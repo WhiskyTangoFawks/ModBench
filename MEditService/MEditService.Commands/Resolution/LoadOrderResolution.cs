@@ -13,21 +13,21 @@ namespace MEditService.Commands.Resolution;
 internal sealed class LoadOrderResolution(
     LoadOrderHolder loadOrder, IPluginAdapter adapter, SchemaReflector schemaReflector)
 {
-    internal CopySource SourceOf(PluginAddress plugin, UnsavedBatches batches) => SourceIn(loadOrder.Current, plugin, batches);
+    internal CopySource SourceOf(PluginAddress plugin, WriteSessions sessions) => SourceIn(loadOrder.Current, plugin, sessions);
 
-    private CopySource SourceIn(LoadOrderSnapshot snapshot, PluginAddress plugin, UnsavedBatches batches) =>
-        new(plugin, snapshot, adapter, schemaReflector, batches);
+    private CopySource SourceIn(LoadOrderSnapshot snapshot, PluginAddress plugin, WriteSessions sessions) =>
+        new(plugin, snapshot, adapter, schemaReflector, sessions);
 
     /// <summary>The walk to the left among the masters <paramref name="plugin"/>'s source tree requires,
-    /// over the load order held now, whole, each master read over <paramref name="batches"/>.</summary>
+    /// over the load order held now, whole, each master read over <paramref name="sessions"/>.</summary>
     internal MastersWalk WalkAmongMastersOf(
-        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas, UnsavedBatches batches) =>
-        WalkIn(loadOrder.Current, repository, plugin, schemas, batches);
+        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas, WriteSessions sessions) =>
+        WalkIn(loadOrder.Current, repository, plugin, schemas, sessions);
 
     private MastersWalk WalkIn(
         LoadOrderSnapshot snapshot, SourceRepository repository, PluginAddress plugin,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, UnsavedBatches batches) =>
-        new(this, snapshot, plugin, batches, new Lazy<Answer<IReadOnlySet<string>, SourceFailure>>(() => RequiredMasters.InTheTree(repository, plugin, schemas)));
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, WriteSessions sessions) =>
+        new(this, snapshot, plugin, sessions, new Lazy<Answer<IReadOnlySet<string>, SourceFailure>>(() => RequiredMasters.InTheTree(repository, plugin, schemas)));
 
     /// <summary>The first master the copy needs that <paramref name="destination"/> loads before, an underride:
     /// its origin, then each plugin holding a record <paramref name="body"/> references (ADR-0008; xEdit).</summary>
@@ -61,7 +61,7 @@ internal sealed class LoadOrderResolution(
         if (!sourcePartial && snapshot.LoadsBefore(source.Plugin, destinationPlugin) != true) return null;
 
         var masters = WalkIn(
-            snapshot, destinationRepository, destinationPlugin, schemaReflector.GetSchemas(snapshot.GameRelease), source.Batches);
+            snapshot, destinationRepository, destinationPlugin, schemaReflector.GetSchemas(snapshot.GameRelease), source.Sessions);
         switch (masters.NearestCopy(identity.FormKey, _ => true, PartialFormFlag.Bit))
         {
             case LeftCopy.Unreadable unreadable:
@@ -78,12 +78,12 @@ internal sealed class LoadOrderResolution(
     /// AllVisibleForFile, ADR-0018). A refusal is spelled at <paramref name="spelled"/>, naming <paramref name="subject"/>.</summary>
     internal GridCellHolder HolderOfCell(
         SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        string worldspace, (int X, int Y) grid, string spelled, string subject, UnsavedBatches batches)
+        string worldspace, (int X, int Y) grid, string spelled, string subject, WriteSessions sessions)
     {
         if (!repository.GetCellAt(plugin, worldspace, grid.X, grid.Y).Holds(out var held, out var failure))
             return Unreadable(failure);
         if (held is not null) return new GridCellHolder.Plugins(held);
-        switch (WalkAmongMastersOf(repository, plugin, schemas, batches).NearestCell(worldspace, grid.X, grid.Y))
+        switch (WalkAmongMastersOf(repository, plugin, schemas, sessions).NearestCell(worldspace, grid.X, grid.Y))
         {
             case LeftCopy.Unreadable left:
                 return new GridCellHolder.Unreadable(
@@ -103,7 +103,7 @@ internal sealed class LoadOrderResolution(
     }
 
     internal sealed class MastersWalk(
-        LoadOrderResolution resolution, LoadOrderSnapshot snapshot, PluginAddress plugin, UnsavedBatches batches, Lazy<Answer<IReadOnlySet<string>, SourceFailure>> masters)
+        LoadOrderResolution resolution, LoadOrderSnapshot snapshot, PluginAddress plugin, WriteSessions sessions, Lazy<Answer<IReadOnlySet<string>, SourceFailure>> masters)
     {
         /// <summary>The nearest master's copy of <paramref name="formKey"/> that <paramref name="says"/> accepts,
         /// passing over one whose header holds a flag of <paramref name="passOver"/>. An unreadable copy ends the walk.</summary>
@@ -149,7 +149,7 @@ internal sealed class LoadOrderResolution(
                 .Where(left => required.Contains(left.Name));
             foreach (var left in asked)
             {
-                using var source = resolution.SourceIn(snapshot, left, batches);
+                using var source = resolution.SourceIn(snapshot, left, sessions);
                 if (!answer(source).Holds(out var text, out var why)) return new LeftCopy.UnreadableCopy(left, askedAbout, why.Why, why.Kind);
                 if (text is not null) return new LeftCopy.Found(text, left);
             }

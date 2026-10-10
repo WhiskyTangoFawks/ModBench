@@ -8,7 +8,7 @@ using CodecDocument = MEditService.Codec.Serialization.Document;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>The changes a transaction is made of, put, remove and rekey, each by identity; and the
+/// <summary>The changes a write session applies, put, remove and rekey, each by identity; and the
 /// write made directly, the whole-plugin replacement. Every write forgets what the locator remembered of the tree.</summary>
 internal sealed class SourceRepositoryWrites(
     string modFolder, GameRelease release, SourceRepositoryLocator locator, SourceRepositoryLayout layout, SourceRepositoryGit git,

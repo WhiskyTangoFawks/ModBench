@@ -28,10 +28,10 @@ public sealed class DeleteRecordChangesHandler
     public Task<SelectionResult<RecordAt, RecordEditRefusal, SourceChanges>> DeleteRecords(IReadOnlyList<RecordAt> records)
     {
         _loadOrder.Require();
-        var batches = new UnsavedBatches(_unsaved.Current);
+        var sessions = new WriteSessions(_unsaved.Current);
         return ItemWrite.Over(
             records, SameRecord.Instance,
-            record => Delete(record.Plugin, record.FormKey, batches),
+            record => Delete(record.Plugin, record.FormKey, sessions),
             changes => changes.Changes,
             record => $"Could not delete the source file for {record.FormKey} in {record.Plugin.Name} ({record.Plugin.Origin})",
             _logger);
@@ -46,23 +46,20 @@ public sealed class DeleteRecordChangesHandler
             : null;
 
     private Answer<RecordEditChanges, SourceFailure> Delete(
-        PluginAddress plugin, string formKey, UnsavedBatches batches)
+        PluginAddress plugin, string formKey, WriteSessions sessions)
     {
-        if (_targets.ResolveEditTarget(plugin, formKey, batches, out var target) is { } blocked) return blocked;
-        var (_, identity, _) = target;
+        if (_targets.ResolveEditTarget(plugin, formKey, sessions, out var target) is { } blocked) return blocked;
+        var (_, identity, session) = target;
         if (RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
 
-        var batch = _targets.BatchOf(plugin, batches);
-        var repository = batch.Repository;
+        var repository = session.Repository;
 
         // Read before the removal, so what the log names is where it took from.
         if (!repository.RelativePathOf(plugin, identity).Holds(out var relativePath, out var unread)) return unread;
 
         // Every descendant's row follows from the removal once it is re-indexed.
-        var before = batch.Changes;
-        if (SourceTransaction.Atomically(repository, transaction => transaction.Apply(repository.ChangesToRemove(plugin, identity)))
-            is { } unremoved)
-            return unremoved;
+        var before = session.Changes;
+        if (session.Atomically(() => session.Apply(repository.ChangesToRemove(plugin, identity))) is { } unremoved) return unremoved;
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -70,6 +67,6 @@ public sealed class DeleteRecordChangesHandler
                 "Answered the deletion of {FormKey} from {Plugin} ({Origin}) — working-tree deletion of {SourcePath}",
                 formKey, plugin.Name, plugin.Origin, relativePath);
         }
-        return SourceAnswer.Of(new RecordEditChanges(RecordEditResult.Success(), batch.ChangesAddedSince(before)));
+        return SourceAnswer.Of(new RecordEditChanges(RecordEditResult.Success(), session.ChangesAddedSince(before)));
     }
 }

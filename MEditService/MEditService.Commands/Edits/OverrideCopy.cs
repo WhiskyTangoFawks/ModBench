@@ -29,13 +29,14 @@ internal sealed class OverrideCopy
     /// <summary>An unreadable source record refuses rather than landing as a stub.
     /// <paramref name="replace"/> lets it take a held record's place.</summary>
     internal Answer<RecordEditChanges, SourceFailure> Copy(
-        CopySource source, string formKey, PluginAddress destinationPlugin, bool replace, UnsavedBatches batches)
+        CopySource source, string formKey, PluginAddress destinationPlugin, bool replace, WriteSessions sessions)
     {
-        if (_targets.ResolveCopySource(destinationPlugin, source, formKey, batches, out var copy) is { } blocked) return blocked;
+        if (_targets.ResolveCopySource(destinationPlugin, source, formKey, sessions, out var copy) is { } blocked) return blocked;
         // commands.md, Doing nothing is not an error: the record's own plugin already is this copy.
         if (PluginAddress.Comparer.Equals(source.Plugin, destinationPlugin)) return RecordEditResult.Success();
-        var before = copy.Batch.Changes;
-        return RecordCopy.ChangesSince(copy.Batch, before, CopyAsOverride(copy, destinationPlugin, replace));
+        var session = copy.Destination.Session;
+        var before = session.Changes;
+        return RecordCopy.ChangesSince(session, before, CopyAsOverride(copy, destinationPlugin, replace));
     }
 
     private Answer<RecordEditResult, SourceFailure> CopyAsOverride(
@@ -49,7 +50,7 @@ internal sealed class OverrideCopy
     private Answer<RecordEditResult, SourceFailure> LandRecord(
         WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, bool replace)
     {
-        var (source, identity, destination, _, release, body) = copy;
+        var (source, identity, destination, release, body) = copy;
         var formKey = identity.FormKey;
 
         if (!destination.Repository.FormKeysUsed(destinationPlugin).Holds(out var used, out var unread)) return unread;
@@ -76,14 +77,14 @@ internal sealed class OverrideCopy
     private Answer<RecordEditResult, SourceFailure> LandNewRecord(
         WriteTargets.CopyTarget copy, string body, PluginAddress destinationPlugin)
     {
-        var (source, identity, destination, _, release, _) = copy;
+        var (source, identity, destination, release, _) = copy;
         var formKey = identity.FormKey;
         var worldspaceRead = RecordTypes.For(release).IsCell(identity.RecordType) ? source.WorldspaceOf(identity) : (string?)null;
         if (!worldspaceRead.Holds(out var worldspace, out var why)) return WriteTargets.RefuseUnreadableSource(formKey, why);
         if (worldspace is not null)
         {
-            if (!SourceTransaction.Atomically(destination.Repository, transaction => _recordCopy.PlaceExteriorCell(
-                    transaction, source, worldspace,
+            if (!destination.Session.Atomically(() => _recordCopy.PlaceExteriorCell(
+                    source, worldspace,
                     new SourceDocument(
                         formKey, identity.RecordType, identity.EditorId,
                         ContainerDocumentEdits.WithoutChildren(body, release, identity.RecordType)),
@@ -121,8 +122,8 @@ internal sealed class OverrideCopy
 
     private static Answer<RecordEditResult, SourceFailure> Put(RecordCopy.Destination destination, SourceDocument document) =>
         RecordEditResult.Making(
-            RecordEditResult.Success(), destination.Repository,
-            transaction => transaction.Apply(destination.Repository.ChangesToPut(destination.Plugin, document)));
+            RecordEditResult.Success(), destination.Session,
+            () => destination.Session.Apply(destination.Repository.ChangesToPut(destination.Plugin, document)));
 
     private Answer<RecordEditResult, SourceFailure> ReplaceHeldCopy(
         CopySource source, RecordIdentity identity, string body, RecordIdentity existingTarget,

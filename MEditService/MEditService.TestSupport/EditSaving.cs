@@ -15,7 +15,7 @@ public static class EditSaving
         foreach (var path in deletions)
         {
             if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
-            else File.Delete(path);
+            else if (File.Exists(path)) File.Delete(path);
         }
         foreach (var (path, text) in documents)
         {

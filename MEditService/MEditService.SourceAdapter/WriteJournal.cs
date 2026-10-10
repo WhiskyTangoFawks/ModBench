@@ -1,4 +1,3 @@
-using System.Text;
 using MEditService.Codec.Serialization;
 
 namespace MEditService.SourceAdapter;
@@ -16,10 +15,6 @@ internal enum UnrestoredReason
     /// <summary>A file this action removed was written again; its bytes are left alone.</summary>
     WrittenByAnother,
 
-    /// <summary>A move cannot be undone because its origin is occupied again — putting the entry back
-    /// would overwrite whatever now stands there.</summary>
-    OccupiedByAnother,
-
     /// <summary>A directory this action made now holds something else's.</summary>
     HoldsSomethingElse,
 
@@ -33,7 +28,7 @@ internal enum UnrestoredReason
 internal sealed record Unrestored(
     UnrestoredReason Reason, string? RelativePath = null, string? Description = null, string? Detail = null);
 
-/// <summary>Everything a Source adapter act creates, replaces, moves and mints under one mod folder. One
+/// <summary>Everything a Source adapter act creates, replaces, removes and mints under one mod folder. One
 /// rollback restores exactly that, leaves what another program wrote (ADR-0003) and answers what it
 /// could not restore as data (ADR-0019).</summary>
 internal sealed class WriteJournal(string modFolder)
@@ -47,10 +42,6 @@ internal sealed class WriteJournal(string modFolder)
     private sealed record FileState(string Path, byte[]? Before, byte[]? After) : IEntry;
 
     private sealed record DeletedFile(string Path, byte[] Original) : IEntry;
-
-    private sealed record DeletedTree(List<string> Directories, List<(string Path, byte[] Bytes)> Files) : IEntry;
-
-    private sealed record EntryMove(string From, string To) : IEntry;
 
     private sealed record TempFile(string Path) : IEntry;
 
@@ -96,20 +87,12 @@ internal sealed class WriteJournal(string modFolder)
         foreach (var file in files) Write(Path.Combine(baseDirectory, file.RelativePath), file.Content);
     }
 
-    internal void WriteText(string path, string text) => Write(path, Encoding.UTF8.GetBytes(text));
-
     internal void Delete(string path)
     {
         var original = Snapshot(path);
         if (original == null) return;
         _entries.Add(new DeletedFile(path, original));
         File.Delete(path);
-    }
-
-    internal void DeletePath(string path)
-    {
-        if (Directory.Exists(path)) DeleteTree(path);
-        else Delete(path);
     }
 
     internal void DeleteIfHolds(string path, byte[] expected)
@@ -125,25 +108,6 @@ internal sealed class WriteJournal(string modFolder)
         if (Directory.EnumerateFileSystemEntries(directory).Any()) return;
         _entries.Add(new RemovedDirectory(directory));
         Directory.Delete(directory);
-    }
-
-    // A failed recursive delete goes on past the entry it could not take, so it stops partway. What went
-    // is put back; a file still standing is left alone, as this delete never wrote it.
-    internal void DeleteTree(string directory)
-    {
-        _entries.Add(new DeletedTree(
-            [.. Directory.GetDirectories(directory, "*", SearchOption.AllDirectories).Prepend(directory).Order(StringComparer.Ordinal)],
-            [.. Directory.GetFiles(directory, "*", SearchOption.AllDirectories)
-                .Order(StringComparer.Ordinal)
-                .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))]));
-        Directory.Delete(directory, recursive: true);
-    }
-
-    internal void Move(string from, string to)
-    {
-        if (Directory.Exists(from)) Directory.Move(from, to);
-        else File.Move(from, to);
-        _entries.Add(new EntryMove(from, to));
     }
 
     /// <summary>Records a change that <paramref name="undo"/> puts back, such as a git ref or a repository
@@ -185,7 +149,6 @@ internal sealed class WriteJournal(string modFolder)
             UnrestoredReason.ChangedByAnother => "changed by something else after this change wrote it, so its current content was kept",
             UnrestoredReason.RemovedByAnother => "removed by something else after this change wrote it, so it was not put back",
             UnrestoredReason.WrittenByAnother => "written by something else after this change removed it, so its current content was kept",
-            UnrestoredReason.OccupiedByAnother => "occupied by something else, so what this change moved away was not moved back",
             UnrestoredReason.HoldsSomethingElse => "holds something this change did not write, so it was left",
             _ => "could not be restored",
         };
@@ -210,14 +173,6 @@ internal sealed class WriteJournal(string modFolder)
                 break;
             case DeletedFile deleted:
                 RestoreDeleted(deleted, unrestored);
-                break;
-            case DeletedTree tree:
-                foreach (var level in tree.Directories) Attempt(level, () => Directory.CreateDirectory(level), unrestored);
-                foreach (var (path, bytes) in tree.Files.Where(file => !File.Exists(file.Path)))
-                    Attempt(path, () => File.WriteAllBytes(path, bytes), unrestored);
-                break;
-            case EntryMove move:
-                RestoreMove(move, unrestored);
                 break;
             case TempFile temp:
                 Attempt(temp.Path, () => { if (File.Exists(temp.Path)) File.Delete(temp.Path); }, unrestored);
@@ -295,27 +250,6 @@ internal sealed class WriteJournal(string modFolder)
         else if (!SameBytes(current, deleted.Original)) unrestored.Add(Named(deleted.Path, UnrestoredReason.WrittenByAnother));
     }
 
-    private void RestoreMove(EntryMove move, List<Unrestored> unrestored)
-    {
-        if (!Exists(move.To))
-        {
-            unrestored.Add(Named(move.To, UnrestoredReason.RemovedByAnother));
-            return;
-        }
-
-        if (Exists(move.From))
-        {
-            unrestored.Add(Named(move.From, UnrestoredReason.OccupiedByAnother));
-            return;
-        }
-
-        Attempt(move.From, () =>
-        {
-            if (Directory.Exists(move.To)) Directory.Move(move.To, move.From);
-            else File.Move(move.To, move.From);
-        }, unrestored);
-    }
-
     private void Attempt(string path, Action restore, List<Unrestored> unrestored)
     {
         try
@@ -330,8 +264,6 @@ internal sealed class WriteJournal(string modFolder)
 
     private Unrestored Named(string path, UnrestoredReason reason, string? detail = null) =>
         new(reason, Path.GetRelativePath(modFolder, path), Detail: detail);
-
-    private static bool Exists(string path) => File.Exists(path) || Directory.Exists(path);
 
     private static string TempPathFor(string path) =>
         Path.Combine(PathShape.DirectoryOf(path), ".medit_tmp_" + Path.GetRandomFileName() + ".tmp");
