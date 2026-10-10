@@ -471,6 +471,14 @@ describe('package.json contributes the conflict table\'s cell value as a setting
   });
 });
 
+describe('package.json contributes the port to attach to a running mEdit as a setting', () => {
+  it('null by default, not the 0 VS Code gives a number setting with no default', () => {
+    expect(pkg.contributes.configuration.properties['modbench.attachToBackendPort']).toMatchObject({
+      type: ['number', 'null'], default: null,
+    });
+  });
+});
+
 describe('package.json contributes the Mods view\'s indicators and grey as settings (mods.md, Indicators)', () => {
   const { properties } = pkg.contributes.configuration;
 
