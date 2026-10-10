@@ -1,6 +1,6 @@
 import { access, readFile } from 'node:fs/promises';
 import * as os from 'node:os';
-import * as path from 'node:path';
+import { posix, win32 } from 'node:path';
 
 export interface GamePaths {
   dataFolder: string;
@@ -26,7 +26,8 @@ function parseLibraryFoldersVdf(content: string, appId: string): string | null {
 }
 
 /** Takes `platform` explicitly (rather than reading `process.platform` itself) so tests can
- *  exercise both branches directly instead of stubbing global process state. */
+ *  exercise both branches directly instead of stubbing global process state. Each branch spells its
+ *  paths as its platform does, whatever platform runs it. */
 export async function detectGamePaths(
   platform: NodeJS.Platform,
   game: GameAutodetect,
@@ -49,20 +50,20 @@ async function findLibraryInVdfs(vdfPaths: string[], steamAppId: string): Promis
 
 function windowsVdfPaths(steamPath: string): string[] {
   return [
-    path.join(steamPath, 'steamapps', 'libraryfolders.vdf'),
-    path.join(steamPath, 'config', 'libraryfolders.vdf'),
+    win32.join(steamPath, 'steamapps', 'libraryfolders.vdf'),
+    win32.join(steamPath, 'config', 'libraryfolders.vdf'),
   ];
 }
 
 function findSteamLibrary(steamAppId: string): Promise<string | null> {
-  return findLibraryInVdfs([path.join(os.homedir(), '.steam', 'steam', 'config', 'libraryfolders.vdf')], steamAppId);
+  return findLibraryInVdfs([posix.join(os.homedir(), '.steam', 'steam', 'config', 'libraryfolders.vdf')], steamAppId);
 }
 
 async function detectLinux(game: GameAutodetect): Promise<GamePaths | null> {
   const library = await findSteamLibrary(game.steamAppId);
   if (!library) return null;
   try {
-    const dataFolder = path.join(library, 'steamapps', 'common', game.steamFolderName, 'Data');
+    const dataFolder = posix.join(library, 'steamapps', 'common', game.steamFolderName, 'Data');
     await access(dataFolder);
     return { dataFolder };
   } catch {
@@ -74,7 +75,7 @@ async function detectLinux(game: GameAutodetect): Promise<GamePaths | null> {
  *  so Wine drive-letter translation does not re-derive it. */
 export async function detectWinePrefix(steamAppId: string): Promise<string | null> {
   const library = await findSteamLibrary(steamAppId);
-  return library ? path.join(library, 'steamapps', 'compatdata', steamAppId, 'pfx') : null;
+  return library ? posix.join(library, 'steamapps', 'compatdata', steamAppId, 'pfx') : null;
 }
 
 function parseRegQuerySteamPath(stdout: string): string | null {
@@ -92,7 +93,7 @@ async function detectWindows(
     if (!steamPath) return null;
 
     const library = (await findLibraryInVdfs(windowsVdfPaths(steamPath), game.steamAppId)) ?? steamPath;
-    const dataFolder = path.join(library, 'steamapps', 'common', game.steamFolderName, 'Data');
+    const dataFolder = win32.join(library, 'steamapps', 'common', game.steamFolderName, 'Data');
     await access(dataFolder);
     return { dataFolder };
   } catch {

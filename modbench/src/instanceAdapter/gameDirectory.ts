@@ -2,7 +2,7 @@
 // The user's overrides arrive from the composition root as values; nothing here reads a setting itself.
 
 import { exec } from 'node:child_process';
-import { dirname, join } from 'node:path';
+import { dirname, join, posix, win32 } from 'node:path';
 import { promisify } from 'node:util';
 import { readGameName, readGamePath, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { gamePathInfoForRelease, gameReleaseForGame } from '../tables/gamePaths';
@@ -42,7 +42,7 @@ export async function normalizeGamePath(
   platform: NodeJS.Platform,
   detectPrefix: DetectWinePrefix,
 ): Promise<string> {
-  if (platform === 'win32') return p;
+  if (platform === 'win32') return win32.normalize(p);
 
   const match = /^([A-Za-z]):(.*)$/s.exec(p);
   if (!match) return p.replaceAll('\\', '/');
@@ -60,7 +60,7 @@ export async function normalizeGamePath(
   if (!prefix) {
     throw new Error(`Cannot translate Wine path '${p}': the Proton prefix could not be determined`);
   }
-  return join(prefix, 'drive_c', posixRest);
+  return posix.join(prefix, 'drive_c', posixRest);
 }
 
 async function hasDataFolder(root: string): Promise<boolean> {

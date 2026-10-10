@@ -51,5 +51,5 @@ export async function applyWorkspaceChanges(
 
 function documentAt(path: string, read: vscode.Uri | undefined): vscode.Uri {
   const file = vscode.Uri.file(path);
-  return file.path === read?.path ? read : file;
+  return file.fsPath === read?.fsPath ? read : file;
 }
