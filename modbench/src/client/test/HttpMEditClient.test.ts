@@ -152,536 +152,299 @@ describe('HttpMEditClient — the notification stream follows the status', () =>
   });
 });
 
-describe('HttpMEditClient — a 503 from a write', () => {
-  it('relays the load-order-absent 503 as the backend worded it, 503 having one meaning left: the load order went away, so the client reads no more into the status than the detail says', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
-    const client = makeClient(fetch);
+type Verb = (client: MEditClient) => Promise<unknown>;
 
-    const result = await client.getCopyChanges(
-      [{ formKey: '000800:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' }], 'Override',
-      [{ name: 'Other.esp', origin: 'ModB' }], false);
+const answers = (status: number, body?: unknown) => () =>
+  Promise.resolve(body === undefined ? new Response(null, { status }) : jsonResponse(status, body));
+const rejects = (message: string) => () => Promise.reject(new Error(message));
 
-    expect(result).toEqual({ refused: true, message: 'Could not copy 1 record — No load order has been received.' });
-  });
-});
+async function exchange(verb: Verb, respond: () => Promise<Response>) {
+  const log = leveledLog();
+  const fetch = vi.fn((_req: Request) => respond());
+  const result = await verb(makeClient(fetch, { log }));
+  const request = fetch.mock.calls[0]?.[0];
+  if (!request) throw new Error('no request sent');
+  return { result, log, fetch, request };
+}
 
-describe('HttpMEditClient — creating a record answers the changes', () => {
-  const plugin = { name: 'MyPatch.esp', origin: 'ModA' };
-  const changes = { moves: [], deletions: [], documents: [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
-
-  it('sends the plugin and the type, and reads the new FormKey with its changes', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { formKey: '000900:MyPatch.esp', ...changes })));
-
-    const result = await makeClient(fetch).getCreateChanges(plugin, 'npc_');
-
-    expect(result).toEqual({ formKey: '000900:MyPatch.esp', ...changes });
-    const request = fetch.mock.calls[0]?.[0];
-    expect(request?.url).toMatch(/\/plugins\/MyPatch\.esp\/create-record-changes$/);
-    expect(await request?.json()).toEqual({ origin: 'ModA', recordType: 'npc_' });
-  });
-
-  it('sends the container and the grid position it is given', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { formKey: '000900:MyPatch.esp', ...changes })));
-
-    await makeClient(fetch).getCreateChanges(plugin, 'cell', { container: '000800:MyPatch.esp', position: { x: 1, y: -2 } });
-
-    expect(await fetch.mock.calls[0]?.[0].json()).toEqual({
-      origin: 'ModA', recordType: 'cell', container: '000800:MyPatch.esp', position: { x: 1, y: -2 },
-    });
-  });
-
-  it('answers a full FormID space as a refusal carrying mEdit\'s remedy, asking once', async () => {
-    const detail = 'MyPatch.esp has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can address. Clear the light flag in the header to draw above it.';
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(422, { detail })));
-
-    const result = await makeClient(fetch).getCreateChanges(plugin, 'npc_');
-
-    expect(result).toEqual({ refused: true, message: `Could not create a new npc_ record in "MyPatch.esp" — ${detail}` });
-    expect(fetch).toHaveBeenCalledOnce();
-  });
-});
-
-describe('HttpMEditClient — deleting records answers the changes per record', () => {
+describe('HttpMEditClient — what each verb sends and reads', () => {
+  const myPatch = { name: 'MyPatch.esp', origin: 'ModA' };
+  const shared = { name: 'Shared.esp', origin: 'ModA' };
+  const sharedKey = '000800:Shared.esp';
+  const first = { name: 'First.esp', origin: 'ModA' };
+  const second = { name: 'Second.esp', origin: 'ModB' };
   const kept = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const gone = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const untracked = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' };
-  const cellPath = '/mods/ModA/plugin-source/MyPatch.esp/Cell.json';
-
-  it('sends the selection as one call, and reads each record\'s moves, deletions and documents, each refusal with its message', async () => {
-    const keptChanges = { record: kept, moves: [], deletions: ['/mods/ModA/plugin-source/MyPatch.esp/Npcs/Kept'], documents: [] };
-    const goneChanges = { record: gone, moves: [], deletions: [], documents: [{ path: cellPath, text: '{"cut": true}' }] };
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
-      applied: [keptChanges, goneChanges],
-      refused: [{ item: untracked, refusal: 'PluginNotTracked', message: 'Other.esp is not tracked.' }],
-    })));
-    const client = makeClient(fetch);
-
-    const outcome = await client.getDeleteChanges([kept, untracked, gone]);
-
-    expect(outcome).toEqual({
-      applied: [keptChanges, goneChanges],
-      refused: [{ item: untracked, reason: 'Other.esp is not tracked.' }],
-    });
-    expect(fetch).toHaveBeenCalledOnce();
-    const request = fetch.mock.calls[0]?.[0];
-    expect(request?.url).toMatch(/\/records\/delete-changes$/);
-    expect(await request?.json()).toEqual({ records: [kept, untracked, gone] });
-  });
-
-  it('resolves a WriteRefused carrying the count and the server text on a non-ok response', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(400, 'Bad Request')));
-    const log = leveledLog();
-    const client = makeClient(fetch, { log });
-
-    const result = await client.getDeleteChanges([kept, gone]);
-
-    expect(result).toEqual({ refused: true, message: 'Could not delete 2 records — Bad Request' });
-    expect(log.lines.error).toEqual([expect.stringContaining('failed (400)')]);
-  });
-
-  it('resolves a thrown request the same way', async () => {
-    const fetch = vi.fn(() => Promise.reject(new Error('socket hang up')));
-    const log = leveledLog();
-    const client = makeClient(fetch, { log });
-
-    const result = await client.getDeleteChanges([kept]);
-
-    expect(result).toEqual({ refused: true, message: 'Could not delete 1 record — mEdit could not be reached.' });
-    expect(log.lines.error).toEqual([expect.stringContaining('socket hang up')]);
-  });
-
-  it('refuses a success with no body, and a thrown create or copy', async () => {
-    const client = makeClient(vi.fn(() => Promise.resolve(new Response(null, { status: 200 }))));
-    const thrown = makeClient(vi.fn(() => Promise.reject(new Error('socket hang up'))));
-
-    const answers = [
-      await client.getDeleteChanges([kept]),
-      await thrown.getCreateChanges({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_'),
-      await thrown.getCopyChanges([kept], 'New', [{ name: 'Patch.esp', origin: 'PatchMod' }], false),
-    ];
-
-    for (const answer of answers) expect(answer).toMatchObject({ refused: true });
-    expect(answers[0]).toEqual({ refused: true, message: 'Could not delete 1 record — no answer' });
-  });
-});
-
-describe('HttpMEditClient — creating a plugin', () => {
-  const plugin = { name: 'New.esp', origin: 'ModA' };
-
-  it('sends the origin, the file name and the folder, and reads back the plugin it wrote', async () => {
-    const wrote = { name: 'New.esp', origin: 'ModA', path: '/mods/ModA/New.esp' };
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, wrote)));
-    const client = makeClient(fetch);
-
-    const result = await client.createPlugin(plugin, '/mods/ModA');
-
-    expect(result).toEqual(wrote);
-    const request = fetch.mock.calls[0]?.[0];
-    expect(request?.url).toMatch(/\/plugins\/create$/);
-    expect(await request?.json()).toEqual({ origin: 'ModA', name: 'New.esp', folder: '/mods/ModA' });
-  });
-
-  it('resolves a WriteRefused carrying the name and the server text on a refusal', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(409, {
-      detail: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'FileExists',
-    })));
-    const client = makeClient(fetch);
-
-    const result = await client.createPlugin(plugin, '/mods/ModA');
-
-    expect(result).toEqual({
-      refused: true,
-      message: 'Could not create "New.esp" — A file is already at /mods/ModA/New.esp, so New.esp was not created.',
-    });
-  });
-});
-
-describe('HttpMEditClient — renaming a plugin source answers the changes', () => {
-  const plugin = { name: 'Old.esp', origin: 'ModA' };
-  const changes = { treeName: 'Old.esp', moves: [{ from: '/m/plugin-source/Old.esp', to: '/m/plugin-source/New.esp' }], deletions: [], documents: [{ path: '/m/plugin-source/New.esp/h.json', text: '{}' }] };
-
-  it('sends the plugin and the new name, and reads the changes', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, changes)));
-
-    const result = await makeClient(fetch).getRenameSourceChanges(plugin, 'New.esp');
-
-    expect(result).toEqual(changes);
-    const request = fetch.mock.calls[0]?.[0];
-    expect(request?.url).toMatch(/\/plugins\/rename-source-changes$/);
-    expect(await request?.json()).toEqual({ origin: 'ModA', name: 'Old.esp', newName: 'New.esp' });
-  });
-
-  it('resolves a WriteRefused carrying the name and the server text on a refusal', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(409, { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' })));
-
-    const result = await makeClient(fetch).getRenameSourceChanges(plugin, 'New.esp');
-
-    expect(result).toEqual({ refused: true, message: 'Could not rename the source of "Old.esp" — ModA already holds New.esp.' });
-  });
-
-  it('moves what was last written, answering moved on a 204', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 204 })));
-
-    const result = await makeClient(fetch).moveLastWritten(plugin, 'OLD.esp', 'New.esp');
-
-    expect(result).toEqual({ moved: true });
-    const request = fetch.mock.calls[0]?.[0];
-    expect(request?.url).toMatch(/\/plugins\/move-last-written$/);
-    expect(await request?.json()).toEqual({ origin: 'ModA', name: 'Old.esp', treeName: 'OLD.esp', newName: 'New.esp' });
-  });
-});
-
-describe('HttpMEditClient — copying records answers the changes per record and destination', () => {
-  const npc = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+  const npc = kept;
   const patch = { name: 'Patch.esp', origin: 'PatchMod' };
   const other = { name: 'Other.esp', origin: 'OtherMod' };
-
-  const copiedDocuments = [{ path: '/mods/PatchMod/plugin-source/Patch.esp/Header.json', text: '{"h":1}' }];
-
-  it('sends the records, the mode, the destinations, the replace Option as one call, and reads each item', async () => {
-    const copied = { record: npc, destination: patch, moves: [], deletions: [], documents: copiedDocuments };
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
-      applied: [copied],
-      refused: [{ item: { record: npc, destination: other }, refusal: 'DestinationHoldsRecord', message: 'Other.esp already holds it.' }],
-    })));
-    const client = makeClient(fetch);
-
-    const outcome = await client.getCopyChanges([npc], 'Override', [patch, other], true);
-
-    expect(outcome).toEqual({
-      applied: [copied],
-      refused: [{ item: { record: npc, destination: other }, reason: 'Other.esp already holds it.' }],
-    });
-    const request = fetch.mock.calls[0]?.[0];
-    expect(request?.url).toMatch(/\/records\/copy-changes$/);
-    expect(await request?.json()).toEqual({
-      records: [npc], mode: 'Override', destinations: [patch, other], replace: true,
-    });
-  });
-
-  it('asks the record\'s holders by plugin and origin', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
-      overrides: [{ plugin: 'Patch.esp', origin: 'PatchMod' }, { plugin: 'Patch.esp', origin: 'OtherMod' }],
-      diffs: [], conflictAll: 'NoConflict',
-    })));
-    const client = makeClient(fetch);
-
-    expect(await client.getRecordHolders(npc.formKey)).toEqual([
-      { name: 'Patch.esp', origin: 'PatchMod' }, { name: 'Patch.esp', origin: 'OtherMod' },
-    ]);
-  });
-});
-
-describe('HttpMEditClient — getRecordOwner', () => {
-  it('answers the plugin holding the record as a plugin address', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { plugin: 'Patch.esp', origin: 'PatchMod' })));
-
-    expect(await makeClient(fetch).getRecordOwner('000800:Patch.esp')).toEqual({ name: 'Patch.esp', origin: 'PatchMod' });
-  });
-});
-
-describe('HttpMEditClient — getComparison', () => {
-  it('asks the record\'s comparison by FormKey and returns it untransformed', async () => {
-    const comparison = {
-      overrides: [{ plugin: 'Patch.esp', origin: 'PatchMod', formKey: '000801:MyPatch.esp', editorId: 'MyRecord', fields: [] }],
-      diffs: [], conflictAll: 'NoConflict',
-    };
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, comparison)));
-    const client = makeClient(fetch);
-
-    expect(await client.getComparison('000801:MyPatch.esp')).toEqual(comparison);
-    const request = fetch.mock.calls[0]?.[0];
-    expect(request?.url).toMatch(/\/records\/000801%3AMyPatch\.esp\/compare$/);
-  });
-
-  it('posts the plugin\'s document text and returns the comparison untransformed', async () => {
-    const comparison = { overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Weapon' };
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, comparison)));
-    const text = { plugin: { name: 'Patch.esp', origin: 'PatchMod' }, documentText: '{}', alone: false };
-
-    expect(await makeClient(fetch).getComparison('000801:MyPatch.esp', text)).toEqual(comparison);
-    const request = fetch.mock.calls[0]?.[0];
-    expect(request?.method).toBe('POST');
-    expect(request?.url).toMatch(/\/records\/000801%3AMyPatch\.esp\/compare$/);
-    expect(await request?.json()).toEqual(text);
-  });
-
-  it('answers null on a 404, a record gone from every active plugin', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(404, { detail: 'No such record.' })));
-    const client = makeClient(fetch);
-
-    expect(await client.getComparison('000801:Gone.esp')).toBeNull();
-  });
-
-  it('fails on any other non-OK answer with mEdit\'s reason alone, and files the verb and status in the log', async () => {
-    const log = leveledLog();
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(500, { detail: 'boom' })));
-    const client = makeClient(fetch, { log });
-
-    await expect(client.getComparison('000801:Broken.esp')).resolves.toEqual({ failed: 'refused', refusal: 'boom' });
-    expect(log.lines.error).toEqual([expect.stringMatching(/getComparison.*failed \(500\): boom/)]);
-  });
-});
-
-describe('HttpMEditClient — getRecordsComparison', () => {
+  const newPlugin = { name: 'New.esp', origin: 'ModA' };
+  const changes = { moves: [], deletions: [], documents: [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
+  const keptChanges = { record: kept, moves: [], deletions: ['/mods/ModA/plugin-source/MyPatch.esp/Npcs/Kept'], documents: [] };
+  const goneChanges = { record: gone, moves: [], deletions: [], documents: [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Cell.json', text: '{"cut": true}' }] };
+  const copied = { record: npc, destination: patch, moves: [], deletions: [], documents: [{ path: '/mods/PatchMod/plugin-source/Patch.esp/Header.json', text: '{"h":1}' }] };
+  const diagnostic = { formKey: '000800:First.esp', sourceRelativePath: 'First.esp/Npc/A.json', message: 'Race: points at nothing' };
+  const renamed: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'Renamed' };
+  const editChanges = {
+    moves: [{ from: 'plugin-source/MyPatch.esp/Npcs/Old - 000800_MyPatch.esp.json', to: 'plugin-source/MyPatch.esp/Npcs/Renamed - 000800_MyPatch.esp.json' }],
+    deletions: ['plugin-source/MyPatch.esp/Npcs/Gone'],
+    documents: [{ path: 'plugin-source/MyPatch.esp/Npcs/Renamed - 000800_MyPatch.esp.json', text: '{"EditorID": "Renamed"}' }],
+  };
+  const comparison = { overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Weapon' };
   const copies = [
     { formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'AMod' }, documentText: '{}' },
     { formKey: '000802:B.esp', plugin: { name: 'B.esp', origin: 'BMod' } },
   ];
+  const documentText = { plugin: patch, documentText: '{}', alone: false };
+  const sharedFile = { kind: 'OwnFile', location: '/mods/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json' };
+  const fileRecord = { formKey: sharedKey, plugin: 'Shared.esp', origin: 'ModA' };
+  const sourcePath = '/mods/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json';
+  const problems = [{
+    plugin: { name: 'Refers.esp', origin: 'ReferringMod' },
+    problems: [{ formKey: '000800:Refers.esp', targetFormKey: '000ABC:Absent.esp', sourceRelativePath: 'Refers.esp/Npcs/Npc.json', message: 'Race: 000ABC:Absent.esp is held by no active plugin' }],
+  }];
+  const owner = { query: { origin: 'ModA' } };
 
-  it('posts the copies in order and returns the comparison untransformed', async () => {
-    const answer = { compare: { overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Weapon' }, missing: [] };
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, answer)));
-    const client = makeClient(fetch);
+  interface Row {
+    name: string; verb: Verb; answer?: unknown; reads?: unknown;
+    method: string; path: string; query?: Record<string, string>; body?: unknown;
+  }
+  const rows: Row[] = [
+    { name: 'getCreateChanges', verb: (c) => c.getCreateChanges(myPatch, 'npc_'), answer: { formKey: '000900:MyPatch.esp', ...changes },
+      method: 'POST', path: '/plugins/MyPatch.esp/create-record-changes', body: { origin: 'ModA', recordType: 'npc_' } },
+    { name: 'getCreateChanges in a container', verb: (c) => c.getCreateChanges(myPatch, 'cell', { container: '000800:MyPatch.esp', position: { x: 1, y: -2 } }),
+      answer: { formKey: '000900:MyPatch.esp', ...changes },
+      method: 'POST', path: '/plugins/MyPatch.esp/create-record-changes',
+      body: { origin: 'ModA', recordType: 'cell', container: '000800:MyPatch.esp', position: { x: 1, y: -2 } } },
+    { name: 'getDeleteChanges', verb: (c) => c.getDeleteChanges([kept, untracked, gone]),
+      answer: { applied: [keptChanges, goneChanges], refused: [{ item: untracked, refusal: 'PluginNotTracked', message: 'Other.esp is not tracked.' }] },
+      reads: { applied: [keptChanges, goneChanges], refused: [{ item: untracked, reason: 'Other.esp is not tracked.' }] },
+      method: 'POST', path: '/records/delete-changes', body: { records: [kept, untracked, gone] } },
+    { name: 'createPlugin', verb: (c) => c.createPlugin(newPlugin, '/mods/ModA'), answer: { ...newPlugin, path: '/mods/ModA/New.esp' },
+      method: 'POST', path: '/plugins/create', body: { origin: 'ModA', name: 'New.esp', folder: '/mods/ModA' } },
+    { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'),
+      answer: { treeName: 'Old.esp', ...editChanges },
+      method: 'POST', path: '/plugins/rename-source-changes', body: { origin: 'ModA', name: 'Old.esp', newName: 'New.esp' } },
+    { name: 'moveLastWritten', verb: (c) => c.moveLastWritten({ name: 'Old.esp', origin: 'ModA' }, 'OLD.esp', 'New.esp'), reads: { moved: true },
+      method: 'POST', path: '/plugins/move-last-written', body: { origin: 'ModA', name: 'Old.esp', treeName: 'OLD.esp', newName: 'New.esp' } },
+    { name: 'getCopyChanges', verb: (c) => c.getCopyChanges([npc], 'Override', [patch, other], true),
+      answer: { applied: [copied], refused: [{ item: { record: npc, destination: other }, refusal: 'DestinationHoldsRecord', message: 'Other.esp already holds it.' }] },
+      reads: { applied: [copied], refused: [{ item: { record: npc, destination: other }, reason: 'Other.esp already holds it.' }] },
+      method: 'POST', path: '/records/copy-changes', body: { records: [npc], mode: 'Override', destinations: [patch, other], replace: true } },
+    { name: 'getComparison', verb: (c) => c.getComparison('000801:MyPatch.esp'), answer: comparison,
+      method: 'GET', path: '/records/000801%3AMyPatch.esp/compare' },
+    { name: 'getComparison with the document text', verb: (c) => c.getComparison('000801:MyPatch.esp', documentText), answer: comparison,
+      method: 'POST', path: '/records/000801%3AMyPatch.esp/compare', body: documentText },
+    { name: 'getRecordsComparison', verb: (c) => c.getRecordsComparison(copies), answer: { compare: comparison, missing: [] },
+      method: 'POST', path: '/records/compare', body: { copies } },
+    { name: 'getRecordsComparison with copies no plugin gave', verb: (c) => c.getRecordsComparison(copies),
+      answer: { compare: null, missing: [{ formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'AMod' }, reason: 'RecordGone', message: 'held by no plugin' }] },
+      method: 'POST', path: '/records/compare', body: { copies } },
+    { name: 'track', verb: (c) => c.track(['ModA', 'ModC']),
+      answer: { applied: [{ mod: 'ModA', tracked: [first] }], refused: [{ item: 'ModC', refusal: 'ModProvidesNoPlugin', message: 'ModC provides no plugin.' }] },
+      reads: { landed: [{ mod: 'ModA', tracked: [first] }], refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }] },
+      method: 'POST', path: '/plugins/track', body: { mods: ['ModA', 'ModC'] } },
+    { name: 'compile', verb: (c) => c.compile([first, second]),
+      answer: { applied: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginNotTracked', message: 'Second.esp is not tracked, so there is no source to compile.' }] },
+      reads: { landed: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp is not tracked, so there is no source to compile.' }] },
+      method: 'POST', path: '/plugins/compile', body: { plugins: [first, second] } },
+    { name: 'decompile', verb: (c) => c.decompile([first, second]),
+      answer: { applied: [first], refused: [{ item: second, refusal: 'NotInTrackedMod', message: 'Second.esp is not in a tracked mod.' }] },
+      reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a tracked mod.' }] },
+      method: 'POST', path: '/plugins/decompile', body: { plugins: [first, second] } },
+    { name: 'getEditChanges', verb: (c) => c.getEditChanges('000800:MyPatch.esp', myPatch, renamed),
+      answer: { formKey: '000800:MyPatch.esp', path: 'EditorID', ...editChanges, newFormKey: null }, reads: { applied: true, ...editChanges },
+      method: 'POST', path: '/records/000800%3AMyPatch.esp/edit-changes', body: { edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed } } },
+    { name: 'getEditChanges of the FormID', verb: (c) => c.getEditChanges('000800:MyPatch.esp', myPatch, { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' }),
+      answer: { formKey: '000800:MyPatch.esp', path: 'FormKey', moves: [], deletions: [], documents: [], newFormKey: '000900:MyPatch.esp' },
+      reads: { applied: true, moves: [], deletions: [], documents: [], newFormKey: '000900:MyPatch.esp' },
+      method: 'POST', path: '/records/000800%3AMyPatch.esp/edit-changes',
+      body: { edit: { plugin: 'MyPatch.esp', origin: 'ModA', op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' } } },
+    { name: 'rebuildIndex', verb: (c) => c.rebuildIndex('/instance', 'Fallout4'), reads: { rebuilt: true },
+      method: 'POST', path: '/index/rebuild', body: { instanceRoot: '/instance', gameRelease: 'Fallout4' } },
+    { name: 'getCreatableRecordTypes', verb: (c) => c.getCreatableRecordTypes(),
+      answer: [{ type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' }],
+      method: 'GET', path: '/record-types/creatable' },
+    { name: 'getChildRecordTypes', verb: (c) => c.getChildRecordTypes(shared, sharedKey), answer: [{ type: 'dial', displayName: 'Dialog Topic' }],
+      method: 'GET', path: '/plugins/Shared.esp/records/000800%3AShared.esp/child-record-types', ...owner },
+    { name: 'getRenderedDocument', verb: (c) => c.getRenderedDocument(shared, sharedKey),
+      answer: { fileName: 'SharedNpc - 000800_Shared.esp.json', text: '{ "FormKey": "000800:Shared.esp" }' },
+      method: 'GET', path: '/plugins/Shared.esp/records/000800%3AShared.esp/rendered-document', ...owner },
+    { name: 'getCopyDocument', verb: (c) => c.getCopyDocument(shared, sharedKey), answer: sharedFile,
+      method: 'GET', path: '/plugins/Shared.esp/records/000800%3AShared.esp/document', ...owner },
+    { name: 'getRecordOfFile', verb: (c) => c.getRecordOfFile(sourcePath), answer: fileRecord,
+      method: 'GET', path: '/plugin-source/record', query: { path: sourcePath } },
+    { name: 'getRecordOfFile of a file holding no record', verb: (c) => c.getRecordOfFile(sourcePath), reads: null,
+      method: 'GET', path: '/plugin-source/record', query: { path: sourcePath } },
+    { name: 'getCreatablePluginExtensions', verb: (c) => c.getCreatablePluginExtensions(), answer: ['.esp', '.esm'],
+      method: 'GET', path: '/plugins/creatable-extensions' },
+    { name: 'getPluginDependants', verb: (c) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' }),
+      answer: { dependants: [{ name: 'Child.esp', origin: 'ChildMod' }], unreadable: [{ name: 'Bad.esp', origin: 'BadMod' }] },
+      method: 'GET', path: '/plugins/Base.esm/dependants', query: { origin: 'BaseMod' } },
+    { name: 'getPluginProblems', verb: (c) => c.getPluginProblems(), answer: problems,
+      method: 'GET', path: '/plugins/problems' },
+  ];
 
-    expect(await client.getRecordsComparison(copies)).toEqual(answer);
-    const request = fetch.mock.calls[0]?.[0];
-    expect(request?.method).toBe('POST');
-    expect(request?.url).toMatch(/\/records\/compare$/);
-    expect(await request?.json()).toEqual({ copies });
+  it.each(rows)('$name sends $method $path and reads the answer', async ({ verb, answer, reads, method, path, query, body }) => {
+    const { result, request } = await exchange(verb, answers(answer === undefined ? 204 : 200, answer));
+
+    expect(result).toEqual(reads === undefined ? answer : reads);
+    const url = new URL(request.url);
+    expect(request.method).toBe(method);
+    expect(url.pathname).toBe(path);
+    expect(Object.fromEntries(url.searchParams)).toEqual(query ?? {});
+    if (body !== undefined) expect(await request.json()).toEqual(body);
   });
 
-  it('returns the copies no plugin gave, each with its reason, and no comparison', async () => {
-    const answer = {
-      compare: null,
-      missing: [{ formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'AMod' }, reason: 'RecordGone', message: 'held by no plugin' }],
-    };
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, answer)));
+  it('getRecordHolders asks the record\'s holders by plugin and origin', async () => {
+    const { result } = await exchange((c) => c.getRecordHolders(npc.formKey), answers(200, {
+      overrides: [{ plugin: 'Patch.esp', origin: 'PatchMod' }, { plugin: 'Patch.esp', origin: 'OtherMod' }],
+      diffs: [], conflictAll: 'NoConflict',
+    }));
 
-    expect(await makeClient(fetch).getRecordsComparison(copies)).toEqual(answer);
+    expect(result).toEqual([{ name: 'Patch.esp', origin: 'PatchMod' }, { name: 'Patch.esp', origin: 'OtherMod' }]);
   });
 
-  it('fails on any other non-OK answer', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(400, { detail: 'No records.' })));
+  it('getRecordOwner answers the plugin holding the record as a plugin address', async () => {
+    const { result } = await exchange((c) => c.getRecordOwner('000800:Patch.esp'), answers(200, { plugin: 'Patch.esp', origin: 'PatchMod' }));
 
-    await expect(makeClient(fetch).getRecordsComparison([])).resolves.toEqual({ failed: 'refused', refusal: 'No records.' });
+    expect(result).toEqual(patch);
   });
-});
 
-describe('HttpMEditClient — tracking mods answers per mod', () => {
-  const first = { name: 'First.esp', origin: 'ModA' };
+  describe('a write mEdit refuses, or a request that never reaches it', () => {
+    const detail = 'No load order has been received.';
+    const writes: { name: string; verb: Verb; status: number; body: unknown; text: string; refusal: string }[] = [
+      { name: 'getDeleteChanges', verb: (c) => c.getDeleteChanges([kept, gone]), status: 400, body: 'Bad Request', text: 'Bad Request', refusal: 'Could not delete 2 records' },
+      { name: 'getCreateChanges', verb: (c) => c.getCreateChanges(myPatch, 'npc_'), status: 422,
+        body: { detail: 'MyPatch.esp has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can address. Clear the light flag in the header to draw above it.' },
+        text: 'MyPatch.esp has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can address. Clear the light flag in the header to draw above it.',
+        refusal: 'Could not create a new npc_ record in "MyPatch.esp"' },
+      { name: 'getCopyChanges', verb: (c) => c.getCopyChanges([kept], 'Override', [other], false), status: 503, body: { detail }, text: detail, refusal: 'Could not copy 1 record' },
+      { name: 'createPlugin', verb: (c) => c.createPlugin(newPlugin, '/mods/ModA'), status: 409,
+        body: { detail: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'FileExists' },
+        text: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'Could not create "New.esp"' },
+      { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'), status: 409,
+        body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename the source of "Old.esp"' },
+      { name: 'track', verb: (c) => c.track(['ModA', 'ModB']), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not track 2 mods' },
+      { name: 'compile', verb: (c) => c.compile([first, second]), status: 503, body: detail, text: detail, refusal: 'Could not compile 2 plugins' },
+      { name: 'decompile', verb: (c) => c.decompile([first, second]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
+    ];
 
-  it('sends the mods as one call and reads each applied mod with the plugins that tracked, and each refused mod, with its message', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
-      applied: [{ mod: 'ModA', tracked: [first] }],
-      refused: [{ item: 'ModC', refusal: 'ModProvidesNoPlugin', message: 'ModC provides no plugin.' }],
-    })));
-    const client = makeClient(fetch);
+    it.each(writes)('$name resolves a WriteRefused with the server text, asking once', async ({ verb, status, body, text, refusal }) => {
+      const { result, log, fetch } = await exchange(verb, answers(status, body));
 
-    const outcome = await client.track(['ModA', 'ModC']);
-
-    expect(outcome).toEqual({
-      landed: [{ mod: 'ModA', tracked: [first] }],
-      refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }],
+      expect(result).toEqual({ refused: true, message: `${refusal} — ${text}` });
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(log.lines.error).toEqual([expect.stringContaining(`failed (${status})`)]);
     });
-    const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/track$/.test(req.url));
-    expect(await request?.json()).toEqual({ mods: ['ModA', 'ModC'] });
-  });
 
-  it('resolves a WriteRefused carrying the count and the server text when the whole selection is refused', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(500, 'git was not found on PATH.')));
-    const client = makeClient(fetch);
+    it.each(writes)('$name resolves a thrown request the same way', async ({ verb, refusal }) => {
+      const { result, log } = await exchange(verb, rejects('socket hang up'));
 
-    const result = await client.track(['ModA', 'ModB']);
-
-    expect(result).toEqual({ refused: true, message: 'Could not track 2 mods — git was not found on PATH.' });
-  });
-});
-
-describe('HttpMEditClient — compiling plugins answers per plugin', () => {
-  const first = { name: 'First.esp', origin: 'ModA' };
-  const second = { name: 'Second.esp', origin: 'ModB' };
-  const diagnostic = { formKey: '000800:First.esp', sourceRelativePath: 'First.esp/Npc/A.json', message: 'Race: points at nothing' };
-
-  it('sends the whole selection as one call, and reads each compiled plugin and each refusal with its message', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
-      applied: [{ ...first, diagnostics: [diagnostic] }],
-      refused: [{ item: second, refusal: 'PluginNotTracked', message: 'Second.esp is not tracked, so there is no source to compile.' }],
-    })));
-    const client = makeClient(fetch);
-
-    const outcome = await client.compile([first, second]);
-
-    expect(outcome).toEqual({
-      landed: [{ ...first, diagnostics: [diagnostic] }],
-      refused: [{ item: second, reason: 'Second.esp is not tracked, so there is no source to compile.' }],
-    });
-    const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/compile$/.test(req.url));
-    expect(await request?.json()).toEqual({ plugins: [first, second] });
-  });
-
-  it('resolves a WriteRefused carrying the count and the server text when the whole selection is refused', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, 'No load order has been received.')));
-    const client = makeClient(fetch);
-
-    const result = await client.compile([first, second]);
-
-    expect(result).toEqual({ refused: true, message: 'Could not compile 2 plugins — No load order has been received.' });
-  });
-});
-
-describe('HttpMEditClient — decompiling plugins answers per plugin', () => {
-  const first = { name: 'First.esp', origin: 'ModA' };
-  const second = { name: 'Second.esp', origin: 'ModB' };
-
-  it('sends the whole selection as one call, and reads each decompiled plugin and each refusal with its message', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
-      applied: [first],
-      refused: [{ item: second, refusal: 'NotInTrackedMod', message: 'Second.esp is not in a tracked mod.' }],
-    })));
-    const client = makeClient(fetch);
-
-    const outcome = await client.decompile([first, second]);
-
-    expect(outcome).toEqual({ landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a tracked mod.' }] });
-    const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/decompile$/.test(req.url));
-    expect(await request?.json()).toEqual({ plugins: [first, second] });
-  });
-
-  it('resolves a WriteRefused carrying the count and the server text when the whole selection is refused', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(500, 'git was not found on PATH.')));
-    const client = makeClient(fetch);
-
-    const result = await client.decompile([first, second]);
-
-    expect(result).toEqual({ refused: true, message: 'Could not decompile 2 plugins — git was not found on PATH.' });
-  });
-});
-
-describe('HttpMEditClient — an edit answered as its source changes', () => {
-  const plugin = { name: 'MyPatch.esp', origin: 'ModA' };
-  const renamed: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'Renamed' };
-
-  it('getEditChanges posts the envelope, and reads each move and document', async () => {
-    const to = 'plugin-source/MyPatch.esp/Npcs/Renamed - 000800_MyPatch.esp.json';
-    const moves = [{ from: 'plugin-source/MyPatch.esp/Npcs/Old - 000800_MyPatch.esp.json', to }];
-    const documents = [{ path: to, text: '{"EditorID": "Renamed"}' }];
-    const deletions = ['plugin-source/MyPatch.esp/Npcs/Gone'];
-    let seen: Request | undefined;
-    const fetch = vi.fn((req: Request) => {
-      seen = req;
-      return Promise.resolve(jsonResponse(200, { formKey: '000800:MyPatch.esp', path: 'EditorID', moves, deletions, documents, newFormKey: null }));
+      expect(result).toEqual({ refused: true, message: `${refusal} — mEdit could not be reached.` });
+      expect(log.lines.error).toEqual([expect.stringContaining('socket hang up')]);
     });
 
-    const outcome = await makeClient(fetch).getEditChanges('000800:MyPatch.esp', plugin, renamed);
+    it('getDeleteChanges refuses a success with no body', async () => {
+      const { result } = await exchange((c) => c.getDeleteChanges([kept]), answers(200));
 
-    expect(outcome).toEqual({ applied: true, moves, deletions, documents });
-    expect(new URL(seen?.url ?? '').pathname).toBe('/records/000800%3AMyPatch.esp/edit-changes');
-    expect(await seen?.json()).toEqual({ edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed } });
-  });
-
-  it('getEditChanges carries the new FormKey an edit of the FormID answers with', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
-      formKey: '000800:MyPatch.esp', path: 'FormKey', moves: [], deletions: [], documents: [], newFormKey: '000900:MyPatch.esp',
-    })));
-
-    const outcome = await makeClient(fetch).getEditChanges(
-      '000800:MyPatch.esp', plugin, { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' });
-
-    expect(outcome).toEqual({ applied: true, moves: [], deletions: [], documents: [], newFormKey: '000900:MyPatch.esp' });
-  });
-
-  it('getEditChanges answers the edit\'s typed refusal as the backend worded it', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(409, {
-      refusal: 'PluginNotTracked', detail: 'MyPatch.esp is not tracked, so it is read-only.',
-    })));
-
-    const log = leveledLog();
-    const outcome = await makeClient(fetch, { log }).getEditChanges('000800:MyPatch.esp', plugin, renamed);
-
-    expect(outcome).toEqual({ applied: false, refusal: 'PluginNotTracked', message: 'MyPatch.esp is not tracked, so it is read-only.' });
-    expect(log.lines.warn).toEqual([expect.stringContaining('PluginNotTracked')]);
-    expect(log.lines.error).toEqual([]);
-  });
-});
-
-describe('HttpMEditClient — the not-OK response text', () => {
-
-  it('getEditChanges answers a 422 refusal with its cause, in the backend\'s words', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(422, {
-      refusal: 'PluginNotTracked', detail: 'MyPatch.esp is not tracked, so it is read-only.',
-    })));
-    const client = makeClient(fetch);
-
-    const outcome = await client.getEditChanges(
-      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
-    );
-
-    expect(outcome).toEqual({
-      applied: false, refusal: 'PluginNotTracked', message: 'MyPatch.esp is not tracked, so it is read-only.',
+      expect(result).toEqual({ refused: true, message: 'Could not delete 1 record — no answer' });
     });
   });
 
-  it('getEditChanges answers a refused disk read with its cause, SourceAccessFailed', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(422, {
-      refusal: 'SourceAccessFailed', detail: 'Could not write the source file for 000800:MyPatch.esp: Access denied.',
-    })));
-    const client = makeClient(fetch);
+  describe('a read mEdit refuses', () => {
+    const cannotAnswer = 'No load order has been loaded.';
+    const notIndexed = 'mEdit has not finished indexing the plugins.';
+    const reads: { name: string; verb: Verb; status: number; detail: string }[] = [
+      { name: 'getComparison', verb: (c) => c.getComparison('000801:Broken.esp'), status: 500, detail: 'boom' },
+      { name: 'getRecordsComparison', verb: (c) => c.getRecordsComparison([]), status: 400, detail: 'No records.' },
+      { name: 'getCreatableRecordTypes', verb: (c) => c.getCreatableRecordTypes(), status: 503, detail: cannotAnswer },
+      { name: 'getChildRecordTypes', verb: (c) => c.getChildRecordTypes(shared, sharedKey), status: 503, detail: cannotAnswer },
+      { name: 'getRenderedDocument', verb: (c) => c.getRenderedDocument(shared, sharedKey), status: 503, detail: cannotAnswer },
+      { name: 'getCopyDocument', verb: (c) => c.getCopyDocument(shared, sharedKey), status: 503, detail: cannotAnswer },
+      { name: 'getRecordOfFile', verb: (c) => c.getRecordOfFile(sourcePath), status: 422, detail: `${sourcePath} declares no FormKey, so it is no record's document.` },
+      { name: 'getCreatablePluginExtensions', verb: (c) => c.getCreatablePluginExtensions(), status: 503, detail: cannotAnswer },
+      { name: 'getPluginDependants', verb: (c) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' }), status: 503, detail: notIndexed },
+      { name: 'getPluginProblems', verb: (c) => c.getPluginProblems(), status: 503, detail: notIndexed },
+    ];
 
-    const outcome = await client.getEditChanges(
-      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
-    );
+    it.each(reads)('$name fails with mEdit\'s reason alone, and files the verb and status in the log', async ({ name, verb, status, detail }) => {
+      const { result, log } = await exchange(verb, answers(status, { detail }));
 
-    expect(outcome).toEqual({
-      applied: false, refusal: 'SourceAccessFailed', message: 'Could not write the source file for 000800:MyPatch.esp: Access denied.',
+      expect(result).toEqual({ failed: 'refused', refusal: detail });
+      expect(log.lines.error).toEqual([expect.stringMatching(new RegExp(`${name}.*failed \\(${status}\\): `))]);
+      expect(log.lines.error[0]).toContain(detail);
+    });
+
+    it.each([
+      ['getComparison', (c: MEditClient) => c.getComparison('000801:Gone.esp')],
+      ['getRenderedDocument', (c: MEditClient) => c.getRenderedDocument(shared, sharedKey)],
+      ['getCopyDocument', (c: MEditClient) => c.getCopyDocument(shared, sharedKey)],
+    ])('%s answers null on a 404, a record held by no plugin', async (_name, verb) => {
+      const { result } = await exchange(verb, answers(404, { detail: 'No such record.' }));
+
+      expect(result).toBeNull();
+    });
+
+    it.each([
+      ['getPluginDependants, so a rename never goes ahead unasked on no answer', (c: MEditClient) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })],
+      ['getPluginProblems, so no plugin reads as clean on no answer', (c: MEditClient) => c.getPluginProblems()],
+    ])('%s fails a response with no body', async (_name, verb) => {
+      const { result } = await exchange(verb, answers(200));
+
+      expect(result).toEqual({ failed: 'no-answer' });
     });
   });
 
-  it('getEditChanges answers a 503 that names no cause as Unknown, in the backend\'s words', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
-    const client = makeClient(fetch);
+  describe('getEditChanges answered with a refusal', () => {
+    const notTracked = 'MyPatch.esp is not tracked, so it is read-only.';
+    const detail = 'No load order has been received.';
+    const refusals = [
+      [409, { refusal: 'PluginNotTracked', detail: notTracked }, 'PluginNotTracked', notTracked],
+      [422, { refusal: 'PluginNotTracked', detail: notTracked }, 'PluginNotTracked', notTracked],
+      [422, { refusal: 'SourceAccessFailed', detail: 'Could not write the source file for 000800:MyPatch.esp: Access denied.' }, 'SourceAccessFailed', 'Could not write the source file for 000800:MyPatch.esp: Access denied.'],
+      [503, { detail }, 'Unknown', detail],
+    ] as const;
 
-    const outcome = await client.getEditChanges(
-      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
-    );
+    it.each(refusals)('answers a %s as its cause in the backend\'s words, a warning and no error', async (status, body, refusal, message) => {
+      const { result, log } = await exchange((c) => c.getEditChanges('000800:MyPatch.esp', myPatch, renamed), answers(status, body));
 
-    expect(outcome).toEqual({ applied: false, refusal: 'Unknown', message: 'No load order has been received.' });
-  });
-});
-
-describe('HttpMEditClient — rebuildIndex', () => {
-  it('POSTs the instance root and game release, and resolves rebuilt on success', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 204 })));
-    const client = makeClient(fetch);
-
-    const outcome = await client.rebuildIndex('/instance', 'Fallout4');
-
-    expect(outcome).toEqual({ rebuilt: true });
-    const request = fetch.mock.calls[0]?.[0];
-    expect(request?.url).toMatch(/\/index\/rebuild$/);
-    expect(await request?.json()).toEqual({ instanceRoot: '/instance', gameRelease: 'Fallout4' });
+      expect(result).toEqual({ applied: false, refusal, message });
+      expect(log.lines.warn).toEqual([expect.stringContaining(refusal)]);
+      expect(log.lines.error).toEqual([]);
+    });
   });
 
-  it('answers a 423 as heldElsewhere, not in the generic-failure shape a non-ok response otherwise gets', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(423, {
+  describe('rebuildIndex answered with a failure', () => {
+    const heldBody = {
       detail: 'This instance\'s index is open in another Modbench window (/instance/modbench/index.duckdb). '
         + 'Close mEdit there first, or open a different instance here.',
-    })));
-    const client = makeClient(fetch);
+    };
+    it.each([
+      ['a 423 as heldElsewhere', answers(423, heldBody), { rebuilt: false, heldElsewhere: true }],
+      ['any other non-ok response as a plain failure carrying the backend detail', answers(500, { detail: 'Failed to rebuild the store.' }), { rebuilt: false, heldElsewhere: false, detail: 'Failed to rebuild the store.' }],
+      ['a thrown request as a plain failure, never a rejection', rejects('fetch failed'), { rebuilt: false, heldElsewhere: false, detail: 'mEdit could not be reached.' }],
+    ])('answers %s', async (_name, respond, expected) => {
+      const { result } = await exchange((c) => c.rebuildIndex('/instance', 'Fallout4'), respond);
 
-    const outcome = await client.rebuildIndex('/instance', 'Fallout4');
-
-    expect(outcome).toEqual({ rebuilt: false, heldElsewhere: true });
+      expect(result).toEqual(expected);
+    });
   });
 
-  it('answers any other non-ok response as a plain failure, carrying the backend detail', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(500, { detail: 'Failed to rebuild the store.' })));
-    const client = makeClient(fetch);
+  describe('clearFilter', () => {
+    it.each([
+      ['a refusal with the backend detail', answers(503, { detail: 'No load order has been received yet.' }), 'No load order has been received yet.'],
+      ['a thrown request with its reason, never a rejection', rejects('fetch failed'), 'mEdit could not be reached.'],
+      ['a clear mEdit took with null', answers(204), null],
+    ])('answers %s', async (_name, respond, expected) => {
+      const { result } = await exchange((c) => c.clearFilter(), respond);
 
-    const outcome = await client.rebuildIndex('/instance', 'Fallout4');
-
-    expect(outcome).toEqual({ rebuilt: false, heldElsewhere: false, detail: 'Failed to rebuild the store.' });
-  });
-
-  it('answers a thrown request as a plain failure, never a rejection', async () => {
-    const fetch = vi.fn(() => Promise.reject(new Error('fetch failed')));
-    const client = makeClient(fetch);
-
-    const outcome = await client.rebuildIndex('/instance', 'Fallout4');
-
-    expect(outcome).toEqual({ rebuilt: false, heldElsewhere: false, detail: 'mEdit could not be reached.' });
+      expect(result).toBe(expected);
+    });
   });
 });
+
 
 describe('HttpMEditClient — the record filter', () => {
   it('POSTs the SQL with its source', async () => {
@@ -712,23 +475,6 @@ describe('HttpMEditClient — the record filter', () => {
     expect(await client.getActiveFilter()).toBeNull();
   });
 
-  it('answers a refused clear with the backend detail', async () => {
-    const client = makeClient(vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received yet.' }))));
-
-    expect(await client.clearFilter()).toBe('No load order has been received yet.');
-  });
-
-  it('answers a thrown clear with its reason, never a rejection', async () => {
-    const client = makeClient(vi.fn(() => Promise.reject(new Error('fetch failed'))));
-
-    expect(await client.clearFilter()).toBe('mEdit could not be reached.');
-  });
-
-  it('answers a clear mEdit took with null', async () => {
-    const client = makeClient(vi.fn(() => Promise.resolve(new Response(null, { status: 204 }))));
-
-    expect(await client.clearFilter()).toBeNull();
-  });
 });
 
 describe('HttpMEditClient — searchRecords', () => {
@@ -963,206 +709,6 @@ describe('HttpMEditClient — sendLoadOrder', () => {
   });
 });
 
-describe('HttpMEditClient — the record types the game can create', () => {
-  it('asks mEdit for them and reads each type with its name', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, [
-      { type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' },
-    ])));
-    const client = makeClient(fetch);
-
-    const types = await client.getCreatableRecordTypes();
-
-    expect(types).toEqual([{ type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' }]);
-    expect(fetch.mock.calls[0]?.[0].url).toMatch(/\/record-types\/creatable$/);
-  });
-
-  it('fails, naming the reason, when mEdit cannot answer', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
-    const client = makeClient(fetch);
-
-    await expect(client.getCreatableRecordTypes()).resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
-  });
-});
-
-describe('HttpMEditClient — the record types a container record can hold', () => {
-  it('asks mEdit for the plugin\'s copy of the record and reads each type with its name', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, [{ type: 'dial', displayName: 'Dialog Topic' }])));
-    const client = makeClient(fetch);
-
-    const types = await client.getChildRecordTypes({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp');
-
-    expect(types).toEqual([{ type: 'dial', displayName: 'Dialog Topic' }]);
-    const url = new URL(fetch.mock.calls[0]?.[0].url ?? '');
-    expect(url.pathname).toBe('/plugins/Shared.esp/records/000800%3AShared.esp/child-record-types');
-    expect(url.searchParams.get('origin')).toBe('ModA');
-  });
-
-  it('fails, naming the reason, when mEdit cannot answer', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
-    const client = makeClient(fetch);
-
-    await expect(client.getChildRecordTypes({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp'))
-      .resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
-  });
-});
-
-describe('HttpMEditClient — a copy rendered as its document', () => {
-  it('asks mEdit for the plugin\'s copy of the record and reads its name and text', async () => {
-    const rendered = { fileName: 'SharedNpc - 000800_Shared.esp.json', text: '{ "FormKey": "000800:Shared.esp" }' };
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, rendered)));
-    const client = makeClient(fetch);
-
-    const document = await client.getRenderedDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp');
-
-    expect(document).toEqual(rendered);
-    const url = new URL(fetch.mock.calls[0]?.[0].url ?? '');
-    expect(url.pathname).toBe('/plugins/Shared.esp/records/000800%3AShared.esp/rendered-document');
-    expect(url.searchParams.get('origin')).toBe('ModA');
-  });
-
-  it('answers null when the plugin holds no such record', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(404, { detail: 'The plugin holds no such record.' })));
-    const client = makeClient(fetch);
-
-    await expect(client.getRenderedDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp')).resolves.toBeNull();
-  });
-
-  it('fails, naming the reason, when mEdit cannot answer', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
-    const client = makeClient(fetch);
-
-    await expect(client.getRenderedDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp'))
-      .resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
-  });
-});
-
-describe('HttpMEditClient — the document of a copy of a record', () => {
-  it('asks mEdit for the document of the plugin\'s copy of the record', async () => {
-    const file = { kind: 'OwnFile', location: '/mods/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json' };
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, file)));
-    const client = makeClient(fetch);
-
-    await expect(client.getCopyDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp')).resolves.toEqual(file);
-    const url = new URL(fetch.mock.calls[0]?.[0].url ?? '');
-    expect(url.pathname).toBe('/plugins/Shared.esp/records/000800%3AShared.esp/document');
-    expect(url.searchParams.get('origin')).toBe('ModA');
-  });
-
-  it('answers null when the plugin holds no such record', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(404, { detail: 'The plugin holds no such record.' })));
-    const client = makeClient(fetch);
-
-    await expect(client.getCopyDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp')).resolves.toBeNull();
-  });
-
-  it('fails, naming the reason, when mEdit cannot answer', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
-    const client = makeClient(fetch);
-
-    await expect(client.getCopyDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp'))
-      .resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
-  });
-});
-
-describe('HttpMEditClient — the record a file holds', () => {
-  const path = '/mods/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json';
-
-  it('asks mEdit for the record whose own document the file is', async () => {
-    const record = { formKey: '000800:Shared.esp', plugin: 'Shared.esp', origin: 'ModA' };
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, record)));
-    const client = makeClient(fetch);
-
-    await expect(client.getRecordOfFile(path)).resolves.toEqual(record);
-    const url = new URL(fetch.mock.calls[0]?.[0].url ?? '');
-    expect(url.pathname).toBe('/plugin-source/record');
-    expect(url.searchParams.get('path')).toBe(path);
-  });
-
-  it('answers null when mEdit answers the file holds no record', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 204 })));
-    const client = makeClient(fetch);
-
-    await expect(client.getRecordOfFile(path)).resolves.toBeNull();
-  });
-
-  it('fails with mEdit\'s reason when it cannot read the file', async () => {
-    const detail = `${path} declares no FormKey, so it is no record's document.`;
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(422, { detail })));
-    const client = makeClient(fetch);
-
-    await expect(client.getRecordOfFile(path)).resolves.toEqual({ failed: 'refused', refusal: detail });
-  });
-});
-
-describe('HttpMEditClient — the extensions a new plugin may take', () => {
-  it('asks mEdit and reads its answer', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, ['.esp', '.esm'])));
-    const client = makeClient(fetch);
-
-    await expect(client.getCreatablePluginExtensions()).resolves.toEqual(['.esp', '.esm']);
-    expect(fetch.mock.calls[0]?.[0].url).toMatch(/\/plugins\/creatable-extensions$/);
-  });
-
-  it('fails, naming the reason, when mEdit cannot answer', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
-    const client = makeClient(fetch);
-
-    await expect(client.getCreatablePluginExtensions()).resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
-  });
-});
-
-describe('HttpMEditClient — the plugins that list a plugin as a master', () => {
-  it('answers the dependants and the plugins whose masters could not be read', async () => {
-    const answer = { dependants: [{ name: 'Child.esp', origin: 'ChildMod' }], unreadable: [{ name: 'Bad.esp', origin: 'BadMod' }] };
-    const client = makeClient(vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, answer))));
-
-    await expect(client.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })).resolves.toEqual(answer);
-  });
-
-  it('fails a response with no body, so a rename never goes ahead unasked on no answer', async () => {
-    const client = makeClient(vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 200 }))));
-
-    await expect(client.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })).resolves.toEqual({ failed: 'no-answer' });
-  });
-
-  it('fails, naming the reason, while mEdit has not finished indexing', async () => {
-    const client = makeClient(vi.fn((_req: Request) =>
-      Promise.resolve(jsonResponse(503, { detail: 'mEdit has not finished indexing the plugins.' }))));
-
-    await expect(client.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })).resolves.toEqual({ failed: 'refused', refusal: 'mEdit has not finished indexing the plugins.' });
-  });
-});
-
-describe('HttpMEditClient — the problems in each tracked plugin\'s source', () => {
-  it('answers each plugin with its problems, on the file that holds the record', async () => {
-    const answer = [{
-      plugin: { name: 'Refers.esp', origin: 'ReferringMod' },
-      problems: [{ formKey: '000800:Refers.esp', targetFormKey: '000ABC:Absent.esp', sourceRelativePath: 'Refers.esp/Npcs/Npc.json', message: 'Race: 000ABC:Absent.esp is held by no active plugin' }],
-    }];
-    let asked: Request | undefined;
-    const client = makeClient(vi.fn((req: Request) => {
-      asked = req;
-      return Promise.resolve(jsonResponse(200, answer));
-    }));
-
-    await expect(client.getPluginProblems()).resolves.toEqual(answer);
-    expect(new URL(asked?.url ?? '').pathname).toBe('/plugins/problems');
-  });
-
-  it('fails a response with no body, so no plugin reads as clean on no answer', async () => {
-    const client = makeClient(vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 200 }))));
-
-    await expect(client.getPluginProblems()).resolves.toEqual({ failed: 'no-answer' });
-  });
-
-  it('fails, naming the reason, while mEdit has not finished indexing', async () => {
-    const client = makeClient(vi.fn((_req: Request) =>
-      Promise.resolve(jsonResponse(503, { detail: 'mEdit has not finished indexing the plugins.' }))));
-
-    await expect(client.getPluginProblems()).resolves.toEqual({ failed: 'refused', refusal: 'mEdit has not finished indexing the plugins.' });
-  });
-});
-
 describe('HttpMEditClient — a read the request never reaches mEdit with', () => {
   it('fails as unreachable, and files the fetch error in the log alone', async () => {
     const log = leveledLog();
@@ -1325,12 +871,4 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await expect(client.getEditChanges(record.formKey, plugin, envelope)).rejects.toThrow(new Error('mEdit could not be reached.'));
   });
 
-  it('carries no documents of its own: an edit sends its envelope alone', async () => {
-    let seen: Request | undefined;
-    const client = makeClient(vi.fn((req: Request) => { seen = req; return Promise.resolve(jsonResponse(200, { moves: [], deletions: [], documents: [] })); }));
-
-    await client.getEditChanges(record.formKey, plugin, envelope);
-
-    expect(await seen?.json()).toEqual({ edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...envelope } });
-  });
 });

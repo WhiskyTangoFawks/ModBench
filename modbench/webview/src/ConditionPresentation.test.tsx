@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
+import { collapsedReading } from './presentation';
 import type { CompareResult, FieldDiff, FieldMetadata } from './types';
 import { vscode } from './vscode';
 import {
@@ -273,92 +274,6 @@ describe('a collapsed condition reads as xEdit prose', () => {
     expect(summaryOf(0)).toBe('CombatTarget.GetStageDone(MQ101, 10) = 1.000000 AND');
   });
 
-  it('Run On = Reference renders the reference as its short name in parentheses', async () => {
-    currentCompare = oneColumn(
-      [documentSpelledCondition({}, {
-        RunOnType: 'Reference', Reference: '00000014:Fallout4.esm',
-        Function: 'HasKeyword', ParameterOneRecord: '00AABBCC:MyMod.esp',
-      })],
-      { '00000014:Fallout4.esm': 'PlayerRef', '00AABBCC:MyMod.esp': 'ArmorKeyword' },
-    );
-    renderPanel();
-    await collapseConditions();
-
-    expect(summaryOf(0)).toBe('(PlayerRef).HasKeyword(ArmorKeyword) = 1.000000');
-  });
-
-  it('a function with no parameters is written without parentheses', async () => {
-    currentCompare = oneColumn([documentSpelledCondition({ CompareOperator: 'NotEqualTo' }, { Function: 'IsSneaking' })]);
-    renderPanel();
-    await collapseConditions();
-
-    expect(summaryOf(0)).toBe('Subject.IsSneaking <> 1.000000');
-  });
-
-  it('a string parameter is written without parentheses — xEdit ignores the slot, the value has its own row', async () => {
-    currentCompare = oneColumn([documentSpelledCondition({}, {
-      Function: 'GetGraphVariableFloat', ParameterOneString: 'bAllowRotation',
-    })]);
-    renderPanel();
-    await collapseConditions();
-
-    expect(summaryOf(0)).toBe('Subject.GetGraphVariableFloat = 1.000000');
-  });
-
-  it('both record slots read as short names', async () => {
-    currentCompare = oneColumn(
-      [documentSpelledCondition({}, {
-        Function: 'HasAssociationType',
-        ParameterOneRecord: '00000014:Fallout4.esm', ParameterTwoRecord: '00003333:MyMod.esp',
-      })],
-      { '00000014:Fallout4.esm': 'PlayerRef', '00003333:MyMod.esp': 'MyAssocType' },
-    );
-    renderPanel();
-    await collapseConditions();
-
-    expect(summaryOf(0)).toBe('Subject.HasAssociationType(PlayerRef, MyAssocType) = 1.000000');
-  });
-
-  it('a string second parameter drops only itself', async () => {
-    currentCompare = oneColumn(
-      [documentSpelledCondition({}, {
-        Function: 'GetVMQuestVariable',
-        ParameterOneRecord: '00000F1E:MyMod.esp', ParameterTwoString: '::myVar',
-      })],
-      { '00000F1E:MyMod.esp': 'MyQuest' },
-    );
-    renderPanel();
-    await collapseConditions();
-
-    expect(summaryOf(0)).toBe('Subject.GetVMQuestVariable(MyQuest) = 1.000000');
-  });
-
-  it('a GLOB comparison reads as the global’s short name, not a float', async () => {
-    currentCompare = oneColumn(
-      [documentSpelledCondition({
-        MutagenObjectType: 'ConditionGlobal', CompareOperator: 'GreaterThanOrEqualTo',
-        ComparisonValue: '00000ABC:MyMod.esp',
-      }, { Function: 'IsSneaking' })],
-      { '00000ABC:MyMod.esp': 'MyGlobal' },
-    );
-    renderPanel();
-    await collapseConditions();
-
-    expect(summaryOf(0)).toBe('Subject.IsSneaking >= MyGlobal');
-  });
-
-  it('the OR flag writes OR, and the last element of the list carries no conjunction at all', async () => {
-    currentCompare = oneColumn([
-      documentSpelledCondition({ Flags: ['OR'] }, { Function: 'IsSneaking' }),
-      documentSpelledCondition({ Flags: ['OR'] }, { Function: 'IsSneaking' }),
-    ]);
-    renderPanel();
-    await collapseConditions();
-
-    expect(summaryOf(0)).toBe('Subject.IsSneaking = 1.000000 OR');
-    expect(summaryOf(1)).toBe('Subject.IsSneaking = 1.000000');
-  });
-
   it('a column with fewer conditions ends its list where its own last element is', async () => {
     currentCompare = compareResult({
       [PLUGIN]: [documentSpelledCondition({}, { Function: 'IsSneaking' }), documentSpelledCondition({}, { Function: 'IsSneaking' })],
@@ -377,16 +292,6 @@ describe('a collapsed condition reads as xEdit prose', () => {
     if (!firstColumnCell || !secondColumnCell) throw new Error("both columns' [0] row cells");
     expect(firstColumnCell.textContent).toBe('Subject.IsSneaking = 1.000000 AND');
     expect(secondColumnCell.textContent).toBe('Subject.IsSneaking = 1.000000');
-  });
-
-  it('the leaf with no function member of its own, as Fallout 4\'s GetEventData *is* one function, is named by its own leaf type', async () => {
-    currentCompare = oneColumn([documentSpelledCondition({}, {
-      MutagenObjectType: 'GetEventData', Function: null, EventFunction: 0, EventMember: 0,
-    })]);
-    renderPanel();
-    await collapseConditions();
-
-    expect(summaryOf(0)).toBe('Subject.GetEventData = 1.000000');
   });
 
   it('an expanded condition shows its members instead of the summary', async () => {
@@ -430,7 +335,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
   });
 });
 
-describe('the table keys on the leaf type name: the discriminator\'s value where the leaf is a union, the schema\'s declared type name where it is not', () => {
+describe('collapsedReading of a condition', () => {
   const notAUnionWithAnEntryTheTableAlreadyHas: FieldMetadata = {
     ...conditionsMeta,
     elementType: {
@@ -439,28 +344,70 @@ describe('the table keys on the leaf type name: the discriminator\'s value where
       fields: conditionsElementTypeFields.filter(f => !f.isDiscriminator),
     },
   };
+  const declaredConcreteBase: FieldMetadata = {
+    ...conditionsMeta,
+    elementType: { ...conditionsElementType, leafTypeName: 'ConditionFloat' },
+  };
+  const withoutDiscriminator = documentSpelledCondition({}, { Function: 'IsSneaking' });
+  delete withoutDiscriminator.MutagenObjectType;
+  const playerRef = { '00000014:Fallout4.esm': 'PlayerRef' };
 
-  it('reads its summary from the type name the schema declares', async () => {
-    const noDiscriminator = documentSpelledCondition({}, { Function: 'IsSneaking' });
-    delete noDiscriminator.MutagenObjectType;
-    currentCompare = oneColumn([noDiscriminator], {}, notAUnionWithAnEntryTheTableAlreadyHas);
-    renderPanel();
-    await collapseConditions();
+  const rows: {
+    name: string; conditions: Condition[]; resolutions?: Record<string, string>; meta?: FieldMetadata; isLast?: boolean; reads: string;
+  }[] = [
+    { name: 'Run On = Reference reads the reference as its short name in parentheses',
+      conditions: [documentSpelledCondition({}, {
+        RunOnType: 'Reference', Reference: '00000014:Fallout4.esm', Function: 'HasKeyword', ParameterOneRecord: '00AABBCC:MyMod.esp',
+      })],
+      resolutions: { ...playerRef, '00AABBCC:MyMod.esp': 'ArmorKeyword' },
+      reads: '(PlayerRef).HasKeyword(ArmorKeyword) = 1.000000' },
+    { name: 'a function with no parameters is written without parentheses',
+      conditions: [documentSpelledCondition({ CompareOperator: 'NotEqualTo' }, { Function: 'IsSneaking' })],
+      reads: 'Subject.IsSneaking <> 1.000000' },
+    { name: 'a string parameter is written without parentheses, xEdit ignoring the slot, the value having its own row',
+      conditions: [documentSpelledCondition({}, { Function: 'GetGraphVariableFloat', ParameterOneString: 'bAllowRotation' })],
+      reads: 'Subject.GetGraphVariableFloat = 1.000000' },
+    { name: 'both record slots read as short names',
+      conditions: [documentSpelledCondition({}, {
+        Function: 'HasAssociationType', ParameterOneRecord: '00000014:Fallout4.esm', ParameterTwoRecord: '00003333:MyMod.esp',
+      })],
+      resolutions: { ...playerRef, '00003333:MyMod.esp': 'MyAssocType' },
+      reads: 'Subject.HasAssociationType(PlayerRef, MyAssocType) = 1.000000' },
+    { name: 'a string second parameter drops only itself',
+      conditions: [documentSpelledCondition({}, {
+        Function: 'GetVMQuestVariable', ParameterOneRecord: '00000F1E:MyMod.esp', ParameterTwoString: '::myVar',
+      })],
+      resolutions: { '00000F1E:MyMod.esp': 'MyQuest' },
+      reads: 'Subject.GetVMQuestVariable(MyQuest) = 1.000000' },
+    { name: 'a GLOB comparison reads as the global\'s short name, not a float',
+      conditions: [documentSpelledCondition({
+        MutagenObjectType: 'ConditionGlobal', CompareOperator: 'GreaterThanOrEqualTo', ComparisonValue: '00000ABC:MyMod.esp',
+      }, { Function: 'IsSneaking' })],
+      resolutions: { '00000ABC:MyMod.esp': 'MyGlobal' },
+      reads: 'Subject.IsSneaking >= MyGlobal' },
+    { name: 'the OR flag writes OR after a non-last element',
+      conditions: [documentSpelledCondition({ Flags: ['OR'] })], isLast: false,
+      reads: 'Subject.IsSneaking = 1.000000 OR' },
+    { name: 'the last element of the list carries no conjunction at all',
+      conditions: [documentSpelledCondition({ Flags: ['OR'] })],
+      reads: 'Subject.IsSneaking = 1.000000' },
+    { name: 'the leaf with no function member of its own, as Fallout 4\'s GetEventData is one function, is named by its own leaf type',
+      conditions: [documentSpelledCondition({}, { MutagenObjectType: 'GetEventData', Function: null, EventFunction: 0, EventMember: 0 })],
+      reads: 'Subject.GetEventData = 1.000000' },
+    { name: 'a leaf that is not a union reads from the type name the schema declares',
+      conditions: [withoutDiscriminator], meta: notAUnionWithAnEntryTheTableAlreadyHas,
+      reads: 'Subject.IsSneaking = 1.000000' },
+    { name: 'a union whose own value names no leaf keys on nothing, not on the name the schema declares, which as a concrete base is a leaf name too',
+      conditions: [documentSpelledCondition({ MutagenObjectType: null }, { Function: 'IsSneaking' })], meta: declaredConcreteBase,
+      reads: '{…}' },
+  ];
 
-    expect(summaryOf(0)).toBe('Subject.IsSneaking = 1.000000');
-  });
+  it.each(rows)('$name', ({ conditions, resolutions, meta = conditionsMeta, isLast = true, reads }) => {
+    const [conditionDiff] = required(oneColumn(conditions, resolutions, meta).diffs[0]?.children, 'the condition rows');
 
-  it('a union whose own value names no leaf keys on nothing, not on the name the schema declares, which as a concrete base is a leaf name too', async () => {
-    const declared: FieldMetadata = {
-      ...conditionsMeta,
-      elementType: { ...conditionsElementType, leafTypeName: 'ConditionFloat' },
-    };
-    const unnamed = documentSpelledCondition({ MutagenObjectType: null }, { Function: 'IsSneaking' });
-    currentCompare = oneColumn([unnamed], {}, declared);
-    renderPanel();
-    await collapseConditions();
+    const reading = collapsedReading(required(conditionDiff, 'the condition row'), meta.elementType ?? undefined, PLUGIN, isLast);
 
-    expect(summaryOf(0)).toBe('{…}');
+    expect(reading).toEqual({ text: reads, isPlaceholder: reads === '{…}' });
   });
 });
 
