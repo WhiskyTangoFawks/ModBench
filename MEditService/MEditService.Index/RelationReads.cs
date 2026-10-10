@@ -32,6 +32,8 @@ internal sealed class RelationReads(
         return tableName == null ? null : ReadDocument(connection, tableName, formKey, plugin: null, origin: null, winnerOnly: true);
     }
 
+    /// <summary>One specific plugin's copy of <paramref name="formKey"/>, winner or not. Null if
+    /// that plugin never indexed this FormKey.</summary>
     public RecordDocument? GetDocument(string formKey, PluginAddress plugin)
     {
         using var connection = store.OpenReadConnection();
@@ -176,8 +178,8 @@ internal sealed class RelationReads(
         return conditions.Count == 0 ? "" : "WHERE " + string.Join(" AND ", conditions);
     }
 
-    /// <summary>Row count per record type for one plugin, narrowed by the filter as listings are
-    /// (SetFilter never affects a point read), through the same BuildWhere.</summary>
+    /// <summary>Row count per record type for one plugin, narrowed by the filter as Search is
+    /// (SetFilter never affects a point read).</summary>
     public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin)
     {
         using var connection = store.OpenReadConnection();
@@ -455,6 +457,8 @@ internal sealed class RelationReads(
         return result;
     }
 
+    // Worldspace tree reads (plugins.md, The tree, story 6) from the placement / cell_location side
+    // tables, in the order xEdit's navigator lists them.
     public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey) =>
         CellLocations(plugin, "cl.parent_worldspace = $3", "cl.block_x, cl.block_y, cl.sub_x, cl.sub_y", [worldspaceFormKey]);
 

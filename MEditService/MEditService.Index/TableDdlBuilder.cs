@@ -138,8 +138,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         var records = PublicViews.Single(relation => relation.Table == "records");
         CreatePublicView(connection, PluginRecordsView, records, RegisteredJoin("t", records.PluginColumn, records.OriginColumn));
 
-        // form_key -> (record type, EditorID): the identity columns of `records`, so a lookup never
-        // reads `body`.
+        // form_key -> (record type, EditorID): the lookup exposes records' identity columns, not its
+        // document.
         CreatePublicView(
             connection, "form_lookup", records, ActiveJoin("t", records.PluginColumn, records.OriginColumn),
             columns: "t.form_key, t.plugin, t.origin, t.record_type, t.editor_id");

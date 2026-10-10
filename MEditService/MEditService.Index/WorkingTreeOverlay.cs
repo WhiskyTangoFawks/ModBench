@@ -76,8 +76,8 @@ internal sealed class WorkingTreeOverlay
                 }
             }
 
-            // Gone: document, lookup row and outgoing references alike. Dropping only the document
-            // would leave the record resolvable and in the reference graph.
+            // Gone: document and derived rows alike. Dropping only the document would leave the
+            // record in the reference graph.
             DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin);
             DeleteDerivationsForRecord(key, formKey);
@@ -150,7 +150,7 @@ internal sealed class WorkingTreeOverlay
 
         // The header carries no reference graph (masters are a plugin-dependency list, not FormKey
         // references), and a ModHeader cannot go through the per-record codec below, so this stops
-        // after the identity-only update, clearing stale form_references.
+        // after clearing stale form_references.
         if (recordType == PluginHeader.RecordType)
         {
             DeleteFormReferencesForRecord(key, formKey);
