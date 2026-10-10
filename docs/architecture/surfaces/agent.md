@@ -34,7 +34,7 @@ As a user, I want:
 5. My agent to see the problems I see in the Problems panel for the source it changed. Source: plugin-source.md, In the text editor, story 6
 6. My agent never to edit an untracked plugin. Editing needs tracking, for my agent as for me. Source: ADR-0007
 7. My agent to open a record in an editor tab, to show me what it found. Source: catalog, Record, `open`
-8. My agent to change many records by a rule with a script, as I do, against my window's mEdit. Source: scripts.md
+8. My agent to change many records by a rule with a script, as I do. Source: scripts.md
 
 ## Mod management
 

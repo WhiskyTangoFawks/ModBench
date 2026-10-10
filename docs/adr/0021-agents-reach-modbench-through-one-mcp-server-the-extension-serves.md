@@ -6,7 +6,7 @@ The user's agent runs in VS Code, in Chat or in its own panel, and MCP is the on
 
 - A record in plugin source has no edit gesture for the agent. The format is Modbench's own, so the agent edits the files, and git and the Problems panel review the edit as they review a hand edit (ADR-0007).
 - The mod manager's files have no file route for the agent. The gestures are its one way to change them, so the agent acts the same in every mod manager's instance.
-- A change to many records by a rule is a script, and a script is not a second door. My agent writes and runs one as I do, and the script reaches records through mEdit's API ([scripts.md](../architecture/surfaces/scripts.md)). The agent edits a few records as files, asks Modbench through MCP, and changes the mod manager's files through its gestures.
+- A change to many records by a rule is a script. The user's agent writes and runs one as the user does, and the script, not the agent, is mEdit's client ([scripts.md](../architecture/surfaces/scripts.md)).
 
 ## Alternatives rejected
 
