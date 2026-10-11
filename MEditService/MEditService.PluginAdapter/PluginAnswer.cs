@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using MEditService.Codec.Serialization;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda.Plugins;
@@ -109,11 +110,15 @@ public abstract record PluginFailure
     };
 
     /// <summary>Whether <paramref name="ex"/> is the failure of the read or write it came out of:
-    /// Mutagen fails in open-ended ways, and only running out of memory or being cancelled is not the
-    /// file's answer.</summary>
-    internal static bool StandsFor(Exception ex) => ex is not (OutOfMemoryException or OperationCanceledException);
+    /// only running out of memory or being cancelled, however Mutagen wrapped it, is not the file's
+    /// answer.</summary>
+    internal static bool StandsFor(Exception ex) => NotTheFilesAnswer(ex) is null;
 
-    /// <summary><paramref name="read"/>'s value, or the failure its throw stands for.</summary>
+    private static Exception? NotTheFilesAnswer(Exception? ex) =>
+        ex is null or OutOfMemoryException or OperationCanceledException ? ex : NotTheFilesAnswer(ex.InnerException);
+
+    /// <summary><paramref name="read"/>'s value, or the failure its throw stands for. A throw that is
+    /// not the file's answer is thrown as itself, unwrapped.</summary>
     internal static Answer<T, PluginFailure> Answer<T>(Func<T> read)
     {
         try
@@ -123,6 +128,11 @@ public abstract record PluginFailure
         catch (Exception ex) when (StandsFor(ex))
         {
             return Of(ex);
+        }
+        catch (Exception ex) when (NotTheFilesAnswer(ex) is { } cause && cause != ex)
+        {
+            ExceptionDispatchInfo.Throw(cause);
+            throw;
         }
     }
 
@@ -136,6 +146,11 @@ public abstract record PluginFailure
         catch (Exception ex) when (StandsFor(ex))
         {
             return Of(ex);
+        }
+        catch (Exception ex) when (NotTheFilesAnswer(ex) is { } cause && cause != ex)
+        {
+            ExceptionDispatchInfo.Throw(cause);
+            throw;
         }
     }
 }

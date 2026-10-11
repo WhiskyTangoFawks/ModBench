@@ -1,3 +1,6 @@
+using System.Collections;
+using System.Diagnostics.CodeAnalysis;
+using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
@@ -11,7 +14,7 @@ public sealed class PluginReadabilityTests : IDisposable
     private const string PluginName = "Readable.esp";
 
     private readonly PluginFixtureData _data = new PluginFixtureBuilder("adapter-readability")
-        .WithPlugin(PluginName)
+        .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Npc"))
         .Build();
 
     private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
@@ -66,5 +69,37 @@ public sealed class PluginReadabilityTests : IDisposable
         Directory.CreateDirectory(path);
 
         Assert.IsType<PluginFailure.Inaccessible>((await ReadSourceAt(path)).Failure());
+    }
+
+    [Fact]
+    public void ARecordReadStoppedByRunningOutOfMemory_ThrowsThatCause_HoweverMutagenWrappedIt()
+    {
+        using var records = Adapter.OpenRecordLookup(
+            new RegisteredPlugin(PluginName, PluginOrigin.DataDirectory, PluginPath, PluginProvider.Game, Line: null),
+            GameRelease.Fallout4, new SchemasWhoseReadRunsOutOfMemory()).Answered();
+
+        Assert.Throws<OutOfMemoryException>(() => records.TextOf($"000800:{PluginName}"));
+    }
+
+    private sealed class SchemasWhoseReadRunsOutOfMemory : IReadOnlyDictionary<string, RecordTableSchema>
+    {
+        private static InvalidOperationException Wrapped() =>
+            new("Mutagen's wrapper", Activator.CreateInstance<OutOfMemoryException>());
+
+        public RecordTableSchema this[string key] => throw Wrapped();
+
+        public IEnumerable<string> Keys => throw Wrapped();
+
+        public IEnumerable<RecordTableSchema> Values => throw Wrapped();
+
+        public int Count => throw Wrapped();
+
+        public bool ContainsKey(string key) => throw Wrapped();
+
+        public bool TryGetValue(string key, [MaybeNullWhen(false)] out RecordTableSchema value) => throw Wrapped();
+
+        public IEnumerator<KeyValuePair<string, RecordTableSchema>> GetEnumerator() => throw Wrapped();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }
