@@ -7,8 +7,10 @@ namespace MEditService.Index.Tests.Indexing;
 
 public class IndexAtomicityTests
 {
-    [Fact]
-    public void IndexingThatThrowsPartway_CommitsNoPartialRows()
+    [Theory]
+    [InlineData(typeof(InvalidOperationException))]
+    [InlineData(typeof(OperationCanceledException))]
+    public void IndexingThatThrowsPartway_CommitsNoPartialRows(Type thrownType)
     {
         using var fixture = new PluginFixtureBuilder("index-atomicity")
             .WithPlugin("Atomic.esp", mod =>
@@ -20,7 +22,7 @@ public class IndexAtomicityTests
             .Build();
         var key = new PluginAddress("Atomic.esp", PluginOrigin.DataDirectory);
         using var index = Indexes.Reconciled(fixture, adapter: new PartwayAdapter(
-            afterRecords: 2, () => throw new InvalidOperationException("injected mid-plugin read failure")));
+            afterRecords: 2, () => throw Faults.Of(thrownType)));
 
         Assert.Contains(index.Status.Failures, f => f.Name == "Atomic.esp");
         Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "Atomic.esp");

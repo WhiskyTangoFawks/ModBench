@@ -181,16 +181,20 @@ public sealed class UnsavedDocumentTests : IDisposable
         Assert.Null(LaterReadFailureOfTracked());
     }
 
-    [Fact]
-    public void AHandOverWhoseValidationFaultsOutright_FailsTheStatus()
+    [Theory]
+    [InlineData(typeof(InvalidOperationException))]
+    [InlineData(typeof(OutOfMemoryException))]
+    [InlineData(typeof(OperationCanceledException))]
+    public void AHandOverWhoseValidationFaultsOutright_FailsTheStatus(Type thrownType)
     {
+        var thrown = Faults.Of(thrownType);
         using var faulting = Indexes.Reconciled(
-            _fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: new InMemoryNotificationPublisher { FaultsOn = IsRowsChanged });
+            _fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: new InMemoryNotificationPublisher { OnPublish = Faults.On(IsRowsChanged, thrown) });
 
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedUnsaved\""))]);
 
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the failed status");
-        Assert.Contains(InMemoryNotificationPublisher.FaultReason, faulting.Status.Message, StringComparison.Ordinal);
+        Assert.Contains(thrown.Message, faulting.Status.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -202,6 +206,24 @@ public sealed class UnsavedDocumentTests : IDisposable
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the failed status");
 
         faults.FaultsOn = null;
+        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedAgain\""))]);
+
+        Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready, "the ready status");
+        Assert.Equal("TypedAgain", faulting.DocumentOf(_npc, _tracked.KeyOf()).EditorId);
+    }
+
+    [Fact]
+    public void AHandOverWhoseStatusCannotBePublished_LeavesTheNextHandOverValidated()
+    {
+        var faults = new InMemoryNotificationPublisher();
+        using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: faults);
+        var publishFault = Faults.Of(typeof(NotSupportedException));
+        faults.OnPublish = Faults.On(IsRowsChanged, Faults.Of(typeof(InvalidOperationException)))
+            + Faults.On(n => n is LoadOrderStatusNotification, publishFault);
+        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedUnsaved\""))]);
+        Waits.Reached(() => faulting.Status.Message?.Contains(publishFault.Message, StringComparison.Ordinal) == true, "the publish fault in the status");
+
+        faults.OnPublish = null;
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedAgain\""))]);
 
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready, "the ready status");
