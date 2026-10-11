@@ -56,7 +56,7 @@ public class MultiSubclassIndexingTests
     }
 
     [Fact]
-    public void EveryGlobSubclassLands_AndOnlyGlobalBoolsDataIsLostInTheBinary()
+    public void EveryGlobSubclassLands_WithItsData()
     {
         using var fixture = new PluginFixtureBuilder("glob-subclasses")
             .WithPlugin("Glob263.esp", mod =>
@@ -74,7 +74,7 @@ public class MultiSubclassIndexingTests
         Assert.Equal(7, Assert.IsType<JsonElement>(byEdid["TestGlobInt"]).GetInt32());
         Assert.Equal(1.25f, Assert.IsType<JsonElement>(byEdid["TestGlobFloat"]).GetSingle());
         Assert.Equal(3, Assert.IsType<JsonElement>(byEdid["TestGlobShort"]).GetInt32());
-        Assert.Null(byEdid["TestGlobBool"]);
+        Assert.True(Assert.IsType<JsonElement>(byEdid["TestGlobBool"]).GetBoolean());
     }
 
     [Fact]

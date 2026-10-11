@@ -24,7 +24,7 @@ internal static class PluginWriter
         Directory.CreateDirectory(tmpDir);
 
         // Cleanup is catch-and-rethrow, not finally: tmpDir must survive a successful return (Commit still
-        // needs tmpPath), and a throw from WriteAsync (Mutagen issue 688) leaves no
+        // needs tmpPath), and a throw from WriteAsync leaves no
         // PreparedPluginSave to Dispose it.
         try
         {
@@ -44,7 +44,7 @@ internal static class PluginWriter
         catch
         {
             // Cleanup is a courtesy, never allowed to outrank the exception it follows: a locked temp
-            // directory makes Directory.Delete throw, which would replace UnmappableFormIDException with an
+            // directory makes Directory.Delete throw, which would replace the write's own exception with an
             // IOException. No ILogger is in scope, so the failed cleanup is swallowed.
             try { Directory.Delete(tmpDir, recursive: true); }
             catch (IOException) { /* best-effort; tmpDir will remain on disk */ }

@@ -75,17 +75,6 @@ public abstract record PluginFailure
         public override bool OfItsBytes => false;
     }
 
-    /// <summary>ADR-0008's content-derived master pass pruned a master the write still needs: its only
-    /// reference sits in a VMAD struct-list property, which Mutagen never walks (upstream issue 688).</summary>
-    public sealed record PrunedMaster : PluginFailure
-    {
-        private readonly string _reason;
-
-        internal PrunedMaster(Exception error) : base(error) => _reason = PluginDiagnosis.FromWriteException(error).Describe();
-
-        public override string Reason => _reason;
-    }
-
     /// <summary>A record of the plugin's own object ID 0, whose FormKey is the one the plugin header's
     /// source document holds.</summary>
     public sealed record HeaderFormKeyHeld : PluginFailure
@@ -151,7 +140,6 @@ public abstract record PluginFailure
     internal static PluginFailure? OfWrite(Exception ex) => ex switch
     {
         IOException or UnauthorizedAccessException => new Inaccessible(ex),
-        _ when PluginDiagnosis.HasUnmappableFormID(ex) => new PrunedMaster(ex),
         MissingModException missing => new MasterNotInLoadOrder(missing),
         _ => null,
     };

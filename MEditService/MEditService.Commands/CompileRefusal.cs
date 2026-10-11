@@ -42,9 +42,6 @@ public enum CompileRefusal
     /// that range.</summary>
     FormIdOutsideFlagLimit,
 
-    /// <summary>A FormID the masters cannot map, so no binary is written (ADR-0008).</summary>
-    FormIdUnmappable,
-
     /// <summary>The source references a plugin the load order does not hold, so its masters have no
     /// order to be written in; the way out is that plugin in the load order.</summary>
     MasterNotInLoadOrder,
