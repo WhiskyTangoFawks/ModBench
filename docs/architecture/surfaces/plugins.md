@@ -52,9 +52,10 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 - A master issue never disables the plugin or cascades to its dependants. The check box stays as I set it. Source: xedit.md, divergence 28
 - Before the snapshot is indexed, a plugin shows no master status. That means not yet checked, not no issues.
 - A later snapshot keeps the last statuses until the new ones land.
-- A plugin that failed to read stays failed until its bytes change or I refresh.
+- A plugin that failed to read stays failed until its bytes change or I refresh. A failure that names another file, a master, a strings file or an archive, clears once that file reads. Source: ADR-0003
 - A malformed plugin's reasons are also in the Problems panel, on the plugin file. Source: commands.md, Surfaces and their templates
 - A plugin that changed outside Modbench is also a warning in the Problems panel, on the plugin file, while its bytes differ from what Modbench last wrote. Source: ADR-0003
+- A plugin that holds one FormKey in two groups fails to read, as xEdit refuses a duplicate FormID. The reason is also an error in the Problems panel, on the plugin file. Source: ruling; xEdit
 - A plugin whose plugin source is unreadable on disk shows the records of its plugin file, read-only, until decompile writes its source. An unsaved document that does not read is a failed later read, as [common.md](common.md), States, story 6 says. Source: ruling
 
 ### A plugin the game loads with no line
