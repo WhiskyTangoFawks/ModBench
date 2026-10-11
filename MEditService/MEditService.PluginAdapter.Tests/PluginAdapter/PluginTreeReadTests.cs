@@ -25,7 +25,7 @@ public sealed class PluginTreeReadTests
         var unwritable = new TreeFile(Path.Combine("Tree.esp", new string('n', 300) + ".json"), "{}"u8.ToArray());
 
         var thrown = await Assert.ThrowsAnyAsync<IOException>(
-            () => Adapter.ReadTreeAsync([unwritable], GameRelease.Fallout4));
+            () => Adapter.ReadTreeAsync([unwritable], EmptyLoadOrder.Of(GameRelease.Fallout4)));
 
         AssertScratchFolderGone(thrown.Message);
     }
@@ -35,7 +35,7 @@ public sealed class PluginTreeReadTests
     {
         var unreadable = new TreeFile(Path.Combine("Tree.esp", "RecordData.json"), "{ not json"u8.ToArray());
 
-        var read = await Adapter.ReadTreeAsync([unreadable], GameRelease.Fallout4);
+        var read = await Adapter.ReadTreeAsync([unreadable], EmptyLoadOrder.Of(GameRelease.Fallout4));
 
         Assert.IsType<PluginFailure.Unparsed>(read.Failure());
     }
@@ -45,7 +45,7 @@ public sealed class PluginTreeReadTests
     {
         var skyrim = new TreeFile(Path.Combine("Tree.esp", "RecordData.json"), "{ \"ModKey\": \"Tree.esp\", \"GameRelease\": \"SkyrimSE\" }"u8.ToArray());
 
-        var read = await Adapter.ReadTreeAsync([skyrim], GameRelease.Fallout4);
+        var read = await Adapter.ReadTreeAsync([skyrim], EmptyLoadOrder.Of(GameRelease.Fallout4));
 
         Assert.Equal(Path.Combine("Tree.esp", "RecordData.json"), Assert.IsType<PluginFailure.Unparsed>(read.Failure()).Diagnosis.Anchor);
     }
@@ -55,7 +55,7 @@ public sealed class PluginTreeReadTests
     {
         var header = new TreeFile(Path.Combine("Tree.esp", "RecordData.json"), "{ \"ModKey\": \"Tree.esp\" }"u8.ToArray());
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => Adapter.ReadTreeAsync([header], GameRelease.Oblivion));
+        await Assert.ThrowsAsync<NotSupportedException>(() => Adapter.ReadTreeAsync([header], EmptyLoadOrder.Of(GameRelease.Oblivion)));
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public sealed class PluginTreeReadTests
         var corrupt = files.Select(file => new TreeFile(file.RelativePath,
             Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(file.Content).Replace(race, "NOT-A-FORMKEY", StringComparison.Ordinal))));
 
-        var read = await Adapter.ReadTreeAsync([.. corrupt], GameRelease.Fallout4);
+        var read = await Adapter.ReadTreeAsync([.. corrupt], EmptyLoadOrder.Of(GameRelease.Fallout4));
 
         AssertScratchFolderGone(Assert.IsType<FilePathedException>(read.Failure().Error).Path);
     }
@@ -111,7 +111,7 @@ public sealed class PluginTreeReadTests
         var reversed = new[] { "BetaBase.esm", "AlphaBase.esm" };
         var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Patch.esp");
 
-        (await Adapter.WriteFromTreeAsync(files, recompiledPath, reversed, GameRelease.Fallout4)).Answered();
+        (await Adapter.WriteFromTreeAsync(files, recompiledPath, reversed, EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 
         var written = Adapter.ReadContent(
             new ModPath(ModKey.FromFileName("Patch.esp"), recompiledPath), EmptyLoadOrder.Of(GameRelease.Fallout4)).Answered();
@@ -135,7 +135,7 @@ public sealed class PluginTreeReadTests
         var files = await ReadTreeFiles(data, "Lower.esp");
         var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Lower.esp");
 
-        (await Adapter.WriteFromTreeAsync(files, recompiledPath, ["AlphaBase.esm"], GameRelease.Fallout4)).Answered();
+        (await Adapter.WriteFromTreeAsync(files, recompiledPath, ["AlphaBase.esm"], EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 
         var written = Adapter.ReadContent(
             new ModPath(ModKey.FromFileName("Lower.esp"), recompiledPath), EmptyLoadOrder.Of(GameRelease.Fallout4)).Answered();
@@ -158,10 +158,25 @@ public sealed class PluginTreeReadTests
         var files = await ReadTreeFiles(data, "Counter.esp");
         var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Counter.esp");
 
-        (await Adapter.WriteFromTreeAsync(files, recompiledPath, [], GameRelease.Fallout4)).Answered();
+        (await Adapter.WriteFromTreeAsync(files, recompiledPath, [], EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 
         using var written = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Counter.esp"), recompiledPath), Fallout4Release.Fallout4);
         Assert.Equal(0x900u, written.ModHeader.Stats.NextFormID);
+    }
+
+    [Fact]
+    public async Task WriteFromTree_OfAStarfieldOverrideOfALightMastersRecord_WritesItUnderThatMastersFormKey()
+    {
+        using var scratch = new ScratchDirectory("writetree-light-master");
+        var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
+        var source = (await Adapter.ReadSourceOfAsync(LightMasterAndChild.ChildIn(loadOrder), loadOrder, new PluginStrings(null, scratch))).Answered();
+        var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(scratch, "recompiled")).FullName, LightMasterAndChild.Child.FileName);
+
+        (await Adapter.WriteFromTreeAsync(source.Files, recompiledPath, source.Masters, loadOrder)).Answered();
+
+        using var written = Adapter.OpenDocuments(
+            new ModPath(LightMasterAndChild.Child, recompiledPath), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield)).Answered();
+        Assert.Equal([LightMasterAndChild.Weapon.ToString()], written.Records.Select(record => record.FormKey));
     }
 }

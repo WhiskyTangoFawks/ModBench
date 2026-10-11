@@ -84,7 +84,7 @@ public sealed class PluginWriterSaveTests
         var source = (await adapter.ReadSourceOfAsync(
             new RegisteredPlugin("Fixture.esp", "FixtureMod", pluginPath, new PluginProvider.FromMod("FixtureMod", folder), Line: null),
             EmptyLoadOrder.Of(GameRelease.Fallout4), new PluginStrings(folder, folder))).Answered();
-        var tree = (await adapter.ReadTreeAsync(source.Files, GameRelease.Fallout4)).Answered();
+        var tree = (await adapter.ReadTreeAsync(source.Files, EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 
         var saved = await tree.SaveAsync(pluginPath, ["Other.esm", "Fixture.esp"], save =>
         {
@@ -95,5 +95,50 @@ public sealed class PluginWriterSaveTests
         Assert.False(saved.Holds(out _, out var failure));
         Assert.Equal("it references Master.esm, which the load order does not hold", Assert.IsType<PluginFailure.MasterNotInLoadOrder>(failure).Reason);
         Assert.Equal(before, File.ReadAllBytes(pluginPath));
+    }
+
+    [Fact]
+    public async Task Save_OfAStarfieldOverrideOfALightMastersRecord_WritesItUnderThatMastersFormKey_AndDropsNothing()
+    {
+        using var scratch = new ScratchDirectory("pw-save-light-master");
+        var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
+        var child = LightMasterAndChild.ChildIn(loadOrder);
+        var adapter = TestAdapters.Mutagen();
+        var source = (await adapter.ReadSourceOfAsync(child, loadOrder, new PluginStrings(null, scratch))).Answered();
+        var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();
+
+        var drops = (await tree.SaveAsync(child.Path, source.Masters, save =>
+        {
+            var dropped = tree.DropsIn(save);
+            save.Commit();
+            return dropped;
+        })).Answered();
+
+        Assert.Empty(drops);
+        using var written = adapter.OpenDocuments(
+            new ModPath(LightMasterAndChild.Child, child.Path), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield)).Answered();
+        Assert.Equal([LightMasterAndChild.Weapon.ToString()], written.Records.Select(record => record.FormKey));
+    }
+
+    [Fact]
+    public async Task Save_OfAStarfieldTree_WhoseLoadOrderLacksItsLightMaster_FailsNamingIt()
+    {
+        using var scratch = new ScratchDirectory("pw-save-light-master-missing");
+        var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
+        var child = LightMasterAndChild.ChildIn(loadOrder);
+        var adapter = TestAdapters.Mutagen();
+        var source = (await adapter.ReadSourceOfAsync(child, loadOrder, new PluginStrings(null, scratch))).Answered();
+        var childAlone = SnapshotPlugins.Snapshot(scratch, null, GameRelease.Starfield,
+            [new LoadOrderEntry(child.Name, child.Path, child.Origin, 0, Enabled: true, Winning: true)]);
+        var tree = (await adapter.ReadTreeAsync(source.Files, childAlone)).Answered();
+
+        var saved = await tree.SaveAsync(child.Path, [child.Name], save =>
+        {
+            save.Commit();
+            return true;
+        });
+
+        Assert.False(saved.Holds(out _, out var failure));
+        Assert.Equal($"it references {LightMasterAndChild.Master.FileName}, which the load order does not hold", Assert.IsType<PluginFailure.MasterNotInLoadOrder>(failure).Reason);
     }
 }

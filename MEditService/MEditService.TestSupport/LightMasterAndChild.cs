@@ -1,3 +1,5 @@
+using MEditService.LoadOrder;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
@@ -33,4 +35,18 @@ public static class LightMasterAndChild
         });
         return (masterPath, childPath);
     }
+
+    /// <summary>Both written into <paramref name="folder"/>, as the game's own plugins in load order.</summary>
+    public static LoadOrderSnapshot LoadOrderIn(string folder)
+    {
+        var (masterPath, childPath) = Write(folder);
+        return SnapshotPlugins.Snapshot(folder, null, GameRelease.Starfield,
+        [
+            new LoadOrderEntry(Master.FileName, masterPath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
+            new LoadOrderEntry(Child.FileName, childPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
+        ]);
+    }
+
+    public static RegisteredPlugin ChildIn(LoadOrderSnapshot loadOrder) =>
+        loadOrder.Plugin(new PluginAddress(Child.FileName, PluginOrigin.DataDirectory)) ?? throw new InvalidOperationException($"{Child} is not in the load order.");
 }

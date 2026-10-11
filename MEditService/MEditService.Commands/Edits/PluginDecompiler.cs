@@ -60,7 +60,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         var gameRelease = loadOrder.GameRelease;
         using var scratch = ScratchPlugin.For(pluginName);
         if (!(await adapter.WriteFromTreeAsync(
-                    sourceAdapter.ReadBackOf(pluginName, source.Files, gameRelease), scratch.PluginPath, source.Masters, gameRelease, cancel))
+                    sourceAdapter.ReadBackOf(pluginName, source.Files, gameRelease), scratch.PluginPath, source.Masters, loadOrder, cancel))
                 .Holds(out var recompiledPath, out var failure)
             || !(await adapter.CompareBytesAsync(originalPluginPath, recompiledPath, loadOrder, cancel)).Holds(out var comparison, out failure))
         {

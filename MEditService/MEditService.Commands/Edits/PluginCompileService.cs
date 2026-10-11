@@ -62,7 +62,7 @@ internal sealed class PluginCompileService(
                 $"{plugin.Name}'s source folder holds no files, so there is nothing to compile. {RegenerateTheSource}");
         }
 
-        var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin, repository, loadOrder.GameRelease);
+        var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin, repository, loadOrder);
         if (deserializeRefusal != null)
             return CompileResult.Refused(CompileRefusal.SourceDoesNotParse, deserializeRefusal);
         var tree = parsedTree
@@ -190,9 +190,9 @@ internal sealed class PluginCompileService(
     }
 
     private async Task<(CompiledTree? Tree, string? RefusalReason)> DeserializeSource(
-        IReadOnlyList<TreeFile> files, PluginAddress plugin, ISourceRepository repository, GameRelease release)
+        IReadOnlyList<TreeFile> files, PluginAddress plugin, ISourceRepository repository, LoadOrderSnapshot loadOrder)
     {
-        if ((await adapter.ReadTreeAsync(files, release)).Holds(out var tree, out var failure)) return (tree, null);
+        if ((await adapter.ReadTreeAsync(files, loadOrder)).Holds(out var tree, out var failure)) return (tree, null);
 
         logger.LogWarning("{Plugin} could not be read from its source: {Reason}", plugin.Name, failure.Reason);
         var why = failure is PluginFailure.Unparsed unparsed && repository.InSourceNames(plugin, unparsed.Diagnosis).Holds(out var named, out _)

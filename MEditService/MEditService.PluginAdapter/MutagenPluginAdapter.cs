@@ -123,14 +123,14 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public Task<Answer<CompiledTree, PluginFailure>> ReadTreeAsync(
         IReadOnlyList<TreeFile> files,
-        GameRelease gameRelease,
+        LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default) =>
-        PluginTrees.ReadTreeAsync(files, gameRelease, cancel);
+        PluginTrees.ReadTreeAsync(files, loadOrder, cancel);
 
     public Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
-        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, GameRelease gameRelease,
+        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default) =>
-        PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, gameRelease, cancel);
+        PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, loadOrder, cancel);
 
     public Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
         RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, PluginStrings strings, CancellationToken cancel = default) =>
@@ -239,22 +239,26 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     /// <summary>Bytes written in place; the temp file and rename are <see cref="PluginWriter"/>'s. A
     /// mod read from a source tree has no header masters (ADR-0008), so it needs
-    /// <paramref name="masterOrder"/>.</summary>
+    /// <paramref name="masterOrder"/>, and <paramref name="loadOrder"/> to find their styles in.</summary>
     internal static async Task WriteAsync(
         IMod plugin,
         string destinationPath,
         IReadOnlyList<string>? masterOrder = null,
+        LoadOrderSnapshot? loadOrder = null,
         string? stringsFolder = null,
         bool noModKeySync = false)
     {
         var toPath = plugin.BeginWrite.ToPath(destinationPath);
+        var masters = masterOrder?.Select(name => ModKey.FromFileName(name)).ToList();
         // Mutagen's default resets the Next Object ID to one past the highest FormID, which would
         // hand a deleted record's FormKey out again (plugins.md, Create record, story 2).
-        var writeBuilder = (masterOrder is null
+        var writeBuilder = (masters is null
                 ? toPath.WithLoadOrderFromHeaderMasters()
-                : toPath.WithLoadOrder(masterOrder.Select(name => ModKey.FromFileName(name))))
+                : toPath.WithLoadOrder(masters))
             .WithNoDataFolder()
             .NoNextFormIDProcessing();
+        if (masters is not null && loadOrder is not null && MasterStyles.Of(masters, loadOrder) is { } styles)
+            writeBuilder = writeBuilder.WithKnownMasters([.. styles.Items]);
         // A destination named other than plugin's ModKey needs this lifted.
         if (noModKeySync) writeBuilder = writeBuilder.NoModKeySync();
 

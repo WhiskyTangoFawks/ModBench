@@ -31,7 +31,7 @@ public static class TreeSaves
                 Encoding.UTF8.GetString(file.Content),
                 (text, edit) => text.Replace(edit.From, edit.To, StringComparison.Ordinal))))).ToList();
 
-        var tree = (await adapter.ReadTreeAsync(edited, GameRelease.Fallout4)).Answered();
+        var tree = (await adapter.ReadTreeAsync(edited, EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
         var masters = loadOrder
             ?? adapter.ReadContent(new ModPath(ModKey.FromFileName(name), pluginPath), EmptyLoadOrder.Of(GameRelease.Fallout4)).Answered().Content.Masters;
         return (await tree.SaveAsync(pluginPath, masters, land)).Answered();

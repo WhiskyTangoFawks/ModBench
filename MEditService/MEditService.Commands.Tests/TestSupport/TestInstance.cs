@@ -3,7 +3,10 @@ using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
+using Noggog;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
@@ -19,6 +22,7 @@ public abstract class TestInstance : IDisposable
     private readonly ScratchDirectory _root = new("medit-instance-");
     private readonly GameRelease _release;
     private readonly List<LoadOrderEntry> _entries = [];
+    private readonly Cache<IModMasterStyledGetter, ModKey> _added = new(mod => mod.ModKey);
     private readonly Lazy<LoadOrderHolder> _holder;
     private readonly Lazy<IServiceProvider> _services;
     private LoadOrderSnapshot? _loadOrder;
@@ -90,18 +94,25 @@ public abstract class TestInstance : IDisposable
         var entry = new LoadOrderEntry(name, path, origin, line, Enabled: true, Winning: listing != Listing.Overridden);
         _entries.Add(entry);
 
-        if (!tracked) mod.WriteToBinary(path);
+        if (!tracked) Write(mod, path);
         else if (entry.Provider is not PluginProvider.FromMod)
             throw new InvalidOperationException($"'{origin}' is not a mod, so its plugin has no folder to track.");
         else if (mod.MasterReferences.Count == 0) TrackedTemplates.WriteTracked(folder, mod);
         else
         {
-            mod.WriteToBinary(path);
+            Write(mod, path);
             Track(origin);
         }
+        _added.Set(mod);
 
         return entry.Key;
     }
+
+    // Where a game's masters carry a style, Mutagen writes no FormID of a master whose style it is not given.
+    private void Write(IMod mod, string path) => mod.WriteToBinary(path, new BinaryWriteParameters { MasterFlagsLookup = _added });
+
+    /// <summary>The plugins added so far, by the style each one's header gives it.</summary>
+    public IReadOnlyCache<IModMasterStyledGetter, ModKey> Added => _added;
 
     /// <summary>The repository over the mod providing <paramref name="plugin"/>, or null when its
     /// folder is not tracked.</summary>

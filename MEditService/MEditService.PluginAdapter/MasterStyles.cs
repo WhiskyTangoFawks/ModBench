@@ -7,18 +7,24 @@ using Noggog;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>Where a game's masters each carry a style (full, medium or light), Mutagen reads no FormID
-/// out of a plugin without its masters' styles, and only each master's own header says it.</summary>
+/// <summary>Where a game's masters each carry a style (full, medium or light), Mutagen reads or writes no
+/// FormID of a plugin without its masters' styles, and only each master's own header says it.</summary>
 internal static class MasterStyles
 {
     /// <summary>Null for a game whose masters share one style, or with no load order to find them in.</summary>
     internal static IReadOnlyCache<IModMasterStyledGetter, ModKey>? Of(ModPath plugin, LoadOrderSnapshot? loadOrder) =>
-        loadOrder is not null && GameConstants.Get(loadOrder.GameRelease).SeparateMasterLoadOrders
-            ? Of(MasterReferenceCollection.FromPath(plugin, loadOrder.GameRelease).Masters.Select(reference => reference.Master), loadOrder)
+        loadOrder is not null && AreStyled(loadOrder)
+            ? Read(MasterReferenceCollection.FromPath(plugin, loadOrder.GameRelease).Masters.Select(reference => reference.Master), loadOrder)
             : null;
 
-    /// <summary>A master the load order does not hold is left out, so the read names it as missing.</summary>
-    internal static IReadOnlyCache<IModMasterStyledGetter, ModKey> Of(IEnumerable<ModKey> masters, LoadOrderSnapshot loadOrder)
+    /// <summary>Null for a game whose masters share one style. A master the load order does not hold is
+    /// left out, so the read or write names it as missing.</summary>
+    internal static IReadOnlyCache<IModMasterStyledGetter, ModKey>? Of(IEnumerable<ModKey> masters, LoadOrderSnapshot loadOrder) =>
+        AreStyled(loadOrder) ? Read(masters, loadOrder) : null;
+
+    private static bool AreStyled(LoadOrderSnapshot loadOrder) => GameConstants.Get(loadOrder.GameRelease).SeparateMasterLoadOrders;
+
+    private static Cache<IModMasterStyledGetter, ModKey> Read(IEnumerable<ModKey> masters, LoadOrderSnapshot loadOrder)
     {
         var files = CopyOfEachFilename(loadOrder).ToDictionary(file => file.Name, file => file.Path, StringComparer.OrdinalIgnoreCase);
         var styles = new Cache<IModMasterStyledGetter, ModKey>(master => master.ModKey);

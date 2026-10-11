@@ -117,7 +117,7 @@ public sealed class CompiledTreeDropTests
         var files = Directory.EnumerateFiles(treeFolder, "*", SearchOption.AllDirectories)
             .Select(file => new TreeFile(Path.GetRelativePath(treeFolder, file), File.ReadAllBytes(file)))
             .ToList();
-        var tree = (await Adapter.ReadTreeAsync(files, GameRelease.Fallout4)).Answered();
+        var tree = (await Adapter.ReadTreeAsync(files, EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
         return (await tree.SaveAsync(Path.Combine(scratch.Path, Plugin.FileName), [Plugin.FileName.String], tree.DropsIn)).Answered();
     }
 }

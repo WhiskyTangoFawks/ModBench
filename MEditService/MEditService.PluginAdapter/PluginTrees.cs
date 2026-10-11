@@ -78,15 +78,15 @@ internal static class PluginTrees
     /// <paramref name="destinationPath"/>, in place with no rename: a scratch verification, never a
     /// replacement of the real plugin.</summary>
     internal static async Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
-        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, GameRelease gameRelease,
+        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default)
     {
-        var game = GameCodecs.For(gameRelease);
+        var game = GameCodecs.For(loadOrder.GameRelease);
         var scratchDir = Directory.CreateTempSubdirectory("medit-writetree-").FullName;
         try
         {
             if (!(await ReadIntoAsync(game, files, scratchDir, cancel)).Holds(out var recompiled, out var unread)) return unread;
-            await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder);
+            await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder, loadOrder);
             return PluginAnswer.Of(destinationPath);
         }
         catch (Exception ex) when (PluginFailure.OfWrite(ex) is { } failure)
@@ -179,15 +179,15 @@ internal static class PluginTrees
     /// <summary>One source tree's files read into the mod they compile to, in a scratch folder of the
     /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005).</summary>
     internal static async Task<Answer<CompiledTree, PluginFailure>> ReadTreeAsync(
-        IReadOnlyList<TreeFile> files, GameRelease gameRelease,
+        IReadOnlyList<TreeFile> files, LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default)
     {
         // Outside the catch below: a game the service was not wired for is no source defect.
-        var game = GameCodecs.For(gameRelease);
+        var game = GameCodecs.For(loadOrder.GameRelease);
         var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;
         try
         {
-            return (await ReadIntoAsync(game, files, scratchDir, cancel)).Then(mod => PluginAnswer.Of(new CompiledTree(mod, gameRelease)));
+            return (await ReadIntoAsync(game, files, scratchDir, cancel)).Then(mod => PluginAnswer.Of(new CompiledTree(mod, loadOrder)));
         }
         finally
         {
@@ -207,14 +207,15 @@ internal static class PluginTrees
 public sealed class CompiledTree
 {
     private readonly IMod _mod;
-    private readonly GameRelease _gameRelease;
+    private readonly LoadOrderSnapshot _loadOrder;
     private readonly Lazy<IReadOnlyList<FormKey>> _formKeys;
     private readonly Lazy<IReadOnlyList<(IMajorRecordGetter Record, PluginDocument Document)>> _documents;
 
-    internal CompiledTree(IMod mod, GameRelease gameRelease)
+    internal CompiledTree(IMod mod, LoadOrderSnapshot loadOrder)
     {
         _mod = mod;
-        _gameRelease = gameRelease;
+        _loadOrder = loadOrder;
+        var gameRelease = loadOrder.GameRelease;
         _formKeys = new Lazy<IReadOnlyList<FormKey>>(
             () => mod.EnumerateMajorRecords().Select(record => record.FormKey).ToList());
         _documents = new Lazy<IReadOnlyList<(IMajorRecordGetter, PluginDocument)>>(
@@ -250,22 +251,22 @@ public sealed class CompiledTree
     /// <summary>Every value of the tree that <paramref name="save"/>'s bytes do not hold.</summary>
     public IReadOnlyList<DroppedValue> DropsIn(PreparedPluginSave save)
     {
-        var written = MutagenPluginAdapter.OpenForWrite(save.Written(_mod.ModKey, out var strings), _gameRelease, strings);
+        var written = MutagenPluginAdapter.OpenForWrite(save.Written(_mod.ModKey, out var strings), _loadOrder.GameRelease, strings, _loadOrder);
         var held = _documents.Value.Select(pair => (pair.Record, pair.Document.Text)).ToList();
         return [.. ModelIdentity.FindDrops(held, written).Select(drop => new DroppedValue(
-            new RecordIdentity(drop.Record.FormKey.ToString(), RecordTypes.For(_gameRelease).RecordTypeOf(drop.Record), drop.Record.EditorID),
+            new RecordIdentity(drop.Record.FormKey.ToString(), RecordTypes.For(_loadOrder.GameRelease).RecordTypeOf(drop.Record), drop.Record.EditorID),
             drop.Paths))];
     }
 
     /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/> and handed to
     /// <paramref name="land"/>, whose Commit renames it into place; discarded once it returns.</summary>
     public async Task<Answer<T, PluginFailure>> SaveAsync<T>(
-        string pluginPath, IReadOnlyList<string> loadOrder, Func<PreparedPluginSave, T> land)
+        string pluginPath, IReadOnlyList<string> masterOrder, Func<PreparedPluginSave, T> land)
     {
         var landing = false;
         try
         {
-            using var save = await PluginWriter.PrepareFromModAsync(_mod, pluginPath, loadOrder);
+            using var save = await PluginWriter.PrepareFromModAsync(_mod, pluginPath, masterOrder, _loadOrder);
             landing = true;
             return PluginAnswer.Of(land(save));
         }
