@@ -17,7 +17,7 @@ source "$DIR/slot.sh"
 unit=medit-build-$$
 scope=()
 if systemd-run --user --scope --quiet true 2>/dev/null; then
-  scope=(systemd-run --user --scope --quiet --collect --unit="$unit" -p MemoryMax=6G -p MemorySwapMax=0)
+  scope=(systemd-run --user --scope --quiet --collect --unit="$unit" -p MemoryMax="${SLOT_MEMORY_MAX:-6G}" -p MemorySwapMax=0)
   # The compiler server is shared by every build of the user, and compiles in the cgroup it
   # started in. One of the run's own compiles inside the cap, and the scope's stop ends it, where
   # it would otherwise idle on holding a GB or more.
