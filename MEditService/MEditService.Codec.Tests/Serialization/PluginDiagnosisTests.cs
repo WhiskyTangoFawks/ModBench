@@ -142,11 +142,9 @@ public sealed class PluginDiagnosisTests
         Assert.Contains("0000DD:Invented_Quest.esp", diagnosis.Anchor);
         Assert.Contains("Invented_QuestEdid", diagnosis.Anchor);
         Assert.Contains("DLCNukaWorld.esm", diagnosis.Message);
-        Assert.Equal("likely blocked upstream: Mutagen #688 (FormLinks inside a VMAD struct-list " +
-            "script property are the known cause of this shape, not confirmed for every instance)", diagnosis.Tail);
+        Assert.Null(diagnosis.Tail);
         Assert.Contains("Invented_QuestEdid", diagnosis.Describe());
         Assert.Contains("DLCNukaWorld.esm", diagnosis.Describe());
-        Assert.Contains("Mutagen #688", diagnosis.Describe());
     }
 
     [Fact]

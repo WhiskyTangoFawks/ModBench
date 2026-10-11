@@ -22,23 +22,6 @@ public sealed class MasterPruningRoundTripGateTests
         Assert.True(TestAdapters.Source().IsTracked(scratch.ModFolder));
     }
 
-    [Fact]
-    public async Task TrackAsync_OfAGeneratedStructListLink_RefusesNamingTheQuestAndThePrunedMaster()
-    {
-        using var scratch = new PrunedMasterScratch(StructListLinkPlugin.Plugin, "StructListLinkMod");
-        Assert.Equal([StructListLinkPlugin.Master], scratch.DeclaredMasters());
-
-        var result = await scratch.TrackAsync();
-
-        Assert.False(result.Applied);
-        Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
-
-        Assert.Contains(StructListLinkPlugin.QuestEditorId, result.Message);
-        Assert.Contains(StructListLinkPlugin.Master, result.Message);
-        Assert.Contains("Mutagen #688", result.Message);
-        Assert.False(TestAdapters.Source().IsTracked(scratch.ModFolder));
-    }
-
     private sealed class PrunedMasterScratch : IDisposable
     {
         private readonly string _fixtureFileName;

@@ -13,14 +13,10 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
     public const string UnknownClass = "unknown";
 
     // Kind A is ADR-0006's legitimate data, matched by message substring since Mutagen's
-    // exceptions carry no error code. The second message is UnmappableFormIDException's generic one
-    // for any unresolvable master, so its tail says "likely".
+    // exceptions carry no error code.
     private static readonly (string MessageContains, string Tail)[] KindATable =
     [
         ("All FNAM strings should be the same", "blocked upstream: Mutagen #687"),
-        ("Could not map FormKey to a master index",
-            "likely blocked upstream: Mutagen #688 (FormLinks inside a VMAD struct-list script " +
-            "property are the known cause of this shape, not confirmed for every instance)"),
     ];
 
     /// <summary>Track's seam: the deepest <see cref="RecordException"/> in the tree anchors the diagnosis;
@@ -46,7 +42,7 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
 
     /// <summary>The write seam: anchored like <see cref="FromParseException"/>, plus the master an
     /// <c>UnmappableFormIDException</c> could not map, since Mutagen's message never names it. States
-    /// only what the exception proves; the causal claim stays in the tail.</summary>
+    /// only what the exception proves.</summary>
     public static PluginDiagnosis FromWriteException(Exception ex)
     {
         var deepestRecord = FindDeepest<RecordException>(ex);
@@ -58,8 +54,8 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
         return new PluginDiagnosis(DescribeRecord(deepestRecord), UnknownClass, TailFor(rawMessage), message);
     }
 
-    /// <summary>The catch-filter test for the one Kind A write shape: every other write failure
-    /// propagates untouched.</summary>
+    /// <summary>The catch-filter test for a write a FormID its masters cannot map stops: every other
+    /// write failure propagates untouched.</summary>
     public static bool HasUnmappableFormID(Exception ex) => FindDeepest<UnmappableFormIDException>(ex) != null;
 
     // Every branch, not a linear InnerException walk: that only reaches InnerExceptions[0] and would miss
