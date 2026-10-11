@@ -82,6 +82,8 @@ public sealed class PluginSourceReadTests
     private const int BlockCount = 10;
     private const int SubBlockCount = 10;
     private const int CellCount = 20;
+    private const int ThreeEightByteProperties = 3;
+    private const int TwoTwelveByteProperties = 2;
 
     private static string? PlacedPropertyValues(TreeFile file) =>
         JsonNode.Parse(file.Content)?["Temporary"]?[0]?["Properties"] is JsonArray properties
@@ -103,18 +105,16 @@ public sealed class PluginSourceReadTests
         subBlock.Cells.AddRange(Enumerable.Range(0, CellCount).Select(value => new Starfield.Cell(mod)
         {
             Flags = Starfield.Cell.Flag.IsInteriorCell,
-            Temporary = { PlacedOfProperties(mod, value) },
+            Temporary = { PlacedWhosePropertiesFillOneLengthAtEitherFormVersion(mod, value) },
         }));
         return subBlock;
     }
 
-    // Three properties before form version 152 fill as many bytes as two from it on, so one read under the
-    // other's form version reads the wrong values without running out of bytes.
-    private static Starfield.PlacedObject PlacedOfProperties(Starfield.StarfieldMod mod, int value) =>
+    private static Starfield.PlacedObject PlacedWhosePropertiesFillOneLengthAtEitherFormVersion(Starfield.StarfieldMod mod, int value) =>
         value % 2 == 0
             ? new Starfield.PlacedObject(mod) { FormVersion = 151, Properties = [.. PropertiesOf(value)] }
             : new Starfield.PlacedObject(mod) { Properties = [.. PropertiesOf(value)] };
 
     private static IEnumerable<Starfield.ObjectProperty> PropertiesOf(int value) =>
-        Enumerable.Range(0, value % 2 == 0 ? 3 : 2).Select(index => new Starfield.ObjectProperty { Value = value + (index + 1) / 4f });
+        Enumerable.Range(0, value % 2 == 0 ? ThreeEightByteProperties : TwoTwelveByteProperties).Select(index => new Starfield.ObjectProperty { Value = value + (index + 1) / 4f });
 }
