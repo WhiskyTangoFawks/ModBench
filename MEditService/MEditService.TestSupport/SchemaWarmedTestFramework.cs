@@ -28,9 +28,13 @@ public class SchemaWarmedTestFramework(IMessageSink messageSink) : GamesRegister
         protected override void RunTestCases(
             IEnumerable<IXunitTestCase> testCases, IMessageSink executionMessageSink, ITestFrameworkExecutionOptions executionOptions)
         {
-            if (Record.Exception(warm) is { } warmUpFailure)
+            try
             {
-                executionMessageSink.OnMessage(new ErrorMessage(testCases, warmUpFailure));
+                warm();
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                executionMessageSink.OnMessage(new ErrorMessage(testCases, ex));
             }
             base.RunTestCases(testCases, executionMessageSink, executionOptions);
         }

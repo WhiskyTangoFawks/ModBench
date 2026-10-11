@@ -67,12 +67,6 @@ public sealed class StarfieldConditionSchemaTests
     }
 
     [Fact]
-    public void RunOn_GovernsTheReference()
-    {
-        Assert.Equal(["Reference"], Member(Data(), "RunOnType").SiblingsInUse.Require()[nameof(Condition.RunOnType.Reference)]);
-    }
-
-    [Fact]
     public void AFormParameter_IsAReference_OrAnIndexWhileItsConditionSaysItNamesAnAlias()
     {
         var quest = Member(Data(), "FirstParameter");

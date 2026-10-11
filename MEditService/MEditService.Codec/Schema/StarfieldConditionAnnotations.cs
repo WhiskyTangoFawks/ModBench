@@ -9,11 +9,11 @@ internal static class StarfieldConditionAnnotations
     /// types an integer the function reads.</summary>
     public static IEnumerable<(string LeafName, string MemberName)> UnusedSlotMembers =>
     [
-        .. ReadingNeitherParameter.SelectMany(f => new[] { Leaf(f, "FirstParameter"), Leaf(f, "SecondParameter") }),
-        .. ReadingOnlyTheFirstParameter.Select(f => Leaf(f, "SecondParameter")),
+        .. ReadingNeitherParameter.SelectMany(f => new[] { SlotRow(f, "FirstParameter"), SlotRow(f, "SecondParameter") }),
+        .. ReadingOnlyTheFirstParameter.Select(f => SlotRow(f, "SecondParameter")),
     ];
 
-    private static (string, string) Leaf(string function, string member) => ($"{function}ConditionData", member);
+    private static (string LeafName, string MemberName) SlotRow(string function, string member) => ($"{function}ConditionData", member);
 
     // No ParamType1 or ParamType2.
     private static readonly string[] ReadingNeitherParameter =

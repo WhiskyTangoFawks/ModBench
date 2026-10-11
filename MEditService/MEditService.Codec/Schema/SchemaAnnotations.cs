@@ -48,8 +48,8 @@ internal sealed record SchemaAnnotations(
     // Loqui bases whose leaves are one function each: the discriminator is the Function row, and
     // each leaf reads as its function's name (editor-fields.md § Conditions, story 3).
     HashSet<string> FunctionUnions,
-    // Members a union's leaves declare only to carry a slot their function leaves unused, keyed by the
-    // union's base or by one leaf: no row (editor-fields.md § Conditions, story 1), and a kind switch drops them.
+    // Members a function union's leaves declare only for a slot their function leaves unused, keyed by
+    // the base or a class under it, for each leaf beneath: no row (editor-fields.md § Conditions, story 1).
     HashSet<(string TypeName, string MemberName)> UnusedSlotMembers,
     // Getter interfaces the walk may re-enter and stop at silently because the game's format cannot
     // nest them (a Fallout 4 Papyrus struct member is never itself a struct). Any other re-entry is fatal.
@@ -126,6 +126,15 @@ internal sealed record SchemaAnnotations(
 
     // The header members Mutagen.Bethesda.Core declares on every game's major records, leading
     // xEdit's order; each game's base adds the rest.
+    // Mutagen's names for a condition slot's raw value under a function that reads nothing from it.
+    private static readonly (string, string)[] UnusedConditionSlotCarriers =
+    [
+        ("ConditionData", "FirstUnusedIntParameter"),
+        ("ConditionData", "FirstUnusedStringParameter"),
+        ("ConditionData", "SecondUnusedIntParameter"),
+        ("ConditionData", "SecondUnusedStringParameter"),
+    ];
+
     private static readonly RecordHeaderMember[] RecordHeaderMembersInEveryGame =
     [
         new("IMajorRecordGetter", "MajorRecordFlagsRaw", "Record Flags"),
@@ -308,15 +317,7 @@ internal sealed record SchemaAnnotations(
             ],
             ExcludedUnions: [],
             FunctionUnions: ["ConditionData"],
-            // Mutagen's names for a slot's raw value under a function that reads nothing from it.
-            UnusedSlotMembers:
-            [
-                ("ConditionData", "FirstUnusedIntParameter"),
-                ("ConditionData", "FirstUnusedStringParameter"),
-                ("ConditionData", "SecondUnusedIntParameter"),
-                ("ConditionData", "SecondUnusedStringParameter"),
-                ("ConditionData", "Unused"),
-            ],
+            UnusedSlotMembers: [.. UnusedConditionSlotCarriers, ("ConditionData", "Unused")],
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
             VectorStructTypes: [.. VectorStructTypesInEveryGame, "Noggog.P3UInt8", "Noggog.P3UInt16"],
@@ -366,15 +367,8 @@ internal sealed record SchemaAnnotations(
             ],
             ExcludedUnions: [],
             FunctionUnions: ["ConditionData"],
-            UnusedSlotMembers:
-            [
-                ("ConditionData", "FirstUnusedIntParameter"),
-                ("ConditionData", "FirstUnusedStringParameter"),
-                ("ConditionData", "SecondUnusedIntParameter"),
-                ("ConditionData", "SecondUnusedStringParameter"),
-                .. StarfieldConditionAnnotations.UnusedSlotMembers,
-            ],
-            // As in Fallout 4, no struct member is a struct: none of the installed masters' struct members is one.
+            UnusedSlotMembers: [.. UnusedConditionSlotCarriers, .. StarfieldConditionAnnotations.UnusedSlotMembers],
+            // As in Fallout 4, no struct member is a struct.
             CycleTruncations: ["IScriptStructPropertyGetter", "IScriptStructListPropertyGetter"],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
             VectorStructTypes: [.. VectorStructTypesInEveryGame],
@@ -440,8 +434,9 @@ internal sealed record SchemaAnnotations(
         return false;
     }
     public bool IsFunctionUnion(Type setterType) => FunctionUnions.Contains(setterType.Name);
-    public bool IsUnusedSlotMember(Type unionBase, string leafName, PropertyInfo prop) =>
-        UnusedSlotMembers.Contains((unionBase.Name, prop.Name)) || UnusedSlotMembers.Contains((leafName, prop.Name));
+    public bool IsUnusedSlotMember(Type leafGetter, PropertyInfo prop) =>
+        ReflectedTypes.GetSetterType(leafGetter) is { } leaf
+        && ReflectedTypes.BaseChain(leaf).Any(t => UnusedSlotMembers.Contains((t.Name, prop.Name)));
     public bool IsCycleTruncation(Type getterInterface) => CycleTruncations.Contains(getterInterface.Name);
     public bool IsEmptySubSchemaType(Type getterInterface) => EmptySubSchemaTypes.Contains(getterInterface.Name);
     public bool IsVectorStructType(Type type) => VectorStructTypes.Contains(type.FullName ?? type.Name);
