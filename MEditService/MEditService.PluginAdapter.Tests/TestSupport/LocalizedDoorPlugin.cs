@@ -12,11 +12,14 @@ namespace MEditService.PluginAdapter.Tests.TestSupport;
 public static class LocalizedDoorPlugin
 {
     public static void Write(string pluginPath, string doorName, Language language = Language.English) =>
-        WriteSkyrim(pluginPath, doorName, language, localized: true);
+        WriteSkyrim(pluginPath, localized: true, (language, doorName));
+
+    public static void WriteNamedIn(string pluginPath, params (Language Language, string Name)[] names) =>
+        WriteSkyrim(pluginPath, localized: true, names);
 
     /// <summary>A plugin without the localized flag, whose name sits in the plugin itself.</summary>
     public static void WriteNameInPlugin(string pluginPath, string doorName) =>
-        WriteSkyrim(pluginPath, doorName, Language.English, localized: false);
+        WriteSkyrim(pluginPath, localized: false, (Language.English, doorName));
 
     public static void WriteFallout4(string pluginPath, string doorName)
     {
@@ -25,10 +28,10 @@ public static class LocalizedDoorPlugin
         ((IModGetter)mod).WriteToBinary(pluginPath);
     }
 
-    private static void WriteSkyrim(string pluginPath, string doorName, Language language, bool localized)
+    private static void WriteSkyrim(string pluginPath, bool localized, params (Language Language, string Name)[] names)
     {
         var mod = new SkyrimMod(ModKey.FromFileName(Path.GetFileName(pluginPath)), SkyrimRelease.SkyrimSE) { UsingLocalization = localized };
-        mod.Doors.AddNew("MainDoor").Name = new TranslatedString(language, doorName);
+        mod.Doors.AddNew("MainDoor").Name = new TranslatedString(names[0].Language, names.Select(name => new KeyValuePair<Language, string>(name.Language, name.Name)));
         ((IModGetter)mod).WriteToBinary(pluginPath);
     }
 

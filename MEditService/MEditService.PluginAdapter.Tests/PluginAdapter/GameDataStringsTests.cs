@@ -175,6 +175,23 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadSourceOf_APluginsStringsInAnArchiveOrLoose_GiveItsLanguagesInOneOrder()
+    {
+        LocalizedDoorPlugin.WriteNamedIn(_pluginPath, (Language.English, DoorName), (Language.French, "La Grande Porte"), (Language.German, "Das Große Tor"));
+        var looseStrings = Directory.EnumerateFiles(LocalizedDoorPlugin.LooseStrings(_pluginPath)).ToList();
+        var archive = Path.Combine(_modFolder, "Update.bsa");
+        var loose = await DoorSource();
+        StringsArchive.Pack(looseStrings.Order(StringComparer.Ordinal), archive);
+        Directory.Delete(LocalizedDoorPlugin.LooseStrings(_pluginPath), recursive: true);
+        var packedInOrder = await DoorSource();
+        LocalizedDoorPlugin.WriteNamedIn(_pluginPath, (Language.English, DoorName), (Language.French, "La Grande Porte"), (Language.German, "Das Große Tor"));
+        StringsArchive.Pack(looseStrings.OrderDescending(StringComparer.Ordinal), archive);
+        Directory.Delete(LocalizedDoorPlugin.LooseStrings(_pluginPath), recursive: true);
+
+        Assert.Equal([loose, loose], [packedInOrder, await DoorSource()]);
+    }
+
+    [Fact]
     public void OpenDocuments_APluginWhoseStringsAreNowhere_OpensWithItsNamesBlank()
     {
         Directory.Delete(LocalizedDoorPlugin.LooseStrings(_pluginPath), recursive: true);
@@ -185,13 +202,13 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     [Fact]
-    public void OpenDocuments_ALocalizedPluginWhoseArchiveIsCorrupt_FailsAsUnreadableStringsNamingTheArchive()
+    public void OpenDocuments_ALocalizedPluginWhoseArchiveIsCorrupt_FailsNamingTheArchive()
     {
         Directory.Delete(LocalizedDoorPlugin.LooseStrings(_pluginPath), recursive: true);
         File.WriteAllText(Path.Combine(_dataFolder, "Update.bsa"), "not an archive");
 
         Assert.False(OpenDocuments(_pluginPath).Holds(out _, out var failure));
-        Assert.Equal(Path.Combine(_dataFolder, "Update.bsa"), Assert.IsType<PluginFailure.UnreadableStrings>(failure).Archive);
+        Assert.StartsWith($"its strings archive '{Path.Combine(_dataFolder, "Update.bsa")}' could not be read", failure.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -249,6 +266,11 @@ public sealed class GameDataStringsTests : IDisposable
 
         Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
     }
+
+    private async Task<string> DoorSource() =>
+        (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, new PluginStrings(_modFolder, _dataFolder))).Answered().Files
+            .Select(file => Encoding.UTF8.GetString(file.Content))
+            .Single(content => content.Contains("MainDoor", StringComparison.Ordinal) && content.Contains("Values", StringComparison.Ordinal));
 
     private void WriteOnlyFrenchStringsBesideThePlugin()
     {

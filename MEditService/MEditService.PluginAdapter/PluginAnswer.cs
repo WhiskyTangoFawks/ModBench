@@ -56,13 +56,11 @@ public abstract record PluginFailure
     }
 
     /// <summary>An archive the plugin's strings are looked up in that could not be read.</summary>
-    public sealed record UnreadableStrings : PluginFailure
+    internal sealed record UnreadableStrings : PluginFailure
     {
         private readonly string _reason;
 
-        internal UnreadableStrings(UnreadableStringsArchiveException error) : base(error) => (Archive, _reason) = (error.Archive, error.Message);
-
-        public string Archive { get; }
+        internal UnreadableStrings(UnreadableStringsArchiveException error) : base(error) => _reason = error.Message;
 
         public override string Reason => _reason;
     }

@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Archives;
 using Mutagen.Bethesda.Plugins;
@@ -30,7 +30,7 @@ internal sealed class StringsRead(BinaryReadParameters parameters, string? scrat
 }
 
 /// <summary>An archive the strings lookup opened and could not read.</summary>
-public sealed class UnreadableStringsArchiveException : Exception
+internal sealed class UnreadableStringsArchiveException : InvalidOperationException
 {
     // RCS1194's standard constructors; the lookup throws only through Of.
     internal UnreadableStringsArchiveException()
@@ -46,9 +46,7 @@ public sealed class UnreadableStringsArchiveException : Exception
     }
 
     internal static UnreadableStringsArchiveException Of(string archive, Exception innerException) =>
-        new($"its strings archive '{archive}' could not be read: {innerException.Message}", innerException) { Archive = archive };
-
-    public string Archive { get; private init; } = "";
+        new($"its strings archive '{archive}' could not be read: {innerException.Message}", innerException);
 }
 
 /// <summary>Passing no <see cref="BinaryReadParameters"/> is not "no localization": Mutagen still
@@ -63,7 +61,7 @@ internal static class LocalizedStrings
 
     // Each archive's strings files by its stamp: a listed archive is opened once, not on every read, and a
     // changed archive is listed again (ADR-0003).
-    private static readonly ConcurrentDictionary<(string Path, long Length, DateTime Written), string[]> StringsPathsIn = new();
+    private static readonly StampGatedMemo<string[]> StringsPathsIn = new(TimeProvider.System);
 
     /// <summary>Mutagen's listings resolution reads the <c>LocalAppData</c> environment variable with no
     /// injectable seam; the env var is the only lever. Never overwrites a real value, and the
@@ -76,12 +74,21 @@ internal static class LocalizedStrings
 
     /// <summary>Mutagen reads strings from one folder: the folder where the game finds them all, else a
     /// scratch folder each file is copied into from where the game finds it.</summary>
-    internal static StringsRead ForRead(PluginStrings strings, IReadOnlyList<string> archives, ModPath plugin, GameRelease gameRelease)
+    internal static StringsRead ForRead(PluginStrings strings, IReadOnlyList<string> archives, ModPath plugin, GameRelease gameRelease) =>
+        For(strings, archives, plugin, gameRelease, inOneOrder: false);
+
+    /// <summary>An import lists a string's languages in the order Mutagen finds their files, an archive's
+    /// order or a folder's. So an import always reads them copied into a fresh folder in name order, and the
+    /// order follows the file system alone: decompiling an unchanged plugin changes nothing (plugin-source.md).</summary>
+    internal static StringsRead ForImport(PluginStrings strings, IReadOnlyList<string> archives, ModPath plugin, GameRelease gameRelease) =>
+        For(strings, archives, plugin, gameRelease, inOneOrder: true);
+
+    private static StringsRead For(PluginStrings strings, IReadOnlyList<string> archives, ModPath plugin, GameRelease gameRelease, bool inOneOrder)
     {
         if (!IsLocalized(plugin, gameRelease)) return new StringsRead(new BinaryReadParameters(), scratch: null);
 
         var found = Find(strings, archives, plugin.ModKey, gameRelease);
-        if (found.Values.Select(file => file.Folder).Distinct().ToList() is [{ } folder])
+        if (!inOneOrder && found.Values.Select(file => file.Folder).Distinct().ToList() is [{ } folder])
             return new StringsRead(ForFolder(folder), scratch: null);
         if (found.Count == 0)
             return new StringsRead(ForFolder(strings.Folders.First()), scratch: null);
@@ -91,8 +98,10 @@ internal static class LocalizedStrings
         {
             var languageFormat = LanguageFormat(gameRelease);
             var stringsFolder = Directory.CreateDirectory(Path.Combine(scratch, "Strings")).FullName;
-            foreach (var ((source, language), file) in found)
-                File.WriteAllBytes(Path.Combine(stringsFolder, StringsUtility.GetFileName(languageFormat, plugin.ModKey, language, source)), file.Bytes());
+            foreach (var (name, file) in found
+                .Select(each => (Name: StringsUtility.GetFileName(languageFormat, plugin.ModKey, each.Key.Language, each.Key.Source), File: each.Value))
+                .OrderBy(each => each.Name, StringComparer.Ordinal))
+                File.WriteAllBytes(Path.Combine(stringsFolder, name), file.Bytes());
             return new StringsRead(ForFolder(scratch), scratch);
         }
         catch
@@ -133,33 +142,32 @@ internal static class LocalizedStrings
         PluginStrings strings, IReadOnlyList<string> archives, ModKey plugin, GameRelease gameRelease)
     {
         var found = new Dictionary<(StringsSource, Language), StringsFile>();
-        foreach (var file in InPlaceOrder(strings, archives, plugin, gameRelease))
+        foreach (var place in Places(strings, archives, plugin, gameRelease))
         {
-            found.TryAdd((file.Source, file.Language), file);
+            foreach (var file in place) found.TryAdd((file.Source, file.Language), file);
             if (Sources.All(source => found.ContainsKey((source, Target)))) break;
         }
         return found;
     }
 
-    // Loose files beat archives, and of the archives the game loads, a later one's file replaces an earlier one's.
-    private static IEnumerable<StringsFile> InPlaceOrder(
+    // Each folder's loose files, then each archive named for the plugin in it; then the archives the game
+    // loads, the latest first, since a later archive's file replaces an earlier one's.
+    private static IEnumerable<IReadOnlyList<StringsFile>> Places(
         PluginStrings strings, IReadOnlyList<string> archives, ModKey plugin, GameRelease gameRelease)
     {
         var languageFormat = LanguageFormat(gameRelease);
         foreach (var folder in strings.Folders)
         {
-            foreach (var file in Loose(folder, plugin, languageFormat)) yield return file;
+            yield return [.. Loose(folder, plugin, languageFormat)];
             var named = Directory.Exists(folder)
                 ? Directory.EnumerateFiles(folder, $"*{Archive.GetExtension(gameRelease)}")
                     .Where(archive => Archive.IsApplicable(gameRelease, plugin, Path.GetFileName(archive)))
                     .Order(StringComparer.OrdinalIgnoreCase)
                 : Enumerable.Empty<string>();
-            foreach (var file in named.SelectMany(archive => InArchive(archive, folder, plugin, gameRelease, languageFormat)))
-                yield return file;
+            foreach (var archive in named) yield return [.. InArchive(archive, folder, plugin, gameRelease, languageFormat)];
         }
 
-        foreach (var file in archives.Reverse().SelectMany(archive => InArchive(archive, folder: null, plugin, gameRelease, languageFormat)))
-            yield return file;
+        foreach (var archive in archives.Reverse()) yield return [.. InArchive(archive, folder: null, plugin, gameRelease, languageFormat)];
     }
 
     // The pattern Mutagen's own lookup enumerates a strings folder with, so a file found here is one it reads.
@@ -176,11 +184,7 @@ internal static class LocalizedStrings
     private static IEnumerable<StringsFile> InArchive(
         string archive, string? folder, ModKey plugin, GameRelease gameRelease, StringsLanguageFormat languageFormat)
     {
-        var paths = Reading(archive, () =>
-        {
-            var file = new FileInfo(archive);
-            return StringsPathsIn.GetOrAdd((archive, file.Length, file.LastWriteTimeUtc), _ => [.. StringsIn(archive, gameRelease).Select(entry => entry.Path)]);
-        });
+        var paths = Reading(archive, () => StringsPathsIn.Of(archive, () => [.. StringsIn(archive, gameRelease).Select(entry => entry.Path)])) ?? [];
         return paths
             .Select(path => StringsFile.Named(
                 Path.GetFileName(path.Replace('\\', '/')), plugin, languageFormat, folder,
