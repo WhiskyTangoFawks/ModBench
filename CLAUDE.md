@@ -1,6 +1,6 @@
 # Modbench and mEdit
 
-Modding IDE for Bethesda plugins: VS Code extension (`modbench/`) + local C# service (`MEditService/`). Architecture and surface map: [README.md](README.md). Per-module invariants: [modbench/CLAUDE.md](modbench/CLAUDE.md), [MEditService/CLAUDE.md](MEditService/CLAUDE.md).
+Modding IDE for Bethesda plugins: VS Code extension (`modbench/`) + local C# service (`MEditService/`). Architecture: [docs/architecture/](docs/architecture/). Per-module invariants: [modbench/CLAUDE.md](modbench/CLAUDE.md), [MEditService/CLAUDE.md](MEditService/CLAUDE.md).
 
 ## Status: pre-alpha, unreleased, zero users
 

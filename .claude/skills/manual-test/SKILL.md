@@ -7,7 +7,7 @@ description: Build the extension and launch a VS Code Extension Development Host
 
 Build the extension if needed, then launch a VS Code Extension Development Host pointed at a real MO2 instance directory. Do all steps proactively without waiting to be asked.
 
-The extension spawns the backend itself at activation ([ADR-0002](../../../docs/adr/0002-mod-management-and-editing-are-one-tool.md); there is no Launch/Close mEdit command) — no manual `dotnet run` step. Setup and prerequisites: [README.md](../../../README.md) § Getting started.
+The extension spawns the backend itself at activation ([ADR-0002](../../../docs/adr/0002-mod-management-and-editing-are-one-tool.md); there is no Launch/Close mEdit command) — no manual `dotnet run` step. Setup and prerequisites: [README.md](../../../README.md) § Setup.
 
 ## 0 — Confirm the checkout is current
 
@@ -27,14 +27,12 @@ The published self-contained backend binary lives at `modbench/backend/` (produc
 
 ## 2 — Launch the VS Code Extension Development Host
 
-F5 doesn't reliably work in this environment — use the CLI directly:
-
 ```bash
 code --extensionDevelopmentPath="$(git rev-parse --show-toplevel)/modbench" \
      "$(git rev-parse --show-toplevel)/DevList" &
 ```
 
-**The workspace root must be a real MO2 instance directory** (README, *Launch the extension*: the workspace folder is the instance, with no separate setting). Default to `DevList/` (the local test instance checked into this repo) unless the user names another instance. Do not open the Modbench source repo itself as the workspace — the Toolbox will have nothing to show.
+The workspace root must be a real MO2 instance directory (README § Launch the extension). Default to `DevList/` (README § Local folders) unless the user names another instance. Do not open the Modbench source repo itself as the workspace — the Toolbox will have nothing to show.
 
 ## 3 — Activate the extension
 
