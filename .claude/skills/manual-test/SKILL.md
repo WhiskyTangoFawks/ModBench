@@ -32,7 +32,7 @@ code --extensionDevelopmentPath="$(git rev-parse --show-toplevel)/modbench" \
      "$(git rev-parse --show-toplevel)/DevList" &
 ```
 
-**The workspace root must be a real MO2 instance directory** (README, *Launch the extension*: the workspace folder is the instance, with no separate setting). Default to `DevList/` (README § Local folders) unless the user names another instance. Do not open the Modbench source repo itself as the workspace — the Toolbox will have nothing to show.
+The workspace root must be a real MO2 instance directory (README § Launch the extension). Default to `DevList/` (README § Local folders) unless the user names another instance. Do not open the Modbench source repo itself as the workspace — the Toolbox will have nothing to show.
 
 ## 3 — Activate the extension
 

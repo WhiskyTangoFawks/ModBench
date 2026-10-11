@@ -38,7 +38,7 @@ Present the lanes with one line per ticket, and the model tier the ticket will r
 
 Before the first dispatch, confirm that `git symbolic-ref -q HEAD` names `refs/heads/main` and that `git status --porcelain` prints nothing. If either check fails, refuse and give the reason.
 
-For each ticket, assign yourself and start one fresh `general-purpose` agent with `isolation: "worktree"` and `run_in_background: true` on the specified model tier. The agent's working directory is its own worktree under `.claude/worktrees/`, cut from local `HEAD` (`worktree.baseRef` is `head` in this project's local settings, since a run never pushes), and its first act is `git checkout -b fix-<n>-<slug>`. A global hook blocks EnterWorktree for subagents, so the executor never leaves that directory. If the ticket touches a directory whose dependencies are gitignored and slow to install, such as `node_modules`, tell the executor to symlink it from the checkout.
+For each ticket, assign yourself and start one fresh `general-purpose` agent with `isolation: "worktree"` and `run_in_background: true` on the specified model tier. The agent's working directory is its own worktree under `.claude/worktrees/`, cut from local `HEAD` (`worktree.baseRef` is `head`, since a run never pushes), and its first act is `git checkout -b fix-<n>-<slug>`. A global hook blocks EnterWorktree for subagents, so the executor never leaves that directory. If the ticket touches a directory whose dependencies are gitignored and slow to install, such as `node_modules`, tell the executor to symlink it from the checkout.
 
 Keep the agentId, because `SendMessage` carries every later exchange. Within a minute, confirm the agent's transcript is still growing: one that stopped at its first tool call is dead, and a message to a dead agent is queued, never delivered, so respawn rather than wait. The prompt is `BRIEF.md` verbatim, followed by the fillings it needs:
 
@@ -61,11 +61,11 @@ When an executor reports committed, work through these in order.
 4. Dispatch a reviewer with [`REVIEW.md`](REVIEW.md) as its brief and the breaks the report names. Merge on MERGE. On HOLD, send the blocking findings to the executor, and re-verify with the same reviewer after the fix commit. The executor reverts a change to a maintainer's document, and you quote the reverted diff as a break for the drain. You read the verdict, never the code.
 5. Run the tripwires:
    - When the report says "no behaviour change", diff the wire format and the public signatures.
-   - Check whether README's status table now claims Implemented for anything this ticket did not build.
+   - Check whether README's What works today list now names anything this ticket did not build.
    - For a new cross-boundary import, name what it drags with it.
    - When a named surface was wired, retired or renamed, grep `CLAUDE.md`, the specs and adjacent doc comments for present-tense claims about it. A stale doc comment is fixed; a stale claim in a maintainer's document is a break for the drain.
 6. Run `git -C <checkout-absolute-path> merge --no-ff <branch>`.
-7. Where the outcome leaves a maintainer's document out of step with the code, such as a README status that should flip, quote it as a break for the drain.
+7. Where the outcome leaves a maintainer's document out of step with the code, such as a feature the README's What works today list should now name, quote it as a break for the drain.
 8. Close the ticket. Anything that needs human eyes is noted for the drain, since verification happens at the epic.
 9. Remove the worktree (`git worktree remove .claude/worktrees/<name>`) and delete the branch.
 10. Tell every open executor what landed and the new baseline test count, in one line.
