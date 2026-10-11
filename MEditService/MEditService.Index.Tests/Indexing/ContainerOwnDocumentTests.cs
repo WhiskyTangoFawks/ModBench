@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -156,5 +157,27 @@ public sealed class ContainerOwnDocumentTests
 
         Assert.Contains(ContainerModPlugin.TemporaryRefEditorId, File.ReadAllText(file), StringComparison.Ordinal);
         Assert.Empty(fields.Select(f => f.Metadata.Name).Intersect(["Persistent", "Temporary", "NavigationMeshes", "Landscape"]));
+    }
+
+    [Fact]
+    public void AContainerHandEditedToSpellAChildSlotFirst_IsStoredWithItsOwnFieldsOnly()
+    {
+        using var fixture = new Fixture(tracked: true);
+        var cell = fixture.Keys.EmbedCell.ToString();
+        var file = fixture.Entry.SourceFileOf(fixture.Index.DocumentOf(cell, Plugin));
+        var spelled = JsonNode.Parse(File.ReadAllText(file))?.AsObject() ?? throw new InvalidOperationException("Expected the cell's file to hold an object.");
+        var temporary = spelled["Temporary"];
+        spelled.Remove("Temporary");
+        var slotFirst = new JsonObject { ["Temporary"] = temporary };
+        foreach (var (name, value) in spelled.ToList())
+        {
+            spelled.Remove(name);
+            slotFirst[name] = value;
+        }
+        File.WriteAllText(file, slotFirst.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        fixture.Index.NextSnapshot();
+
+        Assert.Equal(["FormKey", "EditorID", "WaterHeight"], MembersOf(fixture.Stored(cell)));
     }
 }

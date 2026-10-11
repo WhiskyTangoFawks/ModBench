@@ -13,21 +13,19 @@ public sealed class ContainmentReadOnlySchemaTests
     private static ColumnSpec Column(string table, string column) =>
         Schemas[table].RecordColumns.Single(c => c.Name == column);
 
-    [Fact]
-    public void EveryContainersChildSlotColumn_IsReadOnly_SinceAChildHasGesturesOfItsOwn()
+    [Theory]
+    [InlineData(GameRelease.Fallout4)]
+    [InlineData(GameRelease.SkyrimSE)]
+    [InlineData(GameRelease.Starfield)]
+    public void NoContainersColumn_IsAChildSlot_SinceEachChildIsARecordOfItsOwn(GameRelease release)
     {
-        var slots = Schemas.Values
-            .SelectMany(schema => schema.RecordColumns
-                .Where(c => RecordTypes.For(GameRelease.Fallout4).ChildSlotsOf(schema.TableName).Contains(c.PropertyName))
-                .Select(column => (Schema: schema, Column: column)))
-            .ToList();
-        Assert.Contains(slots, s => s.Schema.TableName == "cell" && s.Column.Name == "NavigationMeshes");
-        Assert.Contains(slots, s => s.Schema.TableName == "wrld" && s.Column.Name == "SubCells");
+        var types = RecordTypes.For(release);
+        var containers = SharedSchemaReflector.Instance.GetSchemas(release).Values.Where(schema => types.HasChildSlots(schema.TableName)).ToList();
+        Assert.Contains(containers, schema => types.IsCell(schema.TableName));
 
-        var writable = slots
-            .Where(s => s.Column.Field.ReadOnlyReason?.Contains("not by editing the slot", StringComparison.Ordinal) != true)
-            .Select(s => $"{s.Schema.TableName}.{s.Column.Name}");
-        Assert.Empty(writable);
+        Assert.Empty(containers.SelectMany(schema => schema.RecordColumns
+            .Where(c => types.ChildSlotsOf(schema.TableName).Contains(c.PropertyName))
+            .Select(c => $"{schema.TableName}.{c.Name}")));
     }
 
     [Fact]

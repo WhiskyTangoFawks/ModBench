@@ -283,7 +283,8 @@ internal sealed class RecordQueries(
         if (reads.GetDocument(formKey, plugin) is not { Body: { } body } container) return null;
         var schemas = RequireSchemas();
         var place = reads.GetCellLocation(plugin, formKey)?.Place;
-        return Choices(ChildRecordTypes.Of(container.RecordType, body, place, _loadOrder.Require().GameRelease), schemas);
+        var held = reads.GetEveryHolding(plugin, formKey).Select(holding => (holding.Slot, holding.Child));
+        return Choices(ChildRecordTypes.Of(container.RecordType, body, held, place, _loadOrder.Require().GameRelease), schemas);
     }
 
     // Sorted as a plugin's groups are, so the pick reads in the order the tree shows.

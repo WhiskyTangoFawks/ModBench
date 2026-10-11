@@ -17,7 +17,8 @@ public sealed class ChildRecordTypesTests
 
     private static string[] Of(IMajorRecordGetter container, CellPlace? place = null) =>
         [.. ChildRecordTypes.Of(
-                RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(container), RecordTextCodec.SerializeToText(container, GameRelease.Fallout4), place,
+                RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(container), RecordTextCodec.SerializeToText(container, GameRelease.Fallout4),
+                ContainerChildFields.EnumerateChildren(container).Select(c => (c.SlotName, c.Child.FormKey.ToString())), place,
                 GameRelease.Fallout4)
             .Order(StringComparer.Ordinal)];
 
@@ -109,7 +110,7 @@ public sealed class ChildRecordTypesTests
                 var text = RecordTextCodec.BlankDocument(type, release, Document.Empty.With("000800:Holds.esp", RecordMembers.FormKey));
                 CellPlace?[] places = types.IsCell(type) ? [.. Enum.GetValues<CellPlace>().Cast<CellPlace?>()] : [null];
                 foreach (var place in places)
-                    Assert.True(ChildRecordTypes.Of(type, text, place, release).Count > 0, $"{release} {type} in {place} holds nothing.");
+                    Assert.True(ChildRecordTypes.Of(type, text, [], place, release).Count > 0, $"{release} {type} in {place} holds nothing.");
                 checkedTypes++;
             }
         }
@@ -138,6 +139,6 @@ public sealed class ChildRecordTypesTests
     [Fact]
     public void AContainerWhoseTextIsNoRecordDocument_IsRefusedRatherThanReadAsNotDeleted()
     {
-        Assert.Throws<InvalidOperationException>(() => ChildRecordTypes.Of("cell", "[]", CellPlace.Interior, GameRelease.Fallout4));
+        Assert.Throws<InvalidOperationException>(() => ChildRecordTypes.Of("cell", "[]", [], CellPlace.Interior, GameRelease.Fallout4));
     }
 }

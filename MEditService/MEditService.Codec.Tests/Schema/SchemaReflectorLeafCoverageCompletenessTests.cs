@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Reflection;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -124,11 +125,13 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         foreach (var schema in schemas.Values)
         {
             if (HasNoClrGetterTypeBecauseModHeaderIsNeverAnIMajorRecordGetter(schema)) continue;
+            var slotsHoldingRecordsOfTheirOwn = RecordTypes.For(GameRelease.Fallout4).ChildSlotsOf(schema.TableName);
 
             foreach (var owner in OwnersOf(schema))
             {
                 foreach (var prop in DirectDataProperties(owner, HandKeptSkipOfEditorIdTheWritePathOwnsAndGrupTimestampsSoADriftFailsLoud))
                 {
+                    if (slotsHoldingRecordsOfTheirOwn.Contains(prop.Name)) continue;
                     if (schema.RecordColumns.Any(c => c.PropertyName == prop.Name || IsAFlagView(c, prop.Name))) continue;
                     gaps.Add($"{owner.Name}.{prop.Name} (missing from '{schema.TableName}' entirely)");
                 }

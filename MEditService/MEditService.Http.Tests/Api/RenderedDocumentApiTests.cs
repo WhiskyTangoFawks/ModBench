@@ -1,4 +1,5 @@
 using System.Net;
+using MEditService.Codec.Serialization;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -50,7 +51,6 @@ public sealed class RenderedDocumentApiTests : HostedTests
     [Theory]
     [InlineData("npc_", "RenderedNpc")]
     [InlineData("qust", "RenderedQuest")]
-    [InlineData("cell", "RenderedRoom")]
     [InlineData(null, null)]
     public async Task AnUntrackedCopy_IsTheFileTrackWrites_ByNameAndText_TheHeadersWithNoRecordType(string? recordType, string? editorId)
     {
@@ -64,6 +64,20 @@ public sealed class RenderedDocumentApiTests : HostedTests
             ModFolderOf(fx), editorId is null ? "000000_*.json" : $"{editorId} - *.json", SearchOption.AllDirectories).Single();
         Assert.Equal(Path.GetFileName(written), fileName);
         Assert.Equal(File.ReadAllText(written), text);
+    }
+
+    [Fact]
+    public async Task AnUntrackedContainer_IsTheFileTrackWrites_WithoutItsChildren()
+    {
+        var fx = await Untracked();
+        var (_, text) = await RenderedOk(await Client.FormKeyNamed(Plugin, Origin, "cell", "RenderedRoom"));
+
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+
+        var written = Directory.EnumerateFiles(ModFolderOf(fx), "*.json", SearchOption.AllDirectories)
+            .Single(file => File.ReadAllText(file).Contains("\"RenderedRoom\"", StringComparison.Ordinal));
+        Assert.Contains("\"RenderedRef\"", File.ReadAllText(written), StringComparison.Ordinal);
+        Assert.Equal(ContainerDocumentEdits.WithoutChildren(File.ReadAllText(written), GameRelease.Fallout4, "cell"), text);
     }
 
     [Fact]

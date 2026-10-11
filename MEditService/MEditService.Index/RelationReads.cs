@@ -493,6 +493,14 @@ internal sealed class RelationReads(
             connection, plugin.Name, plugin.Origin, parentFormKey, store.Filter.AlsoKeeps("cc", "child"), NavigatorSql.FormIdOrder("cc.child"));
     }
 
+    /// <summary>Every child <paramref name="parentFormKey"/> holds, whatever filter is in force, by slot and
+    /// place in it.</summary>
+    public IReadOnlyList<HoldingRow> GetEveryHolding(PluginAddress plugin, string parentFormKey)
+    {
+        using var connection = store.OpenReadConnection();
+        return GetHoldings(connection, plugin.Name, plugin.Origin, parentFormKey, inFilter: "", "cc.slot, cc.slot_index");
+    }
+
     // Column 6 is the row's working_tree_state, 7 the correlated holdings EXISTS Search's
     // SELECT adds, 8 this record's own diagnosis, 9 the same fact widened to its children and 10
     // its FULL, read positionally.

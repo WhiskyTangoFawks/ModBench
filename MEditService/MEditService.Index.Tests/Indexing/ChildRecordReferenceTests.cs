@@ -61,7 +61,7 @@ public sealed class ChildRecordReferenceTests : IDisposable
         using var index = Indexes.Reconciled(_fixture);
         var committed = index.DocumentOf(_quest, _plugin.KeyOf());
 
-        index.Edit(_plugin, committed, index.BodyOf(_quest, _plugin.KeyOf()).Replace("Owner", "OwnerEdited", StringComparison.Ordinal));
+        index.Edit(_plugin, committed, _plugin.SourceTextOf(committed).Replace("Owner", "OwnerEdited", StringComparison.Ordinal));
 
         Assert.Equal("OwnerEdited", index.DocumentOf(_quest, _plugin.KeyOf()).EditorId);
         AssertEachListsOnlyItsOwn(index);
