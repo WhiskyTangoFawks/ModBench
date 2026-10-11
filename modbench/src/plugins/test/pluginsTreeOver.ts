@@ -15,6 +15,7 @@ export function pluginsTreeOver(
     records: new RecordBrowser(client),
     publishDiagnoses: () => undefined,
     publishChangedOutside: () => undefined,
+    publishFailedToRead: () => undefined,
     log: () => undefined,
     dataFolderFile: () => undefined,
     ...overrides,

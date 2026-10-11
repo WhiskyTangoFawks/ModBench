@@ -594,9 +594,20 @@ internal sealed class Store : IDisposable
         public void ReadFailedOrRecovered(PluginAddress key) => Announce(sequence => new PluginChangedNotification(key, sequence));
     }
 
-    /// <summary>Indexes one plugin's documents, replacing whatever the key held. Stamps the file's
-    /// hash and diagnosis (ADR-0003); a null path claims no file backs the rows (ADR-0012).</summary>
-    public void Index(IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom)
+    /// <summary>Indexes a tracked plugin's tree as <see cref="IndexBinary"/> indexes a binary. The tree
+    /// is the plugin's truth however many records its binary holds, and it refuses a FormKey two
+    /// documents claim before any is indexed.</summary>
+    public void IndexTree(IPluginDocuments documents, PluginMetadata registered, string? filePath) =>
+        Index(documents, registered, filePath, DerivedFrom.SourceTree);
+
+    /// <summary>A binary whose documents miss a record it holds, or that holds one FormKey in two
+    /// groups, is not indexed, and the failure says which. xEdit refuses a duplicate FormID to load.</summary>
+    public LoadFailure? IndexBinary(IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom) =>
+        Index(documents, registered, filePath, derivedFrom);
+
+    // Replaces whatever the key held, and stamps the file's hash and diagnosis (ADR-0003); a null
+    // path claims no file backs the rows (ADR-0012).
+    private LoadFailure? Index(IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom)
     {
         var (plugin, origin) = (registered.Name, registered.Origin);
         var schemas = Schemas;
@@ -612,7 +623,8 @@ internal sealed class Store : IDisposable
         // with them rather than beside them.
         StampPluginFacts(plugin, origin, filePath, derivedFrom);
 
-        var timing = Ingest.IndexPlugin(documents, plugin, origin, schemas);
+        var ingested = Ingest.IndexPlugin(documents, plugin, origin, schemas);
+        if (derivedFrom != DerivedFrom.SourceTree && BinaryRefused(registered, ingested.Records) is { } refused) return refused;
         BumpSequence();
 
         var commitTimer = Stopwatch.StartNew();
@@ -621,9 +633,25 @@ internal sealed class Store : IDisposable
         {
             _logger.LogDebug(
                 "Index {Plugin}: ingest {IngestMs} ms (prepare {PrepareMs} ms, append {AppendMs} ms), commit {CommitMs} ms",
-                plugin, timing.IngestMs, timing.PrepareMs, timing.AppendMs, commitTimer.ElapsedMilliseconds);
+                plugin, ingested.IngestMs, ingested.PrepareMs, ingested.AppendMs, commitTimer.ElapsedMilliseconds);
         }
+        return null;
     }
+
+    // The duplicate first: it is a defect in the bytes, where a shortfall may be mEdit's own.
+    private LoadFailure? BinaryRefused(PluginMetadata registered, int read)
+    {
+        var heldTwice = Ingest.FormKeysHeldTwice(registered.Name, registered.Origin);
+        if (heldTwice.Count > 0)
+        {
+            return new LoadFailure("duplicate FormKey " + string.Join("; ", heldTwice.Select(held =>
+                $"{held.FormKey}, in its {Listed([.. held.RecordTypes.Select(Schemas.DisplayNameFor)])} groups")), IsDiagnosis: true);
+        }
+        return read < registered.RecordCount ? new LoadFailure($"mEdit read {read} of its {registered.RecordCount} records") : null;
+    }
+
+    private static string Listed(string[] names) =>
+        names.Length == 1 ? names[0] : $"{string.Join(", ", names[..^1])} and {names[^1]}";
 
     /// <summary>ADR-0012's file-gone verb: every trace of <paramref name="key"/> removed, rows and
     /// registration alike, the winners they held swept and the plugin announced. Leaving the load

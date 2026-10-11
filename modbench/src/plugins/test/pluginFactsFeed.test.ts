@@ -39,6 +39,7 @@ function feedOver(client = new InMemoryMEditClient(), shown: readonly PluginAddr
     log: (level, msg) => logged.push({ level, msg }),
     publishDiagnoses: diagnoses.push,
     publishChangedOutside: changedOutside.push,
+    publishFailedToRead: () => undefined,
   });
   const changes = vi.fn();
   feed.onDidChange(changes);

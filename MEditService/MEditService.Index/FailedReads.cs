@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -90,7 +89,7 @@ internal sealed class FailedReads(Store index, ISourceAdapter source, ILogger lo
     // holds nothing of git or of a file another process held, so those are read again at the next
     // reconcile.
     private static bool StateObserves(ReadOutcome outcome) =>
-        outcome is { Failure: not PluginFailure.Inaccessible, StoppedBy: null, TreeStopped: null or SourceFailure.Unreadable or SourceFailure.Ambiguous };
+        outcome is { Failure: null or { Inaccessible: false }, StoppedBy: null, TreeStopped: null or SourceFailure.Unreadable or SourceFailure.Ambiguous };
 
     private static UnreadableSource? WhyStopped(ReadOutcome outcome)
     {

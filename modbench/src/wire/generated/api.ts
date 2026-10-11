@@ -1053,6 +1053,7 @@ export interface components {
             name: string;
             origin: string;
             reason: string;
+            diagnosis?: string | null;
         };
         PluginProblems: {
             plugin: components["schemas"]["PluginAddress"];

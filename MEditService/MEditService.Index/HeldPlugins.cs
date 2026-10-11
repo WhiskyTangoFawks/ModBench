@@ -196,9 +196,9 @@ internal sealed class HeldPlugins
     /// <summary>Lets the Indexer report a post-open failure (an indexing throw from malformed record
     /// data Mutagen can't parse) through the same channel as open failures. False when the plugin
     /// already failed for this reason.</summary>
-    internal bool SetFailure(PluginAddress key, string reason)
+    internal bool SetFailure(PluginAddress key, string reason, string? diagnosis = null)
     {
-        var failure = new PluginLoadFailure(key.Name, key.Origin, reason);
+        var failure = new PluginLoadFailure(key.Name, key.Origin, reason, diagnosis);
         lock (_mutation)
         {
             if (_loadFailures.TryGetValue(key, out var standing) && standing == failure) return false;
