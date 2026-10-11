@@ -138,16 +138,24 @@ def turn_edited_files(transcript_path: str | None) -> set[str] | None:
 
 
 # ---------------------------------------------------------------- backend (C#)
+SLOT_RUN = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),
+                        "skills", "validate", "slot-run.sh")
+
+
+def in_build_slot(command: list[str], root: str, timeout: int) -> None:
+    subprocess.run(["bash", SLOT_RUN, *command], cwd=root, capture_output=True, text=True, timeout=timeout)
+
+
 def build_sarif(root: str, csproj: str, sarif_path: str) -> None:
     """Compile one project into a SARIF log. --no-incremental: an up-to-date build emits none.
     UseSharedCompilation=false: the Roslyn build server caches analyzer results and returns an
     empty log. --no-dependencies: this project only."""
-    subprocess.run(
+    in_build_slot(
         ["dotnet", "build", os.path.join(root, csproj),
          "--no-dependencies", "--no-incremental",
          "-p:UseSharedCompilation=false",
          "-v", "quiet", f"-p:ErrorLog={sarif_path},version=2.1"],
-        cwd=root, capture_output=True, text=True, timeout=180,
+        root, timeout=180,
     )
 
 
@@ -185,13 +193,13 @@ def read_sarif(sarif_path: str) -> list[dict]:
 def format_findings(root: str, csproj: str, changed_rel: list[str], report_dir: str) -> list[dict]:
     """Catch FORMAT_ONLY_DIAGNOSTICS, which build_sarif never sees; --include scopes it to the
     changed files and --diagnostics to those two rules, so the pass stays cheap."""
-    subprocess.run(
+    in_build_slot(
         ["dotnet", "format", os.path.join(root, csproj),
          "--severity", "info", "--verify-no-changes",
          "--diagnostics", *FORMAT_ONLY_DIAGNOSTICS,
          "--include", *changed_rel,
          "--report", report_dir],
-        cwd=root, capture_output=True, text=True, timeout=120,
+        root, timeout=120,
     )
     report_path = os.path.join(report_dir, "format-report.json")
     if not os.path.exists(report_path):
@@ -228,12 +236,17 @@ def backend_findings(root: str, changed: list[str]) -> list[dict]:
             changed_abs = {os.path.realpath(os.path.join(root, f)) for f in proj_changed}
 
             sarif = os.path.join(tmp, name + ".sarif")
-            build_sarif(root, csproj, sarif)
-            for r in read_sarif(sarif):
-                if os.path.realpath(r["path"]) in changed_abs:
-                    found.append(r)
-
-            found.extend(format_findings(root, csproj, proj_changed, os.path.join(tmp, name + "-fmt")))
+            try:
+                build_sarif(root, csproj, sarif)
+                for r in read_sarif(sarif):
+                    if os.path.realpath(r["path"]) in changed_abs:
+                        found.append(r)
+                found.extend(format_findings(root, csproj, proj_changed, os.path.join(tmp, name + "-fmt")))
+            except subprocess.TimeoutExpired as late:
+                found.append({
+                    "path": os.path.join(root, csproj), "line": 0, "level": "note", "rule": "build-slot",
+                    "msg": f"C# check skipped: the build slot did not free within {late.timeout:.0f} s",
+                })
     return found
 
 

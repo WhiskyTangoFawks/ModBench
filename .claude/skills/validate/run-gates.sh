@@ -48,16 +48,10 @@ if [[ ${#GATE_ARGS[@]} -eq 0 ]]; then
   exec bash "$0" ${flags:---comments}
 fi
 
-source "$ROOT/.claude/skills/validate/slot.sh"
-# MSBuild lends a run's worker nodes to any build of the same user, so a gate run its slot owner
-# stops would take another worktree's build down with it.
-export MSBUILDDISABLENODEREUSE=1
-
-# Two backend gate runs per machine, measured: a third leaves no memory headroom. api-drift
-# builds and boots a backend, and docs builds the backend tests, so each takes a slot too.
-if { $BACKEND || $API_DRIFT || $DOCS; } && [[ -z ${GATE_SLOT:-} ]]; then
-  GATE_SLOT=held in_slot backend 2 "$0" "${GATE_ARGS[@]}"
-  exit
+# Every gate but the comment gate builds or tests: api-drift builds and boots a backend, and docs
+# runs both stacks' scans.
+if { $BACKEND || $FRONTEND || $API_DRIFT || $DOCS; } && [[ -z ${BUILD_SLOT_HELD:-} ]]; then
+  exec bash "$ROOT/.claude/skills/validate/slot-run.sh" bash "$0" "${GATE_ARGS[@]}"
 fi
 
 echo "=== Gate 1: Comment discipline ==="
@@ -149,10 +143,8 @@ if $DOCS; then
   fi
 fi
 
-# Two frontend gate runs per machine, measured: a run peaks near 3 GB, and a third slows the
-# slowest unit test past its ceiling.
 if $FRONTEND; then
-  in_slot frontend 2 python3 "$ROOT/.claude/skills/validate/frontend_gates.py" "$ROOT" \
+  python3 "$ROOT/.claude/skills/validate/frontend_gates.py" "$ROOT" \
   || { echo "--- FRONTEND GATES FAILED ---"; FAILED=true; }
 fi
 
