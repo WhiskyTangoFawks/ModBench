@@ -1,4 +1,7 @@
 {
+  "worktree": {
+    "baseRef": "head"
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -39,39 +42,6 @@
           }
         ]
       }
-    ]
-  },
-  "permissions": {
-    "allow": [
-      "Bash(xargs cat)",
-      "Bash(git fetch *)",
-      "Bash(grep -n 'AddNew\\\\|create\\\\|$create\\\\|SaveAsync\\\\|RecordTableSchema\\\\|AddNew' MEditService/MEditService.Core/Edits/PluginWriter.cs)",
-      "Bash(kill %1)",
-      "Bash(curl -s http://localhost:5172/swagger/v1/swagger.json)",
-      "Bash(python3 -c \"import sys,json; paths=json.load\\(sys.stdin\\)['paths']; print\\([p for p in paths if 'copy' in p]\\)\")",
-      "Bash(dotnet run *)",
-      "Bash(echo \"Started PID $!\")",
-      "Bash(bash .claude/skills/validate/run-gates.sh --backend --frontend)",
-      "Skill(simplify)",
-      "Skill(simplify:*)",
-      "Skill(code-review)",
-      "Skill(code-review:*)",
-      "Bash(grep \"\\\\.cs$\")",
-      "Bash(xargs ls -l)",
-      "Bash(dotnet tool *)",
-      "Bash(dotnet decompile *)",
-      "Bash(which dotnet-ildasm *)",
-      "Bash(bash .claude/skills/validate/run-gates.sh --backend)",
-      "Bash(git checkout *)",
-      "Bash(git add *)",
-      "Bash(git commit -m ' *)",
-      "Bash(grep -E \"0x[0-9a-fA-F]{9,}|: ulong|: long\")",
-      "Bash(python3 -c ' *)",
-      "Bash(node -e ' *)",
-      "Bash(echo \"EXIT:$?\")",
-      "Bash(bash .claude/skills/validate/run-gates.sh --frontend)",
-      "Bash(git merge *)",
-      "Bash(git stash *)"
     ]
   }
 }
