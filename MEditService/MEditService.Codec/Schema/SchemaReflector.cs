@@ -163,7 +163,6 @@ public sealed class SchemaReflector
         };
     }
 
-    // A child record is a record of its own, not a field of its container (editor-conflicts.md).
     private static bool IsChildSlot(ColumnSpec column, List<Type> recordGetters) =>
         recordGetters.Any(getter => ContainerChildFields.EnumerateChildFieldsFor(getter)?.Contains(column.PropertyName, StringComparer.Ordinal) == true);
 }

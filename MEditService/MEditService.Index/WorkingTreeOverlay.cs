@@ -19,6 +19,7 @@ internal sealed class WorkingTreeOverlay
     private readonly PluginIngest _ingest;
     private readonly IReadOnlyDictionary<string, RecordTableSchema> _schemas;
     private readonly RecordTypes _types;
+    private readonly GameRelease _release;
 
     public WorkingTreeOverlay(
         DuckDBConnection connection, ILogger logger, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
@@ -28,6 +29,7 @@ internal sealed class WorkingTreeOverlay
         _containers = new ContainerDocuments(release);
         _ingest = new PluginIngest(connection, logger, release);
         _types = RecordTypes.For(release);
+        _release = release;
         _schemas = schemas;
     }
 
@@ -134,7 +136,7 @@ internal sealed class WorkingTreeOverlay
             """, formKey, key.Name, key.Origin, Stored(recordType, body), SourceRepository.ContentStamp(body));
     }
 
-    private string Stored(string recordType, string body) => OwnDocument.Of(body, _types.ChildSlotsOf(recordType));
+    private string Stored(string recordType, string body) => ContainerDocumentEdits.WithChildSlotsCut(body, recordType, _release);
 
     // Rebuilt for one record through the same collectors ingest uses, so an edit cannot
     // leave derived answers describing bytes that are gone.

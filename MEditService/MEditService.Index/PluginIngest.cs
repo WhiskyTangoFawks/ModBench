@@ -19,6 +19,7 @@ internal sealed class PluginIngest
     private readonly ILogger _logger;
     private readonly ContainerDocuments _containers;
     private readonly RecordTypes _types;
+    private readonly GameRelease _release;
 
     public PluginIngest(DuckDBConnection connection, ILogger logger, GameRelease release)
     {
@@ -26,6 +27,7 @@ internal sealed class PluginIngest
         _logger = logger;
         _containers = new ContainerDocuments(release);
         _types = RecordTypes.For(release);
+        _release = release;
     }
 
     internal readonly record struct Ingested(int Records, long IngestMs, long PrepareMs, long AppendMs);
@@ -218,7 +220,7 @@ internal sealed class PluginIngest
         // The stamp is the source document's, children and all: it is what validation compares a
         // tree's file against.
         return new PreparedRecord(
-            document.RecordType, document.FormKey, OwnDocument.Of(document.Text, _types.ChildSlotsOf(document.RecordType)),
+            document.RecordType, document.FormKey, ContainerDocumentEdits.WithChildSlotsCut(document.Text, document.RecordType, _release),
             SourceRepository.ContentStamp(document.Text), refs,
             holdings, cellLocations, editorId, document.ParseDiagnosis);
     }

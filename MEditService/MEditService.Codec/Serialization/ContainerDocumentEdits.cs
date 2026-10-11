@@ -16,6 +16,11 @@ public static class ContainerDocumentEdits
         return RecordTextCodec.SerializeToText(record, release);
     }
 
+    /// <summary>The record's own fields alone, as <see cref="WithoutChildren"/> lands them from the codec's
+    /// text, cut from <paramref name="text"/> with no other byte changed and no read through Mutagen.</summary>
+    public static string WithChildSlotsCut(string text, string recordType, GameRelease release) =>
+        EmbeddedChildSplice.CutSlots(text, RecordTypes.For(release).ChildSlotsOf(recordType));
+
     /// <summary>The container's own text with <paramref name="childText"/> appended to
     /// <paramref name="slotName"/>, and its other bytes as they were.</summary>
     public static ChildAppend WithChildAppended(

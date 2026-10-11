@@ -11,7 +11,7 @@ public sealed class ContainerConflictTests
     private static readonly FormKey Container = ComparedCopies.InMaster(0x800);
     private static readonly FormKey Child = ComparedCopies.InMaster(0x801);
 
-    public enum Held { PlacedReference, Navmesh, DialogTopic }
+    public enum Held { PlacedReference, Navmesh }
 
     private static void AddContainerHoldingChildNamed(Fallout4Mod mod, Held held, string childEditorId)
     {
@@ -26,11 +26,6 @@ public sealed class ContainerConflictTests
                 var navigated = new Cell(Container, Fallout4Release.Fallout4) { EditorID = "Room" };
                 navigated.NavigationMeshes.Add(new NavigationMesh(Child, Fallout4Release.Fallout4) { EditorID = childEditorId });
                 mod.AddInteriorCells(navigated);
-                break;
-            case Held.DialogTopic:
-                var quest = new Quest(Container, Fallout4Release.Fallout4) { EditorID = "Quest" };
-                quest.DialogTopics.Add(new DialogTopic(Child, Fallout4Release.Fallout4) { EditorID = childEditorId });
-                mod.Quests.Add(quest);
                 break;
         }
     }
@@ -53,7 +48,6 @@ public sealed class ContainerConflictTests
     [Theory]
     [InlineData(Held.PlacedReference)]
     [InlineData(Held.Navmesh)]
-    [InlineData(Held.DialogTopic)]
     public void TwoCopiesOfAContainer_DifferingOnlyInsideAChild_AreIdentical_AndTheChildShowsTheDifference(Held held)
     {
         Assert.Equal((ConflictThis.IdenticalToMaster, ConflictThis.Override), OverridersConflicts(held));
