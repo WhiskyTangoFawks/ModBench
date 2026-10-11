@@ -226,6 +226,17 @@ describe('PluginFacts — the Problems panel reads the answers the rows read', (
     expect(facts.problems().changedOutside).toEqual([{ plugin: 'C.esp', origin: 'OtherMod', text: CHANGED_TEXT }]);
   });
 
+  it('lists the diagnosis of each failed read that carries one, on its plugin, as the reconcile answered', () => {
+    const facts = new PluginFacts();
+    const B = { name: 'B.esp', origin: 'SomeMod' };
+    facts.reconciled([], [{ ...failure('Could not read (duplicate FormKey).'), diagnosis: 'duplicate FormKey' }, failure('Malformed record', B)]);
+
+    expect(facts.problems().failedToRead).toEqual([{ plugin: 'A.esp', origin: 'SomeMod', text: 'duplicate FormKey' }]);
+
+    facts.reconciled([], []);
+    expect(facts.problems().failedToRead).toEqual([]);
+  });
+
   it('lists exactly the plugins whose rows carry the changed outside status', () => {
     const facts = new PluginFacts();
     changedOutside(facts, 'SomeMod', 'A.esp', 'B.esp');

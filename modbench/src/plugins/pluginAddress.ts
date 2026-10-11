@@ -20,4 +20,8 @@ export class ByPluginAddress<T> {
   has(plugin: PluginAddress): boolean {
     return this.bySpelling.has(exactPluginAddressKey(plugin));
   }
+
+  values(): T[] {
+    return [...this.bySpelling.values()];
+  }
 }

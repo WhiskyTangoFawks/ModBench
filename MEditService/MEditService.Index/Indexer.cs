@@ -625,7 +625,7 @@ internal sealed class Indexer : IDisposable
         try
         {
             if (scope.Failed.Read(plugin, read).Failure is { } failure)
-                FailRead(scope, plugin.Key, ReadFailure(failure.Reason, scope.Store.DerivationOf(plugin.Key)));
+                FailRead(scope, plugin.Key, failure);
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
@@ -700,10 +700,13 @@ internal sealed class Indexer : IDisposable
     }
 
     // A failure that says what the plugin already said publishes nothing.
-    private void FailRead(OpenScope scope, PluginAddress key, string reason)
+    private void FailRead(OpenScope scope, PluginAddress key, string reason, string? diagnosis = null)
     {
-        if (scope.Held.SetFailure(key, reason)) PublishStatus();
+        if (scope.Held.SetFailure(key, reason, diagnosis)) PublishStatus();
     }
+
+    private void FailRead(OpenScope scope, PluginAddress key, LoadFailure failure) =>
+        FailRead(scope, key, ReadFailure(failure.Reason, scope.Store.DerivationOf(key)), failure.IsDiagnosis ? failure.Reason : null);
 
     // Listed only once its commit has landed: Status promises a plugin listed here is wholly
     // queryable, the filter's matches in it included, and a registered one is.
@@ -802,8 +805,9 @@ internal sealed class Indexer : IDisposable
         }
 
         using var documents = opened;
-        scope.Store.Index(documents, plugin, plugin.Path, derivedFrom);
-        return ReadOutcome.Read;
+        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom) is not { } refused) return ReadOutcome.Read;
+        _logger.LogWarning("Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, refused.Reason);
+        return ReadOutcome.Failed(refused);
     }
 
     // ADR-0015.
@@ -944,7 +948,7 @@ internal sealed class Indexer : IDisposable
             FailRead(scope, key, ReadFailure(PluginLoadFailure.ReasonFor(ex), scope.Store.DerivationOf(key)));
             throw;
         }
-        if (outcome.Failure is { } failure) FailRead(scope, key, ReadFailure(failure.Reason, scope.Store.DerivationOf(key)));
+        if (outcome.Failure is { } failure) FailRead(scope, key, failure);
         else if (scope.Held.ClearFailure(key)) PublishStatus();
     }
 
