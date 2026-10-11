@@ -20,7 +20,7 @@ As a user, I want:
 
 | Type | The cell reads | The editor | Ctrl+C copies |
 |---|---|---|---|
-| Text, and translated text | the text | a text box in place; open field value for a long text | the text |
+| Text, and translated text | the text; a translated text whose strings file is missing reads `<Error: No strings file>`, with the file it looked for in its tooltip | a text box in place; open field value for a long text | the text |
 | Integer | the number | a number box | the number |
 | Float | the number | a number box | the full number |
 | True or false | `True` or `False` | a check box, which writes as it is clicked | `True` or `False` |
@@ -33,9 +33,11 @@ As a user, I want:
 | Struct | collapsed, `{…}` or its reading, below; expanded, its members | none: its members edit | the whole value, as JSON |
 | Array | collapsed, its reading, below; expanded, its elements | none: its elements edit | the whole value, as JSON |
 
-Source: xEdit's editors by type; xedit.md, divergences 1, 5, 10, 11 and 12; mEdit's answer
+Source: xEdit's editors by type; xedit.md, divergences 1, 5, 10, 11 and 12; mEdit's answer; Never silently wrong
 
 A struct or array row pastes, and takes a drop, of a whole value copied from the same field. Source: xEdit
+
+The strings language setting chooses the language a translated text shows in, English by default. The source keeps every language the plugin's strings hold. Source: xEdit, Localization > Language; commands.md, VS Code provides it
 
 ## Placeholders
 

@@ -25,6 +25,8 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 # On Windows the same commands run in PowerShell; from Linux, /windows-vm runs them in a Windows VM.
 ```
 
+An agent runs each build and test through `.claude/skills/validate/slot-run.sh <command>`: one at a time machine-wide, under a memory cap. A hook blocks the bare form.
+
 ## Resources
 - `docs/architecture/` is the spec. `target-architecture.md` says how to read the diagrams. A view's spec is its surface in `surfaces/`. A trace in `traces/` is a diagram of how data flows, and holds no contract.
 - `docs/adr/` holds the decisions the code only cites. `ls docs/adr` is the index and the file names are the titles; `grep -rn ADR-00nn` finds everything one governs. Read one when a comment, spec or CLAUDE.md line names it, and when a design looks wrong and you are about to route around it.

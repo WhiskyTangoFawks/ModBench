@@ -37,7 +37,7 @@ internal static class LocalizedStrings
 {
     private static readonly StringsSource[] Sources = [StringsSource.Normal, StringsSource.IL, StringsSource.DL];
 
-    // Mutagen's default target, and the one language Track checks for; multi-language is deliberately out of scope.
+    // Mutagen's default target, and the one language Track checks for until the strings language setting chooses another.
     private const Language Target = Language.English;
 
     // Each archive's strings files by its stamp: a listed archive is opened once, not on every read, and a
