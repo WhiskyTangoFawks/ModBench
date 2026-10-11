@@ -1,9 +1,11 @@
 using System.Text;
+using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Strings;
 using Noggog;
 
 namespace MEditService.Codec.Tests.Serialization;
@@ -78,4 +80,21 @@ public class RecordTextCodecTests
         Assert.DoesNotContain('\r', text);
     }
 
+    [Fact]
+    public void SerializeToText_ATranslatedStringsLanguages_ListInLanguageOrderWhateverOrderTheModelHoldsThem()
+    {
+        var weapon = MakeWeapon();
+        weapon.Name = new TranslatedString(Language.English,
+        [
+            new KeyValuePair<Language, string>(Language.French, "Arme"),
+            new KeyValuePair<Language, string>(Language.English, "Weapon"),
+            new KeyValuePair<Language, string>(Language.German, "Waffe"),
+        ]);
+
+        using var doc = JsonDocument.Parse(RecordTextCodec.SerializeToText(weapon, GameRelease.Fallout4));
+
+        Assert.Equal(
+            ["English", "German", "French"],
+            doc.RootElement.GetProperty("Name").GetProperty("Values").EnumerateArray().Select(value => value.GetProperty("Language").GetString()));
+    }
 }

@@ -54,20 +54,12 @@ internal static class LocalizedStrings
 
     /// <summary>Mutagen reads strings from one folder: the folder where the game finds them all, else a
     /// scratch folder each file is copied into from where the game finds it.</summary>
-    internal static StringsRead ForRead(PluginStrings strings, IReadOnlyList<string> archives, ModPath plugin, GameRelease gameRelease) =>
-        For(strings, archives, plugin, gameRelease, inOneOrder: false);
-
-    /// <summary>An import lists a string's languages in the order Mutagen finds their files. Always copied in
-    /// name order, they come in one order from an archive or a folder (plugin-source.md, The tree).</summary>
-    internal static StringsRead ForImport(PluginStrings strings, IReadOnlyList<string> archives, ModPath plugin, GameRelease gameRelease) =>
-        For(strings, archives, plugin, gameRelease, inOneOrder: true);
-
-    private static StringsRead For(PluginStrings strings, IReadOnlyList<string> archives, ModPath plugin, GameRelease gameRelease, bool inOneOrder)
+    internal static StringsRead ForRead(PluginStrings strings, IReadOnlyList<string> archives, ModPath plugin, GameRelease gameRelease)
     {
         if (!IsLocalized(plugin, gameRelease)) return new StringsRead(new BinaryReadParameters(), scratch: null);
 
         var found = Find(strings, archives, plugin.ModKey, gameRelease);
-        if (!inOneOrder && found.Values.Select(file => file.Folder).Distinct().ToList() is [{ } folder])
+        if (found.Values.Select(file => file.Folder).Distinct().ToList() is [{ } folder])
             return new StringsRead(ForFolder(folder), scratch: null);
         if (found.Count == 0)
             return new StringsRead(ForFolder(strings.Folders.First()), scratch: null);
@@ -77,10 +69,8 @@ internal static class LocalizedStrings
         {
             var languageFormat = LanguageFormat(gameRelease);
             var stringsFolder = Directory.CreateDirectory(Path.Combine(scratch, "Strings")).FullName;
-            foreach (var (name, file) in found
-                .Select(each => (Name: StringsUtility.GetFileName(languageFormat, plugin.ModKey, each.Key.Language, each.Key.Source), File: each.Value))
-                .OrderBy(each => each.Name, StringComparer.Ordinal))
-                File.WriteAllBytes(Path.Combine(stringsFolder, name), file.Bytes());
+            foreach (var ((source, language), file) in found)
+                File.WriteAllBytes(Path.Combine(stringsFolder, StringsUtility.GetFileName(languageFormat, plugin.ModKey, language, source)), file.Bytes());
             return new StringsRead(ForFolder(scratch), scratch);
         }
         catch

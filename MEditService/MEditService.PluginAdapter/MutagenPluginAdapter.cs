@@ -182,7 +182,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     internal static IMod OpenForWrite(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
     {
-        using var read = strings is { } named ? LocalizedStrings.ForImport(named, loadOrder?.Archives ?? [], modPath, gameRelease) : null;
+        using var read = strings is { } named ? LocalizedStrings.ForRead(named, loadOrder?.Archives ?? [], modPath, gameRelease) : null;
         return ModFactory.ImportSetter(modPath, gameRelease, ReadParameters(modPath, read, loadOrder));
     }
 

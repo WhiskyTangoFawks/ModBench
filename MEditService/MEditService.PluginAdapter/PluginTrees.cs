@@ -64,7 +64,7 @@ internal static class PluginTrees
                 cancel.ThrowIfCancellationRequested();
                 treeFiles.Add(new TreeFile(
                     Path.GetRelativePath(scratchDir, file),
-                    StripCarriageReturns(await File.ReadAllBytesAsync(file, cancel))));
+                    TranslatedStringValues.InLanguageOrder(StripCarriageReturns(await File.ReadAllBytesAsync(file, cancel)))));
             }
             return treeFiles;
         }
