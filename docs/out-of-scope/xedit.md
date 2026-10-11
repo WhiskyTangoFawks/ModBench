@@ -54,6 +54,7 @@ Gestures Modbench does differently.
 | 30 | A container copied in to hold a copied child record | A Partial Form, where the game lets it be one | A full override, unless xEdit started with -IKnowWhatImDoing -AllowMakePartial | Ruling: a container copied in only to hold a child overrides none of its fields. |
 | 31 | Compare Selected | Records of different record types open one grid, with a row for each field name any of them holds | Offered only when every selected record has the same signature | Ruling: a field two record types share, such as the EditorID or the keywords, compares across them. |
 | 32 | Referenced By | A gesture on a record, answered as a snapshot in VS Code's References view | A tab beside the record view that follows the selected record | Ruling: Existing tools. |
+| 33 | GetVATSValue's VATS function | A function per VATS value, as Mutagen types it: GetVATSValueWeapon to GetVATSValueUnknown | One function, GetVATSValue, with the VATS function as Parameter 1 | Mutagen decides the data: it reads each VATS function as a condition type of its own. |
 
 ## Omissions by object
 
