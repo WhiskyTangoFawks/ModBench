@@ -1,6 +1,7 @@
 using System.Reflection;
 using Mutagen.Bethesda;
 using Xunit.Abstractions;
+using Xunit.Sdk;
 
 namespace MEditService.TestSupport;
 
@@ -8,26 +9,30 @@ namespace MEditService.TestSupport;
 /// rather than inside whichever tests start first on each thread.</summary>
 public class SchemaWarmedTestFramework(IMessageSink messageSink) : GamesRegisteredTestFramework(messageSink)
 {
-    public static void WarmSchemas()
+    protected virtual void Warm()
     {
         _ = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
         _ = SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE);
         _ = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield);
     }
 
-    protected virtual void Warm() => WarmSchemas();
+    protected override ITestFrameworkExecutor CreateExecutor(AssemblyName assemblyName) =>
+        new Executor(assemblyName, SourceInformationProvider, DiagnosticMessageSink, Warm);
 
-    // xUnit answers a throw here by skipping the whole assembly and exiting clean. A schema that does
-    // not build instead fails, by name, every test that reads it, since a failed build is not cached.
-    protected override ITestFrameworkExecutor CreateExecutor(AssemblyName assemblyName)
+    // xUnit exits clean on a throw from CreateExecutor and runs no test on one from RunTestCases.
+    // A failed warm-up is reported as an error, which fails the run, and the tests still run.
+    private sealed class Executor(
+        AssemblyName assemblyName, ISourceInformationProvider sourceInformation, IMessageSink diagnostics, Action warm)
+        : XunitTestFrameworkExecutor(assemblyName, sourceInformation, diagnostics)
     {
-        try
+        protected override void RunTestCases(
+            IEnumerable<IXunitTestCase> testCases, IMessageSink executionMessageSink, ITestFrameworkExecutionOptions executionOptions)
         {
-            Warm();
+            if (Record.Exception(warm) is { } warmUpFailure)
+            {
+                executionMessageSink.OnMessage(new ErrorMessage(testCases, warmUpFailure));
+            }
+            base.RunTestCases(testCases, executionMessageSink, executionOptions);
         }
-        catch (InvalidOperationException)
-        {
-        }
-        return base.CreateExecutor(assemblyName);
     }
 }
