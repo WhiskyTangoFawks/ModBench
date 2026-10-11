@@ -2,8 +2,8 @@ using System.IO.Abstractions;
 
 namespace MEditService.PluginAdapter;
 
-// Mutagen's serialization reads a group's records in the order a directory lists their files. NTFS
-// lists by name and ext4 by a hash of the name, so the listing is put in name order everywhere.
+// Mutagen's serialization orders a group's records and a block level's blocks as the directory lists
+// them, and file systems list differently: NTFS by name, ext4 by a hash of the name.
 internal sealed class NameOrderedFileSystem : FileSystem
 {
     internal static readonly NameOrderedFileSystem Instance = new();
