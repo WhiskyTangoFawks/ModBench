@@ -59,7 +59,7 @@ As a user, I want:
 
 | Part | What it shows | Source |
 |---|---|---|
-| Label | `[XX] File name`: the plugin's load index, in hex, `[FE:XXX]` for a light plugin, and its file name. | xEdit |
+| Label | `[XX] File name`: the plugin's load index, in hex, `[FE:XXX]` for a light plugin, `[FD:XX]` for a medium one, and its file name. | xEdit |
 | Status | the column's status, from the table below | ruling |
 | Colour | the column's worst cell colour | [editor-conflicts.md](editor-conflicts.md) |
 | Tooltip | the file name, the origin, and the status's reason in a sentence | ruling |

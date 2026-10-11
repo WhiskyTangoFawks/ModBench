@@ -9,7 +9,7 @@ As a user, I want:
 1. To find a record by its file: one folder for each plugin, and one file for each record, named by its EditorID when it has one, then its FormKey, except a child record (story 3).
 2. A diff to hold only what changed in the plugin. An insert or a delete touches one record's file, and an insert also moves the Next Object ID in the plugin header's file. A reorder reads as a reorder, nothing is re-sorted, and decompiling an unchanged plugin changes nothing. Source: ADR-0006
 3. A record and its child records in one file, so a change to a cell or a quest is one file to review. A worldspace's grid cells are each a file of their own. Source: ADR-0020
-4. Never to edit or merge a value the plugin derives. The masters and the record count are not in the source, so branches never conflict over them. The Next Object ID is, as Mutagen holds it, so two branches that add records both move it in the header. Source: ADR-0008; Mutagen's data; ruling
+4. Never to edit or merge a value the plugin derives, in the header or in a record: it is not in the source. The masters and the record count are not, so branches never conflict over them. The Next Object ID is in the source, as Mutagen holds it, so two branches that add records both move it in the header. Source: ADR-0008; Mutagen's data; ruling
 
 ## Decompile and compile
 
@@ -17,7 +17,7 @@ As a user, I want:
 
 1. To decompile any plugin in my modlist, whatever tool wrote it and however it bends convention.
 2. To trust the source: it says what the plugin means, and compiling it unchanged gives a plugin that means the same, though its bytes may differ. Source: ADR-0006
-3. To be told, naming the record, when a plugin cannot become source without losing meaning, and never to get a source that quietly lost it. Source: Never silently wrong
+3. To be told when a plugin cannot become source without losing meaning, and never to get a source that quietly lost it. The refusal names the record, and says whether the plugin is malformed or Mutagen mishandles it, because the remedy differs. Source: Never silently wrong; CONTEXT.md, Malformed plugin
 4. To take a new upstream version into my edits myself: decompile it onto the mod's `main`, then merge my branch with git, where each conflict lands in one record's file. Source: ADR-0007
 
 ## Changes outside Modbench
@@ -25,7 +25,7 @@ As a user, I want:
 The source is files, and any tool can change them. As a user, I want:
 
 1. A change made outside Modbench to compile like any other: a deleted file deletes its record, and an added file adds one. Source: ADR-0003
-2. Compile to stop on a file it cannot read, on a file that means something other than what compile would write back for it, such as one with a misspelled field, and on two files that claim one FormKey, naming every such file and the field at fault where there is one, so a broken change never becomes a broken plugin. Spacing and key order alone change no meaning. Source: Never silently wrong; ADR-0006
+2. Compile to stop on a file it cannot read, on a file that holds what no plugin can hold, and on two files that claim one FormKey, naming every such file and the field at fault where there is one, so a broken change never becomes a broken plugin. A misspelled field, a value the plugin derives (The tree, story 4) and an element the plugin would drop are things no plugin can hold. Spacing and key order alone change no meaning. Source: Never silently wrong; ADR-0006
 3. A record file in the wrong place to compile, with a warning naming where it belongs. Modbench's next write to that record moves it there. Source: Never silently wrong
 
 ## In the text editor
