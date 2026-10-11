@@ -2,126 +2,110 @@
 
 A modding IDE for Bethesda games, built inside VS Code. Modbench is a VS Code extension plus a local C# service. It manages a Mod Organizer 2 instance in place — install, order, enable — and it edits the plugins in that instance (`.esp`/`.esm`/`.esl`) record by record, xEdit-style, with git as the review and history model.
 
-Status: pre-alpha. Unreleased, no packaged builds, no users yet. Supports Fallout 4, Skyrim SE and Starfield.
+Status: pre-alpha. Unreleased, no packaged builds, no users yet. Supports Fallout 4, Skyrim SE and Starfield. What's next is on the [GitHub Milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones) board.
 
 ## What's different
 
 Every other plugin editor writes the binary in place and leaves you with `.bak` files. Modbench treats a plugin the way an IDE treats a program:
 
-- Track a mod, and every record in its plugins is serialized to a JSON source tree inside the mod folder, one file for each record and its child records,, committed to a git repo that lives right there. The serialization is lossless — compiling it back gives a plugin that means the same, record for record, though its bytes may differ, and that round trip is verified at Track time, so a plugin that can't be reproduced is refused rather than silently mangled.
+- Track a mod, and every record in its plugins is serialized to a JSON source tree inside the mod folder, one file for each record and its child records, committed to a git repo that lives right there. The serialization is lossless — compiling it back gives a plugin that means the same, record for record, though its bytes may differ, and that round trip is verified at Track time, so a plugin that can't be reproduced is refused rather than silently mangled.
 - Edit in the compare grid (or from a script, or from an agent) and the change lands as an ordinary working-tree edit. VS Code's own Source Control panel is the review surface: diff it, discard it, commit it, branch it, rebase it.
 - Compile writes the binary from the source when you say so. The compiler refuses what it can't emit and reports the rest as Problems.
-- The plugin stays what every tool sees. The game, MO2 and xEdit load the plugin binary. Compile writes it from the source, which is the truth (ADR-0007). Modbench never assumes exclusive ownership of any file. When a tracked plugin changes outside Modbench, Modbench tells you, and you decide what to do next.
+- The plugin stays what every tool sees. The game, MO2 and xEdit load the plugin binary. Compile writes it from the source, which is the truth. Modbench never assumes exclusive ownership of any file. When a tracked plugin changes outside Modbench, Modbench tells you, and you decide what to do next.
 
-The decisions behind this are [ADR-0007](docs/adr/0007-plugin-edits-are-git-working-tree-changes.md) and [ADR-0006](docs/adr/0006-a-tracked-plugins-truth-is-its-source.md).
+The UX is borrowed, not invented: mod management follows MO2, record editing follows xEdit, and every interaction uses the VS Code surface that already does the job. [docs/principles.md](docs/principles.md) and [docs/adr/](docs/adr/) hold the reasons.
 
 ## What works today
 
-| Surface | Spec | State |
-|---|---|---|
-| Mods — install from archive or folder, separators, drag-order, enable | [mods.md](docs/architecture/surfaces/mods.md) | Implemented; spec rewritten, code catching up |
-| Plugins — `plugins.txt` order and checkboxes, and with mEdit running, every active plugin expands into its record types, records, worldspace/cell tree | [plugins.md](docs/architecture/surfaces/plugins.md) | Implemented; spec rewritten, code catching up |
-| Record editor — xEdit-style compare grid across the active plugins, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD | [editor.md](docs/architecture/surfaces/editor.md) | Implemented |
-| Version control — Track, compile, native SCM integration, external-change handling | [plugins.md](docs/architecture/surfaces/plugins.md), [plugin-source.md](docs/architecture/surfaces/plugin-source.md) | Implemented; spec rewritten, code catching up |
-| Referenced By — what points at a record, as a snapshot in VS Code's References view | [editor-referenced-by.md](docs/architecture/surfaces/editor-referenced-by.md) | Implemented; spec rewritten, code catching up |
-| Toolbox — the instance at a glance: its game and active profile, switch profile, refresh | [toolbox.md](docs/architecture/surfaces/toolbox.md) | Implemented; spec rewritten, code catching up |
-| Record filter — plain `.sql` files against the record index, applied with a Code Lens | [plugins.md](docs/architecture/surfaces/plugins.md) | Implemented |
-| Repair — byte-level repair of malformed plugins the Creation Kit wouldn't have written | [#666](https://github.com/WhiskyTangoFawks/ModBench/issues/666) | Planned |
-| Downloads — the downloads folder as a tree: install, exclude, delete (`nxm://` downloading not built) | [downloads.md](docs/architecture/surfaces/downloads.md) | Implemented; spec rewritten, code catching up |
-| Agent — an agent in VS Code reads the instance and its records, and runs the gestures, through one MCP server | [agent.md](docs/architecture/surfaces/agent.md) | Planned |
+- Mods: install from an archive or a folder, separators, drag to order, enable.
+- Plugins: `plugins.txt` order and checkboxes. Each active plugin expands into its record types, records and worldspace and cell tree.
+- Record editor: an xEdit-style compare grid across the active plugins, with conflict colours, in-place editing, copy as override and new record.
+- Version control: Track, Compile, VS Code's Source Control panel, and external-change handling.
+- Referenced By: what points at a record, in VS Code's References view.
+- Record filter: plain `.sql` files against the record index.
+- Toolbox: the instance's game and active profile, switch profile, refresh.
+- Downloads: the downloads folder as a tree, to install, exclude and delete. `nxm://` downloads are not built.
 
-What's next is the [GitHub Milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones) board: each numbered milestone is an epic in priority order, its issues are the slices.
+Planned: byte-level repair of malformed plugins, and an MCP server so an agent in VS Code reads the instance and runs its gestures.
 
-## Architecture at a glance
+## Setup
 
-```
-modbench/          VS Code extension (TypeScript) + React webview for the compare grid, one
-                   composite project per box of docs/architecture/
-  src/*.ts           the activation file, its wiring, and the ports it implements over
-                     VS Code's window and workspace: Modbench's composition root
-  src/toolbox/       Toolbox view — the instance's profile row, switch profile and refresh
-  src/mods/          Mods view — the modlist tree and every mod gesture, never calling the
-                     backend
-  src/plugins/       Plugins view — the one tree, rows from the instance value and records from
-                     the mEdit client, and every plugin gesture (ADR-0017)
-  src/downloads/     Downloads view — the downloads/ tree, its row actions and the upgrade pick
-  src/editor/        Editor view — the record panel's host, the active record and Referenced By
-  src/modlist/       modlist commands — the mods and separators in mod order, and mod sync
-  src/pluginsCommands/   plugins commands — enable, disable and move plugins, and plugin sync
-  src/instanceCommands/  instance commands — switch profile, put load order, refresh
-  src/downloadsCommands/ downloads commands — exclude, include and delete a downloaded file
-  src/install/       install — a new mod, or an upgrade over one
-  src/deploy/        deploy commands — makes the game see the instance's resolved files (drawn, not built yet)
-  src/client/        the mEdit client — one port over the backend's commands, queries,
-                     notifications and lifecycle, with an HTTP and an in-memory adapter (ADR-0002)
-  src/loadOrderFileCodec/, src/wire/, src/tables/, src/ports/
-                     the kernel — the game's plugins.txt codec, the generated API types and
-                     webview protocol, the per-release tables, and the report / ask / trash port
-  src/instanceLoader/   the Instance loader — the instance value, rebuilt on the adapter's signal
-  src/instanceAdapter/  the Instance adapter — the one reader and writer of the instance; MO2's
-                        implementation holds its layout, its watch and its file codecs
-MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172), one project
-                   per box of docs/architecture/, and the codec one more per game
-  MEditService.Http/          the endpoints, the SSE notification adapter, OpenAPI via
-                              Swashbuckle, and mEdit's composition root
-  MEditService.Commands/      one handler per gesture: edit, create, track, compile, put load order
-  MEditService.Queries/       compare, references, children — the read model's face
-  MEditService.LoadOrder/     the kernel: every plugin in the instance, and the active plugins
-  MEditService.Codec/         the kernel: record text to document and back, and the schema
-  MEditService.Codec.Fallout4/ the codec compiled against Fallout 4's types; one such project per game
-  MEditService.Ports/         the kernel: the notification port and its payloads
-  MEditService.Index/         DuckDB as an index over the record documents
-  MEditService.SourceAdapter/ the source tree and its git layer
-  MEditService.PluginAdapter/ Mutagen for plugin I/O
-```
+### Prerequisites
 
-Two bounded contexts with an enforced language boundary — Mod Management speaks mods, modlists and files; Editing speaks plugins, records and FormKeys — meet at exactly one object: a plugin file at a physical path. [CONTEXT.md](CONTEXT.md) is the glossary, both contexts in one file. The extension spawns and owns the backend for an instance ([ADR-0002](docs/adr/0002-mod-management-and-editing-are-one-tool.md)). The Mods, Downloads and Toolbox views never call the backend.
+- .NET SDK 10.x, Node.js 20 or later, VS Code and git.
+- 7-Zip on `PATH` as `7z`, `7za` or `7zz`. Installing a mod from an archive needs it.
+- `python3` (`python` on Windows) on `PATH`. The two-windows backend tests need it, and skip without it.
 
-The UX rules are borrowed, not invented: Mod Management follows MO2, record editing follows xEdit ([ADR-0018](docs/adr/0018-xedit-is-the-reference-for-record-editing.md)), and every interaction uses the native VS Code surface that already does the job ([principles](docs/principles.md), Mutagen's data, the reference's behaviour, VS Code's interaction). Decisions live in [docs/adr/](docs/adr/); a decision that was reversed is deleted, and the story is in the Alternatives rejected section of whatever replaced it.
-
-## Getting started
-
-Prerequisites: [.NET SDK](https://dotnet.microsoft.com/download) 10.x, [Node.js](https://nodejs.org/) 20 LTS or later, VS Code, git on `PATH` (Track needs it), and 7-Zip on `PATH` as `7z`, `7za` or `7zz` (installing a mod from an archive needs it). The backend test suite also wants `python3` (`python` on Windows) on `PATH` — only to hold an index file from a second process in the two-windows tests, which skip without it. On Ubuntu/Debian: `sudo apt-get install -y dotnet-sdk-10.0 nodejs npm p7zip-full`. On Windows: `winget install Git.Git OpenJS.NodeJS.22 Microsoft.DotNet.SDK.10 Python.Python.3.12 7zip.7zip`; turn on Developer Mode, since the tests create symlinks; and run `Set-ExecutionPolicy RemoteSigned` so npm runs in PowerShell.
+On Ubuntu or Debian:
 
 ```bash
-# backend
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash -   # Ubuntu's own nodejs is too old
+sudo apt-get install -y git dotnet-sdk-10.0 nodejs p7zip-full python3
+```
+
+On Windows, turn on Developer Mode, because the tests create symlinks. Then:
+
+```powershell
+winget install Git.Git OpenJS.NodeJS.22 Microsoft.DotNet.SDK.10 Python.Python.3.12 7zip.7zip
+Set-ExecutionPolicy RemoteSigned   # npm runs in PowerShell only with this
+```
+
+### Build and test
+
+```bash
 cd MEditService
-dotnet build MEditService.sln
+dotnet build
 dotnet test -v minimal
 
-# extension
 cd ../modbench
 npm ci
-npm run build          # type-check + bundle extension and webview
+npm run build
 npm run test:unit
 ```
 
-You don't run the backend yourself — the extension spawns it at activation and hands it the snapshot: every plugin in the instance and what provides it, and the active plugins in load order. For the API on its own: `dotnet run --project MEditService.Http`, then `http://localhost:5172/swagger`.
+[CLAUDE.md](CLAUDE.md) § Tools has the full set of commands.
 
-Launch the extension from the repo root (F5 is unreliable in this environment; use the CLI):
+### Launch the extension
 
 ```bash
 code --extensionDevelopmentPath="$(pwd)/modbench" "<path to an MO2 instance directory>"
 ```
 
-The workspace folder you open is the MO2 instance — the directory containing `ModOrganizer.ini`, `mods/` and `profiles/`. There is no separate instance-path setting. The extension activates on `onStartupFinished`, so the Modbench views are in the activity bar as soon as the window is ready — no command is needed to wake it.
+Run it from the repo root. The workspace folder you open is the MO2 instance: the directory that holds `ModOrganizer.ini`, `mods/` and `profiles/`. The extension starts the backend itself.
 
-Regenerating the typed API client after a backend change: `npm run generate-api` against a freshly started backend (the `/regenerate-api` skill has the exact sequence).
+### Local folders
 
-## Working on it
+Each developer fills two gitignored kinds of folder at the repo root. Neither is needed to build or test.
 
-The repo is set up to be worked on by people and coding agents alike:
+`references/` holds read-only clones of the reference tools' source, to grep. [CLAUDE.md](CLAUDE.md) § Resources says which files in them matter. Clone them once:
 
-- [CLAUDE.md](CLAUDE.md) — the tool commands and the rules no gate can express; the process files under `modbench/` and `MEditService/` carry each side's own.
-- [docs/architecture/](docs/architecture/) — the specification the code is built against: the target architecture, one surface spec per view, one trace per flow.
-- [docs/adr/](docs/adr/) — decisions.
-- [docs/out-of-scope/](docs/out-of-scope/) — the divergence registers, one for each reference tool.
-- [docs/research/](docs/research/) — audits of MO2 and xEdit, read from their source. They are the evidence behind the registers and commands.md's Template column.
-- [docs/agents/](docs/agents/) — tracker conventions (GitHub issues and milestones) and triage labels.
+```bash
+mkdir -p references
+for repo in Mutagen-Modding/Mutagen TES5Edit/TES5Edit ModOrganizer2/modorganizer monster-cookie/SFRecordCompareEngine microsoft/vscode-docs; do
+  git -C references clone --depth 1 "https://github.com/$repo.git"
+done
+```
 
-The editing backend is agent-friendly by construction: a discoverable OpenAPI surface, typed request/response for every operation, an index you can query with SQL, and edits that land as git working-tree changes a human can review before anything touches the binary. Scripts, xEdit scripting in Python against the same API, are planned but not yet built.
+`DevList/`, `DevListSkyrim/` and `DevListStarfield/` each hold an MO2 instance for manual tests: Fallout 4, Skyrim Special Edition and Starfield. The `/manual-test` skill opens `DevList/`. Make each one in MO2, or copy one in. `ModOrganizer.ini` holds the game folder as an absolute path, so set `gamePath` again in a copied instance.
 
-## References
+### Windows gates from Linux
+
+Every feature works on Windows and Linux alike, so the gates run on both. On a Linux host they run in a Windows 11 VM under Docker. The host needs virtualization turned on in its firmware, so that `/dev/kvm` exists. Then:
+
+```bash
+sudo apt-get install -y docker.io docker-compose-v2
+sudo usermod -aG docker "$USER"   # log in again before the next line
+.claude/skills/windows-vm/vm.sh up
+.claude/skills/windows-vm/gates.sh
+```
+
+The first `vm.sh up` installs Windows, which takes about 30 minutes. The [windows-vm skill](.claude/skills/windows-vm/SKILL.md) holds the rest.
+
+## Contributing
+
+[CLAUDE.md](CLAUDE.md) is the entry point, for people and coding agents alike. [docs/architecture/](docs/architecture/) is the specification the code is built against.
+
+## Built on
 
 Modbench stands on [Mutagen](https://github.com/Mutagen-Modding/Mutagen) (plugin parsing and writing), [DuckDB](https://duckdb.org/) (the record index), and 20+ years of [xEdit](https://github.com/TES5Edit/TES5Edit) UX refinement, and it manages [Mod Organizer 2](https://github.com/ModOrganizer2/modorganizer) instances in their own format.
 
