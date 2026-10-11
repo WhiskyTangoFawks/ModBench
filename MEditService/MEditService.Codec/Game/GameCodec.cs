@@ -61,17 +61,17 @@ internal sealed class GameCodec : IGameCodec
 
     public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record)
     {
-        switch (record)
+        if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !GameSpecifics.Normalizes(record)) return record;
+        var copy = record.DeepCopy();
+        switch (copy)
         {
-            case ICellGetter cell:
-                var cellCopy = cell.DeepCopy();
-                ZeroCellGroupFields(cellCopy);
-                return cellCopy;
-            case IWorldspaceGetter worldspace:
-                var worldspaceCopy = worldspace.DeepCopy();
-                worldspaceCopy.SubCellsTimestamp = 0;
-                worldspaceCopy.SubCellsUnknown = 0;
-                foreach (var block in worldspaceCopy.SubCells)
+            case Cell cell:
+                ZeroCellGroupFields(cell);
+                break;
+            case Worldspace worldspace:
+                worldspace.SubCellsTimestamp = 0;
+                worldspace.SubCellsUnknown = 0;
+                foreach (var block in worldspace.SubCells)
                 {
                     block.LastModified = 0;
                     block.Unknown = 0;
@@ -84,16 +84,15 @@ internal sealed class GameCodec : IGameCodec
                     }
                     block.Items.SetTo(block.Items.OrderBy(s => s.BlockNumberX).ThenBy(s => s.BlockNumberY).ToList());
                 }
-                worldspaceCopy.SubCells.SetTo(worldspaceCopy.SubCells.OrderBy(b => b.BlockNumberX).ThenBy(b => b.BlockNumberY).ToList());
-                if (worldspaceCopy.TopCell is { } topCell) ZeroCellGroupFields(topCell);
-                return worldspaceCopy;
-            case IDialogTopicGetter topic:
-                var topicCopy = topic.DeepCopy();
-                ZeroTopicGroupFields(topicCopy);
-                return topicCopy;
-            default:
-                return GameSpecifics.NormalizeRecord(record);
+                worldspace.SubCells.SetTo(worldspace.SubCells.OrderBy(b => b.BlockNumberX).ThenBy(b => b.BlockNumberY).ToList());
+                if (worldspace.TopCell is { } topCell) ZeroCellGroupFields(topCell);
+                break;
+            case DialogTopic topic:
+                ZeroTopicGroupFields(topic);
+                break;
         }
+        GameSpecifics.Normalize(copy);
+        return copy;
     }
 
     internal static void ZeroTopicGroupFields(DialogTopic topic)
