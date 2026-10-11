@@ -262,9 +262,9 @@ public sealed class CompiledTree
             drop.Paths))];
     }
 
-    /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/> and handed to
-    /// <paramref name="land"/>, whose Commit renames it into place; discarded once it returns. Only
-    /// <paramref name="masters"/>, the plugins the tree references, are read for their styles.</summary>
+    /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/> for
+    /// <paramref name="land"/> to Commit into place, and discarded once it returns. Only the styles
+    /// of <paramref name="masters"/>, the plugins the tree references, are read.</summary>
     public async Task<Answer<T, PluginFailure>> SaveAsync<T>(
         string pluginPath, IReadOnlyList<string> masterOrder, IEnumerable<string> masters, Func<PreparedPluginSave, T> land)
     {
