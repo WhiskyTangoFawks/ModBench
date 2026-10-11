@@ -140,24 +140,26 @@ internal sealed class PluginCompileService(
         return CompileResult.Success(diagnostics);
     }
 
-    // Never silently wrong: a value the written bytes drop refuses the commit, so the binary stays as it was.
     private static Answer<bool, CompileResult> Land(PreparedPluginSave save, CompiledTree tree, PluginAddress plugin, ISourceRepository repository)
     {
-        if (tree.FirstDropIn(save) is { } dropped) return Dropped(plugin, repository, dropped);
+        if (tree.DropsIn(save) is { Count: > 0 } drops) return Dropped(plugin, repository, drops);
         return repository.WriteBinary(plugin, save.BinarySha256(), save.Commit).Holds(out var recorded, out var unwritten)
             ? recorded
             : WriteFailed(plugin, unwritten.Reason);
     }
 
-    private static CompileResult Dropped(PluginAddress plugin, ISourceRepository repository, DroppedValue dropped)
+    private static CompileResult Dropped(PluginAddress plugin, ISourceRepository repository, IReadOnlyList<DroppedValue> drops)
     {
-        var file = repository.RelativePathOf(plugin, dropped.Record).Holds(out var path, out _) && path is not null
-            ? path
-            : dropped.Record.FormKey;
-        var what = dropped.Path.Length == 0 ? "its record" : $"its '{dropped.Path}'";
+        var named = new List<string>();
+        foreach (var drop in drops)
+        {
+            if (!repository.RelativePathOf(plugin, drop.Record).Holds(out var file, out var unread)) return SourceDoesNotParse(plugin, unread);
+            var held = file ?? throw new InvalidOperationException($"Expected the tree this compile read to hold {drop.Record.FormKey}'s document.");
+            named.Add($"{held} ({string.Join(", ", drop.Paths.Select(path => $"'{path}'"))})");
+        }
         return CompileResult.Refused(
             CompileRefusal.SourceValueDropped,
-            $"{plugin.Name} cannot be compiled: the plugin written from {file} would not hold {what}. Nothing was written.");
+            $"{plugin.Name} cannot be compiled: the plugin written from its source would not hold {string.Join("; ", named)}. Nothing was written.");
     }
 
     private static CompileResult SourceDoesNotParse(PluginAddress plugin, SourceFailure unread) =>

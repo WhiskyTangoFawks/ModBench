@@ -51,20 +51,15 @@ internal static class ModelIdentity
     // field the mask disagrees on, else the codec document path that differs; null when none differs.
     private static Divergence? FindFirst(IModGetter original, IModGetter recompiled)
     {
-        var game = GameCodecs.For(original.GameRelease);
-        var recompiledByFormKey = recompiled.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
         var originalFormKeys = new HashSet<FormKey>();
-        foreach (var originalRecord in original.EnumerateMajorRecords())
+        foreach (var (originalRecord, normalizedOriginal, recompiledRecord) in Normalized(original.EnumerateMajorRecords(), recompiled))
         {
             originalFormKeys.Add(originalRecord.FormKey);
-            if (!recompiledByFormKey.TryGetValue(originalRecord.FormKey, out var recompiledRecord))
+            if (recompiledRecord is not { } normalizedRecompiled)
             {
                 return new Divergence(originalRecord.GetType().Name, originalRecord.FormKey, originalRecord.EditorID,
                     "is missing from the recompiled plugin.");
             }
-
-            var normalizedOriginal = game.NormalizeEncoding(originalRecord);
-            var normalizedRecompiled = game.NormalizeEncoding(recompiledRecord);
 
             // The mask lies by omission (a polymorphic hierarchy's derived-only fields bind through the
             // base overload and are never compared), so a mask-equal pair is never the verdict; the codec
@@ -91,57 +86,78 @@ internal static class ModelIdentity
         return null;
     }
 
-    /// <summary>The first <paramref name="held"/> record, and its document path, that
-    /// <paramref name="written"/> lacks; empty for a whole record. A value read back respelled is
-    /// Mutagen's to decide, so only an absence counts.</summary>
-    public static (IMajorRecordGetter Record, string Path)? FindFirstDrop(
-        IEnumerable<(IMajorRecordGetter Record, string Text)> held, IModGetter written)
+    // Both sides through the game's one definition of legitimate divergence (ADR-0006).
+    private static IEnumerable<(IMajorRecordGetter Original, IMajorRecordGetter Normalized, IMajorRecordGetter? Recompiled)> Normalized(
+        IEnumerable<IMajorRecordGetter> original, IModGetter recompiled)
     {
-        var writtenByFormKey = written.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
-        foreach (var (record, sourceText) in held)
+        var game = GameCodecs.For(recompiled.GameRelease);
+        var recompiledByFormKey = recompiled.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
+        foreach (var record in original)
         {
-            if (!writtenByFormKey.TryGetValue(record.FormKey, out var writtenRecord)) return (record, "");
-
-            var writtenText = RecordTextCodec.SerializeToText(writtenRecord, written.GameRelease);
-            if (string.Equals(sourceText, writtenText, StringComparison.Ordinal)) continue;
-
-            using var sourceDoc = System.Text.Json.JsonDocument.Parse(sourceText);
-            using var writtenDoc = System.Text.Json.JsonDocument.Parse(writtenText);
-            if (FirstAbsence(sourceDoc.RootElement, writtenDoc.RootElement, path: "") is { } path) return (record, path);
+            yield return (record, game.NormalizeEncoding(record),
+                recompiledByFormKey.TryGetValue(record.FormKey, out var other) ? game.NormalizeEncoding(other) : null);
         }
-        return null;
     }
 
-    // Array elements pair by position, so one past the written array's end is absent.
-    private static string? FirstAbsence(System.Text.Json.JsonElement held, System.Text.Json.JsonElement? written, string path)
+    /// <summary>Each <paramref name="held"/> record with every document path whose value <paramref name="written"/>
+    /// lacks. A value read back in another form, a union of another kind included, is Mutagen's to decide.</summary>
+    public static IReadOnlyList<(IMajorRecordGetter Record, IReadOnlyList<string> Paths)> FindDrops(
+        IReadOnlyList<(IMajorRecordGetter Record, string Text)> held, IModGetter written)
     {
+        var drops = new List<(IMajorRecordGetter, IReadOnlyList<string>)>();
+        foreach (var ((record, normalized, writtenRecord), text) in Normalized(held.Select(h => h.Record), written).Zip(held.Select(h => h.Text)))
+        {
+            var recompiled = writtenRecord
+                ?? throw new InvalidOperationException($"Expected the plugin written from the tree to hold {record.FormKey}.");
+            var heldText = ReferenceEquals(normalized, record) ? text : RecordTextCodec.SerializeToText(normalized, written.GameRelease);
+            var writtenText = RecordTextCodec.SerializeToText(recompiled, written.GameRelease);
+            if (string.Equals(heldText, writtenText, StringComparison.Ordinal)) continue;
+
+            using var heldDoc = System.Text.Json.JsonDocument.Parse(heldText);
+            using var writtenDoc = System.Text.Json.JsonDocument.Parse(writtenText);
+            var paths = new List<string>();
+            CollectAbsences(heldDoc.RootElement, writtenDoc.RootElement, path: "", paths);
+            if (paths.Count > 0) drops.Add((record, paths));
+        }
+        return drops;
+    }
+
+    private static void CollectAbsences(System.Text.Json.JsonElement held, System.Text.Json.JsonElement? written, string path, List<string> absent)
+    {
+        if (held.ValueKind == System.Text.Json.JsonValueKind.Array && written is null)
+        {
+            for (var index = 0; index < held.GetArrayLength(); index++) absent.Add($"{path}[{index}]");
+            return;
+        }
+        if (written is not { } present)
+        {
+            absent.Add(path);
+            return;
+        }
         switch (held.ValueKind)
         {
-            case System.Text.Json.JsonValueKind.Object:
-                if (written is not { } writtenObject) return path;
-                if (writtenObject.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+            case System.Text.Json.JsonValueKind.Object when present.ValueKind == System.Text.Json.JsonValueKind.Object:
+                if (KindOf(held) != KindOf(present)) return;
                 foreach (var member in held.EnumerateObject())
                 {
                     var memberPath = path.Length == 0 ? member.Name : $"{path}.{member.Name}";
-                    var writtenMember = writtenObject.TryGetProperty(member.Name, out var found) ? found : (System.Text.Json.JsonElement?)null;
-                    if (FirstAbsence(member.Value, writtenMember, memberPath) is { } absent) return absent;
+                    CollectAbsences(member.Value, present.TryGetProperty(member.Name, out var found) ? found : null, memberPath, absent);
                 }
-                return null;
-            case System.Text.Json.JsonValueKind.Array:
-                if (written is { ValueKind: not System.Text.Json.JsonValueKind.Array }) return null;
-                var writtenItems = written?.EnumerateArray().ToList() ?? [];
+                return;
+            case System.Text.Json.JsonValueKind.Array when present.ValueKind == System.Text.Json.JsonValueKind.Array:
+                var presentItems = present.EnumerateArray().ToList();
                 var index = 0;
                 foreach (var item in held.EnumerateArray())
                 {
-                    var writtenItem = index < writtenItems.Count ? writtenItems[index] : (System.Text.Json.JsonElement?)null;
-                    if (FirstAbsence(item, writtenItem, $"{path}[{index}]") is { } absent) return absent;
+                    CollectAbsences(item, index < presentItems.Count ? presentItems[index] : null, $"{path}[{index}]", absent);
                     index++;
                 }
-                return null;
-            default:
-                return written is null ? path : null;
+                return;
         }
     }
+
+    private static string? KindOf(System.Text.Json.JsonElement document) =>
+        document.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var kind) ? kind.GetString() : null;
 
     /// <summary>The mod header mask fields Mutagen carries as opaque data, so a corruption is
     /// a real defect. An allow-list, not every field: masters, stats and overridden forms have

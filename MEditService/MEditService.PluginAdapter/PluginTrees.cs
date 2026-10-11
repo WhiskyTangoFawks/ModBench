@@ -247,13 +247,14 @@ public sealed class CompiledTree
     /// compares the tree against.</summary>
     public Task<IReadOnlyList<TreeFile>> SerializeTreeAsync() => PluginTrees.SerializeTree(_mod);
 
-    /// <summary>The first value of the tree that <paramref name="save"/>'s bytes do not hold, or null.</summary>
-    public DroppedValue? FirstDropIn(PreparedPluginSave save)
+    /// <summary>Every value of the tree that <paramref name="save"/>'s bytes do not hold.</summary>
+    public IReadOnlyList<DroppedValue> DropsIn(PreparedPluginSave save)
     {
         var written = MutagenPluginAdapter.OpenForWrite(save.Written(_mod.ModKey, out var strings), _gameRelease, strings);
-        var held = _documents.Value.Select(pair => (pair.Record, pair.Document.Text));
-        if (ModelIdentity.FindFirstDrop(held, written) is not var (record, at)) return null;
-        return new DroppedValue(new RecordIdentity(record.FormKey.ToString(), RecordTypes.For(_gameRelease).RecordTypeOf(record), record.EditorID), at);
+        var held = _documents.Value.Select(pair => (pair.Record, pair.Document.Text)).ToList();
+        return [.. ModelIdentity.FindDrops(held, written).Select(drop => new DroppedValue(
+            new RecordIdentity(drop.Record.FormKey.ToString(), RecordTypes.For(_gameRelease).RecordTypeOf(drop.Record), drop.Record.EditorID),
+            drop.Paths))];
     }
 
     /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/> and handed to
@@ -276,6 +277,5 @@ public sealed class CompiledTree
     }
 }
 
-/// <summary>A value a tree's record holds that the plugin written from it lacks, at <see cref="Path"/> in the
-/// record's document; an empty path is the whole record.</summary>
-public sealed record DroppedValue(RecordIdentity Record, string Path);
+/// <summary>A tree's record and each path in its document whose value the plugin written from it lacks.</summary>
+public sealed record DroppedValue(RecordIdentity Record, IReadOnlyList<string> Paths);
