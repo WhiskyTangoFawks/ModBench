@@ -91,6 +91,16 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadSourceOf_APluginWhoseStringsAreInAnArchiveBesideItWithAnUpperCaseExtension_TracksItsNames()
+    {
+        LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_modFolder, "Update.BSA"));
+
+        var source = (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, new PluginStrings(_modFolder, _dataFolder))).Answered();
+
+        Assert.Contains(source.Files, file => Encoding.UTF8.GetString(file.Content).Contains(DoorName, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void OpenRecordLookup_APluginWhoseStringsAreInTheGameDataFoldersArchiveForIt_ReadsItsNamesFromThere()
     {
         MoveStringsIntoGameData("Update.bsa");

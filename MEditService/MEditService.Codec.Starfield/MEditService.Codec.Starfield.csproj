@@ -17,7 +17,7 @@
   <ItemGroup>
     <!-- Pinned with MEditService.Codec's Mutagen and Serialization references; its comments say what
          the versions wait on. -->
-    <PackageReference Include="Mutagen.Bethesda.Starfield" Version="0.54.4" />
+    <PackageReference Include="Mutagen.Bethesda.Starfield" Version="$(MutagenVersion)" />
     <PackageReference Include="Mutagen.Bethesda.Serialization" Version="1.37.1" />
     <PackageReference Include="Mutagen.Bethesda.Serialization.Newtonsoft" Version="1.37.1" />
     <PackageReference Include="Mutagen.Bethesda.Serialization.SourceGenerator" Version="1.37.1">

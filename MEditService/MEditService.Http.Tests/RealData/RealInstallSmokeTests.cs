@@ -59,7 +59,7 @@ public sealed class RealInstallSmokeTests(RealInstallSmokeTests.OneGameLoadedAtA
         }
     }
 
-    private static List<string> MastersIn(GameRelease release, string dataDir) =>
+    internal static List<string> MastersIn(GameRelease release, string dataDir) =>
     [
         .. Implicits.Get(release).Listings
             .Select(master => master.FileName.String)

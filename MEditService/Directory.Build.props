@@ -15,6 +15,7 @@
          the reference list), so a box two hops down is a compile error rather than a line nobody
          noticed arriving. -->
     <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
+    <MutagenVersion>0.55.0-modbench.2</MutagenVersion>
   </PropertyGroup>
 
   <!-- ADR-0005: the codec's projects and PluginAdapter are the boxes that hold live Mutagen objects, so
@@ -46,7 +47,7 @@
     <!-- Identity is not a model of a record (ADR-0005): FormKey, ModKey and GameRelease are
          values every box names, and the ban above is what keeps the live-object namespaces out.
          Pinned to the version the codec's game projects resolve. -->
-    <PackageReference Include="Mutagen.Bethesda.Core" Version="0.54.4" />
+    <PackageReference Include="Mutagen.Bethesda.Core" Version="$(MutagenVersion)" />
     <!-- No built-in analyzer reads the null-forgiving operator; NX0001 does, held at error through
          .editorconfig for every project, production and test alike. -->
     <PackageReference Include="Nullable.Extended.Analyzer" Version="1.16.6891">

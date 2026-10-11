@@ -2002,7 +2002,7 @@ describe('An unsaved document in plugin source', () => {
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, EditorID: 'Saved' }));
   });
-  after(() => rmSync(folder, { recursive: true, force: true }));
+  after(() => rmSync(folder, { recursive: true, force: true, maxRetries: 10 }));
 
   const textHanded = (documents: unknown[] | undefined, at: string): unknown => {
     const document = documents?.find((each) => isRecord(each) && each.path === at);

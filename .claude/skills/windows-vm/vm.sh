@@ -6,6 +6,7 @@ export VM_HOME="${MODBENCH_WINDOWS_HOME:-$HOME/.local/share/modbench-windows}"
 KEY="$VM_HOME/id_ed25519"
 STAGE='C:\work\stage'
 WORK='C:\work\modbench'
+FEED='C:\work\mutagen-feed'
 COMPOSE=(docker compose -f "$HERE/compose.yml")
 SSH_OPTS=(-i "$KEY" -o UserKnownHostsFile="$VM_HOME/known_hosts" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5)
 
@@ -33,6 +34,10 @@ case "${1:-}" in
       > "${2:-/tmp/modbench-windows.png}"
     ;;
   sync)
+    feed="$(sed -n 's/.*key="modbench-stack" value="\([^"]*\)".*/\1/p' "$HOME/.nuget/NuGet/NuGet.Config")"
+    [[ -d $feed ]] || { echo "No modbench-stack feed: declare it with dotnet nuget add source <folder> -n modbench-stack." >&2; exit 1; }
+    tar -C "$feed" -cf - . \
+      | "$HERE/vm.sh" ssh "New-Item -ItemType Directory -Force $FEED | Out-Null; tar -xf - -C $FEED; dotnet nuget remove source modbench-stack *> \$null; dotnet nuget add source $FEED -n modbench-stack | Out-Null"
     root="$(git -C "$HERE" rev-parse --show-toplevel)"
     (cd "$root" && git ls-files -z -co --exclude-standard | while IFS= read -r -d '' f; do if [[ -f $f ]]; then printf '%s\0' "$f"; fi; done | tar --format=pax --null -cf - -T -) \
       | "$HERE/vm.sh" ssh "Remove-Item -Recurse -Force $STAGE -ErrorAction SilentlyContinue; New-Item -ItemType Directory $STAGE | Out-Null; tar -xf - -C $STAGE"

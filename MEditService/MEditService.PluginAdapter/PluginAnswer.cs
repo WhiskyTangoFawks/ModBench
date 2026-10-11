@@ -75,8 +75,8 @@ public abstract record PluginFailure
         public override bool OfItsBytes => false;
     }
 
-    /// <summary>ADR-0008's content-derived master pass pruned a master the write still needs: its only
-    /// reference sits in a VMAD struct-list property, which Mutagen never walks (upstream issue 688).</summary>
+    /// <summary>ADR-0008's content-derived master pass pruned a master the write still needs, through a
+    /// FormLink Mutagen's link enumeration does not yield.</summary>
     public sealed record PrunedMaster : PluginFailure
     {
         private readonly string _reason;
