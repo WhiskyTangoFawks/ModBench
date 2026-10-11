@@ -100,11 +100,39 @@ public sealed class ReconcileDoorTests
     {
         using var data = AReadThenB();
         var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, Faults.Once(thrownType)));
+        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, Faults.InTurn(thrownType)));
         index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 
         index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the next snapshot's ready status");
 
+        Assert.Contains(B, index.Status.IndexedPlugins);
+        Assert.Equal(2, index.CountOf(B, "npc_"));
+    }
+
+    [Fact]
+    public void APluginReadAgain_IsListed_ThoughTheValidationFailsAtTheNextPlugin()
+    {
+        using var data = new PluginFixtureBuilder("landed-before-throw-door")
+            .WithPlugin("B.esp", mod =>
+            {
+                mod.Npcs.AddNew("FromB1");
+                mod.Npcs.AddNew("FromB2");
+            })
+            .WithPlugin("C.esp", mod =>
+            {
+                mod.Npcs.AddNew("FromC1");
+                mod.Npcs.AddNew("FromC2");
+            })
+            .Build();
+        var holder = new LoadOrderHolder();
+        var readB = typeof(InvalidOperationException);
+        var readC = typeof(InvalidOperationException);
+        var readCAgain = typeof(OutOfMemoryException);
+        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, Faults.InTurn(readB, readC, null, readCAgain)));
+
+        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+
+        Assert.Equal(LoadOrderState.Failed, index.Status.State);
         Assert.Contains(B, index.Status.IndexedPlugins);
         Assert.Equal(2, index.CountOf(B, "npc_"));
     }

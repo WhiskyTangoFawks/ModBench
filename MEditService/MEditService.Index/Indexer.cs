@@ -278,7 +278,7 @@ internal sealed class Indexer : IDisposable
     {
         var scope = RequireScope();
         var holding = scope.Held.Plugins.Where(plugin => paths.Exists(path => _source.TreeHolds(plugin.Registered, path))).ToList();
-        if (holding.Count > 0) ListLanded(scope.Store.Commit(_ => holding.Where(plugin => ValidateOne(scope, plugin, CancellationToken.None)).ToList()));
+        if (holding.Count > 0) Validate(scope, holding, CancellationToken.None);
     }
 
     // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
@@ -821,15 +821,33 @@ internal sealed class Indexer : IDisposable
     {
         var scope = RequireScope();
         // A plugin not held failed to open, and the reconcile opens it again once its bytes change.
-        ListLanded(scope.Store.Commit(_ => scope.Held.Plugins.Where(metadata =>
+        Validate(scope, scope.Held.Plugins, token);
+    }
+
+    // Each plugin read whole lands in its own transaction, so one read before a throw is listed too:
+    // in a finally, after the commit's own finally has landed it.
+    private void Validate(OpenScope scope, IEnumerable<PluginMetadata> plugins, CancellationToken token)
+    {
+        var landed = new List<PluginMetadata>();
+        try
         {
-            token.ThrowIfCancellationRequested();
-            return ValidateOne(scope, metadata, token);
-        }).ToList()));
+            scope.Store.Commit(_ =>
+            {
+                foreach (var plugin in plugins)
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (ValidateOne(scope, plugin, token)) landed.Add(plugin);
+                }
+            });
+        }
+        finally
+        {
+            ListLanded(landed);
+        }
     }
 
     // Listed as RegisterOrIndex lists an arriving plugin, once the commit that read it has landed.
-    private void ListLanded(IReadOnlyList<PluginMetadata> landed)
+    private void ListLanded(List<PluginMetadata> landed)
     {
         bool listed;
         lock (_lock)

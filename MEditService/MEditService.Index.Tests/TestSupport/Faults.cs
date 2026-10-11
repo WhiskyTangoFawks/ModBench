@@ -10,13 +10,15 @@ internal static class Faults
     internal static Exception Of(Type type) =>
         ((Exception?)Activator.CreateInstance(type, $"injected {type.Name}")).Require();
 
-    /// <summary>Throws an exception of <paramref name="type"/> the first time it runs, and nothing after.</summary>
-    internal static Action Once(Type type)
+    /// <summary>On its nth run, throws an exception of the nth of <paramref name="turns"/>; a null turn, or a run
+    /// past the last, throws nothing.</summary>
+    internal static Action InTurn(params Type?[] turns)
     {
-        Exception? pending = Of(type);
+        var run = -1;
         return () =>
         {
-            if (Interlocked.Exchange(ref pending, null) is { } thrown) throw thrown;
+            var turn = Interlocked.Increment(ref run);
+            if (turn < turns.Length && turns[turn] is { } type) throw Of(type);
         };
     }
 
