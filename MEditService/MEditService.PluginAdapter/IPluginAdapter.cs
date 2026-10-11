@@ -11,10 +11,9 @@ namespace MEditService.PluginAdapter;
 /// parameter of every verb, and a read or write Mutagen cannot make answers its failure (ADR-0019).</summary>
 public interface IPluginAdapter
 {
-    /// <summary>The plugin as the documents its source tree would hold (ADR-0007). Owns the open
-    /// until the result is disposed; omitting <paramref name="strings"/> is not neutral for a
-    /// localized plugin, nor omitting <paramref name="loadOrder"/>, which holds its masters, for a
-    /// plugin whose masters carry a style.</summary>
+    /// <summary>The plugin as the documents its source tree would hold (ADR-0007), owning the open until
+    /// disposed. Omitting <paramref name="strings"/> is not neutral for a localized plugin, nor
+    /// <paramref name="loadOrder"/> where masters carry a style.</summary>
     Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath,
         GameRelease gameRelease,

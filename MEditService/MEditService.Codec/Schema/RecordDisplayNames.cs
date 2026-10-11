@@ -2,10 +2,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Schema;
 
-// xEdit's display name per record type, transcribed from the wbRecord calls in wbDefinitionsFO4.pas,
-// wbDefinitionsTES5.pas and wbDefinitionsSF1.pas since the reference isn't shipped. The games agree on
-// every name they share but one. A miss falls back to the raw signature so a newly discovered Mutagen
-// type never breaks startup.
+// xEdit's record type names, from the wbRecord calls in wbDefinitionsFO4, TES5 and SF1.pas; the games
+// agree on all but one shared name. A miss reads as the raw signature, so a new Mutagen type never
+// breaks startup.
 internal static class RecordDisplayNames
 {
     private static readonly Dictionary<(GameCategory, string), string> OneGamesOwn = new()

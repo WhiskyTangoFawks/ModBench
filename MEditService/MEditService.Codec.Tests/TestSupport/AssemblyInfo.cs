@@ -1,1 +1,1 @@
-[assembly: Xunit.TestFramework("MEditService.TestSupport.GamesRegisteredTestFramework", "MEditService.TestSupport")]
+[assembly: Xunit.TestFramework("MEditService.TestSupport.SchemaWarmedTestFramework", "MEditService.TestSupport")]

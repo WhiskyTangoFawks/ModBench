@@ -15,9 +15,9 @@ internal static class SubFieldReflection
         ILogger logger,
         Type[] path)
     {
-        // Only a truncation makes a walk depend on its path: any other loop is fatal wherever it starts.
-        // So a union whose walk can meet no truncation is the same wherever the walk reaches it, and a
-        // game's unions recur in hundreds of places.
+        // Only a truncation makes a walk depend on its path; any other loop is fatal from anywhere. A
+        // union whose walk meets no truncation is walked once, since a game's unions recur in hundreds
+        // of places.
         if (LoquiUnions.TryGetUnion(getterInterface, game) is null
             || game.ReachesATruncation.GetOrAdd(getterInterface, type => Reach(type, game).Any(game.Annotations.IsCycleTruncation)))
         {
