@@ -66,9 +66,9 @@ public enum RecordEditRefusal
     /// interrupted rename; which to change is the user's call, so the way out is resolving it by hand.</summary>
     AmbiguousSourceUnit,
 
-    /// <summary>A light or medium plugin's slot addresses local IDs only up to the cap its flag sets; native
-    /// space is not exhausted, so the way out differs from <see cref="FormKeySpaceExhausted"/>.</summary>
-    LightPluginFormIdOutOfRange,
+    /// <summary>A plugin whose header flag, light or medium, limits its FormIDs addresses local IDs only up
+    /// to that limit; native space is not exhausted, so the way out differs from <see cref="FormKeySpaceExhausted"/>.</summary>
+    FormIdOutsideFlagLimit,
 
     /// <summary>A Partial Form record's own fields are never seen by the game; the way out is clearing the
     /// flag. EditorID is exempt: xEdit's <c>CanAssignInternal</c> allows EDID on a Partial Form (ADR-0018).</summary>

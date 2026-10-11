@@ -135,7 +135,7 @@ internal sealed class FormKeyAllocator
         if (_limit is { } limit && parsed.ID > limit.Cap)
         {
             return RecordEditResult.Refused(
-                RecordEditRefusal.LightPluginFormIdOutOfRange,
+                RecordEditRefusal.FormIdOutsideFlagLimit,
                 $"{requestedFormKey} exceeds {_plugin.Name}'s {limit.Flag} local FormID range — a {limit.Flag} " +
                 $"plugin can only address local FormIDs up to 0x{limit.Cap:X}. " +
                 $"Choose a FormID within that range, or clear the {limit.Flag} flag.");

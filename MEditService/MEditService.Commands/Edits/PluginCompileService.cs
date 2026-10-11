@@ -81,7 +81,7 @@ internal sealed class PluginCompileService(
             {
                 var renameOffEsl = plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase) ? " rename the plugin off .esl," : "";
                 return CompileResult.Refused(
-                    CompileRefusal.LightFormIdOutOfRange,
+                    CompileRefusal.FormIdOutsideFlagLimit,
                     $"{plugin.Name} is a {limited.Flag} plugin but holds native FormID(s) outside the {limited.Flag} range " +
                     $"(0x{limited.Min:X}-0x{limited.Max:X}): {string.Join(", ", outOfRange.Take(4))}" +
                     (outOfRange.Count > 4 ? $" and {outOfRange.Count - 4} more" : "") +
@@ -119,6 +119,9 @@ internal sealed class PluginCompileService(
             {
                 PluginFailure.PrunedMaster => CompileResult.Refused(CompileRefusal.FormIdUnmappable, $"{plugin.Name} could not be compiled: {failure.Reason}"),
                 PluginFailure.MasterNotInLoadOrder => CompileResult.Refused(CompileRefusal.MasterNotInLoadOrder, $"{plugin.Name} could not be compiled: {failure.Reason}"),
+                PluginFailure.MasterUnreadable master => CompileResult.Refused(
+                    CompileRefusal.MasterUnreadable,
+                    $"{plugin.Name} could not be compiled: {failure.Reason} Fix or restore {master.Master}, then compile again."),
                 _ => WriteFailed(plugin, failure.Reason),
             };
         }

@@ -38,8 +38,9 @@ public enum CompileRefusal
     /// <summary>Two source files claim one FormKey; which to keep is the user's call.</summary>
     FormKeyCollision,
 
-    /// <summary>A light or medium plugin holds a native FormID outside the range its flag limits it to.</summary>
-    LightFormIdOutOfRange,
+    /// <summary>A plugin whose header flag, light or medium, limits its FormIDs holds a native FormID outside
+    /// that range.</summary>
+    FormIdOutsideFlagLimit,
 
     /// <summary>A FormID the masters cannot map, so no binary is written (ADR-0008).</summary>
     FormIdUnmappable,
@@ -47,6 +48,10 @@ public enum CompileRefusal
     /// <summary>The source references a plugin the load order does not hold, so its masters have no
     /// order to be written in; the way out is that plugin in the load order.</summary>
     MasterNotInLoadOrder,
+
+    /// <summary>A master the source references has a header that does not read, so the write cannot
+    /// address its FormIDs; the way out is fixing or restoring that master.</summary>
+    MasterUnreadable,
 
     /// <summary>The file system refused the write (ADR-0003); the source is untouched, so compiling again
     /// rebuilds it.</summary>

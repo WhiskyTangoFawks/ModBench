@@ -116,6 +116,21 @@ public sealed class StarfieldGestureTests : IDisposable
     }
 
     [Fact]
+    public async Task ACompile_WhoseMasterHeaderDoesNotRead_IsRefusedNamingTheMasterToFixOrRestore()
+    {
+        File.WriteAllBytes(Path.Combine(_instance.ModFolderOf(_light), LightName), "not a plugin"u8.ToArray());
+
+        var refused = Assert.Single((await _instance.CompileHandler.CompileAsync([_tracked])).Refused);
+
+        Assert.Equal(
+            (CompileRefusal.MasterUnreadable,
+             $"{TrackedName} could not be compiled: its master {LightName} could not be read: the plugin — unknown: " +
+             "Could not read enough data to parse a Mod Header from stream.  Position: 0.  12 remaining < 24 expected. " +
+             $"Fix or restore {LightName}, then compile again."),
+            (refused.Refusal, refused.Message));
+    }
+
+    [Fact]
     public async Task TheMediumFlag_OnAPluginHoldingARecordPastTheMediumRange_RefusesCompileNamingIt()
     {
         var wide = CreatedAt(0x10000);
@@ -125,7 +140,7 @@ public sealed class StarfieldGestureTests : IDisposable
         Assert.True(flagged.Applied, flagged.Message);
         var refused = Assert.Single((await _instance.CompileHandler.CompileAsync([_tracked])).Refused);
         Assert.Equal(
-            (CompileRefusal.LightFormIdOutOfRange,
+            (CompileRefusal.FormIdOutsideFlagLimit,
              $"{TrackedName} is a medium plugin but holds native FormID(s) outside the medium range (0x0-0xFFFF): {wide}. " +
              "Clear the medium flag, or change the records' FormIDs."),
             (refused.Refusal, refused.Message));
@@ -156,7 +171,7 @@ public sealed class StarfieldGestureTests : IDisposable
         var result = _instance.EditHandler.SetFormId(_tracked, created, wide);
 
         Assert.Equal(
-            (RecordEditRefusal.LightPluginFormIdOutOfRange,
+            (RecordEditRefusal.FormIdOutsideFlagLimit,
              $"{wide} exceeds {TrackedName}'s medium local FormID range — a medium plugin can only address local FormIDs up to 0xFFFF. " +
              "Choose a FormID within that range, or clear the medium flag."),
             (result.Refusal, result.Message));

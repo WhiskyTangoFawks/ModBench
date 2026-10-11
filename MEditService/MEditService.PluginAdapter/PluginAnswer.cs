@@ -91,12 +91,17 @@ public abstract record PluginFailure
 
     /// <summary>A master the plugin written references whose header does not read, so its style, which
     /// the write needs, is unknown.</summary>
-    internal sealed record MasterUnreadable : PluginFailure
+    public sealed record MasterUnreadable : PluginFailure
     {
         private readonly string _reason;
 
-        internal MasterUnreadable(ModKey master, PluginFailure unread) : base(unread.Error) =>
-            _reason = $"its master {master.FileName} could not be read: {unread.Reason}";
+        internal MasterUnreadable(ModKey master, PluginFailure unread) : base(unread.Error)
+        {
+            Master = master.FileName;
+            _reason = $"its master {Master} could not be read: {unread.Reason}";
+        }
+
+        public string Master { get; }
 
         public override string Reason => _reason;
     }

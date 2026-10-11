@@ -51,7 +51,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.Empty(answer.Landed);
         var refused = Assert.Single(answer.Refused);
         Assert.Equal(
-            (CompileRefusal.LightFormIdOutOfRange,
+            (CompileRefusal.FormIdOutsideFlagLimit,
              $"{SourceEditFixture.PluginName} is a light plugin but holds native FormID(s) outside the light range (0x0-0xFFF): " +
              $"001000:{SourceEditFixture.PluginName}. Clear the light flag, or change the records' FormIDs."),
             (refused.Refusal, refused.Message));

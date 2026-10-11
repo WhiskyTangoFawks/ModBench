@@ -91,7 +91,7 @@ public sealed class FormIdEditTests
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.LightPluginFormIdOutOfRange, result.Refusal);
+        Assert.Equal(RecordEditRefusal.FormIdOutsideFlagLimit, result.Refusal);
     }
 
     [Fact]
@@ -104,7 +104,7 @@ public sealed class FormIdEditTests
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.LightPluginFormIdOutOfRange, result.Refusal);
+        Assert.Equal(RecordEditRefusal.FormIdOutsideFlagLimit, result.Refusal);
     }
 
     [Fact]
