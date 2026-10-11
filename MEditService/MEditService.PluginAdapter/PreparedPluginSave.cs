@@ -1,3 +1,5 @@
+using Mutagen.Bethesda.Plugins;
+
 namespace MEditService.PluginAdapter;
 
 /// <summary>An uncommitted plugin write: temp-written binary and strings files. Commit renames them
@@ -16,6 +18,13 @@ public sealed class PreparedPluginSave : IDisposable
         _tmpPath = tmpPath;
         _finalPath = finalPath;
         _stringsFiles = stringsFiles ?? [];
+    }
+
+    /// <summary>The temp-written binary, beside the temp strings its read needs.</summary>
+    internal ModPath Written(ModKey plugin, out PluginStrings strings)
+    {
+        strings = new PluginStrings(_tmpDir, _tmpDir);
+        return new ModPath(plugin, _tmpPath);
     }
 
     /// <summary>The hash of the binary Commit puts in place, spelled as the commit trailers spell it.</summary>

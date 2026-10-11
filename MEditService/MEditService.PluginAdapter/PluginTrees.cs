@@ -209,6 +209,7 @@ public sealed class CompiledTree
     private readonly IMod _mod;
     private readonly GameRelease _gameRelease;
     private readonly Lazy<IReadOnlyList<FormKey>> _formKeys;
+    private readonly Lazy<IReadOnlyList<(IMajorRecordGetter Record, PluginDocument Document)>> _documents;
 
     internal CompiledTree(IMod mod, GameRelease gameRelease)
     {
@@ -216,6 +217,9 @@ public sealed class CompiledTree
         _gameRelease = gameRelease;
         _formKeys = new Lazy<IReadOnlyList<FormKey>>(
             () => mod.EnumerateMajorRecords().Select(record => record.FormKey).ToList());
+        _documents = new Lazy<IReadOnlyList<(IMajorRecordGetter, PluginDocument)>>(
+            () => [.. mod.EnumerateMajorRecords().Select(record => ((IMajorRecordGetter)record, new PluginDocument(
+                RecordTypes.For(gameRelease).RecordTypeOf(record), record.FormKey.ToString(), RecordTextCodec.SerializeToText(record, gameRelease))))]);
     }
 
     /// <summary>The plugin the tree describes, which is whose records count as native.</summary>
@@ -237,13 +241,21 @@ public sealed class CompiledTree
     public IReadOnlyList<FormKey> FormKeys => _formKeys.Value;
 
     /// <summary>Each record as its own document, under the schema table it belongs to.</summary>
-    public IEnumerable<PluginDocument> Documents() =>
-        _mod.EnumerateMajorRecords().Select(record => new PluginDocument(
-            RecordTypes.For(_gameRelease).RecordTypeOf(record), record.FormKey.ToString(), RecordTextCodec.SerializeToText(record, _gameRelease)));
+    public IEnumerable<PluginDocument> Documents() => _documents.Value.Select(held => held.Document);
 
     /// <summary>What the current codec would write for this mod, which is what the round-trip gate
     /// compares the tree against.</summary>
     public Task<IReadOnlyList<TreeFile>> SerializeTreeAsync() => PluginTrees.SerializeTree(_mod);
+
+    /// <summary>Every value of the tree that <paramref name="save"/>'s bytes do not hold.</summary>
+    public IReadOnlyList<DroppedValue> DropsIn(PreparedPluginSave save)
+    {
+        var written = MutagenPluginAdapter.OpenForWrite(save.Written(_mod.ModKey, out var strings), _gameRelease, strings);
+        var held = _documents.Value.Select(pair => (pair.Record, pair.Document.Text)).ToList();
+        return [.. ModelIdentity.FindDrops(held, written).Select(drop => new DroppedValue(
+            new RecordIdentity(drop.Record.FormKey.ToString(), RecordTypes.For(_gameRelease).RecordTypeOf(drop.Record), drop.Record.EditorID),
+            drop.Paths))];
+    }
 
     /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/> and handed to
     /// <paramref name="land"/>, whose Commit renames it into place; discarded once it returns.</summary>
@@ -264,3 +276,6 @@ public sealed class CompiledTree
         }
     }
 }
+
+/// <summary>A tree's record and each path in its document whose value the plugin written from it lacks.</summary>
+public sealed record DroppedValue(RecordIdentity Record, IReadOnlyList<string> Paths);
