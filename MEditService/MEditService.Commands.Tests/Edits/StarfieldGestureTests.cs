@@ -98,9 +98,7 @@ public sealed class StarfieldGestureTests : IDisposable
     [Fact]
     public async Task TheLightFlag_SetOnTheHeader_CompilesAsALightStarfieldPlugin()
     {
-        var header = new FormKey(ModKey.FromFileName(TrackedName), 0).ToString();
-
-        var result = _instance.EditHandler.Set(_tracked, header, "IsSmallMaster", JsonDocument.Parse("true").RootElement);
+        var result = _instance.EditHandler.Set(_tracked, Header, "IsSmallMaster", JsonDocument.Parse("true").RootElement);
 
         Assert.True(result.Applied, result.Message);
         using var compiled = await CompiledAfterAsync();
@@ -186,6 +184,29 @@ public sealed class StarfieldGestureTests : IDisposable
 
         using var compiled = await CompiledAfterAsync();
         Assert.Empty(compiled.Weapons);
+    }
+
+    [Fact]
+    public async Task TheLightFlag_OnAPluginHoldingARecordPastTheLightRange_RefusesCompileNamingIt()
+    {
+        var wide = new FormKey(ModKey.FromFileName(TrackedName), 0x1000);
+        CreatedAt(wide);
+
+        var flagged = _instance.EditHandler.Set(_tracked, Header, "IsSmallMaster", JsonDocument.Parse("true").RootElement);
+
+        Assert.True(flagged.Applied, flagged.Message);
+        var refused = Assert.Single((await _instance.CompileHandler.CompileAsync([_tracked])).Refused);
+        Assert.Equal(CompileRefusal.LightFormIdOutOfRange, refused.Refusal);
+        Assert.Contains(wide.ToString(), refused.Message, StringComparison.Ordinal);
+    }
+
+    private static string Header => new FormKey(ModKey.FromFileName(TrackedName), 0).ToString();
+
+    private void CreatedAt(FormKey formKey)
+    {
+        var created = _instance.CreateHandler.CreateRecordSync(_tracked, "kywd");
+        var moved = _instance.EditHandler.Set(_tracked, created.NewFormKey.Require(), "FormKey", JsonSerializer.SerializeToElement(formKey.ToString()));
+        Assert.True(moved.Applied, moved.Message);
     }
 
     private void SetFlags(int raw)
