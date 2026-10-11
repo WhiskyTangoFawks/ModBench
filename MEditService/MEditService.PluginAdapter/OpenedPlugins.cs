@@ -30,7 +30,7 @@ internal static class OpenedPlugins
         {
             foreach (var _ in mod.EnumerateMajorRecords()) count++;
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (PluginFailure.StandsFor(ex))
         {
             return (count, PluginFailure.Of(ex));
         }

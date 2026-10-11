@@ -66,7 +66,7 @@ internal static class RecordTextEdit
         {
             written = request.RoundTrip(patched.Text);
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
             return RecordEditResult.RefusedAt(
                 RecordEditRefusal.CodecRejected, spelled, $"'{spelled}': the codec rejected the document — {ex.Message}");
