@@ -120,15 +120,15 @@ internal static class LocalizedStrings
         return found;
     }
 
-    // Each folder's loose files, then each archive named for the plugin in it; then the archives the game
-    // loads, the latest first, since a later archive's file replaces an earlier one's.
+    // Loose files beat every archive. Then each folder's archives named for the plugin; then the archives
+    // the game loads, the latest first, since a later archive's file replaces an earlier one's.
     private static IEnumerable<IReadOnlyList<StringsFile>> Places(
         PluginStrings strings, IReadOnlyList<string> archives, ModKey plugin, GameRelease gameRelease)
     {
         var languageFormat = LanguageFormat(gameRelease);
+        foreach (var folder in strings.Folders) yield return [.. Loose(folder, plugin, languageFormat)];
         foreach (var folder in strings.Folders)
         {
-            yield return [.. Loose(folder, plugin, languageFormat)];
             var named = Directory.Exists(folder)
                 ? Directory.EnumerateFiles(folder, $"*{Archive.GetExtension(gameRelease)}")
                     .Where(archive => Archive.IsApplicable(gameRelease, plugin, Path.GetFileName(archive)))

@@ -46,7 +46,7 @@ public sealed class LoadOrderLinkTargetsTests
     private static LinkAnswers Answers(IReadOnlyList<RegisteredPlugin> loadOrder, params string[] formKeys) =>
         Adapter.LinkTargets(
             new LoadOrderSnapshot(
-                DataFolderOf(loadOrder[0]), null, GameRelease.Fallout4, loadOrder, [.. loadOrder.Select(plugin => plugin.Key)], []),
+                DataFolderOf(loadOrder[0]), null, GameRelease.Fallout4, loadOrder, [.. loadOrder.Select(plugin => plugin.Key)], [], []),
             loadOrder[^1],
             formKeys);
 

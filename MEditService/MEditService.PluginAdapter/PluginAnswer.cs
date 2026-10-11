@@ -24,6 +24,9 @@ public abstract record PluginFailure
 
     public abstract string Reason { get; }
 
+    /// <summary>Whether the failure is the plugin's own bytes' answer, which holds until they change.</summary>
+    public virtual bool OfItsBytes => true;
+
     /// <summary>The file system would not open the file: it is gone, another program holds it, or
     /// access is denied. Nothing is known of its bytes.</summary>
     public sealed record Inaccessible : PluginFailure
@@ -33,6 +36,8 @@ public abstract record PluginFailure
         internal Inaccessible(Exception error) : base(error) => _reason = error.Message;
 
         public override string Reason => _reason;
+
+        public override bool OfItsBytes => false;
     }
 
     /// <summary>Mutagen could not read the bytes.</summary>
@@ -64,6 +69,8 @@ public abstract record PluginFailure
             _reason = $"its strings archive '{archive}' could not be read: {error.Message}";
 
         public override string Reason => _reason;
+
+        public override bool OfItsBytes => false;
     }
 
     /// <summary>ADR-0008's content-derived master pass pruned a master the write still needs: its only
@@ -115,6 +122,8 @@ public abstract record PluginFailure
         public string Master { get; }
 
         public override string Reason => _reason;
+
+        public override bool OfItsBytes => false;
     }
 
     /// <summary>The failure <paramref name="ex"/> stands for: a file system refusal is

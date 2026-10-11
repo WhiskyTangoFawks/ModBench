@@ -26,7 +26,6 @@ public static class TranslatedStringValues
         return ordered;
     }
 
-    // Each element moves with its own bytes, and the separators between them stay where they were.
     private static void Reorder(byte[] json, byte[] ordered, List<Element> elements)
     {
         var inOrder = elements.OrderBy(element => element.Language).ToList();

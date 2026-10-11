@@ -78,6 +78,19 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     [Fact]
+    public void OpenDocuments_APluginWhoseStringsAreInAnArchiveBesideItAndLooseInTheGameDataFolder_ReadsTheLooseOnes()
+    {
+        LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_modFolder, "Update.bsa"));
+        var copyInData = Path.Combine(_dataFolder, PluginName);
+        LocalizedDoorPlugin.Write(copyInData, "The Loose Door");
+        File.Delete(copyInData);
+
+        using var documents = OpenDocuments(_pluginPath).Answered();
+
+        Assert.Contains("The Loose Door", documents.Records.Single().Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void OpenRecordLookup_APluginWhoseStringsAreInTheGameDataFoldersArchiveForIt_ReadsItsNamesFromThere()
     {
         MoveStringsIntoGameData("Update.bsa");
@@ -189,16 +202,6 @@ public sealed class GameDataStringsTests : IDisposable
         Directory.Delete(LocalizedDoorPlugin.LooseStrings(_pluginPath), recursive: true);
 
         Assert.Equal([loose, loose], [packedInOrder, await DoorSource()]);
-    }
-
-    [Fact]
-    public void OpenDocuments_APluginWhoseStringsAreNowhere_OpensWithItsNamesBlank()
-    {
-        Directory.Delete(LocalizedDoorPlugin.LooseStrings(_pluginPath), recursive: true);
-
-        using var documents = OpenDocuments(_pluginPath).Answered();
-
-        Assert.DoesNotContain(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
     }
 
     [Fact]

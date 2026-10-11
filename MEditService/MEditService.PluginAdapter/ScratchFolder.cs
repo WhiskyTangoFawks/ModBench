@@ -7,7 +7,6 @@ internal static class ScratchFolder
     internal static void DeleteAsCourtesy(string folder)
     {
         try { Directory.Delete(folder, recursive: true); }
-        catch (IOException) { /* the folder stays in temp */ }
-        catch (UnauthorizedAccessException) { /* the folder stays in temp */ }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return; }
     }
 }

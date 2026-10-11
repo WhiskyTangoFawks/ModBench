@@ -22,7 +22,7 @@ internal static class MasterStyles
     }
 
     /// <summary>Null for a game whose masters share one style. A master the load order does not hold is
-    /// left out, so the read or write names it as missing, and one whose header does not read fails the answer.</summary>
+    /// left out, so the read or write names it as missing; one whose header does not read fails the answer.</summary>
     internal static Answer<IReadOnlyCache<IModMasterStyledGetter, ModKey>?, PluginFailure> Of(IEnumerable<ModKey> masters, LoadOrderSnapshot loadOrder)
     {
         if (!AreStyled(loadOrder)) return PluginAnswer.Of<IReadOnlyCache<IModMasterStyledGetter, ModKey>?>(null);
