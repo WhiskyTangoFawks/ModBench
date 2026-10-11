@@ -217,12 +217,13 @@ public sealed class UnsavedDocumentTests : IDisposable
     {
         var faults = new InMemoryNotificationPublisher();
         using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: faults);
-        var thrown = Faults.Of(typeof(InvalidOperationException));
-        faults.OnPublish = Faults.On(n => n is RowsChangedNotification or LoadOrderStatusNotification, thrown);
+        var publishFault = Faults.Of(typeof(NotSupportedException));
+        faults.OnPublish = Faults.On(IsRowsChanged, Faults.Of(typeof(InvalidOperationException)))
+            + Faults.On(n => n is LoadOrderStatusNotification, publishFault);
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedUnsaved\""))]);
-        Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the failed status");
+        Waits.Reached(() => faulting.Status.Message?.Contains(publishFault.Message, StringComparison.Ordinal) == true, "the publish fault in the status");
 
-        faults.OnPublish = Faults.On(n => n is LoadOrderStatusNotification, thrown);
+        faults.OnPublish = null;
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedAgain\""))]);
 
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready, "the ready status");

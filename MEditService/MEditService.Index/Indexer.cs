@@ -267,10 +267,15 @@ internal sealed class Indexer : IDisposable
                 if (moved) PublishStatus();
             }
         }
-        catch (Exception ex) when (!CancelledBy(ex, CancellationToken.None))
+        catch (Exception ex)
         {
             _logger.LogError(ex, "Validating the handed documents failed unexpectedly");
-            lock (_lock) _validatingHanded = false;
+            lock (_lock)
+            {
+                _handOverFailure = ex.Message;
+                _validatingHanded = false;
+            }
+            throw;
         }
     }
 
