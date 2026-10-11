@@ -25,7 +25,8 @@ internal sealed class DroppingAPluginOnTheFirstRead(LoadOrderHolder holder, Plug
                 held.DataFolderPath, held.InstanceRoot, held.GameRelease,
                 [.. held.Plugins.Where(p => !p.Key.Equals(dropped))],
                 [.. held.Active.Select(p => p.Key).Where(a => !a.Equals(dropped))],
-                [.. held.LoadedWithNoLine.Select(p => p.Key).Where(a => !a.Equals(dropped))]));
+                [.. held.LoadedWithNoLine.Select(p => p.Key).Where(a => !a.Equals(dropped))],
+                held.Archives));
         }
         return base.OpenRecordLookup(plugin, loadOrder, schemas);
     }

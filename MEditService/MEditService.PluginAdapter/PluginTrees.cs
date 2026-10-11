@@ -28,7 +28,7 @@ internal static class PluginTrees
 
             // Refuse by name before any serialize: TranslatedString.TryLookup returns false for a missing
             // file with no exception.
-            if (LocalizedStrings.FindMissingStringsFile(mod, pluginName, strings, gameRelease) is { } missing)
+            if (LocalizedStrings.FindMissingStringsFile(mod, pluginName, strings, loadOrder.Archives, gameRelease) is { } missing)
                 return new PluginFailure.MissingStrings(missing);
             if (mod.EnumerateMajorRecords().FirstOrDefault(record => record.FormKey == new FormKey(mod.ModKey, 0)) is { } holdsTheHeaders)
                 return new PluginFailure.HeaderFormKeyHeld(RecordTypes.For(gameRelease).RecordTypeOf(holdsTheHeaders).ToUpperInvariant(), holdsTheHeaders.FormKey);
@@ -63,7 +63,7 @@ internal static class PluginTrees
                 cancel.ThrowIfCancellationRequested();
                 treeFiles.Add(new TreeFile(
                     Path.GetRelativePath(scratchDir, file),
-                    StripCarriageReturns(await File.ReadAllBytesAsync(file, cancel))));
+                    TranslatedStringValues.InLanguageOrder(StripCarriageReturns(await File.ReadAllBytesAsync(file, cancel)))));
             }
             return treeFiles;
         }

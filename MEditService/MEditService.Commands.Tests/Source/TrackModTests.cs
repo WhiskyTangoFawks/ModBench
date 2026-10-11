@@ -20,7 +20,7 @@ public sealed class TrackModTests
     public async Task TrackMod_OfAModThatProvidesNoPlugin_RefusesThatModWithoutThrowing()
     {
         using var gameDir = new ScratchDirectory("medit-track-noorigin-game-");
-        var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], []);
+        var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], []);
 
         var result = await TrackEveryPluginOf.ModAsync(loadOrder, "NoSuchMod");
 

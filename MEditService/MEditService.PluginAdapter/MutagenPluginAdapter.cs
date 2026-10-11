@@ -27,9 +27,22 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 {
     private readonly PluginFileHashes _hashes = new(timeProvider);
 
+    // The getter looks its strings up as they are read, so the folder it reads them from lives as long as it does.
     internal static ILoadedMod OpenForRead(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
-        => new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(modPath, gameRelease, strings, loadOrder)));
+    {
+        var read = strings is { } named ? LocalizedStrings.ForRead(named, loadOrder?.Archives ?? [], modPath, gameRelease) : null;
+        try
+        {
+            var loaded = new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(read, MasterStyles.Of(modPath, loadOrder))), read);
+            read = null;
+            return loaded;
+        }
+        finally
+        {
+            read?.Dispose();
+        }
+    }
 
     // The header is read with the open: a header Mutagen cannot read is the open's failure, not a
     // throw out of the ingest that follows.
@@ -170,25 +183,25 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     // field its form version shapes is read by another record's, or by none.
     internal static IMod OpenForWrite(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
-        => OpenForWrite(modPath, gameRelease, strings, MasterStyles.Of(modPath, loadOrder));
+        => Import(modPath, gameRelease, strings, loadOrder?.Archives ?? [], MasterStyles.Of(modPath, loadOrder));
 
     internal static IMod OpenForWrite(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings, IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles)
-        => ModFactory.ImportSetter(
-            modPath, gameRelease, (ReadParameters(modPath.ModKey, gameRelease, strings, masterStyles) ?? new BinaryReadParameters()) with { Parallel = false });
+        => Import(modPath, gameRelease, strings, archives: [], masterStyles);
 
-    private static BinaryReadParameters? ReadParameters(
-        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, LoadOrderSnapshot? loadOrder) =>
-        ReadParameters(modPath.ModKey, gameRelease, strings, MasterStyles.Of(modPath, loadOrder));
-
-    private static BinaryReadParameters? ReadParameters(
-        ModKey plugin, GameRelease gameRelease, PluginStrings? strings, IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles)
+    // The setter resolves every string as it imports, so the folder it reads them from is done with after.
+    private static IMod Import(
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, IReadOnlyList<string> archives,
+        IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles)
     {
-        var read = strings is { } named ? LocalizedStrings.ForRead(named, plugin, gameRelease) : null;
-        return masterStyles is not null
-            ? (read ?? new BinaryReadParameters()) with { MasterFlagsLookup = masterStyles }
-            : read;
+        using var read = strings is { } named ? LocalizedStrings.ForRead(named, archives, modPath, gameRelease) : null;
+        return ModFactory.ImportSetter(modPath, gameRelease, (ReadParameters(read, masterStyles) ?? new BinaryReadParameters()) with { Parallel = false });
     }
+
+    private static BinaryReadParameters? ReadParameters(StringsRead? read, IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles) =>
+        masterStyles is not null
+            ? (read?.Parameters ?? new BinaryReadParameters()) with { MasterFlagsLookup = masterStyles }
+            : read?.Parameters;
 
     internal static IMod CreateEmpty(ModKey modKey, GameRelease gameRelease)
         => ModFactory.Activator(modKey, gameRelease);
@@ -296,9 +309,14 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         await writeBuilder.WriteAsync();
     }
 
-    private sealed class LoadedMod(IModDisposeGetter inner) : ILoadedMod
+    private sealed class LoadedMod(IModDisposeGetter inner, StringsRead? strings) : ILoadedMod
     {
         public IModGetter Getter => inner;
-        public void Dispose() => inner.Dispose();
+
+        public void Dispose()
+        {
+            inner.Dispose();
+            strings?.Dispose();
+        }
     }
 }

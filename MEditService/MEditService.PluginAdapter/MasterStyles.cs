@@ -12,15 +12,17 @@ namespace MEditService.PluginAdapter;
 /// FormID of a plugin without its masters' styles, and only each master's own header says it.</summary>
 internal static class MasterStyles
 {
-    /// <summary>Null for a game whose masters share one style, or with no load order to find them in.</summary>
-    internal static IReadOnlyCache<IModMasterStyledGetter, ModKey>? Of(ModPath plugin, LoadOrderSnapshot? loadOrder) =>
-        loadOrder is not null && AreStyled(loadOrder)
-            ? Cached(HeldPaths(MasterReferenceCollection.FromPath(plugin, loadOrder.GameRelease).Masters.Select(reference => reference.Master), loadOrder)
-                .Select(path => KeyedMasterStyle.FromPath(path, loadOrder.GameRelease)))
-            : null;
+    /// <summary>Null for a game whose masters share one style, or with no load order to find them in. A
+    /// master whose header does not read fails the read naming that master.</summary>
+    internal static IReadOnlyCache<IModMasterStyledGetter, ModKey>? Of(ModPath plugin, LoadOrderSnapshot? loadOrder)
+    {
+        if (loadOrder is null || !AreStyled(loadOrder)) return null;
+        var masters = MasterReferenceCollection.FromPath(plugin, loadOrder.GameRelease).Masters.Select(reference => reference.Master);
+        return Of(masters, loadOrder).Holds(out var styles, out var unread) ? styles : throw new PluginFailureException(unread);
+    }
 
     /// <summary>Null for a game whose masters share one style. A master the load order does not hold is
-    /// left out, so the write names it as missing, and one whose header does not read fails the answer.</summary>
+    /// left out, so the read or write names it as missing; one whose header does not read fails the answer.</summary>
     internal static Answer<IReadOnlyCache<IModMasterStyledGetter, ModKey>?, PluginFailure> Of(IEnumerable<ModKey> masters, LoadOrderSnapshot loadOrder)
     {
         if (!AreStyled(loadOrder)) return PluginAnswer.Of<IReadOnlyCache<IModMasterStyledGetter, ModKey>?>(null);

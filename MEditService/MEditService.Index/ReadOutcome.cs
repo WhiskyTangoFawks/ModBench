@@ -3,9 +3,9 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Index;
 
-/// <summary>Why a read left its plugin "Failed to read" (plugins.md, A row, Plugin). An inaccessible
-/// file says nothing of its bytes; a diagnosis names a defect in them.</summary>
-internal sealed record LoadFailure(string Reason, bool Inaccessible = false, bool IsDiagnosis = false);
+/// <summary>Why a read left its plugin "Failed to read" (plugins.md, A row, Plugin). A failure not of its
+/// bytes says nothing of them; a diagnosis names a defect in them.</summary>
+internal sealed record LoadFailure(string Reason, bool OfItsBytes = true, bool IsDiagnosis = false);
 
 /// <summary>How one read of a plugin ended: whether its own truth served, what stopped its tree when
 /// the read went on without it, and the binary's failure when nothing was read.</summary>
@@ -17,7 +17,7 @@ internal sealed record ReadOutcome(bool Served, Exception? StoppedBy = null, Loa
 
     public static ReadOutcome StoppedAt(SourceFailure treeStopped) => new(Served: false, TreeStopped: treeStopped);
 
-    public static ReadOutcome Failed(PluginFailure failure) => Failed(new LoadFailure(failure.Reason, failure is PluginFailure.Inaccessible));
+    public static ReadOutcome Failed(PluginFailure failure) => Failed(new LoadFailure(failure.Reason, failure.OfItsBytes));
 
     public static ReadOutcome Failed(LoadFailure failure) => new(Served: false, Failure: failure);
 }

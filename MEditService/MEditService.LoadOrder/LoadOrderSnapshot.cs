@@ -21,7 +21,7 @@ public readonly record struct PluginLine(int Place, bool NamesIt);
 public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 {
     /// <summary>No snapshot has arrived.</summary>
-    internal static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, [], [], []);
+    internal static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, [], [], [], []);
 
     private readonly Dictionary<PluginAddress, int> _loadOrderIndex;
 
@@ -49,9 +49,13 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// Club plugin.</summary>
     public IReadOnlyList<RegisteredPlugin> LoadedWithNoLine { get; }
 
+    /// <summary>The archive files the game loads, in the order it loads them, each at the path that wins
+    /// (ADR-0013). A later archive's file replaces an earlier one's.</summary>
+    public IReadOnlyList<string> Archives { get; }
+
     public LoadOrderSnapshot(
         string dataFolderPath, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<RegisteredPlugin> plugins,
-        IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine)
+        IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine, IReadOnlyList<string> archives)
     {
         if (RefusalOf(plugins, active, loadedWithNoLine) is { } refusal) throw new ArgumentException(refusal);
         DataFolderPath = dataFolderPath;
@@ -70,6 +74,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         Active = [.. active.Select(PluginRefusalOfVouchesFor)];
         LoadedWithNoLine = [.. loadedWithNoLine.Where(a => !colliding.Contains(a)).Select(PluginRefusalOfVouchesFor)];
         _places = PlacesOf(Plugins, Active, LoadedWithNoLine);
+        Archives = [.. archives];
     }
 
     // A plugin with no line that is not active has no place.
@@ -146,7 +151,8 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         && Plugins.SequenceEqual(other.Plugins)
         && CaseOnlyCollisions.SequenceEqual(other.CaseOnlyCollisions)
         && Active.SequenceEqual(other.Active)
-        && LoadedWithNoLine.SequenceEqual(other.LoadedWithNoLine);
+        && LoadedWithNoLine.SequenceEqual(other.LoadedWithNoLine)
+        && Archives.SequenceEqual(other.Archives, StringComparer.OrdinalIgnoreCase);
 
     public override bool Equals(object? obj) => Equals(obj as LoadOrderSnapshot);
 
