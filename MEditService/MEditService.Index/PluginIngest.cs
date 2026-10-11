@@ -28,7 +28,7 @@ internal sealed class PluginIngest
         _types = RecordTypes.For(release);
     }
 
-    internal readonly record struct IndexTiming(long IngestMs, long PrepareMs, long AppendMs);
+    internal readonly record struct Ingested(int Records, long IngestMs, long PrepareMs, long AppendMs);
 
     // Everything the index derives from one document, computed off the appender thread; only writing
     // it is sequential. ParseDiagnosis is null for a record whose document was produced.
@@ -40,15 +40,19 @@ internal sealed class PluginIngest
     // ADR-0005, from the one stream that carries the documents. A DuckDB appender holds its rows
     // outside DuckDB's memory limit until it is disposed, so each batch disposes its own, inside the
     // caller's transaction.
-    public IndexTiming IndexPlugin(
+    public Ingested IndexPlugin(
         IPluginDocuments documents, string plugin, string origin,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         DeleteAllRowsFor(plugin, origin);
         var timer = Stopwatch.StartNew();
         var counters = new PhaseCounters();
+        var records = 0;
         foreach (var batch in Batches(documents.Records))
+        {
             AppendBatch(batch, schemas, plugin, origin, counters);
+            records += batch.Count;
+        }
 
         if (schemas.ContainsKey(PluginHeader.RecordType))
         {
@@ -56,8 +60,17 @@ internal sealed class PluginIngest
             HeaderIndexer.Index(documents.Header, plugin, origin, headerAppender);
         }
         WriteTypeFailures(plugin, origin, documents.Failures);
-        return new IndexTiming(timer.ElapsedMilliseconds, counters.PrepareMs, counters.AppendMs);
+        return new Ingested(records, timer.ElapsedMilliseconds, counters.PrepareMs, counters.AppendMs);
     }
+
+    /// <summary>Each FormKey more than one of the plugin's records holds, with their record types.</summary>
+    public List<(string FormKey, string[] RecordTypes)> FormKeysHeldTwice(string plugin, string origin) =>
+        DuckDbSql.Rows(_connection, $"""
+            SELECT form_key, string_agg(record_type, ',' ORDER BY record_type) FROM {TableDdlBuilder.MirrorSchema}.records
+            WHERE plugin = $1 AND origin = $2
+            GROUP BY form_key HAVING COUNT(*) > 1
+            ORDER BY form_key
+            """, reader => (reader.GetString(0), reader.GetString(1).Split(',')), plugin, origin);
 
     // The inverse of IndexPlugin, table for table, built from the same per-plugin delete helper so a
     // new indexed table cannot be added to one side without the other noticing.

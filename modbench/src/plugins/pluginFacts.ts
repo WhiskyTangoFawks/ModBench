@@ -6,8 +6,8 @@ import { pluginAddressKey } from '../wire/pluginAddress';
 import { ByPluginAddress } from './pluginAddress';
 import type { PluginConditions } from '../drivingLib/recordRowContext';
 
-/** A warning on one plugin's file, as the Problems panel shows it. */
-export type PluginWarning = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;
+/** A diagnostic on one plugin's file, as the Problems panel shows it. */
+export type PluginProblem = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;
 
 type StatusKind = 'failedToRead' | 'masterIssues' | 'unreadableRecords' | 'sourceUnreadable' | 'changedOutside' | 'malformed';
 
@@ -99,6 +99,7 @@ export class PluginFacts {
   // Row status only, no blink: merges across a reload's ticks and persists until `reconciled`
   // lands the new answer.
   private loadFailures = new ByPluginAddress<string>();
+  private reconciledFailures: readonly PluginLoadFailure[] = [];
   // Children expansion only: this reload's own ticks, replaced wholesale each time, so a plugin
   // not yet reached reads as still indexing, never a stale failure from before the reload began.
   private reachableFailures = new ByPluginAddress<string>();
@@ -137,6 +138,7 @@ export class PluginFacts {
   reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[]): void {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
+    this.reconciledFailures = failures;
     this.reachableFailures = this.loadFailures;
     this.clearOverride();
     this.refreshed(plugins);
@@ -281,9 +283,11 @@ export class PluginFacts {
   }
 
   /** What the Problems panel shows, read from the same answers as the rows' statuses. */
-  problems(): { malformed: PluginDiagnosisReport[]; changedOutside: readonly PluginWarning[] } {
+  problems(): { malformed: PluginDiagnosisReport[]; changedOutside: readonly PluginProblem[]; failedToRead: readonly PluginProblem[] } {
     return {
       malformed: this.diagnosisReports,
+      failedToRead: this.reconciledFailures.flatMap(({ name, origin, diagnosis }) =>
+        diagnosis == null ? [] : [{ plugin: name, origin, text: diagnosis }]),
       changedOutside: [...this.changedByMod.values()].flat()
         .map(({ name, origin }) => ({ plugin: name, origin, text: CHANGED_OUTSIDE_TEXT })),
     };

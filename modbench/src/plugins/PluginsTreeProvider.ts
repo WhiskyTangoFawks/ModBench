@@ -10,7 +10,7 @@ import { IndexingNode, type RecordBrowser } from './RecordBrowser';
 import { ImplicitMasterNode, PluginNode, rowIdentity, type PluginListNode, type PluginsTreeNode } from './pluginRows';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
-import { placeOf, type PluginWarning } from './pluginFacts';
+import { placeOf, type PluginProblem } from './pluginFacts';
 import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
@@ -55,7 +55,10 @@ interface PluginsTreeProviderOptions {
   publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
   /** The Changed outside Modbench status's other surface, the Problems panel: a warning for every
    *  such plugin. */
-  publishChangedOutside: (warnings: readonly PluginWarning[]) => void;
+  publishChangedOutside: (warnings: readonly PluginProblem[]) => void;
+  /** The Failed to read status's other surface, the Problems panel, for a read a defect in the
+   *  plugin's bytes stopped. */
+  publishFailedToRead: (errors: readonly PluginProblem[]) => void;
   /** This provider states the severity (ADR-0019), so a background blip and a failed
    *  read land on different channel levels. */
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
@@ -133,6 +136,7 @@ export class PluginsTreeProvider
       shownPlugins: () => this.builtRows().map(addressOfRow),
       publishDiagnoses: options.publishDiagnoses,
       publishChangedOutside: options.publishChangedOutside,
+      publishFailedToRead: options.publishFailedToRead,
       log: options.log,
     });
     this.instanceValue = options.instance.value;

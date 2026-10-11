@@ -421,6 +421,24 @@ describe('the Plugins view\'s Problems', () => {
     const collection = present(h.diagnostics.get('modbench-changed-outside'), 'the changed-outside collection');
     expect([...collection].map(([uri]) => uri.fsPath)).toEqual([onDisk]);
   });
+
+  it('puts the diagnosis of a failed read on its row\'s own file, as an error', async () => {
+    const onDisk = '/instance/mods/ModA/Test.esp';
+    const { client } = pluginsView(instanceValueFixture({
+      plugins: [{ name: 'Test.esp', path: onDisk, origin: 'ModA', line: 0, enabled: true, winning: true }],
+    }));
+    client.setQueryAnswer('getPlugins', []);
+
+    client.emit(tick({
+      state: 'Ready', conflictsComputed: true,
+      failures: [{ name: 'Test.esp', origin: 'ModA', reason: 'Could not read this plugin.', diagnosis: 'duplicate FormKey' }],
+    }));
+    await settle();
+
+    const collection = present(h.diagnostics.get('modbench-failed-to-read'), 'the failed-to-read collection');
+    expect([...collection].map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => [d.message, d.severity])]))
+      .toEqual([[onDisk, [['duplicate FormKey', DiagnosticSeverity.Error]]]]);
+  });
 });
 
 describe('the Plugins view badges the records beneath a plugin', () => {
