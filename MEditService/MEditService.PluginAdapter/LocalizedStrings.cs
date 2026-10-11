@@ -7,12 +7,12 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>Where a plugin's localized strings are: beside the plugin's file, in whatever folder
-/// holds it, and in the game Data folder when that folder is unknown.</summary>
+/// <summary>Where the game finds a plugin's localized strings, loose or in an archive: the folder that
+/// holds the plugin, then the game Data folder, which holds what no mod provides.</summary>
 public readonly record struct PluginStrings(string? PluginFolder, string DataFolderPath)
 {
-    /// <summary>The folder a refusal names, so a caller can say where it looked.</summary>
-    public string Folder => Path.Combine(PluginFolder ?? DataFolderPath, "Strings");
+    public IEnumerable<string> Folders =>
+        PluginFolder is { } own && own != DataFolderPath ? [own, DataFolderPath] : [DataFolderPath];
 }
 
 /// <summary>Passing no <see cref="BinaryReadParameters"/> is not "no localization": Mutagen still
@@ -20,6 +20,8 @@ public readonly record struct PluginStrings(string? PluginFolder, string DataFol
 /// Handing it a strings folder directly stops that implicit lookup.</summary>
 internal static class LocalizedStrings
 {
+    private static readonly StringsSource[] Sources = [StringsSource.Normal, StringsSource.IL, StringsSource.DL];
+
     /// <summary>Mutagen's listings resolution reads the <c>LocalAppData</c> environment variable with no
     /// injectable seam; the env var is the only lever. Never overwrites a real value, and the
     /// placeholder is never read for content.</summary>
@@ -29,20 +31,8 @@ internal static class LocalizedStrings
             Environment.SetEnvironmentVariable("LocalAppData", Path.GetTempPath());
     }
 
-    /// <summary>An explicit strings folder so Mutagen never falls through to its implicit resolution, and
-    /// the same folder as the BSA-scan root so archive-packed strings still resolve.</summary>
-    internal static BinaryReadParameters ForRead(PluginStrings strings)
-    {
-        EnsureLocalAppDataDefault();
-        return new BinaryReadParameters
-        {
-            StringsParam = new StringsReadParameters
-            {
-                StringsFolderOverride = strings.Folder,
-                BsaFolderOverride = strings.PluginFolder ?? strings.DataFolderPath,
-            },
-        };
-    }
+    internal static BinaryReadParameters ForRead(PluginStrings strings, ModKey plugin, GameRelease gameRelease) =>
+        ForFolder(ReadFolder(strings, plugin, gameRelease));
 
     /// <summary>A missing strings file is refused by name: <c>TranslatedString.TryLookup</c> returns false
     /// silently for one. Asked of the lookup the read uses, which finds a file loose or in an archive.</summary>
@@ -53,14 +43,38 @@ internal static class LocalizedStrings
 
         var languageFormat = GameConstants.Get(gameRelease).StringsLanguageFormat
             ?? throw new ArgumentException($"Tried to check localization strings for an unsupported game: {gameRelease}", nameof(gameRelease));
-        var modKey = ModKey.FromFileName(pluginName);
-        var lookup = StringsFolderLookupOverlay.TypicalFactory(
-            gameRelease, modKey, strings.PluginFolder ?? strings.DataFolderPath, ForRead(strings).StringsParam);
+        var plugin = ModKey.FromFileName(pluginName);
+        var lookup = LookupIn(ReadFolder(strings, plugin, gameRelease), plugin, gameRelease);
 
         // English only; multi-language is deliberately out of scope.
-        return new[] { StringsSource.Normal, StringsSource.IL, StringsSource.DL }
+        return Sources
             .Where(source => !lookup.AvailableLanguages(source).Contains(Language.English))
-            .Select(source => StringsUtility.GetFileName(languageFormat, modKey, Language.English, source))
+            .Select(source => StringsUtility.GetFileName(languageFormat, plugin, Language.English, source))
             .FirstOrDefault();
+    }
+
+    // Mutagen's read takes its strings from one folder: the first holding every source in some language.
+    private static string ReadFolder(PluginStrings strings, ModKey plugin, GameRelease gameRelease) =>
+        strings.Folders.FirstOrDefault(folder =>
+        {
+            var lookup = LookupIn(folder, plugin, gameRelease);
+            return Sources.All(source => lookup.AvailableLanguages(source).Count > 0);
+        }) ?? strings.Folders.First();
+
+    private static StringsFolderLookupOverlay LookupIn(string folder, ModKey plugin, GameRelease gameRelease) =>
+        StringsFolderLookupOverlay.TypicalFactory(gameRelease, plugin, folder, ForFolder(folder).StringsParam);
+
+    // The folder is also the archive-scan root, so strings packed in an archive still resolve.
+    private static BinaryReadParameters ForFolder(string folder)
+    {
+        EnsureLocalAppDataDefault();
+        return new BinaryReadParameters
+        {
+            StringsParam = new StringsReadParameters
+            {
+                StringsFolderOverride = Path.Combine(folder, "Strings"),
+                BsaFolderOverride = folder,
+            },
+        };
     }
 }

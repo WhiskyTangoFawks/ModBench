@@ -396,6 +396,7 @@ public sealed class TrackModTests
 
         const string stringsFileNamedByIsoLanguageCodeNotByLanguageName = "Fixture_en.STRINGS";
         Assert.Contains(stringsFileNamedByIsoLanguageCodeNotByLanguageName, result.Message);
+        Assert.Contains(gameDir.Path, result.Message);
         Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }
 
