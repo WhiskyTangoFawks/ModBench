@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -110,7 +111,7 @@ internal sealed class PluginCompileService(
 
         var loadOrderNames = loadOrder.InJudgedOrder().Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-        var saved = await tree.SaveAsync(registered.Path, loadOrderNames, save => repository.WriteBinary(plugin, save.BinarySha256(), save.Commit));
+        var saved = await tree.SaveAsync(registered.Path, loadOrderNames, save => Land(save, tree, plugin, repository));
         if (!saved.Holds(out var landed, out var failure))
         {
             return failure switch
@@ -120,7 +121,7 @@ internal sealed class PluginCompileService(
                 _ => WriteFailed(plugin, failure.Reason),
             };
         }
-        if (!landed.Holds(out var recorded, out var unwritten)) return WriteFailed(plugin, unwritten.Reason);
+        if (!landed.Holds(out var recorded, out var refused)) return refused;
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -137,6 +138,26 @@ internal sealed class PluginCompileService(
                 "Compile it again to update the record."));
         }
         return CompileResult.Success(diagnostics);
+    }
+
+    // Never silently wrong: a value the written bytes drop refuses the commit, so the binary stays as it was.
+    private static Answer<bool, CompileResult> Land(PreparedPluginSave save, CompiledTree tree, PluginAddress plugin, ISourceRepository repository)
+    {
+        if (tree.FirstDropIn(save) is { } dropped) return Dropped(plugin, repository, dropped);
+        return repository.WriteBinary(plugin, save.BinarySha256(), save.Commit).Holds(out var recorded, out var unwritten)
+            ? recorded
+            : WriteFailed(plugin, unwritten.Reason);
+    }
+
+    private static CompileResult Dropped(PluginAddress plugin, ISourceRepository repository, DroppedValue dropped)
+    {
+        var file = repository.RelativePathOf(plugin, dropped.Record).Holds(out var path, out _) && path is not null
+            ? path
+            : dropped.Record.FormKey;
+        var what = dropped.Path.Length == 0 ? "its record" : $"its '{dropped.Path}'";
+        return CompileResult.Refused(
+            CompileRefusal.SourceValueDropped,
+            $"{plugin.Name} cannot be compiled: the plugin written from {file} would not hold {what}. Nothing was written.");
     }
 
     private static CompileResult SourceDoesNotParse(PluginAddress plugin, SourceFailure unread) =>

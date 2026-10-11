@@ -91,6 +91,58 @@ internal static class ModelIdentity
         return null;
     }
 
+    /// <summary>The first <paramref name="held"/> record, and its document path, that
+    /// <paramref name="written"/> lacks; empty for a whole record. A value read back respelled is
+    /// Mutagen's to decide, so only an absence counts.</summary>
+    public static (IMajorRecordGetter Record, string Path)? FindFirstDrop(
+        IEnumerable<(IMajorRecordGetter Record, string Text)> held, IModGetter written)
+    {
+        var writtenByFormKey = written.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
+        foreach (var (record, sourceText) in held)
+        {
+            if (!writtenByFormKey.TryGetValue(record.FormKey, out var writtenRecord)) return (record, "");
+
+            var writtenText = RecordTextCodec.SerializeToText(writtenRecord, written.GameRelease);
+            if (string.Equals(sourceText, writtenText, StringComparison.Ordinal)) continue;
+
+            using var sourceDoc = System.Text.Json.JsonDocument.Parse(sourceText);
+            using var writtenDoc = System.Text.Json.JsonDocument.Parse(writtenText);
+            if (FirstAbsence(sourceDoc.RootElement, writtenDoc.RootElement, path: "") is { } path) return (record, path);
+        }
+        return null;
+    }
+
+    // Array elements pair by position, so one past the written array's end is absent.
+    private static string? FirstAbsence(System.Text.Json.JsonElement held, System.Text.Json.JsonElement? written, string path)
+    {
+        switch (held.ValueKind)
+        {
+            case System.Text.Json.JsonValueKind.Object:
+                if (written is not { } writtenObject) return path;
+                if (writtenObject.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+                foreach (var member in held.EnumerateObject())
+                {
+                    var memberPath = path.Length == 0 ? member.Name : $"{path}.{member.Name}";
+                    var writtenMember = writtenObject.TryGetProperty(member.Name, out var found) ? found : (System.Text.Json.JsonElement?)null;
+                    if (FirstAbsence(member.Value, writtenMember, memberPath) is { } absent) return absent;
+                }
+                return null;
+            case System.Text.Json.JsonValueKind.Array:
+                if (written is { ValueKind: not System.Text.Json.JsonValueKind.Array }) return null;
+                var writtenItems = written?.EnumerateArray().ToList() ?? [];
+                var index = 0;
+                foreach (var item in held.EnumerateArray())
+                {
+                    var writtenItem = index < writtenItems.Count ? writtenItems[index] : (System.Text.Json.JsonElement?)null;
+                    if (FirstAbsence(item, writtenItem, $"{path}[{index}]") is { } absent) return absent;
+                    index++;
+                }
+                return null;
+            default:
+                return written is null ? path : null;
+        }
+    }
+
     /// <summary>The mod header mask fields Mutagen carries as opaque data, so a corruption is
     /// a real defect. An allow-list, not every field: masters, stats and overridden forms have
     /// legitimate divergence paths (ADR-0006).</summary>
