@@ -165,9 +165,12 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             return new PluginByteComparison(Identical: false, loss, cause, deletedRecordEmptied);
         });
 
+    // Mutagen's parallel import shares the form version of the record being read across threads, so a
+    // field its form version shapes is read by another record's, or by none.
     internal static IMod OpenForWrite(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
-        => ModFactory.ImportSetter(modPath, gameRelease, ReadParameters(modPath, gameRelease, strings, loadOrder));
+        => ModFactory.ImportSetter(
+            modPath, gameRelease, (ReadParameters(modPath, gameRelease, strings, loadOrder) ?? new BinaryReadParameters()) with { Parallel = false });
 
     private static BinaryReadParameters? ReadParameters(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings, LoadOrderSnapshot? loadOrder)

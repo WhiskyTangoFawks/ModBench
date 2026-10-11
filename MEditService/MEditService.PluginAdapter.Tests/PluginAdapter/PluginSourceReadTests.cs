@@ -58,4 +58,31 @@ public sealed class PluginSourceReadTests
             "NPC_ 000000:Fixture.esp holds object ID 000000, the FormKey its plugin header's source holds",
             Assert.IsType<PluginFailure.HeaderFormKeyHeld>(failure).Reason);
     }
+
+    [Fact]
+    public async Task AStarfieldPluginOfManyCellBlocks_WhosePlacedPropertiesTheFormVersionShapes_Reads()
+    {
+        using var folder = new ScratchDirectory("medit-source-form-version-");
+        var pluginPath = Path.Combine(folder, "Fixture.esm");
+        var mod = new Mutagen.Bethesda.Starfield.StarfieldMod(ModKey.FromFileName("Fixture.esm"), Mutagen.Bethesda.Starfield.StarfieldRelease.Starfield);
+        for (var b = 0; b < 10; b++)
+        {
+            var block = new Mutagen.Bethesda.Starfield.CellBlock { BlockNumber = b, GroupType = Mutagen.Bethesda.Starfield.GroupTypeEnum.InteriorCellBlock };
+            for (var s = 0; s < 10; s++)
+            {
+                var subBlock = new Mutagen.Bethesda.Starfield.CellSubBlock { BlockNumber = s, GroupType = Mutagen.Bethesda.Starfield.GroupTypeEnum.InteriorCellSubBlock };
+                for (var c = 0; c < 20; c++)
+                {
+                    var cell = new Mutagen.Bethesda.Starfield.Cell(mod) { Flags = Mutagen.Bethesda.Starfield.Cell.Flag.IsInteriorCell };
+                    cell.Temporary.Add(new Mutagen.Bethesda.Starfield.PlacedObject(mod) { Properties = [new Mutagen.Bethesda.Starfield.ObjectProperty { Value = c }] });
+                    subBlock.Cells.Add(cell);
+                }
+                block.SubBlocks.Add(subBlock);
+            }
+            mod.Cells.Records.Add(block);
+        }
+        ((IModGetter)mod).WriteToBinary(pluginPath);
+
+        Assert.True((await ReadSourceAsync(pluginPath, GameRelease.Starfield)).Holds(out _, out var failure), failure?.Reason);
+    }
 }
