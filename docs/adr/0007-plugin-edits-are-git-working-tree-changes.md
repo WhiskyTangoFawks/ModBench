@@ -1,9 +1,10 @@
 # Plugin edits are git working-tree changes
 
-Version control is foundational to working with an agent in a domain where automated validation is next to impossible: the user needs oversight of what the agent did and an easy roll-back of what it did wrong. Git gives both, and VS Code's Source Control panel shows them. So a tracked mod's source ([ADR-0006](0006-a-tracked-plugins-truth-is-its-source.md)) lives in a git working tree inside the mod folder, and every edit is a change to that tree.
+Plugin edits are git working-tree changes. A tracked mod's source ([ADR-0006](0006-a-tracked-plugins-truth-is-its-source.md)) lives in a repository of its own, in a source folder beside `mods/`, never inside the mod folder: the mod folder is a build output, and holds only what deploys.
 
 ## Consequences
 
+- The instance repository tracks files in `mods/` in place, which a nested repository would forbid.
 - Editing requires tracking; viewing never does. An untracked plugin is read-only. The friction is deliberate: someone else's plugin is edited as a vendored mod, with upstream on `main` and the user's edits on a branch.
 
 ## Alternatives rejected
