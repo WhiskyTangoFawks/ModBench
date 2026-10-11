@@ -4,6 +4,7 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Archives;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Strings;
 
@@ -90,14 +91,22 @@ public sealed class GameDataStringsTests : IDisposable
         Assert.Contains("The Loose Door", documents.Records.Single().Text, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task ReadSourceOf_APluginWhoseStringsAreInAnArchiveBesideItWithAnUpperCaseExtension_TracksNoNames_UntilMutagenEnumeratesArchivesInAnyCase()
+    [PosixFact]
+    public async Task ReadSourceOf_APluginWhoseStringsAreInAnArchiveBesideItWithAnUpperCaseExtension_RefusesNamingTheStringsFile()
     {
         LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_modFolder, "Update.BSA"));
 
-        var source = (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, new PluginStrings(_modFolder, _dataFolder))).Answered();
+        var source = await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, new PluginStrings(_modFolder, _dataFolder));
 
-        Assert.DoesNotContain(source.Files, file => Encoding.UTF8.GetString(file.Content).Contains(DoorName, StringComparison.Ordinal));
+        Assert.Equal("Update_English.STRINGS", Assert.IsType<PluginFailure.MissingStrings>(source.Failure()).File);
+    }
+
+    [PosixFact]
+    public void MutagensArchiveLookup_MissesAnArchiveWithAnUpperCaseExtension_UntilItMatchesTheExtensionInAnyCase()
+    {
+        LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_modFolder, "Update.BSA"));
+
+        Assert.Empty(Archive.GetApplicableArchivePaths(GameRelease.SkyrimSE, _modFolder, ModKey.FromFileName(PluginName)));
     }
 
     [Fact]
