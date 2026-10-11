@@ -55,6 +55,18 @@ public abstract record PluginFailure
         public override string Reason => $"its strings file '{File}' was not found";
     }
 
+    /// <summary>An archive the plugin's strings are looked up in that could not be read.</summary>
+    public sealed record UnreadableStrings : PluginFailure
+    {
+        private readonly string _reason;
+
+        internal UnreadableStrings(UnreadableStringsArchiveException error) : base(error) => (Archive, _reason) = (error.Archive, error.Message);
+
+        public string Archive { get; }
+
+        public override string Reason => _reason;
+    }
+
     /// <summary>ADR-0008's content-derived master pass pruned a master the write still needs: its only
     /// reference sits in a VMAD struct-list property, which Mutagen never walks (upstream issue 688).</summary>
     public sealed record PrunedMaster : PluginFailure
@@ -96,6 +108,7 @@ public abstract record PluginFailure
     {
         TargetInvocationException { InnerException: { } invoked } => Of(invoked),
         MissingModException missing => new MasterNotInLoadOrder(missing),
+        UnreadableStringsArchiveException unreadable => new UnreadableStrings(unreadable),
         _ when Refusal(ex) is { } refusal => new Inaccessible(refusal),
         _ => new Unparsed(PluginDiagnosis.FromParseException(ex), ex),
     };

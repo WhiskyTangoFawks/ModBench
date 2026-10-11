@@ -5,6 +5,7 @@ using MEditService.PluginAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -143,12 +144,34 @@ public sealed class GameDataStringsTests : IDisposable
     {
         MoveStringsIntoGameData("Update.bsa");
         LocalizedDoorPlugin.Write(_pluginPath, "The Mod's Door");
-        foreach (var dlOrIl in Directory.EnumerateFiles(LocalizedDoorPlugin.LooseStrings(_pluginPath), "*LSTRINGS"))
-            File.Delete(dlOrIl);
+        File.Delete(Path.Combine(LocalizedDoorPlugin.LooseStrings(_pluginPath), "Update_English.ILSTRINGS"));
+        File.Delete(Path.Combine(LocalizedDoorPlugin.LooseStrings(_pluginPath), "Update_English.DLSTRINGS"));
 
         using var documents = OpenDocuments(_pluginPath).Answered();
 
         Assert.Contains("The Mod's Door", documents.Records.Single().Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OpenDocuments_APluginWithAnotherLanguagesStringsBesideItAndItsEnglishInTheGame_ReadsTheEnglish()
+    {
+        MoveStringsIntoGameData("Update.bsa");
+        WriteOnlyFrenchStringsBesideThePlugin();
+
+        using var documents = OpenDocuments(_pluginPath).Answered();
+
+        Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReadSourceOf_APluginWithAnotherLanguagesStringsBesideItAndItsEnglishInTheGame_TracksIt()
+    {
+        MoveStringsIntoGameData("Update.bsa");
+        WriteOnlyFrenchStringsBesideThePlugin();
+
+        var source = (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, new PluginStrings(_modFolder, _dataFolder))).Answered();
+
+        Assert.Contains(source.Files, file => Encoding.UTF8.GetString(file.Content).Contains(DoorName, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -162,19 +185,49 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     [Fact]
-    public void OpenDocuments_ALocalizedPluginWhoseArchiveIsCorrupt_FailsNamingTheArchive()
+    public void OpenDocuments_ALocalizedPluginWhoseArchiveIsCorrupt_FailsAsUnreadableStringsNamingTheArchive()
     {
         Directory.Delete(LocalizedDoorPlugin.LooseStrings(_pluginPath), recursive: true);
         File.WriteAllText(Path.Combine(_dataFolder, "Update.bsa"), "not an archive");
 
         Assert.False(OpenDocuments(_pluginPath).Holds(out _, out var failure));
-        Assert.Contains("Update.bsa", failure.Reason, StringComparison.Ordinal);
+        Assert.Equal(Path.Combine(_dataFolder, "Update.bsa"), Assert.IsType<PluginFailure.UnreadableStrings>(failure).Archive);
+    }
+
+    [Fact]
+    public void OpenDocuments_ACorruptArchiveLoadedBeforeTheOneHoldingAPluginsStrings_IsNeverOpened()
+    {
+        LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_dataFolder, "Skyrim - Interface.bsa"));
+        File.WriteAllText(Path.Combine(_dataFolder, "Skyrim - Misc.bsa"), "not an archive");
+        TheGameLoads("Skyrim - Misc.bsa", "Skyrim - Interface.bsa");
+
+        using var documents = OpenDocuments(_pluginPath).Answered();
+
+        Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OpenDocuments_AnArchiveTheGameLoadsRewrittenAfterARead_IsReadAgain()
+    {
+        var interfaceArchive = Path.Combine(_dataFolder, "Skyrim - Interface.bsa");
+        var otherPlugin = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "Other")).FullName, "Other.esm");
+        LocalizedDoorPlugin.Write(otherPlugin, "Another Door");
+        LocalizedDoorPlugin.PackStrings(otherPlugin, interfaceArchive);
+        Directory.Delete(LocalizedDoorPlugin.LooseStrings(_pluginPath), recursive: true);
+        TheGameLoads("Skyrim - Interface.bsa");
+        OpenDocuments(_pluginPath).Answered().Dispose();
+        LocalizedDoorPlugin.Write(_pluginPath, DoorName);
+        LocalizedDoorPlugin.PackStrings(_pluginPath, interfaceArchive);
+
+        using var documents = OpenDocuments(_pluginPath).Answered();
+
+        Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
     }
 
     [Fact]
     public void OpenDocuments_APluginThatIsNotLocalizedBesideACorruptArchiveNamedForIt_Opens()
     {
-        LocalizedDoorPlugin.Write(_pluginPath, DoorName, localized: false);
+        LocalizedDoorPlugin.WriteNameInPlugin(_pluginPath, DoorName);
         File.WriteAllText(Path.Combine(_modFolder, "Update.bsa"), "not an archive");
 
         using var documents = OpenDocuments(_pluginPath).Answered();
@@ -188,13 +241,20 @@ public sealed class GameDataStringsTests : IDisposable
         const string master = "DLCRobot.esm";
         var masterPath = Path.Combine(_dataFolder, master);
         LocalizedDoorPlugin.WriteFallout4(masterPath, DoorName);
-        LocalizedDoorPlugin.PackStringsBa2(masterPath, Path.Combine(_dataFolder, "Fallout4 - Interface.ba2"));
+        LocalizedDoorPlugin.PackStrings(masterPath, Path.Combine(_dataFolder, "Fallout4 - Interface.ba2"));
 
         using var documents = Adapter.OpenDocuments(
             new ModPath(ModKey.FromFileName(master), masterPath), new LoadOrderSnapshot(_dataFolder, null, GameRelease.Fallout4, [], [], [], [Path.Combine(_dataFolder, "Fallout4 - Interface.ba2")]),
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), new PluginStrings(_dataFolder, _dataFolder)).Answered();
 
         Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
+    }
+
+    private void WriteOnlyFrenchStringsBesideThePlugin()
+    {
+        LocalizedDoorPlugin.Write(_pluginPath, "La Grande Porte", Language.French);
+        File.Delete(Path.Combine(LocalizedDoorPlugin.LooseStrings(_pluginPath), "Update_French.ILSTRINGS"));
+        File.Delete(Path.Combine(LocalizedDoorPlugin.LooseStrings(_pluginPath), "Update_French.DLSTRINGS"));
     }
 
     private void TheGameLoads(params string[] archives) =>
