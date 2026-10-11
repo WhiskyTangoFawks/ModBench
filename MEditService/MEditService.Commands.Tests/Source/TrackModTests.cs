@@ -399,6 +399,84 @@ public sealed class TrackModTests
         Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }
 
+    [Fact]
+    public async Task TrackMod_ADeletedRecordStillHoldingFields_RefusesNamingIt_SinceMutagenWritesADeletedRecordAsItsHeader()
+    {
+        using var modFolder = new ScratchDirectory("medit-track-deleted-fields-");
+        using var gameDir = new ScratchDirectory("medit-track-deleted-fields-game-");
+        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+        var npc = new FormKey(ModKey.FromFileName("Fixture.esp"), 0x800);
+        DeletedNpcPlugin.WriteHoldingEveryField(pluginPath, npc);
+
+        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
+        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+
+        Assert.Equal((false, TrackRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Equal(
+            $"Fixture.esp does not round-trip through its own source: NPC_ {npc} is flagged Deleted " +
+            "and still holds fields, which Mutagen does not write for a deleted record.",
+            result.Message);
+        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+    }
+
+    [Fact]
+    public async Task TrackMod_ARecordWithANullFormId_RefusesNamingItsFile_SinceItsSourceCannotBeReadBack()
+    {
+        using var modFolder = new ScratchDirectory("medit-track-null-formid-");
+        using var gameDir = new ScratchDirectory("medit-track-null-formid-game-");
+        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        mod.Npcs.AddNew("NullGuy");
+        mod.WriteToBinary(pluginPath);
+        var bytes = File.ReadAllBytes(pluginPath);
+        const int formIdOffset = 12;
+        BitConverter.GetBytes(0u).CopyTo(bytes, bytes.AsSpan().LastIndexOf("NPC_"u8) + formIdOffset);
+        File.WriteAllBytes(pluginPath, bytes);
+
+        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
+        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+
+        Assert.Equal((false, TrackRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Equal(
+            $"Fixture.esp does not round-trip through its own source: {Path.Combine("Npcs", "NullGuy - Null.json")} — unknown: " +
+            "Malformed FormKey string: NullGuy",
+            result.Message);
+        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+    }
+
+    [Fact]
+    public async Task TrackMod_ARecordOfObjectIdZero_RefusesNamingIt_SinceItsFormKeyIsTheHeaders()
+    {
+        using var modFolder = new ScratchDirectory("medit-track-object-id-zero-");
+        using var gameDir = new ScratchDirectory("medit-track-object-id-zero-game-");
+        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Master.esm") });
+        mod.Npcs.AddNew("ZeroGuy");
+        mod.WriteToBinary(pluginPath, new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
+        {
+            MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.NoCheck,
+        });
+        var bytes = File.ReadAllBytes(pluginPath);
+        const int formIdOffset = 12;
+        const uint ownObjectIdZero = 0x01000000;
+        BitConverter.GetBytes(ownObjectIdZero).CopyTo(bytes, bytes.AsSpan().LastIndexOf("NPC_"u8) + formIdOffset);
+        File.WriteAllBytes(pluginPath, bytes);
+
+        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
+        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+
+        Assert.Equal((false, TrackRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Equal(
+            "Fixture.esp cannot become source: NPC_ 000000:Fixture.esp holds object ID 000000, " +
+            "the FormKey its plugin header's source holds.",
+            result.Message);
+        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+    }
+
     private static (string PluginPath, Door Door) WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(string modFolder)
     {
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");

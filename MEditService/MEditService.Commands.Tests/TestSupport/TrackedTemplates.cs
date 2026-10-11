@@ -46,17 +46,17 @@ internal static class TrackedTemplates
         CopyInto(modFolder, $"{pluginName} {Convert.ToHexString(SHA256.HashData(bytes))}", template =>
         {
             File.WriteAllBytes(Path.Combine(template, pluginName), bytes);
-            TrackAlone(template, pluginName);
+            TrackAlone(template, pluginName, mod.GameRelease);
         });
     }
 
     /// <summary>Tracks the one plugin <paramref name="modFolder"/> holds, in a load order of that
     /// plugin alone.</summary>
-    internal static void TrackAlone(string modFolder, string pluginName)
+    internal static void TrackAlone(string modFolder, string pluginName, GameRelease release = GameRelease.Fallout4)
     {
         const string origin = "TemplateMod";
         using var gameDirectory = new ScratchDirectory("medit-tracked-template-game-");
-        var loadOrder = SnapshotPlugins.Snapshot(gameDirectory, instanceRoot: null, GameRelease.Fallout4,
+        var loadOrder = SnapshotPlugins.Snapshot(gameDirectory, instanceRoot: null, release,
             [new LoadOrderEntry(pluginName, Path.Combine(modFolder, pluginName), origin, Line: 0, Enabled: true, Winning: true)]);
         var result = TrackEveryPluginOf.ModAsync(loadOrder, origin)
             .GetAwaiter().GetResult();

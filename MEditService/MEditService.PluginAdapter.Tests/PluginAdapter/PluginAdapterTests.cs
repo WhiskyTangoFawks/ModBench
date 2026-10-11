@@ -4,6 +4,8 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Meta;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -65,19 +67,23 @@ public sealed class PluginAdapterTests
     }
 
     [Theory]
-    [InlineData("Plain.esp", false, false)]
-    [InlineData("Master.esm", true, false)]
-    [InlineData("Light.esl", false, true)]
-    public async Task CreateAndWriteAsync_SetsTheHeaderFlagsFromTheExtensionAlone(string name, bool master, bool light)
+    [InlineData(GameRelease.Fallout4, "Plain.esp", false, false)]
+    [InlineData(GameRelease.Fallout4, "Master.esm", true, false)]
+    [InlineData(GameRelease.Fallout4, "Light.esl", false, true)]
+    [InlineData(GameRelease.SkyrimSE, "Plain.esp", false, false)]
+    [InlineData(GameRelease.SkyrimSE, "Master.esm", true, false)]
+    [InlineData(GameRelease.SkyrimSE, "Light.esl", false, true)]
+    public async Task CreateAndWriteAsync_WritesTheGamesHeader_FlaggedFromTheExtensionAlone(GameRelease release, string name, bool master, bool light)
     {
         using var scratch = new ScratchDirectory("medit-adapter-create-flags-");
         var path = Path.Combine(scratch, name);
 
-        (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(name), scratch, GameRelease.Fallout4)).Answered();
+        (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(name), scratch, release)).Answered();
 
-        using var reread = Fallout4Mod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName(name), path), Fallout4Release.Fallout4);
-        Assert.Equal((master, light), (reread.IsMaster, reread.IsSmallMaster));
+        using var reread = ModFactory.ImportGetter(new ModPath(ModKey.FromFileName(name), path), release);
+        Assert.Equal((master, light), (((IModFlagsGetter)reread).IsMaster, ((IModFlagsGetter)reread).IsSmallMaster));
+        const int headerVersionOffset = 24 + 6;
+        Assert.Equal(GameConstants.Get(release).DefaultModHeaderVersion, BitConverter.ToSingle(await File.ReadAllBytesAsync(path), headerVersionOffset));
     }
 
     [Fact]

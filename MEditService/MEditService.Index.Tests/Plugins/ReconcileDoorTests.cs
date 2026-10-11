@@ -63,6 +63,80 @@ public sealed class ReconcileDoorTests
         Assert.Equal(LoadOrderState.Failed, Assert.Single(StatusesPublished(notifications)).Status.State);
     }
 
+    private static PluginFixtureData AReadThenB() => new PluginFixtureBuilder("cut-short-door")
+        .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
+        .WithPlugin("B.esp", mod =>
+        {
+            mod.Npcs.AddNew("FromB1");
+            mod.Npcs.AddNew("FromB2");
+        })
+        .Build();
+
+    private static readonly PluginAddress A = new("A.esp", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress B = new("B.esp", PluginOrigin.DataDirectory);
+
+    [Fact]
+    public void RunningOutOfMemoryPartwayThroughAPlugin_FailsTheReconcile_AndThePluginsReadBeforeItKeepTheirRecords()
+    {
+        using var data = AReadThenB();
+        var thrown = Faults.Of(typeof(OutOfMemoryException));
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, () => throw thrown));
+
+        var version = index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+
+        Assert.Equal(LoadOrderState.Failed, index.Status.State);
+        Assert.Equal(version, index.Status.Version);
+        Assert.Contains(thrown.Message, index.Status.Message, StringComparison.Ordinal);
+        Assert.NotEmpty(index.ListedIn(A));
+        Assert.DoesNotContain(index.Status.Failures, f => f.Name == "B.esp");
+    }
+
+    [Theory]
+    [InlineData(typeof(OutOfMemoryException))]
+    [InlineData(typeof(InvalidOperationException))]
+    [InlineData(typeof(OperationCanceledException))]
+    public void APluginWhoseReadWasCutShort_IsReadByTheNextSnapshot_AndListed(Type thrownType)
+    {
+        using var data = AReadThenB();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, Faults.InTurn(thrownType)));
+        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+
+        index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the next snapshot's ready status");
+
+        Assert.Contains(B, index.Status.IndexedPlugins);
+        Assert.Equal(2, index.CountOf(B, "npc_"));
+    }
+
+    [Fact]
+    public void APluginReadAgain_IsListed_ThoughTheValidationFailsAtTheNextPlugin()
+    {
+        using var data = new PluginFixtureBuilder("landed-before-throw-door")
+            .WithPlugin("B.esp", mod =>
+            {
+                mod.Npcs.AddNew("FromB1");
+                mod.Npcs.AddNew("FromB2");
+            })
+            .WithPlugin("C.esp", mod =>
+            {
+                mod.Npcs.AddNew("FromC1");
+                mod.Npcs.AddNew("FromC2");
+            })
+            .Build();
+        var holder = new LoadOrderHolder();
+        var readB = typeof(InvalidOperationException);
+        var readC = typeof(InvalidOperationException);
+        var readCAgain = typeof(OutOfMemoryException);
+        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, Faults.InTurn(readB, readC, null, readCAgain)));
+
+        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+
+        Assert.Equal(LoadOrderState.Failed, index.Status.State);
+        Assert.Contains(B, index.Status.IndexedPlugins);
+        Assert.Equal(2, index.CountOf(B, "npc_"));
+    }
+
     [Fact]
     public void AFailedReconcile_IsTriedAgain_ByAnEqualSnapshot()
     {

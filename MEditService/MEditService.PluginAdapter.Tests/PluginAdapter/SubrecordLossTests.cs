@@ -18,9 +18,74 @@ public sealed class SubrecordLossTests : IDisposable
     {
         var originalPath = Path.Combine(_folder.Path, "original.esp");
         var rewrittenPath = Path.Combine(_folder.Path, "rewritten.esp");
-        File.WriteAllBytes(originalPath, original);
-        File.WriteAllBytes(rewrittenPath, rewritten);
+        File.WriteAllBytes(originalPath, WithHeader(original));
+        File.WriteAllBytes(rewrittenPath, WithHeader(rewritten));
         return (await Adapter.CompareBytesAsync(originalPath, rewrittenPath, GameRelease.Fallout4)).Answered().Loss;
+    }
+
+    private static byte[] WithHeader(byte[] records) =>
+        Encoding.ASCII.GetString(records, 0, 4) == "TES4" ? records : Concat(Tes4(), records);
+
+    private static byte[] Tes4(params string[] masters) =>
+        BuildRecordHeader("TES4", 0, flags: 0, subrecordBytes: Concat(
+            [Sub("HEDR", new byte[12]), .. masters.SelectMany(master => new[] { Sub("MAST", Encoding.ASCII.GetBytes(master + "\0")), Sub("DATA", new byte[8]) })]));
+
+    private static (byte[] Original, byte[] Rewritten) OwnRecordAndOverrideOfB_SwappingRawFormIds_AsTheRewritePrunesA(byte[] ownSubrecordsAfter)
+    {
+        var own = Concat(Sub("EDID", "Own"u8.ToArray()), Sub("RDMP", [1]));
+        var overrideOfB = Concat(Sub("EDID", "OverrideOfB"u8.ToArray()), Sub("RDMP", [2]), Sub("RDMO", [3]));
+        var original = Concat(Tes4("A.esm", "B.esm"),
+            BuildRecordHeader("WEAP", 0x02000801, 0, own), BuildRecordHeader("WEAP", 0x01000801, 0, overrideOfB));
+        var rewritten = Concat(Tes4("B.esm"),
+            BuildRecordHeader("WEAP", 0x01000801, 0, ownSubrecordsAfter), BuildRecordHeader("WEAP", 0x00000801, 0, overrideOfB));
+        return (original, rewritten);
+    }
+
+    [Fact]
+    public async Task WhenTheRewritePrunesAMaster_AnUnchangedRecordIsNotLoss()
+    {
+        var (original, rewritten) = OwnRecordAndOverrideOfB_SwappingRawFormIds_AsTheRewritePrunesA(Concat(Sub("EDID", "Own"u8.ToArray()), Sub("RDMP", [1])));
+
+        Assert.Null(await LossAsync(original, rewritten));
+    }
+
+    [Fact]
+    public async Task WhenTheRewritePrunesAMaster_ADropInThePluginsOwnRecordIsNamedByItsFormKey()
+    {
+        var (original, rewritten) = OwnRecordAndOverrideOfB_SwappingRawFormIds_AsTheRewritePrunesA(Concat(Sub("EDID", "Own"u8.ToArray())));
+
+        var loss = await LossAsync(original, rewritten);
+
+        Assert.Equal(("WEAP", "000801:original.esp"), (loss?.RecordType, loss?.FormKey.ToString()));
+        Assert.Equal(["RDMP"], loss?.Signatures);
+    }
+
+    private async Task<string?> DeletedRecordEmptiedAsync(byte[] original, byte[] rewritten)
+    {
+        var originalPath = Path.Combine(_folder.Path, "original.esp");
+        var rewrittenPath = Path.Combine(_folder.Path, "rewritten.esp");
+        File.WriteAllBytes(originalPath, WithHeader(original));
+        File.WriteAllBytes(rewrittenPath, WithHeader(rewritten));
+        return (await Adapter.CompareBytesAsync(originalPath, rewrittenPath, GameRelease.Fallout4)).Answered().DeletedRecordEmptied;
+    }
+
+    [Fact]
+    public async Task ADeletedRecordWhoseRewriteHoldsNoSubrecord_IsNamedBySignatureAndFormKey()
+    {
+        const uint deletedFlag = 0x20;
+        var original = BuildRecordHeader("REFR", 0x00000801, deletedFlag, Concat(Sub("NAME", [1, 2, 3, 4])));
+        var rewritten = BuildRecordHeader("REFR", 0x00000801, deletedFlag, []);
+
+        Assert.Equal("REFR 000801:original.esp", await DeletedRecordEmptiedAsync(original, rewritten));
+    }
+
+    [Fact]
+    public async Task ADeletedRecordWhoseRewriteKeepsItsSubrecords_IsNotNamed()
+    {
+        const uint deletedFlag = 0x20;
+        var deleted = BuildRecordHeader("WRLD", 0x00000801, deletedFlag, Concat(Sub("EDID", "World"u8.ToArray())));
+
+        Assert.Null(await DeletedRecordEmptiedAsync(deleted, deleted.Concat(BuildRecordHeader("WEAP", 0x00000802, 0, [])).ToArray()));
     }
 
     [Fact]

@@ -32,6 +32,8 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
                 PluginFailure.MissingStrings missing => Decompiled.Refused(DecompileRefusal.MissingLocalizationStrings,
                     $"{plugin.Name} is a localized plugin but its strings file '{missing.File}' was not found " +
                     $"in {strings.Folder}. Restore the file, then try again."),
+                PluginFailure.HeaderFormKeyHeld => Decompiled.Refused(DecompileRefusal.RoundTripFailed,
+                    $"{plugin.Name} cannot become source: {failure.Reason}."),
                 PluginFailure.Inaccessible => Decompiled.Refused(DecompileRefusal.RoundTripFailed,
                     $"{plugin.Name} cannot be read from its own binary ({failure.Reason}). Close whatever holds the file, then try again."),
                 _ => Decompiled.Refused(DecompileRefusal.RoundTripFailed,
@@ -69,13 +71,19 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         if (comparison.Identical)
             return null;
 
+        if (comparison.DeletedRecordEmptied is { } deleted)
+        {
+            return $"{pluginName} does not round-trip through its own source: {deleted} is flagged Deleted and still " +
+                   "holds fields, which Mutagen does not write for a deleted record.";
+        }
+
         if (comparison.Loss is { } loss)
         {
             // A Kind B diagnosis on the record names the cause ahead of the drop it produced.
             return $"{pluginName} does not round-trip through its own source: " + (comparison.LossCause is { } cause
                 ? $"{cause.Describe()} — parsing the malformed subrecord dropped " +
                   $"{string.Join(", ", loss.Signatures)} before its source was written."
-                : $"{loss.RecordType} {loss.FormId:X8} is missing {string.Join(", ", loss.Signatures)} " +
+                : $"{loss.RecordType} {loss.FormKey} is missing {string.Join(", ", loss.Signatures)} " +
                   "present in the original — dropped during parsing, before its source was written.");
         }
 

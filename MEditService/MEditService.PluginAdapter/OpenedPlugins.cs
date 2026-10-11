@@ -21,8 +21,8 @@ internal static class OpenedPlugins
             unreachable);
     }
 
-    // A group whose location scan Mutagen refuses stops the walk, and the count is a readout, not a
-    // gate: the plugin reads on what was reachable and the ingest reports the type that was not.
+    // A group whose location scan Mutagen refuses stops the walk at the records reachable so far, and
+    // the ingest reports the type that was not.
     private static (int Count, PluginFailure? Unreachable) ReachableRecordCount(IModGetter mod)
     {
         var count = 0;

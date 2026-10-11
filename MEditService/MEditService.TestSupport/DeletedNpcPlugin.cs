@@ -19,13 +19,23 @@ public static class DeletedNpcPlugin
     /// <summary>The NPC still holds field subrecords, its name among them, beside the absent ACBS.</summary>
     public static void WriteHoldingFields(string path, FormKey npc, params ModKey[] masters)
     {
+        var (bytes, record) = WriteFlaggedDeleted(path, npc, masters);
+        Encoding.ASCII.GetBytes("ZZZZ").CopyTo(bytes, IndexOf(bytes, "ACBS", record));
+        File.WriteAllBytes(path, bytes);
+    }
+
+    /// <summary>The NPC still holds every field it had before the flag was set, as the Creation Kit can leave it.</summary>
+    public static void WriteHoldingEveryField(string path, FormKey npc) =>
+        File.WriteAllBytes(path, WriteFlaggedDeleted(path, npc, []).Bytes);
+
+    private static (byte[] Bytes, int Record) WriteFlaggedDeleted(string path, FormKey npc, ModKey[] masters)
+    {
         Write(path, masters, new Npc(npc, Fallout4Release.Fallout4) { EditorID = "Guy", Name = "Guy" });
         var bytes = File.ReadAllBytes(path);
         var record = IndexOf(bytes, "NPC_", IndexOf(bytes, "NPC_", 0) + 4);
         var flags = BitConverter.ToInt32(bytes, record + RecordFlagsOffset) | DeletedFlag;
         BitConverter.GetBytes(flags).CopyTo(bytes, record + RecordFlagsOffset);
-        Encoding.ASCII.GetBytes("ZZZZ").CopyTo(bytes, IndexOf(bytes, "ACBS", record));
-        File.WriteAllBytes(path, bytes);
+        return (bytes, record);
     }
 
     private static void Write(string path, ModKey[] masters, Npc record)

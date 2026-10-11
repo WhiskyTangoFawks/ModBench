@@ -113,9 +113,12 @@ internal sealed class PluginCompileService(
         var saved = await tree.SaveAsync(registered.Path, loadOrderNames, save => repository.WriteBinary(plugin, save.BinarySha256(), save.Commit));
         if (!saved.Holds(out var landed, out var failure))
         {
-            return failure is PluginFailure.PrunedMaster
-                ? CompileResult.Refused(CompileRefusal.FormIdUnmappable, $"{plugin.Name} could not be compiled: {failure.Reason}")
-                : WriteFailed(plugin, failure.Reason);
+            return failure switch
+            {
+                PluginFailure.PrunedMaster => CompileResult.Refused(CompileRefusal.FormIdUnmappable, $"{plugin.Name} could not be compiled: {failure.Reason}"),
+                PluginFailure.MasterNotInLoadOrder => CompileResult.Refused(CompileRefusal.MasterNotInLoadOrder, $"{plugin.Name} could not be compiled: {failure.Reason}"),
+                _ => WriteFailed(plugin, failure.Reason),
+            };
         }
         if (!landed.Holds(out var recorded, out var unwritten)) return WriteFailed(plugin, unwritten.Reason);
 
