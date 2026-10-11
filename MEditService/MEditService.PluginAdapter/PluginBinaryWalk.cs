@@ -1,6 +1,7 @@
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Headers;
+using Mutagen.Bethesda.Plugins.Masters;
 using Mutagen.Bethesda.Plugins.Meta;
 using Noggog;
 
@@ -38,7 +39,10 @@ public static class PluginBinaryWalk
         return pairs;
     }
 
-    private static FormKey FormKeyOf(MajorRecordFrame record, IReadOnlyList<ModKey> masters, ModKey plugin)
+    internal static IReadOnlyList<ModKey> MastersOf(ModPath plugin, GameRelease release) =>
+        [.. MasterReferenceCollection.FromPath(plugin, release).Masters.Select(reference => reference.Master)];
+
+    internal static FormKey FormKeyOf(MajorRecordFrame record, IReadOnlyList<ModKey> masters, ModKey plugin)
     {
         if (record.RecordType.Type == "TES4") return FormKey.Null;
         var index = (int)(record.FormID.Raw >> 24);
@@ -53,7 +57,7 @@ public static class PluginBinaryWalk
 
     /// <summary>Every record, the plugin header first, in document order. A GRUP's children follow its
     /// header: the format nests by adjacency, so stepping over the header alone descends.</summary>
-    internal static IEnumerable<MajorRecordFrame> Records(byte[] pluginBytes, GameRelease release)
+    internal static IEnumerable<MajorRecordPinFrame> Records(byte[] pluginBytes, GameRelease release)
     {
         var constants = GameConstants.Get(release);
         var bytes = new ReadOnlyMemorySlice<byte>(pluginBytes);
@@ -66,7 +70,7 @@ public static class PluginBinaryWalk
                 position += constants.GroupConstants.HeaderLength;
                 continue;
             }
-            var record = constants.MajorRecord(rest);
+            var record = new MajorRecordPinFrame(constants, rest, position);
             yield return record;
             position += checked((int)record.TotalLength);
         }

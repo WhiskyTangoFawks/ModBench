@@ -7,7 +7,6 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Headers;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
-using Mutagen.Bethesda.Plugins.Masters;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
 using Mutagen.Bethesda.Strings.DI;
@@ -156,7 +155,8 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
             var plugin = ModKey.FromFileName(Path.GetFileName(originalPath));
             var pairs = PluginBinaryWalk.PairByFormKey(
-                originalBytes, MastersOf(plugin, originalPath, gameRelease), recompiledBytes, MastersOf(plugin, recompiledPath, gameRelease), plugin, gameRelease);
+                originalBytes, PluginBinaryWalk.MastersOf(new ModPath(plugin, originalPath), gameRelease),
+                recompiledBytes, PluginBinaryWalk.MastersOf(new ModPath(plugin, recompiledPath), gameRelease), plugin, gameRelease);
             var deletedRecordEmptied = PluginBinaryWalk.FirstEmptiedDeletedRecord(pairs) is { } emptied
                 ? $"{emptied.Original.RecordType} {emptied.FormKey}"
                 : null;
@@ -167,9 +167,6 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                 d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
             return new PluginByteComparison(Identical: false, loss, cause, deletedRecordEmptied);
         });
-
-    private static IReadOnlyList<ModKey> MastersOf(ModKey plugin, string path, GameRelease gameRelease) =>
-        [.. MasterReferenceCollection.FromPath(new ModPath(plugin, path), gameRelease).Masters.Select(reference => reference.Master)];
 
     internal static IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
         => ModFactory.ImportSetter(modPath, gameRelease, ReadParameters(strings));
