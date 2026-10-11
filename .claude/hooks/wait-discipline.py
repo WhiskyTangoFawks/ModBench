@@ -63,8 +63,8 @@ if any(builds_or_holds_the_slot(segment) for segment in segments):
     )
 if any(outside_the_slot(segment) for segment in segments):
     block(
-        "builds and tests run one at a time machine-wide, under a memory cap, because parallel "
-        f"runs beside VS Code exhaust the machine's memory. Prefix the build: `bash {SLOT_RUN} "
+        "builds and tests run one at a time machine-wide, because parallel runs beside VS Code "
+        f"exhaust the machine's memory. Prefix the build: `bash {SLOT_RUN} "
         f"<command...>`, as in `cd MEditService && bash {SLOT_RUN} dotnet test --filter X`. It "
         "waits for the slot, so give it the Bash timeout 600000."
     )
