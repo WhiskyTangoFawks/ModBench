@@ -242,7 +242,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     /// <summary>Bytes written in place; the temp file and rename are <see cref="PluginWriter"/>'s. A
     /// mod read from a source tree has no header masters (ADR-0008), so it needs
-    /// <paramref name="masterOrder"/>, and <paramref name="loadOrder"/> to find their styles in.</summary>
+    /// <paramref name="masterOrder"/>, styled from <paramref name="loadOrder"/>.</summary>
     internal static async Task WriteAsync(
         IMod plugin,
         string destinationPath,
