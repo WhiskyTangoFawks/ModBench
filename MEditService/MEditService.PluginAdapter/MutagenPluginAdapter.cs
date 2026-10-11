@@ -10,6 +10,7 @@ using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
 using Mutagen.Bethesda.Strings.DI;
+using Noggog;
 
 namespace MEditService.PluginAdapter;
 
@@ -33,7 +34,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         var read = strings is { } named ? LocalizedStrings.ForRead(named, loadOrder?.Archives ?? [], modPath, gameRelease) : null;
         try
         {
-            var loaded = new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(modPath, read, loadOrder)), read);
+            var loaded = new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(read, MasterStyles.Of(modPath, loadOrder))), read);
             read = null;
             return loaded;
         }
@@ -136,14 +137,14 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public Task<Answer<CompiledTree, PluginFailure>> ReadTreeAsync(
         IReadOnlyList<TreeFile> files,
-        GameRelease gameRelease,
+        LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default) =>
-        PluginTrees.ReadTreeAsync(files, gameRelease, cancel);
+        PluginTrees.ReadTreeAsync(files, loadOrder, cancel);
 
     public Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
-        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, GameRelease gameRelease,
+        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default) =>
-        PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, gameRelease, cancel);
+        PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, loadOrder, cancel);
 
     public Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
         RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, PluginStrings strings, CancellationToken cancel = default) =>
@@ -178,17 +179,28 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             return new PluginByteComparison(Identical: false, loss, cause, deletedRecordEmptied);
         });
 
-    // The setter resolves every string as it imports, so the folder it reads them from is done with after.
+    // Mutagen's parallel import shares the form version of the record being read across threads, so a
+    // field its form version shapes is read by another record's, or by none.
     internal static IMod OpenForWrite(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
+        => Import(modPath, gameRelease, strings, loadOrder?.Archives ?? [], MasterStyles.Of(modPath, loadOrder));
+
+    internal static IMod OpenForWrite(
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles)
+        => Import(modPath, gameRelease, strings, archives: [], masterStyles);
+
+    // The setter resolves every string as it imports, so the folder it reads them from is done with after.
+    private static IMod Import(
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, IReadOnlyList<string> archives,
+        IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles)
     {
-        using var read = strings is { } named ? LocalizedStrings.ForRead(named, loadOrder?.Archives ?? [], modPath, gameRelease) : null;
-        return ModFactory.ImportSetter(modPath, gameRelease, ReadParameters(modPath, read, loadOrder));
+        using var read = strings is { } named ? LocalizedStrings.ForRead(named, archives, modPath, gameRelease) : null;
+        return ModFactory.ImportSetter(modPath, gameRelease, (ReadParameters(read, masterStyles) ?? new BinaryReadParameters()) with { Parallel = false });
     }
 
-    private static BinaryReadParameters? ReadParameters(ModPath modPath, StringsRead? read, LoadOrderSnapshot? loadOrder) =>
-        MasterStyles.Of(modPath, loadOrder) is { } styles
-            ? (read?.Parameters ?? new BinaryReadParameters()) with { MasterFlagsLookup = styles }
+    private static BinaryReadParameters? ReadParameters(StringsRead? read, IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles) =>
+        masterStyles is not null
+            ? (read?.Parameters ?? new BinaryReadParameters()) with { MasterFlagsLookup = masterStyles }
             : read?.Parameters;
 
     internal static IMod CreateEmpty(ModKey modKey, GameRelease gameRelease)
@@ -250,24 +262,27 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         }
     }
 
-    /// <summary>Bytes written in place; the temp file and rename are <see cref="PluginWriter"/>'s. A
-    /// mod read from a source tree has no header masters (ADR-0008), so it needs
-    /// <paramref name="masterOrder"/>.</summary>
+    /// <summary>Bytes written in place, with no temp file or rename. A mod read from a source tree has
+    /// no header masters (ADR-0008), so it needs <paramref name="masterOrder"/>, and their
+    /// <paramref name="masterStyles"/> where masters carry one.</summary>
     internal static async Task WriteAsync(
         IMod plugin,
         string destinationPath,
         IReadOnlyList<string>? masterOrder = null,
+        IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles = null,
         string? stringsFolder = null,
         bool noModKeySync = false)
     {
         var toPath = plugin.BeginWrite.ToPath(destinationPath);
+        var masters = masterOrder?.Select(name => ModKey.FromFileName(name)).ToList();
         // Mutagen's default resets the Next Object ID to one past the highest FormID, which would
         // hand a deleted record's FormKey out again (plugins.md, Create record, story 2).
-        var writeBuilder = (masterOrder is null
+        var writeBuilder = (masters is null
                 ? toPath.WithLoadOrderFromHeaderMasters()
-                : toPath.WithLoadOrder(masterOrder.Select(name => ModKey.FromFileName(name))))
+                : toPath.WithLoadOrder(masters))
             .WithNoDataFolder()
             .NoNextFormIDProcessing();
+        if (masterStyles is not null) writeBuilder = writeBuilder.WithKnownMasters([.. masterStyles.Items]);
         // A destination named other than plugin's ModKey needs this lifted.
         if (noModKeySync) writeBuilder = writeBuilder.NoModKeySync();
 

@@ -1,26 +1,13 @@
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>A plugin's flags. The header flag is authoritative and the extension only a
-/// secondary path, as in Mutagen's own <c>IModFlagsGetter</c>.</summary>
+/// <summary>A Starfield plugin's blueprint flag, which MO2's rule reads; the other flags are
+/// <see cref="PluginFlags"/>'.</summary>
 internal static class PluginFlagPredicates
 {
-    // Plain statics, not extension methods: an extension named IsMaster on IModFlagsGetter is never
-    // considered, because member lookup finds that interface's own IsMaster property first.
-    internal static bool IsLight(IModFlagsGetter mod, string fileName) =>
-        mod.IsSmallMaster || fileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>Mutagen's <c>MasterStyle.Medium</c>, read off the flags without
-    /// <c>GetMasterStyle</c>, which throws on a header that is both light and medium. Such a plugin
-    /// counts as light, the style Mutagen checks first.</summary>
-    internal static bool IsMedium(IModFlagsGetter mod, string fileName) =>
-        mod.CanBeMediumMaster && mod.IsMediumMaster && !IsLight(mod, fileName);
-
-    internal static bool IsMaster(IModFlagsGetter mod, string fileName) =>
-        mod.IsMaster || fileName.EndsWith(".esm", StringComparison.OrdinalIgnoreCase);
-
     // Mutagen's header flag enums name no blueprint bit; TES5Edit's wbDefinitionsSF1.pas names
     // 0x800 'Blueprint' in Starfield's TES4 header, and no other game gives the bit that meaning.
     private const int StarfieldBlueprintFlag = 0x800;
@@ -32,5 +19,5 @@ internal static class PluginFlagPredicates
     /// master-flagged plugin, or one named .esm or .esl.</summary>
     internal static bool IsBlueprint(IModFlagsGetter mod, string fileName, int headerFlags) =>
         (headerFlags & StarfieldBlueprintFlag) != 0
-        && (IsMaster(mod, fileName) || fileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase));
+        && (PluginFlags.IsMaster(mod, fileName) || fileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase));
 }

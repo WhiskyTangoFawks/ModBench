@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Archives;
@@ -170,7 +171,7 @@ internal static class LocalizedStrings
         {
             return read();
         }
-        catch (Exception ex) when (PluginFailure.StandsFor(ex))
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
             throw new PluginFailureException(new PluginFailure.UnreadableStrings(archive, ex));
         }

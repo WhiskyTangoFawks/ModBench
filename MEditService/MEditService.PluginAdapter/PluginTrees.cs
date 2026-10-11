@@ -3,7 +3,6 @@ using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Analysis;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
 
@@ -78,15 +77,16 @@ internal static class PluginTrees
     /// <paramref name="destinationPath"/>, in place with no rename: a scratch verification, never a
     /// replacement of the real plugin.</summary>
     internal static async Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
-        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, GameRelease gameRelease,
+        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default)
     {
-        var game = GameCodecs.For(gameRelease);
+        var game = GameCodecs.For(loadOrder.GameRelease);
         var scratchDir = Directory.CreateTempSubdirectory("medit-writetree-").FullName;
         try
         {
             if (!(await ReadIntoAsync(game, files, scratchDir, cancel)).Holds(out var recompiled, out var unread)) return unread;
-            await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder);
+            if (!MasterStyles.Of(masterOrder.Select(name => ModKey.FromFileName(name)), loadOrder).Holds(out var styles, out unread)) return unread;
+            await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder, styles);
             return PluginAnswer.Of(destinationPath);
         }
         catch (Exception ex) when (PluginFailure.OfWrite(ex) is { } failure)
@@ -150,7 +150,7 @@ internal static class PluginTrees
         {
             return PluginAnswer.Of(await DeserializeTree(game, treeRoot, cancel));
         }
-        catch (Exception ex) when (PluginFailure.StandsFor(ex))
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
             return new PluginFailure.Unparsed(PluginDiagnosis.FromSourceReadException(ex, treeBase), ex);
         }
@@ -179,15 +179,15 @@ internal static class PluginTrees
     /// <summary>One source tree's files read into the mod they compile to, in a scratch folder of the
     /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005).</summary>
     internal static async Task<Answer<CompiledTree, PluginFailure>> ReadTreeAsync(
-        IReadOnlyList<TreeFile> files, GameRelease gameRelease,
+        IReadOnlyList<TreeFile> files, LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default)
     {
         // Outside the catch below: a game the service was not wired for is no source defect.
-        var game = GameCodecs.For(gameRelease);
+        var game = GameCodecs.For(loadOrder.GameRelease);
         var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;
         try
         {
-            return (await ReadIntoAsync(game, files, scratchDir, cancel)).Then(mod => PluginAnswer.Of(new CompiledTree(mod, gameRelease)));
+            return (await ReadIntoAsync(game, files, scratchDir, cancel)).Then(mod => PluginAnswer.Of(new CompiledTree(mod, loadOrder)));
         }
         finally
         {
@@ -207,14 +207,15 @@ internal static class PluginTrees
 public sealed class CompiledTree
 {
     private readonly IMod _mod;
-    private readonly GameRelease _gameRelease;
+    private readonly LoadOrderSnapshot _loadOrder;
     private readonly Lazy<IReadOnlyList<FormKey>> _formKeys;
     private readonly Lazy<IReadOnlyList<(IMajorRecordGetter Record, PluginDocument Document)>> _documents;
 
-    internal CompiledTree(IMod mod, GameRelease gameRelease)
+    internal CompiledTree(IMod mod, LoadOrderSnapshot loadOrder)
     {
         _mod = mod;
-        _gameRelease = gameRelease;
+        _loadOrder = loadOrder;
+        var gameRelease = loadOrder.GameRelease;
         _formKeys = new Lazy<IReadOnlyList<FormKey>>(
             () => mod.EnumerateMajorRecords().Select(record => record.FormKey).ToList());
         _documents = new Lazy<IReadOnlyList<(IMajorRecordGetter, PluginDocument)>>(
@@ -225,17 +226,9 @@ public sealed class CompiledTree
     /// <summary>The plugin the tree describes, which is whose records count as native.</summary>
     public ModKey ModKey => _mod.ModKey;
 
-    /// <summary>The removable ESL header flag, as opposed to light by <c>.esl</c> extension.</summary>
-    internal bool IsSmallMaster => _mod.IsSmallMaster;
-
-    public bool IsLight(string fileName) => PluginFlagPredicates.IsLight(_mod, fileName);
-
-    /// <summary>The local FormID range an ESL-addressable plugin may use, or null when the header
-    /// declares none.</summary>
-    public (uint Min, uint Max)? SmallMasterRange =>
-        RecordCompactionCompatibilityDetection.GetSmallMasterRange(_mod) is { } range
-            ? (range.Min, range.Max)
-            : null;
+    /// <summary>The local FormIDs the tree's header flag limits its native records to, or null for a
+    /// plugin no flag limits.</summary>
+    public FormIdLimit? FormIdLimit(string fileName) => PluginFlags.LimitOf(_mod, fileName);
 
     /// <summary>Every record the tree holds, in the order the mod enumerates them.</summary>
     public IReadOnlyList<FormKey> FormKeys => _formKeys.Value;
@@ -250,22 +243,24 @@ public sealed class CompiledTree
     /// <summary>Every value of the tree that <paramref name="save"/>'s bytes do not hold.</summary>
     public IReadOnlyList<DroppedValue> DropsIn(PreparedPluginSave save)
     {
-        var written = MutagenPluginAdapter.OpenForWrite(save.Written(_mod.ModKey, out var strings), _gameRelease, strings);
+        var written = save.Reread(_mod.ModKey, _loadOrder.GameRelease);
         var held = _documents.Value.Select(pair => (pair.Record, pair.Document.Text)).ToList();
         return [.. ModelIdentity.FindDrops(held, written).Select(drop => new DroppedValue(
-            new RecordIdentity(drop.Record.FormKey.ToString(), RecordTypes.For(_gameRelease).RecordTypeOf(drop.Record), drop.Record.EditorID),
+            new RecordIdentity(drop.Record.FormKey.ToString(), RecordTypes.For(_loadOrder.GameRelease).RecordTypeOf(drop.Record), drop.Record.EditorID),
             drop.Paths))];
     }
 
-    /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/> and handed to
-    /// <paramref name="land"/>, whose Commit renames it into place; discarded once it returns.</summary>
+    /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/> for
+    /// <paramref name="land"/> to Commit into place, and discarded once it returns. Only the styles
+    /// of <paramref name="masters"/>, the plugins the tree references, are read.</summary>
     public async Task<Answer<T, PluginFailure>> SaveAsync<T>(
-        string pluginPath, IReadOnlyList<string> loadOrder, Func<PreparedPluginSave, T> land)
+        string pluginPath, IReadOnlyList<string> masterOrder, IEnumerable<string> masters, Func<PreparedPluginSave, T> land)
     {
+        if (!MasterStyles.Of(masters.Select(name => ModKey.FromFileName(name)), _loadOrder).Holds(out var styles, out var unread)) return unread;
         var landing = false;
         try
         {
-            using var save = await PluginWriter.PrepareFromModAsync(_mod, pluginPath, loadOrder);
+            using var save = await PluginWriter.PrepareFromModAsync(_mod, pluginPath, masterOrder, styles);
             landing = true;
             return PluginAnswer.Of(land(save));
         }

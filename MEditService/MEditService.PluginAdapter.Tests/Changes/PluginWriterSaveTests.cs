@@ -84,9 +84,9 @@ public sealed class PluginWriterSaveTests
         var source = (await adapter.ReadSourceOfAsync(
             new RegisteredPlugin("Fixture.esp", "FixtureMod", pluginPath, new PluginProvider.FromMod("FixtureMod", folder), Line: null),
             EmptyLoadOrder.Of(GameRelease.Fallout4), new PluginStrings(folder, folder))).Answered();
-        var tree = (await adapter.ReadTreeAsync(source.Files, GameRelease.Fallout4)).Answered();
+        var tree = (await adapter.ReadTreeAsync(source.Files, EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 
-        var saved = await tree.SaveAsync(pluginPath, ["Other.esm", "Fixture.esp"], save =>
+        var saved = await tree.SaveAsync(pluginPath, ["Other.esm", "Fixture.esp"], ["Master.esm", "Other.esm"], save =>
         {
             save.Commit();
             return true;
@@ -95,5 +95,71 @@ public sealed class PluginWriterSaveTests
         Assert.False(saved.Holds(out _, out var failure));
         Assert.Equal("it references Master.esm, which the load order does not hold", Assert.IsType<PluginFailure.MasterNotInLoadOrder>(failure).Reason);
         Assert.Equal(before, File.ReadAllBytes(pluginPath));
+    }
+
+    [Fact]
+    public async Task Save_OfAStarfieldOverrideOfALightMastersRecord_WritesItUnderThatMastersFormKey_AndDropsNothing()
+    {
+        using var scratch = new ScratchDirectory("pw-save-light-master");
+        var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
+        var child = LightMasterAndChild.ChildIn(loadOrder);
+        var adapter = TestAdapters.Mutagen();
+        var source = (await adapter.ReadSourceOfAsync(child, loadOrder, new PluginStrings(null, scratch))).Answered();
+        var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();
+
+        var drops = (await tree.SaveAsync(child.Path, source.Masters, source.Masters, save =>
+        {
+            var dropped = tree.DropsIn(save);
+            save.Commit();
+            return dropped;
+        })).Answered();
+
+        Assert.Empty(drops);
+        using var written = adapter.OpenDocuments(
+            new ModPath(LightMasterAndChild.Child, child.Path), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield)).Answered();
+        Assert.Equal([LightMasterAndChild.Weapon.ToString()], written.Records.Select(record => record.FormKey));
+    }
+
+    [Fact]
+    public async Task Save_OfAStarfieldTree_WhoseMasterHeaderDoesNotRead_FailsNamingTheMaster_AndLeavesTheBinary()
+    {
+        using var scratch = new ScratchDirectory("pw-save-unreadable-master");
+        var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
+        var child = LightMasterAndChild.ChildIn(loadOrder);
+        var adapter = TestAdapters.Mutagen();
+        var source = (await adapter.ReadSourceOfAsync(child, loadOrder, new PluginStrings(null, scratch))).Answered();
+        var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();
+        File.WriteAllBytes(Path.Combine(scratch, LightMasterAndChild.Master.FileName), "not a plugin"u8.ToArray());
+        var before = File.ReadAllBytes(child.Path);
+
+        var saved = await tree.SaveAsync(child.Path, source.Masters, source.Masters, save =>
+        {
+            save.Commit();
+            return true;
+        });
+
+        Assert.Equal(
+            "its master Light.esm could not be read: the plugin — unknown: Could not read enough data to parse a Mod Header from stream.  Position: 0.  12 remaining < 24 expected.",
+            saved.Failure().Reason);
+        Assert.Equal(before, File.ReadAllBytes(child.Path));
+    }
+
+    [Fact]
+    public async Task TheDropCheck_OfAStarfieldSave_WhoseMasterTurnsUnreadableAfterTheWrite_ReadsTheStylesTheWriteUsed()
+    {
+        using var scratch = new ScratchDirectory("pw-save-master-turns-unreadable");
+        var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
+        var child = LightMasterAndChild.ChildIn(loadOrder);
+        var adapter = TestAdapters.Mutagen();
+        var source = (await adapter.ReadSourceOfAsync(child, loadOrder, new PluginStrings(null, scratch))).Answered();
+        var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();
+
+        var drops = (await tree.SaveAsync(child.Path, source.Masters, source.Masters, save =>
+        {
+            File.WriteAllBytes(Path.Combine(scratch, LightMasterAndChild.Master.FileName), "not a plugin"u8.ToArray());
+            return tree.DropsIn(save);
+        })).Answered();
+
+        Assert.Empty(drops);
     }
 }

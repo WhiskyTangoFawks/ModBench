@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Masters;
 using Mutagen.Bethesda.Plugins.Meta;
@@ -7,23 +8,35 @@ using Noggog;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>Where a game's masters each carry a style (full, medium or light), Mutagen reads no FormID
-/// out of a plugin without its masters' styles, and only each master's own header says it.</summary>
+/// <summary>Where a game's masters each carry a style (full, medium or light), Mutagen reads or writes no
+/// FormID of a plugin without its masters' styles, and only each master's own header says it.</summary>
 internal static class MasterStyles
 {
-    /// <summary>Null for a game whose masters share one style, or with no load order to find them in.</summary>
-    /// <summary>A master whose header does not read fails the read naming that master.</summary>
-    internal static IReadOnlyCache<IModMasterStyledGetter, ModKey>? Of(ModPath plugin, LoadOrderSnapshot? loadOrder) =>
-        loadOrder is not null && GameConstants.Get(loadOrder.GameRelease).SeparateMasterLoadOrders
-            ? Cached(HeldPaths(MasterReferenceCollection.FromPath(plugin, loadOrder.GameRelease).Masters.Select(reference => reference.Master), loadOrder)
-                .Select(path => PluginFailure.Answer(() => KeyedMasterStyle.FromPath(path, loadOrder.GameRelease)).Holds(out var style, out var unread)
-                    ? style
-                    : throw new PluginFailureException(new PluginFailure.MasterUnreadable(path.ModKey, unread))))
-            : null;
+    /// <summary>Null for a game whose masters share one style, or with no load order to find them in. A
+    /// master whose header does not read fails the read naming that master.</summary>
+    internal static IReadOnlyCache<IModMasterStyledGetter, ModKey>? Of(ModPath plugin, LoadOrderSnapshot? loadOrder)
+    {
+        if (loadOrder is null || !AreStyled(loadOrder)) return null;
+        var masters = MasterReferenceCollection.FromPath(plugin, loadOrder.GameRelease).Masters.Select(reference => reference.Master);
+        return Of(masters, loadOrder).Holds(out var styles, out var unread) ? styles : throw new PluginFailureException(unread);
+    }
 
-    /// <summary>A master the load order does not hold is left out, so the read names it as missing.</summary>
-    internal static IReadOnlyCache<IModMasterStyledGetter, ModKey> Of(IEnumerable<ModKey> masters, LoadOrderSnapshot loadOrder) =>
-        Cached(HeldPaths(masters, loadOrder).Select(path => KeyedMasterStyle.FromPath(path, loadOrder.GameRelease)));
+    /// <summary>Null for a game whose masters share one style. A master the load order does not hold is
+    /// left out, so the read or write names it as missing, and one whose header does not read fails the answer.</summary>
+    internal static Answer<IReadOnlyCache<IModMasterStyledGetter, ModKey>?, PluginFailure> Of(IEnumerable<ModKey> masters, LoadOrderSnapshot loadOrder)
+    {
+        if (!AreStyled(loadOrder)) return PluginAnswer.Of<IReadOnlyCache<IModMasterStyledGetter, ModKey>?>(null);
+        var styles = new List<IModMasterStyledGetter>();
+        foreach (var path in HeldPaths(masters, loadOrder))
+        {
+            if (!PluginFailure.Answer(() => KeyedMasterStyle.FromPath(path, loadOrder.GameRelease)).Holds(out var style, out var unread))
+                return new PluginFailure.MasterUnreadable(path.ModKey, unread);
+            styles.Add(style);
+        }
+        return PluginAnswer.Of<IReadOnlyCache<IModMasterStyledGetter, ModKey>?>(Cached(styles));
+    }
+
+    private static bool AreStyled(LoadOrderSnapshot loadOrder) => GameConstants.Get(loadOrder.GameRelease).SeparateMasterLoadOrders;
 
     private static IEnumerable<ModPath> HeldPaths(IEnumerable<ModKey> masters, LoadOrderSnapshot loadOrder)
     {

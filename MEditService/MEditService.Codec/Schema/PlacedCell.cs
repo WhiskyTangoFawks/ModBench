@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -45,34 +44,24 @@ public static class PlacedCell
         cell.Edited(root => root[RecordTypes.CellGridMember] =
             (x, y) == (0, 0) ? new JsonObject() : new JsonObject { [GridPointMember] = ReflectedTypes.VectorText(new { X = x, Y = y }) });
 
-    /// <summary>The grid cell a placed record's position falls in, or null when it has no position or
-    /// the game has no cell width here.</summary>
-    public static (int X, int Y)? GridHolding(Document placed, GameRelease release) =>
-        SchemaAnnotations.For(release.ToCategory()).ExteriorCellWidth is { } width
-        && Components(placed.StringAt(PositionPath(release))) is [var x, var y, _]
+    /// <summary>The grid cell a placed record's position falls in, or null when it has no position.</summary>
+    public static (int X, int Y)? GridHolding(Document placed, GameRelease release)
+    {
+        var width = SchemaAnnotations.For(release.ToCategory()).ExteriorCellWidth;
+        return Components(placed.StringAt(PositionPath(release))) is [var x, var y, _]
             ? ((int)Math.Floor(x / width), (int)Math.Floor(y / width))
             : null;
+    }
 
     /// <summary>What xEdit creates in <paramref name="group"/>: persistent in the persistent group, and in the
-    /// temporary group of a cell with a grid, at its centre. False, changing nothing, where the game's cell width is unknown.</summary>
-    public static bool TryAsCreatedIn(
-        Document placed, string group, Document cell, GameRelease release, out Document created, [NotNullWhen(false)] out string? refusal)
+    /// temporary group of a cell with a grid, at its centre.</summary>
+    public static Document AsCreatedIn(Document placed, string group, Document cell, GameRelease release)
     {
-        (created, refusal) = (placed, null);
-        if (group == PersistentFlag.PersistentGroup)
-        {
-            created = placed.With(PersistentFlag.Bit, RecordHeaderFlags.Member);
-            return true;
-        }
-        if (group != PersistentFlag.TemporaryGroup || cell.Grid is not (int x, int y)) return true;
-        if (SchemaAnnotations.For(release.ToCategory()).ExteriorCellWidth is not { } width)
-        {
-            refusal = $"{cell.StringAt(RecordMembers.FormKey)} has a grid, and mEdit knows no cell width for {release} to place a new reference at its centre.";
-            return false;
-        }
+        if (group == PersistentFlag.PersistentGroup) return placed.With(PersistentFlag.Bit, RecordHeaderFlags.Member);
+        if (group != PersistentFlag.TemporaryGroup || cell.Grid is not (int x, int y)) return placed;
+        var width = SchemaAnnotations.For(release.ToCategory()).ExteriorCellWidth;
         var position = ReflectedTypes.VectorText(new { X = (x + 0.5f) * width, Y = (y + 0.5f) * width, Z = 0f });
-        created = placed.Edited(root => PositionHolding(root, release)[PositionMember] = position);
-        return true;
+        return placed.Edited(root => PositionHolding(root, release)[PositionMember] = position);
     }
 
     private static readonly ConcurrentDictionary<GameCategory, string?> PositionHolders = new();
