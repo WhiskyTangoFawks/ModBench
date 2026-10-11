@@ -39,4 +39,22 @@ public sealed class MasterStylesTests
         Assert.IsType<PluginFailure.MasterNotInLoadOrder>(failure);
         Assert.Contains(LightMasterAndChild.Master.FileName.String, failure.Reason, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void APluginWhoseMasterDoesNotRead_FailsNamingThatMaster()
+    {
+        using var scratch = new ScratchDirectory("master-styles-unreadable");
+        var (masterPath, childPath) = LightMasterAndChild.Write(scratch.Path);
+        File.WriteAllText(masterPath, "not a plugin");
+        var loadOrder = SnapshotPlugins.Snapshot(scratch.Path, null, GameRelease.Starfield,
+        [
+            new LoadOrderEntry(LightMasterAndChild.Master.FileName, masterPath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
+            new LoadOrderEntry(LightMasterAndChild.Child.FileName, childPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
+        ]);
+
+        var failure = Adapter.OpenDocuments(
+            new ModPath(LightMasterAndChild.Child, childPath), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield)).Failure();
+
+        Assert.Contains(LightMasterAndChild.Master.FileName.String, failure.Reason, StringComparison.Ordinal);
+    }
 }

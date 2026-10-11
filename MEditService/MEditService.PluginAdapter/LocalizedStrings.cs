@@ -29,26 +29,6 @@ internal sealed class StringsRead(BinaryReadParameters parameters, string? scrat
     }
 }
 
-/// <summary>An archive the strings lookup opened and could not read.</summary>
-internal sealed class UnreadableStringsArchiveException : InvalidOperationException
-{
-    // RCS1194's standard constructors; the lookup throws only through Of.
-    internal UnreadableStringsArchiveException()
-    {
-    }
-
-    internal UnreadableStringsArchiveException(string message) : base(message)
-    {
-    }
-
-    internal UnreadableStringsArchiveException(string message, Exception innerException) : base(message, innerException)
-    {
-    }
-
-    internal static UnreadableStringsArchiveException Of(string archive, Exception innerException) =>
-        new($"its strings archive '{archive}' could not be read: {innerException.Message}", innerException);
-}
-
 /// <summary>Passing no <see cref="BinaryReadParameters"/> is not "no localization": Mutagen still
 /// resolves a plugin-listings path that only a real game install has, and throws otherwise.
 /// Handing it a strings folder directly stops that implicit lookup.</summary>
@@ -202,7 +182,7 @@ internal static class LocalizedStrings
         }
         catch (Exception ex) when (PluginFailure.StandsFor(ex))
         {
-            throw UnreadableStringsArchiveException.Of(archive, ex);
+            throw new PluginFailureException(new PluginFailure.UnreadableStrings(archive, ex));
         }
     }
 

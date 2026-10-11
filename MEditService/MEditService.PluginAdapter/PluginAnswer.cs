@@ -60,7 +60,8 @@ public abstract record PluginFailure
     {
         private readonly string _reason;
 
-        internal UnreadableStrings(UnreadableStringsArchiveException error) : base(error) => _reason = error.Message;
+        internal UnreadableStrings(string archive, Exception error) : base(error) =>
+            _reason = $"its strings archive '{archive}' could not be read: {error.Message}";
 
         public override string Reason => _reason;
     }
@@ -99,6 +100,18 @@ public abstract record PluginFailure
         public override string Reason => _reason;
     }
 
+    /// <summary>A master the plugin references whose header does not read, so its style, which the read
+    /// needs, is unknown.</summary>
+    internal sealed record MasterUnreadable : PluginFailure
+    {
+        private readonly string _reason;
+
+        internal MasterUnreadable(ModKey master, PluginFailure unread) : base(unread.Error) =>
+            _reason = $"its master {master.FileName} could not be read: {unread.Reason}";
+
+        public override string Reason => _reason;
+    }
+
     /// <summary>The failure <paramref name="ex"/> stands for: a file system refusal is
     /// <see cref="Inaccessible"/>, anything else a read Mutagen could not make. Mutagen reaches some
     /// readers by reflection, whose wrapper says nothing of the read.</summary>
@@ -106,7 +119,7 @@ public abstract record PluginFailure
     {
         TargetInvocationException { InnerException: { } invoked } => Of(invoked),
         MissingModException missing => new MasterNotInLoadOrder(missing),
-        UnreadableStringsArchiveException unreadable => new UnreadableStrings(unreadable),
+        PluginFailureException { Failure: { } failure } => failure,
         _ when Refusal(ex) is { } refusal => new Inaccessible(refusal),
         _ => new Unparsed(PluginDiagnosis.FromParseException(ex), ex),
     };
@@ -169,4 +182,26 @@ public abstract record PluginFailure
             return Of(ex);
         }
     }
+}
+
+/// <summary>Carries out through Mutagen's read the failure of a file the read needs besides the plugin,
+/// which names that file.</summary>
+internal sealed class PluginFailureException : InvalidOperationException
+{
+    // RCS1194's standard constructors; a read throws only with a failure.
+    internal PluginFailureException()
+    {
+    }
+
+    internal PluginFailureException(string message) : base(message)
+    {
+    }
+
+    internal PluginFailureException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
+
+    internal PluginFailureException(PluginFailure failure) : base(failure.Reason, failure.Error) => Failure = failure;
+
+    internal PluginFailure? Failure { get; }
 }

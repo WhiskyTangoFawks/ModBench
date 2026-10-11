@@ -12,22 +12,30 @@ namespace MEditService.PluginAdapter;
 internal static class MasterStyles
 {
     /// <summary>Null for a game whose masters share one style, or with no load order to find them in.</summary>
+    /// <summary>A master whose header does not read fails the read naming that master.</summary>
     internal static IReadOnlyCache<IModMasterStyledGetter, ModKey>? Of(ModPath plugin, LoadOrderSnapshot? loadOrder) =>
         loadOrder is not null && GameConstants.Get(loadOrder.GameRelease).SeparateMasterLoadOrders
-            ? Of(MasterReferenceCollection.FromPath(plugin, loadOrder.GameRelease).Masters.Select(reference => reference.Master), loadOrder)
+            ? Cached(HeldPaths(MasterReferenceCollection.FromPath(plugin, loadOrder.GameRelease).Masters.Select(reference => reference.Master), loadOrder)
+                .Select(path => PluginFailure.Answer(() => KeyedMasterStyle.FromPath(path, loadOrder.GameRelease)).Holds(out var style, out var unread)
+                    ? style
+                    : throw new PluginFailureException(new PluginFailure.MasterUnreadable(path.ModKey, unread))))
             : null;
 
     /// <summary>A master the load order does not hold is left out, so the read names it as missing.</summary>
-    internal static IReadOnlyCache<IModMasterStyledGetter, ModKey> Of(IEnumerable<ModKey> masters, LoadOrderSnapshot loadOrder)
+    internal static IReadOnlyCache<IModMasterStyledGetter, ModKey> Of(IEnumerable<ModKey> masters, LoadOrderSnapshot loadOrder) =>
+        Cached(HeldPaths(masters, loadOrder).Select(path => KeyedMasterStyle.FromPath(path, loadOrder.GameRelease)));
+
+    private static IEnumerable<ModPath> HeldPaths(IEnumerable<ModKey> masters, LoadOrderSnapshot loadOrder)
     {
         var files = CopyOfEachFilename(loadOrder).ToDictionary(file => file.Name, file => file.Path, StringComparer.OrdinalIgnoreCase);
-        var styles = new Cache<IModMasterStyledGetter, ModKey>(master => master.ModKey);
-        foreach (var master in masters)
-        {
-            if (files.TryGetValue(master.FileName.String, out var path))
-                styles.Set(KeyedMasterStyle.FromPath(new ModPath(master, path), loadOrder.GameRelease));
-        }
-        return styles;
+        return masters.Where(master => files.ContainsKey(master.FileName.String)).Select(master => new ModPath(master, files[master.FileName.String]));
+    }
+
+    private static Cache<IModMasterStyledGetter, ModKey> Cached(IEnumerable<IModMasterStyledGetter> styles)
+    {
+        var cache = new Cache<IModMasterStyledGetter, ModKey>(master => master.ModKey);
+        cache.Set(styles);
+        return cache;
     }
 
     /// <summary>A copy a line names stands for its filename; a plugin with no line is found after them.</summary>
