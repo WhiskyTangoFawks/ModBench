@@ -115,37 +115,39 @@ public abstract record PluginFailure
     internal static bool StandsFor(Exception ex) => OutOfMemoryOrCancellationIn(ex) is null;
 
     /// <summary>Throws the out-of-memory or cancellation inside <paramref name="ex"/> as itself, so a
-    /// caller's own check sees it.</summary>
-    internal static void ThrowIfNotTheFilesAnswer(Exception ex)
+    /// caller's own check sees it, unless <paramref name="file"/> declares a length that ran it out.</summary>
+    internal static void ThrowIfNotTheFilesAnswer(Exception ex, PluginRecordBytes? file = null)
     {
-        if (OutOfMemoryOrCancellationIn(ex) is { } cause) ExceptionDispatchInfo.Throw(cause);
+        if (OutOfMemoryOrCancellationIn(ex) is { } cause
+            && !(cause is OutOfMemoryException && file is { DeclaresALengthItCannotInflateTo: true }))
+            ExceptionDispatchInfo.Throw(cause);
     }
 
     private static Exception? OutOfMemoryOrCancellationIn(Exception? ex) =>
         ex is null or OutOfMemoryException or OperationCanceledException ? ex : OutOfMemoryOrCancellationIn(ex.InnerException);
 
     /// <summary><paramref name="read"/>'s value, or the failure its throw stands for.</summary>
-    internal static Answer<T, PluginFailure> Answer<T>(Func<T> read)
+    internal static Answer<T, PluginFailure> Answer<T>(Func<T> read, PluginRecordBytes? file = null)
     {
         try
         {
             return PluginAnswer.Of(read());
         }
-        catch (Exception ex) when (ex is not (OutOfMemoryException or OperationCanceledException))
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            ThrowIfNotTheFilesAnswer(ex);
+            ThrowIfNotTheFilesAnswer(ex, file);
             return Of(ex);
         }
     }
 
-    /// <summary><see cref="Answer{T}(Func{T})"/> for a read that awaits.</summary>
+    /// <summary><see cref="Answer{T}(Func{T}, PluginRecordBytes)"/> for a read that awaits.</summary>
     internal static async Task<Answer<T, PluginFailure>> AnswerAsync<T>(Func<Task<T>> read)
     {
         try
         {
             return PluginAnswer.Of(await read());
         }
-        catch (Exception ex) when (ex is not (OutOfMemoryException or OperationCanceledException))
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             ThrowIfNotTheFilesAnswer(ex);
             return Of(ex);

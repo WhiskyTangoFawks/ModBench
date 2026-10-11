@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Headers;
@@ -83,17 +84,27 @@ public static class PluginBinaryWalk
     {
         if (record.IsCompressed)
         {
+            if (!DeclaresALengthItsBytesCanInflateTo(record)) return null;
             try
             {
                 record = record.Decompress(out _);
             }
-            catch (Exception ex) when (ex is InvalidDataException or OverflowException or EndOfStreamException)
+            catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException)
             {
                 return null;
             }
         }
         return [.. record.EnumerateSubrecords()];
     }
+
+    // Mutagen allocates the declared length before it inflates, and zlib expands its input at most
+    // 1032 times.
+    private const long ZlibMostExpansion = 1032;
+
+    /// <summary>Whether a compressed record's declared length is one its zlib stream could inflate to.</summary>
+    internal static bool DeclaresALengthItsBytesCanInflateTo(MajorRecordFrame record) =>
+        record.Content.Length >= sizeof(uint)
+        && BinaryPrimitives.ReadUInt32LittleEndian(record.Content) <= Math.Min(Array.MaxLength, (record.Content.Length - sizeof(uint)) * ZlibMostExpansion);
 
     // Order and content are model identity's concern, and a signature the rewrite has more of, a
     // canonical marker insertion, is not loss.

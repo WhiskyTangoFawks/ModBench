@@ -1,11 +1,14 @@
+using System.Buffers.Binary;
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
+using System.IO.Compression;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using static MEditService.TestSupport.RawPlugin;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -71,8 +74,37 @@ public sealed class PluginReadabilityTests : IDisposable
         Assert.IsType<PluginFailure.Inaccessible>((await ReadSourceAt(path)).Failure());
     }
 
+    private const string UninflatablePlugin = "Uninflatable.esp";
+
+    private string WithARecordDeclaringALengthItsBytesCannotInflateTo()
+    {
+        const int MoreThanAnArrayHolds = 0x7FFFFFD0;
+        var npc = DeflatedRecord("NPC_", 0x800, CompressionLevel.Optimal, EditorId("Npc"));
+        BinaryPrimitives.WriteInt32LittleEndian(npc.AsSpan(24), MoreThanAnArrayHolds);
+        var path = Path.Combine(_data.DataFolder, UninflatablePlugin);
+        File.WriteAllBytes(path, Plugin(Tes4(), Group("NPC_", npc)));
+        return path;
+    }
+
     [Fact]
-    public void ARecordReadStoppedByRunningOutOfMemory_ThrowsThatCause_HoweverMutagenWrappedIt()
+    public void TheDocumentsOfAPluginWhoseRecordCannotInflate_CarryItAsTheTypesFailure()
+    {
+        var path = WithARecordDeclaringALengthItsBytesCannotInflateTo();
+
+        using var documents = Adapter.OpenDocuments(
+            new ModPath(ModKey.FromFileName(UninflatablePlugin), path), GameRelease.Fallout4,
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)).Answered();
+
+        Assert.Empty(documents.Records);
+        Assert.Equal("npc_", Assert.Single(documents.Failures).RecordType);
+    }
+
+    [Fact]
+    public async Task TheSourceOfAPluginWhoseRecordCannotInflate_IsUnparsed() =>
+        Assert.IsType<PluginFailure.Unparsed>((await ReadSourceAt(WithARecordDeclaringALengthItsBytesCannotInflateTo())).Failure());
+
+    [Fact]
+    public void ARecordReadStoppedByRunningOutOfMemory_ThrowsThatCause_HoweverItIsWrapped()
     {
         using var records = Adapter.OpenRecordLookup(
             new RegisteredPlugin(PluginName, PluginOrigin.DataDirectory, PluginPath, PluginProvider.Game, Line: null),
@@ -84,7 +116,7 @@ public sealed class PluginReadabilityTests : IDisposable
     private sealed class SchemasWhoseReadRunsOutOfMemory : IReadOnlyDictionary<string, RecordTableSchema>
     {
         private static InvalidOperationException Wrapped() =>
-            new("Mutagen's wrapper", Activator.CreateInstance<OutOfMemoryException>());
+            new("a wrapper", Activator.CreateInstance<OutOfMemoryException>());
 
         public RecordTableSchema this[string key] => throw Wrapped();
 

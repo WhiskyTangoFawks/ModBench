@@ -79,9 +79,9 @@ internal sealed class MutagenModDocuments(
             }
             return true;
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            PluginFailure.ThrowIfNotTheFilesAnswer(ex);
+            PluginFailure.ThrowIfNotTheFilesAnswer(ex, file);
             _failures.Add(new RecordTypeFailure(tableName, PluginDiagnosis.FromParseException(ex).Describe()));
             return false;
         }
@@ -122,9 +122,9 @@ internal sealed class MutagenModDocuments(
             var text = Encoding.UTF8.GetString(DeletedRecord.Serialize(record, schema, mod.GameRelease, () => file.HoldsNoFields(record.FormKey)));
             return WithGrupFacts(new PluginDocument(tableName, formKey, text), record);
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            PluginFailure.ThrowIfNotTheFilesAnswer(ex);
+            PluginFailure.ThrowIfNotTheFilesAnswer(ex, file);
             var stub = ParseFailedDocument.For(record, EditorIdOrNull(record), mod.GameRelease);
             return WithGrupFacts(
                 new PluginDocument(
@@ -145,12 +145,12 @@ internal sealed class MutagenModDocuments(
 
     // The EditorID of an unreadable record is read through the same lazy Mutagen field access that
     // just threw, so it answers null rather than taking the plugin down with it.
-    private static string? EditorIdOrNull(IMajorRecordGetter record)
+    private string? EditorIdOrNull(IMajorRecordGetter record)
     {
         try { return record.EditorID; }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            PluginFailure.ThrowIfNotTheFilesAnswer(ex);
+            PluginFailure.ThrowIfNotTheFilesAnswer(ex, file);
             return null;
         }
     }

@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.IO.Compression;
 using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
@@ -179,6 +181,18 @@ public sealed class MalformedPluginScanTests
         var path = Path.Combine(folder.Path, "scanned.esp");
         File.WriteAllBytes(path, bytes);
         return [.. TestAdapters.Mutagen().ClaimOf(path, release).Answered().Diagnoses.Answered()];
+    }
+
+    [Fact]
+    public void ACompressedRecordDeclaringALengthItsBytesCannotInflateTo_IsSkippedWithoutAllocatingThatLength()
+    {
+        const int HalfAGigabyte = 0x20000000;
+        var region = DeflatedRecord("REGN", 0x00000001, CompressionLevel.Optimal, Subrecord("RDAT", new byte[6]));
+        BinaryPrimitives.WriteInt32LittleEndian(region.AsSpan(24), HalfAGigabyte);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+
+        Assert.Empty(Scan(region));
+        Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - allocatedBefore, 0, HalfAGigabyte / 8);
     }
 
     [Fact]

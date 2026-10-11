@@ -16,7 +16,9 @@ public sealed class DeletedRecordDocumentTests
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    private static PluginDocument NpcDocumentOf(Action<string> write)
+    private static PluginDocument NpcDocumentOf(Action<string> write) => DocumentOf(Npc, write);
+
+    private static PluginDocument DocumentOf(FormKey npc, Action<string> write)
     {
         using var directory = new ScratchDirectory("deleted-record-document-");
         var path = Path.Combine(directory.Path, PluginName);
@@ -24,13 +26,24 @@ public sealed class DeletedRecordDocumentTests
 
         using var documents = Adapter.OpenDocuments(
             new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas).Answered();
-        return documents.Records.Single(d => d.FormKey == Npc.ToString());
+        return documents.Records.Single(d => d.FormKey == npc.ToString());
     }
 
     [Fact]
     public void OpenDocuments_YieldsADeletedRecordWithNoSubrecordAsItsHeader()
     {
         var document = NpcDocumentOf(path => DeletedNpcPlugin.WriteEmpty(path, Npc));
+
+        Assert.Null(document.ParseDiagnosis);
+    }
+
+    [Fact]
+    public void OpenDocuments_YieldsADeletedOverrideOfAMastersRecordWithNoSubrecordAsItsHeader()
+    {
+        var master = ModKey.FromFileName("Master.esm");
+        var overridden = new FormKey(master, 0x801);
+
+        var document = DocumentOf(overridden, path => DeletedNpcPlugin.WriteEmpty(path, overridden, master));
 
         Assert.Null(document.ParseDiagnosis);
     }

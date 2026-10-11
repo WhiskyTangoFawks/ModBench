@@ -15,8 +15,26 @@ internal sealed class PluginRecordBytes(ModPath path, GameRelease release)
     {
         var masters = PluginBinaryWalk.MastersOf(path, release);
         return PluginBinaryWalk.Records(File.ReadAllBytes(path.Path), release).ToLookup(
-            record => PluginBinaryWalk.FormKeyOf(record, masters, path.ModKey), record => (record.Location, (int)record.TotalLength));
+            record => PluginBinaryWalk.FormKeyOf(record, masters, path.ModKey), record => (record.Location, checked((int)record.TotalLength)));
     });
+
+    private readonly Lazy<bool> _declaresALengthItCannotInflateTo = new(() =>
+    {
+        try
+        {
+            return PluginBinaryWalk.Records(File.ReadAllBytes(path.Path), release)
+                .Any(record => record.IsCompressed && !PluginBinaryWalk.DeclaresALengthItsBytesCanInflateTo(record));
+        }
+        catch (Exception ex) when (PluginFailure.StandsFor(ex))
+        {
+            // Bytes the walk cannot frame are malformed, so a read of them fails because of the file.
+            return true;
+        }
+    });
+
+    /// <summary>Whether a compressed record declares a length its bytes cannot inflate to, which a read
+    /// allocates before it inflates.</summary>
+    public bool DeclaresALengthItCannotInflateTo => _declaresALengthItCannotInflateTo.Value;
 
     /// <summary>Whether the record holds no subrecord but its EditorID, which its header carries.</summary>
     public bool HoldsNoFields(FormKey formKey)

@@ -229,6 +229,7 @@ public sealed class SubrecordLossTests : IDisposable
     public static TheoryData<string, byte[]> UnreadableCompressedData => new()
     {
         { "a declared length past an int", [0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03] },
+        { "a declared length an array cannot hold", [.. BitConvert(0x7FFFFFF0), .. CompressedData(Sub("EDID", [1]))[4..]] },
         { "a stream that is not zlib", [0x08, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03] },
         { "a stream shorter than its declared length", [.. BitConvert(64), .. CompressedData(Sub("EDID", [1]))[4..]] },
     };
