@@ -30,8 +30,7 @@ public sealed class CompileDroppedValueTests : IDisposable
         var refused = Assert.Single(answer.Refused);
         Assert.Equal(CompileRefusal.SourceValueDropped, refused.Refusal);
         var file = TreeTampering.FileOf(_fixture.ModFolderOf(_fixture.Plugin), _fixture.Plugin, new RecordIdentity(Quest, "qust", "Quest"));
-        Assert.Contains(Path.GetRelativePath(_fixture.ModFolderOf(_fixture.Plugin), file), refused.Message, StringComparison.Ordinal);
-        Assert.Contains("'Aliases[0]'", refused.Message, StringComparison.Ordinal);
+        Assert.Contains($"would not hold, in {Path.GetRelativePath(_fixture.ModFolderOf(_fixture.Plugin), file)}, 'Aliases[0]'.", refused.Message, StringComparison.Ordinal);
         Assert.Equal(before, await File.ReadAllBytesAsync(pluginPath));
     }
 }

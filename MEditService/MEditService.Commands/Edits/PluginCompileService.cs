@@ -155,11 +155,11 @@ internal sealed class PluginCompileService(
         {
             if (!repository.RelativePathOf(plugin, drop.Record).Holds(out var file, out var unread)) return SourceDoesNotParse(plugin, unread);
             var held = file ?? throw new InvalidOperationException($"Expected the tree this compile read to hold {drop.Record.FormKey}'s document.");
-            named.Add($"{held} ({string.Join(", ", drop.Paths.Select(path => $"'{path}'"))})");
+            named.Add($"in {held}, {string.Join(", ", drop.Paths.Select(path => $"'{path}'"))}");
         }
         return CompileResult.Refused(
             CompileRefusal.SourceValueDropped,
-            $"{plugin.Name} cannot be compiled: the plugin written from its source would not hold {string.Join("; ", named)}. Nothing was written.");
+            $"{plugin.Name} cannot be compiled: the plugin written from its source would not hold, {string.Join("; ", named)}. Nothing was written.");
     }
 
     private static CompileResult SourceDoesNotParse(PluginAddress plugin, SourceFailure unread) =>
