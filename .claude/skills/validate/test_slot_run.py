@@ -13,7 +13,7 @@ FAKE_SLOT = 'in_slot() { echo "in_slot $1 $2"; "${@:3}"; }\n'
 FAKE_SYSTEMD_RUN = """#!/bin/bash
 echo "systemd-run $*" >> "$LOG"
 [[ -n ${NO_SCOPE:-} ]] && exit 1
-while [[ $1 == -* ]]; do [[ $1 == -p ]] && shift; shift; done
+while [[ $1 == -* ]]; do shift; done
 exec "$@"
 """
 FAKE_SYSTEMCTL = '#!/bin/bash\necho "systemctl $*" >> "$LOG"\n'
@@ -58,32 +58,30 @@ class SlotRun(unittest.TestCase):
     def test_a_run_fails_with_its_command_status(self):
         self.assertEqual(self.slot_run("exit 7").returncode, 7)
 
-    def test_a_run_is_capped_in_a_scope_it_stops_once_the_command_exits(self):
+    def test_a_run_is_in_a_scope_it_stops_once_the_command_exits(self):
         self.slot_run("echo ran")
-        scoped = [line for line in self.log.read_text().splitlines() if "MemoryMax" in line]
+        scoped = [line for line in self.log.read_text().splitlines() if "--unit=" in line]
         self.assertEqual(len(scoped), 1)
-        self.assertIn("--user --scope", scoped[0])
-        self.assertIn("-p MemoryMax=6G -p MemorySwapMax=0 bash -c echo ran", scoped[0])
+        self.assertRegex(scoped[0], r"^systemd-run --user --scope --quiet --collect --unit=medit-build-\d+ bash -c echo ran$")
         unit = re.search(r"--unit=(\S+)", scoped[0])[1]
         self.assertEqual(self.log.read_text().splitlines()[-1], f"systemctl --user stop {unit}.scope")
 
-    def test_a_capped_run_compiles_on_a_compiler_server_of_its_own(self):
+    def test_a_scoped_run_compiles_on_a_compiler_server_of_its_own(self):
         run = self.slot_run('echo "server $SharedCompilationId"')
         unit = re.search(r"--unit=(\S+)", self.log.read_text())[1]
         self.assertEqual(run.stdout.splitlines()[-1], f"server {unit}")
 
-    def test_where_systemd_gives_no_scope_the_run_is_uncapped(self):
+    def test_where_systemd_gives_no_scope_the_run_is_unscoped(self):
         run = self.slot_run('echo "ran ${SharedCompilationId-on the shared server}"; exit 7', NO_SCOPE="1")
         self.assertEqual(run.stdout, "in_slot build 1\nran on the shared server\n")
         self.assertEqual(run.returncode, 7)
-        self.assertNotIn("MemoryMax", self.log.read_text())
         self.assertNotIn("systemctl", self.log.read_text())
 
     def test_what_a_run_starts_holds_the_slot_and_leaves_no_msbuild_node(self):
         run = self.slot_run('echo "$BUILD_SLOT_HELD $MSBUILDDISABLENODEREUSE"')
         self.assertEqual(run.stdout.splitlines()[-1], "1 1")
 
-    def test_a_run_inside_the_slot_neither_waits_for_it_nor_leaves_its_cap(self):
+    def test_a_run_inside_the_slot_neither_waits_for_it_nor_leaves_its_scope(self):
         run = self.slot_run("echo ran; exit 7", BUILD_SLOT_HELD="1")
         self.assertEqual(run.stdout, "ran\n")
         self.assertEqual(run.returncode, 7)

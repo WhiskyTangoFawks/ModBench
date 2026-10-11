@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# slot-run.sh <command...>: runs a build or test in the machine's build slot, in a memory-capped
-# scope of its own where systemd gives one. A run already in the slot, as a gate's build is, runs
-# as it stands, inside the cap it already has.
+# slot-run.sh <command...>: runs a build or test in the machine's build slot, in a scope of its own
+# where systemd gives one. A run already in the slot, as a gate's build is, runs as it stands.
 DIR=${BASH_SOURCE[0]%/*}
 [[ -n ${BUILD_SLOT_HELD:-} ]] && exec "$@"
 
@@ -17,9 +16,9 @@ source "$DIR/slot.sh"
 unit=medit-build-$$
 scope=()
 if systemd-run --user --scope --quiet true 2>/dev/null; then
-  scope=(systemd-run --user --scope --quiet --collect --unit="$unit" -p MemoryMax=6G -p MemorySwapMax=0)
+  scope=(systemd-run --user --scope --quiet --collect --unit="$unit")
   # The compiler server is shared by every build of the user, and compiles in the cgroup it
-  # started in. One of the run's own compiles inside the cap, and the scope's stop ends it, where
+  # started in. One of the run's own compiles inside the scope, and the scope's stop ends it, where
   # it would otherwise idle on holding a GB or more.
   export SharedCompilationId=$unit
 fi
