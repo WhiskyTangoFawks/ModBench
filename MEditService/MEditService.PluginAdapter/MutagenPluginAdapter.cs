@@ -156,11 +156,11 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
             var plugin = ModKey.FromFileName(Path.GetFileName(originalPath));
             var pairs = PluginBinaryWalk.PairByFormKey(
-                originalBytes, MastersOf(plugin, originalPath, gameRelease), recompiledBytes, MastersOf(plugin, recompiledPath, gameRelease), plugin);
+                originalBytes, MastersOf(plugin, originalPath, gameRelease), recompiledBytes, MastersOf(plugin, recompiledPath, gameRelease), plugin, gameRelease);
             var deletedRecordEmptied = PluginBinaryWalk.FirstEmptiedDeletedRecord(pairs) is { } emptied
-                ? $"{emptied.Original.Type} {emptied.FormKey}"
+                ? $"{emptied.Original.RecordType} {emptied.FormKey}"
                 : null;
-            if (PluginBinaryWalk.FindFirstSubrecordLoss(originalBytes, recompiledBytes, pairs) is not { } loss)
+            if (PluginBinaryWalk.FindFirstSubrecordLoss(pairs) is not { } loss)
                 return new PluginByteComparison(Identical: false, DeletedRecordEmptied: deletedRecordEmptied);
 
             var cause = MalformedPluginScan.Scan(originalBytes, gameRelease).FirstOrDefault(d =>

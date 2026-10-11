@@ -1,12 +1,13 @@
+using System.Buffers.Binary;
 using System.Text;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins.Binary.Headers;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>Kind B detectors (ADR-0006, a plugin malformed by another tool): byte-level
-/// scans of the plugin's original bytes, with no Mutagen. Expected values come from vanilla
+/// <summary>Kind B detectors (ADR-0006, a plugin malformed by another tool): scans of the
+/// plugin's original subrecords, free of Mutagen's typed parse. Expected values come from vanilla
 /// binaries, not a reference's comments.</summary>
 internal static class MalformedPluginScan
 {
@@ -30,35 +31,22 @@ internal static class MalformedPluginScan
         [15] = "Set Text",
     };
 
-    /// <summary>Every Kind B diagnosis the plugin's own bytes prove, in record order. A record
-    /// whose compressed payload cannot be inflated is skipped — an unreadable stream is a
-    /// different failure than the classes this scan names.</summary>
+    /// <summary>Every Kind B diagnosis the plugin's own bytes prove, in record order.</summary>
     internal static List<PluginDiagnosis> Scan(byte[] pluginBytes, GameRelease gameRelease)
     {
         var shapes = GameCodecs.For(gameRelease).CreationKitShapes;
         var diagnoses = new List<PluginDiagnosis>();
-        foreach (var record in PluginBinaryWalk.WalkRecords(pluginBytes))
+        foreach (var record in PluginBinaryWalk.Records(pluginBytes, gameRelease))
         {
-            if (record.IsGrup || !HasDetector(shapes, record.Type)) continue;
+            var type = record.RecordType.Type;
+            if (!HasDetector(shapes, type) || PluginBinaryWalk.Subrecords(record) is not { } subrecords) continue;
 
-            byte[] data;
-            try
-            {
-                data = pluginBytes.AsSpan(record.DataStart, Math.Min(record.DataLen, pluginBytes.Length - record.DataStart)).ToArray();
-                if ((record.Flags & CompressedFlag.Bit) != 0) data = PluginBinaryWalk.Inflate(data);
-            }
-            catch (InvalidDataException)
-            {
-                continue;
-            }
-
-            var subrecords = PluginBinaryWalk.WalkSubrecords(data);
-            var anchor = Anchor(record, data, subrecords);
-            DetectFixedSize(shapes, record, subrecords, anchor, diagnoses);
-            DetectFixedCount(shapes, record, subrecords, anchor, diagnoses);
-            DetectCounterEntries(shapes, record, data, subrecords, anchor, diagnoses);
-            DetectTemplateOrder(shapes, record, subrecords, anchor, diagnoses);
-            DetectEntryPointShape(shapes.EntryPoints, record, data, subrecords, anchor, diagnoses);
+            var anchor = Anchor(type, record.FormID.Raw, subrecords);
+            DetectFixedSize(shapes, type, subrecords, anchor, diagnoses);
+            DetectFixedCount(shapes, type, subrecords, anchor, diagnoses);
+            DetectCounterEntries(shapes, type, subrecords, anchor, diagnoses);
+            DetectTemplateOrder(shapes, type, subrecords, anchor, diagnoses);
+            DetectEntryPointShape(shapes.EntryPoints, type, subrecords, anchor, diagnoses);
         }
         return diagnoses;
     }
@@ -71,29 +59,29 @@ internal static class MalformedPluginScan
         || recordType == "PERK";
 
     private static void DetectFixedSize(
-        CreationKitShapes shapes, PluginBinaryWalk.RecordSpan record, List<PluginBinaryWalk.SubrecordSpan> subrecords,
+        CreationKitShapes shapes, string recordType, List<SubrecordPinFrame> subrecords,
         string anchor, List<PluginDiagnosis> diagnoses)
     {
         foreach (var sub in subrecords)
         {
-            if (!shapes.SubrecordSizes.TryGetValue((record.Type, sub.Sig), out var expected)) continue;
-            var payload = sub.Len - 6;
-            if (payload < expected)
+            var sig = sub.RecordType.Type;
+            if (!shapes.SubrecordSizes.TryGetValue((recordType, sig), out var expected)) continue;
+            if (sub.ContentLength < expected)
             {
                 diagnoses.Add(new PluginDiagnosis(anchor, "fixed-size-subrecord-short", Lossless,
-                    $"{sub.Sig} is {payload} bytes; a {record.Type} {sub.Sig} is always {expected}"));
+                    $"{sig} is {sub.ContentLength} bytes; a {recordType} {sig} is always {expected}"));
             }
         }
     }
 
     private static void DetectFixedCount(
-        CreationKitShapes shapes, PluginBinaryWalk.RecordSpan record, List<PluginBinaryWalk.SubrecordSpan> subrecords,
+        CreationKitShapes shapes, string recordType, List<SubrecordPinFrame> subrecords,
         string anchor, List<PluginDiagnosis> diagnoses)
     {
-        foreach (var ((recordType, sig), expected) in shapes.SubrecordCounts)
+        foreach (var ((type, sig), expected) in shapes.SubrecordCounts)
         {
-            if (recordType != record.Type) continue;
-            var count = subrecords.Count(s => s.Sig == sig);
+            if (type != recordType) continue;
+            var count = subrecords.Count(s => s.RecordType.Type == sig);
             if (count > 0 && count != expected)
             {
                 diagnoses.Add(new PluginDiagnosis(anchor, "fixed-count-list-wrong-count", Lossless,
@@ -103,21 +91,21 @@ internal static class MalformedPluginScan
     }
 
     private static void DetectCounterEntries(
-        CreationKitShapes shapes, PluginBinaryWalk.RecordSpan record, byte[] data, List<PluginBinaryWalk.SubrecordSpan> subrecords,
+        CreationKitShapes shapes, string recordType, List<SubrecordPinFrame> subrecords,
         string anchor, List<PluginDiagnosis> diagnoses)
     {
         for (var i = 0; i < subrecords.Count; i++)
         {
-            if (!shapes.CountedEntries.TryGetValue((record.Type, subrecords[i].Sig), out var entrySig)) continue;
-            if (subrecords[i].Len - 6 < 4) continue; // a short counter is the fixed-size class's finding, not a count disagreement
-            var declared = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(
-                data.AsSpan(subrecords[i].Start + 6, 4));
+            var counter = subrecords[i];
+            if (!shapes.CountedEntries.TryGetValue((recordType, counter.RecordType.Type), out var entrySig)) continue;
+            if (counter.ContentLength < 4) continue; // a short counter is the fixed-size class's finding, not a count disagreement
+            var declared = BinaryPrimitives.ReadUInt32LittleEndian(counter.Content.Span);
             var actual = 0;
-            for (var j = i + 1; j < subrecords.Count && subrecords[j].Sig == entrySig; j++) actual++;
+            for (var j = i + 1; j < subrecords.Count && subrecords[j].RecordType.Type == entrySig; j++) actual++;
             if (actual != declared)
             {
                 diagnoses.Add(new PluginDiagnosis(anchor, "counter-entries-mismatch", Lossless,
-                    $"{subrecords[i].Sig} counts {declared}; {actual} {entrySig} entries follow"));
+                    $"{counter.RecordType.Type} counts {declared}; {actual} {entrySig} entries follow"));
             }
         }
     }
@@ -125,15 +113,16 @@ internal static class MalformedPluginScan
     // R1: combinations are written OBTF, FULL, OBTS after an optional bare leading OBTS; a trailing
     // OBTF/FULL with no closing OBTS is the defect.
     private static void DetectTemplateOrder(
-        CreationKitShapes shapes, PluginBinaryWalk.RecordSpan record, List<PluginBinaryWalk.SubrecordSpan> subrecords,
+        CreationKitShapes shapes, string recordType, List<SubrecordPinFrame> subrecords,
         string anchor, List<PluginDiagnosis> diagnoses)
     {
-        if (!shapes.TemplateCombinations.Contains(record.Type)) return;
-        var start = subrecords.FindIndex(s => s.Sig == "OBTE");
+        if (!shapes.TemplateCombinations.Contains(recordType)) return;
+        var signatures = subrecords.Select(s => s.RecordType.Type).ToList();
+        var start = signatures.IndexOf("OBTE");
         if (start < 0) return;
-        var end = subrecords.FindIndex(start, s => s.Sig == "STOP");
-        if (end < 0) end = subrecords.Count;
-        var template = subrecords.Skip(start + 1).Take(end - start - 1).Select(s => s.Sig).ToList();
+        var end = signatures.IndexOf("STOP", start);
+        if (end < 0) end = signatures.Count;
+        var template = signatures[(start + 1)..end];
 
         var lastObts = template.LastIndexOf("OBTS");
         var lastDress = Math.Max(template.LastIndexOf("OBTF"), template.LastIndexOf("FULL"));
@@ -161,15 +150,15 @@ internal static class MalformedPluginScan
     // R5-R7: a PRKE with type byte 2 carries its function in the next DATA's second byte; the parameter
     // block until PRKF must match the vanilla-proven shape.
     private static void DetectEntryPointShape(
-        PerkEntryPointShapes shapes, PluginBinaryWalk.RecordSpan record, byte[] data, List<PluginBinaryWalk.SubrecordSpan> subrecords,
+        PerkEntryPointShapes shapes, string recordType, List<SubrecordPinFrame> subrecords,
         string anchor, List<PluginDiagnosis> diagnoses)
     {
-        if (record.Type != "PERK") return;
+        if (recordType != "PERK") return;
         var entryIndex = -1;
         var i = 0;
         while (i < subrecords.Count)
         {
-            if (subrecords[i].Sig != "PRKE" || subrecords[i].Len < 7 || data[subrecords[i].Start + 6] != 2)
+            if (subrecords[i].RecordType.Type != "PRKE" || subrecords[i].ContentLength < 1 || subrecords[i].Content.Span[0] != 2)
             {
                 i++;
                 continue;
@@ -181,15 +170,16 @@ internal static class MalformedPluginScan
             var hasEpf3 = false;
             var parameterBytes = 0;
             var j = i + 1;
-            for (; j < subrecords.Count && subrecords[j].Sig is not ("PRKF" or "PRKE"); j++)
+            for (; j < subrecords.Count && subrecords[j].RecordType.Type is not ("PRKF" or "PRKE"); j++)
             {
                 var s = subrecords[j];
-                if (s.Sig == "DATA" && function == null && s.Len >= 8) function = data[s.Start + 7];
-                if (s.Sig == "EPFT" && s.Len >= 7) { epft = data[s.Start + 6]; parameterBytes += s.Len; }
+                var sig = s.RecordType.Type;
+                if (sig == "DATA" && function == null && s.ContentLength >= 2) function = s.Content.Span[1];
+                if (sig == "EPFT" && s.ContentLength >= 1) { epft = s.Content.Span[0]; parameterBytes += s.TotalLength; }
                 // The drop operation removes the whole parameter block — EPFT, EPFB and EPFD — so
                 // all three count toward the tail's byte cost.
-                if (s.Sig is "EPFD" or "EPFB") parameterBytes += s.Len;
-                if (s.Sig == "EPF3") hasEpf3 = true;
+                if (sig is "EPFD" or "EPFB") parameterBytes += s.TotalLength;
+                if (sig == "EPF3") hasEpf3 = true;
             }
             i = j;
             if (function == null) continue;
@@ -219,12 +209,12 @@ internal static class MalformedPluginScan
         }
     }
 
-    private static string Anchor(PluginBinaryWalk.RecordSpan record, byte[] data, List<PluginBinaryWalk.SubrecordSpan> subrecords)
+    private static string Anchor(string recordType, uint formId, List<SubrecordPinFrame> subrecords)
     {
-        var edid = subrecords.FirstOrDefault(s => s.Sig == "EDID");
-        var name = edid.Sig == "EDID" && edid.Len > 6
-            ? Encoding.UTF8.GetString(data, edid.Start + 6, edid.Len - 6).TrimEnd('\0')
+        var edid = subrecords.FindIndex(s => s.RecordType.Type == "EDID");
+        var name = edid >= 0 && subrecords[edid].ContentLength > 0
+            ? Encoding.UTF8.GetString(subrecords[edid].Content.Span).TrimEnd('\0')
             : null;
-        return $"{record.Type} {record.FormId:X8}{(name != null ? $" ({name})" : "")}";
+        return $"{recordType} {formId:X8}{(name != null ? $" ({name})" : "")}";
     }
 }

@@ -226,16 +226,21 @@ public sealed class SubrecordLossTests : IDisposable
         Assert.Null(await LossAsync(Concat(uncompressed), Concat(compressedSamePayloadMinusRdmp)));
     }
 
-    [Fact]
-    public async Task AnUnreadableCompressedRecord_IsSkippedRatherThanThrowing()
+    public static TheoryData<string, byte[]> UnreadableCompressedData => new()
+    {
+        { "a declared length past an int", [0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03] },
+        { "a stream that is not zlib", [0x08, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03] },
+        { "a stream shorter than its declared length", [.. BitConvert(64), .. CompressedData(Sub("EDID", [1]))[4..]] },
+    };
+
+    [Theory]
+    [MemberData(nameof(UnreadableCompressedData))]
+    public async Task AnUnreadableCompressedRecord_IsSkippedRatherThanThrowing(string _, byte[] compressedData)
     {
         const uint compressedFlag = 0x00040000;
-        byte[] notActuallyZlib = [0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03];
-        byte[] otherGarbage = [0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x04];
-        var garbageRecord = BuildRecordHeader("REGN", 0x00000042, compressedFlag, notActuallyZlib);
-        var otherGarbageRecord = BuildRecordHeader("REGN", 0x00000042, compressedFlag, otherGarbage);
+        var unreadable = BuildRecordHeader("REGN", 0x00000042, compressedFlag, compressedData);
 
-        var loss = await LossAsync(garbageRecord, otherGarbageRecord);
+        var loss = await LossAsync(unreadable, Concat(unreadable, BuildRecordHeader("WEAP", 0x00000802, 0, [])));
 
         Assert.Null(loss);
     }
