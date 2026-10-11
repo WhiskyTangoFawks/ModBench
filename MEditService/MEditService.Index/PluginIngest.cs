@@ -215,8 +215,11 @@ internal sealed class PluginIngest
                 holdings.Add(new HoldingRow(worldspace, document.FormKey, HoldingSlots.ExteriorCell, 0));
         }
 
+        // The stamp is the source document's, children and all: it is what validation compares a
+        // tree's file against.
         return new PreparedRecord(
-            document.RecordType, document.FormKey, document.Text, SourceRepository.ContentStamp(document.Text), refs,
+            document.RecordType, document.FormKey, OwnDocument.Of(document.Text, _types.ChildSlotsOf(document.RecordType)),
+            SourceRepository.ContentStamp(document.Text), refs,
             holdings, cellLocations, editorId, document.ParseDiagnosis);
     }
 

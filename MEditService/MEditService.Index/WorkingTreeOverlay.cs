@@ -50,9 +50,7 @@ internal sealed class WorkingTreeOverlay
     // that can move winner status. touched collects every key whose rows this call moved.
     private bool ApplyOneWorkingTreeChange(PluginAddress key, string formKey, string? body, ICollection<string> touched)
     {
-        var existedBefore = RowExistsAtEffective(key, formKey);
-
-        if (!existedBefore)
+        if (RecordTypeAtEffective(key, formKey) is not { } recordType)
         {
             // A create is its own gesture and there is nothing here to derive its record_type from, so
             // this is a caller mistake: logged, skipped, never thrown (the seam's missing-data rule).
@@ -86,14 +84,17 @@ internal sealed class WorkingTreeOverlay
             return true;
         }
 
-        UpsertEffectiveBody(key, formKey, body);
-        RederiveIndexRowsForRecord(key, formKey, body, touched);
+        UpsertEffectiveBody(key, formKey, recordType, body);
+        RederiveIndexRowsForRecord(key, formKey, recordType, body, touched);
         return false;
     }
 
-    internal bool RowExistsAtEffective(PluginAddress key, string formKey) =>
-        DuckDbSql.ScalarString(_connection, "SELECT form_key FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin) != null;
+    private bool RowExistsAtEffective(PluginAddress key, string formKey) => RecordTypeAtEffective(key, formKey) != null;
+
+    private string? RecordTypeAtEffective(PluginAddress key, string formKey) =>
+        DuckDbSql.ScalarString(_connection,
+            "SELECT record_type FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin);
 
     // A record the index does not hold, materialized: the shape an embedded child re-derived out of a
     // container's document arrives in.
@@ -101,7 +102,7 @@ internal sealed class WorkingTreeOverlay
         PluginAddress key, string formKey, string recordType, string body, ICollection<string> touched)
     {
         InsertNewWorkingTreeRow(key, formKey, recordType, body);
-        RederiveIndexRowsForRecord(key, formKey, body, touched);
+        RederiveIndexRowsForRecord(key, formKey, recordType, body, touched);
     }
 
     private void InsertNewWorkingTreeRow(PluginAddress key, string formKey, string recordType, string body)
@@ -114,14 +115,14 @@ internal sealed class WorkingTreeOverlay
         DuckDbSql.Execute(_connection, """
             INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, body, content_hash)
             VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $5, $6)
-            """, formKey, key.Name, key.Origin, recordType, body, SourceRepository.ContentStamp(body));
+            """, formKey, key.Name, key.Origin, recordType, Stored(recordType, body), SourceRepository.ContentStamp(body));
     }
 
     private bool IsRegisteredPlugin(PluginAddress key) =>
         DuckDbSql.ScalarString(_connection,
             $"SELECT plugin FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin) != null;
 
-    private void UpsertEffectiveBody(PluginAddress key, string formKey, string body)
+    private void UpsertEffectiveBody(PluginAddress key, string formKey, string recordType, string body)
     {
         // editor_id follows the body: it is a projection of the document; otherwise a renamed record
         // would keep listing under its old EditorID. record_type is not re-derived: a record cannot
@@ -130,17 +131,17 @@ internal sealed class WorkingTreeOverlay
             UPDATE mirror.records
             SET body = $4, content_hash = $5, editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """, formKey, key.Name, key.Origin, body, SourceRepository.ContentStamp(body));
+            """, formKey, key.Name, key.Origin, Stored(recordType, body), SourceRepository.ContentStamp(body));
     }
+
+    private string Stored(string recordType, string body) => OwnDocument.Of(body, _types.ChildSlotsOf(recordType));
 
     // Rebuilt for one record through the same collectors ingest uses, so an edit cannot
     // leave derived answers describing bytes that are gone.
-    private void RederiveIndexRowsForRecord(PluginAddress key, string formKey, string body, ICollection<string> touched)
+    private void RederiveIndexRowsForRecord(
+        PluginAddress key, string formKey, string recordType, string body, ICollection<string> touched)
     {
-        var recordType = DuckDbSql.ScalarString(_connection,
-            "SELECT record_type FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin);
-        if (recordType == null || !_schemas.TryGetValue(recordType, out var schema)) return;
+        if (!_schemas.TryGetValue(recordType, out var schema)) return;
 
         // The header carries no reference graph (masters are a plugin-dependency list, not FormKey
         // references), and a ModHeader cannot go through the per-record codec below, so this stops
@@ -215,7 +216,7 @@ internal sealed class WorkingTreeOverlay
                 $"{child.FormKey} in {key.Name} ({key.Origin}) reached projection untyped, past the read that refuses it.");
 
             var childBody = _containers.TextOf(child);
-            if (string.Equals(childBody, EffectiveBody(key, child.FormKey), StringComparison.Ordinal)) continue;
+            if (string.Equals(SourceRepository.ContentStamp(childBody), EffectiveStamp(key, child.FormKey), StringComparison.Ordinal)) continue;
 
             touched.Add(child.FormKey);
             if (RowExistsAtEffective(key, child.FormKey))
@@ -225,12 +226,12 @@ internal sealed class WorkingTreeOverlay
         }
     }
 
-    private string? EffectiveBody(PluginAddress key, string formKey) =>
-        DuckDbSql.ScalarString(_connection, "SELECT body FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+    private string? EffectiveStamp(PluginAddress key, string formKey) =>
+        DuckDbSql.ScalarString(_connection, "SELECT content_hash FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
 
-    // A container's child set and slot order live in its body, so delete-then-insert per parent
-    // is correct. A worldspace's exterior cells are not in its body: their own records place them.
+    // A container's child set and slot order live in its document, so delete-then-insert per parent
+    // is correct. A worldspace's exterior cells are not in its document: their own records place them.
     private void RederiveContainmentForRecord(PluginAddress key, PluginIngest.PreparedRecord prepared)
     {
         DuckDbSql.Execute(_connection,

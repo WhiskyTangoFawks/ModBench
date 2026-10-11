@@ -157,9 +157,15 @@ public sealed class SchemaReflector
         return new RecordTableSchema(getterType, RecordDisplayNames.For(category, tableName))
         {
             TableName = tableName,
-            RecordColumns = [.. columns.Select(column => ContainmentReadOnly.Marked(column, tableName, siblingGetterTypes, game.Annotations))],
+            RecordColumns = [.. columns
+                .Where(column => !IsChildSlot(column, siblingGetterTypes))
+                .Select(column => ContainmentReadOnly.Marked(column, siblingGetterTypes, game.Annotations))],
         };
     }
+
+    // A child record is a record of its own, not a field of its container (editor-conflicts.md).
+    private static bool IsChildSlot(ColumnSpec column, List<Type> recordGetters) =>
+        recordGetters.Any(getter => ContainerChildFields.EnumerateChildFieldsFor(getter)?.Contains(column.PropertyName, StringComparer.Ordinal) == true);
 }
 
 /// <summary>A game release whose Mutagen record-type assembly is not referenced by this build. Its
