@@ -1,12 +1,10 @@
 using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
-using Mutagen.Bethesda.Skyrim;
-using Mutagen.Bethesda.Strings;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -28,42 +26,29 @@ public sealed class GameDataStringsTests : IDisposable
         _modFolder = Directory.CreateDirectory(Path.Combine(_root, "mods", ModName)).FullName;
         _dataFolder = Directory.CreateDirectory(Path.Combine(_root, "Game", "Data")).FullName;
         _pluginPath = Path.Combine(_modFolder, PluginName);
-        WritePluginNamingItsDoor(DoorName);
-    }
-
-    private void WritePluginNamingItsDoor(string doorName)
-    {
-        var mod = new SkyrimMod(ModKey.FromFileName(PluginName), SkyrimRelease.SkyrimSE) { UsingLocalization = true };
-        mod.Doors.AddNew("MainDoor").Name = new TranslatedString(Language.English, doorName);
-        ((IModGetter)mod).WriteToBinary(_pluginPath);
+        LocalizedDoorPlugin.Write(_pluginPath, DoorName);
     }
 
     public void Dispose() => _root.Dispose();
-
-    private PluginStrings Strings => new(_modFolder, _dataFolder);
 
     private LoadOrderSnapshot LoadOrder => new(_dataFolder, null, GameRelease.SkyrimSE, [], [], []);
 
     private RegisteredPlugin Plugin => new(PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder), Line: null);
 
-    private void MoveStringsIntoGameDataArchive(string archiveName)
-    {
-        var looseStrings = Path.Combine(_modFolder, "Strings");
-        StringsArchive.Pack(Directory.EnumerateFiles(looseStrings), Path.Combine(_dataFolder, archiveName));
-        Directory.Delete(looseStrings, recursive: true);
-    }
+    private void MoveStringsIntoGameData(string archiveName) => LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_dataFolder, archiveName));
 
-    private RepositoriesLib.Answer<IPluginDocuments, PluginFailure> OpenDocuments() =>
+    private RepositoriesLib.Answer<IPluginDocuments, PluginFailure> OpenDocuments(string pluginPath) =>
         Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), _pluginPath), LoadOrder,
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE), Strings);
+            new ModPath(ModKey.FromFileName(PluginName), pluginPath), LoadOrder,
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE),
+            new PluginStrings(Path.GetDirectoryName(pluginPath), _dataFolder));
 
     [Fact]
     public async Task ReadSourceOf_APluginWhoseStringsAreInTheGameDataFoldersArchiveForIt_ReadsThemFromThere()
     {
-        MoveStringsIntoGameDataArchive("Update.bsa");
+        MoveStringsIntoGameData("Update.bsa");
 
-        var source = (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, Strings)).Answered();
+        var source = (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, new PluginStrings(_modFolder, _dataFolder))).Answered();
 
         Assert.Contains(source.Files, file => Encoding.UTF8.GetString(file.Content).Contains(DoorName, StringComparison.Ordinal));
     }
@@ -71,9 +56,9 @@ public sealed class GameDataStringsTests : IDisposable
     [Fact]
     public void OpenDocuments_APluginWhoseStringsAreInTheGameDataFoldersArchiveForIt_ReadsItsNamesFromThere()
     {
-        MoveStringsIntoGameDataArchive("Update.bsa");
+        MoveStringsIntoGameData("Update.bsa");
 
-        using var documents = OpenDocuments().Answered();
+        using var documents = OpenDocuments(_pluginPath).Answered();
 
         Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
     }
@@ -81,10 +66,10 @@ public sealed class GameDataStringsTests : IDisposable
     [Fact]
     public void OpenDocuments_APluginWhoseStringsAreBesideItAndInTheGameDataFolder_ReadsTheOnesBesideIt()
     {
-        MoveStringsIntoGameDataArchive("Update.bsa");
-        WritePluginNamingItsDoor("The Mod's Door");
+        MoveStringsIntoGameData("Update.bsa");
+        LocalizedDoorPlugin.Write(_pluginPath, "The Mod's Door");
 
-        using var documents = OpenDocuments().Answered();
+        using var documents = OpenDocuments(_pluginPath).Answered();
 
         Assert.Contains("The Mod's Door", documents.Records.Single().Text, StringComparison.Ordinal);
     }
@@ -92,7 +77,7 @@ public sealed class GameDataStringsTests : IDisposable
     [Fact]
     public void OpenRecordLookup_APluginWhoseStringsAreInTheGameDataFoldersArchiveForIt_ReadsItsNamesFromThere()
     {
-        MoveStringsIntoGameDataArchive("Update.bsa");
+        MoveStringsIntoGameData("Update.bsa");
 
         using var records = Adapter.OpenRecordLookup(Plugin, LoadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)).Answered();
 
@@ -100,11 +85,13 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     [Fact]
-    public void OpenDocuments_APluginWhoseStringsAreNowhereTheGameLooks_FailsNamingTheMissingFile()
+    public void OpenDocuments_AGameMasterWhoseStringsAreInAnArchiveNamedForNoPlugin_Opens()
     {
-        Directory.Delete(Path.Combine(_modFolder, "Strings"), recursive: true);
+        var masterPath = Path.Combine(_dataFolder, PluginName);
+        LocalizedDoorPlugin.Write(masterPath, DoorName);
+        LocalizedDoorPlugin.PackStrings(masterPath, Path.Combine(_dataFolder, "Skyrim - Interface.bsa"));
 
-        Assert.False(OpenDocuments().Holds(out _, out var failure));
-        Assert.Equal("Update_English.STRINGS", Assert.IsType<PluginFailure.MissingStrings>(failure).File);
+        Assert.True(OpenDocuments(masterPath).Holds(out var documents, out _));
+        documents.Dispose();
     }
 }

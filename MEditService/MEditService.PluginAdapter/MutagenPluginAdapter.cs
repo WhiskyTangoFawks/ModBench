@@ -61,18 +61,13 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         ILoadedMod? loaded = null;
         try
         {
-            return PluginFailure.Answer(() => loaded = OpenForRead(modPath, loadOrder.GameRelease, strings, loadOrder))
-                .Then(mod => PluginFailure.Answer(() => strings is { } named
-                        ? LocalizedStrings.FindMissingStringsFile(mod.Getter, modPath.ModKey.FileName, named, loadOrder.GameRelease)
-                        : null)
-                    .Then(missing => missing is { } file
-                        ? new PluginFailure.MissingStrings(file)
-                        : PluginFailure.Answer(() =>
-                        {
-                            var held = holding(mod);
-                            loaded = null;
-                            return held;
-                        })));
+            return PluginFailure.Answer(() =>
+            {
+                loaded = OpenForRead(modPath, loadOrder.GameRelease, strings, loadOrder);
+                var held = holding(loaded);
+                loaded = null;
+                return held;
+            });
         }
         finally
         {
