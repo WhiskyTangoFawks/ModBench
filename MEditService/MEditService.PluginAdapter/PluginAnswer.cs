@@ -98,6 +98,17 @@ public abstract record PluginFailure
         public override string Reason => _reason;
     }
 
+    /// <summary>A record of FormID 00000000, which a full import reads as the null FormKey.</summary>
+    public sealed record NullFormIdHeld : PluginFailure
+    {
+        private readonly string _reason;
+
+        internal NullFormIdHeld(string signature) : base(error: null) =>
+            _reason = $"{signature} 00000000 holds the null FormID, so the plugin is malformed";
+
+        public override string Reason => _reason;
+    }
+
     /// <summary>The plugin read or written references a plugin the load order does not hold.</summary>
     public sealed record MasterNotInLoadOrder : PluginFailure
     {

@@ -6,9 +6,9 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
-using Mutagen.Bethesda.Skyrim;
 using Starfield = Mutagen.Bethesda.Starfield;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
@@ -43,24 +43,40 @@ public sealed class PluginSourceReadTests
     public async Task ARecordOfThePluginsOwnObjectIdZero_FailsNamingIt_SinceTheHeadersSourceHoldsThatFormKey()
     {
         using var folder = new ScratchDirectory("medit-source-object-id-zero-");
+        const uint ownObjectIdZero = 0x01000000;
+
+        Assert.False((await ReadSourceAsync(PluginWithAnNpcOfFormId(folder, ownObjectIdZero), GameRelease.Fallout4)).Holds(out _, out var failure));
+        Assert.Equal(
+            "NPC_ 000000:Fixture.esp holds object ID 000000, the FormKey its plugin header's source holds",
+            Assert.IsType<PluginFailure.HeaderFormKeyHeld>(failure).Reason);
+    }
+
+    [Fact]
+    public async Task ARecordOfFormIdZero_FailsNamingIt_SinceThatIsTheNullFormId()
+    {
+        using var folder = new ScratchDirectory("medit-source-null-formid-");
+
+        Assert.False((await ReadSourceAsync(PluginWithAnNpcOfFormId(folder, 0), GameRelease.Fallout4)).Holds(out _, out var failure));
+        Assert.Equal(
+            "NPC_ 00000000 holds the null FormID, so the plugin is malformed",
+            Assert.IsType<PluginFailure.NullFormIdHeld>(failure).Reason);
+    }
+
+    private static string PluginWithAnNpcOfFormId(string folder, uint formId)
+    {
         var pluginPath = Path.Combine(folder, "Fixture.esp");
-        var mod = new SkyrimMod(ModKey.FromFileName("Fixture.esp"), SkyrimRelease.SkyrimSE);
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Master.esm") });
-        mod.Npcs.AddNew("ZeroGuy");
+        mod.Npcs.AddNew("Npc");
         ((IModGetter)mod).WriteToBinary(pluginPath, new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
         {
             MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.NoCheck,
         });
         var bytes = File.ReadAllBytes(pluginPath);
         const int formIdOffset = 12;
-        const uint ownObjectIdZero = 0x01000000;
-        BitConverter.GetBytes(ownObjectIdZero).CopyTo(bytes, bytes.AsSpan().LastIndexOf("NPC_"u8) + formIdOffset);
+        BitConverter.GetBytes(formId).CopyTo(bytes, bytes.AsSpan().LastIndexOf("NPC_"u8) + formIdOffset);
         File.WriteAllBytes(pluginPath, bytes);
-
-        Assert.False((await ReadSourceAsync(pluginPath, GameRelease.SkyrimSE)).Holds(out _, out var failure));
-        Assert.Equal(
-            "NPC_ 000000:Fixture.esp holds object ID 000000, the FormKey its plugin header's source holds",
-            Assert.IsType<PluginFailure.HeaderFormKeyHeld>(failure).Reason);
+        return pluginPath;
     }
 
     [Fact]
