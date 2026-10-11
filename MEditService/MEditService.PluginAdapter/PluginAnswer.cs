@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Runtime.ExceptionServices;
 using MEditService.Codec.Serialization;
 using MEditService.RepositoriesLib;
@@ -77,7 +78,7 @@ public abstract record PluginFailure
         public override string Reason => _reason;
     }
 
-    /// <summary>The write's content references a plugin the load order it orders masters by does not hold.</summary>
+    /// <summary>The plugin read or written references a plugin the load order does not hold.</summary>
     public sealed record MasterNotInLoadOrder : PluginFailure
     {
         private readonly string _reason;
@@ -89,11 +90,15 @@ public abstract record PluginFailure
     }
 
     /// <summary>The failure <paramref name="ex"/> stands for: a file system refusal is
-    /// <see cref="Inaccessible"/>, anything else a read Mutagen could not make.</summary>
-    internal static PluginFailure Of(Exception ex) =>
-        Refusal(ex) is { } refusal
-            ? new Inaccessible(refusal)
-            : new Unparsed(PluginDiagnosis.FromParseException(ex), ex);
+    /// <see cref="Inaccessible"/>, anything else a read Mutagen could not make. Mutagen reaches some
+    /// readers by reflection, whose wrapper says nothing of the read.</summary>
+    internal static PluginFailure Of(Exception ex) => ex switch
+    {
+        TargetInvocationException { InnerException: { } invoked } => Of(invoked),
+        MissingModException missing => new MasterNotInLoadOrder(missing),
+        _ when Refusal(ex) is { } refusal => new Inaccessible(refusal),
+        _ => new Unparsed(PluginDiagnosis.FromParseException(ex), ex),
+    };
 
     // Mutagen wraps the file system's refusal in exceptions of its own.
     private static Exception? Refusal(Exception? ex) =>

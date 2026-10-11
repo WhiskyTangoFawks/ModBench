@@ -39,7 +39,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         PluginStrings? strings = null) =>
         Opened<IPluginDocuments>(modPath, strings, loadOrder, loaded =>
         {
-            var documents = new MutagenModDocuments(loaded.Getter, new PluginRecordBytes(modPath, loadOrder.GameRelease), schemas, loaded);
+            var documents = new MutagenModDocuments(loaded.Getter, new PluginRecordBytes(modPath, loadOrder), schemas, loaded);
             _ = documents.Header;
             return documents;
         });
@@ -51,7 +51,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     {
         var modPath = new ModPath(plugin.Path);
         return Opened<IPluginRecords>(modPath, strings: null, loadOrder, loaded =>
-            new ModRecordLookup(loaded.Getter, new PluginRecordBytes(modPath, loadOrder.GameRelease), schemas, loaded));
+            new ModRecordLookup(loaded.Getter, new PluginRecordBytes(modPath, loadOrder), schemas, loaded));
     }
 
     // The open passes to what its result holds; until it has, a failure disposes it here.
@@ -142,7 +142,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), recompiledPath, loadOrder, strings)?.Describe());
 
     public Task<Answer<PluginByteComparison, PluginFailure>> CompareBytesAsync(
-        string originalPath, string recompiledPath, GameRelease gameRelease, CancellationToken cancel = default) =>
+        string originalPath, string recompiledPath, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>
         PluginFailure.AnswerAsync(async () =>
         {
             var originalBytes = await File.ReadAllBytesAsync(originalPath, cancel);
@@ -152,15 +152,15 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
             var plugin = ModKey.FromFileName(Path.GetFileName(originalPath));
             var pairs = PluginBinaryWalk.PairByFormKey(
-                originalBytes, PluginBinaryWalk.MastersOf(new ModPath(plugin, originalPath), gameRelease),
-                recompiledBytes, PluginBinaryWalk.MastersOf(new ModPath(plugin, recompiledPath), gameRelease), plugin, gameRelease);
+                originalBytes, PluginBinaryWalk.MastersOf(new ModPath(plugin, originalPath), loadOrder),
+                recompiledBytes, PluginBinaryWalk.MastersOf(new ModPath(plugin, recompiledPath), loadOrder), loadOrder.GameRelease);
             var deletedRecordEmptied = PluginBinaryWalk.FirstEmptiedDeletedRecord(pairs) is { } emptied
                 ? $"{emptied.Original.RecordType} {emptied.FormKey}"
                 : null;
             if (PluginBinaryWalk.FindFirstSubrecordLoss(pairs) is not { } loss)
                 return new PluginByteComparison(Identical: false, DeletedRecordEmptied: deletedRecordEmptied);
 
-            var cause = MalformedPluginScan.Scan(originalBytes, gameRelease).FirstOrDefault(d =>
+            var cause = MalformedPluginScan.Scan(originalBytes, loadOrder.GameRelease).FirstOrDefault(d =>
                 d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
             return new PluginByteComparison(Identical: false, loss, cause, deletedRecordEmptied);
         });

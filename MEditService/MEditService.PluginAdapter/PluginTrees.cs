@@ -38,7 +38,7 @@ internal static class PluginTrees
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            PluginFailure.ThrowIfNotTheFilesAnswer(ex, new PluginRecordBytes(modPath, gameRelease));
+            PluginFailure.ThrowIfNotTheFilesAnswer(ex, new PluginRecordBytes(modPath, loadOrder));
             return PluginFailure.Of(ex);
         }
     }

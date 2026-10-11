@@ -1,8 +1,13 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
+using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Starfield;
+using Noggog;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -54,5 +59,37 @@ public sealed class DeletedRecordDocumentTests
         var document = NpcDocumentOf(path => DeletedNpcPlugin.WriteHoldingFields(path, Npc));
 
         Assert.NotNull(document.ParseDiagnosis);
+    }
+
+    [Fact]
+    public void OpenDocuments_YieldsADeletedOverrideOfALightMastersRecordWithNoSubrecordAsItsHeader()
+    {
+        using var directory = new ScratchDirectory("deleted-light-override-");
+        var lightMaster = new StarfieldMod(ModKey.FromFileName("LightNpcs.esm"), StarfieldRelease.Starfield);
+        lightMaster.ModHeader.Flags |= StarfieldModHeader.HeaderFlag.Light;
+        var overridden = new FormKey(lightMaster.ModKey, 0x801);
+        lightMaster.Npcs.Add(new Mutagen.Bethesda.Starfield.Npc(overridden, StarfieldRelease.Starfield) { EditorID = "Guy" });
+        var masterPath = Path.Combine(directory.Path, lightMaster.ModKey.FileName);
+        lightMaster.WriteToBinary(masterPath);
+
+        var plugin = new StarfieldMod(ModKey.FromFileName(PluginName), StarfieldRelease.Starfield);
+        plugin.ModHeader.MasterReferences.Add(new MasterReference { Master = lightMaster.ModKey });
+        plugin.Npcs.Add(new Mutagen.Bethesda.Starfield.Npc(overridden, StarfieldRelease.Starfield) { MajorRecordFlagsRaw = 0x20 });
+        var path = Path.Combine(directory.Path, PluginName);
+        plugin.WriteToBinary(path, new BinaryWriteParameters
+        {
+            MastersListContent = MastersListContentOption.NoCheck,
+            MasterFlagsLookup = new Cache<IModMasterStyledGetter, ModKey>(m => m.ModKey) { lightMaster },
+        });
+        var loadOrder = SnapshotPlugins.Snapshot(directory.Path, null, GameRelease.Starfield,
+        [
+            new LoadOrderEntry(lightMaster.ModKey.FileName, masterPath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
+            new LoadOrderEntry(PluginName, path, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
+        ]);
+
+        using var documents = Adapter.OpenDocuments(
+            new ModPath(plugin.ModKey, path), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield)).Answered();
+
+        Assert.Null(documents.Records.Single(d => d.FormKey == overridden.ToString()).ParseDiagnosis);
     }
 }

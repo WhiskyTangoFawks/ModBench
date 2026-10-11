@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -14,13 +15,13 @@ public sealed class SubrecordLossTests : IDisposable
 
     public void Dispose() => _folder.Dispose();
 
-    private async Task<PluginBinaryWalk.SubrecordLoss?> LossAsync(byte[] original, byte[] rewritten, GameRelease release = GameRelease.Fallout4)
+    private async Task<PluginBinaryWalk.SubrecordLoss?> LossAsync(byte[] original, byte[] rewritten, LoadOrderSnapshot? loadOrder = null)
     {
         var originalPath = Path.Combine(_folder.Path, "original.esp");
         var rewrittenPath = Path.Combine(_folder.Path, "rewritten.esp");
         File.WriteAllBytes(originalPath, WithHeader(original));
         File.WriteAllBytes(rewrittenPath, WithHeader(rewritten));
-        return (await Adapter.CompareBytesAsync(originalPath, rewrittenPath, release)).Answered().Loss;
+        return (await Adapter.CompareBytesAsync(originalPath, rewrittenPath, loadOrder ?? EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered().Loss;
     }
 
     private static byte[] WithHeader(byte[] records) =>
@@ -64,15 +65,18 @@ public sealed class SubrecordLossTests : IDisposable
     public async Task InAGameThatSeparatesLightMasters_ADropInAnOverrideOfALightMastersRecordIsNamedByThatMastersFormKey()
     {
         const uint LightMasterZerosObjectId801 = 0xFE000801;
-        var lightMasterAfterAFullOne = Tes4("Full.esm", "Light.esm");
-        var original = Concat(lightMasterAfterAFullOne,
+        var (masterPath, _) = LightMasterAndChild.Write(_folder.Path);
+        var loadOrder = SnapshotPlugins.Snapshot(_folder.Path, null, GameRelease.Starfield,
+            [new LoadOrderEntry(LightMasterAndChild.Master.FileName, masterPath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true)]);
+        var overridingTheLightMaster = Tes4(LightMasterAndChild.Master.FileName);
+        var original = Concat(overridingTheLightMaster,
             BuildRecordHeader("WEAP", LightMasterZerosObjectId801, 0, Concat(Sub("EDID", "Gun"u8.ToArray()), Sub("RDMP", [1]))));
-        var rewritten = Concat(lightMasterAfterAFullOne,
+        var rewritten = Concat(overridingTheLightMaster,
             BuildRecordHeader("WEAP", LightMasterZerosObjectId801, 0, Concat(Sub("EDID", "Gun"u8.ToArray()))));
 
-        var loss = await LossAsync(original, rewritten, GameRelease.Starfield);
+        var loss = await LossAsync(original, rewritten, loadOrder);
 
-        Assert.Equal("000801:Light.esm", loss?.FormKey.ToString());
+        Assert.Equal(LightMasterAndChild.Weapon, loss?.FormKey);
     }
 
     private async Task<string?> DeletedRecordEmptiedAsync(byte[] original, byte[] rewritten)
@@ -81,7 +85,7 @@ public sealed class SubrecordLossTests : IDisposable
         var rewrittenPath = Path.Combine(_folder.Path, "rewritten.esp");
         File.WriteAllBytes(originalPath, WithHeader(original));
         File.WriteAllBytes(rewrittenPath, WithHeader(rewritten));
-        return (await Adapter.CompareBytesAsync(originalPath, rewrittenPath, GameRelease.Fallout4)).Answered().DeletedRecordEmptied;
+        return (await Adapter.CompareBytesAsync(originalPath, rewrittenPath, EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered().DeletedRecordEmptied;
     }
 
     [Fact]

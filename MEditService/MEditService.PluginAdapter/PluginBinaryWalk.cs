@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Headers;
@@ -23,32 +24,27 @@ public static class PluginBinaryWalk
     /// through its own plugin's masters: a rewrite prunes unneeded masters, which moves every index after
     /// them.</summary>
     internal static List<RecordPair> PairByFormKey(
-        byte[] original, IReadOnlyList<ModKey> originalMasters, byte[] rewritten, IReadOnlyList<ModKey> rewrittenMasters,
-        ModKey plugin, GameRelease release)
+        byte[] original, IReadOnlySeparatedMasterPackage originalMasters, byte[] rewritten, IReadOnlySeparatedMasterPackage rewrittenMasters,
+        GameRelease release)
     {
         var rewrittenByIdentity = new Dictionary<(RecordType Type, FormKey FormKey), MajorRecordFrame>();
         foreach (var record in Records(rewritten, release))
-            rewrittenByIdentity.TryAdd((record.RecordType, FormKeyOf(record, rewrittenMasters, plugin)), record);
+            rewrittenByIdentity.TryAdd((record.RecordType, rewrittenMasters.GetFormKey(record.FormID, reference: false)), record);
 
         var pairs = new List<RecordPair>();
         foreach (var record in Records(original, release))
         {
-            var formKey = FormKeyOf(record, originalMasters, plugin);
+            var formKey = originalMasters.GetFormKey(record.FormID, reference: false);
             if (rewrittenByIdentity.TryGetValue((record.RecordType, formKey), out var partner))
                 pairs.Add(new RecordPair(formKey, record, partner));
         }
         return pairs;
     }
 
-    internal static IReadOnlyList<ModKey> MastersOf(ModPath plugin, GameRelease release) =>
-        [.. MasterReferenceCollection.FromPath(plugin, release).Masters.Select(reference => reference.Master)];
-
-    internal static FormKey FormKeyOf(MajorRecordFrame record, IReadOnlyList<ModKey> masters, ModKey plugin)
-    {
-        if (record.RecordType.Type == "TES4") return FormKey.Null;
-        var index = (int)(record.FormID.Raw >> 24);
-        return new FormKey(index < masters.Count ? masters[index] : plugin, record.FormID.Raw & 0xFFFFFF);
-    }
+    /// <summary>How the plugin's FormIDs name records: through its own masters, each in the style the load
+    /// order's copy of it carries.</summary>
+    internal static IReadOnlySeparatedMasterPackage MastersOf(ModPath plugin, LoadOrderSnapshot loadOrder) =>
+        SeparatedMasterPackage.Factory(loadOrder.GameRelease, plugin, MasterStyles.Of(plugin, loadOrder));
 
     /// <summary>The first record flagged Deleted that holds subrecords in the original and none in its
     /// rewrite, as Mutagen writes most deleted records.</summary>
