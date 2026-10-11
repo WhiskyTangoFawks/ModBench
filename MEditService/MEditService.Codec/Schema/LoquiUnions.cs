@@ -103,7 +103,7 @@ public static class LoquiUnions
             if (leafPath == null) continue;
             var members = ReflectedTypes.Members(getterType)
                 .Where(member => !baseMemberNames.Contains(member.Key))
-                .Select(member => member.Where(p => !game.Annotations.IsExcludedMember(p) && !game.Annotations.IsUnusedSlotMember(union.SetterType, p)).ToList())
+                .Select(member => member.Where(p => !game.Annotations.IsExcludedMember(p) && !game.Annotations.IsUnusedSlotMember(getterType, p)).ToList())
                 .Where(declarations => declarations.Count > 0)
                 .Select(ReflectedTypes.MostDerived)
                 .Select(p => SubFieldReflection.GetSubFieldInfo(p, game, leafPath, logger))

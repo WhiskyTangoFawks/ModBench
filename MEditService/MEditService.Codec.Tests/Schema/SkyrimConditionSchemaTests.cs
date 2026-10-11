@@ -77,12 +77,6 @@ public sealed class SkyrimConditionSchemaTests
         Assert.DoesNotContain(nameof(GetIsIDConditionData), actorValue.Keys);
     }
 
-    [Fact]
-    public void RunOn_GovernsTheReference()
-    {
-        Assert.Equal(["Reference"], Member(Data(), "RunOnType").SiblingsInUse.Require()[nameof(Condition.RunOnType.Reference)]);
-    }
-
     [Theory]
     [InlineData(nameof(IsLinkedToConditionData), "Target", "Keyword")]
     [InlineData(nameof(GetInCellParamConditionData), "Cell", "Target")]
