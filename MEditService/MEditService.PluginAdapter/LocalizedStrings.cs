@@ -45,8 +45,7 @@ internal static class LocalizedStrings
     }
 
     /// <summary>A missing strings file is refused by name: <c>TranslatedString.TryLookup</c> returns false
-    /// silently for one. Mutagen's writer always emits all three files for a language, so a missing one
-    /// is lost data.</summary>
+    /// silently for one. Asked of the lookup the read uses, which finds a file loose or in an archive.</summary>
     internal static string? FindMissingStringsFile(
         IModGetter mod, string pluginName, PluginStrings strings, GameRelease gameRelease)
     {
@@ -55,15 +54,13 @@ internal static class LocalizedStrings
         var languageFormat = GameConstants.Get(gameRelease).StringsLanguageFormat
             ?? throw new ArgumentException($"Tried to check localization strings for an unsupported game: {gameRelease}", nameof(gameRelease));
         var modKey = ModKey.FromFileName(pluginName);
+        var lookup = StringsFolderLookupOverlay.TypicalFactory(
+            gameRelease, modKey, strings.PluginFolder ?? strings.DataFolderPath, ForRead(strings).StringsParam);
 
-        foreach (var source in new[] { StringsSource.Normal, StringsSource.IL, StringsSource.DL })
-        {
-            // English only; multi-language is deliberately out of scope.
-            var fileName = StringsUtility.GetFileName(languageFormat, modKey, Language.English, source);
-            if (!File.Exists(Path.Combine(strings.Folder, fileName)))
-                return fileName;
-        }
-
-        return null;
+        // English only; multi-language is deliberately out of scope.
+        return new[] { StringsSource.Normal, StringsSource.IL, StringsSource.DL }
+            .Where(source => !lookup.AvailableLanguages(source).Contains(Language.English))
+            .Select(source => StringsUtility.GetFileName(languageFormat, modKey, Language.English, source))
+            .FirstOrDefault();
     }
 }

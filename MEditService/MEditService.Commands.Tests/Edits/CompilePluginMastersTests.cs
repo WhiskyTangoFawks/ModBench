@@ -17,6 +17,7 @@ public sealed class CompilePluginMastersTests : IDisposable
     private const string DeltaName = "Delta.esm";
     private readonly ScratchDirectory _modFolder = new("medit-masters-");
     private readonly ScratchDirectory _gameDirectory = new("medit-masters-game-");
+    private readonly List<LoadOrderEntry> _entries;
     private readonly LoadOrderSnapshot _loadOrder;
     private readonly PluginAddress _plugin = new(PluginName, "MastersMod");
     private readonly FormKey _npc;
@@ -57,14 +58,14 @@ public sealed class CompilePluginMastersTests : IDisposable
         });
         (_npc, _bravoKeyword, _charlieKeyword) = (npc.FormKey, bravoKeyword.FormKey, charlieKeyword.FormKey);
 
-        _loadOrder = SnapshotPlugins.Snapshot(
-            _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            [
-                new LoadOrderEntry(CharlieName, charliePath, PluginOrigin.DataDirectory, Line: 0, Enabled: true, Winning: true),
-                new LoadOrderEntry(BravoName, bravoPath, PluginOrigin.DataDirectory, Line: 1, Enabled: true, Winning: true),
-                new LoadOrderEntry(DeltaName, deltaPath, PluginOrigin.DataDirectory, Line: 2, Enabled: true, Winning: true),
-                new LoadOrderEntry(PluginName, pluginPath, _plugin.Origin, Line: 3, Enabled: true, Winning: true),
-            ]);
+        _entries =
+        [
+            new LoadOrderEntry(CharlieName, charliePath, PluginOrigin.DataDirectory, Line: 0, Enabled: true, Winning: true),
+            new LoadOrderEntry(BravoName, bravoPath, PluginOrigin.DataDirectory, Line: 1, Enabled: true, Winning: true),
+            new LoadOrderEntry(DeltaName, deltaPath, PluginOrigin.DataDirectory, Line: 2, Enabled: true, Winning: true),
+            new LoadOrderEntry(PluginName, pluginPath, _plugin.Origin, Line: 3, Enabled: true, Winning: true),
+        ];
+        _loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, _entries);
 
         TrackEveryPluginOf.ModAsync(_loadOrder, _plugin.Origin)
             .GetAwaiter().GetResult();
@@ -88,6 +89,21 @@ public sealed class CompilePluginMastersTests : IDisposable
         var diagnostics = Assert.Single(answer.Landed).Outcome;
         Assert.DoesNotContain(
             diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Compile_WhenTheLoadOrderLacksAMasterTheSourceReferences_IsRefusedNamingIt_AndLeavesTheBinary()
+    {
+        var binary = File.ReadAllBytes(Path.Combine(_modFolder, PluginName));
+        var withoutBravo = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, _entries.Where(entry => entry.Name != BravoName));
+
+        var answer = await CompileServices.Over(withoutBravo).CompileAsync([_plugin]);
+
+        var refused = Assert.Single(answer.Refused);
+        Assert.Equal(
+            (CompileRefusal.MasterNotInLoadOrder, $"{PluginName} could not be compiled: it references {BravoName}, which the load order does not hold"),
+            (refused.Refusal, refused.Message));
+        Assert.Equal(binary, File.ReadAllBytes(Path.Combine(_modFolder, PluginName)));
     }
 
     [Fact]

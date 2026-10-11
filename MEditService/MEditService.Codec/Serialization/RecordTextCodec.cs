@@ -153,8 +153,8 @@ public static class RecordTextCodec
         // name the banned property; the already-awaited value comes back through reflection instead.
         var resultProperty = read.GetType().GetProperty("Result")
             ?? throw new InvalidOperationException($"Expected '{read.GetType().Name}' to declare 'Result'.");
-        return resultProperty.GetValue(read)
-            ?? throw new InvalidOperationException("Expected the deserialized record to be non-null.");
+        return AbsentIndexes.Fill(resultProperty.GetValue(read)
+            ?? throw new InvalidOperationException("Expected the deserialized record to be non-null."));
     }
 
     // SerializeWithCheck writes MutagenObjectType ahead of the fields and DeserializeWithCheck

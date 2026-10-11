@@ -2,11 +2,12 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 using MEditService.Codec.Schema;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>Mutagen-free byte-level walker over a plugin's record/GRUP/subrecord structure, shared by
-/// Track's tripwire and the Repair surface (ADR-0006).</summary>
+/// <summary>A byte-level walker over a plugin's record/GRUP/subrecord structure, free of Mutagen's typed
+/// parse, shared by Track's tripwire and the Repair surface (ADR-0006).</summary>
 public static class PluginBinaryWalk
 {
     /// <summary>One top-level record or GRUP header. For a GRUP only <c>Start</c>/<c>DataStart</c> are
@@ -18,9 +19,44 @@ public static class PluginBinaryWalk
     internal readonly record struct SubrecordSpan(string Sig, int Start, int Len);
 
     /// <summary>A record whose rewrite has fewer occurrences of some subrecord signatures than the
-    /// original. <c>FormId</c> is the raw stored FormID, unresolved — this walker has no link cache and
-    /// callers name records the way the bytes do.</summary>
-    public readonly record struct SubrecordLoss(string RecordType, uint FormId, IReadOnlyList<string> Signatures);
+    /// original. <c>FormId</c> is the original's stored FormID, as a diagnosis of its bytes anchors it.</summary>
+    public readonly record struct SubrecordLoss(string RecordType, uint FormId, FormKey FormKey, IReadOnlyList<string> Signatures);
+
+    /// <summary>One record of a plugin and of its rewrite.</summary>
+    internal readonly record struct RecordPair(FormKey FormKey, RecordSpan Original, RecordSpan Rewritten);
+
+    /// <summary>The records a plugin and its rewrite both hold, paired by type and FormKey, each FormID read
+    /// through its own plugin's masters: a rewrite prunes unneeded masters, which moves every index after
+    /// them.</summary>
+    internal static List<RecordPair> PairByFormKey(
+        byte[] original, IReadOnlyList<ModKey> originalMasters, byte[] rewritten, IReadOnlyList<ModKey> rewrittenMasters, ModKey plugin)
+    {
+        var rewrittenByIdentity = new Dictionary<(string Type, FormKey FormKey), RecordSpan>();
+        foreach (var record in WalkRecords(rewritten).Where(r => !r.IsGrup))
+            rewrittenByIdentity.TryAdd((record.Type, FormKeyOf(record, rewrittenMasters, plugin)), record);
+
+        var pairs = new List<RecordPair>();
+        foreach (var record in WalkRecords(original).Where(r => !r.IsGrup))
+        {
+            var formKey = FormKeyOf(record, originalMasters, plugin);
+            if (rewrittenByIdentity.TryGetValue((record.Type, formKey), out var partner))
+                pairs.Add(new RecordPair(formKey, record, partner));
+        }
+        return pairs;
+    }
+
+    private static FormKey FormKeyOf(RecordSpan record, IReadOnlyList<ModKey> masters, ModKey plugin)
+    {
+        if (record.Type == "TES4") return FormKey.Null;
+        var index = (int)(record.FormId >> 24);
+        return new FormKey(index < masters.Count ? masters[index] : plugin, record.FormId & 0xFFFFFF);
+    }
+
+    /// <summary>The first record flagged Deleted that holds subrecords in the original and none in its
+    /// rewrite, as Mutagen writes most deleted records.</summary>
+    internal static RecordPair? FirstEmptiedDeletedRecord(IEnumerable<RecordPair> pairs) =>
+        pairs.Cast<RecordPair?>().FirstOrDefault(pair => pair is { } p
+            && (p.Original.Flags & DeletedFlag.Bit) != 0 && p.Original.DataLen > 0 && p.Rewritten.DataLen == 0);
 
     /// <summary>Flat, document-order walk. A GRUP's children follow immediately after its 24-byte header —
     /// the format nests by adjacency, not by a length prefix — so the walk descends by construction.</summary>
@@ -103,20 +139,12 @@ public static class PluginBinaryWalk
             .GroupBy(sub => sub.Sig, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
 
-    /// <summary>The first record whose subrecord inventory shows a drop, or null. Paired by type and
-    /// FormID, never by position: a rewrite carries no group order. TES4's MAST/DATA are exempt
-    /// (ADR-0008).</summary>
-    internal static SubrecordLoss? FindFirstSubrecordLoss(byte[] originalPluginBytes, byte[] rewrittenPluginBytes)
+    /// <summary>The first paired record whose subrecord inventory shows a drop, or null. TES4's MAST/DATA
+    /// are exempt (ADR-0008).</summary>
+    internal static SubrecordLoss? FindFirstSubrecordLoss(byte[] originalPluginBytes, byte[] rewrittenPluginBytes, IEnumerable<RecordPair> pairs)
     {
-        var rewrittenByIdentity = new Dictionary<(string Type, uint FormId), RecordSpan>();
-        foreach (var record in WalkRecords(rewrittenPluginBytes).Where(r => !r.IsGrup))
-            rewrittenByIdentity.TryAdd((record.Type, record.FormId), record);
-
-        foreach (var original in WalkRecords(originalPluginBytes).Where(r => !r.IsGrup))
+        foreach (var (formKey, original, rewritten) in pairs)
         {
-            if (!rewrittenByIdentity.TryGetValue((original.Type, original.FormId), out var rewritten))
-                continue;
-
             var originalCompressed = (original.Flags & CompressedFlag.Bit) != 0;
             var rewrittenCompressed = (rewritten.Flags & CompressedFlag.Bit) != 0;
             if (originalCompressed != rewrittenCompressed)
@@ -143,7 +171,7 @@ public static class PluginBinaryWalk
             if (original.Type == "TES4")
                 dropped = dropped.Where(sig => sig is not ("MAST" or "DATA")).ToList();
             if (dropped.Count > 0)
-                return new SubrecordLoss(original.Type, original.FormId, dropped);
+                return new SubrecordLoss(original.Type, original.FormId, formKey, dropped);
         }
 
         return null;

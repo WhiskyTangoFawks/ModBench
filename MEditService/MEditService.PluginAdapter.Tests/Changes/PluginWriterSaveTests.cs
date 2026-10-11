@@ -1,5 +1,7 @@
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
@@ -64,6 +66,34 @@ public sealed class PluginWriterSaveTests
             return Assert.ThrowsAny<IOException>(prep.Commit);
         });
 
+        Assert.Equal(before, File.ReadAllBytes(pluginPath));
+    }
+
+    [Fact]
+    public async Task Save_WhoseLoadOrderLacksAMasterTheTreeReferences_FailsNamingIt_AndLeavesTheBinary()
+    {
+        using var folder = new ScratchDirectory("pw-save-master-not-in-load-order");
+        var pluginPath = Path.Combine(folder, "Fixture.esp");
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var npc = mod.Npcs.AddNew("Npc");
+        npc.Race.SetTo(new FormKey(ModKey.FromFileName("Master.esm"), 0x800));
+        npc.Class.SetTo(new FormKey(ModKey.FromFileName("Other.esm"), 0x800));
+        mod.WriteToBinary(pluginPath);
+        var before = File.ReadAllBytes(pluginPath);
+        var adapter = TestAdapters.Mutagen();
+        var source = (await adapter.ReadSourceOfAsync(
+            new RegisteredPlugin("Fixture.esp", "FixtureMod", pluginPath, new PluginProvider.FromMod("FixtureMod", folder), Line: null),
+            GameRelease.Fallout4, new PluginStrings(folder, folder))).Answered();
+        var tree = (await adapter.ReadTreeAsync(source.Files, GameRelease.Fallout4)).Answered();
+
+        var saved = await tree.SaveAsync(pluginPath, ["Other.esm", "Fixture.esp"], save =>
+        {
+            save.Commit();
+            return true;
+        });
+
+        Assert.False(saved.Holds(out _, out var failure));
+        Assert.Equal("it references Master.esm, which the load order does not hold", Assert.IsType<PluginFailure.MasterNotInLoadOrder>(failure).Reason);
         Assert.Equal(before, File.ReadAllBytes(pluginPath));
     }
 }

@@ -46,8 +46,8 @@ internal sealed class GameCodec : IGameCodec
     public async Task<IMod> DeserializeWholeMod(
         string folder, IWorkDropoff workDropoff, CancellationToken cancel,
         IFileSystem? fileSystem = null, ICreateStream? streamCreator = null)
-        => await MutagenJsonConverter.Instance.Deserialize(
-            folder, workDropoff: workDropoff, fileSystem: fileSystem, streamCreator: streamCreator, cancel: cancel);
+        => AbsentIndexes.Fill<IMod>(await MutagenJsonConverter.Instance.Deserialize(
+            folder, workDropoff: workDropoff, fileSystem: fileSystem, streamCreator: streamCreator, cancel: cancel));
 
     // Serialized from a header-only clone: a full-mod walk costs ~1.5 s per plugin, the clone 1 ms,
     // byte-identical.
