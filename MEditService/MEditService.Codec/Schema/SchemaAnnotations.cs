@@ -124,8 +124,6 @@ internal sealed record SchemaAnnotations(
         ("IAMagicEffectArchetypeGetter", "AssociationKey"),  // IFormLinkIdentifier alias of Association
     ];
 
-    // The header members Mutagen.Bethesda.Core declares on every game's major records, leading
-    // xEdit's order; each game's base adds the rest.
     // Mutagen's names for a condition slot's raw value under a function that reads nothing from it.
     private static readonly (string, string)[] UnusedConditionSlotCarriers =
     [
@@ -135,6 +133,8 @@ internal sealed record SchemaAnnotations(
         ("ConditionData", "SecondUnusedStringParameter"),
     ];
 
+    // The header members Mutagen.Bethesda.Core declares on every game's major records, leading
+    // xEdit's order; each game's base adds the rest.
     private static readonly RecordHeaderMember[] RecordHeaderMembersInEveryGame =
     [
         new("IMajorRecordGetter", "MajorRecordFlagsRaw", "Record Flags"),
