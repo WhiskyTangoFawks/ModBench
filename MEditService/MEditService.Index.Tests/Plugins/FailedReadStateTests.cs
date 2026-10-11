@@ -354,6 +354,18 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
+    public async Task APluginWhoseStringsFileWasMissing_IsReadAgainOnceItArrivesWithItsBytesUnchanged()
+    {
+        var adapter = new FailsToOpen(await PluginFailures.MissingStringsAsync(), atOpen: n => n == 1);
+        using var index = Reconciled(adapter);
+        Assert.True(adapter.Failed);
+
+        index.NextSnapshotUntil(() => !Failed(index), "the plugin read again");
+
+        Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+    }
+
+    [Fact]
     public void ATreeDocumentHeldOnlyWhileTheTreeIsRead_IsReadAgainWithItsBytesUnchanged()
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);

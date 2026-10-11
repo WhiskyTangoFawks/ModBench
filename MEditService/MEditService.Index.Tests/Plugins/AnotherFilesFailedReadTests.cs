@@ -37,6 +37,21 @@ public sealed class AnotherFilesFailedReadTests : IDisposable
     }
 
     [Fact]
+    public void APluginWhoseMasterTheLoadOrderDidNotHold_IsReadAgainOnceItDoes()
+    {
+        var (masterPath, childPath) = LightMasterAndChild.Write(_scratch.Path);
+        var master = new LoadOrderEntry(LightMasterAndChild.Master.FileName, masterPath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true);
+        var child = new LoadOrderEntry(LightMasterAndChild.Child.FileName, childPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true);
+        using var index = Indexes.Open(_holder);
+        index.Reconcile(_holder, _scratch.Path, [child], GameRelease.Starfield);
+        Assert.Contains("which the load order does not hold", index.Status.Failures.Single().Reason, StringComparison.Ordinal);
+
+        index.Reconcile(_holder, _scratch.Path, [master, child], GameRelease.Starfield);
+
+        Assert.False(Failed(index, LightMasterAndChild.Child));
+    }
+
+    [Fact]
     public void APluginWhoseStringsArchiveWasCorrupt_IsReadAgainOnceTheArchiveIsRepaired()
     {
         var plugin = ModKey.FromFileName("Localized.esp");

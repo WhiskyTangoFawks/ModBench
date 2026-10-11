@@ -58,6 +58,8 @@ public abstract record PluginFailure
         public string File { get; }
 
         public override string Reason => $"its strings file '{File}' was not found";
+
+        public override bool OfItsBytes => false;
     }
 
     /// <summary>An archive the plugin's strings are looked up in that could not be read.</summary>
@@ -105,6 +107,8 @@ public abstract record PluginFailure
             _reason = $"it references {string.Join(", ", error.ModPaths.Select(path => path.ModKey.FileName))}, which the load order does not hold";
 
         public override string Reason => _reason;
+
+        public override bool OfItsBytes => false;
     }
 
     /// <summary>A master the plugin read or written references whose header does not read, so its style,
