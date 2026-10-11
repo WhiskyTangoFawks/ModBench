@@ -168,8 +168,7 @@ internal sealed record SchemaAnnotations(
     private static readonly string[] VectorStructTypesInEveryGame =
     [
         "Noggog.P3Int16", "Noggog.P3Float",
-        "Noggog.P2Int", "Noggog.P2Int16",
-        "Noggog.P3UInt8", "Noggog.P3UInt16", "Noggog.P2Float",
+        "Noggog.P2Int", "Noggog.P2Int16", "Noggog.P2Float",
     ];
 
     // Counts are live, from the audit's enumeration over Fallout 4.
@@ -246,7 +245,7 @@ internal sealed record SchemaAnnotations(
                 .. EmptySubSchemaTypesInEveryGame,
                 "IASceneActionTypeGetter",      // deliberately not abstract upstream; see KnownDefects
             ],
-            VectorStructTypes: [.. VectorStructTypesInEveryGame, "Noggog.P2UInt8"],
+            VectorStructTypes: [.. VectorStructTypesInEveryGame, "Noggog.P3UInt8", "Noggog.P3UInt16", "Noggog.P2UInt8"],
             RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
             EnumMemberLabels: new()
             {
@@ -320,7 +319,7 @@ internal sealed record SchemaAnnotations(
             ],
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
-            VectorStructTypes: [.. VectorStructTypesInEveryGame],
+            VectorStructTypes: [.. VectorStructTypesInEveryGame, "Noggog.P3UInt8", "Noggog.P3UInt16"],
             RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
             EnumMemberLabels: new()
             {
@@ -363,26 +362,37 @@ internal sealed record SchemaAnnotations(
                 .. PlumbingMembers,
                 ("IObjectModStringPropertyGetter`1", "Unused"),
                 ("IObjectModEnumPropertyGetter`1", "Unused"),
+                // Mutagen's answer to which function a leaf is: the document never holds it, and as a base
+                // member it hides GetEventData's own Function.
+                ("IConditionDataGetter", "Function"),
             ],
             ExcludedUnions: [],
             FunctionUnions: [],
             UnusedSlotMembers: [],
-            // Starfield's VirtualMachineAdapter.xml declares the same struct-property chain as
-            // Fallout 4's, unverified against a built Starfield schema. Empty is loud, not wrong: a
-            // lifted VMAD exclusion fails generation naming the chain rather than truncating silently.
-            CycleTruncations: [],
+            CycleTruncations: ["IScriptStructPropertyGetter", "IScriptStructListPropertyGetter"],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
-            VectorStructTypes: [.. VectorStructTypesInEveryGame, "Noggog.P2UInt8"],
+            VectorStructTypes: [.. VectorStructTypesInEveryGame],
             RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
-            // This build references no Starfield assembly, so Validate checks these rows only once one
-            // loads. A label, defect, condition or keyed-array row is found from a built schema.
-            EnumMemberLabels: [],
+            // wbDefinitionsSF1.pas's TES4 record spells the light-master and overlay bits Small and Update.
+            EnumMemberLabels: new()
+            {
+                [(ModHeaderGetter(GameCategory.Starfield), "Flags")] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["Light"] = "Small",
+                    ["Overlay"] = "Update",
+                },
+            },
             KnownDefects: [],
             SiblingsInUse: SiblingsInUseRows.None,
-            KeyedArrays: [],
-            ExtendedKeys: [],
-            PermittedNullFormLinks: [],
-            SyntheticFlagMembers: [],
+            KeyedArrays: StarfieldVmadAnnotations.KeyedArrays.Concat(StarfieldKeyedArrayAnnotations.KeyedArrays).ToDictionary(
+                r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
+            ExtendedKeys: StarfieldKeyedArrayAnnotations.ExtendedKeys.ToDictionary(
+                r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
+            PermittedNullFormLinks: [.. StarfieldVmadAnnotations.PermittedNullFormLinks],
+            SyntheticFlagMembers: new()
+            {
+                [(ModHeaderGetter(GameCategory.Starfield), "IsSmallMaster")] = ("Flags", "Light"),
+            },
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,

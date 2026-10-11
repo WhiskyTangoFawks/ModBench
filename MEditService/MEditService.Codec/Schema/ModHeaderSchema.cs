@@ -8,27 +8,21 @@ namespace MEditService.Codec.Schema;
 /// sit one level into the whole mod's root <c>RecordData.json</c>.</summary>
 internal static class ModHeaderSchema
 {
-    internal static void AddHeaderSchemaIfAvailable(
+    internal static void AddHeaderSchema(
         Dictionary<string, RecordTableSchema> schemas, GameCategory category, Assembly assembly,
-        GameReflection game, ILogger logger)
-    {
-        if (BuildHeaderSchema(category, assembly, game, logger) is { } headerSchema)
-            schemas[PluginHeader.RecordType] = headerSchema;
-    }
+        GameReflection game, ILogger logger) =>
+        schemas[PluginHeader.RecordType] = BuildHeaderSchema(category, assembly, game, logger);
 
     // PropertyName carries the "ModHeader." prefix because the header's document is the whole mod's
     // root RecordData.json.
-    private static RecordTableSchema? BuildHeaderSchema(
+    private static RecordTableSchema BuildHeaderSchema(
         GameCategory category, Assembly assembly,
         GameReflection game, ILogger logger)
     {
         var modGetterType = assembly.GetType($"Mutagen.Bethesda.{category}.I{category}ModGetter");
-        var modHeaderProp = modGetterType?.GetProperty("ModHeader", BindingFlags.Public | BindingFlags.Instance);
-        if (modHeaderProp == null)
-        {
-            logger.LogWarning("No ModHeader property found for {Category}; header record unavailable", category);
-            return null;
-        }
+        var modHeaderProp = modGetterType?.GetProperty("ModHeader", BindingFlags.Public | BindingFlags.Instance)
+            ?? throw new InvalidOperationException(
+                $"{assembly.GetName().Name} declares no I{category}ModGetter.ModHeader, so no plugin of {category} would have a header row.");
 
         var headerGetterType = modHeaderProp.PropertyType;
         var pathPrefix = $"{modHeaderProp.Name}.";
@@ -60,7 +54,7 @@ internal static class ModHeaderSchema
         // column's own member names.
         columns.AddRange(SyntheticColumns.For(headerGetterType, game, backingPathPrefix: pathPrefix));
 
-        return new RecordTableSchema(headerGetterType)
+        return new RecordTableSchema(headerGetterType, RecordDisplayNames.For(category, PluginHeader.RecordType))
         {
             TableName = PluginHeader.RecordType,
             RecordColumns = columns,

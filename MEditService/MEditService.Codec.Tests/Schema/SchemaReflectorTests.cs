@@ -34,6 +34,14 @@ public class SchemaReflectorTests
         Assert.Equal("Activator", schemas.DisplayNameFor("acti"));
     }
 
+    [Theory]
+    [InlineData(GameRelease.Fallout4, "Idle Animation")]
+    [InlineData(GameRelease.Starfield, "Animation")]
+    public void ARecordTypesName_IsTheOneItsGamesXEditGivesIt(GameRelease release, string displayName)
+    {
+        Assert.Equal(displayName, _reflector.GetSchemas(release).DisplayNameFor("idle"));
+    }
+
     [Fact]
     public void GetSchemas_Gmst_DisplayName_MatchesXEdit()
     {
@@ -121,10 +129,13 @@ public class SchemaReflectorTests
         Assert.Equal("bool", variants[nameof(GlobalFloat)].Type);
     }
 
-    [Fact]
-    public void GetSchemas_EveryDiscoveredTable_HasANonEmptyDisplayName_DifferentFromItsKeyBecauseRecordDisplayNamesForFallsBackToTheRawSignatureOnALookupMiss()
+    [Theory]
+    [InlineData(GameRelease.Fallout4)]
+    [InlineData(GameRelease.SkyrimSE)]
+    [InlineData(GameRelease.Starfield)]
+    public void GetSchemas_EveryDiscoveredTable_HasANonEmptyDisplayName_DifferentFromItsKeyBecauseRecordDisplayNamesForFallsBackToTheRawSignatureOnALookupMiss(GameRelease release)
     {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var schemas = _reflector.GetSchemas(release);
         var missing = schemas
             .Where(kv => string.IsNullOrEmpty(schemas.DisplayNameFor(kv.Key)) || schemas.DisplayNameFor(kv.Key) == kv.Key)
             .Select(kv => kv.Key)
@@ -367,9 +378,21 @@ public class SchemaReflectorTests
         Assert.DoesNotContain(col.Field.EnumMembers, m => m.Value is "ESM" or "ESL");
     }
 
+    [Fact]
+    public void AStarfieldHeadersFlags_CarryMutagensNamesLabelledWithXEdits()
+    {
+        var flags = _reflector.GetSchemas(GameRelease.Starfield)["header"].RecordColumns.Single(c => c.Name == "Flags").Field;
+
+        Assert.Equal("Small", flags.EnumMembers.Single(m => m.Value == "Light").Label);
+        Assert.Equal("Update", flags.EnumMembers.Single(m => m.Value == "Overlay").Label);
+        Assert.Null(flags.EnumMembers.Single(m => m.Value == "Master").Label);
+        Assert.Null(flags.EnumMembers.Single(m => m.Value == "Medium").Label);
+    }
+
     [Theory]
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
+    [InlineData(GameRelease.Starfield)]
     public void GetSchemas_Header_PresentsTheLightMasterFlagAsAMemberOfItsOwn(GameRelease release)
     {
         var header = _reflector.GetSchemas(release)["header"];
