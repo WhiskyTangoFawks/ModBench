@@ -4,9 +4,9 @@ namespace MEditService.Codec.Schema;
 /// <see cref="SchemaAnnotations"/> stays game-neutral.</summary>
 internal static class StarfieldConditionAnnotations
 {
-    /// <summary>The slots a function's own class declares that the function reads nothing from, transcribed
-    /// from <c>wbDefinitionsSF1.pas</c>'s <c>wbConditionFunctions</c>: Mutagen types each an Int32
-    /// FirstParameter or SecondParameter, as it types an integer the function reads.</summary>
+    /// <summary>The slots a function reads nothing from, from <c>wbDefinitionsSF1.pas</c>'s
+    /// <c>wbConditionFunctions</c>: Mutagen types each an Int32 FirstParameter or SecondParameter, as it
+    /// types an integer the function reads.</summary>
     public static IEnumerable<(string LeafName, string MemberName)> UnusedSlotMembers =>
     [
         .. ReadingNeitherParameter.SelectMany(f => new[] { Leaf(f, "FirstParameter"), Leaf(f, "SecondParameter") }),
