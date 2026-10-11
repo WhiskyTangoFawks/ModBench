@@ -24,7 +24,7 @@ public sealed class WorkingTreeStatesBeneathTests : IDisposable
 
     private void AddARefToTheTopCellItsWorldspacesDocumentEmbeds()
     {
-        var cell = JsonNode.Parse(Index.BodyOf(_fixture.TopCell, _fixture.Plugin))?.AsObject()
+        var cell = JsonNode.Parse(_fixture.Entry.SourceTextOf(Index.DocumentOf(_fixture.TopCell, _fixture.Plugin)))?.AsObject()
             ?? throw new InvalidOperationException("Expected the top cell's body to be an object.");
         var temporary = cell["Temporary"]?.AsArray()
             ?? throw new InvalidOperationException("Expected the top cell to hold temporary refs.");

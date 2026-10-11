@@ -59,6 +59,12 @@ internal static class TrackedMods
     internal static string SourceFileOf(this LoadOrderEntry entry, RecordDetail document) =>
         entry.SourceFileOf(new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));
 
+    /// <summary>The record's own text in the tracked tree: a container's with its children in it, as an
+    /// edit starts from.</summary>
+    internal static string SourceTextOf(this LoadOrderEntry entry, RecordDetail document) =>
+        RepositoryOf(entry).RecordOf(entry.KeyOf(), new RecordIdentity(document.FormKey, document.RecordType, document.EditorId)).Value()?.Body
+            ?? throw new InvalidOperationException($"No document in {entry.Name}'s tree holds {document.FormKey}.");
+
     /// <summary>Git run against the tracked mod folder: the "other tool" actor, never an
     /// assertion channel.</summary>
     internal static string Git(this LoadOrderEntry entry, params string[] args) =>

@@ -46,7 +46,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         var oldCellKey = _mod.EmbedCell;
         var navmesh = EmbeddedNavmeshKeyReadFromTheLiveChildRows;
         const string newCellKey = "F00010:ContainerFixture.esp";
-        var before = Index.BodyOf(oldCellKey, _mod.Plugin);
+        var before = _mod.Entry.SourceTextOf(Index.DocumentOf(oldCellKey, _mod.Plugin));
         var newBody = before.Replace(oldCellKey, newCellKey, StringComparison.Ordinal);
         Assert.NotEqual(before, newBody);
 
@@ -66,7 +66,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         var oldNavmeshKey = EmbeddedNavmeshKeyReadFromTheLiveChildRows;
         const string newNavmeshKey = "F00011:ContainerFixture.esp";
         var document = Index.DocumentOf(cellKey, _mod.Plugin);
-        var before = Index.BodyOf(cellKey, _mod.Plugin);
+        var before = _mod.Entry.SourceTextOf(document);
         var newBody = before.Replace(oldNavmeshKey, newNavmeshKey, StringComparison.Ordinal);
         Assert.NotEqual(before, newBody);
 

@@ -213,4 +213,52 @@ public sealed class ContainerDocumentEditsTests
 
         Assert.Equal(handFormatted.Replace("PersistRef", "Renamed", StringComparison.Ordinal), replaced);
     }
+
+    [Fact]
+    public void CuttingTheChildSlots_OfTheCodecsText_LandsTheOwnFieldsCopy()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Append.esp"), Fallout4Release.Fallout4);
+        var cell = new Cell(mod) { EditorID = "Room", WaterHeight = 4 };
+        cell.Persistent.Add(new PlacedObject(mod) { EditorID = "PersistRef" });
+        cell.Temporary.Add(new PlacedObject(mod) { EditorID = "TempRef" });
+        cell.NavigationMeshes.Add(new NavigationMesh(mod) { EditorID = "Navmesh" });
+
+        Assert.Equal(
+            ContainerDocumentEdits.WithoutChildren(Text(cell), Release, RecordTypeOf(cell)),
+            ContainerDocumentEdits.WithChildSlotsCut(Text(cell), RecordTypeOf(cell), Release));
+    }
+
+    [Theory]
+    [InlineData(
+        """
+        {
+          "Temporary": [ { "FormKey": "000801:Append.esp" } ],
+          "FormKey":  "000800:Append.esp",
+          "EditorID": "Room"
+        }
+        """,
+        """
+        {
+          "FormKey":  "000800:Append.esp",
+          "EditorID": "Room"
+        }
+        """)]
+    [InlineData(
+        """
+        {
+            "FormKey": "000800:Append.esp",
+            "Persistent": [],
+            "EditorID":   "Room",
+            "Landscape": { "FormKey": "000802:Append.esp" },
+            "NavigationMeshes": [ { "FormKey": "000803:Append.esp" } ]
+        }
+        """,
+        """
+        {
+            "FormKey": "000800:Append.esp",
+            "EditorID":   "Room"
+        }
+        """)]
+    public void CuttingTheChildSlots_OfHandFormattedText_ChangesNoOtherByte(string handFormatted, string cut) =>
+        Assert.Equal(cut, ContainerDocumentEdits.WithChildSlotsCut(handFormatted, "cell", Release));
 }

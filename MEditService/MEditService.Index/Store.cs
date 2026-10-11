@@ -858,10 +858,10 @@ internal sealed class Store : IDisposable
     // --- What the rows hold ---
 
     // The projection reads the plugin's rows whether it is active or not (ADR-0012).
-    public (string RecordType, string? EditorId, string Body)? StoredRow(PluginAddress key, string formKey)
+    public (string RecordType, string? EditorId, string ContentHash)? StoredRow(PluginAddress key, string formKey)
     {
         return DuckDbSql.Rows(
-            Connection, $"SELECT record_type, editor_id, body FROM {EffectiveRows} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            Connection, $"SELECT record_type, editor_id, content_hash FROM {EffectiveRows} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             reader => (reader.GetString(0), reader.GetStringOrNull(1), reader.GetString(2)),
             formKey, key.Name, key.Origin) is [var row, ..] ? row : null;
     }

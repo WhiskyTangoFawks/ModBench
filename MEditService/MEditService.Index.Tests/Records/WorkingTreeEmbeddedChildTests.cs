@@ -17,7 +17,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     private void Project(string formKey, string? body) =>
         _fixture.Index.Project(_fixture.Entry, [(formKey, body)]);
 
-    private string CellBody() => _fixture.Index.BodyOf(_fixture.EmbedCell, _fixture.Plugin);
+    private string CellBody() => _fixture.Entry.SourceTextOf(_fixture.Index.DocumentOf(_fixture.EmbedCell, _fixture.Plugin));
 
     private string CellBodyAfterCodecRoundTripThrough(Action<JsonArray> changeTemporaryRefs)
     {

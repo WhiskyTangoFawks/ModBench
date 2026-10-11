@@ -137,7 +137,8 @@ internal sealed class Projector(
         // the caller says why.
         if (workingTreeText != null && repository.WhyUnreadable(key, identity, workingTreeText) is { } unreadable) return unreadable;
 
-        return string.Equals(workingTreeText, effective.Body, StringComparison.Ordinal)
+        return workingTreeText != null
+               && string.Equals(SourceRepository.ContentStamp(workingTreeText), effective.ContentHash, StringComparison.Ordinal)
             ? SourceAnswer.Of<IReadOnlyList<string>>([])
             : SourceAnswer.Of<IReadOnlyList<string>>(index.ProjectDocuments(key, [(formKey, workingTreeText)]));
     }

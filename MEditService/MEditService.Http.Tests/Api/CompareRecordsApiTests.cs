@@ -159,12 +159,9 @@ public sealed class CompareRecordsApiTests : HostedTests
         (await Client.Track(WithNpcMod)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(WithNpc);
-        var cell = await Client.FormKeyNamed(WithNpc, WithNpcMod, "cell", "Room");
-        var rendered = await Client.GetAsync(new Uri(
-            $"/plugins/{WithNpc}/records/{Uri.EscapeDataString(cell)}/rendered-document?origin={WithNpcMod}", UriKind.Relative));
-        rendered.EnsureSuccessStatusCode();
-        return (await Client.FormKeyNamed(WithNpc, WithNpcMod, "refr", "PlacedRef"),
-            (await rendered.Body()).GetProperty("text").GetString().Require());
+        var cellFile = Directory.EnumerateFiles(Path.GetDirectoryName(fx.Plugins.Single().Path).Require(), "*.json", SearchOption.AllDirectories)
+            .Single(file => File.ReadAllText(file).Contains("\"PlacedRef\"", StringComparison.Ordinal));
+        return (await Client.FormKeyNamed(WithNpc, WithNpcMod, "refr", "PlacedRef"), await File.ReadAllTextAsync(cellFile));
     }
 
     private async Task<JsonElement> ColumnReadFrom(string formKey, string text)
