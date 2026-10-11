@@ -37,17 +37,27 @@ public sealed class PlacedCellTests
     private static Document Cell(string text) => Document.Parse(text);
 
     [Fact]
-    public void APlacedRecordCreatedInAGridCell_OfAGameWithNoKnownCellWidth_IsRefusedNamingTheCell_AndKeepsTheBareDocument()
+    public void AStarfieldPlacedRecordsPosition_FallsInTheGridCellOfAHundredUnitsItNames()
     {
-        var placed = Document.Parse("""{ "FormKey": "000802:Holds.esm" }""");
+        var placed = new Mutagen.Bethesda.Starfield.PlacedObject(FormKey.Factory("000802:Holds.esm"), Mutagen.Bethesda.Starfield.StarfieldRelease.Starfield)
+        {
+            Position = new P3Float(232.9f, -18.9f, 242.4f),
+        };
+
+        Assert.Equal((2, -1), PlacedCell.GridHolding(Document.Parse(RecordTextCodec.SerializeToText(placed, GameRelease.Starfield)), GameRelease.Starfield));
+    }
+
+    [Fact]
+    public void AReferenceCreatedInAStarfieldGridCell_StartsAtItsCentre()
+    {
+        var bare = Document.Parse(RecordTextCodec.SerializeToText(
+            new Mutagen.Bethesda.Starfield.PlacedObject(FormKey.Factory("000802:Holds.esm"), Mutagen.Bethesda.Starfield.StarfieldRelease.Starfield), GameRelease.Starfield));
         var cell = PlacedCell.WithGrid(Document.Parse("""{ "FormKey": "000801:Holds.esm" }"""), 3, -2);
 
-        Assert.False(PlacedCell.TryAsCreatedIn(placed, PersistentFlag.TemporaryGroup, cell, GameRelease.Starfield, out var created, out var refusal));
+        Assert.True(PlacedCell.TryAsCreatedIn(bare, PersistentFlag.TemporaryGroup, cell, GameRelease.Starfield, out var created, out _));
 
-        Assert.Equal(
-            "000801:Holds.esm has a grid, and mEdit knows no cell width for Starfield to place a new reference at its centre.",
-            refusal);
-        Assert.Equal("""{"FormKey":"000802:Holds.esm"}""", created.Text);
+        var read = JsonNode.Parse(RecordTextCodec.RoundTrip(created.Text, GameRelease.Starfield, "refr")).Require();
+        Assert.Equal("350, -150, 0", read["Position"].Require().GetValue<string>());
     }
 
     [Fact]

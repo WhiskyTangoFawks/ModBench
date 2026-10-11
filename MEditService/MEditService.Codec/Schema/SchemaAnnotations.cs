@@ -409,9 +409,9 @@ internal sealed record SchemaAnnotations(
                 ("IRegionGetter", "MajorFlag"),
                 ("ILeveledBaseFormGetter", "MajorFlag"),
             ],
-            // Mutagen's Starfield worldspace bounds divide by 4096, but xEdit scales Starfield's cells by
-            // wbCellSizeFactor, and no xEdit source in references/ shows how.
-            ExteriorCellWidth: null,
+            // The installed masters' exterior references sit in their cell's grid at 100 units a cell, and
+            // wbDefinitionsSF1.pas sets wbCellSizeFactor to 100; Mutagen's 4096 scales worldspace bounds.
+            ExteriorCellWidth: 100f,
             PartialFormCellsDefinedIn: null,
             PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetter(GameCategory.Starfield)),
             ContainmentMembers: [CellGridInEveryGame]),
