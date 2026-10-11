@@ -14,13 +14,13 @@ public sealed class SubrecordLossTests : IDisposable
 
     public void Dispose() => _folder.Dispose();
 
-    private async Task<PluginBinaryWalk.SubrecordLoss?> LossAsync(byte[] original, byte[] rewritten)
+    private async Task<PluginBinaryWalk.SubrecordLoss?> LossAsync(byte[] original, byte[] rewritten, GameRelease release = GameRelease.Fallout4)
     {
         var originalPath = Path.Combine(_folder.Path, "original.esp");
         var rewrittenPath = Path.Combine(_folder.Path, "rewritten.esp");
         File.WriteAllBytes(originalPath, WithHeader(original));
         File.WriteAllBytes(rewrittenPath, WithHeader(rewritten));
-        return (await Adapter.CompareBytesAsync(originalPath, rewrittenPath, GameRelease.Fallout4)).Answered().Loss;
+        return (await Adapter.CompareBytesAsync(originalPath, rewrittenPath, release)).Answered().Loss;
     }
 
     private static byte[] WithHeader(byte[] records) =>
@@ -58,6 +58,21 @@ public sealed class SubrecordLossTests : IDisposable
 
         Assert.Equal(("WEAP", "000801:original.esp"), (loss?.RecordType, loss?.FormKey.ToString()));
         Assert.Equal(["RDMP"], loss?.Signatures);
+    }
+
+    [Fact]
+    public async Task InAGameThatSeparatesLightMasters_ADropInAnOverrideOfALightMastersRecordIsNamedByThatMastersFormKey()
+    {
+        const uint LightMasterZerosObjectId801 = 0xFE000801;
+        var lightMasterAfterAFullOne = Tes4("Full.esm", "Light.esm");
+        var original = Concat(lightMasterAfterAFullOne,
+            BuildRecordHeader("WEAP", LightMasterZerosObjectId801, 0, Concat(Sub("EDID", "Gun"u8.ToArray()), Sub("RDMP", [1]))));
+        var rewritten = Concat(lightMasterAfterAFullOne,
+            BuildRecordHeader("WEAP", LightMasterZerosObjectId801, 0, Concat(Sub("EDID", "Gun"u8.ToArray()))));
+
+        var loss = await LossAsync(original, rewritten, GameRelease.Starfield);
+
+        Assert.Equal("000801:Light.esm", loss?.FormKey.ToString());
     }
 
     private async Task<string?> DeletedRecordEmptiedAsync(byte[] original, byte[] rewritten)
