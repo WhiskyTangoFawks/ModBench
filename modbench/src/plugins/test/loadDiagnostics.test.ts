@@ -3,7 +3,7 @@ import { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, fakeUr
 
 vi.mock('vscode', () => ({ Diagnostic, Range, DiagnosticSeverity, Uri: { file: fakeUri } }));
 
-import { publishPluginWarnings } from '../loadDiagnostics';
+import { publishPluginProblems } from '../loadDiagnostics';
 import type { PluginAddress, PluginDiagnosisReport } from '../../client';
 import { present } from '../../ports/present';
 
@@ -18,26 +18,26 @@ function entriesAsFsPathAndDiagnosticsInInsertionOrder(collection: FakeDiagnosti
 const pluginFilesFrom = (files: Record<string, string>) => ({ name, origin }: PluginAddress): string | undefined =>
   files[`${origin}/${name}`];
 
-describe('publishPluginWarnings', () => {
-  it('targets the plugin binary itself (pre-Track), carries the refusal wording verbatim, and warns rather than errors since a Malformed plugin still loads and plays', () => {
+describe('publishPluginProblems', () => {
+  it('targets the plugin binary itself (pre-Track), carries the refusal wording verbatim, at the severity it is given', () => {
     const collection = new FakeDiagnosticCollection();
 
-    publishPluginWarnings(collection, pluginFilesFrom({ 'TS Mod/InventedWeather.esp': '/instance/mods/TS Mod/InventedWeather.esp' }), [
+    publishPluginProblems(collection, pluginFilesFrom({ 'TS Mod/InventedWeather.esp': '/instance/mods/TS Mod/InventedWeather.esp' }), [
       report('InventedWeather.esp', 'TS Mod', 'REGN … — fixed-size-subrecord-short, repairable (lossless): …'),
-    ]);
+    ], DiagnosticSeverity.Error);
 
     const [path, list] = present(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection)[0], 'the sole published diagnostic-collection entry');
     expect(path).toBe('/instance/mods/TS Mod/InventedWeather.esp');
     const diagnostic = present(list[0], 'the sole diagnostic published for InventedWeather.esp');
     expect(diagnostic.message).toBe('REGN … — fixed-size-subrecord-short, repairable (lossless): …');
-    expect(diagnostic.severity).toBe(DiagnosticSeverity.Warning);
+    expect(diagnostic.severity).toBe(DiagnosticSeverity.Error);
   });
 
   it('publishes nothing for a plugin with no file', () => {
     const collection = new FakeDiagnosticCollection();
     const clear = vi.spyOn(collection, 'clear');
 
-    publishPluginWarnings(collection, pluginFilesFrom({}), [report('Ghost.esp', 'Gone', 'bad')]);
+    publishPluginProblems(collection, pluginFilesFrom({}), [report('Ghost.esp', 'Gone', 'bad')], DiagnosticSeverity.Warning);
 
     expect(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection)).toEqual([]);
     expect(clear).toHaveBeenCalledTimes(1);
@@ -47,9 +47,9 @@ describe('publishPluginWarnings', () => {
     const collection = new FakeDiagnosticCollection();
     const clear = vi.spyOn(collection, 'clear');
     const files = pluginFilesFrom({ 'M/A.esp': '/i/mods/M/A.esp', 'M/B.esp': '/i/mods/M/B.esp' });
-    publishPluginWarnings(collection, files, [report('A.esp', 'M', 'old')]);
+    publishPluginProblems(collection, files, [report('A.esp', 'M', 'old')], DiagnosticSeverity.Warning);
 
-    publishPluginWarnings(collection, files, [report('B.esp', 'M', 'new')]);
+    publishPluginProblems(collection, files, [report('B.esp', 'M', 'new')], DiagnosticSeverity.Warning);
 
     expect(clear).toHaveBeenCalledTimes(2);
     expect(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection).map(([path]) => path)).toEqual(['/i/mods/M/B.esp']);
@@ -58,9 +58,9 @@ describe('publishPluginWarnings', () => {
   it('groups several diagnoses on one plugin under one file entry', () => {
     const collection = new FakeDiagnosticCollection();
 
-    publishPluginWarnings(collection, pluginFilesFrom({ 'M/A.esp': '/i/mods/M/A.esp' }), [
+    publishPluginProblems(collection, pluginFilesFrom({ 'M/A.esp': '/i/mods/M/A.esp' }), [
       report('A.esp', 'M', 'first'), report('A.esp', 'M', 'second'),
-    ]);
+    ], DiagnosticSeverity.Warning);
 
     const [, groupedDiagnostics] = present(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection)[0], 'the sole grouped diagnostic-collection entry');
     expect(groupedDiagnostics.map((d) => d.message)).toEqual(['first', 'second']);

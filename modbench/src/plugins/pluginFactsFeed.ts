@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { LoadOrderRefusal, MEditClient, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { PluginFacts, type PluginWarning } from './pluginFacts';
+import { PluginFacts, type PluginProblem } from './pluginFacts';
 import { answerOf } from '../wire/readFailed';
 
 /** The mEdit reads every plugin-keyed fact comes from, and the notification that names a plugin
@@ -16,7 +16,9 @@ export interface PluginFactsFeedDeps {
   /** The malformed-plugin scan's other surface, the Problems panel. */
   publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
   /** The Changed outside Modbench status's other surface, the Problems panel. */
-  publishChangedOutside: (warnings: readonly PluginWarning[]) => void;
+  publishChangedOutside: (warnings: readonly PluginProblem[]) => void;
+  /** A failed read's diagnosis, the defect in the plugin's bytes that stopped it: an error in the Problems panel. */
+  publishFailedToRead: (errors: readonly PluginProblem[]) => void;
   /** The feed states the severity (ADR-0019), so a background blip and a failed read land on
    *  different channel levels. */
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
@@ -85,6 +87,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     const plugins = await this.readPlugins();
     if (plugins === undefined || generation !== this.generation) return undefined;
     this.facts.reconciled(plugins, failures);
+    this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     // Diagnoses stay as the last scan left them (no blink) until the scan lands a fresh answer;
     // a failed scan leaves them alone too.
     this.changed.fire();
