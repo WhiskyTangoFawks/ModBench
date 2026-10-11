@@ -232,7 +232,6 @@ describe('PluginFacts — the Problems panel reads the answers the rows read', (
     facts.reconciled([], [{ ...failure('Could not read (duplicate FormKey).'), diagnosis: 'duplicate FormKey' }, failure('Malformed record', B)]);
 
     expect(facts.problems().failedToRead).toEqual([{ plugin: 'A.esp', origin: 'SomeMod', text: 'duplicate FormKey' }]);
-    expect(facts.description(A)).toBe('failed to read');
 
     facts.reconciled([], []);
     expect(facts.problems().failedToRead).toEqual([]);

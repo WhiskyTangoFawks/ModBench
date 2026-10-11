@@ -625,7 +625,7 @@ internal sealed class Indexer : IDisposable
         try
         {
             if (scope.Failed.Read(plugin, read).Failure is { } failure)
-                FailRead(scope, plugin.Key, ReadFailure(failure.Reason, scope.Store.DerivationOf(plugin.Key)), failure.Diagnosis);
+                FailRead(scope, plugin.Key, failure);
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
@@ -704,6 +704,9 @@ internal sealed class Indexer : IDisposable
     {
         if (scope.Held.SetFailure(key, reason, diagnosis)) PublishStatus();
     }
+
+    private void FailRead(OpenScope scope, PluginAddress key, LoadFailure failure) =>
+        FailRead(scope, key, ReadFailure(failure.Reason, scope.Store.DerivationOf(key)), failure.IsDiagnosis ? failure.Reason : null);
 
     // Listed only once its commit has landed: Status promises a plugin listed here is wholly
     // queryable, the filter's matches in it included, and a registered one is.
@@ -945,7 +948,7 @@ internal sealed class Indexer : IDisposable
             FailRead(scope, key, ReadFailure(PluginLoadFailure.ReasonFor(ex), scope.Store.DerivationOf(key)));
             throw;
         }
-        if (outcome.Failure is { } failure) FailRead(scope, key, ReadFailure(failure.Reason, scope.Store.DerivationOf(key)), failure.Diagnosis);
+        if (outcome.Failure is { } failure) FailRead(scope, key, failure);
         else if (scope.Held.ClearFailure(key)) PublishStatus();
     }
 

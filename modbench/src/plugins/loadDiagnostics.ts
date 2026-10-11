@@ -2,22 +2,14 @@ import * as vscode from 'vscode';
 import type { PluginAddress } from '../client';
 import type { PluginProblem } from './pluginFacts';
 
-type PluginFile = (plugin: PluginAddress) => string | undefined;
-
-/** Targets the plugin binary itself, which is where a malformed plugin's diagnoses and a change
- *  outside Modbench both live, and one call answers for the whole load order. Warning severity:
- *  such a plugin still loads and plays. */
-export function publishPluginWarnings(collection: vscode.DiagnosticCollection, pluginFile: PluginFile, entries: readonly PluginProblem[]): void {
-  publish(collection, pluginFile, entries, vscode.DiagnosticSeverity.Warning);
-}
-
-/** As {@link publishPluginWarnings}, for a plugin that failed to read. */
-export function publishPluginErrors(collection: vscode.DiagnosticCollection, pluginFile: PluginFile, entries: readonly PluginProblem[]): void {
-  publish(collection, pluginFile, entries, vscode.DiagnosticSeverity.Error);
-}
-
-function publish(
-  collection: vscode.DiagnosticCollection, pluginFile: PluginFile, entries: readonly PluginProblem[], severity: vscode.DiagnosticSeverity,
+/** Targets the plugin binary itself, which is where a malformed plugin's diagnoses, a change
+ *  outside Modbench and a failed read's diagnosis all live, and one call answers for the whole
+ *  load order. */
+export function publishPluginProblems(
+  collection: vscode.DiagnosticCollection,
+  pluginFile: (plugin: PluginAddress) => string | undefined,
+  entries: readonly PluginProblem[],
+  severity: vscode.DiagnosticSeverity,
 ): void {
   collection.clear();
   const byUri = new Map<string, vscode.Diagnostic[]>();

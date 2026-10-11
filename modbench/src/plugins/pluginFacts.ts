@@ -98,11 +98,10 @@ export class PluginFacts {
   private changed = new ByPluginAddress<true>();
   // Row status only, no blink: merges across a reload's ticks and persists until `reconciled`
   // lands the new answer.
-  private loadFailures = new ByPluginAddress<string>();
-  private reconciledFailures: readonly PluginLoadFailure[] = [];
+  private loadFailures = new ByPluginAddress<PluginLoadFailure>();
   // Children expansion only: this reload's own ticks, replaced wholesale each time, so a plugin
   // not yet reached reads as still indexing, never a stale failure from before the reload began.
-  private reachableFailures = new ByPluginAddress<string>();
+  private reachableFailures = new ByPluginAddress<PluginLoadFailure>();
   private expansionOverride?: ExpansionOverride;
   private indexFailure?: string;
   private compilable = false;
@@ -138,7 +137,6 @@ export class PluginFacts {
   reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[]): void {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
-    this.reconciledFailures = failures;
     this.reachableFailures = this.loadFailures;
     this.clearOverride();
     this.refreshed(plugins);
@@ -196,7 +194,7 @@ export class PluginFacts {
   expansion(address: PluginAddress): Expansion {
     if (this.expansionOverride?.scope === 'everyRow') return { kind: 'error', message: this.expansionOverride.message };
     if (this.isHeld(address)) return { kind: 'records' };
-    const failure = this.reachableFailures.get(address);
+    const failure = this.reachableFailures.get(address)?.reason;
     if (failure !== undefined) return { kind: 'error', message: failure };
     if (this.expansionOverride !== undefined) return { kind: 'error', message: this.expansionOverride.message };
     return { kind: 'indexing' };
@@ -238,7 +236,7 @@ export class PluginFacts {
   private statuses(address: PluginAddress): PluginStatus[] {
     const read = this.reads.get(address);
     return [
-      failedToRead(this.loadFailures.get(address)),
+      failedToRead(this.loadFailures.get(address)?.reason),
       masterIssues(read?.masterIssues ?? []),
       unreadableRecords(read?.parseFailure === true),
       sourceUnreadable(read?.sourceUnreadable),
@@ -286,7 +284,7 @@ export class PluginFacts {
   problems(): { malformed: PluginDiagnosisReport[]; changedOutside: readonly PluginProblem[]; failedToRead: readonly PluginProblem[] } {
     return {
       malformed: this.diagnosisReports,
-      failedToRead: this.reconciledFailures.flatMap(({ name, origin, diagnosis }) =>
+      failedToRead: this.loadFailures.values().flatMap(({ name, origin, diagnosis }) =>
         diagnosis == null ? [] : [{ plugin: name, origin, text: diagnosis }]),
       changedOutside: [...this.changedByMod.values()].flat()
         .map(({ name, origin }) => ({ plugin: name, origin, text: CHANGED_OUTSIDE_TEXT })),
@@ -300,7 +298,9 @@ function heldSet(plugins: readonly PluginAddress[]): ByPluginAddress<true> {
   return held;
 }
 
-function indexLoadFailures(failures: readonly PluginLoadFailure[], byAddress = new ByPluginAddress<string>()): ByPluginAddress<string> {
-  for (const f of failures) byAddress.set(f, f.reason);
+function indexLoadFailures(
+  failures: readonly PluginLoadFailure[], byAddress = new ByPluginAddress<PluginLoadFailure>(),
+): ByPluginAddress<PluginLoadFailure> {
+  for (const f of failures) byAddress.set(f, f);
   return byAddress;
 }

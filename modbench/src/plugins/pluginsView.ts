@@ -15,7 +15,7 @@ import { type PluginsTreeNode } from './pluginRows';
 import type { PluginFactsClient } from './pluginFactsFeed';
 import type { PluginConditions } from '../drivingLib/recordRowContext';
 import type { RecordBrowser } from './RecordBrowser';
-import { publishPluginErrors, publishPluginWarnings } from './loadDiagnostics';
+import { publishPluginProblems } from './loadDiagnostics';
 import { pluginsKeyContext } from './gestureEntry';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
@@ -102,9 +102,10 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     dataFolderFile: deps.dataFolderFile,
     records: recordBrowser,
     client,
-    publishDiagnoses: (reports) => publishPluginWarnings(loadDiagnostics, pluginFile, reports),
-    publishChangedOutside: (warnings) => publishPluginWarnings(changedOutsideDiagnostics, pluginFile, warnings),
-    publishFailedToRead: (errors) => publishPluginErrors(failedToReadDiagnostics, pluginFile, errors),
+    // A malformed plugin and one changed outside Modbench still load and play; one that failed to read does not.
+    publishDiagnoses: (reports) => publishPluginProblems(loadDiagnostics, pluginFile, reports, vscode.DiagnosticSeverity.Warning),
+    publishChangedOutside: (warnings) => publishPluginProblems(changedOutsideDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning),
+    publishFailedToRead: (errors) => publishPluginProblems(failedToReadDiagnostics, pluginFile, errors, vscode.DiagnosticSeverity.Error),
   });
   const view = vscode.window.createTreeView('modbench.pluginListTree', {
     treeDataProvider: tree,

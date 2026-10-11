@@ -1,12 +1,9 @@
 using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Plugins;
 
@@ -25,14 +22,6 @@ public sealed class IncompleteBinaryReadTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private PluginAddress Plugin => _fixture.Plugins.Single().KeyOf();
-
-    private sealed class AdapterReadingWithoutTables(Func<string, bool> dropped) : DelegatingPluginAdapter(TestAdapters.Mutagen())
-    {
-        public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
-            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-            PluginStrings? strings = null) =>
-            base.OpenDocuments(modPath, gameRelease, schemas.Where(table => !dropped(table.Key)).ToDictionary(), strings);
-    }
 
     private static readonly AdapterReadingWithoutTables EveryRecordTable = new(table => table != PluginHeader.RecordType);
 
@@ -66,6 +55,6 @@ public sealed class IncompleteBinaryReadTests : IDisposable
 
         using var reopened = Reconciled(EveryRecordTable);
 
-        Assert.NotNull(ReasonFor(reopened, PluginName));
+        Assert.Contains("0 of its 2 records", ReasonFor(reopened, PluginName));
     }
 }

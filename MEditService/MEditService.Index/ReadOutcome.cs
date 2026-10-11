@@ -4,8 +4,8 @@ using MEditService.SourceAdapter;
 namespace MEditService.Index;
 
 /// <summary>Why a read left its plugin "Failed to read" (plugins.md, A row, Plugin). An inaccessible
-/// file says nothing of its bytes; a diagnosis is a defect in them.</summary>
-internal sealed record LoadFailure(string Reason, bool Inaccessible = false, string? Diagnosis = null);
+/// file says nothing of its bytes; a diagnosis names a defect in them.</summary>
+internal sealed record LoadFailure(string Reason, bool Inaccessible = false, bool IsDiagnosis = false);
 
 /// <summary>How one read of a plugin ended: whether its own truth served, what stopped its tree when
 /// the read went on without it, and the binary's failure when nothing was read.</summary>

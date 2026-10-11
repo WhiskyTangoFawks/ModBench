@@ -419,15 +419,19 @@ describe('the Plugins view\'s Problems', () => {
     client.emit({ ...rowsChanged, kind: 'external-change', changedPlugins: [{ name: 'Test.esp', bytesSha256: 'ab12' }] });
 
     const collection = present(h.diagnostics.get('modbench-changed-outside'), 'the changed-outside collection');
-    expect([...collection].map(([uri]) => uri.fsPath)).toEqual([onDisk]);
+    expect([...collection].map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => d.severity)]))
+      .toEqual([[onDisk, [DiagnosticSeverity.Warning]]]);
   });
 
-  it('puts the diagnosis of a failed read on its row\'s own file, as an error', async () => {
+  it('puts the diagnosis of a failed read on its row\'s own file as an error, and a malformed plugin\'s as a warning', async () => {
     const onDisk = '/instance/mods/ModA/Test.esp';
     const { client } = pluginsView(instanceValueFixture({
       plugins: [{ name: 'Test.esp', path: onDisk, origin: 'ModA', line: 0, enabled: true, winning: true }],
     }));
     client.setQueryAnswer('getPlugins', []);
+    client.setQueryAnswer('getDiagnoses', [
+      { plugin: 'Test.esp', origin: 'ModA', defectClass: 'fixed-size-subrecord-short', message: 'short', text: 'short' },
+    ]);
 
     client.emit(tick({
       state: 'Ready', conflictsComputed: true,
@@ -435,9 +439,10 @@ describe('the Plugins view\'s Problems', () => {
     }));
     await settle();
 
-    const collection = present(h.diagnostics.get('modbench-failed-to-read'), 'the failed-to-read collection');
-    expect([...collection].map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => [d.message, d.severity])]))
-      .toEqual([[onDisk, [['duplicate FormKey', DiagnosticSeverity.Error]]]]);
+    const published = (name: string) => [...present(h.diagnostics.get(name), name)]
+      .map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => [d.message, d.severity])]);
+    expect(published('modbench-failed-to-read')).toEqual([[onDisk, [['duplicate FormKey', DiagnosticSeverity.Error]]]]);
+    expect(published('modbench-diagnosis')).toEqual([[onDisk, [['short', DiagnosticSeverity.Warning]]]]);
   });
 });
 

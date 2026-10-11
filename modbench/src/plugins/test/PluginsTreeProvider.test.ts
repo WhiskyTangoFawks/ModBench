@@ -160,7 +160,6 @@ function makeTree(
     client: InMemoryMEditClient;
     publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
     publishChangedOutside: ConstructorParameters<typeof PluginsTreeProvider>[0]['publishChangedOutside'];
-    publishFailedToRead: ConstructorParameters<typeof PluginsTreeProvider>[0]['publishFailedToRead'];
     dataFolderFile: (name: string) => string | undefined;
     loadedWithNoLine: readonly (string | PluginAddress)[];
   }> = {},
@@ -174,7 +173,6 @@ function makeTree(
     log: (level, msg) => logged.push({ level, msg }),
     ...(extra.publishDiagnoses && { publishDiagnoses: extra.publishDiagnoses }),
     ...(extra.publishChangedOutside && { publishChangedOutside: extra.publishChangedOutside }),
-    ...(extra.publishFailedToRead && { publishFailedToRead: extra.publishFailedToRead }),
     ...(extra.dataFolderFile && { dataFolderFile: extra.dataFolderFile }),
   });
   return { tree, client, records, instance, logged };
@@ -2053,15 +2051,6 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
     const children = await h.tree.getChildren(row);
     expect(children.map(c => c.contextValue)).toEqual(['error']);
     expect(present(children[0], 'the error row').tooltip).toBe('Malformed record');
-  });
-
-  it('publishes the diagnosis of a failed read for the Problems panel', async () => {
-    const published: string[][] = [];
-    const h = makeTree([A_ROW()], { publishFailedToRead: (problems) => published.push(problems.map((p) => `${p.origin}/${p.plugin}: ${p.text}`)) });
-
-    await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Could not read this plugin.', diagnosis: 'duplicate FormKey' }]);
-
-    expect(published).toEqual([['SomeMod/A.esp: duplicate FormKey']]);
   });
 });
 

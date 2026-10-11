@@ -17,6 +17,7 @@ public sealed class DuplicateFormKeyTests : IDisposable
         {
             var npc = mod.Npcs.AddNew("TheNpc");
             mod.Weapons.Add(new Weapon(npc.FormKey, Fallout4Release.Fallout4) { EditorID = "TheWeapon" });
+            mod.Armors.AddNew("TheArmor");
         }, origin: "DuplicateMod", writeParams: new BinaryWriteParameters { FormIDUniqueness = FormIDUniquenessOption.NoCheck })
         .BuildScattered();
 
@@ -24,16 +25,39 @@ public sealed class DuplicateFormKeyTests : IDisposable
 
     private PluginAddress Plugin => _fixture.Plugins.Single().KeyOf();
 
+    private const string Diagnosis = $"duplicate FormKey {HeldTwice}, in its Non-Player Character and Weapon groups";
+
     [Fact]
     public void ABinaryHoldingOneFormKeyInTwoGroups_FailsToRead_DiagnosingTheFormKeyAndBothGroups()
     {
         using var index = Indexes.Reconciled(_fixture);
 
         var failure = Assert.Single(index.Status.Failures, failure => failure.Name == PluginName);
-        var diagnosis = $"duplicate FormKey {HeldTwice}, in its Non-Player Character and Weapon groups";
-        Assert.Equal(diagnosis, failure.Diagnosis);
-        Assert.Contains(diagnosis, failure.Reason);
+        Assert.Equal(Diagnosis, failure.Diagnosis);
+        Assert.Contains(Diagnosis, failure.Reason);
         Assert.Empty(index.ListedIn(Plugin));
+    }
+
+    [Fact]
+    public void ABinaryAlsoShortOfRecords_IsDiagnosedWithTheDuplicate()
+    {
+        using var index = Indexes.Reconciled(_fixture, adapter: new AdapterReadingWithoutTables(table => table == "armo"));
+
+        Assert.Equal(Diagnosis, Assert.Single(index.Status.Failures, failure => failure.Name == PluginName).Diagnosis);
+    }
+
+    [Fact]
+    public void ARefusedReRead_KeepsTheLastGoodRows()
+    {
+        using var lastGood = new PluginFixtureBuilder("duplicate-reread")
+            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("LastGoodNpc"), origin: "DuplicateMod")
+            .BuildScattered();
+        using var index = Indexes.Reconciled(lastGood);
+
+        File.Copy(_fixture.Plugins.Single().Path, lastGood.Plugins.Single().Path, overwrite: true);
+        index.NextSnapshotUntil(() => index.Status.Failures.Any(failure => failure.Name == PluginName), "the re-read's failure");
+
+        Assert.Equal(["LastGoodNpc"], index.ListedIn(lastGood.Plugins.Single().KeyOf()).Select(row => row.EditorId));
     }
 
     [Fact]
