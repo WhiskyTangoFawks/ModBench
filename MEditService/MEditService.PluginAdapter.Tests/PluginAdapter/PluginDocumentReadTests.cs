@@ -79,6 +79,23 @@ public sealed class PluginDocumentReadTests
     }
 
     [Fact]
+    public void OpenDocuments_GivesARecordTypeWhoseGroupMutagenCannotEnumerate_ItsDiagnosis()
+    {
+        using var scratch = new ScratchDirectory("documents-unenumerable-group");
+        var path = Path.Combine(scratch.Path, PluginName);
+        File.WriteAllBytes(path, RawPlugin.Plugin(RawPlugin.Tes4(),
+            RawPlugin.Group("NPC_", RawPlugin.Record("NPC_", 0x800, RawPlugin.EditorId("Npc")), RawPlugin.Misc(0x801, "Stray"))));
+
+        using var documents = Adapter.OpenDocuments(
+            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas).Answered();
+
+        Assert.Empty(documents.Records);
+        var failure = Assert.Single(documents.Failures);
+        Assert.Equal("npc_", failure.RecordType);
+        Assert.Contains("MISC", failure.Diagnosis, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void OpenDocuments_GivesACellTheBlockCoordinatesItsGrupHierarchyPutsItAt()
     {
         using var data = CellFixture("documents-cell", out var extCellFormKey);
