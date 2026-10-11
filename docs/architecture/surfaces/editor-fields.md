@@ -37,6 +37,8 @@ Source: xEdit's editors by type; xedit.md, divergences 1, 5, 10, 11 and 12; mEdi
 
 A struct or array row pastes, and takes a drop, of a whole value copied from the same field. Source: xEdit
 
+The strings language setting chooses the language a translated text shows in, English by default. The source keeps every language the plugin's strings hold. Source: xEdit, Localization > Language; commands.md, VS Code provides it
+
 ## Placeholders
 
 A placeholder says a struct or array is there and collapsed, so it is drawn for each column. As a user, I want:
