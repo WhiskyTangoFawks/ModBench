@@ -33,7 +33,7 @@ fi
 
 # The build runs outside the backend's process group: the MSBuild and compiler servers it
 # leaves behind are shared with every other build on the machine.
-dotnet build "$PROJECT" -nologo -v quiet \
+bash "$ROOT/.claude/skills/validate/slot-run.sh" dotnet build "$PROJECT" -nologo -v quiet \
   || { echo "--- API DRIFT GATE FAILED: backend build failed ---"; exit 1; }
 BACKEND_DLL="$(dotnet msbuild "$PROJECT" -nologo -getProperty:TargetPath)"
 

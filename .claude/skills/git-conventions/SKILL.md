@@ -16,7 +16,7 @@ description: This repo's git workflow — every stream of work gets its own work
 
 ## While working
 
-A worktree isolates the tree, not the runtime. Never run a live backend against the same MO2 instance path from two places at once. A long-running process on a fixed port takes a flock'd lockfile. Backend gate runs are the heaviest thing a stream does. `run-gates.sh` holds two machine-wide gate slots, so a third run waits rather than sharing: at three the machine has no memory headroom left. Inner-loop `dotnet test --filter` runs take no slot.
+A worktree isolates the tree, not the runtime. Never run a live backend against the same MO2 instance path from two places at once. A long-running process on a fixed port takes a flock'd lockfile. Builds and tests are the heaviest thing a stream does, so the machine runs one at a time. Every `dotnet build`, `test` or `format` and every `npm run build` or `test`, inner loop included, runs as `bash .claude/skills/validate/slot-run.sh <command...>`. It waits for the one build slot and caps the run's memory. A gate run holds the slot for the whole run. A `dotnet run` starts with `--no-build` after a slotted build, so a server never holds the slot.
 
 ## Merging
 

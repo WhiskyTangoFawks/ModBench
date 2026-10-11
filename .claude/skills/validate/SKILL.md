@@ -15,7 +15,7 @@ The work is done when both kinds of evidence exist. Validate runs before the mer
 
 Merge current `main` into the branch first. The gates then test the tree that will land. A detached HEAD is the user's to resolve.
 
-Run `bash .claude/skills/validate/run-gates.sh --detach`. Then run `run-gates.sh --wait` in the foreground until it prints a verdict. Exit 3 means wait again. Gates queue on machine-wide slots, so one run can outlast one foreground call. The runner reads the diff since `main`, and names each gate it runs and why.
+Run `bash .claude/skills/validate/run-gates.sh --detach`. Then run `run-gates.sh --wait` in the foreground until it prints a verdict. Exit 3 means wait again. A run that builds or tests waits for the machine's one build slot (`slot-run.sh`), so one run can outlast one foreground call. The runner reads the diff since `main`, and names each gate it runs and why.
 
 A red gate is yours to fix. A failure already on `main` is a defect that already landed. It is yours to fix for the same reason. A gate is code, and changing it is tactical. A change serves the gate's purpose: the gate still catches every defect it exists to catch.
 

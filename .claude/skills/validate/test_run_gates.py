@@ -1,5 +1,5 @@
 """Observes run-gates.sh's refusal: a run gates the tree that will land, so a branch behind main
-is refused before any gate runs. Also observes what a slotted gate run is handed."""
+is refused before any gate runs. Also observes which gate runs take the build slot."""
 import os
 import pathlib
 import shutil
@@ -50,20 +50,35 @@ class BehindMain(unittest.TestCase):
         self.assertIn("Gate 1", run.stdout)
 
 
-class InASlot(unittest.TestCase):
-    def test_a_slotted_gate_run_neither_lends_nor_borrows_an_msbuild_node(self):
-        repo = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, repo)
-        validate = pathlib.Path(repo, ".claude/skills/validate")
-        validate.mkdir(parents=True)
-        shutil.copy(SCRIPT, validate)
-        (validate / "slot.sh").write_text('in_slot() { echo "node reuse off: $MSBUILDDISABLENODEREUSE"; }\n')
-        git(repo, "init", "-q", "-b", "main")
-        git(repo, "commit", "-q", "--allow-empty", "-m", "base")
-        env = {k: v for k, v in os.environ.items() if k not in ("MSBUILDDISABLENODEREUSE", "GATE_SLOT")}
-        run = subprocess.run(["bash", str(validate / "run-gates.sh"), "--backend"],
-                             capture_output=True, text=True, timeout=60, env=env)
-        self.assertIn("node reuse off: 1", run.stdout)
+class InTheSlot(unittest.TestCase):
+    def setUp(self):
+        self.repo = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.repo)
+        self.validate = pathlib.Path(self.repo, ".claude/skills/validate")
+        self.validate.mkdir(parents=True)
+        shutil.copy(SCRIPT, self.validate)
+        (self.validate / "slot-run.sh").write_text('echo "slot-run: $*"\n')
+        git(self.repo, "init", "-q", "-b", "main")
+        git(self.repo, "commit", "-q", "--allow-empty", "-m", "base")
+
+    def gates(self, flag, **env):
+        clean = {k: v for k, v in os.environ.items() if k != "BUILD_SLOT_HELD"}
+        return subprocess.run(["bash", str(self.validate / "run-gates.sh"), flag],
+                              capture_output=True, text=True, timeout=60, env=clean | env)
+
+    def test_a_gate_run_that_builds_or_tests_runs_in_the_build_slot(self):
+        for flag in ("--backend", "--frontend", "--api-drift", "--docs"):
+            with self.subTest(flag=flag):
+                run = self.gates(flag)
+                self.assertEqual(run.stdout, f"slot-run: bash {self.validate / 'run-gates.sh'} {flag}\n")
+
+    def test_the_comment_gate_alone_takes_no_slot(self):
+        self.assertNotIn("slot-run:", self.gates("--comments").stdout)
+
+    def test_a_gate_run_in_the_slot_does_not_take_it_again(self):
+        run = self.gates("--frontend", BUILD_SLOT_HELD="1")
+        self.assertNotIn("slot-run:", run.stdout)
+        self.assertIn("=== Gate 1", run.stdout)
 
 
 if __name__ == '__main__':
