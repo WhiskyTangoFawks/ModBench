@@ -43,9 +43,9 @@ internal static class PluginWriter
         }
         catch
         {
-            // Cleanup is a courtesy, never allowed to outrank the exception it follows: a locked temp
-            // directory makes Directory.Delete throw, which would replace the write's own exception with an
-            // IOException. No ILogger is in scope, so the failed cleanup is swallowed.
+            // Cleanup never outranks the exception it follows: a locked temp directory makes
+            // Directory.Delete throw, which would replace the write's own exception with an IOException.
+            // No ILogger is in scope, so the failed cleanup is swallowed.
             try { Directory.Delete(tmpDir, recursive: true); }
             catch (IOException) { /* best-effort; tmpDir will remain on disk */ }
             catch (UnauthorizedAccessException) { /* Windows file lock (AV/game); tmpDir will remain */ }
