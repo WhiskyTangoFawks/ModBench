@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -91,7 +92,38 @@ public sealed class FormIdEditTests
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.LightPluginFormIdOutOfRange, result.Refusal);
+        Assert.Equal(RecordEditRefusal.FormIdOutsideFlagLimit, result.Refusal);
+    }
+
+    [Fact]
+    public void EditingTheFormId_OnALightFlaggedEsl_PastTheLightRange_NamesClearingTheFlagAndRenamingOffEsl()
+    {
+        using var mod = SourceEditFixture.TrackedLight("Fixture.esl");
+
+        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esl");
+
+        Assert.Equal(
+            (RecordEditRefusal.FormIdOutsideFlagLimit,
+             "001000:Fixture.esl exceeds Fixture.esl's light local FormID range — a light plugin can only address local FormIDs " +
+             "up to 0xFFF. Choose a FormID within that range, or clear the light flag and rename the plugin off .esl."),
+            (result.Refusal, result.Message));
+    }
+
+    [Fact]
+    public void EditingTheFormId_OnALightPluginWhoseHeaderVersionKeepsItsRangeAbove0x800_RefusesAValueBelowIt()
+    {
+        using var mod = SourceEditFixture.TrackedLight();
+        var headerFile = Path.Combine(mod.ModFolder, PluginSourceRoot.HeaderDocument(mod.Plugin.Name));
+        var header = JsonNode.Parse(File.ReadAllText(headerFile)).Require();
+        header["ModHeader"].Require()["Stats"].Require()["Version"] = 0.95f;
+        File.WriteAllText(headerFile, header.ToJsonString());
+
+        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "000700:Fixture.esp");
+
+        Assert.Equal(
+            (RecordEditRefusal.FormIdOutsideFlagLimit,
+             "000700:Fixture.esp is below Fixture.esp's light local FormID range, 0x800-0xFFF. Choose a FormID within that range."),
+            (result.Refusal, result.Message));
     }
 
     [Fact]
@@ -104,7 +136,7 @@ public sealed class FormIdEditTests
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.LightPluginFormIdOutOfRange, result.Refusal);
+        Assert.Equal(RecordEditRefusal.FormIdOutsideFlagLimit, result.Refusal);
     }
 
     [Fact]

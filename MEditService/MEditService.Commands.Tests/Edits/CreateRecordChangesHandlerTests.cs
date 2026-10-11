@@ -355,7 +355,7 @@ public sealed class CreateRecordChangesHandlerTests
 
         Assert.Equal(
             "Fixture.esp has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can " +
-            "address. Clear the light flag in the header to draw above it.",
+            "address. Clear the light flag to draw above it.",
             result.Message);
     }
 
@@ -372,7 +372,7 @@ public sealed class CreateRecordChangesHandlerTests
     }
 
     [Fact]
-    public void CreateRecord_OnAnEslPlugin_WithNoFormKeyFreeAtOrAboveTheNextObjectId_NamesNoRemedy_SinceItsExtensionKeepsItLight()
+    public void CreateRecord_OnALightFlaggedEsl_WithNoFormKeyFreeAtOrAboveTheNextObjectId_NamesClearingTheFlagAndRenamingOffEsl()
     {
         using var mod = SourceEditFixture.TrackedLight("Fixture.esl");
         TakeTheNextObjectId(mod, "000FFF:Fixture.esl");
@@ -381,7 +381,8 @@ public sealed class CreateRecordChangesHandlerTests
 
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
         Assert.Equal(
-            "Fixture.esl has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can address.",
+            "Fixture.esl has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can address. " +
+            "Clear the light flag and rename the plugin off .esl to draw above it.",
             result.Message);
     }
 

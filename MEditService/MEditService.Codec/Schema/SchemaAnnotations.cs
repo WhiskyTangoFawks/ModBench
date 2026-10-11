@@ -91,9 +91,9 @@ internal sealed record SchemaAnnotations(
     // Flags enums Mutagen nests in a record class for its Record Flags and spells through no member,
     // keyed by the type's getter interface. A type with several has one per base record type.
     IReadOnlyList<(string TypeName, string EnumName)> RecordFlagEnums,
-    // An exterior cell's width in world units, or null where no source pins it down. Unchecked:
-    // Mutagen divides by it as a literal and exposes no member that holds it.
-    float? ExteriorCellWidth,
+    // An exterior cell's width in world units. Unchecked: Mutagen divides by it as a literal and
+    // exposes no member that holds it.
+    float ExteriorCellWidth,
     // The plugin that alone defines a cell a Partial Form copy can override (xEdit's GetCanBePartial),
     // or null where any plugin can. Validated as one of the game's base masters.
     string? PartialFormCellsDefinedIn,
@@ -411,9 +411,9 @@ internal sealed record SchemaAnnotations(
                 ("IRegionGetter", "MajorFlag"),
                 ("ILeveledBaseFormGetter", "MajorFlag"),
             ],
-            // Mutagen's Starfield worldspace bounds divide by 4096, but xEdit scales Starfield's cells by
-            // wbCellSizeFactor, and no xEdit source in references/ shows how.
-            ExteriorCellWidth: null,
+            // The installed masters' exterior references sit in their cell's grid at 100 units a cell, and
+            // wbDefinitionsSF1.pas sets wbCellSizeFactor to 100; Mutagen's 4096 scales worldspace bounds.
+            ExteriorCellWidth: 100f,
             PartialFormCellsDefinedIn: null,
             PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetter(GameCategory.Starfield)),
             ContainmentMembers: [CellGridInEveryGame]),

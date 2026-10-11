@@ -36,40 +36,57 @@ public sealed class PlacedCellTests
 
     private static Document Cell(string text) => Document.Parse(text);
 
-    [Fact]
-    public void APlacedRecordCreatedInAGridCell_OfAGameWithNoKnownCellWidth_IsRefusedNamingTheCell_AndKeepsTheBareDocument()
+    private static readonly FormKey Placed = FormKey.Factory("000802:Holds.esm");
+
+    public static TheoryData<GameRelease, string, int, int> PlacedAt => new()
     {
-        var placed = Document.Parse("""{ "FormKey": "000802:Holds.esm" }""");
-        var cell = PlacedCell.WithGrid(Document.Parse("""{ "FormKey": "000801:Holds.esm" }"""), 3, -2);
-
-        Assert.False(PlacedCell.TryAsCreatedIn(placed, PersistentFlag.TemporaryGroup, cell, GameRelease.Starfield, out var created, out var refusal));
-
-        Assert.Equal(
-            "000801:Holds.esm has a grid, and mEdit knows no cell width for Starfield to place a new reference at its centre.",
-            refusal);
-        Assert.Equal("""{"FormKey":"000802:Holds.esm"}""", created.Text);
-    }
-
-    [Fact]
-    public void ASkyrimPlacedRecordsPosition_FallsInTheGridCellItsPlacementNames()
-    {
-        var placed = new PlacedObject(FormKey.Factory("000802:Holds.esm"), SkyrimRelease.SkyrimSE)
         {
-            Placement = new Placement { Position = new P3Float(5000, -100, 0) },
-        };
+            GameRelease.Starfield,
+            RecordTextCodec.SerializeToText(
+                new Mutagen.Bethesda.Starfield.PlacedObject(Placed, Mutagen.Bethesda.Starfield.StarfieldRelease.Starfield) { Position = new P3Float(232.9f, -18.9f, 242.4f) },
+                GameRelease.Starfield),
+            2, -1
+        },
+        {
+            GameRelease.SkyrimSE,
+            RecordTextCodec.SerializeToText(
+                new PlacedObject(Placed, SkyrimRelease.SkyrimSE) { Placement = new Placement { Position = new P3Float(5000, -100, 0) } },
+                GameRelease.SkyrimSE),
+            1, -1
+        },
+    };
 
-        Assert.Equal((1, -1), PlacedCell.GridHolding(Document.Parse(RecordTextCodec.SerializeToText(placed, GameRelease.SkyrimSE)), GameRelease.SkyrimSE));
-    }
+    [Theory]
+    [MemberData(nameof(PlacedAt))]
+    public void APlacedRecordsPosition_FallsInTheGridCellOfItsGamesWidth(GameRelease release, string placed, int x, int y) =>
+        Assert.Equal((x, y), PlacedCell.GridHolding(Document.Parse(placed), release));
 
-    [Fact]
-    public void AReferenceCreatedInASkyrimGridCell_StartsAtItsCentre_InThePlacementTheCodecReads()
+    public static TheoryData<GameRelease, string, string[], string> CreatedBare => new()
     {
-        var bare = Document.Parse(RecordTextCodec.SerializeToText(new PlacedObject(FormKey.Factory("000802:Holds.esm"), SkyrimRelease.SkyrimSE), GameRelease.SkyrimSE));
+        {
+            GameRelease.Starfield,
+            RecordTextCodec.SerializeToText(new Mutagen.Bethesda.Starfield.PlacedObject(Placed, Mutagen.Bethesda.Starfield.StarfieldRelease.Starfield), GameRelease.Starfield),
+            ["Position"],
+            "350, -150, 0"
+        },
+        {
+            GameRelease.SkyrimSE,
+            RecordTextCodec.SerializeToText(new PlacedObject(Placed, SkyrimRelease.SkyrimSE), GameRelease.SkyrimSE),
+            ["Placement", "Position"],
+            "14336, -6144, 0"
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(CreatedBare))]
+    public void AReferenceCreatedInAGridCell_StartsAtItsCentre_WhereTheCodecReadsItsPosition(
+        GameRelease release, string bare, string[] positionPath, string centre)
+    {
         var cell = PlacedCell.WithGrid(Document.Parse("""{ "FormKey": "000801:Holds.esm" }"""), 3, -2);
 
-        Assert.True(PlacedCell.TryAsCreatedIn(bare, PersistentFlag.TemporaryGroup, cell, GameRelease.SkyrimSE, out var created, out _));
+        var created = PlacedCell.AsCreatedIn(Document.Parse(bare), PersistentFlag.TemporaryGroup, cell, release);
 
-        var read = JsonNode.Parse(RecordTextCodec.RoundTrip(created.Text, GameRelease.SkyrimSE, "refr")).Require();
-        Assert.Equal("14336, -6144, 0", read["Placement"].Require()["Position"].Require().GetValue<string>());
+        var read = JsonNode.Parse(RecordTextCodec.RoundTrip(created.Text, release, "refr")).Require();
+        Assert.Equal(centre, positionPath.Aggregate(read, (node, member) => node[member].Require()).GetValue<string>());
     }
 }

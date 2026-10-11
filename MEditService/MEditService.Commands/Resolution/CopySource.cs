@@ -77,7 +77,7 @@ internal sealed class CopySource(
                 RecordTextCodec.RoundTrip(body, _release, identity.RecordType);
                 return body;
             }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
+            catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
             {
                 return CopyRead<string>.Unreadable(ex.Message);
             }

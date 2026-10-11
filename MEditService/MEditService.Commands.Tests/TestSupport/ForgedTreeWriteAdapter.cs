@@ -1,8 +1,8 @@
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -15,7 +15,7 @@ internal sealed class ForgedTreeWriteAdapter(Func<string, CancellationToken, Tas
 {
     public override async Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath,
-        IReadOnlyList<string> masterOrder, GameRelease gameRelease, CancellationToken cancel = default)
+        IReadOnlyList<string> masterOrder, LoadOrderSnapshot loadOrder, CancellationToken cancel = default)
     {
         using var scratchDir = new ScratchDirectory("medit-forged-writetree-");
         foreach (var file in files)
