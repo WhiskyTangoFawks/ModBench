@@ -70,7 +70,8 @@ class BuildSlot(unittest.TestCase):
     def test_a_build_or_test_outside_the_slot_is_blocked_with_the_form_to_use(self):
         for command in ("dotnet test -v minimal", "dotnet build", "cd MEditService && dotnet test --filter X",
                         "npm run test:unit -- src/x.test.ts", "npm run build", "npm test",
-                        "MSBUILDDISABLENODEREUSE=1 dotnet build", "dotnet format --verify-no-changes"):
+                        "MSBUILDDISABLENODEREUSE=1 dotnet build", "dotnet format --verify-no-changes",
+                        "cd modbench && npx vitest run src/x"):
             with self.subTest(command=command):
                 run = self.check(command)
                 self.assertEqual(run.returncode, 2)
