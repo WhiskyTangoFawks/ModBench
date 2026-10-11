@@ -190,7 +190,7 @@ public sealed class UnsavedDocumentTests : IDisposable
         var thrown = (Exception)(Activator.CreateInstance(thrownType, "injected while validating the hand-over")
             ?? throw new InvalidOperationException($"{thrownType} takes a message."));
         using var faulting = Indexes.Reconciled(
-            _fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: new InMemoryNotificationPublisher { OnPublish = ThrowingOnRowsChanged(thrown) });
+            _fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: new InMemoryNotificationPublisher { OnPublish = ThrowingOn(IsRowsChanged, thrown) });
 
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedUnsaved\""))]);
 
@@ -198,9 +198,9 @@ public sealed class UnsavedDocumentTests : IDisposable
         Assert.Contains(thrown.Message, faulting.Status.Message, StringComparison.Ordinal);
     }
 
-    private static Action<INotification> ThrowingOnRowsChanged(Exception thrown) => notification =>
+    private static Action<INotification> ThrowingOn(Predicate<INotification> on, Exception thrown) => notification =>
     {
-        if (IsRowsChanged(notification)) throw thrown;
+        if (on(notification)) throw thrown;
     };
 
     [Fact]
@@ -208,6 +208,22 @@ public sealed class UnsavedDocumentTests : IDisposable
     {
         var faults = new InMemoryNotificationPublisher { FaultsOn = IsRowsChanged };
         using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: faults);
+        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedUnsaved\""))]);
+        Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the failed status");
+
+        faults.FaultsOn = null;
+        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedAgain\""))]);
+
+        Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready, "the ready status");
+        Assert.Equal("TypedAgain", faulting.DocumentOf(_npc, _tracked.KeyOf()).EditorId);
+    }
+
+    [Fact]
+    public void AHandOverWhoseStatusCannotBePublished_LeavesTheNextHandOverValidated()
+    {
+        var faults = new InMemoryNotificationPublisher { FaultsOn = IsRowsChanged };
+        using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: faults);
+        faults.OnPublish = ThrowingOn(n => n is LoadOrderStatusNotification, new InvalidOperationException("the status could not be pushed"));
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedUnsaved\""))]);
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the failed status");
 

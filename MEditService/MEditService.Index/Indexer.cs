@@ -236,33 +236,42 @@ internal sealed class Indexer : IDisposable
 
     private void ValidateHanded()
     {
-        while (true)
+        try
         {
-            List<string> paths;
-            lock (_lock)
+            while (true)
             {
-                if (_handed.Count == 0 || _disposed)
-                {
-                    _validatingHanded = false;
-                    return;
-                }
-                paths = [.. _handed];
-                _handed.Clear();
-            }
-
-            bool moved;
-            _exclusive.Enter();
-            try
-            {
-                var failure = ValidationFailure(() => ValidateTreesOf(paths), CancellationToken.None);
+                List<string> paths;
                 lock (_lock)
                 {
-                    moved = _handOverFailure != failure;
-                    _handOverFailure = failure;
+                    if (_handed.Count == 0 || _disposed)
+                    {
+                        _validatingHanded = false;
+                        return;
+                    }
+                    paths = [.. _handed];
+                    _handed.Clear();
                 }
+
+                bool moved;
+                _exclusive.Enter();
+                try
+                {
+                    var failure = ValidationFailure(() => ValidateTreesOf(paths), CancellationToken.None);
+                    lock (_lock)
+                    {
+                        moved = _handOverFailure != failure;
+                        _handOverFailure = failure;
+                    }
+                }
+                finally { _exclusive.Exit(); }
+                if (moved) PublishStatus();
             }
-            finally { _exclusive.Exit(); }
-            if (moved) PublishStatus();
+        }
+        catch
+        {
+            // A throw ends this task, so the next hand-over must start another.
+            lock (_lock) _validatingHanded = false;
+            throw;
         }
     }
 
