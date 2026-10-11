@@ -3,10 +3,10 @@ using System.Runtime.CompilerServices;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Indexing;
@@ -46,7 +46,7 @@ public sealed class IngestRetentionTests : IDisposable
     private sealed class StreamedAdapter(IPluginDocuments documents) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
-            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+            ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
             PluginStrings? strings = null) =>
             RequireExtensions.AnswerOf(() => documents);
     }

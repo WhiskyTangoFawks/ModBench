@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -15,15 +16,16 @@ internal static class PluginTrees
 {
     /// <summary>A plugin's own binary read as the documents its tree would hold.</summary>
     internal static async Task<Answer<PluginSource, PluginFailure>> ReadAsync(
-        ModPath modPath, string pluginName, GameRelease gameRelease, PluginStrings strings,
+        ModPath modPath, string pluginName, LoadOrderSnapshot loadOrder, PluginStrings strings,
         CancellationToken cancel = default)
     {
+        var gameRelease = loadOrder.GameRelease;
         try
         {
             // Hashed before the read: bytes another tool writes after it are then named as an external
             // change, never taken for the bytes this tree came from.
             var binarySha256 = PluginBinaryHash.TrailerFormOfFile(modPath.Path);
-            var mod = OpenFor(modPath, gameRelease, strings);
+            var mod = MutagenPluginAdapter.OpenForWrite(modPath, gameRelease, strings, loadOrder);
 
             // Refuse by name before any serialize: TranslatedString.TryLookup returns false for a missing
             // file with no exception.
@@ -40,9 +42,6 @@ internal static class PluginTrees
             return PluginFailure.Of(ex);
         }
     }
-
-    private static IMod OpenFor(ModPath modPath, GameRelease gameRelease, PluginStrings strings) =>
-        MutagenPluginAdapter.OpenForWrite(modPath, gameRelease, strings);
 
     /// <summary>One plugin's complete tree, ready to commit — the one implementation of the door's
     /// write. A second serializer that dropped the root RecordData.json would delete the header from
@@ -166,11 +165,11 @@ internal static class PluginTrees
     /// the one at <paramref name="modPath"/>; null when they are model-identical. Both are
     /// reparsed, since only written bytes show what the writer does.</summary>
     internal static ModelIdentity.Divergence? DivergenceBetween(
-        ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings)
+        ModPath modPath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings)
     {
-        var original = MutagenPluginAdapter.OpenForWrite(modPath, gameRelease, strings);
+        var original = MutagenPluginAdapter.OpenForWrite(modPath, loadOrder.GameRelease, strings, loadOrder);
         var recompiled = MutagenPluginAdapter.OpenForWrite(
-            new ModPath(modPath.ModKey, recompiledPath), gameRelease);
+            new ModPath(modPath.ModKey, recompiledPath), loadOrder.GameRelease, loadOrder: loadOrder);
 
         return ModelIdentity.FindFirstDivergence(original, recompiled);
     }

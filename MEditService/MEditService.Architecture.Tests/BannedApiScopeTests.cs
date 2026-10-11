@@ -123,7 +123,7 @@ public sealed class BannedApiScopeTests
 
         var holders = projects.Where(HoldsAGameAssembly).ToList();
 
-        Assert.Equal(["MEditService.Codec.Fallout4", "MEditService.Codec.Skyrim"], holders);
+        Assert.Equal(["MEditService.Codec.Fallout4", "MEditService.Codec.Skyrim", "MEditService.Codec.Starfield"], holders);
         Assert.All(holders, project => Assert.DoesNotContain(project, MutagenBanProjectsExcludingTheCodecAndThePluginAdapterWhichHoldLiveObjects));
     }
 

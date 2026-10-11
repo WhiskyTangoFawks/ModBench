@@ -146,7 +146,7 @@ internal sealed class CopySource(
         if (!_opened)
         {
             _opened = true;
-            if (adapter.OpenRecordLookup(registered, _release, _schemas).Holds(out var records, out var failure)) _records = records;
+            if (adapter.OpenRecordLookup(registered, loadOrder, _schemas).Holds(out var records, out var failure)) _records = records;
             else _unopened = failure.Reason;
         }
         return _records is { } opened

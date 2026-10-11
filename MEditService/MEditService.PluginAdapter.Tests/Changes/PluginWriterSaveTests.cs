@@ -83,7 +83,7 @@ public sealed class PluginWriterSaveTests
         var adapter = TestAdapters.Mutagen();
         var source = (await adapter.ReadSourceOfAsync(
             new RegisteredPlugin("Fixture.esp", "FixtureMod", pluginPath, new PluginProvider.FromMod("FixtureMod", folder), Line: null),
-            GameRelease.Fallout4, new PluginStrings(folder, folder))).Answered();
+            EmptyLoadOrder.Of(GameRelease.Fallout4), new PluginStrings(folder, folder))).Answered();
         var tree = (await adapter.ReadTreeAsync(source.Files, GameRelease.Fallout4)).Answered();
 
         var saved = await tree.SaveAsync(pluginPath, ["Other.esm", "Fixture.esp"], save =>

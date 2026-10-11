@@ -27,7 +27,7 @@ public sealed class PluginDocumentRetentionTests
             .WithPlugin(PluginName, mod => AddNpcsWithLongEditorIds(mod, RecordsPastABatchAndEveryRecordInFlightWhenItCloses))
             .Build();
         using var documents = TestAdapters.Mutagen().OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), Path.Combine(data.DataFolder, PluginName)), GameRelease.Fallout4, Schemas).Answered();
+            new ModPath(ModKey.FromFileName(PluginName), Path.Combine(data.DataFolder, PluginName)), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
 
         Assert.False(FirstIsHeldWhenTheLastIsRead(documents.Records));
     }

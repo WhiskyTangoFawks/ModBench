@@ -9,6 +9,7 @@ public sealed class SchemaAnnotationTests
     [Theory]
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
+    [InlineData(GameRelease.Starfield)]
     public void ShippedTable_EveryEntryResolves_SoAMutagenRenameLeavingAStaleAnnotationFailsHereNotInAUsersFirstLoad(GameRelease release)
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(release);
@@ -37,6 +38,20 @@ public sealed class SchemaAnnotationTests
         Assert.Equal(["Faction"], factions.KeyMembers);
         Assert.Equal(["Data.Level", "Data.Reference"], entries.KeyMembers);
         Assert.Equal(["Data.Count", "ExtraData.ItemCondition", "ExtraData.Owner"], entries.ExtendedKeyMembers);
+    }
+
+    [Fact]
+    public void AStarfieldArrayXEditSortsByKey_AlignsByThatKey()
+    {
+        var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield);
+        var entries = schemas["lvli"].RecordColumns.Single(c => c.Name == "Entries").Field;
+        var aliases = schemas["qust"].RecordColumns.Single(c => c.Name == "VirtualMachineAdapter").Field
+            .Fields.Require().Single(f => f.Name == "Aliases");
+
+        Assert.Equal(["Faction"], schemas["npc_"].RecordColumns.Single(c => c.Name == "Factions").Field.KeyMembers);
+        Assert.Equal(["Level", "Reference"], entries.KeyMembers);
+        Assert.Equal(["Count", "Data.ItemCondition", "Data.Owner"], entries.ExtendedKeyMembers);
+        Assert.Equal(["Property.Alias"], aliases.KeyMembers);
     }
 
     [Fact]

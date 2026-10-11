@@ -168,8 +168,7 @@ internal sealed record SchemaAnnotations(
     private static readonly string[] VectorStructTypesInEveryGame =
     [
         "Noggog.P3Int16", "Noggog.P3Float",
-        "Noggog.P2Int", "Noggog.P2Int16",
-        "Noggog.P3UInt8", "Noggog.P3UInt16", "Noggog.P2Float",
+        "Noggog.P2Int", "Noggog.P2Int16", "Noggog.P2Float",
     ];
 
     // Counts are live, from the audit's enumeration over Fallout 4.
@@ -246,7 +245,7 @@ internal sealed record SchemaAnnotations(
                 .. EmptySubSchemaTypesInEveryGame,
                 "IASceneActionTypeGetter",      // deliberately not abstract upstream; see KnownDefects
             ],
-            VectorStructTypes: [.. VectorStructTypesInEveryGame, "Noggog.P2UInt8"],
+            VectorStructTypes: [.. VectorStructTypesInEveryGame, "Noggog.P3UInt8", "Noggog.P3UInt16", "Noggog.P2UInt8"],
             RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
             EnumMemberLabels: new()
             {
@@ -320,7 +319,7 @@ internal sealed record SchemaAnnotations(
             ],
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
-            VectorStructTypes: [.. VectorStructTypesInEveryGame],
+            VectorStructTypes: [.. VectorStructTypesInEveryGame, "Noggog.P3UInt8", "Noggog.P3UInt16"],
             RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
             EnumMemberLabels: new()
             {
@@ -363,26 +362,35 @@ internal sealed record SchemaAnnotations(
                 .. PlumbingMembers,
                 ("IObjectModStringPropertyGetter`1", "Unused"),
                 ("IObjectModEnumPropertyGetter`1", "Unused"),
+                ("IConditionDataGetter", "Function"),
             ],
             ExcludedUnions: [],
             FunctionUnions: [],
             UnusedSlotMembers: [],
-            // Starfield's VirtualMachineAdapter.xml declares the same struct-property chain as
-            // Fallout 4's, unverified against a built Starfield schema. Empty is loud, not wrong: a
-            // lifted VMAD exclusion fails generation naming the chain rather than truncating silently.
-            CycleTruncations: [],
+            CycleTruncations: ["IScriptStructPropertyGetter", "IScriptStructListPropertyGetter"],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
-            VectorStructTypes: [.. VectorStructTypesInEveryGame, "Noggog.P2UInt8"],
+            VectorStructTypes: [.. VectorStructTypesInEveryGame],
             RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
-            // This build references no Starfield assembly, so Validate checks these rows only once one
-            // loads. A label, defect, condition or keyed-array row is found from a built schema.
-            EnumMemberLabels: [],
+            // wbDefinitionsSF1.pas's TES4 record spells the light-master and overlay bits Small and Update.
+            EnumMemberLabels: new()
+            {
+                [(ModHeaderGetter(GameCategory.Starfield), "Flags")] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["Light"] = "Small",
+                    ["Overlay"] = "Update",
+                },
+            },
             KnownDefects: [],
             SiblingsInUse: SiblingsInUseRows.None,
-            KeyedArrays: [],
-            ExtendedKeys: [],
-            PermittedNullFormLinks: [],
-            SyntheticFlagMembers: [],
+            KeyedArrays: StarfieldVmadAnnotations.KeyedArrays.Concat(StarfieldKeyedArrayAnnotations.KeyedArrays).ToDictionary(
+                r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
+            ExtendedKeys: StarfieldKeyedArrayAnnotations.ExtendedKeys.ToDictionary(
+                r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
+            PermittedNullFormLinks: [.. StarfieldVmadAnnotations.PermittedNullFormLinks],
+            SyntheticFlagMembers: new()
+            {
+                [(ModHeaderGetter(GameCategory.Starfield), "IsSmallMaster")] = ("Flags", "Light"),
+            },
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
@@ -511,8 +519,9 @@ internal sealed record SchemaAnnotations(
 
     private IEnumerable<string> UnresolvedKeyMembers(ILookup<string, Type> typesByName) =>
     [
-        .. UnresolvedKeyPaths(typesByName, nameof(KeyedArrays), KeyedArrays),
-        .. UnresolvedKeyPaths(typesByName, nameof(ExtendedKeys), ExtendedKeys),
+        .. UnresolvedKeyPaths(typesByName, nameof(KeyedArrays), KeyedArrays, listOrders: false),
+        // xEdit's extended sort key orders by a list too, as a leveled entry's conditions.
+        .. UnresolvedKeyPaths(typesByName, nameof(ExtendedKeys), ExtendedKeys, listOrders: true),
         .. ExtendedKeys.Keys.Where(entry => !KeyedArrays.ContainsKey(entry))
             .Select(entry => $"{nameof(ExtendedKeys)}: {entry.TypeName}.{entry.MemberName} extends no keyed array"),
     ];
@@ -520,7 +529,8 @@ internal sealed record SchemaAnnotations(
     // A row naming a key the element lacks would key every element alike, so the array would align
     // by position alone.
     private static IEnumerable<string> UnresolvedKeyPaths(
-        ILookup<string, Type> typesByName, string table, Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> rows)
+        ILookup<string, Type> typesByName, string table, Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> rows,
+        bool listOrders)
     {
         foreach (var (entry, keyMembers) in rows)
         {
@@ -539,12 +549,12 @@ internal sealed record SchemaAnnotations(
 
             foreach (var keyPath in keyMembers)
             {
-                if (UnresolvedKeyPath(elementType, keyPath) is { } why) yield return $"{label} {why}";
+                if (UnresolvedKeyPath(elementType, keyPath, listOrders) is { } why) yield return $"{label} {why}";
             }
         }
     }
 
-    private static string? UnresolvedKeyPath(Type elementType, string keyPath)
+    private static string? UnresolvedKeyPath(Type elementType, string keyPath, bool listOrders)
     {
         var owner = elementType;
         var segments = keyPath.Split('.');
@@ -555,7 +565,7 @@ internal sealed record SchemaAnnotations(
             if (prop == null) return $"names key {keyPath}, which {owner.Name} does not reach at {segments[i]}";
             if (i == segments.Length - 1)
             {
-                return ReflectedTypes.IsListType(prop.PropertyType, out _)
+                return !listOrders && ReflectedTypes.IsListType(prop.PropertyType, out _)
                     ? $"names key {keyPath}, which is itself a list — a key is one value per element"
                     : null;
             }

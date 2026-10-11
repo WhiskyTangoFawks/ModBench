@@ -34,6 +34,7 @@
     <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
     <ProjectReference Include="..\MEditService.Codec.Fallout4\MEditService.Codec.Fallout4.csproj" />
     <ProjectReference Include="..\MEditService.Codec.Skyrim\MEditService.Codec.Skyrim.csproj" />
+    <ProjectReference Include="..\MEditService.Codec.Starfield\MEditService.Codec.Starfield.csproj" />
     <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
     <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
     <ProjectReference Include="..\MEditService.SourceAdapter\MEditService.SourceAdapter.csproj" />

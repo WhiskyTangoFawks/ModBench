@@ -23,6 +23,7 @@ public class SchemaReflectorTotalClassificationTests
     [Theory]
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
+    [InlineData(GameRelease.Starfield)]
     public void EveryPropertyTheWalkReaches_IsClassifiedOrExplicitlyExcluded_ByAskingTheReflectorWhatItFailedToClassifyNotByReDerivingClassification(GameRelease release)
     {
         var entries = BuildAndCollect_PrivateBecauseTheSharedReflectorIsNullLoggedAndCached_DebugBecauseTheDefaultFloorDropsTheseLines(release);

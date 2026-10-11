@@ -1,6 +1,7 @@
 using MEditService.Codec.Fallout4;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Skyrim;
+using MEditService.Codec.Starfield;
 using Mutagen.Bethesda;
 using Xunit.Abstractions;
 using Xunit.Sdk;
@@ -16,5 +17,6 @@ public class GamesRegisteredTestFramework : XunitTestFramework
         {
             [GameCategory.Fallout4] = Fallout4Codec.Instance,
             [GameCategory.Skyrim] = SkyrimCodec.Instance,
+            [GameCategory.Starfield] = StarfieldCodec.Instance,
         });
 }

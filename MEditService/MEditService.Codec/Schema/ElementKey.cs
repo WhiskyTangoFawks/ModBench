@@ -92,7 +92,9 @@ public readonly record struct ElementKey(IReadOnlyList<(double? Number, string T
             JsonValueKind.True or JsonValueKind.False => (null, current.GetRawText()),
             // A flags member is an array of names (ScenePhaseFragment.Flags keys a fragment); its
             // order is its bits', read off the members the schema declares.
-            JsonValueKind.Array => (FlagBits(current, member), string.Join(", ", current.EnumerateArray().Select(e => e.ToString()))),
+            JsonValueKind.Array when member is { Type: "flags" } =>
+                (FlagBits(current, member), string.Join(", ", current.EnumerateArray().Select(e => e.ToString()))),
+            JsonValueKind.Array => (null, current.GetRawText()),
             JsonValueKind.Object => (null, current.GetRawText()),
             _ => Absent,
         };

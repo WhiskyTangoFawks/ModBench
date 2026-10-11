@@ -32,7 +32,11 @@ public sealed record ColumnSpec(
 
 public sealed class RecordTableSchema
 {
-    internal RecordTableSchema(Type recordType) => RecordType = recordType;
+    internal RecordTableSchema(Type recordType, string displayName)
+    {
+        RecordType = recordType;
+        DisplayName = displayName;
+    }
 
     public required string TableName { get; init; }
     internal Type RecordType { get; }
@@ -40,7 +44,7 @@ public sealed class RecordTableSchema
 
     /// <summary>The xEdit display name ("Activator" for <c>acti</c>); <see cref="TableName"/> stays
     /// the key everywhere else.</summary>
-    internal string DisplayName => RecordDisplayNames.For(TableName);
+    internal string DisplayName { get; }
 
     /// <summary>True for the plugin header, whose document is the whole mod's root RecordData.json
     /// rather than a major record's, so its columns sit under a nested path and it carries no
