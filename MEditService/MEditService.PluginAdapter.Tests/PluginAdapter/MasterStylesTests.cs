@@ -25,4 +25,18 @@ public sealed class MasterStylesTests
 
         Assert.Equal([LightMasterAndChild.Weapon.ToString()], documents.Records.Select(r => r.FormKey));
     }
+
+    [Fact]
+    public void APluginWhoseMasterTheLoadOrderDoesNotHold_FailsNamingThatMaster()
+    {
+        using var scratch = new ScratchDirectory("master-styles-missing");
+        var (_, childPath) = LightMasterAndChild.Write(scratch.Path);
+
+        var failure = Adapter.OpenDocuments(
+            new ModPath(LightMasterAndChild.Child, childPath), EmptyLoadOrder.Of(GameRelease.Starfield),
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield)).Failure();
+
+        Assert.IsType<PluginFailure.MasterNotInLoadOrder>(failure);
+        Assert.Contains(LightMasterAndChild.Master.FileName.String, failure.Reason, StringComparison.Ordinal);
+    }
 }

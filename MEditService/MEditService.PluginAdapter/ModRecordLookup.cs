@@ -41,25 +41,25 @@ internal sealed class ModRecordLookup : IPluginRecords
     public Answer<RecordIdentity?, PluginFailure> IdentityOf(string formKey) =>
         PluginFailure.Answer(() => Resolve(formKey) is { } record
             ? new RecordIdentity(record.FormKey.ToString(), _types.RecordTypeOf(record), record.EditorID)
-            : (RecordIdentity?)null);
+            : (RecordIdentity?)null, _file);
 
     public Answer<long?, PluginFailure> RecordFlagsOf(string formKey) =>
-        PluginFailure.Answer(() => (long?)Resolve(formKey)?.MajorRecordFlagsRaw);
+        PluginFailure.Answer(() => (long?)Resolve(formKey)?.MajorRecordFlagsRaw, _file);
 
     public Answer<string?, PluginFailure> TextOf(string formKey) =>
         PluginFailure.Answer(() => Resolve(formKey) is { } record
             ? Encoding.UTF8.GetString(DeletedRecord.Serialize(
                 record, _schemas[_types.RecordTypeOf(record)], _mod.GameRelease, () => _file.HoldsNoFields(record.FormKey)))
-            : null);
+            : null, _file);
 
     public Answer<DocumentContainment?, PluginFailure> ContainmentOf(string formKey) =>
-        PluginFailure.Answer(() => _containments.Value.TryGetValue(formKey, out var found) ? found : (DocumentContainment?)null);
+        PluginFailure.Answer(() => _containments.Value.TryGetValue(formKey, out var found) ? found : (DocumentContainment?)null, _file);
 
     public Answer<CellStructure?, PluginFailure> CellStructureOf(string formKey) =>
-        PluginFailure.Answer(() => _cells.Value.TryGetValue(formKey, out var cell) ? cell.Structure : (CellStructure?)null);
+        PluginFailure.Answer(() => _cells.Value.TryGetValue(formKey, out var cell) ? cell.Structure : (CellStructure?)null, _file);
 
     public Answer<string?, PluginFailure> CellAt(string worldspace, int x, int y) =>
-        PluginFailure.Answer(() => _cellsByGrid.Value.TryGetValue((worldspace, x, y), out var cell) ? cell : null);
+        PluginFailure.Answer(() => _cellsByGrid.Value.TryGetValue((worldspace, x, y), out var cell) ? cell : null, _file);
 
     public void Dispose()
     {

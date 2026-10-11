@@ -36,8 +36,9 @@ internal static class PluginTrees
             return PluginAnswer.Of(new PluginSource(
                 await SerializeTree(mod, cancel), [.. mod.MasterReferences.Select(reference => reference.Master.FileName.ToString())], binarySha256));
         }
-        catch (Exception ex) when (PluginFailure.StandsFor(ex))
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            PluginFailure.ThrowIfNotTheFilesAnswer(ex, new PluginRecordBytes(modPath, loadOrder));
             return PluginFailure.Of(ex);
         }
     }

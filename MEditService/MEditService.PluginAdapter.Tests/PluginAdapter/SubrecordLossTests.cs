@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -14,13 +15,13 @@ public sealed class SubrecordLossTests : IDisposable
 
     public void Dispose() => _folder.Dispose();
 
-    private async Task<PluginBinaryWalk.SubrecordLoss?> LossAsync(byte[] original, byte[] rewritten)
+    private async Task<PluginBinaryWalk.SubrecordLoss?> LossAsync(byte[] original, byte[] rewritten, LoadOrderSnapshot? loadOrder = null)
     {
         var originalPath = Path.Combine(_folder.Path, "original.esp");
         var rewrittenPath = Path.Combine(_folder.Path, "rewritten.esp");
         File.WriteAllBytes(originalPath, WithHeader(original));
         File.WriteAllBytes(rewrittenPath, WithHeader(rewritten));
-        return (await Adapter.CompareBytesAsync(originalPath, rewrittenPath, GameRelease.Fallout4)).Answered().Loss;
+        return (await Adapter.CompareBytesAsync(originalPath, rewrittenPath, loadOrder ?? EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered().Loss;
     }
 
     private static byte[] WithHeader(byte[] records) =>
@@ -60,13 +61,31 @@ public sealed class SubrecordLossTests : IDisposable
         Assert.Equal(["RDMP"], loss?.Signatures);
     }
 
+    [Fact]
+    public async Task InAGameThatSeparatesLightMasters_ADropInAnOverrideOfALightMastersRecordIsNamedByThatMastersFormKey()
+    {
+        const uint LightMasterZerosObjectId801 = 0xFE000801;
+        var (masterPath, _) = LightMasterAndChild.Write(_folder.Path);
+        var loadOrder = SnapshotPlugins.Snapshot(_folder.Path, null, GameRelease.Starfield,
+            [new LoadOrderEntry(LightMasterAndChild.Master.FileName, masterPath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true)]);
+        var overridingTheLightMaster = Tes4(LightMasterAndChild.Master.FileName);
+        var original = Concat(overridingTheLightMaster,
+            BuildRecordHeader("WEAP", LightMasterZerosObjectId801, 0, Concat(Sub("EDID", "Gun"u8.ToArray()), Sub("RDMP", [1]))));
+        var rewritten = Concat(overridingTheLightMaster,
+            BuildRecordHeader("WEAP", LightMasterZerosObjectId801, 0, Concat(Sub("EDID", "Gun"u8.ToArray()))));
+
+        var loss = await LossAsync(original, rewritten, loadOrder);
+
+        Assert.Equal(LightMasterAndChild.Weapon, loss?.FormKey);
+    }
+
     private async Task<string?> DeletedRecordEmptiedAsync(byte[] original, byte[] rewritten)
     {
         var originalPath = Path.Combine(_folder.Path, "original.esp");
         var rewrittenPath = Path.Combine(_folder.Path, "rewritten.esp");
         File.WriteAllBytes(originalPath, WithHeader(original));
         File.WriteAllBytes(rewrittenPath, WithHeader(rewritten));
-        return (await Adapter.CompareBytesAsync(originalPath, rewrittenPath, GameRelease.Fallout4)).Answered().DeletedRecordEmptied;
+        return (await Adapter.CompareBytesAsync(originalPath, rewrittenPath, EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered().DeletedRecordEmptied;
     }
 
     [Fact]
@@ -226,16 +245,22 @@ public sealed class SubrecordLossTests : IDisposable
         Assert.Null(await LossAsync(Concat(uncompressed), Concat(compressedSamePayloadMinusRdmp)));
     }
 
-    [Fact]
-    public async Task AnUnreadableCompressedRecord_IsSkippedRatherThanThrowing()
+    public static TheoryData<string, byte[]> UnreadableCompressedData => new()
+    {
+        { "a declared length past an int", [0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03] },
+        { "a declared length an array cannot hold", [.. BitConvert(0x7FFFFFF0), .. CompressedData(Sub("EDID", [1]))[4..]] },
+        { "a stream that is not zlib", [0x08, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03] },
+        { "a stream shorter than its declared length", [.. BitConvert(64), .. CompressedData(Sub("EDID", [1]))[4..]] },
+    };
+
+    [Theory]
+    [MemberData(nameof(UnreadableCompressedData))]
+    public async Task AnUnreadableCompressedRecord_IsSkippedRatherThanThrowing(string _, byte[] compressedData)
     {
         const uint compressedFlag = 0x00040000;
-        byte[] notActuallyZlib = [0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03];
-        byte[] otherGarbage = [0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x04];
-        var garbageRecord = BuildRecordHeader("REGN", 0x00000042, compressedFlag, notActuallyZlib);
-        var otherGarbageRecord = BuildRecordHeader("REGN", 0x00000042, compressedFlag, otherGarbage);
+        var unreadable = BuildRecordHeader("REGN", 0x00000042, compressedFlag, compressedData);
 
-        var loss = await LossAsync(garbageRecord, otherGarbageRecord);
+        var loss = await LossAsync(unreadable, Concat(unreadable, BuildRecordHeader("WEAP", 0x00000802, 0, [])));
 
         Assert.Null(loss);
     }

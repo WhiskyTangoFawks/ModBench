@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 using MEditService.Codec.Serialization;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda.Plugins;
@@ -76,7 +78,7 @@ public abstract record PluginFailure
         public override string Reason => _reason;
     }
 
-    /// <summary>The write's content references a plugin the load order it orders masters by does not hold.</summary>
+    /// <summary>The plugin read or written references a plugin the load order does not hold.</summary>
     public sealed record MasterNotInLoadOrder : PluginFailure
     {
         private readonly string _reason;
@@ -88,11 +90,15 @@ public abstract record PluginFailure
     }
 
     /// <summary>The failure <paramref name="ex"/> stands for: a file system refusal is
-    /// <see cref="Inaccessible"/>, anything else a read Mutagen could not make.</summary>
-    internal static PluginFailure Of(Exception ex) =>
-        Refusal(ex) is { } refusal
-            ? new Inaccessible(refusal)
-            : new Unparsed(PluginDiagnosis.FromParseException(ex), ex);
+    /// <see cref="Inaccessible"/>, anything else a read Mutagen could not make. Mutagen reaches some
+    /// readers by reflection, whose wrapper says nothing of the read.</summary>
+    internal static PluginFailure Of(Exception ex) => ex switch
+    {
+        TargetInvocationException { InnerException: { } invoked } => Of(invoked),
+        MissingModException missing => new MasterNotInLoadOrder(missing),
+        _ when Refusal(ex) is { } refusal => new Inaccessible(refusal),
+        _ => new Unparsed(PluginDiagnosis.FromParseException(ex), ex),
+    };
 
     // Mutagen wraps the file system's refusal in exceptions of its own.
     private static Exception? Refusal(Exception? ex) =>
@@ -109,32 +115,46 @@ public abstract record PluginFailure
     };
 
     /// <summary>Whether <paramref name="ex"/> is the failure of the read or write it came out of:
-    /// Mutagen fails in open-ended ways, and only running out of memory or being cancelled is not the
-    /// file's answer.</summary>
-    internal static bool StandsFor(Exception ex) => ex is not (OutOfMemoryException or OperationCanceledException);
+    /// only running out of memory or being cancelled, however Mutagen wrapped it, is not the file's
+    /// answer.</summary>
+    internal static bool StandsFor(Exception ex) => OutOfMemoryOrCancellationIn(ex) is null;
+
+    /// <summary>Throws the out-of-memory or cancellation inside <paramref name="ex"/> as itself, so a
+    /// caller's own check sees it, unless <paramref name="file"/> declares a length that ran it out.</summary>
+    internal static void ThrowIfNotTheFilesAnswer(Exception ex, PluginRecordBytes? file = null)
+    {
+        if (OutOfMemoryOrCancellationIn(ex) is { } cause
+            && !(cause is OutOfMemoryException && file is { DeclaresALengthItCannotInflateTo: true }))
+            ExceptionDispatchInfo.Throw(cause);
+    }
+
+    private static Exception? OutOfMemoryOrCancellationIn(Exception? ex) =>
+        ex is null or OutOfMemoryException or OperationCanceledException ? ex : OutOfMemoryOrCancellationIn(ex.InnerException);
 
     /// <summary><paramref name="read"/>'s value, or the failure its throw stands for.</summary>
-    internal static Answer<T, PluginFailure> Answer<T>(Func<T> read)
+    internal static Answer<T, PluginFailure> Answer<T>(Func<T> read, PluginRecordBytes? file = null)
     {
         try
         {
             return PluginAnswer.Of(read());
         }
-        catch (Exception ex) when (StandsFor(ex))
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            ThrowIfNotTheFilesAnswer(ex, file);
             return Of(ex);
         }
     }
 
-    /// <summary><see cref="Answer{T}(Func{T})"/> for a read that awaits.</summary>
+    /// <summary><see cref="Answer{T}(Func{T}, PluginRecordBytes)"/> for a read that awaits.</summary>
     internal static async Task<Answer<T, PluginFailure>> AnswerAsync<T>(Func<Task<T>> read)
     {
         try
         {
             return PluginAnswer.Of(await read());
         }
-        catch (Exception ex) when (StandsFor(ex))
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            ThrowIfNotTheFilesAnswer(ex);
             return Of(ex);
         }
     }

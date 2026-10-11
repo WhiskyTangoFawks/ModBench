@@ -62,7 +62,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         if (!(await adapter.WriteFromTreeAsync(
                     sourceAdapter.ReadBackOf(pluginName, source.Files, gameRelease), scratch.PluginPath, source.Masters, gameRelease, cancel))
                 .Holds(out var recompiledPath, out var failure)
-            || !(await adapter.CompareBytesAsync(originalPluginPath, recompiledPath, gameRelease, cancel)).Holds(out var comparison, out failure))
+            || !(await adapter.CompareBytesAsync(originalPluginPath, recompiledPath, loadOrder, cancel)).Holds(out var comparison, out failure))
         {
             logger.LogWarning(failure.Error, "Refused to decompile {Plugin}: {Reason}", pluginName, failure.Reason);
             return $"{pluginName} does not round-trip through its own source: {failure.Reason}";

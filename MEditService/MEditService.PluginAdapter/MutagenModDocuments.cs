@@ -19,12 +19,14 @@ internal readonly record struct HeldCell(CellStructure Structure, object Cell);
 internal sealed class MutagenModDocuments(
     IModGetter mod, PluginRecordBytes file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open) : IPluginDocuments
 {
-    // Large enough to keep eight cores busy on cheap records; small enough that a batch of the largest
-    // cell documents stays inside a few hundred MB.
+    // Large enough to keep eight cores busy on cheap records. A master's cell documents run to a
+    // megabyte apiece, so a batch also closes at a size.
     private const int SerializeBatchSize = 2048;
+    private const long SerializeBatchChars = 16 * 1024 * 1024;
 
     private readonly List<RecordTypeFailure> _failures = [];
-    private readonly Lazy<Dictionary<string, HeldCell>> _cells = new(() => CellsIn(mod));
+    private readonly Lazy<Dictionary<string, CellStructure>> _cells = new(() =>
+        CellsIn(mod).ToDictionary(cell => cell.Key, cell => cell.Value.Structure, StringComparer.Ordinal));
 
     public PluginDocument Header => new(
         PluginHeader.RecordType,
@@ -50,39 +52,66 @@ internal sealed class MutagenModDocuments(
 
     public void Dispose() => open?.Dispose();
 
-    // Enumerated one at a time rather than materialized in one shot: Mutagen's group enumerator
-    // throws out of MoveNext and cannot be resumed, so everything it yielded first is kept and the
-    // type carries the diagnosis for what never arrived.
     private IEnumerable<PluginDocument> DocumentsOf(string tableName, RecordTableSchema schema)
     {
-        var records = new List<IMajorRecordGetter>();
+        using var records = schema.RecordsIn(mod).GetEnumerator();
+        var pending = new List<IMajorRecordGetter>(SerializeBatchSize);
+        var recordsRemain = RecordsRemainAfterTopUp(tableName, records, pending);
+        while (pending.Count > 0)
+        {
+            var documents = SerializedPrefix(tableName, schema, pending);
+            pending.RemoveRange(0, documents.Count);
+            foreach (var document in documents) yield return document;
+            recordsRemain = recordsRemain && RecordsRemainAfterTopUp(tableName, records, pending);
+        }
+    }
+
+    // Mutagen's group enumerator throws out of MoveNext and cannot be resumed, so everything it yielded
+    // first is kept and the type carries the diagnosis for what never arrived.
+    private bool RecordsRemainAfterTopUp(string tableName, IEnumerator<IMajorRecordGetter> records, List<IMajorRecordGetter> pending)
+    {
         try
         {
-            foreach (var record in schema.RecordsIn(mod))
-                records.Add(record);
+            while (pending.Count < SerializeBatchSize)
+            {
+                if (!records.MoveNext()) return false;
+                pending.Add(records.Current);
+            }
+            return true;
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            PluginFailure.ThrowIfNotTheFilesAnswer(ex, file);
             _failures.Add(new RecordTypeFailure(tableName, PluginDiagnosis.FromParseException(ex).Describe()));
+            return false;
         }
+    }
 
-        // Serialization is CPU-bound and independent per record, so it runs in parallel; bounded
-        // batches keep a whole type's bodies from being live at once.
-        foreach (var batch in records.Chunk(SerializeBatchSize))
+    // Serialization is CPU-bound and independent per record, so it runs in parallel.
+    private List<PluginDocument> SerializedPrefix(string tableName, RecordTableSchema schema, List<IMajorRecordGetter> records)
+    {
+        var documents = new PluginDocument[records.Count];
+        var taken = -1;
+        long chars = 0;
+        try
         {
-            List<PluginDocument> documents;
-            try
+            Parallel.For(0, Environment.ProcessorCount, (_, loop) =>
             {
-                documents = [.. batch.AsParallel().AsOrdered().Select(record => Document(tableName, schema, record))];
-            }
-            catch (AggregateException ex) when (ex.InnerExceptions.Count > 0)
-            {
-                ExceptionDispatchInfo.Capture(ex.InnerExceptions[0]).Throw();
-                throw;
-            }
-
-            foreach (var document in documents) yield return document;
+                int next;
+                while (!loop.ShouldExitCurrentIteration && Interlocked.Read(ref chars) < SerializeBatchChars
+                    && (next = Interlocked.Increment(ref taken)) < records.Count)
+                {
+                    documents[next] = Document(tableName, schema, records[next]);
+                    Interlocked.Add(ref chars, documents[next].Text.Length);
+                }
+            });
         }
+        catch (AggregateException ex) when (ex.InnerExceptions.Count > 0)
+        {
+            ExceptionDispatchInfo.Capture(ex.InnerExceptions[0]).Throw();
+            throw;
+        }
+        return [.. documents.Take(Math.Min(taken + 1, records.Count))];
     }
 
     private PluginDocument Document(string tableName, RecordTableSchema schema, IMajorRecordGetter record)
@@ -93,8 +122,9 @@ internal sealed class MutagenModDocuments(
             var text = Encoding.UTF8.GetString(DeletedRecord.Serialize(record, schema, mod.GameRelease, () => file.HoldsNoFields(record.FormKey)));
             return WithGrupFacts(new PluginDocument(tableName, formKey, text), record);
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            PluginFailure.ThrowIfNotTheFilesAnswer(ex, file);
             var stub = ParseFailedDocument.For(record, EditorIdOrNull(record), mod.GameRelease);
             return WithGrupFacts(
                 new PluginDocument(
@@ -108,17 +138,21 @@ internal sealed class MutagenModDocuments(
     private PluginDocument WithGrupFacts(PluginDocument document, IMajorRecordGetter record) =>
         document with
         {
-            Cell = _cells.Value.TryGetValue(document.FormKey, out var cell) ? cell.Structure : null,
+            Cell = _cells.Value.TryGetValue(document.FormKey, out var cell) ? cell : null,
             Contents = [.. ContainerChildFields.EnumerateChildren(record)
                 .Select(c => new ChildRecord(c.Child.FormKey.ToString(), c.SlotName, c.SlotIndex))],
         };
 
     // The EditorID of an unreadable record is read through the same lazy Mutagen field access that
     // just threw, so it answers null rather than taking the plugin down with it.
-    private static string? EditorIdOrNull(IMajorRecordGetter record)
+    private string? EditorIdOrNull(IMajorRecordGetter record)
     {
         try { return record.EditorID; }
-        catch (Exception ex) when (ex is not OutOfMemoryException) { return null; }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            PluginFailure.ThrowIfNotTheFilesAnswer(ex, file);
+            return null;
+        }
     }
 
     // plugins.md, The tree, story 6: the worldspace/cell GRUP hierarchy, which EnumerateMajorRecords
