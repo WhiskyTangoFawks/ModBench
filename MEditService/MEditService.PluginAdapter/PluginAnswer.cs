@@ -91,7 +91,7 @@ public abstract record PluginFailure
 
     /// <summary>A master the plugin written references whose header does not read, so its style, which
     /// the write needs, is unknown.</summary>
-    public sealed record MasterUnreadable : PluginFailure
+    internal sealed record MasterUnreadable : PluginFailure
     {
         private readonly string _reason;
 

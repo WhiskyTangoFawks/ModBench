@@ -193,6 +193,6 @@ public sealed class PluginTreeReadTests
 
         Assert.Equal(
             "its master Light.esm could not be read: the plugin — unknown: Could not read enough data to parse a Mod Header from stream.  Position: 0.  12 remaining < 24 expected.",
-            Assert.IsType<PluginFailure.MasterUnreadable>(written.Failure()).Reason);
+            written.Failure().Reason);
     }
 }
