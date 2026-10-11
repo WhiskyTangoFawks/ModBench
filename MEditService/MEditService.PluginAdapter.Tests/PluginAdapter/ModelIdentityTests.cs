@@ -380,7 +380,7 @@ public sealed class ModelIdentityTests
         var originalPath = await Write(original, Path.Combine(scratch.Path, "original"));
         var recompiledPath = await Write(recompiled, Path.Combine(scratch.Path, "recompiled"));
         return Adapter.DivergenceFrom(
-            original.ModKey.FileName, originalPath, recompiledPath, GameRelease.Fallout4,
+            original.ModKey.FileName, originalPath, recompiledPath, EmptyLoadOrder.Of(GameRelease.Fallout4),
             new PluginStrings(null, scratch.Path)).Answered();
     }
 
@@ -404,7 +404,7 @@ public sealed class ModelIdentityTests
             .WriteAsync();
 
         var divergence = Adapter.DivergenceFrom(
-            fileName, originalPath, rewrittenPath, GameRelease.Fallout4, new PluginStrings(null, scratch.Path)).Answered();
+            fileName, originalPath, rewrittenPath, EmptyLoadOrder.Of(GameRelease.Fallout4), new PluginStrings(null, scratch.Path)).Answered();
         return (divergence, await File.ReadAllBytesAsync(originalPath), await File.ReadAllBytesAsync(rewrittenPath));
     }
 }

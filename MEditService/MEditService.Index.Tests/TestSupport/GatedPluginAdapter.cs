@@ -4,7 +4,6 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.TestSupport;
@@ -26,8 +25,8 @@ internal sealed class GatedPluginAdapter(
     public List<string> Opened { get; } = [];
 
     public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
-        ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
+        ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        PluginStrings? strings = null)
     {
         var pluginName = modPath.ModKey.FileName.ToString();
         if (ShouldParkBefore(pluginName))
@@ -42,7 +41,7 @@ internal sealed class GatedPluginAdapter(
         if (pluginName.Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
             return PluginFailures.Unparsed();
 
-        var documents = base.OpenDocuments(modPath, gameRelease, schemas, strings, loadOrder);
+        var documents = base.OpenDocuments(modPath, loadOrder, schemas, strings);
         lock (_gate) Opened.Add(pluginName);
         return documents;
     }

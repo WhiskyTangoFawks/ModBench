@@ -4,7 +4,6 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.TestSupport;
@@ -14,9 +13,9 @@ namespace MEditService.Index.Tests.TestSupport;
 internal sealed class PartwayAdapter(int afterRecords, Action atRecord) : DelegatingPluginAdapter(TestAdapters.Mutagen())
 {
     public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
-        ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null) =>
-        base.OpenDocuments(modPath, gameRelease, schemas, strings, loadOrder).Map<IPluginDocuments, IPluginDocuments>(
+        ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        PluginStrings? strings = null) =>
+        base.OpenDocuments(modPath, loadOrder, schemas, strings).Map<IPluginDocuments, IPluginDocuments>(
             documents => new Partway(documents, afterRecords, atRecord));
 
     private sealed class Partway(IPluginDocuments inner, int afterRecords, Action atRecord) : IPluginDocuments

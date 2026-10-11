@@ -120,8 +120,8 @@ public sealed class DiagnosedContainerTests : IDisposable
     private sealed class StubbedDocumentsAdapter(string? cellDiagnosis) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
-            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-            PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null) =>
+            ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+            PluginStrings? strings = null) =>
             RequireExtensions.AnswerOf<IPluginDocuments>(() => new StubDocuments(cellDiagnosis));
     }
 

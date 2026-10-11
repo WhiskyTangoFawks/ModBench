@@ -16,9 +16,10 @@ internal static class PluginTrees
 {
     /// <summary>A plugin's own binary read as the documents its tree would hold.</summary>
     internal static async Task<Answer<PluginSource, PluginFailure>> ReadAsync(
-        ModPath modPath, string pluginName, GameRelease gameRelease, PluginStrings strings, LoadOrderSnapshot? loadOrder,
+        ModPath modPath, string pluginName, LoadOrderSnapshot loadOrder, PluginStrings strings,
         CancellationToken cancel = default)
     {
+        var gameRelease = loadOrder.GameRelease;
         try
         {
             // Hashed before the read: bytes another tool writes after it are then named as an external
@@ -163,11 +164,11 @@ internal static class PluginTrees
     /// the one at <paramref name="modPath"/>; null when they are model-identical. Both are
     /// reparsed, since only written bytes show what the writer does.</summary>
     internal static ModelIdentity.Divergence? DivergenceBetween(
-        ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings, LoadOrderSnapshot? loadOrder)
+        ModPath modPath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings)
     {
-        var original = MutagenPluginAdapter.OpenForWrite(modPath, gameRelease, strings, loadOrder);
+        var original = MutagenPluginAdapter.OpenForWrite(modPath, loadOrder.GameRelease, strings, loadOrder);
         var recompiled = MutagenPluginAdapter.OpenForWrite(
-            new ModPath(modPath.ModKey, recompiledPath), gameRelease, loadOrder: loadOrder);
+            new ModPath(modPath.ModKey, recompiledPath), loadOrder.GameRelease, loadOrder: loadOrder);
 
         return ModelIdentity.FindFirstDivergence(original, recompiled);
     }

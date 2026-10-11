@@ -99,16 +99,18 @@ internal static class StarfieldKeyedArrayAnnotations
         ("ILensFlareGetter", "Sprites", ["LensFlareSpriteId"]),
         ("IStaticCollectionGetter", "Parts", ["Static"]),
         ("IAmbientSoundEventGetter", "PlanetCustomizations", ["Planet", "SwitchState"]),
+        ("IBiomeGetter", "ProceduralObjectGeneration", ["ProceduralObjectGenerationMaskName"]),
         ("IBiomeProceduralObjectGenerationGetter", "Objects", ["PackIn"]),
         ("IVehicleMaterialTableGetter", "AudioRules", ["Rule"]),
         ("IVehicleMaterialTableGetter", "VfxRules", ["Rule"]),
         ("IVehicleMaterialTableGetter", "FrictionRules", ["Rule"]),
         ("IBlueprintComponentBODSRowGetter", "BODSItems", ["Name"]),
+        ("IAnimationSoundTagSetGetter", "Tags", ["Tag"]),
+        ("ISnapTemplateGetter", "SnapTemplateRnamTraversal", ["Traversal"]),
         ("IPlanetModelComponentXMPMGetter", "UnknownSubItems", ["ResourceID"]),
     ];
 
-    /// <summary>What a wbStructExSK adds to its key. Pack-in and space cell entries carry no COED, so
-    /// their extension is the count alone.</summary>
+    /// <summary>What a wbStructExSK adds to its key.</summary>
     public static readonly (string TypeName, string MemberName, string[] ExtendedKeyMembers)[] ExtendedKeys =
     [
         ("IContainerGetter", "Items", ["Item.Count", "Data.ItemCondition", "Data.Owner"]),
@@ -119,7 +121,7 @@ internal static class StarfieldKeyedArrayAnnotations
         ("ILeveledBaseFormGetter", "Entries", ["Count", "Data.ItemCondition", "Data.Owner"]),
         ("ILeveledItemGetter", "Entries", ["Count", "Data.ItemCondition", "Data.Owner"]),
         ("ILeveledNpcGetter", "Entries", ["Count", "Data.ItemCondition", "Data.Owner"]),
-        ("ILeveledPackInGetter", "Entries", ["Count"]),
-        ("ILeveledSpaceCellGetter", "Entries", ["Count"]),
+        ("ILeveledPackInGetter", "Entries", ["Count", "Conditions"]),
+        ("ILeveledSpaceCellGetter", "Entries", ["Count", "Conditions"]),
     ];
 }

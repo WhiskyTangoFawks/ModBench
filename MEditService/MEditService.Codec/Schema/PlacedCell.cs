@@ -78,11 +78,16 @@ public static class PlacedCell
     private static readonly ConcurrentDictionary<GameCategory, string?> PositionHolders = new();
 
     // Mutagen's placed-record aspect holds the position on the record itself, or in the one member it
-    // declares to carry a position and rotation. Null for the record itself.
+    // declares to carry a position and rotation. Each game declares both aspects under these names.
     private static string? PositionHolder(GameRelease release) =>
         PositionHolders.GetOrAdd(release.ToCategory(), category =>
-            SchemaReflector.GameModule(category)?.GetTypes().FirstOrDefault(t => t.Name == "IPlacedGetter")?.GetProperties()
-                .FirstOrDefault(p => p.PropertyType.GetInterfaces().Any(i => i.Name == "IPositionRotationGetter"))?.Name);
+        {
+            var types = SchemaReflector.GameModule(category)?.GetTypes() ?? [];
+            Type Aspect(string name) => types.FirstOrDefault(t => t.Name == name)
+                ?? throw new InvalidOperationException($"Mutagen.Bethesda.{category} declares no {name}, so mEdit finds no placed record's position.");
+            var positioned = Aspect("IPositionRotationGetter");
+            return Aspect("IPlacedGetter").GetProperties().FirstOrDefault(p => positioned.IsAssignableFrom(p.PropertyType))?.Name;
+        });
 
     private static string[] PositionPath(GameRelease release) =>
         PositionHolder(release) is { } holder ? [holder, PositionMember] : [PositionMember];

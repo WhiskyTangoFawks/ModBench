@@ -43,11 +43,11 @@ internal sealed class DiskSaysAdapter(TimeProvider? clock = null)
     }
 
     public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
-        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null) =>
-        IsGone(modPath.Path) ? PluginFailures.Inaccessible() : base.ReadContent(modPath, gameRelease, strings, loadOrder);
+        ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings? strings = null) =>
+        IsGone(modPath.Path) ? PluginFailures.Inaccessible() : base.ReadContent(modPath, loadOrder, strings);
 
     public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
-        ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null) =>
-        IsGone(modPath.Path) ? PluginFailures.Inaccessible() : base.OpenDocuments(modPath, gameRelease, schemas, strings, loadOrder);
+        ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        PluginStrings? strings = null) =>
+        IsGone(modPath.Path) ? PluginFailures.Inaccessible() : base.OpenDocuments(modPath, loadOrder, schemas, strings);
 }

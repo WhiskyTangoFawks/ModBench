@@ -21,8 +21,7 @@ public sealed class MasterStylesTests
         ]);
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(LightMasterAndChild.Child, childPath), GameRelease.Starfield,
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield), loadOrder: loadOrder).Answered();
+            new ModPath(LightMasterAndChild.Child, childPath), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield)).Answered();
 
         Assert.Equal([LightMasterAndChild.Weapon.ToString()], documents.Records.Select(r => r.FormKey));
     }

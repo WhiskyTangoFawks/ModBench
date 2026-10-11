@@ -61,12 +61,12 @@ public sealed class WarmReconcileTests
         public OpenedIndex? Index { get; set; }
 
         public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
-            ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
+            ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings? strings = null)
         {
             var index = Index
                 ?? throw new InvalidOperationException("Expected the adapter's Index to be set before any open.");
             observed.Add(index.Status.IndexedPlugins.Count);
-            return base.ReadContent(modPath, gameRelease, strings, loadOrder);
+            return base.ReadContent(modPath, loadOrder, strings);
         }
     }
 

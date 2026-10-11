@@ -362,8 +362,6 @@ internal sealed record SchemaAnnotations(
                 .. PlumbingMembers,
                 ("IObjectModStringPropertyGetter`1", "Unused"),
                 ("IObjectModEnumPropertyGetter`1", "Unused"),
-                // Mutagen's answer to which function a leaf is: the document never holds it, and as a base
-                // member it hides GetEventData's own Function.
                 ("IConditionDataGetter", "Function"),
             ],
             ExcludedUnions: [],
@@ -521,8 +519,9 @@ internal sealed record SchemaAnnotations(
 
     private IEnumerable<string> UnresolvedKeyMembers(ILookup<string, Type> typesByName) =>
     [
-        .. UnresolvedKeyPaths(typesByName, nameof(KeyedArrays), KeyedArrays),
-        .. UnresolvedKeyPaths(typesByName, nameof(ExtendedKeys), ExtendedKeys),
+        .. UnresolvedKeyPaths(typesByName, nameof(KeyedArrays), KeyedArrays, listOrders: false),
+        // xEdit's extended sort key orders by a list too, as a leveled entry's conditions.
+        .. UnresolvedKeyPaths(typesByName, nameof(ExtendedKeys), ExtendedKeys, listOrders: true),
         .. ExtendedKeys.Keys.Where(entry => !KeyedArrays.ContainsKey(entry))
             .Select(entry => $"{nameof(ExtendedKeys)}: {entry.TypeName}.{entry.MemberName} extends no keyed array"),
     ];
@@ -530,7 +529,8 @@ internal sealed record SchemaAnnotations(
     // A row naming a key the element lacks would key every element alike, so the array would align
     // by position alone.
     private static IEnumerable<string> UnresolvedKeyPaths(
-        ILookup<string, Type> typesByName, string table, Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> rows)
+        ILookup<string, Type> typesByName, string table, Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> rows,
+        bool listOrders)
     {
         foreach (var (entry, keyMembers) in rows)
         {
@@ -549,12 +549,12 @@ internal sealed record SchemaAnnotations(
 
             foreach (var keyPath in keyMembers)
             {
-                if (UnresolvedKeyPath(elementType, keyPath) is { } why) yield return $"{label} {why}";
+                if (UnresolvedKeyPath(elementType, keyPath, listOrders) is { } why) yield return $"{label} {why}";
             }
         }
     }
 
-    private static string? UnresolvedKeyPath(Type elementType, string keyPath)
+    private static string? UnresolvedKeyPath(Type elementType, string keyPath, bool listOrders)
     {
         var owner = elementType;
         var segments = keyPath.Split('.');
@@ -565,7 +565,7 @@ internal sealed record SchemaAnnotations(
             if (prop == null) return $"names key {keyPath}, which {owner.Name} does not reach at {segments[i]}";
             if (i == segments.Length - 1)
             {
-                return ReflectedTypes.IsListType(prop.PropertyType, out _)
+                return !listOrders && ReflectedTypes.IsListType(prop.PropertyType, out _)
                     ? $"names key {keyPath}, which is itself a list — a key is one value per element"
                     : null;
             }

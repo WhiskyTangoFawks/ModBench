@@ -17,9 +17,17 @@ public class SchemaWarmedTestFramework(IMessageSink messageSink) : GamesRegister
 
     protected virtual void Warm() => WarmSchemas();
 
+    // xUnit answers a throw here by skipping the whole assembly and exiting clean. A schema that does
+    // not build instead fails, by name, every test that reads it, since a failed build is not cached.
     protected override ITestFrameworkExecutor CreateExecutor(AssemblyName assemblyName)
     {
-        Warm();
+        try
+        {
+            Warm();
+        }
+        catch (InvalidOperationException)
+        {
+        }
         return base.CreateExecutor(assemblyName);
     }
 }

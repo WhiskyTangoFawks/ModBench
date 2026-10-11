@@ -27,26 +27,14 @@ public class SchemaReflectorTests
         Assert.Equal(displayName, schemas.DisplayNameFor(table));
     }
 
-    [Fact]
-    public void GetSchemas_Acti_DisplayName_MatchesXEdit()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.Equal("Activator", schemas.DisplayNameFor("acti"));
-    }
-
     [Theory]
-    [InlineData(GameRelease.Fallout4, "Idle Animation")]
-    [InlineData(GameRelease.Starfield, "Animation")]
-    public void ARecordTypesName_IsTheOneItsGamesXEditGivesIt(GameRelease release, string displayName)
+    [InlineData(GameRelease.Fallout4, "acti", "Activator")]
+    [InlineData(GameRelease.Fallout4, "gmst", "Game Setting")]
+    [InlineData(GameRelease.Fallout4, "idle", "Idle Animation")]
+    [InlineData(GameRelease.Starfield, "idle", "Animation")]
+    public void ARecordTypesName_IsTheOneItsGamesXEditGivesIt(GameRelease release, string table, string displayName)
     {
-        Assert.Equal(displayName, _reflector.GetSchemas(release).DisplayNameFor("idle"));
-    }
-
-    [Fact]
-    public void GetSchemas_Gmst_DisplayName_MatchesXEdit()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.Equal("Game Setting", schemas.DisplayNameFor("gmst"));
+        Assert.Equal(displayName, _reflector.GetSchemas(release).DisplayNameFor(table));
     }
 
     [Fact]

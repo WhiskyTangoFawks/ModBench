@@ -23,7 +23,7 @@ public sealed class PluginReadabilityTests : IDisposable
     private Task<Answer<PluginSource, PluginFailure>> ReadSourceAt(string path) =>
         Adapter.ReadSourceOfAsync(
             new RegisteredPlugin(Path.GetFileName(path), PluginOrigin.DataDirectory, path, PluginProvider.Game, Line: null),
-            GameRelease.Fallout4, new PluginStrings(null, _data.DataFolder));
+            EmptyLoadOrder.Of(GameRelease.Fallout4), new PluginStrings(null, _data.DataFolder));
 
     [Fact]
     public async Task APluginThatIsNotThere_IsInaccessible() =>
@@ -34,7 +34,7 @@ public sealed class PluginReadabilityTests : IDisposable
     {
         var path = Path.Combine(_data.DataFolder, "Absent.esp");
 
-        var read = Adapter.ReadContent(new ModPath(ModKey.FromFileName("Absent.esp"), path), GameRelease.Fallout4);
+        var read = Adapter.ReadContent(new ModPath(ModKey.FromFileName("Absent.esp"), path), EmptyLoadOrder.Of(GameRelease.Fallout4));
 
         Assert.IsType<PluginFailure.Inaccessible>(read.Failure());
     }

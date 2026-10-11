@@ -23,7 +23,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         var strings = new PluginStrings(modFolder, loadOrder.DataFolderPath);
 
         // A fresh deep parse, not the load order's own overlay, whose lifetime this gate does not control.
-        if (!(await adapter.ReadSourceOfAsync(plugin, loadOrder.GameRelease, strings, loadOrder, cancel)).Holds(out var source, out var failure))
+        if (!(await adapter.ReadSourceOfAsync(plugin, loadOrder, strings, cancel)).Holds(out var source, out var failure))
         {
             logger.LogWarning(failure.Error, "Refused to decompile {Plugin}: {Reason}", plugin.Name, failure.Reason);
             return failure switch
@@ -88,7 +88,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         }
 
         // Both are reparsed, so only bytes that differ pay for it.
-        if (!adapter.DivergenceFrom(pluginName, originalPluginPath, recompiledPath, gameRelease, strings, loadOrder)
+        if (!adapter.DivergenceFrom(pluginName, originalPluginPath, recompiledPath, loadOrder, strings)
                 .Holds(out var divergence, out failure))
         {
             divergence = failure.Reason;

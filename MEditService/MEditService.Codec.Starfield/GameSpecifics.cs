@@ -11,9 +11,8 @@ internal static class GameSpecifics
         [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
     });
 
-    // Proven over the nine installed masters: 2,034 entry-point effects, 3 region RDATs, 37 races, 107
-    // weapon templates. No Starfield reference has a power-grid counter, and no entry point uses
-    // function 6 or 7.
+    // Proven over the installed masters, in which no reference has a power-grid counter and no entry
+    // point uses function 6 or 7.
     public static CreationKitShapes CreationKitShapes { get; } = new(
         SubrecordSizes: new Dictionary<(string, string), int>
         {
