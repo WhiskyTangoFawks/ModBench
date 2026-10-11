@@ -76,20 +76,22 @@ public sealed class ConditionSchemaTests
             siblingsInUse.Keys.Order(StringComparer.Ordinal));
     }
 
-    [Fact]
-    public void RunOnType_NamesTheReferenceMemberUnderExactlyTheReferenceValue()
+    [Theory]
+    [InlineData(GameRelease.Fallout4, "cobj", "Conditions")]
+    [InlineData(GameRelease.SkyrimSE, "perk", "Conditions")]
+    [InlineData(GameRelease.Starfield, "qust", "DialogConditions")]
+    public void RunOnType_NamesTheReferenceMemberUnderExactlyTheReferenceValue(GameRelease release, string table, string column)
     {
-        var runOn = Member(Member(ConditionElement(), "Data"), "RunOnType");
+        var condition = SharedSchemaReflector.Instance.GetSchemas(release)[table].RecordColumns.Single(c => c.Name == column).Field.ElementType.Require();
+        var runOn = Member(Member(condition, "Data"), "RunOnType");
         var siblingsInUse = runOn.SiblingsInUse;
 
         Assert.NotNull(siblingsInUse);
         Assert.Equal(
             runOn.EnumMembers.Select(m => m.Value).Order(StringComparer.Ordinal),
             siblingsInUse.Keys.Order(StringComparer.Ordinal));
-        Assert.Equal(["Reference"], siblingsInUse[nameof(Condition.RunOnType.Reference)]);
-        Assert.All(
-            siblingsInUse.Where(kv => kv.Key != nameof(Condition.RunOnType.Reference)),
-            kv => Assert.Empty(kv.Value));
+        Assert.Equal(["Reference"], siblingsInUse["Reference"]);
+        Assert.All(siblingsInUse.Where(kv => kv.Key != "Reference"), kv => Assert.Empty(kv.Value));
     }
 
     [Fact]

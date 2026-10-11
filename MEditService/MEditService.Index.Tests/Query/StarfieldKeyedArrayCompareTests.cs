@@ -15,14 +15,16 @@ public sealed class StarfieldKeyedArrayCompareTests
 {
     private static readonly ModKey Base = ModKey.FromFileName("Base.esm");
     private static readonly ModKey Top = ModKey.FromFileName("Top.esp");
-    private static readonly FormKey LeveledPackInKey = new(Base, 0x800);
-    private static readonly FormKey TagSetKey = new(Base, 0x801);
+    private const uint LeveledPackInId = 0x800;
+    private const uint TagSetId = 0x801;
+    private static readonly FormKey LeveledPackInKey = new(Base, LeveledPackInId);
+    private static readonly FormKey TagSetKey = new(Base, TagSetId);
     private static readonly FormKey A = new(Base, 0x900);
 
     [Theory]
-    [InlineData("lvlp", "Entries")]
-    [InlineData("stag", "Tags")]
-    public void ACopyHoldingEntriesAlikeButForTheirConditions_OrTagsByName_InAnotherOrder_IsIdenticalToMaster(string recordType, string field)
+    [InlineData(LeveledPackInId, "Entries")]
+    [InlineData(TagSetId, "Tags")]
+    public void ACopyHoldingEntriesAlikeButForTheirConditions_OrTagsByName_InAnotherOrder_IsIdenticalToMaster(uint recordId, string field)
     {
         using var scratch = new ScratchDirectory("medit-starfield-keyed-arrays-");
         var (basePath, topPath) = Write(scratch.Path);
@@ -33,9 +35,8 @@ public sealed class StarfieldKeyedArrayCompareTests
             new LoadOrderEntry(Base.FileName, basePath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
             new LoadOrderEntry(Top.FileName, topPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
         ], GameRelease.Starfield);
-        var record = recordType == "lvlp" ? LeveledPackInKey : TagSetKey;
 
-        var diff = index.Queries.GetCompare(record.ToString()).Value().Require().Diffs.Single(d => d.FieldName == field);
+        var diff = index.Queries.GetCompare(new FormKey(Base, recordId).ToString()).Value().Require().Diffs.Single(d => d.FieldName == field);
 
         Assert.Equal(ConflictThis.IdenticalToMaster, diff.CellStates[Top.FileName]);
     }
