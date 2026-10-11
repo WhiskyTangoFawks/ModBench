@@ -91,6 +91,16 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     [Fact]
+    public void OpenDocuments_APluginWhoseStringsAreInAnArchiveBesideItWithAnUpperCaseExtension_ReadsItsNamesFromThere()
+    {
+        LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_modFolder, "Update.BSA"));
+
+        using var documents = OpenDocuments(_pluginPath).Answered();
+
+        Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void OpenRecordLookup_APluginWhoseStringsAreInTheGameDataFoldersArchiveForIt_ReadsItsNamesFromThere()
     {
         MoveStringsIntoGameData("Update.bsa");

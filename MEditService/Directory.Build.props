@@ -15,7 +15,7 @@
          the reference list), so a box two hops down is a compile error rather than a line nobody
          noticed arriving. -->
     <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
-    <MutagenVersion>0.55.0-modbench.1</MutagenVersion>
+    <MutagenVersion>0.55.0-modbench.2</MutagenVersion>
   </PropertyGroup>
 
   <!-- ADR-0005: the codec's projects and PluginAdapter are the boxes that hold live Mutagen objects, so
