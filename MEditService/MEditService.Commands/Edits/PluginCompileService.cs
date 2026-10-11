@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -110,7 +111,7 @@ internal sealed class PluginCompileService(
 
         var loadOrderNames = loadOrder.InJudgedOrder().Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-        var saved = await tree.SaveAsync(registered.Path, loadOrderNames, save => repository.WriteBinary(plugin, save.BinarySha256(), save.Commit));
+        var saved = await tree.SaveAsync(registered.Path, loadOrderNames, save => Land(save, tree, plugin, repository));
         if (!saved.Holds(out var landed, out var failure))
         {
             return failure switch
@@ -120,7 +121,7 @@ internal sealed class PluginCompileService(
                 _ => WriteFailed(plugin, failure.Reason),
             };
         }
-        if (!landed.Holds(out var recorded, out var unwritten)) return WriteFailed(plugin, unwritten.Reason);
+        if (!landed.Holds(out var recorded, out var refused)) return refused;
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -137,6 +138,28 @@ internal sealed class PluginCompileService(
                 "Compile it again to update the record."));
         }
         return CompileResult.Success(diagnostics);
+    }
+
+    private static Answer<bool, CompileResult> Land(PreparedPluginSave save, CompiledTree tree, PluginAddress plugin, ISourceRepository repository)
+    {
+        if (tree.DropsIn(save) is { Count: > 0 } drops) return Dropped(plugin, repository, drops);
+        return repository.WriteBinary(plugin, save.BinarySha256(), save.Commit).Holds(out var recorded, out var unwritten)
+            ? recorded
+            : WriteFailed(plugin, unwritten.Reason);
+    }
+
+    private static CompileResult Dropped(PluginAddress plugin, ISourceRepository repository, IReadOnlyList<DroppedValue> drops)
+    {
+        var named = new List<string>();
+        foreach (var drop in drops)
+        {
+            if (!repository.RelativePathOf(plugin, drop.Record).Holds(out var file, out var unread)) return SourceDoesNotParse(plugin, unread);
+            var held = file ?? throw new InvalidOperationException($"Expected the tree this compile read to hold {drop.Record.FormKey}'s document.");
+            named.Add($"in {held}, {string.Join(", ", drop.Paths.Select(path => $"'{path}'"))}");
+        }
+        return CompileResult.Refused(
+            CompileRefusal.SourceValueDropped,
+            $"{plugin.Name} cannot be compiled: the plugin written from its source would not hold, {string.Join("; ", named)}. Nothing was written.");
     }
 
     private static CompileResult SourceDoesNotParse(PluginAddress plugin, SourceFailure unread) =>
