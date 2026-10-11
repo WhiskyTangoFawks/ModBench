@@ -44,7 +44,7 @@ references/
 /DevList*/modbench/
 /DevList*/mods/*/.git/
 /DevList*/mods/*/.gitignore
-/DevList*/mods/*/source/
+/DevList*/mods/*/plugin-source/
 
 # Pinned Vale binary, fetched by .claude/skills/validate/install-vale.sh
 /tools/

@@ -65,7 +65,7 @@ Run it from the repo root. The workspace folder you open is the MO2 instance: th
 
 ### Local folders
 
-Each developer fills two kinds of folder at the repo root. Neither is needed to build or test.
+Two kinds of folder at the repo root serve local work. Neither is needed to build or test.
 
 `references/` holds read-only clones of the reference tools' source, to grep. [CLAUDE.md](CLAUDE.md) § Resources says which files in them matter. Clone them once:
 
@@ -76,7 +76,12 @@ for repo in Mutagen-Modding/Mutagen TES5Edit/TES5Edit ModOrganizer2/modorganizer
 done
 ```
 
-`DevList/`, `DevListSkyrim/` and `DevListStarfield/` are MO2 instances for manual tests: Fallout 4, Skyrim Special Edition and Starfield. Their synthetic `MB-DEV` mods are committed; the game files are not. With no `gamePath` in `ModOrganizer.ini`, Modbench finds the game in Steam. To give an instance its own copy of the game, copy the game's `Data` folder into the instance's `Stock Game Folder/` (`cp -rl` hardlinks it on the same filesystem), and set `gamePath` to the absolute path of `Stock Game Folder`.
+`DevList/`, `DevListSkyrim/` and `DevListStarfield/` are MO2 instances for manual tests: Fallout 4, Skyrim Special Edition and Starfield. The repo holds their synthetic `MB-DEV` mods. It does not hold the game files. With no `gamePath` in `ModOrganizer.ini`, Modbench finds the game in Steam. To give an instance its own copy of the game, hardlink the game's `Data` folder into it, then set `gamePath` to the absolute path of `Stock Game Folder`:
+
+```bash
+mkdir -p "DevList/Stock Game Folder"
+cp -rl "<game folder>/Data" "DevList/Stock Game Folder/"   # cp -r across filesystems
+```
 
 ### Windows gates from Linux
 

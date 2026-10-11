@@ -1,5 +1,0 @@
-*MBDevConflictB.esp
-*MBDevConflictA.esp
-*MBDevLight.esl
-*MBDevConditions.esp
-*MBDevMissingMaster.esp
