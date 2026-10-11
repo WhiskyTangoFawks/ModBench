@@ -185,7 +185,7 @@ As a user, I want:
 1. `compile` to build from the working tree, without asking: a tracked plugin's plugin source is the truth, and compile builds the plugin from it.
 2. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
 3. From the palette with no plugin, a pick of the tracked plugins. Source: No dead entries
-4. A plugin whose header flag limits its FormIDs, light or medium, refused when its records fall outside that range, naming the records and the remedies: clear the flag, rename the plugin off `.esl` where the extension sets it, or change the records' FormIDs.
+4. A plugin whose header flag limits its FormIDs, light or medium, refused when its records fall outside that range, naming the records, what limits the plugin, its flag, its `.esl` extension or both, and what lifts that limit: clear the flag, rename the plugin off `.esl`, or both. Changing the records' FormIDs works in every case.
 5. An interrupted compile to leave the old binary or the new one, and neither to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Compiling again fixes it. This is an exception to A failed gesture writes nothing.
 6. A plugin whose plugin source is unreadable refused, naming it and pointing at decompile. Source: Never silently wrong
 7. `compile` to save the plugin's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugin is built from what I see. A file VS Code does not save refuses compile, naming it. Source: VS Code's save before run; ADR-0001; Never silently wrong
