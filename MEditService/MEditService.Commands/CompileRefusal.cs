@@ -38,7 +38,7 @@ public enum CompileRefusal
     /// <summary>Two source files claim one FormKey; which to keep is the user's call.</summary>
     FormKeyCollision,
 
-    /// <summary>A light plugin holds a native FormID its slot cannot address.</summary>
+    /// <summary>A light or medium plugin holds a native FormID outside the range its flag limits it to.</summary>
     LightFormIdOutOfRange,
 
     /// <summary>A FormID the masters cannot map, so no binary is written (ADR-0008).</summary>

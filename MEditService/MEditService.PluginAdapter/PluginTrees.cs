@@ -5,6 +5,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Analysis;
 using Mutagen.Bethesda.Plugins.Records;
+using Noggog;
 using Noggog.WorkEngine;
 
 namespace MEditService.PluginAdapter;
@@ -86,7 +87,8 @@ internal static class PluginTrees
         try
         {
             if (!(await ReadIntoAsync(game, files, scratchDir, cancel)).Holds(out var recompiled, out var unread)) return unread;
-            await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder, loadOrder);
+            await MutagenPluginAdapter.WriteAsync(
+                recompiled, destinationPath, masterOrder, MasterStyles.Of(masterOrder.Select(name => ModKey.FromFileName(name)), loadOrder));
             return PluginAnswer.Of(destinationPath);
         }
         catch (Exception ex) when (PluginFailure.OfWrite(ex) is { } failure)
@@ -226,17 +228,19 @@ public sealed class CompiledTree
     /// <summary>The plugin the tree describes, which is whose records count as native.</summary>
     public ModKey ModKey => _mod.ModKey;
 
-    /// <summary>The removable ESL header flag, as opposed to light by <c>.esl</c> extension.</summary>
-    internal bool IsSmallMaster => _mod.IsSmallMaster;
-
-    public bool IsLight(string fileName) => PluginFlagPredicates.IsLight(_mod, fileName);
-
-    /// <summary>The local FormID range an ESL-addressable plugin may use, or null when the header
-    /// declares none.</summary>
-    public (uint Min, uint Max)? SmallMasterRange =>
-        RecordCompactionCompatibilityDetection.GetSmallMasterRange(_mod) is { } range
-            ? (range.Min, range.Max)
+    /// <summary>The local FormID range a light or medium plugin's native records must fall in, or null
+    /// for a plugin no flag limits.</summary>
+    public LimitedRange? LimitedRange(string fileName)
+    {
+        if (PluginFlagPredicates.IsLight(_mod, fileName))
+            return Limited("light", RecordCompactionCompatibilityDetection.GetSmallMasterRange(_mod));
+        return PluginFlagPredicates.IsMedium(_mod, fileName)
+            ? Limited("medium", RecordCompactionCompatibilityDetection.GetMediumMasterRange(_mod))
             : null;
+    }
+
+    private static LimitedRange? Limited(string flag, RangeUInt32? range) =>
+        range is { } limited ? new LimitedRange(flag, limited.Min, limited.Max) : null;
 
     /// <summary>Every record the tree holds, in the order the mod enumerates them.</summary>
     public IReadOnlyList<FormKey> FormKeys => _formKeys.Value;
@@ -259,14 +263,16 @@ public sealed class CompiledTree
     }
 
     /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/> and handed to
-    /// <paramref name="land"/>, whose Commit renames it into place; discarded once it returns.</summary>
+    /// <paramref name="land"/>, whose Commit renames it into place; discarded once it returns. Only
+    /// <paramref name="masters"/>, the plugins the tree references, are read for their styles.</summary>
     public async Task<Answer<T, PluginFailure>> SaveAsync<T>(
-        string pluginPath, IReadOnlyList<string> masterOrder, Func<PreparedPluginSave, T> land)
+        string pluginPath, IReadOnlyList<string> masterOrder, IEnumerable<string> masters, Func<PreparedPluginSave, T> land)
     {
         var landing = false;
         try
         {
-            using var save = await PluginWriter.PrepareFromModAsync(_mod, pluginPath, masterOrder, _loadOrder);
+            using var save = await PluginWriter.PrepareFromModAsync(
+                _mod, pluginPath, masterOrder, MasterStyles.Of(masters.Select(name => ModKey.FromFileName(name)), _loadOrder));
             landing = true;
             return PluginAnswer.Of(land(save));
         }
@@ -277,6 +283,9 @@ public sealed class CompiledTree
         }
     }
 }
+
+/// <summary>The FormID range a plugin's light or medium flag limits its native records to, and that flag.</summary>
+public sealed record LimitedRange(string Flag, uint Min, uint Max);
 
 /// <summary>A tree's record and each path in its document whose value the plugin written from it lacks.</summary>
 public sealed record DroppedValue(RecordIdentity Record, IReadOnlyList<string> Paths);

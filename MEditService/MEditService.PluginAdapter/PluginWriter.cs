@@ -1,5 +1,6 @@
-using MEditService.LoadOrder;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Noggog;
 
 namespace MEditService.PluginAdapter;
 
@@ -13,7 +14,7 @@ internal static class PluginWriter
         IMod mod,
         string pluginPath,
         IReadOnlyList<string> masterOrder,
-        LoadOrderSnapshot loadOrder)
+        IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles)
     {
         var dir = Path.GetDirectoryName(pluginPath)
             ?? throw new InvalidOperationException($"Expected '{pluginPath}' to have a parent directory.");
@@ -27,7 +28,7 @@ internal static class PluginWriter
         // PreparedPluginSave to Dispose it.
         try
         {
-            await MutagenPluginAdapter.WriteAsync(mod, tmpPath, masterOrder, loadOrder, tmpStringsDir);
+            await MutagenPluginAdapter.WriteAsync(mod, tmpPath, masterOrder, masterStyles, tmpStringsDir);
 
             // Whatever StringsWriter actually produced (only present when UsingLocalization, and
             // only once WriteAsync's own StringsWriter.Dispose has run) rides to its real Strings/ folder

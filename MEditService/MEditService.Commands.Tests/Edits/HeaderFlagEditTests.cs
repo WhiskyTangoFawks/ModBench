@@ -41,7 +41,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_WithTheLightFlagAndAnOutOfRangeRecord_IsRefused_NamingTheRecordAndTheThreeRemedies()
+    public async Task Compile_WithTheLightFlagAndAnOutOfRangeRecord_IsRefused_NamingTheRecordAndTheRemedies()
     {
         TrackedTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
@@ -50,10 +50,22 @@ public sealed class HeaderFlagEditTests : IDisposable
 
         Assert.Empty(answer.Landed);
         var refused = Assert.Single(answer.Refused);
-        Assert.Contains("001000", refused.Message, StringComparison.Ordinal);
-        Assert.EndsWith(
-            "Clear the light flag, rename the plugin off .esl, or change the records' FormIDs.",
-            refused.Message, StringComparison.Ordinal);
+        Assert.Equal(
+            (CompileRefusal.LightFormIdOutOfRange,
+             $"{SourceEditFixture.PluginName} is a light plugin but holds native FormID(s) outside the light range (0x0-0xFFF): " +
+             $"001000:{SourceEditFixture.PluginName}. Clear the light flag, or change the records' FormIDs."),
+            (refused.Refusal, refused.Message));
+    }
+
+    [Fact]
+    public async Task Compile_OfAnEslWithAnOutOfRangeRecord_NamesRenamingItOffEslAmongTheRemedies()
+    {
+        using var light = SourceEditFixture.TrackedLight("Fixture.esl");
+        TrackedTree.Seed(light.ModFolder, light.Plugin, "001000:Fixture.esl");
+
+        var refused = Assert.Single((await CompileServices.Over(light.LoadOrder).CompileAsync([light.Plugin])).Refused);
+
+        Assert.EndsWith(". Clear the light flag, rename the plugin off .esl, or change the records' FormIDs.", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

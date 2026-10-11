@@ -116,23 +116,6 @@ public sealed class StarfieldGestureTests : IDisposable
     }
 
     [Fact]
-    public async Task TheLightFlag_OnAPluginHoldingARecordPastTheLightRange_RefusesCompileNamingIt()
-    {
-        var wide = CreatedAt(0x1000);
-
-        var flagged = _instance.EditHandler.Set(_tracked, Header, "IsSmallMaster", JsonDocument.Parse("true").RootElement);
-
-        Assert.True(flagged.Applied, flagged.Message);
-        var refused = Assert.Single((await _instance.CompileHandler.CompileAsync([_tracked])).Refused);
-        Assert.Fail(refused.Message);
-        Assert.Equal(
-            (CompileRefusal.LightFormIdOutOfRange,
-             $"{TrackedName} is a light plugin but holds native FormID(s) outside the light range (0x1-0xFFF): {wide}. " +
-             "Clear the light flag, rename the plugin off .esl, or change the records' FormIDs."),
-            (refused.Refusal, refused.Message));
-    }
-
-    [Fact]
     public async Task TheMediumFlag_OnAPluginHoldingARecordPastTheMediumRange_RefusesCompileNamingIt()
     {
         var wide = CreatedAt(0x10000);
@@ -143,9 +126,24 @@ public sealed class StarfieldGestureTests : IDisposable
         var refused = Assert.Single((await _instance.CompileHandler.CompileAsync([_tracked])).Refused);
         Assert.Equal(
             (CompileRefusal.LightFormIdOutOfRange,
-             $"{TrackedName} is a medium plugin but holds native FormID(s) outside the medium range (0x1-0xFFFF): {wide}. " +
+             $"{TrackedName} is a medium plugin but holds native FormID(s) outside the medium range (0x0-0xFFFF): {wide}. " +
              "Clear the medium flag, or change the records' FormIDs."),
             (refused.Refusal, refused.Message));
+    }
+
+    [Fact]
+    public void CreateRecord_OnAMediumPluginWithNoFormKeyFreeInItsRange_IsRefusedNamingClearingTheFlag()
+    {
+        Assert.True(_instance.EditHandler.Set(_tracked, Header, "Flags", JsonDocument.Parse("[\"Medium\"]").RootElement).Applied);
+        CreatedAt(0xFFFF);
+
+        var result = _instance.CreateHandler.CreateRecordSync(_tracked, "kywd");
+
+        Assert.Equal(
+            (RecordEditRefusal.FormKeySpaceExhausted,
+             $"{TrackedName} has no FormKey free at or above its Next Object ID, up to 0xFFFF, the last a medium plugin can address. " +
+             "Clear the medium flag in the header to draw above it."),
+            (result.Refusal, result.Message));
     }
 
     private FormKey CreatedAt(uint id)

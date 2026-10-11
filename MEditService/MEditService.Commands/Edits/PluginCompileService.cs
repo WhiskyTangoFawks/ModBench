@@ -68,23 +68,24 @@ internal sealed class PluginCompileService(
         var tree = parsedTree
             ?? throw new InvalidOperationException("Expected DeserializeSource to produce a tree when it does not refuse.");
 
-        // A light plugin with native records outside the light FormID range would compile to a
-        // binary the game mis-addresses, so refuse it (compile-plugin, Refusals).
-        if (tree.IsLight(plugin.Name) && tree.SmallMasterRange is { } lightRange)
+        // A plugin with native records outside the range its light or medium flag limits it to would
+        // compile to a binary the game mis-addresses, so refuse it (compile-plugin, Refusals).
+        if (tree.LimitedRange(plugin.Name) is { } limited)
         {
             var outOfRange = tree.FormKeys
                 .Where(key => key.ModKey == tree.ModKey
-                    && (key.ID < lightRange.Min || key.ID > lightRange.Max))
+                    && (key.ID < limited.Min || key.ID > limited.Max))
                 .Select(key => key.ToString())
                 .ToList();
             if (outOfRange.Count > 0)
             {
+                var renameOffEsl = plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase) ? " rename the plugin off .esl," : "";
                 return CompileResult.Refused(
                     CompileRefusal.LightFormIdOutOfRange,
-                    $"{plugin.Name} is a light plugin but holds native FormID(s) outside the light range " +
-                    $"(0x{lightRange.Min:X}-0x{lightRange.Max:X}): {string.Join(", ", outOfRange.Take(4))}" +
+                    $"{plugin.Name} is a {limited.Flag} plugin but holds native FormID(s) outside the {limited.Flag} range " +
+                    $"(0x{limited.Min:X}-0x{limited.Max:X}): {string.Join(", ", outOfRange.Take(4))}" +
                     (outOfRange.Count > 4 ? $" and {outOfRange.Count - 4} more" : "") +
-                    ". Clear the light flag, rename the plugin off .esl, or change the records' FormIDs.");
+                    $". Clear the {limited.Flag} flag,{renameOffEsl} or change the records' FormIDs.");
             }
         }
 
@@ -111,7 +112,7 @@ internal sealed class PluginCompileService(
 
         var loadOrderNames = loadOrder.InJudgedOrder().Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-        var saved = await tree.SaveAsync(registered.Path, loadOrderNames, save => Land(save, tree, plugin, repository));
+        var saved = await tree.SaveAsync(registered.Path, loadOrderNames, content.Masters, save => Land(save, tree, plugin, repository));
         if (!saved.Holds(out var landed, out var failure))
         {
             return failure switch
@@ -169,7 +170,7 @@ internal sealed class PluginCompileService(
         CompileResult.Refused(
             CompileRefusal.WriteFailed, $"Could not write {plugin.Name}: {reason} Its source is untouched, so compiling again rebuilds it.");
 
-    private sealed record Content(IReadOnlyList<SourceRecord> Records, IReadOnlyCollection<string> Links);
+    private sealed record Content(IReadOnlyList<SourceRecord> Records, IReadOnlyCollection<string> Links, IReadOnlySet<string> Masters);
 
     // The links come from the records here, through the collector and the schema.
     private Content ContentFacts(CompiledTree tree, PluginAddress plugin, LoadOrderSnapshot loadOrder)
@@ -186,7 +187,7 @@ internal sealed class PluginCompileService(
             required.Add(document, schema);
         }
 
-        return new Content(records, required.Links);
+        return new Content(records, required.Links, required.Masters);
     }
 
     private async Task<(CompiledTree? Tree, string? RefusalReason)> DeserializeSource(

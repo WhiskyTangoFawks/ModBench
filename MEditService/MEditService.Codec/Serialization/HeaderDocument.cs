@@ -70,6 +70,10 @@ public static class HeaderDocument
     /// never string-matched out of the JSON, so the answer is the door's own.</summary>
     public static bool IsLight(byte[] body, GameRelease release) => Read(body, release) is IModFlagsGetter flags && flags.IsSmallMaster;
 
+    /// <summary>Whether the document's header carries the medium flag, read as <see cref="IsLight"/> is.</summary>
+    public static bool IsMedium(byte[] body, GameRelease release) =>
+        Read(body, release) is IModFlagsGetter { CanBeMediumMaster: true, IsMediumMaster: true };
+
     // The GUID segment: the door resolves group folders against the real filesystem, so the folder
     // must not exist; and ExtractMetaInternal prefers a ModKey parsed from the last segment, so it
     // must not look like a plugin filename.

@@ -10,6 +10,7 @@ using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
 using Mutagen.Bethesda.Strings.DI;
+using Noggog;
 
 namespace MEditService.PluginAdapter;
 
@@ -242,12 +243,12 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     /// <summary>Bytes written in place; the temp file and rename are <see cref="PluginWriter"/>'s. A
     /// mod read from a source tree has no header masters (ADR-0008), so it needs
-    /// <paramref name="masterOrder"/>, styled from <paramref name="loadOrder"/>.</summary>
+    /// <paramref name="masterOrder"/>, and where masters carry a style, <paramref name="masterStyles"/>.</summary>
     internal static async Task WriteAsync(
         IMod plugin,
         string destinationPath,
         IReadOnlyList<string>? masterOrder = null,
-        LoadOrderSnapshot? loadOrder = null,
+        IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles = null,
         string? stringsFolder = null,
         bool noModKeySync = false)
     {
@@ -260,8 +261,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                 : toPath.WithLoadOrder(masters))
             .WithNoDataFolder()
             .NoNextFormIDProcessing();
-        if (masters is not null && loadOrder is not null && MasterStyles.Of(masters, loadOrder) is { } styles)
-            writeBuilder = writeBuilder.WithKnownMasters([.. styles.Items]);
+        if (masterStyles is not null) writeBuilder = writeBuilder.WithKnownMasters([.. masterStyles.Items]);
         // A destination named other than plugin's ModKey needs this lifted.
         if (noModKeySync) writeBuilder = writeBuilder.NoModKeySync();
 

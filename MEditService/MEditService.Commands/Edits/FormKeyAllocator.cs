@@ -19,8 +19,7 @@ internal sealed class FormKeyAllocator
     private readonly PluginAddress _plugin;
     private readonly GameRelease _release;
     private readonly SourceDocument? _header;
-    private readonly bool _isLight;
-    private readonly bool _lightByFlagAlone;
+    private readonly FlagLimit? _limit;
     private readonly IReadOnlySet<string> _used;
     private readonly uint _nextObjectIdHeld;
     private uint _nextObjectId;
@@ -33,9 +32,7 @@ internal sealed class FormKeyAllocator
         _nextObjectIdHeld = _nextObjectId = headerBody is null ? 0 : HeaderDocument.NextObjectId(headerBody, release);
         // The working tree's header document decides (ADR-0007), so a flag flipped this session caps
         // minting immediately.
-        var lightByExtension = plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
-        _lightByFlagAlone = !lightByExtension && headerBody is not null && HeaderDocument.IsLight(headerBody, release);
-        _isLight = lightByExtension || _lightByFlagAlone;
+        _limit = LimitOf(plugin.Name, headerBody, release);
         _used = used;
     }
 
@@ -102,7 +99,18 @@ internal sealed class FormKeyAllocator
         return id;
     }
 
-    private uint Cap => _isLight ? FormID.SmallIdMask : FormID.FullIdMask;
+    private uint Cap => _limit?.Cap ?? FormID.FullIdMask;
+
+    // The flag a header document sets, or the .esl extension, which no flag cleared can lift.
+    private sealed record FlagLimit(string Flag, uint Cap, bool Clearable);
+
+    private static FlagLimit? LimitOf(string pluginName, byte[]? headerBody, GameRelease release)
+    {
+        if (pluginName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase)) return new("light", FormID.SmallIdMask, Clearable: false);
+        if (headerBody is null) return null;
+        if (HeaderDocument.IsLight(headerBody, release)) return new("light", FormID.SmallIdMask, Clearable: true);
+        return HeaderDocument.IsMedium(headerBody, release) ? new("medium", FormID.MediumIdMask, Clearable: true) : null;
+    }
 
     private string KeyOf(uint id) => $"{id:X6}:{_plugin.Name}";
 
@@ -124,25 +132,24 @@ internal sealed class FormKeyAllocator
                 "must be native to the plugin that is to hold it.");
         }
 
-        if (_isLight && parsed.ID > FormID.SmallIdMask)
+        if (_limit is { } limit && parsed.ID > limit.Cap)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.LightPluginFormIdOutOfRange,
-                $"{requestedFormKey} exceeds {_plugin.Name}'s ESL local FormID range — a light-flagged " +
-                $"plugin can only address local FormIDs up to 0x{FormID.SmallIdMask:X}. " +
-                "Choose a FormID within that range, or un-flag the plugin as ESL.");
+                $"{requestedFormKey} exceeds {_plugin.Name}'s {limit.Flag} local FormID range — a {limit.Flag} " +
+                $"plugin can only address local FormIDs up to 0x{limit.Cap:X}. " +
+                $"Choose a FormID within that range, or clear the {limit.Flag} flag.");
         }
 
         return null;
     }
 
-    // Clearing the flag cannot make a .esl full, so only a plugin the flag alone makes light is told to.
     private string ExhaustedMessage()
     {
         var noneFree = $"{_plugin.Name} has no FormKey free at or above its Next Object ID";
-        if (!_isLight) return $"{noneFree}, up to 0xFFFFFF.";
-        var lightRange = $"{noneFree}, up to 0xFFF, the last a light plugin can address.";
-        return _lightByFlagAlone ? $"{lightRange} Clear the light flag in the header to draw above it." : lightRange;
+        if (_limit is not { } limit) return $"{noneFree}, up to 0x{FormID.FullIdMask:X}.";
+        var limited = $"{noneFree}, up to 0x{limit.Cap:X}, the last a {limit.Flag} plugin can address.";
+        return limit.Clearable ? $"{limited} Clear the {limit.Flag} flag in the header to draw above it." : limited;
     }
 
     private static uint LocalId(string formKey) =>
