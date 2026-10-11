@@ -445,6 +445,37 @@ public sealed class TrackModTests
     }
 
     [Fact]
+    public async Task TrackMod_ARecordOfObjectIdZero_RefusesNamingIt_SinceItsFormKeyIsTheHeaders()
+    {
+        using var modFolder = new ScratchDirectory("medit-track-object-id-zero-");
+        using var gameDir = new ScratchDirectory("medit-track-object-id-zero-game-");
+        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Master.esm") });
+        mod.Npcs.AddNew("ZeroGuy");
+        mod.WriteToBinary(pluginPath, new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
+        {
+            MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.NoCheck,
+        });
+        var bytes = File.ReadAllBytes(pluginPath);
+        const int formIdOffset = 12;
+        const uint ownObjectIdZero = 0x01000000;
+        BitConverter.GetBytes(ownObjectIdZero).CopyTo(bytes, bytes.AsSpan().LastIndexOf("NPC_"u8) + formIdOffset);
+        File.WriteAllBytes(pluginPath, bytes);
+
+        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
+        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+
+        Assert.Equal((false, TrackRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Equal(
+            "Fixture.esp cannot become source: Npc 000000:Fixture.esp (EditorID 'ZeroGuy') holds object ID 000000, " +
+            "the FormKey its plugin header's source holds.",
+            result.Message);
+        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+    }
+
+    [Fact]
     public async Task TrackMod_LocalizedPluginWhoseStringsAreInItsArchive_TracksAndMaterializesTheRealString()
     {
         using var modFolder = new ScratchDirectory("medit-trackservice-archived-strings-");

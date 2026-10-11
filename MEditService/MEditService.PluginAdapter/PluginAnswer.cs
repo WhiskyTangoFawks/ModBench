@@ -1,6 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda.Plugins.Exceptions;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.PluginAdapter;
 
@@ -59,6 +60,19 @@ public abstract record PluginFailure
         private readonly string _reason;
 
         internal PrunedMaster(Exception error) : base(error) => _reason = PluginDiagnosis.FromWriteException(error).Describe();
+
+        public override string Reason => _reason;
+    }
+
+    /// <summary>A record of the plugin's own object ID 0, whose FormKey is the one the plugin header's
+    /// source document holds.</summary>
+    public sealed record HeaderFormKeyHeld : PluginFailure
+    {
+        private readonly string _reason;
+
+        internal HeaderFormKeyHeld(IMajorRecordGetter record) : base(error: null) =>
+            _reason = $"{record.GetType().Name} {record.FormKey} (EditorID '{record.EditorID}') holds object ID 000000, " +
+                      "the FormKey its plugin header's source holds";
 
         public override string Reason => _reason;
     }

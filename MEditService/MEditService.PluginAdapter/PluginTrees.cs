@@ -29,6 +29,8 @@ internal static class PluginTrees
             // file with no exception.
             if (LocalizedStrings.FindMissingStringsFile(mod, pluginName, strings, gameRelease) is { } missing)
                 return new PluginFailure.MissingStrings(missing);
+            if (mod.EnumerateMajorRecords().FirstOrDefault(record => record.FormKey == new FormKey(mod.ModKey, 0)) is { } holdsTheHeaders)
+                return new PluginFailure.HeaderFormKeyHeld(holdsTheHeaders);
             return PluginAnswer.Of(new PluginSource(
                 await SerializeTree(mod, cancel), [.. mod.MasterReferences.Select(reference => reference.Master.FileName.ToString())], binarySha256));
         }
