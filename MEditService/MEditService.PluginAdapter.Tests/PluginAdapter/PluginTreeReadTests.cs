@@ -143,6 +143,26 @@ public sealed class PluginTreeReadTests
     }
 
     [Fact]
+    public async Task WriteFromTree_WritesAGroupsRecordsInTheOrderOfTheirFilesNames()
+    {
+        var byName = Enumerable.Range(0, 20).Select(i => $"Npc{i:D2}").ToList();
+        using var data = new PluginFixtureBuilder("writetree-group-order")
+            .WithPlugin("Order.esp", mod =>
+            {
+                foreach (var editorId in Enumerable.Reverse(byName)) mod.Npcs.AddNew(editorId);
+            })
+            .Build();
+        var files = await ReadTreeFiles(data, "Order.esp");
+        var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Order.esp");
+
+        (await Adapter.WriteFromTreeAsync(files, recompiledPath, [], EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
+
+        using var written = Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName("Order.esp"), recompiledPath), Fallout4Release.Fallout4);
+        Assert.Equal(byName, written.Npcs.Select(npc => npc.EditorID));
+    }
+
+    [Fact]
     public async Task WriteFromTree_WritesTheNextObjectIdTheSourceHolds_NotOnePastItsHighestRecord()
     {
         using var data = new PluginFixtureBuilder("writetree-next-object-id")
