@@ -26,8 +26,8 @@ public static class PluginBinaryWalk
     internal readonly record struct RecordPair(FormKey FormKey, RecordSpan Original, RecordSpan Rewritten);
 
     /// <summary>The records a plugin and its rewrite both hold, paired by type and FormKey, each FormID read
-    /// through its own plugin's masters: a rewrite prunes the masters its content does not need, which moves
-    /// every index after them. The header pairs with the header.</summary>
+    /// through its own plugin's masters: a rewrite prunes unneeded masters, which moves every index after
+    /// them.</summary>
     internal static List<RecordPair> PairByFormKey(
         byte[] original, IReadOnlyList<ModKey> originalMasters, byte[] rewritten, IReadOnlyList<ModKey> rewrittenMasters, ModKey plugin)
     {
