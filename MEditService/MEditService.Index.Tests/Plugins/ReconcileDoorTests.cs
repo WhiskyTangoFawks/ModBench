@@ -63,6 +63,33 @@ public sealed class ReconcileDoorTests
         Assert.Equal(LoadOrderState.Failed, Assert.Single(StatusesPublished(notifications)).Status.State);
     }
 
+    [Theory]
+    [InlineData(typeof(OutOfMemoryException))]
+    [InlineData(typeof(OperationCanceledException))]
+    public void AThrowNoPluginReadCatches_FailsTheReconcile_AndThePluginsReadBeforeItKeepTheirRecords(Type thrownType)
+    {
+        using var data = new PluginFixtureBuilder("uncaught-throw-door")
+            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
+            .WithPlugin("B.esp", mod =>
+            {
+                mod.Npcs.AddNew("FromB1");
+                mod.Npcs.AddNew("FromB2");
+            })
+            .Build();
+        var thrown = (Exception)(Activator.CreateInstance(thrownType, "injected while reading B.esp")
+            ?? throw new InvalidOperationException($"{thrownType} takes a message."));
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, () => throw thrown));
+
+        var version = index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+
+        Assert.Equal(LoadOrderState.Failed, index.Status.State);
+        Assert.Equal(version, index.Status.Version);
+        Assert.Contains(thrown.Message, index.Status.Message, StringComparison.Ordinal);
+        Assert.NotEmpty(index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
+        Assert.DoesNotContain(index.Status.Failures, f => f.Name == "B.esp");
+    }
+
     [Fact]
     public void AFailedReconcile_IsTriedAgain_ByAnEqualSnapshot()
     {

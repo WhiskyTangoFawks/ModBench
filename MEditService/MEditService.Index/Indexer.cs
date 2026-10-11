@@ -254,7 +254,7 @@ internal sealed class Indexer : IDisposable
             _exclusive.Enter();
             try
             {
-                var failure = ValidationFailure(() => ValidateTreesOf(paths));
+                var failure = ValidationFailure(() => ValidateTreesOf(paths), CancellationToken.None);
                 lock (_lock)
                 {
                     moved = _handOverFailure != failure;
@@ -294,18 +294,13 @@ internal sealed class Indexer : IDisposable
             if (ReconcileOrRefuse(arrival, ref version, ref heldElsewhere, ref failure) is not { } reconciled) return;
             changed = reconciled;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
             // Superseded: the reconcile that cancelled this one answers for this version or
-            // higher, so nothing here is ever the last word for it.
+            // higher, so nothing here is ever the last word for it. Normal, not a failure:
+            // Information, not Warning.
+            _logger.LogInformation(ex, "Load order reconcile was superseded before it completed");
             return;
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            // ReconcileOrRefuse already logged this at error; there is nothing further up to raise
-            // it to, so it becomes status data instead of only a log line.
-            failure = ex.Message;
-            changed = true;
         }
         // Max, not assign: the exclusive lock is released before this runs, so a newer version's
         // own stamp can land first, and this one must never answer for it downward.
@@ -328,6 +323,7 @@ internal sealed class Indexer : IDisposable
         ref string? heldElsewhere, ref string? failure)
     {
         EnterExclusive();
+        var token = CancellationToken.None;
         try
         {
             if (arrival() is not { } resolved) return null;
@@ -349,7 +345,7 @@ internal sealed class Indexer : IDisposable
                 _failureMessage = null;
                 _handOverFailure = null;
             }
-            var token = BeginReconcile();
+            token = BeginReconcile();
             if (EnsureScope(snapshot, out heldElsewhere, out failure) is not { } scope)
             {
                 // Refused, or failed with a reason: nothing is held here (EnsureScope tore the
@@ -360,17 +356,13 @@ internal sealed class Indexer : IDisposable
             failure = ValidateHeld(token);
             return failure is not null || reconciled;
         }
-        catch (OperationCanceledException ex)
+        catch (Exception ex) when (!Superseded(ex, token))
         {
-            // Superseded: whatever landed stays held and registered, and the reconcile that
-            // cancelled this one owns the rest. Normal, not a failure: Information, not Warning.
-            _logger.LogInformation(ex, "Load order reconcile was superseded before it completed");
-            throw;
-        }
-        catch (Exception ex)
-        {
+            // Every type, out of memory included: nothing above observes a throw, so one left here
+            // would leave the status Reconciling for ever (plugins.md, States, story 6).
             _logger.LogError(ex, "Load order reconcile failed");
-            throw;
+            failure = ex.Message;
+            return true;
         }
         finally
         {
@@ -378,6 +370,10 @@ internal sealed class Indexer : IDisposable
             ExitExclusive();
         }
     }
+
+    // A cancellation this reconcile was not asked for is a failure like any other throw.
+    private static bool Superseded(Exception ex, CancellationToken token) =>
+        ex is OperationCanceledException && token.IsCancellationRequested;
 
     // Called with the exclusive right held, so no other reconcile can be in flight.
     private CancellationToken BeginReconcile()
@@ -899,9 +895,9 @@ internal sealed class Indexer : IDisposable
     // ADR-0003: the status answering the version is published once the plugins are validated, and a
     // reconcile that changed the status reads Reconciling until then. The message when validation
     // failed outright, which becomes status data.
-    private string? ValidateHeld(CancellationToken token) => ValidationFailure(() => ValidateIndex(token));
+    private string? ValidateHeld(CancellationToken token) => ValidationFailure(() => ValidateIndex(token), token);
 
-    private string? ValidationFailure(Action validate)
+    private string? ValidationFailure(Action validate, CancellationToken token)
     {
         lock (_lock)
         {
@@ -918,10 +914,10 @@ internal sealed class Indexer : IDisposable
             _logger.LogWarning(ex, "Could not validate the index while another write held it; it is re-checked at the next snapshot");
             return null;
         }
-        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        catch (Exception ex) when (!Superseded(ex, token))
         {
-            // The failure becomes status data (plugins.md, States, story 6), and the next snapshot
-            // tries again.
+            // Every type, out of memory included: the failure becomes status data (plugins.md,
+            // States, story 6), and the next snapshot tries again.
             _logger.LogError(ex, "Validating the index failed unexpectedly");
             return ex.Message;
         }

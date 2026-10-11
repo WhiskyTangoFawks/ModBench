@@ -181,17 +181,27 @@ public sealed class UnsavedDocumentTests : IDisposable
         Assert.Null(LaterReadFailureOfTracked());
     }
 
-    [Fact]
-    public void AHandOverWhoseValidationFaultsOutright_FailsTheStatus()
+    [Theory]
+    [InlineData(typeof(InvalidOperationException))]
+    [InlineData(typeof(OutOfMemoryException))]
+    [InlineData(typeof(OperationCanceledException))]
+    public void AHandOverWhoseValidationFaultsOutright_FailsTheStatus(Type thrownType)
     {
+        var thrown = (Exception)(Activator.CreateInstance(thrownType, "injected while validating the hand-over")
+            ?? throw new InvalidOperationException($"{thrownType} takes a message."));
         using var faulting = Indexes.Reconciled(
-            _fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: new InMemoryNotificationPublisher { FaultsOn = IsRowsChanged });
+            _fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: new InMemoryNotificationPublisher { OnPublish = ThrowingOnRowsChanged(thrown) });
 
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedUnsaved\""))]);
 
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the failed status");
-        Assert.Contains(InMemoryNotificationPublisher.FaultReason, faulting.Status.Message, StringComparison.Ordinal);
+        Assert.Contains(thrown.Message, faulting.Status.Message, StringComparison.Ordinal);
     }
+
+    private static Action<INotification> ThrowingOnRowsChanged(Exception thrown) => notification =>
+    {
+        if (IsRowsChanged(notification)) throw thrown;
+    };
 
     [Fact]
     public void AHandOverThatValidatesCleanly_ClearsTheFailureAnEarlierHandOverSet()
