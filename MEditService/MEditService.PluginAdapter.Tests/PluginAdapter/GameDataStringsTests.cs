@@ -28,14 +28,23 @@ public sealed class GameDataStringsTests : IDisposable
         _modFolder = Directory.CreateDirectory(Path.Combine(_root, "mods", ModName)).FullName;
         _dataFolder = Directory.CreateDirectory(Path.Combine(_root, "Game", "Data")).FullName;
         _pluginPath = Path.Combine(_modFolder, PluginName);
+        WritePluginNamingItsDoor(DoorName);
+    }
+
+    private void WritePluginNamingItsDoor(string doorName)
+    {
         var mod = new SkyrimMod(ModKey.FromFileName(PluginName), SkyrimRelease.SkyrimSE) { UsingLocalization = true };
-        mod.Doors.AddNew("MainDoor").Name = new TranslatedString(Language.English, DoorName);
+        mod.Doors.AddNew("MainDoor").Name = new TranslatedString(Language.English, doorName);
         ((IModGetter)mod).WriteToBinary(_pluginPath);
     }
 
     public void Dispose() => _root.Dispose();
 
     private PluginStrings Strings => new(_modFolder, _dataFolder);
+
+    private LoadOrderSnapshot LoadOrder => new(_dataFolder, null, GameRelease.SkyrimSE, [], [], []);
+
+    private RegisteredPlugin Plugin => new(PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder), Line: null);
 
     private void MoveStringsIntoGameDataArchive(string archiveName)
     {
@@ -46,7 +55,7 @@ public sealed class GameDataStringsTests : IDisposable
 
     private RepositoriesLib.Answer<IPluginDocuments, PluginFailure> OpenDocuments() =>
         Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), _pluginPath), GameRelease.SkyrimSE,
+            new ModPath(ModKey.FromFileName(PluginName), _pluginPath), LoadOrder,
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE), Strings);
 
     [Fact]
@@ -54,9 +63,7 @@ public sealed class GameDataStringsTests : IDisposable
     {
         MoveStringsIntoGameDataArchive("Update.bsa");
 
-        var source = (await Adapter.ReadSourceOfAsync(
-            new RegisteredPlugin(PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder), Line: null),
-            GameRelease.SkyrimSE, Strings)).Answered();
+        var source = (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, Strings)).Answered();
 
         Assert.Contains(source.Files, file => Encoding.UTF8.GetString(file.Content).Contains(DoorName, StringComparison.Ordinal));
     }
@@ -69,6 +76,27 @@ public sealed class GameDataStringsTests : IDisposable
         using var documents = OpenDocuments().Answered();
 
         Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OpenDocuments_APluginWhoseStringsAreBesideItAndInTheGameDataFolder_ReadsTheOnesBesideIt()
+    {
+        MoveStringsIntoGameDataArchive("Update.bsa");
+        WritePluginNamingItsDoor("The Mod's Door");
+
+        using var documents = OpenDocuments().Answered();
+
+        Assert.Contains("The Mod's Door", documents.Records.Single().Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OpenRecordLookup_APluginWhoseStringsAreInTheGameDataFoldersArchiveForIt_ReadsItsNamesFromThere()
+    {
+        MoveStringsIntoGameDataArchive("Update.bsa");
+
+        using var records = Adapter.OpenRecordLookup(Plugin, LoadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)).Answered();
+
+        Assert.Contains(DoorName, records.TextOf("000800:Update.esm").Answered(), StringComparison.Ordinal);
     }
 
     [Fact]

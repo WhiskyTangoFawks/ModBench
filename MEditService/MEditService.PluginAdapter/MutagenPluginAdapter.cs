@@ -29,7 +29,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     internal static ILoadedMod OpenForRead(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
-        => new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(modPath, strings, loadOrder)));
+        => new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(modPath, gameRelease, strings, loadOrder)));
 
     // The header is read with the open: a header Mutagen cannot read is the open's failure, not a
     // throw out of the ingest that follows.
@@ -51,7 +51,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var modPath = new ModPath(plugin.Path);
-        return Opened<IPluginRecords>(modPath, strings: null, loadOrder, loaded =>
+        return Opened<IPluginRecords>(modPath, new PluginStrings(Path.GetDirectoryName(plugin.Path), loadOrder.DataFolderPath), loadOrder, loaded =>
             new ModRecordLookup(loaded.Getter, new PluginRecordBytes(modPath, loadOrder.GameRelease), schemas, loaded));
     }
 
@@ -62,13 +62,18 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         ILoadedMod? loaded = null;
         try
         {
-            return PluginFailure.Answer(() =>
-            {
-                loaded = OpenForRead(modPath, loadOrder.GameRelease, strings, loadOrder);
-                var held = holding(loaded);
-                loaded = null;
-                return held;
-            });
+            return PluginFailure.Answer(() => loaded = OpenForRead(modPath, loadOrder.GameRelease, strings, loadOrder))
+                .Then(mod => PluginFailure.Answer(() => strings is { } named
+                        ? LocalizedStrings.FindMissingStringsFile(mod.Getter, modPath.ModKey.FileName, named, loadOrder.GameRelease)
+                        : null)
+                    .Then(missing => missing is { } file
+                        ? new PluginFailure.MissingStrings(file)
+                        : PluginFailure.Answer(() =>
+                        {
+                            var held = holding(mod);
+                            loaded = null;
+                            return held;
+                        })));
         }
         finally
         {
@@ -170,12 +175,12 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     internal static IMod OpenForWrite(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
-        => ModFactory.ImportSetter(modPath, gameRelease, ReadParameters(modPath, strings, loadOrder));
+        => ModFactory.ImportSetter(modPath, gameRelease, ReadParameters(modPath, gameRelease, strings, loadOrder));
 
     private static BinaryReadParameters? ReadParameters(
-        ModPath modPath, PluginStrings? strings, LoadOrderSnapshot? loadOrder)
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, LoadOrderSnapshot? loadOrder)
     {
-        var read = strings is { } named ? LocalizedStrings.ForRead(named) : null;
+        var read = strings is { } named ? LocalizedStrings.ForRead(named, modPath.ModKey, gameRelease) : null;
         return MasterStyles.Of(modPath, loadOrder) is { } styles
             ? (read ?? new BinaryReadParameters()) with { MasterFlagsLookup = styles }
             : read;
