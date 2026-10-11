@@ -26,15 +26,13 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
     public static TheoryData<Func<ContainerModFixture, FormKey>, string, string, string?, RecordEditRefusal, string> SlotsThatAreStructural => new()
     {
-        { f => f.EmbedCell, RecordEditEnvelope.Set, "NavigationMeshes", "[]", RecordEditRefusal.FieldReadOnly, "not by editing the slot" },
-        { f => f.EmbedCell, RecordEditEnvelope.Set, "Landscape", "null", RecordEditRefusal.FieldReadOnly, "not by editing the slot" },
-        { f => f.Worldspace, RecordEditEnvelope.Set, "TopCell", "null", RecordEditRefusal.FieldReadOnly, "not by editing the slot" },
-        { f => f.Worldspace, RecordEditEnvelope.Set, "SubCells", "[]", RecordEditRefusal.FieldReadOnly, "not by editing the slot" },
-        { f => f.EmbedCell, RecordEditEnvelope.Move, "NavigationMeshes[0]", "1", RecordEditRefusal.FieldReadOnly, "not by editing the slot" },
+        { f => f.EmbedCell, RecordEditEnvelope.Set, "NavigationMeshes", "[]", RecordEditRefusal.FieldNotFound, "has no field" },
+        { f => f.EmbedCell, RecordEditEnvelope.Set, "Landscape", "null", RecordEditRefusal.FieldNotFound, "has no field" },
+        { f => f.Worldspace, RecordEditEnvelope.Set, "TopCell", "null", RecordEditRefusal.FieldNotFound, "has no field" },
+        { f => f.Worldspace, RecordEditEnvelope.Set, "SubCells", "[]", RecordEditRefusal.FieldNotFound, "has no field" },
+        { f => f.EmbedCell, RecordEditEnvelope.Move, "NavigationMeshes[0]", "1", RecordEditRefusal.FieldNotFound, "has no field" },
         { f => f.EmbedCell, RecordEditEnvelope.Set, "Grid", """{"Point": {"X": 9, "Y": 9}}""", RecordEditRefusal.FieldReadOnly, "structural gesture" },
         { f => f.EmbedCell, RecordEditEnvelope.Set, "Grid.Point", "\"9, 9\"", RecordEditRefusal.FieldReadOnly, "structural gesture" },
-        { f => f.EmbedCell, RecordEditEnvelope.Remove, "NavigationMeshes[5]", null, RecordEditRefusal.FieldNotFound, "names no element" },
-        { f => f.EmbedCell, RecordEditEnvelope.Move, "NavigationMeshes[5]", "0", RecordEditRefusal.FieldNotFound, "names no element" },
     };
 
     [Fact]

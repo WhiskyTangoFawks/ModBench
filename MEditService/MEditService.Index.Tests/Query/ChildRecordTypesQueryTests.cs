@@ -17,6 +17,7 @@ public sealed class ChildRecordTypesQueryTests : IDisposable
     private const string ExteriorCell = "000803:Holds.esp";
     private const string TopCell = "000805:Holds.esp";
     private const string PersistentTopCell = "000807:Holds.esp";
+    private const string ExteriorCellWithLandscape = "000808:Holds.esp";
     private static readonly PluginAddress Plugin = new(PluginName, PluginOrigin.DataDirectory);
 
     private readonly ScatteredFixtureData _fixture;
@@ -38,8 +39,12 @@ public sealed class ChildRecordTypesQueryTests : IDisposable
 
                 var exterior = Cell(ExteriorCell);
                 exterior.Grid = new CellGrid { Point = new P2Int(0, 0) };
+                var landscaped = Cell(ExteriorCellWithLandscape);
+                landscaped.Grid = new CellGrid { Point = new P2Int(1, 0) };
+                landscaped.Landscape = new Landscape(new FormKey(ModKey.FromFileName(PluginName), 0x809), Fallout4Release.Fallout4);
                 var worldSubBlock = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
                 worldSubBlock.Items.Add(exterior);
+                worldSubBlock.Items.Add(landscaped);
                 var worldBlock = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
                 worldBlock.Items.Add(worldSubBlock);
                 var world = Worldspace(0x802);
@@ -80,6 +85,7 @@ public sealed class ChildRecordTypesQueryTests : IDisposable
     [InlineData(InteriorCell, new[] { "Navmesh" })]
     [InlineData(ExteriorCell, new[] { "Landscape", "Navmesh" })]
     [InlineData(TopCell, new[] { "Navmesh" })]
+    [InlineData(ExteriorCellWithLandscape, new[] { "Navmesh" })]
     public void ACell_HoldsWhatItsPlaceInTheIndexAllows(string cell, string[] besidesPlacedRecords)
     {
         var types = _index.Queries.GetChildRecordTypes(Plugin, cell).Value();

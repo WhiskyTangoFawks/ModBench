@@ -29,15 +29,15 @@ public static class ChildRecordTypes
         };
 
     /// <summary><paramref name="containerText"/> is the container's own document, which says whether it
-    /// is deleted and which single-record members are filled. <paramref name="place"/> is null for a
-    /// container that is no cell.</summary>
+    /// is deleted; <paramref name="held"/> is each child it holds, by slot. <paramref name="place"/> is
+    /// null for a container that is no cell.</summary>
     public static IReadOnlyList<string> Of(
-        string containerType, string containerText, CellPlace? place,
+        string containerType, string containerText, IEnumerable<(string Slot, string FormKey)> held, CellPlace? place,
         GameRelease release)
     {
         if (!XEditAddList.TryGetValue(containerType, out var adds)) return [];
         using var document = JsonDocument.Parse(containerText);
-        var container = Read(containerType, document.RootElement, release);
+        var container = Read(containerType, document.RootElement, held, release);
         return [.. adds
             .Where(add => SlotFor(add, place, container, release) is ChildSlot.Open or ChildSlot.Several)
             .Select(add => add.Type)];
@@ -53,7 +53,11 @@ public static class ChildRecordTypes
             || adds.Where(add => add.Type.Equals(recordType, StringComparison.OrdinalIgnoreCase)).ToList() is not [var offered])
             return new ChildSlot.NotHeld();
         using var document = JsonDocument.Parse(containerText);
-        return SlotFor(offered, place, Read(containerType, document.RootElement, release), release);
+        var root = document.RootElement;
+        var held = Document.Over(root) is { } owner
+            ? new ContainerDocuments(release).ChildrenOf(containerType, owner).Select(child => (child.SlotName, child.FormKey))
+            : [];
+        return SlotFor(offered, place, Read(containerType, root, held, release), release);
     }
 
     private static ChildSlot SlotFor(
@@ -88,18 +92,18 @@ public static class ChildRecordTypes
     private sealed record Container(IReadOnlyList<Member> Members, bool Persistent);
 
     private static Container Read(
-        string containerType, JsonElement root, GameRelease release) =>
-        new(MembersOf(containerType, root, release), PersistentFlag.IsSet(root));
+        string containerType, JsonElement root, IEnumerable<(string Slot, string FormKey)> held, GameRelease release) =>
+        new(MembersOf(containerType, root, held, release), PersistentFlag.IsSet(root));
 
     // None for a deleted container: it holds nothing.
     private static List<Member> MembersOf(
-        string containerType, JsonElement root, GameRelease release)
+        string containerType, JsonElement root, IEnumerable<(string Slot, string FormKey)> children, GameRelease release)
     {
         if (RecordTypes.For(release).ConcreteFor(containerType) is not { } container) return [];
         if (DeletedFlag.IsSet(root)) return [];
 
-        var held = (Document.Over(root) is { } owner ? new ContainerDocuments(release).ChildrenOf(containerType, owner) : [])
-            .GroupBy(child => child.SlotName, StringComparer.Ordinal)
+        var held = children
+            .GroupBy(child => child.Slot, StringComparer.Ordinal)
             .ToDictionary(slot => slot.Key, slot => slot.First().FormKey, StringComparer.Ordinal);
         var category = release.ToCategory();
         return [.. ContainerMembers.Derived.HeldTypesBySlot

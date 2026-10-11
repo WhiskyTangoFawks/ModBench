@@ -51,6 +51,34 @@ internal static class EmbeddedChildSplice
         return Encoding.UTF8.GetString([.. ownerBytes[..from], .. ownerBytes[to..]]);
     }
 
+    /// <summary>The owner's text without each member <paramref name="slots"/> names, each cut as
+    /// <see cref="Cut"/> cuts a slot. Cut from the last, so the spans read before it still stand.</summary>
+    internal static string CutSlots(string ownerText, IReadOnlyList<string> slots)
+    {
+        if (slots.Count == 0) return ownerText;
+
+        var bytes = Encoding.UTF8.GetBytes(ownerText);
+        var spans = new List<(int Start, int End)>();
+        var reader = new Utf8JsonReader(bytes);
+        reader.Read();
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            var start = (int)reader.TokenStartIndex;
+            var isSlot = slots.Contains(reader.GetString(), StringComparer.Ordinal);
+            reader.Read();
+            reader.Skip();
+            if (isSlot) spans.Add((start, (int)reader.BytesConsumed));
+        }
+        if (spans.Count == 0) return ownerText;
+
+        foreach (var (start, end) in Enumerable.Reverse(spans))
+        {
+            var (from, to) = WithoutItsSeparator(bytes, start, end);
+            bytes = [.. bytes[..from], .. bytes[to..]];
+        }
+        return Encoding.UTF8.GetString(bytes);
+    }
+
     private static bool IsOnlyElement(byte[] bytes, EmbeddedChildSpan span) =>
         LastNonSpaceBefore(bytes, span.Start) is var opener && opener >= 0 && bytes[opener] == (byte)'['
         && FirstNonSpaceFrom(bytes, span.End) is var closer && closer >= 0 && bytes[closer] == (byte)']';
