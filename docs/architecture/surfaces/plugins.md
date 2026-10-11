@@ -185,7 +185,7 @@ As a user, I want:
 1. `compile` to build from the working tree, without asking: a tracked plugin's plugin source is the truth, and compile builds the plugin from it.
 2. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
 3. From the palette with no plugin, a pick of the tracked plugins. Source: No dead entries
-4. A light plugin whose records fall outside the light range refused, naming the records and the remedies: clear the light flag, rename the plugin off `.esl`, or change the records' FormIDs.
+4. A plugin whose header flag limits its FormIDs, light or medium, refused when its records fall outside that range, naming the records and the remedies: clear the flag, rename the plugin off `.esl` where the extension sets it, or change the records' FormIDs.
 5. An interrupted compile to leave the old binary or the new one, and neither to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Compiling again fixes it. This is an exception to A failed gesture writes nothing.
 6. A plugin whose plugin source is unreadable refused, naming it and pointing at decompile. Source: Never silently wrong
 7. `compile` to save the plugin's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugin is built from what I see. A file VS Code does not save refuses compile, naming it. Source: VS Code's save before run; ADR-0001; Never silently wrong
@@ -214,7 +214,7 @@ As a user, I want:
 
 1. On a group, a new record of that type with no prompt, and on a plugin a pick of the record type first. The pick lists the types the game can create. The new record is selected and opens in the record panel. Source: catalog `create` under Record, record type Option; xEdit selects what it adds
 2. The new record to take the first FormKey at or above the plugin header's Next Object ID that no record uses, and the counter to move past it, so a FormKey a deleted record held is never given again. No EditorID, as xEdit adds one. Source: xEdit; Mutagen's data
-3. When no FormKey at or above the Next Object ID is free, a refusal saying so, naming clearing the light flag as the remedy on a light plugin. Source: Mutagen's data; Never silently wrong
+3. When no FormKey at or above the Next Object ID is free, a refusal saying so, naming clearing the flag as the remedy on a plugin whose header flag limits its FormIDs. Source: Mutagen's data; Never silently wrong
 4. No create record on a group of a type the game cannot create. Source: No dead entries
 5. On a container record, a pick of the types it can hold. The pick is skipped when it can hold one type. The new record lands inside the container. Source: xEdit; Mutagen's data
 6. A placed reference created on a cell to land in its temporary child records, or in its persistent ones when the cell is persistent. In an exterior cell's temporary child records, it starts at the centre of the cell. Source: xEdit
