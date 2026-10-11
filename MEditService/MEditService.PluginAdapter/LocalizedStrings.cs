@@ -77,9 +77,8 @@ internal static class LocalizedStrings
     internal static StringsRead ForRead(PluginStrings strings, IReadOnlyList<string> archives, ModPath plugin, GameRelease gameRelease) =>
         For(strings, archives, plugin, gameRelease, inOneOrder: false);
 
-    /// <summary>An import lists a string's languages in the order Mutagen finds their files, an archive's
-    /// order or a folder's. So an import always reads them copied into a fresh folder in name order, and the
-    /// order follows the file system alone: decompiling an unchanged plugin changes nothing (plugin-source.md).</summary>
+    /// <summary>An import lists a string's languages in the order Mutagen finds their files. Always copied in
+    /// name order, they come in one order from an archive or a folder (plugin-source.md, The tree).</summary>
     internal static StringsRead ForImport(PluginStrings strings, IReadOnlyList<string> archives, ModPath plugin, GameRelease gameRelease) =>
         For(strings, archives, plugin, gameRelease, inOneOrder: true);
 
