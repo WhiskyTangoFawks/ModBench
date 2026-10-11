@@ -13,8 +13,7 @@ namespace MEditService.PluginAdapter;
 public interface IPluginAdapter
 {
     /// <summary>The plugin as the documents its source tree would hold (ADR-0007), owning the open until
-    /// disposed; omitting <paramref name="strings"/> is not neutral for a localized plugin. Every read
-    /// takes the load order its plugin's masters are found in.</summary>
+    /// disposed; omitting <paramref name="strings"/> is not neutral for a localized plugin.</summary>
     Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath,
         LoadOrderSnapshot loadOrder,
