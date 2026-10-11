@@ -66,10 +66,6 @@ public static class HeaderDocument
         return Write(mod);
     }
 
-    /// <summary>Whether the document's header carries the ESL flag — read through <see cref="Read"/>,
-    /// never string-matched out of the JSON, so the answer is the door's own.</summary>
-    public static bool IsLight(byte[] body, GameRelease release) => Read(body, release) is IModFlagsGetter flags && flags.IsSmallMaster;
-
     // The GUID segment: the door resolves group folders against the real filesystem, so the folder
     // must not exist; and ExtractMetaInternal prefers a ModKey parsed from the last segment, so it
     // must not look like a plugin filename.

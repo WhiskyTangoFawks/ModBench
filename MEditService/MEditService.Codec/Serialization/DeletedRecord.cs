@@ -19,7 +19,7 @@ public static class DeletedRecord
         {
             return RecordTextCodec.SerializeToBytes(record, release);
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null
             && (record.MajorRecordFlagsRaw & DeletedFlag.Bit) != 0
             && fileHoldsNoFields()
             && HeaderOf(record, schema, release) is { } header)

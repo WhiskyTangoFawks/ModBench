@@ -81,7 +81,7 @@ public sealed class EditRecordChangesHandler
         {
             refused = RecordTextEdit.Patch(request, out newText, out move);
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
             // A document the reader tolerates and the edit's tree does not — duplicate members, most
             // of them — never reaches the codec, and this is the only reader that sees why.
@@ -118,7 +118,7 @@ public sealed class EditRecordChangesHandler
             roundTrip(text);
             return null;
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
             return ex.Message;
         }

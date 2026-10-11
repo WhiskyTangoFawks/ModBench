@@ -89,6 +89,23 @@ public abstract record PluginFailure
         public override string Reason => _reason;
     }
 
+    /// <summary>A master the plugin written references whose header does not read, so its style, which
+    /// the write needs, is unknown.</summary>
+    public sealed record MasterUnreadable : PluginFailure
+    {
+        private readonly string _reason;
+
+        internal MasterUnreadable(ModKey master, PluginFailure unread) : base(unread.Error)
+        {
+            Master = master.FileName;
+            _reason = $"its master {Master} could not be read: {unread.Reason}";
+        }
+
+        public string Master { get; }
+
+        public override string Reason => _reason;
+    }
+
     /// <summary>The failure <paramref name="ex"/> stands for: a file system refusal is
     /// <see cref="Inaccessible"/>, anything else a read Mutagen could not make. Mutagen reaches some
     /// readers by reflection, whose wrapper says nothing of the read.</summary>
@@ -114,22 +131,14 @@ public abstract record PluginFailure
         _ => null,
     };
 
-    /// <summary>Whether <paramref name="ex"/> is the failure of the read or write it came out of:
-    /// only running out of memory or being cancelled, however Mutagen wrapped it, is not the file's
-    /// answer.</summary>
-    internal static bool StandsFor(Exception ex) => OutOfMemoryOrCancellationIn(ex) is null;
-
     /// <summary>Throws the out-of-memory or cancellation inside <paramref name="ex"/> as itself, so a
     /// caller's own check sees it, unless <paramref name="file"/> declares a length that ran it out.</summary>
     internal static void ThrowIfNotTheFilesAnswer(Exception ex, PluginRecordBytes? file = null)
     {
-        if (OutOfMemoryOrCancellationIn(ex) is { } cause
+        if (OutOfMemoryOrCancellation.In(ex) is { } cause
             && !(cause is OutOfMemoryException && file is { DeclaresALengthItCannotInflateTo: true }))
             ExceptionDispatchInfo.Throw(cause);
     }
-
-    private static Exception? OutOfMemoryOrCancellationIn(Exception? ex) =>
-        ex is null or OutOfMemoryException or OperationCanceledException ? ex : OutOfMemoryOrCancellationIn(ex.InnerException);
 
     /// <summary><paramref name="read"/>'s value, or the failure its throw stands for.</summary>
     internal static Answer<T, PluginFailure> Answer<T>(Func<T> read, PluginRecordBytes? file = null)

@@ -167,7 +167,7 @@ internal sealed class SourceRepositoryWrites(
         {
             return read();
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
             throw SourceStopException.Unreadable(ex.Message);
         }

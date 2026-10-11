@@ -62,29 +62,30 @@ internal sealed class PluginCompileService(
                 $"{plugin.Name}'s source folder holds no files, so there is nothing to compile. {RegenerateTheSource}");
         }
 
-        var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin, repository, loadOrder.GameRelease);
+        var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin, repository, loadOrder);
         if (deserializeRefusal != null)
             return CompileResult.Refused(CompileRefusal.SourceDoesNotParse, deserializeRefusal);
         var tree = parsedTree
             ?? throw new InvalidOperationException("Expected DeserializeSource to produce a tree when it does not refuse.");
 
-        // A light plugin with native records outside the light FormID range would compile to a
-        // binary the game mis-addresses, so refuse it (compile-plugin, Refusals).
-        if (tree.IsLight(plugin.Name) && tree.SmallMasterRange is { } lightRange)
+        // A plugin with native records outside the range its light or medium flag limits it to would
+        // compile to a binary the game mis-addresses, so refuse it (compile-plugin, Refusals).
+        if (tree.FormIdLimit(plugin.Name) is { } limited)
         {
             var outOfRange = tree.FormKeys
                 .Where(key => key.ModKey == tree.ModKey
-                    && (key.ID < lightRange.Min || key.ID > lightRange.Max))
+                    && (key.ID < limited.Min || key.ID > limited.Max))
                 .Select(key => key.ToString())
                 .ToList();
             if (outOfRange.Count > 0)
             {
+                var renameOffEsl = limited.ByExtension ? " rename the plugin off .esl," : "";
                 return CompileResult.Refused(
-                    CompileRefusal.LightFormIdOutOfRange,
-                    $"{plugin.Name} is a light plugin but holds native FormID(s) outside the light range " +
-                    $"(0x{lightRange.Min:X}-0x{lightRange.Max:X}): {string.Join(", ", outOfRange.Take(4))}" +
+                    CompileRefusal.FormIdOutsideFlagLimit,
+                    $"{plugin.Name} is a {limited.Flag} plugin but holds native FormID(s) outside the {limited.Flag} range " +
+                    $"(0x{limited.Min:X}-0x{limited.Max:X}): {string.Join(", ", outOfRange.Take(4))}" +
                     (outOfRange.Count > 4 ? $" and {outOfRange.Count - 4} more" : "") +
-                    ". Clear the light flag, rename the plugin off .esl, or change the records' FormIDs.");
+                    $". Clear the {limited.Flag} flag,{renameOffEsl} or change the records' FormIDs.");
             }
         }
 
@@ -111,13 +112,16 @@ internal sealed class PluginCompileService(
 
         var loadOrderNames = loadOrder.InJudgedOrder().Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-        var saved = await tree.SaveAsync(registered.Path, loadOrderNames, save => Land(save, tree, plugin, repository));
+        var saved = await tree.SaveAsync(registered.Path, loadOrderNames, content.Masters, save => Land(save, tree, plugin, repository));
         if (!saved.Holds(out var landed, out var failure))
         {
             return failure switch
             {
                 PluginFailure.PrunedMaster => CompileResult.Refused(CompileRefusal.FormIdUnmappable, $"{plugin.Name} could not be compiled: {failure.Reason}"),
                 PluginFailure.MasterNotInLoadOrder => CompileResult.Refused(CompileRefusal.MasterNotInLoadOrder, $"{plugin.Name} could not be compiled: {failure.Reason}"),
+                PluginFailure.MasterUnreadable master => CompileResult.Refused(
+                    CompileRefusal.MasterUnreadable,
+                    $"{plugin.Name} could not be compiled: {failure.Reason} Fix or restore {master.Master}, then compile again."),
                 _ => WriteFailed(plugin, failure.Reason),
             };
         }
@@ -169,7 +173,7 @@ internal sealed class PluginCompileService(
         CompileResult.Refused(
             CompileRefusal.WriteFailed, $"Could not write {plugin.Name}: {reason} Its source is untouched, so compiling again rebuilds it.");
 
-    private sealed record Content(IReadOnlyList<SourceRecord> Records, IReadOnlyCollection<string> Links);
+    private sealed record Content(IReadOnlyList<SourceRecord> Records, IReadOnlyCollection<string> Links, IReadOnlySet<string> Masters);
 
     // The links come from the records here, through the collector and the schema.
     private Content ContentFacts(CompiledTree tree, PluginAddress plugin, LoadOrderSnapshot loadOrder)
@@ -186,13 +190,13 @@ internal sealed class PluginCompileService(
             required.Add(document, schema);
         }
 
-        return new Content(records, required.Links);
+        return new Content(records, required.Links, required.Masters);
     }
 
     private async Task<(CompiledTree? Tree, string? RefusalReason)> DeserializeSource(
-        IReadOnlyList<TreeFile> files, PluginAddress plugin, ISourceRepository repository, GameRelease release)
+        IReadOnlyList<TreeFile> files, PluginAddress plugin, ISourceRepository repository, LoadOrderSnapshot loadOrder)
     {
-        if ((await adapter.ReadTreeAsync(files, release)).Holds(out var tree, out var failure)) return (tree, null);
+        if ((await adapter.ReadTreeAsync(files, loadOrder)).Holds(out var tree, out var failure)) return (tree, null);
 
         logger.LogWarning("{Plugin} could not be read from its source: {Reason}", plugin.Name, failure.Reason);
         var why = failure is PluginFailure.Unparsed unparsed && repository.InSourceNames(plugin, unparsed.Diagnosis).Holds(out var named, out _)

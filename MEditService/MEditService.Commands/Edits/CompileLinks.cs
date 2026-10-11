@@ -27,7 +27,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
         {
             return LinkDiagnostics(compiled, records, links);
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
             logger.LogWarning(ex, "{Plugin} compiled, but its link check did not run", plugin.Name);
             return [PluginDiagnostic(

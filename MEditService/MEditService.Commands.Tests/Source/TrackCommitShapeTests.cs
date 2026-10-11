@@ -168,10 +168,10 @@ public sealed class TrackCommitShapeTests : IDisposable
     {
         public override Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath,
-            IReadOnlyList<string> masterOrder, GameRelease gameRelease, CancellationToken cancel = default) =>
+            IReadOnlyList<string> masterOrder, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>
             plugins.Contains(Path.GetFileName(destinationPath))
-                ? new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, masterOrder, gameRelease, cancel)
-                : TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, masterOrder, gameRelease, cancel);
+                ? new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, masterOrder, loadOrder, cancel)
+                : TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, masterOrder, loadOrder, cancel);
 
         private static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken cancel)
         {
@@ -194,10 +194,10 @@ public sealed class TrackCommitShapeTests : IDisposable
     {
         public override Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath,
-            IReadOnlyList<string> masterOrder, GameRelease gameRelease, CancellationToken cancel = default) =>
+            IReadOnlyList<string> masterOrder, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>
             Path.GetFileName(destinationPath) == plugin
-                ? new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, masterOrder, gameRelease, cancel)
-                : TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, masterOrder, gameRelease, cancel);
+                ? new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, masterOrder, loadOrder, cancel)
+                : TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, masterOrder, loadOrder, cancel);
 
         private static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken cancel)
         {

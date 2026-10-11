@@ -73,6 +73,9 @@ public sealed class PluginAdapterTests
     [InlineData(GameRelease.SkyrimSE, "Plain.esp", false, false)]
     [InlineData(GameRelease.SkyrimSE, "Master.esm", true, false)]
     [InlineData(GameRelease.SkyrimSE, "Light.esl", false, true)]
+    [InlineData(GameRelease.Starfield, "Plain.esp", false, false)]
+    [InlineData(GameRelease.Starfield, "Master.esm", true, false)]
+    [InlineData(GameRelease.Starfield, "Light.esl", false, true)]
     public async Task CreateAndWriteAsync_WritesTheGamesHeader_FlaggedFromTheExtensionAlone(GameRelease release, string name, bool master, bool light)
     {
         using var scratch = new ScratchDirectory("medit-adapter-create-flags-");
