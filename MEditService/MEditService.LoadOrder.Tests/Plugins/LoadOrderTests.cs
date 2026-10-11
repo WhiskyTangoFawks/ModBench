@@ -173,6 +173,14 @@ public sealed class LoadOrderTests
     }
 
     [Fact]
+    public void SamePlugins_LoadingADifferentArchive_AreDifferentValues()
+    {
+        var a = Registered("A.esp", "ModA");
+
+        Assert.NotEqual(Order([a], a), new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, [a], [a.Key], [], [@"C:\Games\Fallout4\Data\A - Main.ba2"]));
+    }
+
+    [Fact]
     public void EmptySnapshot_HasNoActivePlugin_AndKnowsNoPlugin()
     {
         var order = Order([]);

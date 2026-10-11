@@ -26,9 +26,22 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 {
     private readonly PluginFileHashes _hashes = new(timeProvider);
 
+    // The getter looks its strings up as they are read, so the folder it reads them from lives as long as it does.
     internal static ILoadedMod OpenForRead(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
-        => new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(modPath, gameRelease, strings, loadOrder)));
+    {
+        var read = strings is { } named ? LocalizedStrings.ForRead(named, loadOrder?.Archives ?? [], modPath, gameRelease) : null;
+        try
+        {
+            var loaded = new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(modPath, read, loadOrder)), read);
+            read = null;
+            return loaded;
+        }
+        finally
+        {
+            read?.Dispose();
+        }
+    }
 
     // The header is read with the open: a header Mutagen cannot read is the open's failure, not a
     // throw out of the ingest that follows.
@@ -165,18 +178,18 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             return new PluginByteComparison(Identical: false, loss, cause, deletedRecordEmptied);
         });
 
+    // The setter resolves every string as it imports, so the folder it reads them from is done with after.
     internal static IMod OpenForWrite(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
-        => ModFactory.ImportSetter(modPath, gameRelease, ReadParameters(modPath, gameRelease, strings, loadOrder));
-
-    private static BinaryReadParameters? ReadParameters(
-        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, LoadOrderSnapshot? loadOrder)
     {
-        var read = strings is { } named ? LocalizedStrings.ForRead(named, modPath.ModKey, gameRelease) : null;
-        return MasterStyles.Of(modPath, loadOrder) is { } styles
-            ? (read ?? new BinaryReadParameters()) with { MasterFlagsLookup = styles }
-            : read;
+        using var read = strings is { } named ? LocalizedStrings.ForRead(named, loadOrder?.Archives ?? [], modPath, gameRelease) : null;
+        return ModFactory.ImportSetter(modPath, gameRelease, ReadParameters(modPath, read, loadOrder));
     }
+
+    private static BinaryReadParameters? ReadParameters(ModPath modPath, StringsRead? read, LoadOrderSnapshot? loadOrder) =>
+        MasterStyles.Of(modPath, loadOrder) is { } styles
+            ? (read?.Parameters ?? new BinaryReadParameters()) with { MasterFlagsLookup = styles }
+            : read?.Parameters;
 
     internal static IMod CreateEmpty(ModKey modKey, GameRelease gameRelease)
         => ModFactory.Activator(modKey, gameRelease);
@@ -281,9 +294,14 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         await writeBuilder.WriteAsync();
     }
 
-    private sealed class LoadedMod(IModDisposeGetter inner) : ILoadedMod
+    private sealed class LoadedMod(IModDisposeGetter inner, StringsRead? strings) : ILoadedMod
     {
         public IModGetter Getter => inner;
-        public void Dispose() => inner.Dispose();
+
+        public void Dispose()
+        {
+            inner.Dispose();
+            strings?.Dispose();
+        }
     }
 }
