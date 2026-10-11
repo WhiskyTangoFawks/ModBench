@@ -40,6 +40,24 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
         return new PluginDiagnosis(anchor, UnknownClass, TailFor(message), message);
     }
 
+    /// <summary>The write seam: anchored like <see cref="FromParseException"/>, plus the master an
+    /// <c>UnmappableFormIDException</c> could not map, since Mutagen's message never names it. States
+    /// only what the exception proves.</summary>
+    public static PluginDiagnosis FromWriteException(Exception ex)
+    {
+        var deepestRecord = FindDeepest<RecordException>(ex);
+        var rawMessage = deepestRecord?.Message ?? ex.Message;
+        var master = FindDeepest<UnmappableFormIDException>(ex)?.UnmappableFormKey.FormKey.ModKey.FileName;
+        var message = master != null
+            ? $"references {master}, which this write's content-derived master list pruned before resolving it"
+            : rawMessage;
+        return new PluginDiagnosis(DescribeRecord(deepestRecord), UnknownClass, TailFor(rawMessage), message);
+    }
+
+    /// <summary>The catch-filter test for a write a FormID its masters cannot map stops: every other
+    /// write failure propagates untouched.</summary>
+    public static bool HasUnmappableFormID(Exception ex) => FindDeepest<UnmappableFormIDException>(ex) != null;
+
     // Every branch, not a linear InnerException walk: that only reaches InnerExceptions[0] and would miss
     // a second independently failed parallel-parse branch. Deepest wins, ties by list order.
     private static T? FindDeepest<T>(Exception ex) where T : Exception => FindDeepest<T>(ex, depth: 0).Found;

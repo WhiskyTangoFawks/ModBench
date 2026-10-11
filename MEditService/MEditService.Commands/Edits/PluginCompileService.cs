@@ -117,6 +117,7 @@ internal sealed class PluginCompileService(
         {
             return failure switch
             {
+                PluginFailure.PrunedMaster => CompileResult.Refused(CompileRefusal.FormIdUnmappable, $"{plugin.Name} could not be compiled: {failure.Reason}"),
                 PluginFailure.MasterNotInLoadOrder => CompileResult.Refused(CompileRefusal.MasterNotInLoadOrder, $"{plugin.Name} could not be compiled: {failure.Reason}"),
                 PluginFailure.MasterUnreadable master => CompileResult.Refused(
                     CompileRefusal.MasterUnreadable,

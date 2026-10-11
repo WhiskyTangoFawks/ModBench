@@ -4,19 +4,11 @@ using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Http.Tests.RealData;
 
 public sealed class InstanceCatalogTests
 {
-    private static readonly Dictionary<string, GameRelease> ReleaseByMo2GameName = new()
-    {
-        ["Fallout 4"] = GameRelease.Fallout4,
-        ["Skyrim Special Edition"] = GameRelease.SkyrimSE,
-        ["Starfield"] = GameRelease.Starfield,
-    };
-
     private static readonly EnumerationOptions AnyCase = new() { MatchCasing = MatchCasing.CaseInsensitive };
 
     [SmokeFact("catalog the plugins of the MO2 instance MEDIT_CATALOG_INSTANCE names")]
@@ -26,11 +18,10 @@ public sealed class InstanceCatalogTests
         var profile = Path.Combine(instance, "profiles", Required("MEDIT_CATALOG_PROFILE"));
         var gameDirectory = Required("MEDIT_CATALOG_GAME_DIR");
         var catalogPath = Required("MEDIT_CATALOG_OUT");
-        var release = ReleaseByMo2GameName[Mo2GameName(instance)];
-        var dataDir = Path.Combine(gameDirectory, "Data");
+        var release = Enum.Parse<GameRelease>(Required("MEDIT_CATALOG_RELEASE"));
 
         using var scratch = new ScratchDirectory("medit-catalog-");
-        var entries = ProfileWithPluginsCopiedTo(scratch.Path, instance, profile, dataDir, release);
+        var entries = ProfileWithPluginsCopiedTo(scratch.Path, instance, profile, Path.Combine(gameDirectory, "Data"), release);
         await using var host = new MEditHost();
         var client = host.CreateClient();
         client.Timeout = TimeSpan.FromHours(2);
@@ -42,35 +33,32 @@ public sealed class InstanceCatalogTests
         var lines = new List<string>();
         var status = await client.GetFromJsonAsync<JsonElement>("/load-order/status");
         foreach (var failure in status.GetProperty("failures").EnumerateArray())
-            lines.Add(Line(failure.GetProperty("name"), "read", failure.GetProperty("diagnosis"), failure.GetProperty("reason")));
+            lines.Add(Line(Text(failure, "name"), Text(failure, "origin"), "read", Text(failure, "diagnosis"), Text(failure, "reason")));
 
         foreach (var plugin in (await client.GetFromJsonAsync<JsonElement>("/plugins")).EnumerateArray()
                      .Where(p => p.GetProperty("hasParseFailure").GetBoolean()))
         {
             await foreach (var record in RecordsOf(client, Text(plugin, "name"), Text(plugin, "origin")))
             {
-                if (record.GetProperty("parseDiagnosis") is { ValueKind: JsonValueKind.String } diagnosis)
-                    lines.Add(Line(plugin.GetProperty("name"), "ingest", record.GetProperty("formKey"), diagnosis));
+                if (Text(record, "parseDiagnosis") is { Length: > 0 })
+                    lines.Add(Line(Text(plugin, "name"), Text(plugin, "origin"), "ingest", Text(record, "formKey"), Text(record, "parseDiagnosis")));
             }
         }
 
         foreach (var diagnosis in (await client.GetFromJsonAsync<JsonElement>("/plugins/diagnoses")).EnumerateArray())
-            lines.Add(Line(diagnosis.GetProperty("plugin"), "kind-b", diagnosis.GetProperty("anchor"), diagnosis.GetProperty("message")));
+            lines.Add(Line(Text(diagnosis, "plugin"), Text(diagnosis, "origin"), "kind-b", Text(diagnosis, "anchor"), Text(diagnosis, "message")));
 
-        foreach (var mod in SnapshotPlugins.Active(entries).Select(p => p.Origin).Distinct()
-                     .Where(origin => entries.Any(e => e.Origin == origin && e.Provider is PluginProvider.FromMod)))
+        foreach (var mod in entries.Where(e => e.Provider is PluginProvider.FromMod).GroupBy(e => e.Origin))
         {
-            var track = await client.PostAsJsonAsync("/plugins/track", new { mods = new[] { mod } });
+            var track = await client.PostAsJsonAsync("/plugins/track", new { mods = new[] { mod.Key } });
             var answer = await track.Content.ReadFromJsonAsync<JsonElement>();
-            if (!track.IsSuccessStatusCode)
+            var messages = track.IsSuccessStatusCode
+                ? answer.GetProperty("refused").EnumerateArray().SelectMany(r => Text(r, "message").Split('\n'))
+                : [$"Track answered {(int)track.StatusCode}: {answer}"];
+            foreach (var message in messages)
             {
-                lines.Add($"{mod}\tround-trip\t\tTrack answered {(int)track.StatusCode}: {answer}");
-                continue;
-            }
-            foreach (var refusal in answer.GetProperty("refused").EnumerateArray())
-            {
-                foreach (var message in Text(refusal, "message").Split('\n'))
-                    lines.Add($"{mod}\tround-trip\t\t{message}");
+                var plugin = mod.FirstOrDefault(e => message.StartsWith(e.Name, StringComparison.Ordinal))?.Name ?? "";
+                lines.Add(Line(plugin, mod.Key, "round-trip", "", message));
             }
         }
 
@@ -82,14 +70,11 @@ public sealed class InstanceCatalogTests
             ? value
             : throw new InvalidOperationException($"Set {name}.");
 
-    private static string Text(JsonElement element, string property) => element.GetProperty(property).GetString() ?? "";
+    private static string Text(JsonElement element, string property) =>
+        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
 
-    private static string Mo2GameName(string instance) =>
-        File.ReadLines(Path.Combine(instance, "ModOrganizer.ini"))
-            .First(line => line.StartsWith("gameName=", StringComparison.Ordinal))["gameName=".Length..];
-
-    private static string Line(JsonElement plugin, string stage, JsonElement record, JsonElement message) =>
-        $"{plugin.GetString()}\t{stage}\t{(record.ValueKind == JsonValueKind.String ? record.GetString() : "")}\t{message.GetString()?.ReplaceLineEndings(" ")}";
+    private static string Line(string plugin, string origin, string stage, string record, string message) =>
+        $"{plugin}\t{origin}\t{stage}\t{record}\t{message.ReplaceLineEndings(" ")}";
 
     private static async IAsyncEnumerable<JsonElement> RecordsOf(HttpClient client, string plugin, string origin)
     {
@@ -116,26 +101,19 @@ public sealed class InstanceCatalogTests
             AddFiles(winningFileByName, mod, Path.Combine(instance, "mods", mod));
         AddFiles(winningFileByName, PluginOrigin.Overwrite, Path.Combine(instance, "overwrite"));
 
-        var entries = Implicits.Get(release).Listings
-            .Select(master => master.FileName.String)
-            .Where(name => File.Exists(Path.Combine(dataDir, name)))
-            .Select(name => new LoadOrderEntry(name, Path.Combine(dataDir, name), PluginOrigin.DataDirectory, null, Enabled: true, Winning: true))
-            .ToList();
+        var implicitMasters = RealInstallSmokeTests.MastersIn(release, dataDir);
         var listed = File.ReadLines(Path.Combine(profile, "plugins.txt"))
             .Where(line => line.StartsWith('*'))
             .Select(line => line[1..].Trim())
-            .Where(name => !entries.Exists(implicitMaster => implicitMaster.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
-            .ToList();
-        foreach (var name in listed)
-        {
-            entries.Add(winningFileByName.TryGetValue(name, out var winner)
+            .Where(name => !implicitMasters.Contains(name, StringComparer.OrdinalIgnoreCase));
+        var entries = implicitMasters.Concat(listed)
+            .Select(name => winningFileByName.TryGetValue(name, out var winner)
                 ? new LoadOrderEntry(Path.GetFileName(winner.Path), CopyToScratch(winner.Path, winner.Origin, scratchRoot), winner.Origin, null, Enabled: true, Winning: true)
                 : new LoadOrderEntry(name, Path.Combine(dataDir, name), PluginOrigin.DataDirectory, null, Enabled: true, Winning: true));
-        }
-        return [.. entries.Select((entry, line) => entry with { Line = line })];
+        return [.. entries.Select((entry, index) => entry with { Line = index })];
     }
 
-    private static void AddFiles(Dictionary<string, (string, string)> winningFileByName, string origin, string folder)
+    private static void AddFiles(Dictionary<string, (string Origin, string Path)> winningFileByName, string origin, string folder)
     {
         if (!Directory.Exists(folder)) return;
         foreach (var file in Directory.EnumerateFiles(folder))

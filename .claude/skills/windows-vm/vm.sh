@@ -35,6 +35,7 @@ case "${1:-}" in
     ;;
   sync)
     feed="$(sed -n 's/.*key="modbench-stack" value="\([^"]*\)".*/\1/p' "$HOME/.nuget/NuGet/NuGet.Config")"
+    [[ -d $feed ]] || { echo "No modbench-stack feed: declare it with dotnet nuget add source <folder> -n modbench-stack." >&2; exit 1; }
     tar -C "$feed" -cf - . \
       | "$HERE/vm.sh" ssh "New-Item -ItemType Directory -Force $FEED | Out-Null; tar -xf - -C $FEED; dotnet nuget remove source modbench-stack *> \$null; dotnet nuget add source $FEED -n modbench-stack | Out-Null"
     root="$(git -C "$HERE" rev-parse --show-toplevel)"

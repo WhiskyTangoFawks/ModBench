@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # slot-run.sh <command...>: runs a build or test in the machine's build slot, in a memory-capped
 # scope of its own where systemd gives one. A run already in the slot, as a gate's build is, runs
-# as it stands, inside the cap it already has.
+# as it stands, inside the cap it already has. SLOT_MEMORY_MAX raises the 6G cap for one run.
 DIR=${BASH_SOURCE[0]%/*}
 [[ -n ${BUILD_SLOT_HELD:-} ]] && exec "$@"
 

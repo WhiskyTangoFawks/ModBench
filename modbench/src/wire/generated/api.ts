@@ -786,7 +786,7 @@ export interface components {
             message: string;
         };
         /** @enum {string} */
-        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotTracked" | "PluginSourceUnreadable" | "NoSource" | "SourceFileHeld" | "SourceDoesNotParse" | "SourceDoesNotRoundTrip" | "SourceValueDropped" | "FormKeyCollision" | "FormIdOutsideFlagLimit" | "MasterNotInLoadOrder" | "MasterUnreadable" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
+        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotTracked" | "PluginSourceUnreadable" | "NoSource" | "SourceFileHeld" | "SourceDoesNotParse" | "SourceDoesNotRoundTrip" | "SourceValueDropped" | "FormKeyCollision" | "FormIdOutsideFlagLimit" | "FormIdUnmappable" | "MasterNotInLoadOrder" | "MasterUnreadable" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
         CompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
         };
