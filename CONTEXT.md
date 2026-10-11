@@ -167,6 +167,11 @@ A mod file the instance keeps with its metadata. Installing it creates a mod, an
 
 Avoid: download (as a noun; to download is to fetch a file), archive (that is a BA2 or BSA), package
 
+# Manifest
+The one file in a mod folder that names where each of the mod's files comes from. Restore rebuilds the mod from it.
+
+Avoid: record, recipe, directives
+
 # Game folder
 The game installation: the Steam install or a stock game folder.
 

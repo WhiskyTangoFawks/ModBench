@@ -28,3 +28,4 @@ What the manifest and restore do differently.
 | 7 | A missing download at restore | Restore restores every mod whose downloads are present, and names each mod it could not with the download it lacks. Fetching is the user's. | Install stops when any archive cannot be fetched | Ruling: a mod gone from Nexus never blocks the rest, and restore downloads nothing. |
 | 8 | What restore removes | Files in the mod folder the manifest does not name, and a mod folder with no manifest | Any file in the install folder its deletion rules allow, after one confirmation | Ruling: restore covers `mods/` only. |
 | 9 | Configuration paths | Committed with the paths they hold, and a clone edits them | Rewritten to placeholders and back | Ruling: a developer edits a config. |
+| 10 | Words | track, update, restore | compile, install | Ruling: restore is ADR-0022's word, and compile already runs from source to output elsewhere in Modbench. |
