@@ -143,11 +143,7 @@ SLOT_RUN = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file_
 
 
 def in_build_slot(command: list[str], root: str, timeout: int) -> None:
-    """A run the slot frees too late for gives no findings."""
-    try:
-        subprocess.run(["bash", SLOT_RUN, *command], cwd=root, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        pass
+    subprocess.run(["bash", SLOT_RUN, *command], cwd=root, capture_output=True, text=True, timeout=timeout)
 
 
 def build_sarif(root: str, csproj: str, sarif_path: str) -> None:
@@ -240,12 +236,17 @@ def backend_findings(root: str, changed: list[str]) -> list[dict]:
             changed_abs = {os.path.realpath(os.path.join(root, f)) for f in proj_changed}
 
             sarif = os.path.join(tmp, name + ".sarif")
-            build_sarif(root, csproj, sarif)
-            for r in read_sarif(sarif):
-                if os.path.realpath(r["path"]) in changed_abs:
-                    found.append(r)
-
-            found.extend(format_findings(root, csproj, proj_changed, os.path.join(tmp, name + "-fmt")))
+            try:
+                build_sarif(root, csproj, sarif)
+                for r in read_sarif(sarif):
+                    if os.path.realpath(r["path"]) in changed_abs:
+                        found.append(r)
+                found.extend(format_findings(root, csproj, proj_changed, os.path.join(tmp, name + "-fmt")))
+            except subprocess.TimeoutExpired as late:
+                found.append({
+                    "path": os.path.join(root, csproj), "line": 0, "level": "note", "rule": "build-slot",
+                    "msg": f"C# check skipped: the build slot did not free within {late.timeout:.0f} s",
+                })
     return found
 
 

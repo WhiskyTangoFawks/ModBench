@@ -31,8 +31,6 @@ if [[ ! -x "$OPENAPI_TS" ]]; then
   [[ -x "$OPENAPI_TS" ]] || { echo "ERROR: $OPENAPI_TS missing after npm ci." >&2; exit 1; }
 fi
 
-# The build runs outside the backend's process group: the MSBuild and compiler servers it
-# leaves behind are shared with every other build on the machine.
 bash "$ROOT/.claude/skills/validate/slot-run.sh" dotnet build "$PROJECT" -nologo -v quiet \
   || { echo "--- API DRIFT GATE FAILED: backend build failed ---"; exit 1; }
 BACKEND_DLL="$(dotnet msbuild "$PROJECT" -nologo -getProperty:TargetPath)"

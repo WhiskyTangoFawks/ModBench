@@ -19,10 +19,12 @@ class BuildSlot(unittest.TestCase):
         commands = [call.args[0] for call in run.call_args_list]
         self.assertEqual([c[:3] for c in commands], [["bash", str(SLOT_RUN), "dotnet"]] * 2)
 
-    def test_a_slot_that_frees_too_late_gives_no_findings(self):
+    def test_a_slot_that_frees_too_late_is_reported_as_a_skipped_check(self):
         late = subprocess.TimeoutExpired("slot-run.sh", 180)
         with mock.patch.object(code_quality.subprocess, "run", side_effect=late):
-            self.assertEqual(code_quality.backend_findings("/repo", ["MEditService/MEditService.Codec/X.cs"]), [])
+            found = code_quality.backend_findings("/repo", ["MEditService/MEditService.Codec/X.cs"])
+        self.assertEqual(len(found), 1)
+        self.assertIn("C# check skipped", found[0]["msg"])
 
 
 if __name__ == "__main__":

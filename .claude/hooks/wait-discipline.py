@@ -13,11 +13,12 @@ import sys
 from hook_caller import is_subagent
 
 DETACHED = "bash .claude/skills/validate/detached.sh"
-SLOT_RUN = pathlib.Path(__file__).resolve().parents[1] / "skills/validate/slot-run.sh"
+SLOT_RUN = (pathlib.Path(__file__).resolve().parents[1] / "skills/validate/slot-run.sh").as_posix()
 BUILD = "|".join((r"\bdotnet\s+(?:build|test|format|publish)(?![\w-])",
                   r"\bnpm\s+(?:run\s+)?(?:test|build|package)\b",
                   r"\bnpx\s+vitest\b"))
-BUILDING_RUN = r"\bdotnet\s+run\b(?!.*--no-build)"
+DOTNET_RUN = r"\bdotnet\s+run\b"
+HEREDOC = re.compile(r"(?<!<)<<-?\s*(['\"]?)(\w+)\1([^\n]*)\n.*?^\s*\2\s*$", re.DOTALL | re.MULTILINE)
 RUN = r"(?:(?:^|[;&|(\n])\s*|(?<![\w.])(?:ba)?sh\s+(?:-\S+\s+)*)"
 GATE = BUILD + "|" + RUN + r"\S*run-gates\.sh\b(?!.*--detach)|\bdetached\.sh\s+wait\b"
 
@@ -30,6 +31,12 @@ def block(message):
 def outside_the_slot(segment):
     build = re.search(BUILD, segment)
     return build and "slot-run.sh" not in segment[:build.start()]
+
+
+def builds_or_holds_the_slot(segment):
+    run = re.search(DOTNET_RUN, segment)
+    return run and ("--no-build" not in segment[run.end():] or "slot-run.sh" in segment[:run.start()])
+
 
 data = json.load(sys.stdin)
 tool = data.get("tool_name")
@@ -44,15 +51,15 @@ if subagent and (tool == "Monitor" or tool_input.get("run_in_background")):
         f"`{DETACHED} wait <name>` in the foreground until it prints the verdict."
     )
 command = tool_input.get("command", "")
-# Quoted content is data (issue bodies, commit messages, a command for the Windows VM), not a
-# command this machine runs.
-bare = re.sub(r"\"[^\"]*\"|'[^']*'", "", command)
+# Heredoc bodies and quoted content are data (issue bodies, commit messages, a command for the
+# Windows VM), not a command this machine runs.
+bare = re.sub(r"\"[^\"]*\"|'[^']*'", "", HEREDOC.sub(r"\3", command))
 segments = re.split(r"[;&|\n]", bare)
-if any(re.search(BUILDING_RUN, segment) for segment in segments):
+if any(builds_or_holds_the_slot(segment) for segment in segments):
     block(
-        "`dotnet run` builds first, and a process it starts would hold the build slot for its "
-        f"whole life. Build with `bash {SLOT_RUN} dotnet build <project>`, then start it with "
-        "`dotnet run --no-build --project <project>`."
+        "a process `dotnet run` starts can live for hours, so it neither builds nor runs in the "
+        f"build slot. Build with `bash {SLOT_RUN} dotnet build <project>`, then start it with "
+        "`dotnet run --no-build --project <project>`, outside slot-run.sh."
     )
 if any(outside_the_slot(segment) for segment in segments):
     block(

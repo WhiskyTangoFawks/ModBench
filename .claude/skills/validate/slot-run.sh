@@ -5,13 +5,13 @@
 DIR=${BASH_SOURCE[0]%/*}
 [[ -n ${BUILD_SLOT_HELD:-} ]] && exec "$@"
 
-# The machine ran out of memory with several builds beside VS Code's C# Dev Kit, and the kernel
-# killed VS Code. So builds run one at a time, capped short of the memory VS Code needs.
 export BUILD_SLOT_HELD=1
 # MSBuild's worker nodes otherwise idle on after the build, about 190 MB each, and serve the
 # builds of other worktrees.
 export MSBUILDDISABLENODEREUSE=1
-ROOT=$(cd "$DIR/../../.." && pwd)
+# The slot stops a run whose tree is gone. That tree is the caller's, since a worktree's agent
+# runs the main checkout's copy of this script.
+ROOT=$PWD
 source "$DIR/slot.sh"
 
 unit=medit-build-$$

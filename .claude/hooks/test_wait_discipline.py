@@ -89,28 +89,33 @@ class BuildSlot(unittest.TestCase):
     def test_each_build_in_a_chain_goes_through_the_slot(self):
         self.assertEqual(self.check(f"bash {SLOT_RUN} dotnet build && dotnet test").returncode, 2)
 
+    def test_a_build_after_a_heredoc_is_a_command(self):
+        for command in ("cat <<'EOF' > x\nbody\nEOF\ndotnet test", "cat <<EOF > x && dotnet test\nbody\nEOF"):
+            with self.subTest(command=command):
+                self.assertEqual(self.check(command).returncode, 2)
+
     def test_a_detached_build_outside_the_slot_is_blocked(self):
         self.assertEqual(self.check("bash .claude/skills/validate/detached.sh start t dotnet test").returncode, 2)
 
     def test_a_background_build_outside_the_slot_is_blocked(self):
         self.assertEqual(self.check("dotnet build", run_in_background=True).returncode, 2)
 
-    def test_a_dotnet_run_that_builds_is_blocked_even_in_the_slot(self):
-        for command in ("dotnet run --project MEditService.Http", f"bash {SLOT_RUN} dotnet run --project X"):
+    def test_a_dotnet_run_that_builds_or_holds_the_slot_is_blocked(self):
+        for command in ("dotnet run --project MEditService.Http", f"bash {SLOT_RUN} dotnet run --project X",
+                        f"bash {SLOT_RUN} dotnet run --no-build --project X"):
             with self.subTest(command=command):
                 run = self.check(command)
                 self.assertEqual(run.returncode, 2)
                 self.assertIn("--no-build", run.stderr)
 
-    def test_a_dotnet_run_that_does_not_build_passes(self):
-        for command in ("dotnet run --no-build --project MEditService.Http",
-                        f"bash {SLOT_RUN} dotnet run --no-build --project X"):
-            with self.subTest(command=command):
-                self.assertEqual(self.check(command).returncode, 0)
+    def test_a_dotnet_run_that_neither_builds_nor_holds_the_slot_passes(self):
+        self.assertEqual(self.check("dotnet run --no-build --project MEditService.Http").returncode, 0)
 
     def test_a_command_that_only_names_a_build_passes(self):
         for command in ("dotnet build-server shutdown", "git commit -m 'dotnet test'", "grep -rn dotnet docs",
-                        ".claude/skills/windows-vm/vm.sh ssh 'cd C:\\work; dotnet test'"):
+                        ".claude/skills/windows-vm/vm.sh ssh 'cd C:\\work; dotnet test'",
+                        "git commit -F - <<'EOF'\nRun dotnet test; npm run build\nEOF\ngit log -1",
+                        "cat <<EOF > x && echo done\ndotnet test\nEOF"):
             with self.subTest(command=command):
                 self.assertEqual(self.check(command).returncode, 0)
 

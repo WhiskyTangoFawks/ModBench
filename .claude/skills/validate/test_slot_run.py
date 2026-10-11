@@ -47,6 +47,14 @@ class SlotRun(unittest.TestCase):
         run = self.slot_run("echo ran")
         self.assertEqual(run.stdout, "in_slot build 1\nran\n")
 
+    def test_the_slot_watches_the_directory_the_run_started_in(self):
+        worktree = self.dir / "worktree"
+        worktree.mkdir()
+        (self.script.parent / "slot.sh").write_text('in_slot() { echo "watching $ROOT"; }\n')
+        run = subprocess.run(["bash", str(self.script), "true"], cwd=worktree,
+                             capture_output=True, text=True, timeout=30, env=self.env)
+        self.assertEqual(run.stdout, f"watching {worktree}\n")
+
     def test_a_run_fails_with_its_command_status(self):
         self.assertEqual(self.slot_run("exit 7").returncode, 7)
 
