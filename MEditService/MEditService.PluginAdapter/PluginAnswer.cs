@@ -24,6 +24,9 @@ public abstract record PluginFailure
 
     public abstract string Reason { get; }
 
+    /// <summary>Whether the failure is the plugin's own bytes' answer, which holds until they change.</summary>
+    public virtual bool OfItsBytes => true;
+
     /// <summary>The file system would not open the file: it is gone, another program holds it, or
     /// access is denied. Nothing is known of its bytes.</summary>
     public sealed record Inaccessible : PluginFailure
@@ -33,6 +36,8 @@ public abstract record PluginFailure
         internal Inaccessible(Exception error) : base(error) => _reason = error.Message;
 
         public override string Reason => _reason;
+
+        public override bool OfItsBytes => false;
     }
 
     /// <summary>Mutagen could not read the bytes.</summary>
@@ -53,6 +58,21 @@ public abstract record PluginFailure
         public string File { get; }
 
         public override string Reason => $"its strings file '{File}' was not found";
+
+        public override bool OfItsBytes => false;
+    }
+
+    /// <summary>An archive the plugin's strings are looked up in that could not be read.</summary>
+    internal sealed record UnreadableStrings : PluginFailure
+    {
+        private readonly string _reason;
+
+        internal UnreadableStrings(string archive, Exception error) : base(error) =>
+            _reason = $"its strings archive '{archive}' could not be read: {error.Message}";
+
+        public override string Reason => _reason;
+
+        public override bool OfItsBytes => false;
     }
 
     /// <summary>ADR-0008's content-derived master pass pruned a master the write still needs: its only
@@ -87,10 +107,12 @@ public abstract record PluginFailure
             _reason = $"it references {string.Join(", ", error.ModPaths.Select(path => path.ModKey.FileName))}, which the load order does not hold";
 
         public override string Reason => _reason;
+
+        public override bool OfItsBytes => false;
     }
 
-    /// <summary>A master the plugin written references whose header does not read, so its style, which
-    /// the write needs, is unknown.</summary>
+    /// <summary>A master the plugin read or written references whose header does not read, so its style,
+    /// which the read or write needs, is unknown.</summary>
     public sealed record MasterUnreadable : PluginFailure
     {
         private readonly string _reason;
@@ -104,6 +126,8 @@ public abstract record PluginFailure
         public string Master { get; }
 
         public override string Reason => _reason;
+
+        public override bool OfItsBytes => false;
     }
 
     /// <summary>The failure <paramref name="ex"/> stands for: a file system refusal is
@@ -113,6 +137,7 @@ public abstract record PluginFailure
     {
         TargetInvocationException { InnerException: { } invoked } => Of(invoked),
         MissingModException missing => new MasterNotInLoadOrder(missing),
+        PluginFailureException { Failure: { } failure } => failure,
         _ when Refusal(ex) is { } refusal => new Inaccessible(refusal),
         _ => new Unparsed(PluginDiagnosis.FromParseException(ex), ex),
     };
@@ -167,4 +192,26 @@ public abstract record PluginFailure
             return Of(ex);
         }
     }
+}
+
+/// <summary>Carries out through Mutagen's read the failure of a file the read needs besides the plugin,
+/// which names that file.</summary>
+internal sealed class PluginFailureException : InvalidOperationException
+{
+    // RCS1194's standard constructors; a read throws only with a failure.
+    internal PluginFailureException()
+    {
+    }
+
+    internal PluginFailureException(string message) : base(message)
+    {
+    }
+
+    internal PluginFailureException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
+
+    internal PluginFailureException(PluginFailure failure) : base(failure.Reason, failure.Error) => Failure = failure;
+
+    internal PluginFailure? Failure { get; }
 }

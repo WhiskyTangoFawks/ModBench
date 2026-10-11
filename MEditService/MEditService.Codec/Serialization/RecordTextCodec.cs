@@ -76,7 +76,7 @@ public static class RecordTextCodec
         // No \r anywhere: the kernel's indentation uses the platform newline. No trailing newline:
         // Finalize writes the closing brace and nothing after, as does the source tree, so adding
         // one would diverge from the whole-mod door's document shape.
-        return [.. buffer.ToArray().Where(b => b != (byte)'\r')];
+        return TranslatedStringValues.InLanguageOrder([.. buffer.ToArray().Where(b => b != (byte)'\r')]);
     }
 
     /// <summary>The instance the codec builds for an empty document of a Loqui class: every member

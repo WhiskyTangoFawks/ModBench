@@ -12,11 +12,11 @@ public sealed class LoadOrderTests
             line is { } place ? new PluginLine(place, lineNamesIt) : null);
 
     private static LoadOrderSnapshot Order(RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
-        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], []);
+        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], [], []);
 
     private static LoadOrderSnapshot OrderLoadingWithNoLine(
         RegisteredPlugin[] plugins, RegisteredPlugin[] loadedWithNoLine, params RegisteredPlugin[] active) =>
-        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], [.. loadedWithNoLine.Select(p => p.Key)]);
+        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], [.. loadedWithNoLine.Select(p => p.Key)], []);
 
     [Fact]
     public void APluginTheSnapshotDoesNotListAsActive_IsNotActive_AndIsStillAPluginInTheInstance()
@@ -173,6 +173,14 @@ public sealed class LoadOrderTests
     }
 
     [Fact]
+    public void SamePlugins_LoadingADifferentArchive_AreDifferentValues()
+    {
+        var a = Registered("A.esp", "ModA");
+
+        Assert.NotEqual(Order([a], a), new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, [a], [a.Key], [], [@"C:\Games\Fallout4\Data\A - Main.ba2"]));
+    }
+
+    [Fact]
     public void EmptySnapshot_HasNoActivePlugin_AndKnowsNoPlugin()
     {
         var order = Order([]);
@@ -214,7 +222,7 @@ public sealed class LoadOrderTests
     {
         var plugin = Registered("A.esp", "ModA");
         var lower = new LoadOrderSnapshot(
-            Data.ToLowerInvariant(), Instance.ToLowerInvariant(), GameRelease.Fallout4, [plugin], [plugin.Key], []);
+            Data.ToLowerInvariant(), Instance.ToLowerInvariant(), GameRelease.Fallout4, [plugin], [plugin.Key], [], []);
 
         Assert.Equal(Order([plugin], plugin), lower);
         Assert.Equal(Order([plugin], plugin).GetHashCode(), lower.GetHashCode());
@@ -227,7 +235,7 @@ public sealed class LoadOrderTests
         var b = Registered("B.esp", "ModB");
         var plugins = new List<RegisteredPlugin> { a, b };
         var active = new List<PluginAddress> { a.Key };
-        var order = new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, plugins, active, []);
+        var order = new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, plugins, active, [], []);
 
         plugins.Add(Registered("C.esp", "ModC"));
         active.Add(b.Key);
