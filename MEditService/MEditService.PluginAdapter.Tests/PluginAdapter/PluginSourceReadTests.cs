@@ -1,11 +1,11 @@
 using System.Text;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Skyrim;
-using Mutagen.Bethesda.Strings;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -27,12 +27,8 @@ public sealed class PluginSourceReadTests
     {
         using var folder = new ScratchDirectory("medit-source-archived-strings-");
         var pluginPath = Path.Combine(folder, "Fixture.esl");
-        var mod = new SkyrimMod(ModKey.FromFileName("Fixture.esl"), SkyrimRelease.SkyrimSE) { UsingLocalization = true };
-        mod.Doors.AddNew("MainDoor").Name = new TranslatedString(Language.English, "The Big Door");
-        ((IModGetter)mod).WriteToBinary(pluginPath);
-        var looseStrings = Path.Combine(folder, "Strings");
-        StringsArchive.Pack(Directory.EnumerateFiles(looseStrings), Path.Combine(folder, "Fixture.bsa"));
-        Directory.Delete(looseStrings, recursive: true);
+        LocalizedDoorPlugin.Write(pluginPath, "The Big Door");
+        LocalizedDoorPlugin.PackStrings(pluginPath, Path.Combine(folder, "Fixture.bsa"));
 
         var source = (await ReadSourceAsync(pluginPath, GameRelease.SkyrimSE)).Answered();
 
