@@ -19,7 +19,7 @@ internal sealed class FormKeyAllocator
     private readonly PluginAddress _plugin;
     private readonly GameRelease _release;
     private readonly SourceDocument? _header;
-    private readonly FlagLimit? _limit;
+    private readonly FormIdLimit? _limit;
     private readonly IReadOnlySet<string> _used;
     private readonly uint _nextObjectIdHeld;
     private uint _nextObjectId;
@@ -32,7 +32,7 @@ internal sealed class FormKeyAllocator
         _nextObjectIdHeld = _nextObjectId = headerBody is null ? 0 : HeaderDocument.NextObjectId(headerBody, release);
         // The working tree's header document decides (ADR-0007), so a flag flipped this session caps
         // minting immediately.
-        _limit = LimitOf(plugin.Name, headerBody, release);
+        _limit = headerBody is null ? null : PluginFlags.LimitOf(HeaderDocument.Read(headerBody, release), plugin.Name);
         _used = used;
     }
 
@@ -99,18 +99,14 @@ internal sealed class FormKeyAllocator
         return id;
     }
 
-    private uint Cap => _limit?.Cap ?? FormID.FullIdMask;
+    private uint Cap => _limit?.Max ?? FormID.FullIdMask;
 
-    // The flag a header document sets, or the .esl extension, which no flag cleared can lift.
-    private sealed record FlagLimit(string Flag, uint Cap, bool Clearable);
-
-    private static FlagLimit? LimitOf(string pluginName, byte[]? headerBody, GameRelease release)
+    private static string Lift(FormIdLimit limit) => (limit.ByFlag, limit.ByExtension) switch
     {
-        if (pluginName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase)) return new("light", FormID.SmallIdMask, Clearable: false);
-        if (headerBody is null) return null;
-        if (HeaderDocument.IsLight(headerBody, release)) return new("light", FormID.SmallIdMask, Clearable: true);
-        return HeaderDocument.IsMedium(headerBody, release) ? new("medium", FormID.MediumIdMask, Clearable: true) : null;
-    }
+        (true, true) => $"clear the {limit.Flag} flag and rename the plugin off .esl",
+        (false, true) => "rename the plugin off .esl",
+        _ => $"clear the {limit.Flag} flag",
+    };
 
     private string KeyOf(uint id) => $"{id:X6}:{_plugin.Name}";
 
@@ -132,13 +128,13 @@ internal sealed class FormKeyAllocator
                 "must be native to the plugin that is to hold it.");
         }
 
-        if (_limit is { } limit && parsed.ID > limit.Cap)
+        if (_limit is { } limit && parsed.ID > limit.Max)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.FormIdOutsideFlagLimit,
                 $"{requestedFormKey} exceeds {_plugin.Name}'s {limit.Flag} local FormID range — a {limit.Flag} " +
-                $"plugin can only address local FormIDs up to 0x{limit.Cap:X}. " +
-                $"Choose a FormID within that range, or clear the {limit.Flag} flag.");
+                $"plugin can only address local FormIDs up to 0x{limit.Max:X}. " +
+                $"Choose a FormID within that range, or {Lift(limit)}.");
         }
 
         return null;
@@ -148,8 +144,8 @@ internal sealed class FormKeyAllocator
     {
         var noneFree = $"{_plugin.Name} has no FormKey free at or above its Next Object ID";
         if (_limit is not { } limit) return $"{noneFree}, up to 0x{FormID.FullIdMask:X}.";
-        var limited = $"{noneFree}, up to 0x{limit.Cap:X}, the last a {limit.Flag} plugin can address.";
-        return limit.Clearable ? $"{limited} Clear the {limit.Flag} flag in the header to draw above it." : limited;
+        var lift = Lift(limit);
+        return $"{noneFree}, up to 0x{limit.Max:X}, the last a {limit.Flag} plugin can address. {char.ToUpperInvariant(lift[0])}{lift[1..]} to draw above it.";
     }
 
     private static uint LocalId(string formKey) =>

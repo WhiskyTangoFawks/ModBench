@@ -1,4 +1,7 @@
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
+using Noggog;
 
 namespace MEditService.PluginAdapter;
 
@@ -10,22 +13,23 @@ public sealed class PreparedPluginSave : IDisposable
     private readonly string _tmpPath;
     private readonly string _finalPath;
     private readonly IReadOnlyList<(string TempPath, string FinalPath)> _stringsFiles;
+    private readonly IReadOnlyCache<IModMasterStyledGetter, ModKey>? _masterStyles;
 
     internal PreparedPluginSave(
-        string tmpDir, string tmpPath, string finalPath, IReadOnlyList<(string TempPath, string FinalPath)>? stringsFiles = null)
+        string tmpDir, string tmpPath, string finalPath, IReadOnlyList<(string TempPath, string FinalPath)> stringsFiles,
+        IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles)
     {
         _tmpDir = tmpDir;
         _tmpPath = tmpPath;
         _finalPath = finalPath;
-        _stringsFiles = stringsFiles ?? [];
+        _stringsFiles = stringsFiles;
+        _masterStyles = masterStyles;
     }
 
-    /// <summary>The temp-written binary, beside the temp strings its read needs.</summary>
-    internal ModPath Written(ModKey plugin, out PluginStrings strings)
-    {
-        strings = new PluginStrings(_tmpDir, _tmpDir);
-        return new ModPath(plugin, _tmpPath);
-    }
+    /// <summary>The temp-written binary read back with the temp strings and the master styles it was
+    /// written with.</summary>
+    internal IMod Reread(ModKey plugin, GameRelease release) =>
+        MutagenPluginAdapter.OpenForWrite(new ModPath(plugin, _tmpPath), release, new PluginStrings(_tmpDir, _tmpDir), _masterStyles);
 
     /// <summary>The hash of the binary Commit puts in place, spelled as the commit trailers spell it.</summary>
     public string BinarySha256() => PluginBinaryHash.TrailerFormOfFile(_tmpPath);

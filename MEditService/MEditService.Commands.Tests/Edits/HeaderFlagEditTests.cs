@@ -103,7 +103,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         var result = SetFlags("[\"Small\", \"Master\"]");
 
         Assert.True(result.Applied, result.Message);
-        Assert.True(HeaderDocument.IsLight(System.Text.Encoding.UTF8.GetBytes(_fixture.Document(HeaderFormKey).Require().Body), GameRelease.Fallout4));
+        Assert.True(HeaderDocument.Read(System.Text.Encoding.UTF8.GetBytes(_fixture.Document(HeaderFormKey).Require().Body), GameRelease.Fallout4).IsSmallMaster);
     }
 
     [Fact]

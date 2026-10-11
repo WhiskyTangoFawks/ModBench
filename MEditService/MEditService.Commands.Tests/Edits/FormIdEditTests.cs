@@ -95,6 +95,20 @@ public sealed class FormIdEditTests
     }
 
     [Fact]
+    public void EditingTheFormId_OnALightFlaggedEsl_PastTheLightRange_NamesClearingTheFlagAndRenamingOffEsl()
+    {
+        using var mod = SourceEditFixture.TrackedLight("Fixture.esl");
+
+        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esl");
+
+        Assert.Equal(
+            (RecordEditRefusal.FormIdOutsideFlagLimit,
+             "001000:Fixture.esl exceeds Fixture.esl's light local FormID range — a light plugin can only address local FormIDs " +
+             "up to 0xFFF. Choose a FormID within that range, or clear the light flag and rename the plugin off .esl."),
+            (result.Refusal, result.Message));
+    }
+
+    [Fact]
     public void EditingTheFormId_AfterTheLightFlagIsSetInTheSession_RefusesAValueAboveTheLightRangeImmediately()
     {
         using var mod = SourceEditFixture.Tracked();

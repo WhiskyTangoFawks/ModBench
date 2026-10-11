@@ -108,7 +108,6 @@ public abstract class TestInstance : IDisposable
         return entry.Key;
     }
 
-    // Where a game's masters carry a style, Mutagen writes no FormID of a master whose style it is not given.
     private void Write(IMod mod, string path) => mod.WriteToBinary(path, new BinaryWriteParameters { MasterFlagsLookup = _added });
 
     /// <summary>The plugins added so far, by the style each one's header gives it.</summary>

@@ -70,7 +70,7 @@ internal sealed class PluginCompileService(
 
         // A plugin with native records outside the range its light or medium flag limits it to would
         // compile to a binary the game mis-addresses, so refuse it (compile-plugin, Refusals).
-        if (tree.LimitedRange(plugin.Name) is { } limited)
+        if (tree.FormIdLimit(plugin.Name) is { } limited)
         {
             var outOfRange = tree.FormKeys
                 .Where(key => key.ModKey == tree.ModKey
@@ -79,7 +79,7 @@ internal sealed class PluginCompileService(
                 .ToList();
             if (outOfRange.Count > 0)
             {
-                var renameOffEsl = plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase) ? " rename the plugin off .esl," : "";
+                var renameOffEsl = limited.ByExtension ? " rename the plugin off .esl," : "";
                 return CompileResult.Refused(
                     CompileRefusal.FormIdOutsideFlagLimit,
                     $"{plugin.Name} is a {limited.Flag} plugin but holds native FormID(s) outside the {limited.Flag} range " +

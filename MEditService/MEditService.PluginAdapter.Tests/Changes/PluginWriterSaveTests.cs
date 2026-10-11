@@ -143,4 +143,23 @@ public sealed class PluginWriterSaveTests
             saved.Failure().Reason);
         Assert.Equal(before, File.ReadAllBytes(child.Path));
     }
+
+    [Fact]
+    public async Task TheDropCheck_OfAStarfieldSave_WhoseMasterTurnsUnreadableAfterTheWrite_ReadsTheStylesTheWriteUsed()
+    {
+        using var scratch = new ScratchDirectory("pw-save-master-turns-unreadable");
+        var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
+        var child = LightMasterAndChild.ChildIn(loadOrder);
+        var adapter = TestAdapters.Mutagen();
+        var source = (await adapter.ReadSourceOfAsync(child, loadOrder, new PluginStrings(null, scratch))).Answered();
+        var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();
+
+        var drops = (await tree.SaveAsync(child.Path, source.Masters, source.Masters, save =>
+        {
+            File.WriteAllBytes(Path.Combine(scratch, LightMasterAndChild.Master.FileName), "not a plugin"u8.ToArray());
+            return tree.DropsIn(save);
+        })).Answered();
+
+        Assert.Empty(drops);
+    }
 }

@@ -39,7 +39,7 @@ internal static class PluginWriter
                     .ToList()
                 : [];
 
-            return new PreparedPluginSave(tmpDir, tmpPath, pluginPath, stringsFiles);
+            return new PreparedPluginSave(tmpDir, tmpPath, pluginPath, stringsFiles, masterStyles);
         }
         catch
         {

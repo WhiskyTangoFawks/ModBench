@@ -4,23 +4,18 @@ namespace MEditService.Codec.Tests.Serialization;
 
 public sealed class OutOfMemoryOrCancellationTests
 {
-    [Fact]
-    public void AnOutOfMemoryWrappedTwice_IsFound()
+    private static readonly OutOfMemoryException OutOfMemory = Activator.CreateInstance<OutOfMemoryException>();
+    private static readonly OperationCanceledException Cancelled = new();
+
+    public static TheoryData<string, Exception, Exception?> Thrown => new()
     {
-        var outOfMemory = Activator.CreateInstance<OutOfMemoryException>();
+        { "an out-of-memory wrapped twice", new InvalidOperationException("outer", new InvalidDataException("inner", OutOfMemory)), OutOfMemory },
+        { "a wrapped cancellation", new InvalidOperationException("outer", Cancelled), Cancelled },
+        { "a failure of the file itself", new InvalidOperationException("outer", new InvalidDataException("a bad subrecord")), null },
+    };
 
-        Assert.Same(outOfMemory, OutOfMemoryOrCancellation.In(new InvalidOperationException("outer", new InvalidDataException("inner", outOfMemory))));
-    }
-
-    [Fact]
-    public void AWrappedCancellation_IsFound()
-    {
-        var cancelled = new OperationCanceledException();
-
-        Assert.Same(cancelled, OutOfMemoryOrCancellation.In(new InvalidOperationException("outer", cancelled)));
-    }
-
-    [Fact]
-    public void AFailureOfTheFileItself_IsNot() =>
-        Assert.Null(OutOfMemoryOrCancellation.In(new InvalidOperationException("outer", new InvalidDataException("a bad subrecord"))));
+    [Theory]
+    [MemberData(nameof(Thrown))]
+    public void In_FindsTheOutOfMemoryOrCancellationAThrowWraps(string _, Exception thrown, Exception? found) =>
+        Assert.Same(found, OutOfMemoryOrCancellation.In(thrown));
 }

@@ -131,11 +131,6 @@ public abstract record PluginFailure
         _ => null,
     };
 
-    /// <summary>Whether <paramref name="ex"/> is the failure of the read or write it came out of:
-    /// only running out of memory or being cancelled, however Mutagen wrapped it, is not the file's
-    /// answer.</summary>
-    internal static bool StandsFor(Exception ex) => OutOfMemoryOrCancellation.In(ex) is null;
-
     /// <summary>Throws the out-of-memory or cancellation inside <paramref name="ex"/> as itself, so a
     /// caller's own check sees it, unless <paramref name="file"/> declares a length that ran it out.</summary>
     internal static void ThrowIfNotTheFilesAnswer(Exception ex, PluginRecordBytes? file = null)

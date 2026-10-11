@@ -170,15 +170,23 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     // field its form version shapes is read by another record's, or by none.
     internal static IMod OpenForWrite(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
+        => OpenForWrite(modPath, gameRelease, strings, MasterStyles.Of(modPath, loadOrder));
+
+    internal static IMod OpenForWrite(
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles)
         => ModFactory.ImportSetter(
-            modPath, gameRelease, (ReadParameters(modPath, gameRelease, strings, loadOrder) ?? new BinaryReadParameters()) with { Parallel = false });
+            modPath, gameRelease, (ReadParameters(modPath.ModKey, gameRelease, strings, masterStyles) ?? new BinaryReadParameters()) with { Parallel = false });
 
     private static BinaryReadParameters? ReadParameters(
-        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, LoadOrderSnapshot? loadOrder)
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, LoadOrderSnapshot? loadOrder) =>
+        ReadParameters(modPath.ModKey, gameRelease, strings, MasterStyles.Of(modPath, loadOrder));
+
+    private static BinaryReadParameters? ReadParameters(
+        ModKey plugin, GameRelease gameRelease, PluginStrings? strings, IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles)
     {
-        var read = strings is { } named ? LocalizedStrings.ForRead(named, modPath.ModKey, gameRelease) : null;
-        return MasterStyles.Of(modPath, loadOrder) is { } styles
-            ? (read ?? new BinaryReadParameters()) with { MasterFlagsLookup = styles }
+        var read = strings is { } named ? LocalizedStrings.ForRead(named, plugin, gameRelease) : null;
+        return masterStyles is not null
+            ? (read ?? new BinaryReadParameters()) with { MasterFlagsLookup = masterStyles }
             : read;
     }
 

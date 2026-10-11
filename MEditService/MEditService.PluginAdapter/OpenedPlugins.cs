@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.PluginAdapter;
@@ -12,9 +13,9 @@ internal static class OpenedPlugins
         var (recordCount, unreachable) = ReachableRecordCount(mod);
         return (
             new PluginContent(
-                IsLight: PluginFlagPredicates.IsLight(mod, pluginName),
-                IsMedium: PluginFlagPredicates.IsMedium(mod, pluginName),
-                IsMaster: PluginFlagPredicates.IsMaster(mod, pluginName),
+                IsLight: PluginFlags.IsLight(mod, pluginName),
+                IsMedium: PluginFlags.IsMedium(mod, pluginName),
+                IsMaster: PluginFlags.IsMaster(mod, pluginName),
                 IsBlueprint: isBlueprint,
                 Masters: [.. mod.MasterReferences.Select(reference => reference.Master.FileName.ToString())],
                 RecordCount: recordCount),
@@ -30,7 +31,7 @@ internal static class OpenedPlugins
         {
             foreach (var _ in mod.EnumerateMajorRecords()) count++;
         }
-        catch (Exception ex) when (PluginFailure.StandsFor(ex))
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
             return (count, PluginFailure.Of(ex));
         }

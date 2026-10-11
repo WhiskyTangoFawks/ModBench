@@ -3,9 +3,7 @@ using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Analysis;
 using Mutagen.Bethesda.Plugins.Records;
-using Noggog;
 using Noggog.WorkEngine;
 
 namespace MEditService.PluginAdapter;
@@ -152,7 +150,7 @@ internal static class PluginTrees
         {
             return PluginAnswer.Of(await DeserializeTree(game, treeRoot, cancel));
         }
-        catch (Exception ex) when (PluginFailure.StandsFor(ex))
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
             return new PluginFailure.Unparsed(PluginDiagnosis.FromSourceReadException(ex, treeBase), ex);
         }
@@ -228,19 +226,9 @@ public sealed class CompiledTree
     /// <summary>The plugin the tree describes, which is whose records count as native.</summary>
     public ModKey ModKey => _mod.ModKey;
 
-    /// <summary>The local FormID range a light or medium plugin's native records must fall in, or null
-    /// for a plugin no flag limits.</summary>
-    public LimitedRange? LimitedRange(string fileName)
-    {
-        if (PluginFlagPredicates.IsLight(_mod, fileName))
-            return Limited("light", RecordCompactionCompatibilityDetection.GetSmallMasterRange(_mod));
-        return PluginFlagPredicates.IsMedium(_mod, fileName)
-            ? Limited("medium", RecordCompactionCompatibilityDetection.GetMediumMasterRange(_mod))
-            : null;
-    }
-
-    private static LimitedRange? Limited(string flag, RangeUInt32? range) =>
-        range is { } limited ? new LimitedRange(flag, limited.Min, limited.Max) : null;
+    /// <summary>The local FormIDs the tree's header flag limits its native records to, or null for a
+    /// plugin no flag limits.</summary>
+    public FormIdLimit? FormIdLimit(string fileName) => PluginFlags.LimitOf(_mod, fileName);
 
     /// <summary>Every record the tree holds, in the order the mod enumerates them.</summary>
     public IReadOnlyList<FormKey> FormKeys => _formKeys.Value;
@@ -255,7 +243,7 @@ public sealed class CompiledTree
     /// <summary>Every value of the tree that <paramref name="save"/>'s bytes do not hold.</summary>
     public IReadOnlyList<DroppedValue> DropsIn(PreparedPluginSave save)
     {
-        var written = MutagenPluginAdapter.OpenForWrite(save.Written(_mod.ModKey, out var strings), _loadOrder.GameRelease, strings, _loadOrder);
+        var written = save.Reread(_mod.ModKey, _loadOrder.GameRelease);
         var held = _documents.Value.Select(pair => (pair.Record, pair.Document.Text)).ToList();
         return [.. ModelIdentity.FindDrops(held, written).Select(drop => new DroppedValue(
             new RecordIdentity(drop.Record.FormKey.ToString(), RecordTypes.For(_loadOrder.GameRelease).RecordTypeOf(drop.Record), drop.Record.EditorID),
@@ -283,9 +271,6 @@ public sealed class CompiledTree
         }
     }
 }
-
-/// <summary>The FormID range a plugin's light or medium flag limits its native records to, and that flag.</summary>
-public sealed record LimitedRange(string Flag, uint Min, uint Max);
 
 /// <summary>A tree's record and each path in its document whose value the plugin written from it lacks.</summary>
 public sealed record DroppedValue(RecordIdentity Record, IReadOnlyList<string> Paths);

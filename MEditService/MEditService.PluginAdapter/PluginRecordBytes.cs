@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Headers;
@@ -25,7 +26,7 @@ internal sealed class PluginRecordBytes(ModPath path, LoadOrderSnapshot loadOrde
             return PluginBinaryWalk.Records(File.ReadAllBytes(path.Path), loadOrder.GameRelease)
                 .Any(record => record.IsCompressed && !PluginBinaryWalk.DeclaresALengthItsBytesCanInflateTo(record));
         }
-        catch (Exception ex) when (PluginFailure.StandsFor(ex))
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
             // Bytes the walk cannot frame are malformed, so a read of them fails because of the file.
             return true;
