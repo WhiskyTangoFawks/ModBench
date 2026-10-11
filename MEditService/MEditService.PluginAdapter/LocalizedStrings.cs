@@ -37,7 +37,7 @@ internal static class LocalizedStrings
 {
     private static readonly StringsSource[] Sources = [StringsSource.Normal, StringsSource.IL, StringsSource.DL];
 
-    // The game finds an archive whatever the case of its extension, as Windows' file system matches it.
+    // Mutagen's archive lookup matches the extension in any case, as the game does.
     private static readonly EnumerationOptions AnyCase = new() { MatchCasing = MatchCasing.CaseInsensitive };
 
     // Mutagen's default target, and the one language Track checks for until the strings language setting chooses another.
