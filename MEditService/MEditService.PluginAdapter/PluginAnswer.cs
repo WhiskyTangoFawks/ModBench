@@ -112,27 +112,29 @@ public abstract record PluginFailure
     /// <summary>Whether <paramref name="ex"/> is the failure of the read or write it came out of:
     /// only running out of memory or being cancelled, however Mutagen wrapped it, is not the file's
     /// answer.</summary>
-    internal static bool StandsFor(Exception ex) => NotTheFilesAnswer(ex) is null;
+    internal static bool StandsFor(Exception ex) => OutOfMemoryOrCancellationIn(ex) is null;
 
-    private static Exception? NotTheFilesAnswer(Exception? ex) =>
-        ex is null or OutOfMemoryException or OperationCanceledException ? ex : NotTheFilesAnswer(ex.InnerException);
+    /// <summary>Throws the out-of-memory or cancellation inside <paramref name="ex"/> as itself, so a
+    /// caller's own check sees it.</summary>
+    internal static void ThrowIfNotTheFilesAnswer(Exception ex)
+    {
+        if (OutOfMemoryOrCancellationIn(ex) is { } cause) ExceptionDispatchInfo.Throw(cause);
+    }
 
-    /// <summary><paramref name="read"/>'s value, or the failure its throw stands for. A throw that is
-    /// not the file's answer is thrown as itself, unwrapped.</summary>
+    private static Exception? OutOfMemoryOrCancellationIn(Exception? ex) =>
+        ex is null or OutOfMemoryException or OperationCanceledException ? ex : OutOfMemoryOrCancellationIn(ex.InnerException);
+
+    /// <summary><paramref name="read"/>'s value, or the failure its throw stands for.</summary>
     internal static Answer<T, PluginFailure> Answer<T>(Func<T> read)
     {
         try
         {
             return PluginAnswer.Of(read());
         }
-        catch (Exception ex) when (StandsFor(ex))
+        catch (Exception ex) when (ex is not (OutOfMemoryException or OperationCanceledException))
         {
+            ThrowIfNotTheFilesAnswer(ex);
             return Of(ex);
-        }
-        catch (Exception ex) when (NotTheFilesAnswer(ex) is { } cause && cause != ex)
-        {
-            ExceptionDispatchInfo.Throw(cause);
-            throw;
         }
     }
 
@@ -143,14 +145,10 @@ public abstract record PluginFailure
         {
             return PluginAnswer.Of(await read());
         }
-        catch (Exception ex) when (StandsFor(ex))
+        catch (Exception ex) when (ex is not (OutOfMemoryException or OperationCanceledException))
         {
+            ThrowIfNotTheFilesAnswer(ex);
             return Of(ex);
-        }
-        catch (Exception ex) when (NotTheFilesAnswer(ex) is { } cause && cause != ex)
-        {
-            ExceptionDispatchInfo.Throw(cause);
-            throw;
         }
     }
 }

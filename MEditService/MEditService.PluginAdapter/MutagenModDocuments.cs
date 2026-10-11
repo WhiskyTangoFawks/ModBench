@@ -56,19 +56,19 @@ internal sealed class MutagenModDocuments(
     {
         using var records = schema.RecordsIn(mod).GetEnumerator();
         var pending = new List<IMajorRecordGetter>(SerializeBatchSize);
-        var more = TopUp(tableName, records, pending);
+        var recordsRemain = RecordsRemainAfterTopUp(tableName, records, pending);
         while (pending.Count > 0)
         {
-            var documents = Serialized(tableName, schema, pending);
+            var documents = SerializedPrefix(tableName, schema, pending);
             pending.RemoveRange(0, documents.Count);
             foreach (var document in documents) yield return document;
-            more = more && TopUp(tableName, records, pending);
+            recordsRemain = recordsRemain && RecordsRemainAfterTopUp(tableName, records, pending);
         }
     }
 
     // Mutagen's group enumerator throws out of MoveNext and cannot be resumed, so everything it yielded
-    // first is kept and the type carries the diagnosis for what never arrived. False once it has no more.
-    private bool TopUp(string tableName, IEnumerator<IMajorRecordGetter> records, List<IMajorRecordGetter> pending)
+    // first is kept and the type carries the diagnosis for what never arrived.
+    private bool RecordsRemainAfterTopUp(string tableName, IEnumerator<IMajorRecordGetter> records, List<IMajorRecordGetter> pending)
     {
         try
         {
@@ -81,14 +81,14 @@ internal sealed class MutagenModDocuments(
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            PluginFailure.ThrowIfNotTheFilesAnswer(ex);
             _failures.Add(new RecordTypeFailure(tableName, PluginDiagnosis.FromParseException(ex).Describe()));
             return false;
         }
     }
 
-    // Serialization is CPU-bound and independent per record, so it runs in parallel. Records are taken
-    // in order, so the documents are always the first of the batch, however far its size let it run.
-    private List<PluginDocument> Serialized(string tableName, RecordTableSchema schema, List<IMajorRecordGetter> records)
+    // Serialization is CPU-bound and independent per record, so it runs in parallel.
+    private List<PluginDocument> SerializedPrefix(string tableName, RecordTableSchema schema, List<IMajorRecordGetter> records)
     {
         var documents = new PluginDocument[records.Count];
         var taken = -1;
@@ -124,6 +124,7 @@ internal sealed class MutagenModDocuments(
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            PluginFailure.ThrowIfNotTheFilesAnswer(ex);
             var stub = ParseFailedDocument.For(record, EditorIdOrNull(record), mod.GameRelease);
             return WithGrupFacts(
                 new PluginDocument(
@@ -147,7 +148,11 @@ internal sealed class MutagenModDocuments(
     private static string? EditorIdOrNull(IMajorRecordGetter record)
     {
         try { return record.EditorID; }
-        catch (Exception ex) when (ex is not OutOfMemoryException) { return null; }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            PluginFailure.ThrowIfNotTheFilesAnswer(ex);
+            return null;
+        }
     }
 
     // plugins.md, The tree, story 6: the worldspace/cell GRUP hierarchy, which EnumerateMajorRecords

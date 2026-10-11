@@ -53,12 +53,12 @@ public static class PluginBinaryWalk
 
     /// <summary>Every record, the plugin header first, in document order. A GRUP's children follow its
     /// header: the format nests by adjacency, so stepping over the header alone descends.</summary>
-    internal static IEnumerable<MajorRecordFrame> Records(byte[] plugin, GameRelease release)
+    internal static IEnumerable<MajorRecordFrame> Records(byte[] pluginBytes, GameRelease release)
     {
         var constants = GameConstants.Get(release);
-        var bytes = new ReadOnlyMemorySlice<byte>(plugin);
+        var bytes = new ReadOnlyMemorySlice<byte>(pluginBytes);
         var position = 0;
-        while (position < plugin.Length)
+        while (position < pluginBytes.Length)
         {
             var rest = bytes.Slice(position);
             if (constants.VariableHeader(rest).IsGroup)
@@ -91,8 +91,8 @@ public static class PluginBinaryWalk
         return [.. record.EnumerateSubrecords()];
     }
 
-    // In first-seen order. Order and content are model identity's concern, and a signature the rewrite
-    // has more of, a canonical marker insertion, is not loss.
+    // Order and content are model identity's concern, and a signature the rewrite has more of, a
+    // canonical marker insertion, is not loss.
     private static List<string> DroppedSignatures(List<SubrecordPinFrame> original, List<SubrecordPinFrame> rewritten)
     {
         var originalCounts = CountBySignature(original);

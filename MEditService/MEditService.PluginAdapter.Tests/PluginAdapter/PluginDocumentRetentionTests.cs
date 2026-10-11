@@ -1,7 +1,9 @@
 using System.Runtime.CompilerServices;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
@@ -21,26 +23,35 @@ public sealed class PluginDocumentRetentionTests
     [Fact]
     public void OpenDocuments_LetsGoOfADocumentItHasYielded_BeforeItReadsTheLast()
     {
-        var count = RecordsPastABatchAndEveryRecordInFlightWhenItCloses;
         using var data = new PluginFixtureBuilder("documents-retention")
-            .WithPlugin(PluginName, mod =>
-            {
-                for (var i = 0; i < count; i++) mod.Npcs.AddNew($"{i:D5}{new string('E', EditorIdLength - 5)}");
-            })
+            .WithPlugin(PluginName, mod => AddNpcsWithLongEditorIds(mod, RecordsPastABatchAndEveryRecordInFlightWhenItCloses))
             .Build();
         using var documents = TestAdapters.Mutagen().OpenDocuments(
             new ModPath(ModKey.FromFileName(PluginName), Path.Combine(data.DataFolder, PluginName)), GameRelease.Fallout4, Schemas).Answered();
 
-        var first = new WeakReference(null);
-        bool? firstHeldAtTheLast = null;
-        var read = 0;
-        foreach (var document in documents.Records)
-        {
-            if (read == 0) first.Target = document;
-            if (++read == count) firstHeldAtTheLast = IsHeld(first);
-        }
+        Assert.False(FirstIsHeldWhenTheLastIsRead(documents.Records));
+    }
 
-        Assert.False(firstHeldAtTheLast);
+    private static void AddNpcsWithLongEditorIds(Fallout4Mod mod, int count)
+    {
+        for (var i = 0; i < count; i++) mod.Npcs.AddNew($"{i:D5}{new string('E', EditorIdLength - 5)}");
+    }
+
+    private static bool FirstIsHeldWhenTheLastIsRead(IEnumerable<PluginDocument> documents)
+    {
+        using var reading = documents.GetEnumerator();
+        var first = WeaklyTheFirst(reading);
+        var read = 1;
+        while (read < RecordsPastABatchAndEveryRecordInFlightWhenItCloses && reading.MoveNext()) read++;
+        Assert.Equal(RecordsPastABatchAndEveryRecordInFlightWhenItCloses, read);
+        return IsHeld(first);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference WeaklyTheFirst(IEnumerator<PluginDocument> reading)
+    {
+        Assert.True(reading.MoveNext());
+        return new WeakReference(reading.Current);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
