@@ -83,7 +83,7 @@ public sealed class PluginTreeReadTests
     {
         var read = await Adapter.ReadSourceOfAsync(
             new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, Path.Combine(data.DataFolder, pluginName), PluginProvider.Game, Line: null),
-            GameRelease.Fallout4,
+            EmptyLoadOrder.Of(GameRelease.Fallout4),
             new PluginStrings(null, data.DataFolder));
         return read.Answered().Files;
     }
@@ -114,7 +114,7 @@ public sealed class PluginTreeReadTests
         (await Adapter.WriteFromTreeAsync(files, recompiledPath, reversed, GameRelease.Fallout4)).Answered();
 
         var written = Adapter.ReadContent(
-            new ModPath(ModKey.FromFileName("Patch.esp"), recompiledPath), GameRelease.Fallout4).Answered();
+            new ModPath(ModKey.FromFileName("Patch.esp"), recompiledPath), EmptyLoadOrder.Of(GameRelease.Fallout4)).Answered();
         Assert.Equal(reversed, written.Content.Masters);
     }
 
@@ -138,7 +138,7 @@ public sealed class PluginTreeReadTests
         (await Adapter.WriteFromTreeAsync(files, recompiledPath, ["AlphaBase.esm"], GameRelease.Fallout4)).Answered();
 
         var written = Adapter.ReadContent(
-            new ModPath(ModKey.FromFileName("Lower.esp"), recompiledPath), GameRelease.Fallout4).Answered();
+            new ModPath(ModKey.FromFileName("Lower.esp"), recompiledPath), EmptyLoadOrder.Of(GameRelease.Fallout4)).Answered();
         Assert.Equal(["AlphaBase.esm"], written.Content.Masters);
     }
 

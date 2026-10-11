@@ -24,5 +24,5 @@ public static class PluginFailures
     }
 
     private static PluginFailure ReadOf(string path) =>
-        TestAdapters.Mutagen().ReadContent(new ModPath(ModKey.FromFileName(Path.GetFileName(path)), path), GameRelease.Fallout4).Failure();
+        TestAdapters.Mutagen().ReadContent(new ModPath(ModKey.FromFileName(Path.GetFileName(path)), path), EmptyLoadOrder.Of(GameRelease.Fallout4)).Failure();
 }

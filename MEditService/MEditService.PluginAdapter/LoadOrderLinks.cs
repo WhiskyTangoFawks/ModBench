@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -25,21 +26,22 @@ public sealed record LinkAnswers(
 internal static class LoadOrderLinks
 {
     internal static LinkAnswers Targets(
-        IReadOnlyList<ModPath> loadOrder,
-        GameRelease gameRelease,
+        IReadOnlyList<ModPath> files,
+        LoadOrderSnapshot loadOrder,
         IReadOnlyCollection<string> formKeys)
     {
-        if (loadOrder.Count == 0 || formKeys.Count == 0) return LinkAnswers.None;
+        if (files.Count == 0 || formKeys.Count == 0) return LinkAnswers.None;
 
-        var opened = new List<ILoadedMod>(loadOrder.Count);
+        var gameRelease = loadOrder.GameRelease;
+        var opened = new List<ILoadedMod>(files.Count);
         var unreadable = new List<UnreadablePlugin>();
         try
         {
-            foreach (var modPath in loadOrder)
+            foreach (var modPath in files)
             {
                 // A file the load order names can be malformed or gone by now (ADR-0003). It answers
                 // nothing, which is a fact about the file rather than about the links into it.
-                try { opened.Add(MutagenPluginAdapter.OpenForRead(modPath, gameRelease)); }
+                try { opened.Add(MutagenPluginAdapter.OpenForRead(modPath, gameRelease, loadOrder: loadOrder)); }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
                     unreadable.Add(new UnreadablePlugin(modPath.ModKey.FileName.String, Why(ex)));

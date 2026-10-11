@@ -95,7 +95,8 @@ internal sealed class Indexer : IDisposable
     private readonly List<string> _handed = [];
     private bool _validatingHanded;
 
-    private sealed record OpenScope(HeldPlugins Held, Store Store, Projector Projector, FailedReads Failed);
+    // LoadOrder: the snapshot the scope last reconciled, which holds the masters a plugin is read against.
+    private sealed record OpenScope(HeldPlugins Held, Store Store, Projector Projector, FailedReads Failed, LoadOrderSnapshot LoadOrder);
 
     // Takes the exclusive right to reconcile or tear down, waiting out any in-flight reconcile.
     // Always paired with ExitExclusive in a finally.
@@ -416,7 +417,11 @@ internal sealed class Indexer : IDisposable
         OpenScope? leaving;
         lock (_lock)
         {
-            if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot)) return current;
+            if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot))
+            {
+                _scope = current with { LoadOrder = snapshot };
+                return _scope;
+            }
             leaving = DetachCurrent() ?? _undrained;
             _undrained = null;
             _filter.DropWhenOutside(snapshot);
@@ -444,7 +449,7 @@ internal sealed class Indexer : IDisposable
                 snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
                 () => Status.State == LoadOrderState.Ready, out heldElsewhere);
             if (fresh is null) return null;
-            scope = new OpenScope(held, fresh, new Projector(fresh, held.Find, _source, _logger), new FailedReads(fresh, _source, _logger));
+            scope = new OpenScope(held, fresh, new Projector(fresh, held.Find, _source, _logger), new FailedReads(fresh, _source, _logger), snapshot);
             fresh = null;
         }
         finally
@@ -579,7 +584,7 @@ internal sealed class Indexer : IDisposable
 
             PluginMetadata? metadata = null;
             ReadOne(scope, plugin, state =>
-                held.Open(plugin, Registration.In(snapshot, plugin.Key)).Holds(out metadata, out var failure)
+                held.Open(plugin, Registration.In(snapshot, plugin.Key), snapshot).Holds(out metadata, out var failure)
                     ? RegisterOrIndex(scope, metadata, state, token)
                     : ReadOutcome.Failed(failure), token);
             if (metadata is null) continue;
@@ -806,7 +811,7 @@ internal sealed class Indexer : IDisposable
     {
         if (!_adapter.OpenDocuments(
                 new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path),
-                scope.Store.Release,
+                scope.LoadOrder,
                 scope.Store.Schemas,
                 new PluginStrings(Path.GetDirectoryName(plugin.Path), scope.Held.DataFolderPath))
             .Holds(out var opened, out var failure))

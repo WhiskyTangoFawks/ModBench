@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
@@ -48,7 +49,7 @@ public static class PlacedCell
     /// the game has no cell width here.</summary>
     public static (int X, int Y)? GridHolding(Document placed, GameRelease release) =>
         SchemaAnnotations.For(release.ToCategory()).ExteriorCellWidth is { } width
-        && Components(placed.StringAt(PositionMember)) is [var x, var y, _]
+        && Components(placed.StringAt(PositionPath(release))) is [var x, var y, _]
             ? ((int)Math.Floor(x / width), (int)Math.Floor(y / width))
             : null;
 
@@ -70,8 +71,34 @@ public static class PlacedCell
             return false;
         }
         var position = ReflectedTypes.VectorText(new { X = (x + 0.5f) * width, Y = (y + 0.5f) * width, Z = 0f });
-        created = placed.Edited(root => root[PositionMember] = position);
+        created = placed.Edited(root => PositionHolding(root, release)[PositionMember] = position);
         return true;
+    }
+
+    private static readonly ConcurrentDictionary<GameCategory, string?> PositionHolders = new();
+
+    // Mutagen's placed-record aspect holds the position on the record itself, or in the one member it
+    // declares to carry a position and rotation. Each game declares both aspects under these names.
+    private static string? PositionHolder(GameRelease release) =>
+        PositionHolders.GetOrAdd(release.ToCategory(), category =>
+        {
+            var types = SchemaReflector.GameModule(category)?.GetTypes() ?? [];
+            Type Aspect(string name) => types.FirstOrDefault(t => t.Name == name)
+                ?? throw new InvalidOperationException($"Mutagen.Bethesda.{category} declares no {name}, so mEdit finds no placed record's position.");
+            var positioned = Aspect("IPositionRotationGetter");
+            return Aspect("IPlacedGetter").GetProperties().FirstOrDefault(p => positioned.IsAssignableFrom(p.PropertyType))?.Name;
+        });
+
+    private static string[] PositionPath(GameRelease release) =>
+        PositionHolder(release) is { } holder ? [holder, PositionMember] : [PositionMember];
+
+    private static JsonObject PositionHolding(JsonObject root, GameRelease release)
+    {
+        if (PositionHolder(release) is not { } holder) return root;
+        if (root[holder] is JsonObject held) return held;
+        var made = new JsonObject();
+        root[holder] = made;
+        return made;
     }
 
     // The codec writes a vector as its components in English, comma-separated (ReflectedTypes.VectorText).

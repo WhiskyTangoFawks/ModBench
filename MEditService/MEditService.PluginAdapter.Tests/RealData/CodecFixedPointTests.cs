@@ -30,7 +30,7 @@ public sealed class CodecFixedPointTests(ITestOutputHelper output)
     {
         var modPath = new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath);
         using var documents = TestAdapters.Mutagen()
-            .OpenDocuments(modPath, GameRelease.Fallout4, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4))
+            .OpenDocuments(modPath, EmptyLoadOrder.Of(GameRelease.Fallout4), SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4))
             .Answered();
         var all = new List<PluginDocument> { documents.Header };
         all.AddRange(documents.Records);

@@ -15,6 +15,7 @@ internal sealed class DeclaredDefaults(GameRelease release, ILogger logger)
     internal const string RefusalPrefix = "SchemaReflector: declared defaults unavailable";
 
     private readonly ConcurrentDictionary<Type, object?> _instances = new();
+    private readonly ConcurrentDictionary<PropertyInfo, object?> _defaults = new();
 
 
     /// <summary>The other members the codec spells the bit under: Mutagen's flag views over one raw
@@ -41,7 +42,11 @@ internal sealed class DeclaredDefaults(GameRelease release, ILogger logger)
         return [.. document.RootElement.EnumerateObject().Select(p => p.Name)];
     }
 
-    public object? Of(PropertyInfo prop)
+    // The walk asks a member once for every place its type recurs, and reading one Mutagen's empty
+    // instance throws on costs an exception each time.
+    public object? Of(PropertyInfo prop) => _defaults.GetOrAdd(prop, Read);
+
+    private object? Read(PropertyInfo prop)
     {
         var owner = _instances.GetOrAdd(ReflectedTypes.DeclaringTypeOf(prop), Instance);
         return owner == null ? null : ReflectedTypes.ReadOrNull(owner, prop);

@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace MEditService.Codec.Schema;
 
 /// <summary>What one game category's assembly resolved to, handed to every walk: the getter
@@ -13,4 +15,8 @@ internal sealed record GameReflection(
     internal WalkObservations Observed { get; } = new();
 
     internal int TableCount { get; } = GetterTypeToTable.Values.Distinct(StringComparer.OrdinalIgnoreCase).Count();
+
+    internal ConcurrentDictionary<Type, bool> ReachesATruncation { get; } = new();
+
+    internal ConcurrentDictionary<Type, List<FieldMetadata>> PathFreeSubSchemas { get; } = new();
 }

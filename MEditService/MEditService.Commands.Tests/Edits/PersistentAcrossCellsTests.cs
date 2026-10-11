@@ -227,8 +227,8 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     private sealed class FaultingOnClosingAMasterAskedForACell() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
-            RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-            base.OpenRecordLookup(plugin, gameRelease, schemas).Map<IPluginRecords, IPluginRecords>(records => new Faulting(records));
+            RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+            base.OpenRecordLookup(plugin, loadOrder, schemas).Map<IPluginRecords, IPluginRecords>(records => new Faulting(records));
 
         private sealed class Faulting(IPluginRecords inner) : IPluginRecords
         {
@@ -257,11 +257,11 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     private sealed class UntrackingAModWhenAMasterIsRead(string modFolder) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
-            RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+            RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas)
         {
             var repository = Path.Combine(modFolder, ".git");
             if (Directory.Exists(repository)) Directory.Move(repository, Path.Combine(modFolder, ".git-untracked"));
-            return base.OpenRecordLookup(plugin, gameRelease, schemas);
+            return base.OpenRecordLookup(plugin, loadOrder, schemas);
         }
     }
 
