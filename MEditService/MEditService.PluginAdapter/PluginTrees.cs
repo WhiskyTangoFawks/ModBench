@@ -158,7 +158,7 @@ internal static class PluginTrees
 
     private static async Task<IMod> DeserializeTree(IGameCodec game, string treeRoot, CancellationToken cancel) =>
         HeaderDocument.RestoreOmittedNextObjectId(
-            await game.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel),
+            await game.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel, NameOrderedFileSystem.Instance),
             await File.ReadAllBytesAsync(Path.Combine(treeRoot, DocumentFileNames.Root), cancel));
 
     /// <summary>The codec's verdict on the plugin written at <paramref name="recompiledPath"/> against

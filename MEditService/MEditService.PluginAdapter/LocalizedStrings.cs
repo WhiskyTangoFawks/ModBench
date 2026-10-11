@@ -37,9 +37,6 @@ internal static class LocalizedStrings
 {
     private static readonly StringsSource[] Sources = [StringsSource.Normal, StringsSource.IL, StringsSource.DL];
 
-    // Mutagen's archive lookup matches the extension in any case, as the game does.
-    private static readonly EnumerationOptions AnyCase = new() { MatchCasing = MatchCasing.CaseInsensitive };
-
     // Mutagen's default target, and the one language Track checks for until the strings language setting chooses another.
     private const Language Target = Language.English;
 
@@ -133,7 +130,7 @@ internal static class LocalizedStrings
         foreach (var folder in strings.Folders)
         {
             var named = Directory.Exists(folder)
-                ? Directory.EnumerateFiles(folder, $"*{Archive.GetExtension(gameRelease)}", AnyCase)
+                ? Directory.EnumerateFiles(folder, $"*{Archive.GetExtension(gameRelease)}")
                     .Where(archive => Archive.IsApplicable(gameRelease, plugin, Path.GetFileName(archive)))
                     .Order(StringComparer.OrdinalIgnoreCase)
                 : Enumerable.Empty<string>();
