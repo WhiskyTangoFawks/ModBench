@@ -18,7 +18,7 @@ public sealed class PluginByteComparisonTests : IDisposable
     {
         var record = Record("WEAP", 1, Sub("EDID", "Gun\0"u8.ToArray()));
 
-        var comparison = (await Adapter.CompareBytesAsync(Write("a.esp", record), Write("b.esp", record), GameRelease.Fallout4)).Answered();
+        var comparison = (await Adapter.CompareBytesAsync(Write("a.esp", record), Write("b.esp", record), EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 
         Assert.True(comparison.Identical);
         Assert.Null(comparison.Loss);
@@ -31,7 +31,7 @@ public sealed class PluginByteComparisonTests : IDisposable
         var original = Record("WEAP", 0x10, Sub("EDID", "Gun\0"u8.ToArray()), Sub("RDMP", [1]));
         var rewritten = Record("WEAP", 0x10, Sub("EDID", "Gun\0"u8.ToArray()));
 
-        var comparison = (await Adapter.CompareBytesAsync(Write("a.esp", original), Write("b.esp", rewritten), GameRelease.Fallout4)).Answered();
+        var comparison = (await Adapter.CompareBytesAsync(Write("a.esp", original), Write("b.esp", rewritten), EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 
         Assert.False(comparison.Identical);
         Assert.NotNull(comparison.Loss);
@@ -47,7 +47,7 @@ public sealed class PluginByteComparisonTests : IDisposable
         var original = Record("REGN", 0x20, Sub("EDID", "Region\0"u8.ToArray()), Sub("RDAT", new byte[6]));
         var rewritten = Record("REGN", 0x20, Sub("EDID", "Region\0"u8.ToArray()));
 
-        var comparison = (await Adapter.CompareBytesAsync(Write("a.esp", original), Write("b.esp", rewritten), GameRelease.Fallout4)).Answered();
+        var comparison = (await Adapter.CompareBytesAsync(Write("a.esp", original), Write("b.esp", rewritten), EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 
         Assert.Equal("fixed-size-subrecord-short", comparison.LossCause?.DefectClass);
         Assert.StartsWith("REGN 00000020", comparison.LossCause?.Anchor);
@@ -59,7 +59,7 @@ public sealed class PluginByteComparisonTests : IDisposable
         var original = Record("MISC", 3, Sub("DATA", [1]));
         var rewritten = Record("MISC", 3, Sub("DATA", [2]));
 
-        var comparison = (await Adapter.CompareBytesAsync(Write("a.esp", original), Write("b.esp", rewritten), GameRelease.Fallout4)).Answered();
+        var comparison = (await Adapter.CompareBytesAsync(Write("a.esp", original), Write("b.esp", rewritten), EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 
         Assert.False(comparison.Identical);
         Assert.Null(comparison.Loss);

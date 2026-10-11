@@ -50,6 +50,15 @@ public sealed class PluginFileHashesTests : IDisposable
     }
 
     [Fact]
+    public void TheClaimOfAFileCutShortInsideARecord_ReportsItsDiagnosesAsAFailure()
+    {
+        var whole = RawPlugin.Plugin(RawPlugin.Tes4(), RawPlugin.Group("MISC", RawPlugin.Misc(0x800, "Bottlecap")));
+        File.WriteAllBytes(PluginPath, whole[..^4]);
+
+        Assert.IsType<PluginFailure.Unparsed>(ClaimOf(PluginPath).Answered().Diagnoses.Failure());
+    }
+
+    [Fact]
     public void TheClaimOfAFileHeldAgainstReaders_IsInaccessible()
     {
         using var held = HeldAgainstReaders();

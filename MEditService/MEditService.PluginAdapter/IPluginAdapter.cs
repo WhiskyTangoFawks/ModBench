@@ -79,7 +79,7 @@ public interface IPluginAdapter
     /// <summary>How the file at <paramref name="recompiledPath"/> differs at the byte level from the one
     /// at <paramref name="originalPath"/>.</summary>
     Task<Answer<PluginByteComparison, PluginFailure>> CompareBytesAsync(
-        string originalPath, string recompiledPath, GameRelease gameRelease, CancellationToken cancel = default);
+        string originalPath, string recompiledPath, LoadOrderSnapshot loadOrder, CancellationToken cancel = default);
 
     /// <summary>A new plugin in <paramref name="folder"/>: a header whose flags the extension alone
     /// sets, no records and no masters. Written whole or not at all, into no folder it made and over

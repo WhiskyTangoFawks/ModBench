@@ -1,182 +1,145 @@
 using System.Buffers.Binary;
-using System.IO.Compression;
-using System.Text;
-using MEditService.Codec.Schema;
+using MEditService.LoadOrder;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Headers;
+using Mutagen.Bethesda.Plugins.Masters;
+using Mutagen.Bethesda.Plugins.Meta;
+using Noggog;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>A byte-level walker over a plugin's record/GRUP/subrecord structure, free of Mutagen's typed
+/// <summary>A plugin's records and subrecords as Mutagen's frame reader reads them, free of its typed
 /// parse, shared by Track's tripwire and the Repair surface (ADR-0006).</summary>
 public static class PluginBinaryWalk
 {
-    /// <summary>One top-level record or GRUP header. For a GRUP only <c>Start</c>/<c>DataStart</c> are
-    /// meaningful (its header carries no FormID); for a record the data span bounds its subrecord stream.</summary>
-    internal readonly record struct RecordSpan(string Type, uint FormId, uint Flags, int Start, int DataStart, int DataLen, bool IsGrup);
-
-    /// <summary>One subrecord, relative to the record-data buffer. <c>Len</c> already accounts for an
-    /// <c>XXXX</c> marker preceding it, which is not returned as its own entry.</summary>
-    internal readonly record struct SubrecordSpan(string Sig, int Start, int Len);
-
     /// <summary>A record whose rewrite has fewer occurrences of some subrecord signatures than the
     /// original. <c>FormId</c> is the original's stored FormID, as a diagnosis of its bytes anchors it.</summary>
     public readonly record struct SubrecordLoss(string RecordType, uint FormId, FormKey FormKey, IReadOnlyList<string> Signatures);
 
     /// <summary>One record of a plugin and of its rewrite.</summary>
-    internal readonly record struct RecordPair(FormKey FormKey, RecordSpan Original, RecordSpan Rewritten);
+    internal readonly record struct RecordPair(FormKey FormKey, MajorRecordFrame Original, MajorRecordFrame Rewritten);
 
     /// <summary>The records a plugin and its rewrite both hold, paired by type and FormKey, each FormID read
     /// through its own plugin's masters: a rewrite prunes unneeded masters, which moves every index after
     /// them.</summary>
     internal static List<RecordPair> PairByFormKey(
-        byte[] original, IReadOnlyList<ModKey> originalMasters, byte[] rewritten, IReadOnlyList<ModKey> rewrittenMasters, ModKey plugin)
+        byte[] original, IReadOnlySeparatedMasterPackage originalMasters, byte[] rewritten, IReadOnlySeparatedMasterPackage rewrittenMasters,
+        GameRelease release)
     {
-        var rewrittenByIdentity = new Dictionary<(string Type, FormKey FormKey), RecordSpan>();
-        foreach (var record in WalkRecords(rewritten).Where(r => !r.IsGrup))
-            rewrittenByIdentity.TryAdd((record.Type, FormKeyOf(record, rewrittenMasters, plugin)), record);
+        var rewrittenByIdentity = new Dictionary<(RecordType Type, FormKey FormKey), MajorRecordFrame>();
+        foreach (var record in Records(rewritten, release))
+            rewrittenByIdentity.TryAdd((record.RecordType, rewrittenMasters.GetFormKey(record.FormID, reference: false)), record);
 
         var pairs = new List<RecordPair>();
-        foreach (var record in WalkRecords(original).Where(r => !r.IsGrup))
+        foreach (var record in Records(original, release))
         {
-            var formKey = FormKeyOf(record, originalMasters, plugin);
-            if (rewrittenByIdentity.TryGetValue((record.Type, formKey), out var partner))
+            var formKey = originalMasters.GetFormKey(record.FormID, reference: false);
+            if (rewrittenByIdentity.TryGetValue((record.RecordType, formKey), out var partner))
                 pairs.Add(new RecordPair(formKey, record, partner));
         }
         return pairs;
     }
 
-    private static FormKey FormKeyOf(RecordSpan record, IReadOnlyList<ModKey> masters, ModKey plugin)
-    {
-        if (record.Type == "TES4") return FormKey.Null;
-        var index = (int)(record.FormId >> 24);
-        return new FormKey(index < masters.Count ? masters[index] : plugin, record.FormId & 0xFFFFFF);
-    }
+    /// <summary>How the plugin's FormIDs name records: through its own masters, each in the style the load
+    /// order's copy of it carries.</summary>
+    internal static IReadOnlySeparatedMasterPackage MastersOf(ModPath plugin, LoadOrderSnapshot loadOrder) =>
+        SeparatedMasterPackage.Factory(loadOrder.GameRelease, plugin, MasterStyles.Of(plugin, loadOrder));
 
     /// <summary>The first record flagged Deleted that holds subrecords in the original and none in its
     /// rewrite, as Mutagen writes most deleted records.</summary>
     internal static RecordPair? FirstEmptiedDeletedRecord(IEnumerable<RecordPair> pairs) =>
         pairs.Cast<RecordPair?>().FirstOrDefault(pair => pair is { } p
-            && (p.Original.Flags & DeletedFlag.Bit) != 0 && p.Original.DataLen > 0 && p.Rewritten.DataLen == 0);
+            && p.Original.IsDeleted && p.Original.ContentLength > 0 && p.Rewritten.ContentLength == 0);
 
-    /// <summary>Flat, document-order walk. A GRUP's children follow immediately after its 24-byte header —
-    /// the format nests by adjacency, not by a length prefix — so the walk descends by construction.</summary>
-    internal static List<RecordSpan> WalkRecords(byte[] data)
+    /// <summary>Every record, the plugin header first, in document order. A GRUP's children follow its
+    /// header: the format nests by adjacency, so stepping over the header alone descends.</summary>
+    internal static IEnumerable<MajorRecordPinFrame> Records(byte[] pluginBytes, GameRelease release)
     {
-        var list = new List<RecordSpan>();
-        int pos = 0;
-        while (pos + 24 <= data.Length)
+        var constants = GameConstants.Get(release);
+        var bytes = new ReadOnlyMemorySlice<byte>(pluginBytes);
+        var position = 0;
+        while (position < pluginBytes.Length)
         {
-            var type = Encoding.ASCII.GetString(data, pos, 4);
-            var size = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(pos + 4));
-            if (type == "GRUP")
+            var rest = bytes.Slice(position);
+            if (constants.VariableHeader(rest).IsGroup)
             {
-                list.Add(new RecordSpan("GRUP", 0, 0, pos, pos + 24, 0, IsGrup: true));
-                pos += 24; // descend: children follow inline, not skipped by the group's own size
+                position += constants.GroupConstants.HeaderLength;
                 continue;
             }
-            var flags = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(pos + 8));
-            var formId = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(pos + 12));
-            list.Add(new RecordSpan(type, formId, flags, pos, pos + 24, (int)size, IsGrup: false));
-            pos += 24 + (int)size;
+            var record = new MajorRecordPinFrame(constants, rest, position);
+            yield return record;
+            position += checked((int)record.TotalLength);
         }
-        return list;
     }
 
-    /// <summary>A single record's subrecord stream, already decompressed by the caller. An <c>XXXX</c>
-    /// marker's 4-byte payload replaces the following subrecord's 2-byte length — the escape for a
-    /// length past <c>ushort</c>.</summary>
-    internal static List<SubrecordSpan> WalkSubrecords(byte[] data)
+    /// <summary>The record's subrecords, decompressed first when it is compressed. Null for a compressed
+    /// record whose stream does not inflate to the length it declares: an unreadable stream is a
+    /// different failure than the ones its callers name.</summary>
+    internal static List<SubrecordPinFrame>? Subrecords(MajorRecordFrame record)
     {
-        var list = new List<SubrecordSpan>();
-        int pos = 0;
-        int xxxx = -1;
-        while (pos + 6 <= data.Length)
+        if (record.IsCompressed)
         {
-            var sig = Encoding.ASCII.GetString(data, pos, 4);
-            int len = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos + 4));
-            if (sig == "XXXX")
+            if (!DeclaresALengthItsBytesCanInflateTo(record)) return null;
+            try
             {
-                xxxx = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(pos + 6));
-                pos += 10;
-                continue;
+                record = record.Decompress(out _);
             }
-            if (xxxx >= 0) { len = xxxx; xxxx = -1; }
-            list.Add(new SubrecordSpan(sig, pos, Math.Min(6 + len, data.Length - pos)));
-            pos += 6 + len;
+            catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException)
+            {
+                return null;
+            }
         }
-        return list;
+        return [.. record.EnumerateSubrecords()];
     }
 
-    /// <summary>A compressed record's data is a little-endian uint32 decompressed length followed by a
-    /// zlib stream — decompresses it to the subrecord bytes <see cref="WalkSubrecords"/> expects.</summary>
-    internal static byte[] Inflate(ReadOnlySpan<byte> compressedRecordData)
-    {
-        using var input = new MemoryStream(compressedRecordData[4..].ToArray());
-        using var z = new ZLibStream(input, CompressionMode.Decompress);
-        using var output = new MemoryStream();
-        z.CopyTo(output);
-        return output.ToArray();
-    }
+    // Mutagen allocates the declared length before it inflates, and zlib expands its input at most
+    // 1032 times.
+    private const long ZlibMostExpansion = 1032;
 
-    /// <summary>Signatures the rewrite has fewer of than the original, in first-seen order. Order and
-    /// content are model identity's concern; a signature the rewrite has more of (a canonical marker
-    /// insertion) is not loss.</summary>
-    internal static List<string> DroppedSignatures(byte[] originalData, byte[] rewrittenData)
-    {
-        var originalSubrecords = WalkSubrecords(originalData);
-        var originalCounts = CountBySignature(originalSubrecords);
-        var rewrittenCounts = CountBySignature(WalkSubrecords(rewrittenData));
+    /// <summary>Whether a compressed record's declared length is one its zlib stream could inflate to.</summary>
+    internal static bool DeclaresALengthItsBytesCanInflateTo(MajorRecordFrame record) =>
+        record.Content.Length >= sizeof(uint)
+        && BinaryPrimitives.ReadUInt32LittleEndian(record.Content) <= Math.Min(Array.MaxLength, (record.Content.Length - sizeof(uint)) * ZlibMostExpansion);
 
-        return originalSubrecords
-            .Select(sub => sub.Sig)
+    // Order and content are model identity's concern, and a signature the rewrite has more of, a
+    // canonical marker insertion, is not loss.
+    private static List<string> DroppedSignatures(List<SubrecordPinFrame> original, List<SubrecordPinFrame> rewritten)
+    {
+        var originalCounts = CountBySignature(original);
+        var rewrittenCounts = CountBySignature(rewritten);
+
+        return original
+            .Select(sub => sub.RecordType.Type)
             .Distinct(StringComparer.Ordinal)
             .Where(sig => rewrittenCounts.GetValueOrDefault(sig) < originalCounts[sig])
             .ToList();
     }
 
-    private static Dictionary<string, int> CountBySignature(List<SubrecordSpan> subrecords) =>
+    private static Dictionary<string, int> CountBySignature(List<SubrecordPinFrame> subrecords) =>
         subrecords
-            .GroupBy(sub => sub.Sig, StringComparer.Ordinal)
+            .GroupBy(sub => sub.RecordType.Type, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
 
     /// <summary>The first paired record whose subrecord inventory shows a drop, or null. TES4's MAST/DATA
     /// are exempt (ADR-0008).</summary>
-    internal static SubrecordLoss? FindFirstSubrecordLoss(byte[] originalPluginBytes, byte[] rewrittenPluginBytes, IEnumerable<RecordPair> pairs)
+    internal static SubrecordLoss? FindFirstSubrecordLoss(IEnumerable<RecordPair> pairs)
     {
         foreach (var (formKey, original, rewritten) in pairs)
         {
-            var originalCompressed = (original.Flags & CompressedFlag.Bit) != 0;
-            var rewrittenCompressed = (rewritten.Flags & CompressedFlag.Bit) != 0;
-            if (originalCompressed != rewrittenCompressed)
+            if (original.IsCompressed != rewritten.IsCompressed
+                || Subrecords(original) is not { } originalSubrecords
+                || Subrecords(rewritten) is not { } rewrittenSubrecords)
                 continue;
 
-            byte[] originalData, rewrittenData;
-            try
-            {
-                originalData = Slice(originalPluginBytes, original);
-                rewrittenData = Slice(rewrittenPluginBytes, rewritten);
-                if (originalCompressed)
-                {
-                    originalData = Inflate(originalData);
-                    rewrittenData = Inflate(rewrittenData);
-                }
-            }
-            catch (InvalidDataException)
-            {
-                // Not this check's job to diagnose an unreadable compressed stream.
-                continue;
-            }
-
-            var dropped = DroppedSignatures(originalData, rewrittenData);
-            if (original.Type == "TES4")
+            var type = original.RecordType.Type;
+            var dropped = DroppedSignatures(originalSubrecords, rewrittenSubrecords);
+            if (type == "TES4")
                 dropped = dropped.Where(sig => sig is not ("MAST" or "DATA")).ToList();
             if (dropped.Count > 0)
-                return new SubrecordLoss(original.Type, original.FormId, formKey, dropped);
+                return new SubrecordLoss(type, original.FormID.Raw, formKey, dropped);
         }
 
         return null;
     }
-
-    private static byte[] Slice(byte[] data, RecordSpan record) =>
-        data.AsSpan(record.DataStart, Math.Min(record.DataLen, data.Length - record.DataStart)).ToArray();
 }
