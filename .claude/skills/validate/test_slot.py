@@ -1,4 +1,4 @@
-"""Observes in_slot with a fake gate command, on lock files of its own kind."""
+"""Observes in_slot with a fake command, on lock files of its own kind."""
 import fcntl
 import os
 import pathlib
@@ -23,7 +23,7 @@ class InSlot(unittest.TestCase):
         self.root = self.dir / "root"
         self.root.mkdir()
         self.kind = f"test-{uuid.uuid4().hex}"
-        self.addCleanup(lambda: [lock.unlink() for lock in pathlib.Path("/tmp").glob(f"medit-{self.kind}-gate.*.lock")])
+        self.addCleanup(lambda: [lock.unlink() for lock in pathlib.Path("/tmp").glob(f"medit-{self.kind}-slot.*.lock")])
 
     def in_slot(self, slots, command, path=None):
         """The caller is a shell as a terminal starts it, with INT at its default even where the
@@ -38,7 +38,7 @@ class InSlot(unittest.TestCase):
         return run
 
     def lock(self, slot):
-        return open(f"/tmp/medit-{self.kind}-gate.{slot}.lock", "a")
+        return open(f"/tmp/medit-{self.kind}-slot.{slot}.lock", "a")
 
     def hold(self, slot):
         lock = self.lock(slot)
@@ -77,7 +77,7 @@ class InSlot(unittest.TestCase):
         return pids
 
     def in_slot_with_a_grandchild(self):
-        """A gate command whose leader and grandchild both outlive any test unless killed."""
+        """A command whose leader and grandchild both outlive any test unless killed."""
         run = self.in_slot(1, f"sleep 60 & echo $! > {self.dir}/grandchild; echo $$ > {self.dir}/leader; wait")
         return run, self.pids("leader", "grandchild")
 
@@ -106,7 +106,7 @@ class InSlot(unittest.TestCase):
     def test_a_waiter_whose_caller_is_gone_never_runs(self):
         first = self.hold(1)
         run = self.in_slot(1, f"touch {self.dir}/ran")
-        self.await_line(run, f"=== Waiting for a {self.kind} gate slot ===")
+        self.await_line(run, f"=== Waiting for a {self.kind} slot ===")
         os.kill(run.pid, signal.SIGKILL)
         _, err = run.communicate(timeout=10)
         first.close()
@@ -133,7 +133,7 @@ class InSlot(unittest.TestCase):
         self.hold(1)
         second = self.hold(2)
         run = self.in_slot(2, "echo ran")
-        self.await_line(run, f"=== Waiting for a {self.kind} gate slot ===")
+        self.await_line(run, f"=== Waiting for a {self.kind} slot ===")
         second.close()
         out, _ = run.communicate(timeout=10)
         self.assertNotIn("Waiting", out)
@@ -161,6 +161,17 @@ class InSlot(unittest.TestCase):
         self.assertEqual(run.returncode, 7)
         self.assertIn("ran", out)
         self.assertTrue(self.free(2))
+
+    def test_without_flock_the_command_runs_unslotted(self):
+        tools = self.dir / "bin"
+        tools.mkdir()
+        for tool in ["bash", "setsid", "seq", "sleep", "ps"]:
+            (tools / tool).symlink_to(shutil.which(tool))
+        self.hold(1)
+        run = self.in_slot(1, "echo ran; exit 7", path=str(tools))
+        out, _ = run.communicate(timeout=10)
+        self.assertEqual(run.returncode, 7)
+        self.assertIn("ran", out)
 
 
 if __name__ == "__main__":
