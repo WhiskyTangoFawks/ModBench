@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Codec.Serialization;
 
 /// <summary>Mutagen's serializer writes an alias or package-data index of 0 as nothing and reads nothing
-/// as no index, which no writer accepts. A read fills that index back in as 0.</summary>
+/// as no index, which the serializer then cannot write. A read fills that index back in as 0.</summary>
 public static class AbsentIndexes
 {
     private static readonly ConcurrentDictionary<Assembly, IReadOnlySet<Type>> HoldersByGame = new();

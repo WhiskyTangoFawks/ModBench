@@ -100,8 +100,9 @@ public sealed class CompilePluginMastersTests : IDisposable
         var answer = await CompileServices.Over(withoutBravo).CompileAsync([_plugin]);
 
         var refused = Assert.Single(answer.Refused);
-        Assert.Equal(CompileRefusal.FormIdUnmappable, refused.Refusal);
-        Assert.Contains(BravoName, refused.Message, StringComparison.Ordinal);
+        Assert.Equal(
+            (CompileRefusal.MasterNotInLoadOrder, $"{PluginName} could not be compiled: it references {BravoName}, which the load order does not hold"),
+            (refused.Refusal, refused.Message));
         Assert.Equal(binary, File.ReadAllBytes(Path.Combine(_modFolder, PluginName)));
     }
 

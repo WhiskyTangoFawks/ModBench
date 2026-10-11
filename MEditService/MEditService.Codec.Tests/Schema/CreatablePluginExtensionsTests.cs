@@ -5,10 +5,12 @@ namespace MEditService.Codec.Tests.Schema;
 
 public sealed class CreatablePluginExtensionsTests
 {
-    [Fact]
-    public void AReleaseWithLightPlugins_NamesEveryExtension()
+    [Theory]
+    [InlineData(GameRelease.Fallout4)]
+    [InlineData(GameRelease.SkyrimSE)]
+    public void AReleaseWithLightPlugins_NamesEveryExtension(GameRelease release)
     {
-        Assert.Equal([".esm", ".esl", ".esp"], CreatablePluginExtensions.Of(GameRelease.Fallout4));
+        Assert.Equal([".esm", ".esl", ".esp"], CreatablePluginExtensions.Of(release));
     }
 
     [Theory]
