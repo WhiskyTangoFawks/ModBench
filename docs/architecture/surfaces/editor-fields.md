@@ -65,7 +65,7 @@ As a user, I want:
 
 1. Every array written back in the order I leave it: nothing re-sorts one. Source: xedit.md, divergence 14
 2. An array whose elements have a key to align across the columns by that key. Any other array to align by its values in sequence, as a diff does. A plugin with fewer elements than its master then reads as an absence where they are missing. Two elements that share a key, as another tool can write them, each on a row of their own. Source: xEdit; ADR-0018; xedit.md, divergence 14
-3. Add on an array's row, whether it is collapsed or expanded, to append a new element, empty but for its kind, which is the first the field lists. Source: xEdit
+3. Add on an array's row, whether it is collapsed or expanded, to append a new element as xEdit adds one: the first kind the field lists, with what the plugin requires of it at its defaults. Source: xEdit
 4. A key another element holds to be accepted, on add and on edit: the game uses a repeated key, as a leveled list weights an entry by repeating it. Story 2 shows each on a row of its own. Source: xEdit
 5. Move up absent on the first element, and move down on the last. Source: No dead entries
 
@@ -74,7 +74,7 @@ As a user, I want:
 Some fields hold one of several kinds of value, such as an alias that is a reference, a location or a collection. As a user, I want:
 
 1. A Kind row that chooses between them from VS Code's quick pick of the kinds, named as the schema names them, never a class name. Source: xedit.md, Choose the next or previous member of a union
-2. Switching the kind to keep the members both kinds have, and to drop the rest.
+2. Switching the kind to keep the members both kinds have, to drop the rest, and to fill what the new kind requires at its defaults, as add does. Source: Arrays, story 3
 
 ## Collapsed readings
 
