@@ -63,21 +63,23 @@ public sealed class ReconcileDoorTests
         Assert.Equal(LoadOrderState.Failed, Assert.Single(StatusesPublished(notifications)).Status.State);
     }
 
-    [Theory]
-    [InlineData(typeof(OutOfMemoryException))]
-    [InlineData(typeof(OperationCanceledException))]
-    public void AThrowNoPluginReadCatches_FailsTheReconcile_AndThePluginsReadBeforeItKeepTheirRecords(Type thrownType)
+    private static PluginFixtureData AReadThenB() => new PluginFixtureBuilder("cut-short-door")
+        .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
+        .WithPlugin("B.esp", mod =>
+        {
+            mod.Npcs.AddNew("FromB1");
+            mod.Npcs.AddNew("FromB2");
+        })
+        .Build();
+
+    private static readonly PluginAddress A = new("A.esp", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress B = new("B.esp", PluginOrigin.DataDirectory);
+
+    [Fact]
+    public void RunningOutOfMemoryPartwayThroughAPlugin_FailsTheReconcile_AndThePluginsReadBeforeItKeepTheirRecords()
     {
-        using var data = new PluginFixtureBuilder("uncaught-throw-door")
-            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
-            .WithPlugin("B.esp", mod =>
-            {
-                mod.Npcs.AddNew("FromB1");
-                mod.Npcs.AddNew("FromB2");
-            })
-            .Build();
-        var thrown = (Exception)(Activator.CreateInstance(thrownType, "injected while reading B.esp")
-            ?? throw new InvalidOperationException($"{thrownType} takes a message."));
+        using var data = AReadThenB();
+        var thrown = Faults.Of(typeof(OutOfMemoryException));
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, () => throw thrown));
 
@@ -86,8 +88,25 @@ public sealed class ReconcileDoorTests
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
         Assert.Equal(version, index.Status.Version);
         Assert.Contains(thrown.Message, index.Status.Message, StringComparison.Ordinal);
-        Assert.NotEmpty(index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(index.ListedIn(A));
         Assert.DoesNotContain(index.Status.Failures, f => f.Name == "B.esp");
+    }
+
+    [Theory]
+    [InlineData(typeof(OutOfMemoryException))]
+    [InlineData(typeof(InvalidOperationException))]
+    [InlineData(typeof(OperationCanceledException))]
+    public void APluginWhoseReadWasCutShort_IsReadByTheNextSnapshot_AndListed(Type thrownType)
+    {
+        using var data = AReadThenB();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, Faults.Once(thrownType)));
+        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+
+        index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the next snapshot's ready status");
+
+        Assert.Contains(B, index.Status.IndexedPlugins);
+        Assert.Equal(2, index.CountOf(B, "npc_"));
     }
 
     [Fact]

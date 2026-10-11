@@ -267,11 +267,10 @@ internal sealed class Indexer : IDisposable
                 if (moved) PublishStatus();
             }
         }
-        catch
+        catch (Exception ex) when (!CancelledBy(ex, CancellationToken.None))
         {
-            // A throw ends this task, so the next hand-over must start another.
+            _logger.LogError(ex, "Validating the handed documents failed unexpectedly");
             lock (_lock) _validatingHanded = false;
-            throw;
         }
     }
 
@@ -279,7 +278,7 @@ internal sealed class Indexer : IDisposable
     {
         var scope = RequireScope();
         var holding = scope.Held.Plugins.Where(plugin => paths.Exists(path => _source.TreeHolds(plugin.Registered, path))).ToList();
-        if (holding.Count > 0) scope.Store.Commit(_ => holding.ForEach(plugin => ValidateOne(scope, plugin)));
+        if (holding.Count > 0) ListLanded(scope.Store.Commit(_ => holding.Where(plugin => ValidateOne(scope, plugin, CancellationToken.None)).ToList()));
     }
 
     // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
@@ -365,7 +364,7 @@ internal sealed class Indexer : IDisposable
             failure = ValidateHeld(token);
             return failure is not null || reconciled;
         }
-        catch (Exception ex) when (!Superseded(ex, token))
+        catch (Exception ex) when (!CancelledBy(ex, token))
         {
             // Every type, out of memory included: nothing above observes a throw, so one left here
             // would leave the status Reconciling for ever (plugins.md, States, story 6).
@@ -380,9 +379,11 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    // A cancellation this reconcile was not asked for is a failure like any other throw.
-    private static bool Superseded(Exception ex, CancellationToken token) =>
+    private static bool CancelledBy(Exception ex, CancellationToken token) =>
         ex is OperationCanceledException && token.IsCancellationRequested;
+
+    private static bool FailsOnePlugin(Exception ex, CancellationToken token) =>
+        ex is not OutOfMemoryException && !CancelledBy(ex, token);
 
     // Called with the exclusive right held, so no other reconcile can be in flight.
     private CancellationToken BeginReconcile()
@@ -575,7 +576,7 @@ internal sealed class Indexer : IDisposable
             ReadOne(scope, plugin, state =>
                 held.Open(plugin, Registration.In(snapshot, plugin.Key)).Holds(out metadata, out var failure)
                     ? RegisterOrIndex(scope, metadata, state, token)
-                    : ReadOutcome.Failed(failure));
+                    : ReadOutcome.Failed(failure), token);
             if (metadata is null) continue;
             firstUsableMs ??= timer.ElapsedMilliseconds;
         }
@@ -619,20 +620,20 @@ internal sealed class Indexer : IDisposable
                     "{Plugin} ({Origin}) now reads as {Truth}; re-deriving it", plugin.Name, plugin.Origin,
                     scope.Projector.TruthOf(plugin));
             }
-            ReadOne(scope, plugin, state => IndexOnePlugin(scope, metadata, state, token));
+            ReadOne(scope, plugin, state => IndexOnePlugin(scope, metadata, state, token), token);
         }
     }
 
     // plugins.md, A row, Plugin: one plugin that cannot be read is that row's "Failed to read", never
     // the whole index's failure.
-    private void ReadOne(OpenScope scope, RegisteredPlugin plugin, Func<ReadState, ReadOutcome> read)
+    private void ReadOne(OpenScope scope, RegisteredPlugin plugin, Func<ReadState, ReadOutcome> read, CancellationToken token)
     {
         try
         {
             if (scope.Failed.Read(plugin, read).Failure is { } failure)
                 FailRead(scope, plugin.Key, failure);
         }
-        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        catch (Exception ex) when (FailsOnePlugin(ex, token))
         {
             _logger.LogWarning(ex, "Could not read {Plugin} ({Origin})", plugin.Name, plugin.Origin);
             FailRead(scope, plugin.Key, ReadFailure(PluginLoadFailure.ReasonFor(ex), scope.Store.DerivationOf(plugin.Key)));
@@ -678,7 +679,7 @@ internal sealed class Indexer : IDisposable
 
     // Registers first: the index's reads are scoped by registration, so validate would otherwise
     // compare an empty row set against a full tree. False falls through to a full index.
-    private bool WarmRegister(OpenScope scope, PluginMetadata plugin, ReadState state)
+    private bool WarmRegister(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
     {
         scope.Store.Register(plugin);
 
@@ -695,7 +696,7 @@ internal sealed class Indexer : IDisposable
                 _logger.LogWarning("Validating {Plugin} at load: {Failure}", plugin.Name, failure);
             return !report.NeedsRebuild;
         }
-        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        catch (Exception ex) when (FailsOnePlugin(ex, token))
         {
             // A validation that failed is no evidence the rows are still true: the whole read below
             // re-derives them and reports its own failure.
@@ -728,7 +729,7 @@ internal sealed class Indexer : IDisposable
     // indexed; ADR-0015 validates a tracked plugin by content on that same warm path.
     private ReadOutcome RegisterWarmOrIndex(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
     {
-        if (scope.Store.IndexedContentHash(plugin.Key) != null && WarmRegister(scope, plugin, state))
+        if (scope.Store.IndexedContentHash(plugin.Key) != null && WarmRegister(scope, plugin, state, token))
         {
             if (_logger.IsEnabled(LogLevel.Information))
             {
@@ -776,7 +777,7 @@ internal sealed class Indexer : IDisposable
             _logger.LogWarning("Could not ingest {Plugin} from its source tree; reading its binary: {Reason}", plugin.Name, stopped.Reason);
             stoppedAt = ReadOutcome.StoppedAt(stopped);
         }
-        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        catch (Exception ex) when (FailsOnePlugin(ex, token))
         {
             // Every exception, not a curated set: a third-party deserializer fails in open-ended ways.
             _logger.LogWarning(ex, "Could not ingest {Plugin} from its source tree; reading its binary", plugin.Name);
@@ -820,19 +821,30 @@ internal sealed class Indexer : IDisposable
     {
         var scope = RequireScope();
         // A plugin not held failed to open, and the reconcile opens it again once its bytes change.
-        scope.Store.Commit(_ =>
+        ListLanded(scope.Store.Commit(_ => scope.Held.Plugins.Where(metadata =>
         {
-            foreach (var metadata in scope.Held.Plugins)
-            {
-                token.ThrowIfCancellationRequested();
-                ValidateOne(scope, metadata);
-            }
-        });
+            token.ThrowIfCancellationRequested();
+            return ValidateOne(scope, metadata, token);
+        }).ToList()));
+    }
+
+    // Listed as RegisterOrIndex lists an arriving plugin, once the commit that read it has landed.
+    private void ListLanded(IReadOnlyList<PluginMetadata> landed)
+    {
+        bool listed;
+        lock (_lock)
+        {
+            var unlisted = landed.Select(p => p.Key).Where(key => !_indexed.Contains(key, PluginAddress.Comparer)).ToList();
+            _indexed.AddRange(unlisted);
+            listed = unlisted.Count > 0;
+        }
+        if (listed) PublishStatus();
     }
 
     // plugins.md, A row, Plugin, "Failed to read": a plugin that cannot be read is flagged, and the
     // rest are still validated. A failed one is read whole again once what it reads from changed.
-    private void ValidateOne(OpenScope scope, PluginMetadata plugin)
+    // True when read whole.
+    private bool ValidateOne(OpenScope scope, PluginMetadata plugin, CancellationToken token)
     {
         var (held, store) = (scope.Held, scope.Store);
         var key = plugin.Key;
@@ -842,35 +854,35 @@ internal sealed class Indexer : IDisposable
             if (!holdsTree && !_adapter.Exists(plugin.Path))
             {
                 if (store.IndexedContentHash(key) is not null) store.Unindex(key);
-                return;
+                return false;
             }
 
             // Rows a failed read left say nothing of what the plugin now reads from.
             if (held.IsHeldWithAFailure(key) || scope.Failed.Holds(key))
             {
-                if (!scope.Failed.StillFailing(plugin.Registered)) ReindexHeldPlugin(scope, plugin);
-                return;
+                return !scope.Failed.StillFailing(plugin.Registered) && ReindexHeldPlugin(scope, plugin);
             }
 
             var readWhole = false;
             scope.Failed.Read(plugin.Registered, state =>
             {
-                readWhole = MustReadWhole(scope, plugin, holdsTree, state);
+                readWhole = MustReadWhole(scope, plugin, holdsTree, state, token);
                 return ReadOutcome.Read;
             });
-            if (readWhole) ReindexHeldPlugin(scope, plugin);
+            return readWhole && ReindexHeldPlugin(scope, plugin);
         }
-        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        catch (Exception ex) when (FailsOnePlugin(ex, token))
         {
             _logger.LogWarning(ex, "Could not validate {Plugin} ({Origin})", key.Name, key.Origin);
             // A re-read that failed has named its own failure.
             if (!held.IsHeldWithAFailure(key)) FailRead(scope, key, ValidationFailure(holdsTree, PluginLoadFailure.ReasonFor(ex)));
+            return false;
         }
     }
 
     // When the rows cannot be brought true here. A tree that cannot be read is read whole, which reads
     // the binary in its place and names what stopped it.
-    private bool MustReadWhole(OpenScope scope, PluginMetadata plugin, bool holdsTree, ReadState state)
+    private bool MustReadWhole(OpenScope scope, PluginMetadata plugin, bool holdsTree, ReadState state, CancellationToken token)
     {
         var key = plugin.Key;
         try
@@ -889,7 +901,7 @@ internal sealed class Indexer : IDisposable
             // An untracked plugin's rows went with its file, and the file is back.
             return report.NeedsRebuild || (!holdsTree && scope.Store.IndexedContentHash(key) is null);
         }
-        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        catch (Exception ex) when (FailsOnePlugin(ex, token))
         {
             _logger.LogWarning(ex, "Reconciling {Plugin}: its rows cannot be validated, so it is read whole", key.Name);
             return true;
@@ -923,7 +935,7 @@ internal sealed class Indexer : IDisposable
             _logger.LogWarning(ex, "Could not validate the index while another write held it; it is re-checked at the next snapshot");
             return null;
         }
-        catch (Exception ex) when (!Superseded(ex, token))
+        catch (Exception ex) when (!CancelledBy(ex, token))
         {
             // Every type, out of memory included: the failure becomes status data (plugins.md,
             // States, story 6), and the next snapshot tries again.
@@ -935,7 +947,7 @@ internal sealed class Indexer : IDisposable
     // ADR-0007: the read a first index runs, so a re-read produces the same rows by construction. A
     // failed read is recorded with what it read from and rethrown, so it is not read again until that
     // changes.
-    private void ReindexHeldPlugin(OpenScope scope, PluginMetadata plugin)
+    private bool ReindexHeldPlugin(OpenScope scope, PluginMetadata plugin)
     {
         var key = plugin.Key;
         ReadOutcome outcome;
@@ -953,8 +965,13 @@ internal sealed class Indexer : IDisposable
             FailRead(scope, key, ReadFailure(PluginLoadFailure.ReasonFor(ex), scope.Store.DerivationOf(key)));
             throw;
         }
-        if (outcome.Failure is { } failure) FailRead(scope, key, failure);
-        else if (scope.Held.ClearFailure(key)) PublishStatus();
+        if (outcome.Failure is { } failure)
+        {
+            FailRead(scope, key, failure);
+            return false;
+        }
+        if (scope.Held.ClearFailure(key)) PublishStatus();
+        return true;
     }
 
     /// <summary>The filter in force and the source its SQL came from, read together so a
