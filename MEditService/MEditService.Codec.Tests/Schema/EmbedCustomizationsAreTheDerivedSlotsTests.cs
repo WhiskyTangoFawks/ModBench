@@ -12,6 +12,7 @@ public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
     [Theory]
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
+    [InlineData(GameRelease.Starfield)]
     public void TheCustomizationsEmbedExactlyTheDerivedSlots_BecauseACustomizationTheDerivationDoesNotNamePutsAChildInADocumentNoEditCanReach(GameRelease release)
     {
         var customized = ReplayEveryCustomizeOfTheSerializationFolderThroughARecordingBuilder(release).Order().ToList();

@@ -38,7 +38,7 @@ public sealed class SkyrimDocumentReadTests
         mod.WriteToBinary(path);
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(mod.ModKey, path), GameRelease.SkyrimSE, SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)).Answered();
+            new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.SkyrimSE), SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)).Answered();
         var records = documents.Records.ToList();
 
         Assert.Equal(

@@ -17,6 +17,7 @@ public sealed class GameNamespaceScanTests
     [
         "MEditService.Codec.Fallout4",
         "MEditService.Codec.Skyrim",
+        "MEditService.Codec.Starfield",
     ];
 
     private static readonly Regex Identifier = new(@"\b[A-Za-z_][A-Za-z0-9_]*\b", RegexOptions.Compiled);

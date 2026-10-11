@@ -64,10 +64,10 @@ public sealed class TrackModTests
     private sealed class LockedPluginAdapter(string lockedName) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
-            RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
+            RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, PluginStrings strings, CancellationToken cancel = default) =>
             plugin.Name.Equals(lockedName, StringComparison.OrdinalIgnoreCase)
                 ? Task.FromResult<Answer<PluginSource, PluginFailure>>(PluginFailures.Inaccessible())
-                : base.ReadSourceOfAsync(plugin, gameRelease, strings, cancel);
+                : base.ReadSourceOfAsync(plugin, loadOrder, strings, cancel);
     }
 
     [Fact]

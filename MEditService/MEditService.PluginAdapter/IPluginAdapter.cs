@@ -7,16 +7,16 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>Bytes to documents and facts and back (ADR-0005). The game release is a
-/// parameter of every verb, and a read or write Mutagen cannot make answers its failure (ADR-0019).</summary>
+/// <summary>Bytes to documents and facts and back (ADR-0005). The game release, or the load order
+/// that carries it, is a parameter of every verb, and a read or write Mutagen cannot make answers its
+/// failure (ADR-0019).</summary>
 public interface IPluginAdapter
 {
-    /// <summary>The plugin as the documents its source tree would hold (ADR-0007). Owns the open
-    /// until the result is disposed; omitting <paramref name="strings"/> is not neutral for a
-    /// localized plugin.</summary>
+    /// <summary>The plugin as the documents its source tree would hold (ADR-0007), owning the open until
+    /// disposed; omitting <paramref name="strings"/> is not neutral for a localized plugin.</summary>
     Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath,
-        GameRelease gameRelease,
+        LoadOrderSnapshot loadOrder,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         PluginStrings? strings = null);
 
@@ -24,7 +24,7 @@ public interface IPluginAdapter
     /// streaming all of them. Owns the open until the result is disposed.</summary>
     Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
         RegisteredPlugin plugin,
-        GameRelease gameRelease,
+        LoadOrderSnapshot loadOrder,
         IReadOnlyDictionary<string, RecordTableSchema> schemas);
 
     bool Exists(string pluginPath);
@@ -44,7 +44,7 @@ public interface IPluginAdapter
     /// <summary>What a plugin's own binary says about itself, which is what the Index holds for it.
     /// <c>Unreachable</c> stopped a full walk: the count is a readout, not a gate.</summary>
     Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
-        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null);
+        ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings? strings = null);
 
     /// <summary>What each of <paramref name="formKeys"/> names in the files the game loads (ADR-0013), or in every
     /// plugin when it does not load <paramref name="compiled"/>, beside the unreadable files (ADR-0005).</summary>
@@ -68,13 +68,13 @@ public interface IPluginAdapter
 
     /// <summary>A plugin's binary read as the source tree it would commit.</summary>
     Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
-        RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default);
+        RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, PluginStrings strings, CancellationToken cancel = default);
 
     /// <summary>How the plugin at <paramref name="recompiledPath"/> differs from the named one as the
     /// codec models them; null when they are model-identical. Both are reparsed, since only written
     /// bytes show what the writer does.</summary>
     Answer<string?, PluginFailure> DivergenceFrom(
-        string pluginFileName, string pluginFilePath, string recompiledPath, GameRelease gameRelease, PluginStrings strings);
+        string pluginFileName, string pluginFilePath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings);
 
     /// <summary>How the file at <paramref name="recompiledPath"/> differs at the byte level from the one
     /// at <paramref name="originalPath"/>.</summary>

@@ -12,6 +12,7 @@ public sealed class DerivedContainerMembersTests
     [Theory]
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
+    [InlineData(GameRelease.Starfield)]
     public void TheEmbeddedSlots_AreExactlyTheMembersTypedAsAMajorRecordOrAListOfThem_SweptThroughTheGetterInterfaceARouteTheDerivationNeverTakes(GameRelease release)
     {
         var expected = Sweep(release, (_, p) => TypedAsChildMajor(p)).ToList();
@@ -23,6 +24,7 @@ public sealed class DerivedContainerMembersTests
     [Theory]
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
+    [InlineData(GameRelease.Starfield)]
     public void TheChildFields_AlsoNameTheMembersReachingChildRecordsThroughTheGamesNestedGroups(GameRelease release)
     {
         var module = GameModule(release);
@@ -35,6 +37,7 @@ public sealed class DerivedContainerMembersTests
     [Theory]
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
+    [InlineData(GameRelease.Starfield)]
     public void EveryRecordTypeInTheGameAssembly_IsSwept_IncludingTheSiblingsOfATablesBoundType_BecauseADerivedMemberOnATypeOutsideTheSweepIsOneTheOtherTestsNeverReach(GameRelease release)
     {
         var swept = RecordClasses(release).Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
@@ -50,6 +53,7 @@ public sealed class DerivedContainerMembersTests
     [Theory]
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
+    [InlineData(GameRelease.Starfield)]
     public void EveryEmbeddedSlotsElement_IsAMajorRecordByMutagensOwnReckoning(GameRelease release)
     {
         var mod = ModFactory.Activator(ModKey.FromFileName("Sweep.esp"), release);

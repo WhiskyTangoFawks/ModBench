@@ -60,7 +60,7 @@ internal sealed class HeldPlugins
 
     /// <summary>What the adapter read of the plugin's file, held; or the failure that stopped the
     /// read, with nothing held. A success clears an earlier failure.</summary>
-    public Answer<PluginMetadata, PluginFailure> Open(RegisteredPlugin plugin, Registration registration)
+    public Answer<PluginMetadata, PluginFailure> Open(RegisteredPlugin plugin, Registration registration, LoadOrderSnapshot loadOrder)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -72,7 +72,7 @@ internal sealed class HeldPlugins
         // Track does, or a Localized untracked plugin fails instead of opening.
         var readTimer = Stopwatch.StartNew();
         if (!_adapter.ReadContent(
-                new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), GameRelease,
+                new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder,
                 new PluginStrings(Path.GetDirectoryName(plugin.Path), DataFolderPath))
             .Holds(out var read, out var failure))
         {

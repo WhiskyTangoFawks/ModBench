@@ -22,7 +22,7 @@ public static class TreeSaves
         var adapter = TestAdapters.Mutagen();
         var name = Path.GetFileName(pluginPath);
         var source = (await adapter.ReadSourceOfAsync(
-            new RegisteredPlugin(name, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null), GameRelease.Fallout4,
+            new RegisteredPlugin(name, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null), EmptyLoadOrder.Of(GameRelease.Fallout4),
             new PluginStrings(null, Path.GetDirectoryName(pluginPath) ?? throw new ArgumentException("No folder.", nameof(pluginPath))))).Answered();
 
         var edited = source.Files.Select(file => new TreeFile(
@@ -33,7 +33,7 @@ public static class TreeSaves
 
         var tree = (await adapter.ReadTreeAsync(edited, GameRelease.Fallout4)).Answered();
         var masters = loadOrder
-            ?? adapter.ReadContent(new ModPath(ModKey.FromFileName(name), pluginPath), GameRelease.Fallout4).Answered().Content.Masters;
+            ?? adapter.ReadContent(new ModPath(ModKey.FromFileName(name), pluginPath), EmptyLoadOrder.Of(GameRelease.Fallout4)).Answered().Content.Masters;
         return (await tree.SaveAsync(pluginPath, masters, land)).Answered();
     }
 }

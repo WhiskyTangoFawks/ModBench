@@ -39,7 +39,7 @@ public sealed class PluginAdapterTests
     {
         using var data = TwoNpcPlugin("adapter-read");
 
-        using var documents = Adapter.OpenDocuments(PathOf(data), GameRelease.Fallout4, Schemas).Answered();
+        using var documents = Adapter.OpenDocuments(PathOf(data), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
         var npcs = documents.Records.Where(r => r.RecordType == "npc_").ToList();
 
         Assert.Equal(

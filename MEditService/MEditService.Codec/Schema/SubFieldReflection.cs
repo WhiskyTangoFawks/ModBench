@@ -15,6 +15,44 @@ internal static class SubFieldReflection
         ILogger logger,
         Type[] path)
     {
+        // Only a truncation makes a walk depend on its path; any other loop is fatal from anywhere. A
+        // union whose walk meets no truncation is walked once, since a game's unions recur in hundreds
+        // of places.
+        if (LoquiUnions.TryGetUnion(getterInterface, game) is null
+            || game.ReachesATruncation.GetOrAdd(getterInterface, type => Reach(type, game).Any(game.Annotations.IsCycleTruncation)))
+        {
+            return Walk(getterInterface, game, logger, path);
+        }
+        return [.. game.PathFreeSubSchemas.GetOrAdd(getterInterface, type => Walk(type, game, logger, path))];
+    }
+
+    // Every getter interface the walk below one could enter: its members' types, their list elements,
+    // and a union's leaves. More than the walk enters is safe; less is not.
+    private static HashSet<Type> Reach(Type getterInterface, GameReflection game)
+    {
+        var reached = new HashSet<Type>();
+        var pending = new Stack<Type>([getterInterface]);
+        while (pending.TryPop(out var type))
+        {
+            if (!reached.Add(type)) continue;
+            foreach (var prop in ReflectedTypes.GetAllInterfaceProperties(type))
+                foreach (var held in Held(ReflectedTypes.CoreOf(prop).Core).Where(ReflectedTypes.IsLoquiInterface))
+                    pending.Push(held);
+            foreach (var (leaf, _) in LoquiUnions.TryGetUnion(type, game)?.Leaves ?? [])
+                pending.Push(leaf);
+        }
+        return reached;
+    }
+
+    private static IEnumerable<Type> Held(Type type) =>
+        ReflectedTypes.IsListType(type, out var element) ? Held(element).Prepend(type) : [type];
+
+    private static List<FieldMetadata> Walk(
+        Type getterInterface,
+        GameReflection game,
+        ILogger logger,
+        Type[] path)
+    {
         if (Enter(path, getterInterface, game) is not { } inner) return [];
 
         var kept = ReflectedTypes.Members(getterInterface)
