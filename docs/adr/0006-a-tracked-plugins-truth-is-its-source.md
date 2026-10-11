@@ -5,7 +5,7 @@ Software compiles source into a binary. Modding runs the other way: the plugin i
 ## Consequences
 
 - Decompilation must be provably faithful. The source can take over only if it loses nothing. Faithful means model identity, not byte identity: plugins come from many tools, none writes them exactly right, and byte identity would test whichever tool last wrote the file.
-- Model identity tolerates every difference Mutagen's own rewrite of a plugin it read introduces. Such a difference is encoding, not meaning, so no check refuses it.
+- Meaning is what the game reads, and model identity is its proxy. Two values that write to the same bytes mean the same. A respelling that Mutagen's own rewrite gives a model it read is encoding, not meaning, and model identity tolerates exactly those respellings and nothing else.
 
 ## Alternatives rejected
 
