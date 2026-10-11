@@ -14,7 +14,9 @@ from hook_caller import is_subagent
 
 DETACHED = "bash .claude/skills/validate/detached.sh"
 SLOT_RUN = pathlib.Path(__file__).resolve().parents[1] / "skills/validate/slot-run.sh"
-BUILD = r"\bdotnet\s+(?:build|test|format)(?![\w-])|\bnpm\s+(?:run\s+)?(?:test|build)\b|\bnpx\s+vitest\b"
+BUILD = "|".join((r"\bdotnet\s+(?:build|test|format|publish)(?![\w-])",
+                  r"\bnpm\s+(?:run\s+)?(?:test|build|package)\b",
+                  r"\bnpx\s+vitest\b"))
 BUILDING_RUN = r"\bdotnet\s+run\b(?!.*--no-build)"
 RUN = r"(?:(?:^|[;&|(\n])\s*|(?<![\w.])(?:ba)?sh\s+(?:-\S+\s+)*)"
 GATE = BUILD + "|" + RUN + r"\S*run-gates\.sh\b(?!.*--detach)|\bdetached\.sh\s+wait\b"

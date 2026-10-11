@@ -20,7 +20,7 @@ Both must hold — HEAD on a branch (a detached HEAD silently strands every comm
 ## 1 — Build the extension (if needed)
 
 ```bash
-cd modbench && npm run build
+cd modbench && bash ../.claude/skills/validate/slot-run.sh npm run build
 ```
 
 The published self-contained backend binary lives at `modbench/backend/` (produced by `npm run build:backend`, part of `vscode:prepublish`) — rebuild it only if `MEditService/` changed.
