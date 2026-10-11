@@ -45,39 +45,41 @@ public sealed class SchemaAnnotationTests
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield);
         var entries = schemas["lvli"].RecordColumns.Single(c => c.Name == "Entries").Field;
-        var aliases = schemas["qust"].RecordColumns.Single(c => c.Name == "VirtualMachineAdapter").Field
-            .Fields.Require().Single(f => f.Name == "Aliases");
 
         Assert.Equal(["Faction"], schemas["npc_"].RecordColumns.Single(c => c.Name == "Factions").Field.KeyMembers);
         Assert.Equal(["Level", "Reference"], entries.KeyMembers);
         Assert.Equal(["Count", "Data.ItemCondition", "Data.Owner"], entries.ExtendedKeyMembers);
-        Assert.Equal(["Property.Alias"], aliases.KeyMembers);
     }
 
-    [Fact]
-    public void ASkyrimRecordsScripts_AlignByTheKeysXEditSortsThemBy()
-    {
-        var adapter = SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["qust"]
-            .RecordColumns.Single(c => c.Name == "VirtualMachineAdapter").Field;
-        FieldMetadata Member(FieldMetadata owner, string name) => owner.Fields.Require().Single(f => f.Name == name);
-        var scripts = Member(adapter, "Scripts");
-        var aliases = Member(adapter, "Aliases");
+    private static FieldMetadata QuestAdapterMember(GameRelease release, string path) =>
+        path.Split('.').Aggregate(
+            SharedSchemaReflector.Instance.GetSchemas(release)["qust"].RecordColumns.Single(c => c.Name == "VirtualMachineAdapter").Field,
+            (owner, name) => (owner.ElementType ?? owner).Fields.Require().Single(f => f.Name == name));
 
-        Assert.Equal(["Name"], scripts.KeyMembers);
-        Assert.Equal(["Name"], Member(scripts.ElementType.Require(), "Properties").KeyMembers);
-        Assert.Equal(["Stage", "StageIndex"], Member(adapter, "Fragments").KeyMembers);
-        Assert.Equal(["Property.Object", "Property.Alias"], aliases.KeyMembers);
-        Assert.Equal(["Name"], Member(aliases.ElementType.Require(), "Scripts").KeyMembers);
+    [Theory]
+    [InlineData(GameRelease.SkyrimSE, "Scripts", "Name")]
+    [InlineData(GameRelease.SkyrimSE, "Scripts.Properties", "Name")]
+    [InlineData(GameRelease.SkyrimSE, "Fragments", "Stage,StageIndex")]
+    [InlineData(GameRelease.SkyrimSE, "Aliases", "Property.Object,Property.Alias")]
+    [InlineData(GameRelease.SkyrimSE, "Aliases.Scripts", "Name")]
+    [InlineData(GameRelease.Starfield, "Scripts", "Name")]
+    [InlineData(GameRelease.Starfield, "Scripts.Properties", "Name")]
+    [InlineData(GameRelease.Starfield, "Scripts.Properties.Members", "Name")]
+    [InlineData(GameRelease.Starfield, "Scripts.Properties.Members.Properties", "Name")]
+    [InlineData(GameRelease.Starfield, "Scripts.Properties.Structs.Members", "Name")]
+    [InlineData(GameRelease.Starfield, "Fragments", "Stage,StageIndex")]
+    [InlineData(GameRelease.Starfield, "Aliases", "Property.Alias")]
+    [InlineData(GameRelease.Starfield, "Aliases.Scripts", "Name")]
+    public void AQuestsScriptArray_AlignsByTheKeysXEditSortsItBy(GameRelease release, string path, string keys)
+    {
+        Assert.Equal(keys.Split(','), QuestAdapterMember(release, path).KeyMembers);
     }
 
-    [Fact]
-    public void ASkyrimScriptObjectBoundToAnAlias_HoldsNoObject()
+    [Theory]
+    [InlineData(GameRelease.SkyrimSE)]
+    [InlineData(GameRelease.Starfield)]
+    public void AScriptObjectBoundToAnAlias_HoldsNoObject(GameRelease release)
     {
-        var property = SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["qust"]
-            .RecordColumns.Single(c => c.Name == "VirtualMachineAdapter").Field
-            .Fields.Require().Single(f => f.Name == "Aliases").ElementType.Require()
-            .Fields.Require().Single(f => f.Name == "Property");
-
-        Assert.True(property.Fields.Require().Single(f => f.Name == "Object").AllowsNull);
+        Assert.True(QuestAdapterMember(release, "Aliases.Property.Object").AllowsNull);
     }
 }
