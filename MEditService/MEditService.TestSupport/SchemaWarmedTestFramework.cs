@@ -12,6 +12,7 @@ public class SchemaWarmedTestFramework(IMessageSink messageSink) : GamesRegister
     {
         _ = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
         _ = SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE);
+        _ = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield);
     }
 
     protected virtual void Warm() => WarmSchemas();

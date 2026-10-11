@@ -27,8 +27,9 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 {
     private readonly PluginFileHashes _hashes = new(timeProvider);
 
-    internal static ILoadedMod OpenForRead(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
-        => new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(strings)));
+    internal static ILoadedMod OpenForRead(
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
+        => new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(modPath, gameRelease, strings, loadOrder)));
 
     // The header is read with the open: a header Mutagen cannot read is the open's failure, not a
     // throw out of the ingest that follows.
@@ -36,8 +37,9 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         ModPath modPath,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null) =>
-        Opened<IPluginDocuments>(modPath, gameRelease, strings, loaded =>
+        PluginStrings? strings = null,
+        LoadOrderSnapshot? loadOrder = null) =>
+        Opened<IPluginDocuments>(modPath, gameRelease, strings, loadOrder, loaded =>
         {
             var documents = new MutagenModDocuments(loaded.Getter, new PluginRecordBytes(modPath, gameRelease), schemas, loaded);
             _ = documents.Header;
@@ -47,23 +49,24 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     public Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
         RegisteredPlugin plugin,
         GameRelease gameRelease,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        LoadOrderSnapshot? loadOrder = null)
     {
         var modPath = new ModPath(plugin.Path);
-        return Opened<IPluginRecords>(modPath, gameRelease, strings: null, loaded =>
+        return Opened<IPluginRecords>(modPath, gameRelease, strings: null, loadOrder, loaded =>
             new ModRecordLookup(loaded.Getter, new PluginRecordBytes(modPath, gameRelease), schemas, loaded));
     }
 
     // The open passes to what its result holds; until it has, a failure disposes it here.
     private static Answer<T, PluginFailure> Opened<T>(
-        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, Func<ILoadedMod, T> holding)
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, LoadOrderSnapshot? loadOrder, Func<ILoadedMod, T> holding)
     {
         ILoadedMod? loaded = null;
         try
         {
             return PluginFailure.Answer(() =>
             {
-                loaded = OpenForRead(modPath, gameRelease, strings);
+                loaded = OpenForRead(modPath, gameRelease, strings, loadOrder);
                 var held = holding(loaded);
                 loaded = null;
                 return held;
@@ -86,8 +89,8 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     public Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => PluginBinaryHash.ClaimOfFile(pluginPath, gameRelease);
 
     public Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
-        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
-        Opened(modPath, gameRelease, strings, loaded =>
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null) =>
+        Opened(modPath, gameRelease, strings, loadOrder, loaded =>
         {
             using (loaded)
             {
@@ -118,7 +121,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             .DistinctBy(plugin => plugin.Name, StringComparer.OrdinalIgnoreCase)
             .Select(plugin => new ModPath(plugin.Path))
             .ToList();
-        return LoadOrderLinks.Targets(files, loadOrder.GameRelease, formKeys);
+        return LoadOrderLinks.Targets(files, loadOrder, formKeys);
     }
 
     private static bool SameFile(RegisteredPlugin plugin, RegisteredPlugin other) =>
@@ -136,14 +139,16 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, gameRelease, cancel);
 
     public Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
-        RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
+        RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, LoadOrderSnapshot? loadOrder = null,
+        CancellationToken cancel = default) =>
         PluginTrees.ReadAsync(
-            new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), plugin.Name, gameRelease, strings, cancel);
+            new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), plugin.Name, gameRelease, strings, loadOrder, cancel);
 
     public Answer<string?, PluginFailure> DivergenceFrom(
-        string pluginFileName, string pluginFilePath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
+        string pluginFileName, string pluginFilePath, string recompiledPath, GameRelease gameRelease, PluginStrings strings,
+        LoadOrderSnapshot? loadOrder = null) =>
         PluginFailure.Answer(() => PluginTrees.DivergenceBetween(
-            new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), recompiledPath, gameRelease, strings)?.Describe());
+            new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), recompiledPath, gameRelease, strings, loadOrder)?.Describe());
 
     public Task<Answer<PluginByteComparison, PluginFailure>> CompareBytesAsync(
         string originalPath, string recompiledPath, GameRelease gameRelease, CancellationToken cancel = default) =>
@@ -171,11 +176,18 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     private static IReadOnlyList<ModKey> MastersOf(ModKey plugin, string path, GameRelease gameRelease) =>
         [.. MasterReferenceCollection.FromPath(new ModPath(plugin, path), gameRelease).Masters.Select(reference => reference.Master)];
 
-    internal static IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
-        => ModFactory.ImportSetter(modPath, gameRelease, ReadParameters(strings));
+    internal static IMod OpenForWrite(
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
+        => ModFactory.ImportSetter(modPath, gameRelease, ReadParameters(modPath, gameRelease, strings, loadOrder));
 
-    private static BinaryReadParameters? ReadParameters(PluginStrings? strings) =>
-        strings is { } named ? LocalizedStrings.ForRead(named) : null;
+    private static BinaryReadParameters? ReadParameters(
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, LoadOrderSnapshot? loadOrder)
+    {
+        var read = strings is { } named ? LocalizedStrings.ForRead(named) : null;
+        return MasterStyles.Of(modPath, gameRelease, loadOrder) is { } styles
+            ? (read ?? new BinaryReadParameters()) with { MasterFlagsLookup = styles }
+            : read;
+    }
 
     internal static IMod CreateEmpty(ModKey modKey, GameRelease gameRelease)
         => ModFactory.Activator(modKey, gameRelease);

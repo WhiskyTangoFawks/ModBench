@@ -185,7 +185,8 @@ public sealed class CreatePluginHandlerTests : IDisposable
         public PluginFailure Unread { get; } = PluginFailures.Unparsed();
 
         public override Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
-            RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default)
+            RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, LoadOrderSnapshot? loadOrder = null,
+        CancellationToken cancel = default)
         {
             Before?.Invoke();
             return Task.FromResult<Answer<PluginSource, PluginFailure>>(Unread);

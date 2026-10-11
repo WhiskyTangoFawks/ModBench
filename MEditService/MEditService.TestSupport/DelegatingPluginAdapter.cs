@@ -14,16 +14,17 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
 {
     public virtual Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null) =>
-        inner.OpenDocuments(modPath, gameRelease, schemas, strings);
+        PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null) =>
+        inner.OpenDocuments(modPath, gameRelease, schemas, strings, loadOrder);
 
     public virtual Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
-        RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        inner.OpenRecordLookup(plugin, gameRelease, schemas);
+        RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        LoadOrderSnapshot? loadOrder = null) =>
+        inner.OpenRecordLookup(plugin, gameRelease, schemas, loadOrder);
 
     public virtual Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
-        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
-        inner.ReadContent(modPath, gameRelease, strings);
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null) =>
+        inner.ReadContent(modPath, gameRelease, strings, loadOrder);
 
     public virtual bool Exists(string pluginPath) => inner.Exists(pluginPath);
 
@@ -49,12 +50,14 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         inner.WriteFromTreeAsync(files, destinationPath, masterOrder, gameRelease, cancel);
 
     public virtual Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
-        RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
-        inner.ReadSourceOfAsync(plugin, gameRelease, strings, cancel);
+        RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, LoadOrderSnapshot? loadOrder = null,
+        CancellationToken cancel = default) =>
+        inner.ReadSourceOfAsync(plugin, gameRelease, strings, loadOrder, cancel);
 
     public virtual Answer<string?, PluginFailure> DivergenceFrom(
-        string pluginFileName, string pluginFilePath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
-        inner.DivergenceFrom(pluginFileName, pluginFilePath, recompiledPath, gameRelease, strings);
+        string pluginFileName, string pluginFilePath, string recompiledPath, GameRelease gameRelease, PluginStrings strings,
+        LoadOrderSnapshot? loadOrder = null) =>
+        inner.DivergenceFrom(pluginFileName, pluginFilePath, recompiledPath, gameRelease, strings, loadOrder);
 
     public virtual Task<Answer<PluginByteComparison, PluginFailure>> CompareBytesAsync(
         string originalPath, string recompiledPath, GameRelease gameRelease, CancellationToken cancel = default) =>

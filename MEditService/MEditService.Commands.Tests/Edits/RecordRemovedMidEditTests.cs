@@ -39,11 +39,11 @@ public sealed class RecordRemovedMidEditTests : IDisposable
         internal IReadOnlyList<string> TreeAsRemoved { get; private set; } = [];
 
         public override Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
-            RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+            RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas, LoadOrderSnapshot? loadOrder = null)
         {
             File.Delete(document);
             TreeAsRemoved = TreeSnapshot.Of(modFolder);
-            return base.OpenRecordLookup(plugin, gameRelease, schemas);
+            return base.OpenRecordLookup(plugin, gameRelease, schemas, loadOrder);
         }
     }
 

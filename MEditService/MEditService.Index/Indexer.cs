@@ -579,7 +579,7 @@ internal sealed class Indexer : IDisposable
 
             PluginMetadata? metadata = null;
             ReadOne(scope, plugin, state =>
-                held.Open(plugin, Registration.In(snapshot, plugin.Key)).Holds(out metadata, out var failure)
+                held.Open(plugin, Registration.In(snapshot, plugin.Key), snapshot).Holds(out metadata, out var failure)
                     ? RegisterOrIndex(scope, metadata, state, token)
                     : ReadOutcome.Failed(failure), token);
             if (metadata is null) continue;
@@ -808,7 +808,8 @@ internal sealed class Indexer : IDisposable
                 new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path),
                 scope.Store.Release,
                 scope.Store.Schemas,
-                new PluginStrings(Path.GetDirectoryName(plugin.Path), scope.Held.DataFolderPath))
+                new PluginStrings(Path.GetDirectoryName(plugin.Path), scope.Held.DataFolderPath),
+                _holder.Held?.Snapshot)
             .Holds(out var opened, out var failure))
         {
             _logger.LogWarning(failure.Error, "Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);

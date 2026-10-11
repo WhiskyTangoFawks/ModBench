@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
@@ -14,6 +15,6 @@ internal sealed class AdapterReadingWithoutTables(Func<string, bool> dropped) : 
 {
     public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null) =>
+        PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null) =>
         base.OpenDocuments(modPath, gameRelease, schemas.Where(table => !dropped(table.Key)).ToDictionary(), strings);
 }

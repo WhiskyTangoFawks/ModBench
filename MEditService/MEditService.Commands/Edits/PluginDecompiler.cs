@@ -2,7 +2,6 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
@@ -24,7 +23,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         var strings = new PluginStrings(modFolder, loadOrder.DataFolderPath);
 
         // A fresh deep parse, not the load order's own overlay, whose lifetime this gate does not control.
-        if (!(await adapter.ReadSourceOfAsync(plugin, loadOrder.GameRelease, strings, cancel)).Holds(out var source, out var failure))
+        if (!(await adapter.ReadSourceOfAsync(plugin, loadOrder.GameRelease, strings, loadOrder, cancel)).Holds(out var source, out var failure))
         {
             logger.LogWarning(failure.Error, "Refused to decompile {Plugin}: {Reason}", plugin.Name, failure.Reason);
             return failure switch
@@ -42,7 +41,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         }
 
         onParsed();
-        if (await VerifyRoundTrip(plugin.Name, plugin.Path, source, loadOrder.GameRelease, strings, cancel) is { } refusal)
+        if (await VerifyRoundTrip(plugin.Name, plugin.Path, source, loadOrder, strings, cancel) is { } refusal)
             return Decompiled.Refused(DecompileRefusal.RoundTripFailed, refusal);
 
         return new Decompiled(source, DecompileRefusal.None, "");
@@ -54,10 +53,11 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         string pluginName,
         string originalPluginPath,
         PluginSource source,
-        GameRelease gameRelease,
+        LoadOrderSnapshot loadOrder,
         PluginStrings strings,
         CancellationToken cancel)
     {
+        var gameRelease = loadOrder.GameRelease;
         using var scratch = ScratchPlugin.For(pluginName);
         if (!(await adapter.WriteFromTreeAsync(
                     sourceAdapter.ReadBackOf(pluginName, source.Files, gameRelease), scratch.PluginPath, source.Masters, gameRelease, cancel))
@@ -88,7 +88,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         }
 
         // Both are reparsed, so only bytes that differ pay for it.
-        if (!adapter.DivergenceFrom(pluginName, originalPluginPath, recompiledPath, gameRelease, strings)
+        if (!adapter.DivergenceFrom(pluginName, originalPluginPath, recompiledPath, gameRelease, strings, loadOrder)
                 .Holds(out var divergence, out failure))
         {
             divergence = failure.Reason;

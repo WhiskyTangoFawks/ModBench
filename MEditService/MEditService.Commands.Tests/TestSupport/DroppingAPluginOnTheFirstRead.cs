@@ -15,7 +15,7 @@ internal sealed class DroppingAPluginOnTheFirstRead(LoadOrderHolder holder, Plug
     private bool _dropped;
 
     public override Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
-        RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas, LoadOrderSnapshot? loadOrder = null)
     {
         if (!_dropped)
         {
@@ -27,6 +27,6 @@ internal sealed class DroppingAPluginOnTheFirstRead(LoadOrderHolder holder, Plug
                 [.. held.Active.Select(p => p.Key).Where(a => !a.Equals(dropped))],
                 [.. held.LoadedWithNoLine.Select(p => p.Key).Where(a => !a.Equals(dropped))]));
         }
-        return base.OpenRecordLookup(plugin, gameRelease, schemas);
+        return base.OpenRecordLookup(plugin, gameRelease, schemas, loadOrder);
     }
 }

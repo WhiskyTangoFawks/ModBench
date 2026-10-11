@@ -1,6 +1,11 @@
+using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Skyrim;
+using Noggog;
 
 namespace MEditService.Codec.Tests.Schema;
 
@@ -43,5 +48,28 @@ public sealed class PlacedCellTests
             "000801:Holds.esm has a grid, and mEdit knows no cell width for Starfield to place a new reference at its centre.",
             refusal);
         Assert.Equal("""{"FormKey":"000802:Holds.esm"}""", created.Text);
+    }
+
+    [Fact]
+    public void ASkyrimPlacedRecordsPosition_FallsInTheGridCellItsPlacementNames()
+    {
+        var placed = new PlacedObject(FormKey.Factory("000802:Holds.esm"), SkyrimRelease.SkyrimSE)
+        {
+            Placement = new Placement { Position = new P3Float(5000, -100, 0) },
+        };
+
+        Assert.Equal((1, -1), PlacedCell.GridHolding(Document.Parse(RecordTextCodec.SerializeToText(placed, GameRelease.SkyrimSE)), GameRelease.SkyrimSE));
+    }
+
+    [Fact]
+    public void AReferenceCreatedInASkyrimGridCell_StartsAtItsCentre_InThePlacementTheCodecReads()
+    {
+        var bare = Document.Parse(RecordTextCodec.SerializeToText(new PlacedObject(FormKey.Factory("000802:Holds.esm"), SkyrimRelease.SkyrimSE), GameRelease.SkyrimSE));
+        var cell = PlacedCell.WithGrid(Document.Parse("""{ "FormKey": "000801:Holds.esm" }"""), 3, -2);
+
+        Assert.True(PlacedCell.TryAsCreatedIn(bare, PersistentFlag.TemporaryGroup, cell, GameRelease.SkyrimSE, out var created, out _));
+
+        var read = JsonNode.Parse(RecordTextCodec.RoundTrip(created.Text, GameRelease.SkyrimSE, "refr")).Require();
+        Assert.Equal("14336, -6144, 0", read["Placement"].Require()["Position"].Require().GetValue<string>());
     }
 }

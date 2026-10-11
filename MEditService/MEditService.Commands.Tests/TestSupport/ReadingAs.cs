@@ -11,6 +11,7 @@ namespace MEditService.Commands.Tests.TestSupport;
 internal sealed class ReadingAs(string binarySha256) : DelegatingPluginAdapter(TestAdapters.Mutagen())
 {
     public override async Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
-        RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
-        (await base.ReadSourceOfAsync(plugin, gameRelease, strings, cancel)).Map(source => source with { BinarySha256 = binarySha256 });
+        RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, LoadOrderSnapshot? loadOrder = null,
+        CancellationToken cancel = default) =>
+        (await base.ReadSourceOfAsync(plugin, gameRelease, strings, loadOrder, cancel)).Map(source => source with { BinarySha256 = binarySha256 });
 }

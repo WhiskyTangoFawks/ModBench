@@ -502,10 +502,10 @@ public sealed class FailedReadStateTests : IDisposable
         public HeldAtFirstRead() : base(TestAdapters.Mutagen()) { }
 
         public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
-            ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
+            ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null) =>
             Interlocked.Increment(ref _read) == 1
                 ? PluginFailures.Inaccessible()
-                : base.ReadContent(modPath, gameRelease, strings);
+                : base.ReadContent(modPath, gameRelease, strings, loadOrder);
     }
 
     private sealed class FailsToOpen(PluginFailure failure, Func<int, bool> atOpen, Action? beforeFailing = null)
@@ -517,9 +517,9 @@ public sealed class FailedReadStateTests : IDisposable
 
         public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
             ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-            PluginStrings? strings = null)
+            PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
         {
-            if (!atOpen(Interlocked.Increment(ref _opened))) return base.OpenDocuments(modPath, gameRelease, schemas, strings);
+            if (!atOpen(Interlocked.Increment(ref _opened))) return base.OpenDocuments(modPath, gameRelease, schemas, strings, loadOrder);
             beforeFailing?.Invoke();
             Failed = true;
             return failure;

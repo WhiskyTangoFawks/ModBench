@@ -9,7 +9,7 @@ public sealed class VanillaMalformedScanProofTests
     public static TheoryData<GameRelease, string> InstalledVanillaPlugins()
     {
         var rows = new TheoryData<GameRelease, string>();
-        foreach (var release in new[] { GameRelease.Fallout4, GameRelease.SkyrimSE })
+        foreach (var release in new[] { GameRelease.Fallout4, GameRelease.SkyrimSE, GameRelease.Starfield })
         {
             if (!new GameLocator().TryGetDataDirectory(release, out var dataDir)) continue;
             foreach (var path in Directory.EnumerateFiles(dataDir.Path).Where(p => Path.GetExtension(p) is ".esm" or ".esp" or ".esl"))

@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
@@ -26,7 +27,7 @@ internal sealed class GatedPluginAdapter(
 
     public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null)
+        PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
     {
         var pluginName = modPath.ModKey.FileName.ToString();
         if (ShouldParkBefore(pluginName))
@@ -41,7 +42,7 @@ internal sealed class GatedPluginAdapter(
         if (pluginName.Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
             return PluginFailures.Unparsed();
 
-        var documents = base.OpenDocuments(modPath, gameRelease, schemas, strings);
+        var documents = base.OpenDocuments(modPath, gameRelease, schemas, strings, loadOrder);
         lock (_gate) Opened.Add(pluginName);
         return documents;
     }

@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
@@ -47,7 +48,7 @@ public sealed class IngestRetentionTests : IDisposable
     {
         public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
             ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-            PluginStrings? strings = null) =>
+            PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null) =>
             RequireExtensions.AnswerOf(() => documents);
     }
 
