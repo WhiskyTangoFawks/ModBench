@@ -1,6 +1,5 @@
-using Mutagen.Bethesda;
+using MEditService.LoadOrder;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Analysis;
 using Mutagen.Bethesda.Plugins.Binary.Headers;
 using Mutagen.Bethesda.Plugins.Meta;
 
@@ -8,24 +7,42 @@ namespace MEditService.PluginAdapter;
 
 /// <summary>A plugin file's own bytes for a record: what subrecords it holds, which the overlay does not
 /// say. Located on first use, as only a record the overlay cannot serialize asks.</summary>
-internal sealed class PluginRecordBytes(ModPath path, GameRelease release)
+internal sealed class PluginRecordBytes(ModPath path, LoadOrderSnapshot loadOrder)
 {
     private static readonly RecordType EditorId = new("EDID");
 
-    private readonly Lazy<RecordLocatorResults> _locations = new(() => RecordLocator.GetLocations(path, release, loadOrder: null));
+    private readonly Lazy<ILookup<FormKey, (int Start, int Length)>> _locations = new(() =>
+    {
+        var masters = PluginBinaryWalk.MastersOf(path, loadOrder);
+        return PluginBinaryWalk.Records(File.ReadAllBytes(path.Path), loadOrder.GameRelease).ToLookup(
+            record => masters.GetFormKey(record.FormID, reference: false), record => (record.Location, checked((int)record.TotalLength)));
+    });
+
+    private readonly Lazy<bool> _declaresALengthItCannotInflateTo = new(() =>
+    {
+        try
+        {
+            return PluginBinaryWalk.Records(File.ReadAllBytes(path.Path), loadOrder.GameRelease)
+                .Any(record => record.IsCompressed && !PluginBinaryWalk.DeclaresALengthItsBytesCanInflateTo(record));
+        }
+        catch (Exception ex) when (PluginFailure.StandsFor(ex))
+        {
+            // Bytes the walk cannot frame are malformed, so a read of them fails because of the file.
+            return true;
+        }
+    });
+
+    /// <summary>Whether a compressed record declares a length its bytes cannot inflate to, which a read
+    /// allocates before it inflates.</summary>
+    public bool DeclaresALengthItCannotInflateTo => _declaresALengthItCannotInflateTo.Value;
 
     /// <summary>Whether the record holds no subrecord but its EditorID, which its header carries.</summary>
     public bool HoldsNoFields(FormKey formKey)
     {
-        if (!_locations.Value.TryGetSection(formKey, out var section)) return false;
-        var bytes = new byte[section.Max - section.Min + 1];
-        using (var file = File.OpenRead(path.Path))
-        {
-            file.Position = section.Min;
-            file.ReadExactly(bytes);
-        }
-        var frame = new MajorRecordFrame(GameConstants.Get(release), bytes);
-        if (frame.IsCompressed) frame = frame.Decompress(out _);
-        return frame.EnumerateSubrecords().All(subrecord => subrecord.RecordType == EditorId);
+        if (_locations.Value[formKey].FirstOrDefault() is not { Length: > 0 } location) return false;
+        var bytes = new byte[location.Length];
+        using (var file = File.OpenHandle(path.Path)) RandomAccess.Read(file, bytes, location.Start);
+        return PluginBinaryWalk.Subrecords(GameConstants.Get(loadOrder.GameRelease).MajorRecord(bytes)) is { } subrecords
+            && subrecords.All(subrecord => subrecord.RecordType == EditorId);
     }
 }
