@@ -128,7 +128,8 @@ internal sealed class FormKeyAllocator
                 "must be native to the plugin that is to hold it.");
         }
 
-        if (_limit is { } limit && parsed.ID > limit.Max)
+        if (_limit is not { } limit) return null;
+        if (parsed.ID > limit.Max)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.FormIdOutsideFlagLimit,
@@ -137,7 +138,12 @@ internal sealed class FormKeyAllocator
                 $"Choose a FormID within that range, or {Lift(limit)}.");
         }
 
-        return null;
+        return parsed.ID < limit.Min
+            ? RecordEditResult.Refused(
+                RecordEditRefusal.FormIdOutsideFlagLimit,
+                $"{requestedFormKey} is below {_plugin.Name}'s {limit.Flag} local FormID range, 0x{limit.Min:X}-0x{limit.Max:X}. " +
+                "Choose a FormID within that range.")
+            : null;
     }
 
     private string ExhaustedMessage()
