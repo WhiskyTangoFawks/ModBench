@@ -54,7 +54,7 @@ public sealed class PlacedCellTests
             new Mutagen.Bethesda.Starfield.PlacedObject(FormKey.Factory("000802:Holds.esm"), Mutagen.Bethesda.Starfield.StarfieldRelease.Starfield), GameRelease.Starfield));
         var cell = PlacedCell.WithGrid(Document.Parse("""{ "FormKey": "000801:Holds.esm" }"""), 3, -2);
 
-        Assert.True(PlacedCell.TryAsCreatedIn(bare, PersistentFlag.TemporaryGroup, cell, GameRelease.Starfield, out var created, out _));
+        var created = PlacedCell.AsCreatedIn(bare, PersistentFlag.TemporaryGroup, cell, GameRelease.Starfield);
 
         var read = JsonNode.Parse(RecordTextCodec.RoundTrip(created.Text, GameRelease.Starfield, "refr")).Require();
         Assert.Equal("350, -150, 0", read["Position"].Require().GetValue<string>());
@@ -77,7 +77,7 @@ public sealed class PlacedCellTests
         var bare = Document.Parse(RecordTextCodec.SerializeToText(new PlacedObject(FormKey.Factory("000802:Holds.esm"), SkyrimRelease.SkyrimSE), GameRelease.SkyrimSE));
         var cell = PlacedCell.WithGrid(Document.Parse("""{ "FormKey": "000801:Holds.esm" }"""), 3, -2);
 
-        Assert.True(PlacedCell.TryAsCreatedIn(bare, PersistentFlag.TemporaryGroup, cell, GameRelease.SkyrimSE, out var created, out _));
+        var created = PlacedCell.AsCreatedIn(bare, PersistentFlag.TemporaryGroup, cell, GameRelease.SkyrimSE);
 
         var read = JsonNode.Parse(RecordTextCodec.RoundTrip(created.Text, GameRelease.SkyrimSE, "refr")).Require();
         Assert.Equal("14336, -6144, 0", read["Placement"].Require()["Position"].Require().GetValue<string>());

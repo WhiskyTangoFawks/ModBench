@@ -91,9 +91,9 @@ internal sealed record SchemaAnnotations(
     // Flags enums Mutagen nests in a record class for its Record Flags and spells through no member,
     // keyed by the type's getter interface. A type with several has one per base record type.
     IReadOnlyList<(string TypeName, string EnumName)> RecordFlagEnums,
-    // An exterior cell's width in world units, or null where no source pins it down. Unchecked:
-    // Mutagen divides by it as a literal and exposes no member that holds it.
-    float? ExteriorCellWidth,
+    // An exterior cell's width in world units. Unchecked: Mutagen divides by it as a literal and
+    // exposes no member that holds it.
+    float ExteriorCellWidth,
     // The plugin that alone defines a cell a Partial Form copy can override (xEdit's GetCanBePartial),
     // or null where any plugin can. Validated as one of the game's base masters.
     string? PartialFormCellsDefinedIn,

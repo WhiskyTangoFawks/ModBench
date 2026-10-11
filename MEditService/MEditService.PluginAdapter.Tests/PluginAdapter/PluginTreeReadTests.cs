@@ -179,4 +179,20 @@ public sealed class PluginTreeReadTests
             new ModPath(LightMasterAndChild.Child, recompiledPath), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield)).Answered();
         Assert.Equal([LightMasterAndChild.Weapon.ToString()], written.Records.Select(record => record.FormKey));
     }
+
+    [Fact]
+    public async Task WriteFromTree_OfAStarfieldTree_WhoseMasterHeaderDoesNotRead_FailsNamingTheMaster()
+    {
+        using var scratch = new ScratchDirectory("writetree-unreadable-master");
+        var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
+        var source = (await Adapter.ReadSourceOfAsync(LightMasterAndChild.ChildIn(loadOrder), loadOrder, new PluginStrings(null, scratch))).Answered();
+        File.WriteAllBytes(Path.Combine(scratch, LightMasterAndChild.Master.FileName), "not a plugin"u8.ToArray());
+        var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(scratch, "recompiled")).FullName, LightMasterAndChild.Child.FileName);
+
+        var written = await Adapter.WriteFromTreeAsync(source.Files, recompiledPath, source.Masters, loadOrder);
+
+        Assert.Equal(
+            "its master Light.esm could not be read: the plugin — unknown: Could not read enough data to parse a Mod Header from stream.  Position: 0.  12 remaining < 24 expected.",
+            Assert.IsType<PluginFailure.MasterUnreadable>(written.Failure()).Reason);
+    }
 }

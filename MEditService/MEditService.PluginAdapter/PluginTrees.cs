@@ -87,8 +87,8 @@ internal static class PluginTrees
         try
         {
             if (!(await ReadIntoAsync(game, files, scratchDir, cancel)).Holds(out var recompiled, out var unread)) return unread;
-            await MutagenPluginAdapter.WriteAsync(
-                recompiled, destinationPath, masterOrder, MasterStyles.Of(masterOrder.Select(name => ModKey.FromFileName(name)), loadOrder));
+            if (!MasterStyles.Of(masterOrder.Select(name => ModKey.FromFileName(name)), loadOrder).Holds(out var styles, out unread)) return unread;
+            await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder, styles);
             return PluginAnswer.Of(destinationPath);
         }
         catch (Exception ex) when (PluginFailure.OfWrite(ex) is { } failure)
@@ -268,11 +268,11 @@ public sealed class CompiledTree
     public async Task<Answer<T, PluginFailure>> SaveAsync<T>(
         string pluginPath, IReadOnlyList<string> masterOrder, IEnumerable<string> masters, Func<PreparedPluginSave, T> land)
     {
+        if (!MasterStyles.Of(masters.Select(name => ModKey.FromFileName(name)), _loadOrder).Holds(out var styles, out var unread)) return unread;
         var landing = false;
         try
         {
-            using var save = await PluginWriter.PrepareFromModAsync(
-                _mod, pluginPath, masterOrder, MasterStyles.Of(masters.Select(name => ModKey.FromFileName(name)), _loadOrder));
+            using var save = await PluginWriter.PrepareFromModAsync(_mod, pluginPath, masterOrder, styles);
             landing = true;
             return PluginAnswer.Of(land(save));
         }

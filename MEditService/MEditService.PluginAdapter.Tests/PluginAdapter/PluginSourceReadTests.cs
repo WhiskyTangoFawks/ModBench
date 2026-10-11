@@ -6,6 +6,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Skyrim;
+using Starfield = Mutagen.Bethesda.Starfield;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -64,25 +65,28 @@ public sealed class PluginSourceReadTests
     {
         using var folder = new ScratchDirectory("medit-source-form-version-");
         var pluginPath = Path.Combine(folder, "Fixture.esm");
-        var mod = new Mutagen.Bethesda.Starfield.StarfieldMod(ModKey.FromFileName("Fixture.esm"), Mutagen.Bethesda.Starfield.StarfieldRelease.Starfield);
-        for (var b = 0; b < 10; b++)
-        {
-            var block = new Mutagen.Bethesda.Starfield.CellBlock { BlockNumber = b, GroupType = Mutagen.Bethesda.Starfield.GroupTypeEnum.InteriorCellBlock };
-            for (var s = 0; s < 10; s++)
-            {
-                var subBlock = new Mutagen.Bethesda.Starfield.CellSubBlock { BlockNumber = s, GroupType = Mutagen.Bethesda.Starfield.GroupTypeEnum.InteriorCellSubBlock };
-                for (var c = 0; c < 20; c++)
-                {
-                    var cell = new Mutagen.Bethesda.Starfield.Cell(mod) { Flags = Mutagen.Bethesda.Starfield.Cell.Flag.IsInteriorCell };
-                    cell.Temporary.Add(new Mutagen.Bethesda.Starfield.PlacedObject(mod) { Properties = [new Mutagen.Bethesda.Starfield.ObjectProperty { Value = c }] });
-                    subBlock.Cells.Add(cell);
-                }
-                block.SubBlocks.Add(subBlock);
-            }
-            mod.Cells.Records.Add(block);
-        }
+        var mod = new Starfield.StarfieldMod(ModKey.FromFileName("Fixture.esm"), Starfield.StarfieldRelease.Starfield);
+        mod.Cells.Records.AddRange(Enumerable.Range(0, 10).Select(block => CellBlockOfPlacedProperties(mod, block)));
         ((IModGetter)mod).WriteToBinary(pluginPath);
 
         Assert.True((await ReadSourceAsync(pluginPath, GameRelease.Starfield)).Holds(out _, out var failure), failure?.Reason);
+    }
+
+    private static Starfield.CellBlock CellBlockOfPlacedProperties(Starfield.StarfieldMod mod, int number)
+    {
+        var block = new Starfield.CellBlock { BlockNumber = number, GroupType = Starfield.GroupTypeEnum.InteriorCellBlock };
+        block.SubBlocks.AddRange(Enumerable.Range(0, 10).Select(subBlock => CellSubBlockOfPlacedProperties(mod, subBlock)));
+        return block;
+    }
+
+    private static Starfield.CellSubBlock CellSubBlockOfPlacedProperties(Starfield.StarfieldMod mod, int number)
+    {
+        var subBlock = new Starfield.CellSubBlock { BlockNumber = number, GroupType = Starfield.GroupTypeEnum.InteriorCellSubBlock };
+        subBlock.Cells.AddRange(Enumerable.Range(0, 20).Select(value => new Starfield.Cell(mod)
+        {
+            Flags = Starfield.Cell.Flag.IsInteriorCell,
+            Temporary = { new Starfield.PlacedObject(mod) { Properties = [new Starfield.ObjectProperty { Value = value }] } },
+        }));
+        return subBlock;
     }
 }

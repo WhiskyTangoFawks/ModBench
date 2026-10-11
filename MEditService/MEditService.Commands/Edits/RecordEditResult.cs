@@ -51,7 +51,7 @@ public enum RecordEditRefusal
     FormKeySpaceExhausted,
 
     /// <summary>The gesture does not reach the record yet: a type held only inside another record's
-    /// document, or a placed record in a grid cell of unknown width.</summary>
+    /// document.</summary>
     HeldInAnotherRecordNotYetSupported,
 
     /// <summary>The index and the working tree disagree (a file moved outside Modbench). Not recreated at
@@ -66,8 +66,8 @@ public enum RecordEditRefusal
     /// interrupted rename; which to change is the user's call, so the way out is resolving it by hand.</summary>
     AmbiguousSourceUnit,
 
-    /// <summary>A light plugin's slot addresses local IDs only up to 0xFFF; native space is not exhausted,
-    /// so the way out differs from <see cref="FormKeySpaceExhausted"/>.</summary>
+    /// <summary>A light or medium plugin's slot addresses local IDs only up to the cap its flag sets; native
+    /// space is not exhausted, so the way out differs from <see cref="FormKeySpaceExhausted"/>.</summary>
     LightPluginFormIdOutOfRange,
 
     /// <summary>A Partial Form record's own fields are never seen by the game; the way out is clearing the

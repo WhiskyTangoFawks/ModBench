@@ -146,6 +146,22 @@ public sealed class StarfieldGestureTests : IDisposable
             (result.Refusal, result.Message));
     }
 
+    [Fact]
+    public void AFormKeyEdit_PastAMediumPluginsRange_IsRefused()
+    {
+        Assert.True(_instance.EditHandler.Set(_tracked, Header, "Flags", JsonDocument.Parse("[\"Medium\"]").RootElement).Applied);
+        var created = _instance.CreateHandler.CreateRecordSync(_tracked, "kywd").NewFormKey.Require();
+        var wide = $"010000:{TrackedName}";
+
+        var result = _instance.EditHandler.SetFormId(_tracked, created, wide);
+
+        Assert.Equal(
+            (RecordEditRefusal.LightPluginFormIdOutOfRange,
+             $"{wide} exceeds {TrackedName}'s medium local FormID range — a medium plugin can only address local FormIDs up to 0xFFFF. " +
+             "Choose a FormID within that range, or clear the medium flag."),
+            (result.Refusal, result.Message));
+    }
+
     private FormKey CreatedAt(uint id)
     {
         var formKey = new FormKey(ModKey.FromFileName(TrackedName), id);

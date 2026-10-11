@@ -205,8 +205,7 @@ public sealed class CreateRecordChangesHandler
         if (!FormKeyAllocator.Over(repository, plugin, release).Holds(out var allocator, out var unread)) return unread;
         if (allocator.Next(out var formKey) is { } refusedTarget) return refusedTarget;
         var bare = Document.Parse(RecordMint.BareDocument(schema, release, formKey, editorId: null));
-        if (!PlacedCell.TryAsCreatedIn(bare, slot, root, release, out var child, out var unplaceable))
-            return RecordEditResult.Refused(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, unplaceable);
+        var child = PlacedCell.AsCreatedIn(bare, slot, root, release);
         var childDocument = new SourceDocument(formKey.ToString(), recordType, null, child.Text);
 
         if (session.Atomically(() =>

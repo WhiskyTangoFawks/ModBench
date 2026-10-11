@@ -89,6 +89,18 @@ public abstract record PluginFailure
         public override string Reason => _reason;
     }
 
+    /// <summary>A master the plugin written references whose header does not read, so its style, which
+    /// the write needs, is unknown.</summary>
+    public sealed record MasterUnreadable : PluginFailure
+    {
+        private readonly string _reason;
+
+        internal MasterUnreadable(ModKey master, PluginFailure unread) : base(unread.Error) =>
+            _reason = $"its master {master.FileName} could not be read: {unread.Reason}";
+
+        public override string Reason => _reason;
+    }
+
     /// <summary>The failure <paramref name="ex"/> stands for: a file system refusal is
     /// <see cref="Inaccessible"/>, anything else a read Mutagen could not make. Mutagen reaches some
     /// readers by reflection, whose wrapper says nothing of the read.</summary>
