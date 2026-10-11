@@ -1,0 +1,4 @@
+*MBDevSFConflictB.esp
+*MBDevSFConflictA.esp
+*MBDevSfConditions.esp
+*MBDevSfMaster.esm
