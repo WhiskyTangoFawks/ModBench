@@ -16,7 +16,7 @@ description: This repo's git workflow — every stream of work gets its own work
 
 ## While working
 
-A worktree isolates the tree, not the runtime. Never run a live backend against the same MO2 instance path from two places at once. A long-running process on a fixed port takes a flock'd lockfile. Backend gate runs are the heaviest thing a stream does. `run-gates.sh` holds two machine-wide gate slots, so a third run waits rather than sharing: at three the machine has no memory headroom left. Inner-loop `dotnet test --filter` runs take no slot.
+A worktree isolates the tree, not the runtime. Never run a live backend against the same MO2 instance path from two places at once. A long-running process on a fixed port takes a flock'd lockfile. Builds and tests run one at a time machine-wide, through `.claude/skills/validate/slot-run.sh`, and `.claude/hooks/wait-discipline.py` blocks each one that does not.
 
 ## Merging
 
