@@ -19,12 +19,12 @@ public static class RecordTextCodec
 {
     private static readonly MutagenSerializationWriterKernel<NewtonsoftJsonSerializationWriterKernel, JsonWritingUnit> WriterKernel = new();
     private static readonly NewtonsoftJsonSerializationReaderKernel ReaderKernel = new();
+    private static readonly ConcurrentDictionary<(Type Record, GameRelease Release), Type?> GeneratedSerializationTypes = new();
 
     // Closed generic MethodInfos, resolved once per record type. TWriter/TReaderKernel never vary,
     // so the cache key never carries them.
     private static readonly ConcurrentDictionary<Type, MethodInfo> SerializeMethods = new();
     private static readonly ConcurrentDictionary<(Type Record, Type Reader), MethodInfo> DeserializeMethods = new();
-    private static readonly ConcurrentDictionary<(Type Record, GameRelease Release), Type?> GeneratedSerializationTypes = new();
 
     /// <summary>A document read and written back: the one shape gate a write goes through, and the
     /// spelling the codec gives what it kept.</summary>
@@ -84,10 +84,11 @@ public static class RecordTextCodec
     {
         var kept = new byte[written.Length - written.Count((byte)'\r')];
         var at = 0;
-        foreach (var line in written.Split((byte)'\r'))
+        foreach (var range in written.Split((byte)'\r'))
         {
-            written[line].CopyTo(kept.AsSpan(at));
-            at += line.GetOffsetAndLength(written.Length).Length;
+            var segment = written[range];
+            segment.CopyTo(kept.AsSpan(at));
+            at += segment.Length;
         }
         return kept;
     }

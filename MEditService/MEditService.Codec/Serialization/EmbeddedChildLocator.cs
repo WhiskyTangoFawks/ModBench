@@ -27,14 +27,18 @@ public static class EmbeddedChildLocator
     /// <summary>Where <paramref name="formKey"/> sits inside <paramref name="ownerBytes"/>, or null
     /// when no child slot of the owner carries it.</summary>
     public static EmbeddedChildSpan? Find(
-        byte[] ownerBytes, string? ownerRecordType, string formKey, GameRelease release) =>
-        All(ownerBytes, ownerRecordType, release).FirstOrDefault(child => string.Equals(child.FormKey, formKey, StringComparison.Ordinal)) is { FormKey: not null } found
-            ? found.Span
-            : null;
+        byte[] ownerBytes, string? ownerRecordType, string formKey, GameRelease release)
+    {
+        foreach (var child in All(ownerBytes, ownerRecordType, release))
+        {
+            if (string.Equals(child.FormKey, formKey, StringComparison.Ordinal)) return child.Span;
+        }
+        return null;
+    }
 
-    /// <summary>Every child the owner's slots carry, at every depth and in the order of its text, a child's
-    /// own children before it. An owner whose record type names no slots reads its document's own
-    /// discriminator. Malformed text carries none.</summary>
+    /// <summary>Every child the owner's slots carry, at every depth, a child's own children before it. An
+    /// owner whose record type names no slots reads its document's own discriminator. Malformed text
+    /// carries none.</summary>
     internal static IReadOnlyList<EmbeddedChild> All(byte[] ownerBytes, string? ownerRecordType, GameRelease release)
     {
         var found = new List<EmbeddedChild>();
