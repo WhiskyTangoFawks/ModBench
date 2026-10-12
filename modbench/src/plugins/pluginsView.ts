@@ -176,7 +176,7 @@ function publishKeyContext(selection: readonly PluginsTreeNode[], tree: PluginsT
   for (const [name, value] of Object.entries(pluginsKeyContext(selection, (row) => tree.isEnabled(row)))) {
     void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
   }
-  void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.trackedMods.size > 0);
+  void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.sourceMods.size > 0);
 }
 
 function registerPluginGestures(
@@ -194,7 +194,7 @@ function registerPluginGestures(
     registerBuildCommand({
       commands: sourceCommands, instance, reporter: reporterFor('mod.build'), problems: buildProblems,
       sourceFiles: (origin) => sourceFiles(instance.value, origin), saveUnsaved: saveUnsavedPluginSource,
-      modDirs: () => instance.value.paths.modDirs, sourceMods: () => instance.value.trackedMods, modsView,
+      modDirs: () => instance.value.paths.modDirs, sourceMods: () => instance.value.sourceMods, modsView,
     }, trackSelection),
     registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
     registerRecordCreateCommand({

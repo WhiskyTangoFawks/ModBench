@@ -13,7 +13,7 @@ import { createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
-  type BackendStatus, type CellChildRecords, type BuildOutcome, type BuildStatus,
+  type BackendStatus, type CellChildRecords, type BuildOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -451,24 +451,16 @@ class HttpMEditClient implements MEditClient {
 
   /** Each mod builds or is refused on its own, and each plugin of a built mod compiles or is
    *  refused on its own. Never refreshes the tree: a build changes only bytes on disk. */
-  async build(
-    mods: readonly string[], options: { onProgress?: (status: BuildStatus) => void } = {},
-  ): Promise<BuildOutcome | WriteRefused> {
-    // The POST stays blocking, so progress rides the build-progress notification alongside it.
-    const unsubscribe = options.onProgress ? this.notifications.onNotification('build-progress', options.onProgress) : () => {};
-    try {
-      return await this.mutateEach({
-        verb: 'build', noun: 'mod', items: mods,
-        op: (counted) => `build(${counted})`,
-        post: () => this.apiClient.POST('/build', { body: { mods: [...mods] } }),
-        outcome: (answer) => selectionOutcome({
-          applied: answer.applied.map((m) => ({ mod: m.mod, compiled: m.compiled, refused: itemRefusals(m.refused) })),
-          refused: answer.refused,
-        }),
-      });
-    } finally {
-      unsubscribe();
-    }
+  async build(mods: readonly string[]): Promise<BuildOutcome | WriteRefused> {
+    return this.mutateEach({
+      verb: 'build', noun: 'mod', items: mods,
+      op: (counted) => `build(${counted})`,
+      post: () => this.apiClient.POST('/build', { body: { mods: [...mods] } }),
+      outcome: (answer) => selectionOutcome({
+        applied: answer.applied.map((m) => ({ mod: m.mod, compiled: m.compiled, refused: itemRefusals(m.refused) })),
+        refused: answer.refused,
+      }),
+    });
   }
 
   /** A refusal (untracked plugin, a link that would dangle) comes back typed (ADR-0014); only a

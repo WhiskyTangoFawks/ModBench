@@ -337,6 +337,8 @@ export interface InstanceAdapter {
   sourceFolder(mod: string): string | undefined;
   /** ADR-0007. */
   modTracked(mod: string): Promise<boolean>;
+  /** Every repository in the source folder, by its folder's name, whether the mod order lists it or not. */
+  sourceMods(): Promise<string[]>;
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** The content digest of an origin file, at the path it is read from: two files with one digest

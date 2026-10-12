@@ -295,8 +295,8 @@ describe('modbench.mod.build', () => {
   const PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const MOD_DIRS = new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB'], ['ModC', '/mods/ModC']]);
-  const SOURCE_MODS = new Set(['ModA', 'ModB', 'ModS']);
-  const FILES = valueWithSourceDirs(new Map([['ModA', normalize('/instance/source/ModA')], ['ModB', normalize('/instance/source/ModB')]]));
+  const SOURCE_MODS = new Set(['ModA', 'ModB', 'ModS', 'ModX']);
+  const FILES = valueWithSourceDirs(new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, normalize(`/instance/source/${mod}`)])));
   const built = (mod: string, plugins: PluginAddress[] = [], refused: { item: PluginAddress; reason: string }[] = []) =>
     ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused });
 
@@ -323,9 +323,9 @@ describe('modbench.mod.build', () => {
       instance: instanceThatReads,
       reporter, problems: new BuildProblems(diagnostics),
       modDirs: () => MOD_DIRS, sourceMods: () => SOURCE_MODS, modsView: 'modbench.modList',
-      sourceFiles: (origin) => (origin === 'ModA' || origin === 'ModB' ? sourceFiles(FILES, origin) : undefined),
+      sourceFiles: (origin) => sourceFiles(FILES, origin),
       saveUnsaved: (mod) => {
-        const files = mod === 'ModA' || mod === 'ModB' ? sourceFiles(FILES, mod) : undefined;
+        const files = sourceFiles(FILES, mod);
         if (files === undefined) return Promise.resolve(undefined);
         const folder = files.file('');
         progressSteps.push(`save ${folder}`);
@@ -391,16 +391,15 @@ describe('modbench.mod.build', () => {
     expect(reporter.landings).toEqual(['Built 2 mods.']);
   });
 
-  it('saves the mod\'s plugin source first, before the build writes', async () => {
+  it('builds a source mod the mod order does not list', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModA')], refused: [] });
-    const { handler } = registered(client);
+    client.setCommandResult('build', { landed: [built('ModS')], refused: [] });
+    const { handler, reporter } = registered(client);
 
-    await handler(new ModsRowStandIn('ModA'));
+    await handler(new ModsRowStandIn('ModS'));
 
-    expect(progressSteps.filter((step) => step.startsWith('save') || step === 'build')).toEqual([
-      `save ${normalize('/instance/source/ModA')}`, 'build',
-    ]);
+    expect(buildCalls(client)).toEqual([[['ModS']]]);
+    expect(reporter.landings).toEqual(['Built "ModS".']);
   });
 
   it('refuses the build, naming each document VS Code did not save, and calls mEdit not at all', async () => {
@@ -432,10 +431,10 @@ describe('modbench.mod.build', () => {
     const client = new InMemoryMEditClient();
     const { handler, reporter } = registered(client);
 
-    await handler(new ModsRowStandIn('ModS'));
+    await handler(new ModsRowStandIn('ModX'));
 
     expect(buildCalls(client)).toEqual([]);
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not build: no source folder for these mods.', detail: 'ModS' }]);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not build: no source folder for these mods.', detail: 'ModX' }]);
   });
 
   it('names each refused mod and why in one notification, and builds the rest', async () => {
@@ -578,6 +577,23 @@ describe('modbench.mod.build', () => {
     expect(buildCalls(client)).toEqual([[['ModB']]]);
   });
 
+  it.each([
+    ['a mod that is not a source mod', () => new ModsRowStandIn('ModC')],
+    ['a plugin no mod provides', () => row({ name: 'Game.esm', origin: 'Data' })],
+    ['a row that carries no mod or plugin', () => new TreeItem('Separator')],
+  ])('from the palette with %s selected, falls through to the pick of every source mod, and refuses nothing', async (_what, selected) => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('build', { landed: [built('ModB')], refused: [] });
+    showQuickPick.mockResolvedValueOnce([{ label: 'ModB' }]);
+    const { handler, reporter } = registered(client, { selection: [selected()] });
+
+    await handler();
+
+    expect(showQuickPick).toHaveBeenCalledOnce();
+    expect(buildCalls(client)).toEqual([[['ModB']]]);
+    expect(reporter.reports).toEqual([]);
+  });
+
   it('from the palette with no mod, picks among every source mod, and builds the picks', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', { landed: [built('ModA'), built('ModB')], refused: [] });
@@ -587,7 +603,7 @@ describe('modbench.mod.build', () => {
     await handler();
 
     expect(showQuickPick).toHaveBeenCalledWith(
-      [{ label: 'ModA' }, { label: 'ModB' }, { label: 'ModS' }], { canPickMany: true, placeHolder: 'Build which mods?' });
+      [{ label: 'ModA' }, { label: 'ModB' }, { label: 'ModS' }, { label: 'ModX' }], { canPickMany: true, placeHolder: 'Build which mods?' });
     expect(buildCalls(client)).toEqual([[['ModA', 'ModB']]]);
   });
 

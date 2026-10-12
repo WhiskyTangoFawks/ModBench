@@ -222,10 +222,12 @@ export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => re
   return vscode.commands.registerCommand(
     'modbench.mod.build',
     async (clicked?: unknown, selected?: readonly unknown[]) => {
-      const rows = gestureEntry(clicked, selected, paletteSelection, isClickedRow).selection;
-      if (rows.length > 0) {
-        const invokedFrom = rows.some((row) => modArgumentOf(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
-        await buildMods(deps, targetsOf(rows, deps.modDirs()), invokedFrom);
+      const entry = gestureEntry(clicked, selected, paletteSelection, isClickedRow);
+      const targets = targetsOf(entry.selection, deps.modDirs());
+      const fromARow = entry.clicked !== undefined || targets.mods.some((mod) => deps.sourceMods().has(mod));
+      if (fromARow) {
+        const invokedFrom = entry.selection.some((row) => modArgumentOf(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
+        await buildMods(deps, targets, invokedFrom);
         return;
       }
       const mods = await pickSourceMods(deps.sourceMods());
@@ -234,7 +236,7 @@ export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => re
   );
 }
 
-// mods.md, Build, story 7: from the palette with no mod, a pick of every source.
+// mods.md, Build, story 7: from the palette with no source mod selected, a pick of every source.
 async function pickSourceMods(sourceMods: ReadonlySet<string>): Promise<string[] | undefined> {
   const items = [...sourceMods].sort().map((label) => ({ label }));
   const picked = await vscode.window.showQuickPick(items, { canPickMany: true, placeHolder: 'Build which mods?' });

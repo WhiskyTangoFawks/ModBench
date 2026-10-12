@@ -822,6 +822,18 @@ describe('the MO2 Instance adapter', () => {
 
         expect([await adapter.modTracked('Harder VATS'), await adapter.modTracked('Unofficial Fallout 4 Patch')]).toEqual([true, false]);
       });
+
+      it('lists every repository under the source folder by its folder name, listed in the mod order or not, and no folder without a `.git`', async () => {
+        await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
+        await mkdir(join(root, 'source', 'Cloned And Unlisted', '.git'), { recursive: true });
+        await mkdir(join(root, 'source', 'No Repository'), { recursive: true });
+
+        expect((await adapter.sourceMods()).sort()).toEqual(['Cloned And Unlisted', 'Harder VATS']);
+      });
+
+      it('lists none when the instance has no source folder', async () => {
+        expect(await adapter.sourceMods()).toEqual([]);
+      });
     });
   });
 

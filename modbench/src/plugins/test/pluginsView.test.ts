@@ -230,14 +230,13 @@ describe('the Plugins view registers its own gestures', () => {
     expect(sync).toHaveBeenCalledWith(value.pluginSyncArguments);
   });
 
-  it.each([
-    ['modbench.plugin.create', 'newPlugin', 'Could not look up which extensions a plugin may take.'],
-  ])('runs %s under its own reporter', async (command, tag, message) => {
+  it('runs modbench.plugin.create under its own reporter', async () => {
     const { reporters } = pluginsView();
 
-    await present(h.commands.get(command), `the ${command} handler`)();
+    await present(h.commands.get('modbench.plugin.create'), 'the modbench.plugin.create handler')();
 
-    expect(present(reporters.get(tag), `the ${tag} reporter`).reports.map((report) => report.message)).toEqual([message]);
+    expect(present(reporters.get('newPlugin'), 'the newPlugin reporter').reports.map((report) => report.message))
+      .toEqual(['Could not look up which extensions a plugin may take.']);
   });
 
   it('hears its copy value in the Plugins view\'s key, and defers for any other', () => {

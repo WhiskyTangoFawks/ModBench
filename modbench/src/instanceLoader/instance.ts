@@ -55,6 +55,8 @@ export interface InstanceValue {
   readonly modFolders: readonly ModFolder[] | undefined;
   /** The tracked mods (ADR-0007). */
   readonly trackedMods: ReadonlySet<string>;
+  /** Every repository in the source folder, listed in the mod order or not. */
+  readonly sourceMods: ReadonlySet<string>;
   /** Every profile, the switch's choices. */
   readonly profiles: readonly string[];
   /** The winning enabled provider of every relative path, and its contenders. */
@@ -136,7 +138,7 @@ interface InstanceOptions {
 // Each listed mod's folder is matched as the manager matches names.
 function pathsOf(
   runtimeOutput: OriginFiles, downloaded: DownloadedFiles, entries: readonly ModlistEntry[], modFolders: ModFolders | undefined,
-  sourceFolder: (mod: string) => string | undefined,
+  sourceFolder: (mod: string) => string | undefined, sourceMods: readonly string[],
 ): InstancePaths {
   return {
     overwriteDir: runtimeOutput.folder,
@@ -145,10 +147,8 @@ function pathsOf(
       const folder = entry.kind === 'mod' ? modFolders?.holding(entry) : undefined;
       return folder === undefined ? [] : [[entry.name, folder.path] as const];
     })),
-    sourceDirs: new Map(entries.flatMap((entry) => {
-      const folder = entry.kind === 'mod' ? sourceFolder(entry.name) : undefined;
-      return folder === undefined ? [] : [[entry.name, folder] as const];
-    })),
+    sourceDirs: new Map([...new Set([...sourceMods, ...entries.filter((entry) => entry.kind === 'mod').map((entry) => entry.name)])]
+      .flatMap((name) => { const folder = sourceFolder(name); return folder === undefined ? [] : [[name, folder] as const]; })),
   };
 }
 
@@ -156,6 +156,7 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   mods: [],
   modFolders: [],
   trackedMods: new Set(),
+  sourceMods: new Set(),
   profiles: [],
   files: new FileConflictLookup(),
   filesByMod: new Map(),
@@ -410,7 +411,7 @@ export class Instance implements Subscription {
     const { profile, gameName, gameRelease } = settings;
     const entries = await this.readMods(profile);
     const runtimeOutputRead = adapter.originFiles({ kind: 'runtimeOutput' });
-    const [index, pluginOrder, downloadsOutcome, runtimeOutput, modFolders, profiles, game, trackedMods] = await Promise.all([
+    const [index, pluginOrder, downloadsOutcome, runtimeOutput, modFolders, profiles, game, trackedMods, sourceMods] = await Promise.all([
       runtimeOutputRead.then((output) => buildFileConflictIndex(entries, output.files, adapter, (line) => log.info(line))),
       adapter.pluginOrder(profile),
       // Both answers come from the settings read above, so a rewrite cannot land two generations
@@ -425,6 +426,7 @@ export class Instance implements Subscription {
         creationClub: await adapter.creationClubList(gameFolder, gameRelease),
       })),
       Promise.all(entries.map(async (entry) => (entry.kind === 'mod' && await adapter.modTracked(entry.name) ? [entry.name] : []))),
+      adapter.sourceMods(),
     ]);
     for (const note of runtimeOutput.notes) log.info(`[instance] ${runtimeOutput.origin}: ${note}`);
     const { gameFolder, dataFolderPlugins, creationClub } = game;
@@ -434,7 +436,7 @@ export class Instance implements Subscription {
       ? await this.readInstalledInto(entries, modFolders?.all ?? [])
       : undefined;
     const modFolderList = modFolders?.all;
-    const paths = pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders, (mod) => adapter.sourceFolder(mod));
+    const paths = pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders, (mod) => adapter.sourceFolder(mod), sourceMods);
     const syncSource = {
       activeProfile: profile, modFolders: modFolderList, files: index.files, dataFolderPlugins, pluginsLoadedWithNoLine,
       pluginOrder,
@@ -443,6 +445,7 @@ export class Instance implements Subscription {
       mods: entries,
       modFolders: modFolderList,
       trackedMods: new Set(trackedMods.flat()),
+      sourceMods: new Set(sourceMods),
       profiles,
       files: index.files,
       filesByMod: index.filesByMod,
