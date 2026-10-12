@@ -57,6 +57,16 @@ public sealed class PersistentIndexTests : IDisposable
         new(_gameDirectory, _instanceRoot, plugins, disk);
 
     [Fact]
+    public void TheIndexFile_HoldsDuckDbToAGigabyte_WhateverTheMachineHas()
+    {
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
+
+        using var launched = Launched([alpha]);
+
+        Assert.Equal(["953.6 MiB"], Assert.Single(IndexFiles.Rows(_instanceRoot, "SELECT current_setting('memory_limit')")));
+    }
+
+    [Fact]
     public void ReopeningTheSameFile_KeepsTheRows_AndRegisterAloneMakesThemAnswer()
     {
         var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);

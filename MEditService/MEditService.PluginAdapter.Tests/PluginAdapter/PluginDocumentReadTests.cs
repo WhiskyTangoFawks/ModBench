@@ -38,6 +38,32 @@ public sealed class PluginDocumentReadTests
         Assert.Null(npc.ParseDiagnosis);
     }
 
+    [Theory]
+    [InlineData("weap")]
+    [InlineData("stat")]
+    public void OpenDocuments_SpreadsATopLevelGroupsRecordsAcrossTheStream_AmongTheRecordsOfTheOthers(string recordType)
+    {
+        using var data = new PluginFixtureBuilder("documents-spread")
+            .WithPlugin(PluginName, mod =>
+            {
+                var cell = new Cell(mod) { EditorID = "SpreadCell" };
+                cell.Temporary.AddRange(Enumerable.Range(0, 12).Select(placed => new PlacedObject(mod) { EditorID = $"Placed{placed}" }));
+                mod.AddInteriorCells(cell);
+                mod.Weapons.Set(Enumerable.Range(0, 4).Select(weapon => new Weapon(mod) { EditorID = $"Weapon{weapon}" }));
+                mod.Statics.Set(Enumerable.Range(0, 4).Select(statics => new Static(mod) { EditorID = $"Static{statics}" }));
+            })
+            .Build();
+        var path = Path.Combine(data.DataFolder, PluginName);
+
+        using var documents = Adapter.OpenDocuments(
+            new ModPath(ModKey.FromFileName(PluginName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+        var positions = documents.Records.Select((document, position) => (document.RecordType, position))
+            .Where(d => d.RecordType == recordType).Select(d => d.position).ToList();
+
+        Assert.Equal(4, positions.Count);
+        Assert.All(positions.Zip(positions.Skip(1), (before, after) => after - before), gap => Assert.True(gap > 2, $"{recordType} documents at {string.Join(", ", positions)}"));
+    }
+
     [Fact]
     public void OpenDocuments_YieldsThePluginHeaderAsTheWholeModDoorsRootDocument()
     {
@@ -93,6 +119,30 @@ public sealed class PluginDocumentReadTests
         var failure = Assert.Single(documents.Failures);
         Assert.Equal("npc_", failure.RecordType);
         Assert.Contains("MISC", failure.Diagnosis, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OpenDocuments_GivesAContainerWhoseGroupMutagenCannotEnumerate_ItsDiagnosis_AndReadsEveryRecordBeforeItOnce()
+    {
+        using var data = new PluginFixtureBuilder("documents-unenumerable-container")
+            .WithPlugin(PluginName, mod =>
+            {
+                var cell = new Cell(mod) { EditorID = "BeforeTheQuests" };
+                cell.Temporary.AddRange(Enumerable.Range(0, 3).Select(placed => new PlacedObject(mod) { EditorID = $"Placed{placed}" }));
+                mod.AddInteriorCells(cell);
+            })
+            .Build();
+        var path = Path.Combine(data.DataFolder, PluginName);
+        File.WriteAllBytes(path, RawPlugin.Concat(File.ReadAllBytes(path),
+            RawPlugin.Group("QUST", RawPlugin.Record("QUST", 0xA00, RawPlugin.EditorId("Quest")), RawPlugin.Misc(0xA01, "Stray"))));
+
+        using var documents = Adapter.OpenDocuments(
+            new ModPath(ModKey.FromFileName(PluginName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+        var read = documents.Records.Select(d => d.RecordType).ToList();
+
+        Assert.Equal(["cell", "refr", "refr", "refr"], read.Order(StringComparer.Ordinal));
+        Assert.Equal(["dial", "dlbr", "info", "qust", "scen"], documents.Failures.Select(failure => failure.RecordType).Order(StringComparer.Ordinal));
+        Assert.All(documents.Failures, failure => Assert.Contains("MISC", failure.Diagnosis, StringComparison.Ordinal));
     }
 
     [Fact]

@@ -6,6 +6,7 @@ using System.Runtime.ExceptionServices;
 using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
@@ -42,53 +43,162 @@ internal sealed class MutagenModDocuments(
         get
         {
             _failures.Clear();
-            foreach (var (tableName, schema) in schemas)
+            using var records = Spread().GetEnumerator();
+            var pending = new List<HeldRecord>(SerializeBatchSize);
+            var recordsRemain = RecordsRemainAfterTopUp(records, pending);
+            while (pending.Count > 0)
             {
-                if (tableName == PluginHeader.RecordType) continue;
-                foreach (var document in DocumentsOf(tableName, schema)) yield return document;
+                var documents = SerializedPrefix(pending);
+                pending.RemoveRange(0, documents.Count);
+                foreach (var document in documents) yield return document;
+                recordsRemain = recordsRemain && RecordsRemainAfterTopUp(records, pending);
             }
         }
     }
 
     public void Dispose() => open?.Dispose();
 
-    private IEnumerable<PluginDocument> DocumentsOf(string tableName, RecordTableSchema schema)
+    private readonly record struct HeldRecord(string TableName, RecordTableSchema Schema, IMajorRecordGetter Getter);
+
+    // DuckDB reads 2048 consecutive rows at once, so a group of multi-megabyte documents in one run
+    // holds gigabytes. Each table with a group of its own is spread over the plugin by its share of
+    // the records.
+    private IEnumerable<HeldRecord> Spread()
     {
-        using var records = schema.RecordsIn(mod).GetEnumerator();
-        var pending = new List<IMajorRecordGetter>(SerializeBatchSize);
-        var recordsRemain = RecordsRemainAfterTopUp(tableName, records, pending);
-        while (pending.Count > 0)
+        var tables = schemas.Where(table => table.Key != PluginHeader.RecordType).ToList();
+        var separate = tables
+            .Select(table => (Count: SeparateGroupCount(table.Value), Table: table))
+            .ToList();
+        var shared = SharedRecords([.. separate.Where(s => s.Count is null).Select(s => s.Table)]);
+        var streams = separate
+            .Where(s => s.Count > 0)
+            .Select(s => (Count: s.Count ?? 0, Records: RecordsOf(s.Table.Key, s.Table.Value).GetEnumerator()))
+            .ToList();
+        streams.Add((Math.Max(1, RecordCountInHeader() - streams.Sum(s => s.Count)), shared.GetEnumerator()));
+
+        var queue = new PriorityQueue<int, (double Share, int Stream)>();
+        var taken = new int[streams.Count];
+        try
         {
-            var documents = SerializedPrefix(tableName, schema, pending);
-            pending.RemoveRange(0, documents.Count);
-            foreach (var document in documents) yield return document;
-            recordsRemain = recordsRemain && RecordsRemainAfterTopUp(tableName, records, pending);
+            for (var stream = 0; stream < streams.Count; stream++) queue.Enqueue(stream, (0.5 / streams[stream].Count, stream));
+            while (queue.TryDequeue(out var stream, out _))
+            {
+                if (!streams[stream].Records.MoveNext()) continue;
+                yield return streams[stream].Records.Current;
+                taken[stream]++;
+                queue.Enqueue(stream, ((taken[stream] + 0.5) / streams[stream].Count, stream));
+            }
+        }
+        finally
+        {
+            foreach (var (_, records) in streams) records.Dispose();
+        }
+    }
+
+    // Mutagen reads a group anew on every walk, and a nested table's walk reads its container's
+    // group. A walk cannot resume once it throws, so each table then walks alone past its last record.
+    private IEnumerable<HeldRecord> SharedRecords(IReadOnlyList<KeyValuePair<string, RecordTableSchema>> tables)
+    {
+        var types = RecordTypes.For(mod.GameRelease);
+        var named = tables.ToDictionary(table => table.Key, table => table.Value, StringComparer.Ordinal);
+        var given = new Dictionary<string, (int Count, FormKey Last)>(StringComparer.Ordinal);
+        var stoppedPartway = false;
+        bool Continues(IEnumerator<IMajorRecordGetter> walk)
+        {
+            try
+            {
+                return walk.MoveNext();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                PluginFailure.ThrowIfNotTheFilesAnswer(ex, file);
+                stoppedPartway = true;
+                return false;
+            }
+        }
+        using (var walk = mod.EnumerateMajorRecords().GetEnumerator())
+        {
+            while (Continues(walk))
+            {
+                var record = walk.Current;
+                var table = types.RecordTypeNamed(record.GetType().Name) is { } name && named.TryGetValue(name, out var schema)
+                    ? KeyValuePair.Create(name, schema)
+                    : tables.FirstOrDefault(candidate => candidate.Value.Holds(record, types));
+                if (table.Value is null) continue;
+                given[table.Key] = (given.GetValueOrDefault(table.Key).Count + 1, record.FormKey);
+                yield return new HeldRecord(table.Key, table.Value, record);
+            }
+            if (!stoppedPartway) yield break;
+        }
+        foreach (var (tableName, schema) in tables)
+        {
+            var (count, last) = given.GetValueOrDefault(tableName);
+            foreach (var record in RecordsOf(tableName, schema).Skip(count > 0 ? count - 1 : 0).Select((record, index) => (record, index)))
+            {
+                if (count > 0 && record.index == 0)
+                {
+                    if (record.record.Getter.FormKey == last) continue;
+                    _failures.Add(new RecordTypeFailure(tableName, $"Mutagen stopped reading the plugin after {last}, and the {tableName} records cannot be read past it."));
+                    break;
+                }
+                yield return record.record;
+            }
+        }
+    }
+
+    // A group whose location scan Mutagen refuses throws on its count as on its walk, so the walk
+    // takes it and reports it.
+    private int? SeparateGroupCount(RecordTableSchema schema)
+    {
+        try
+        {
+            return schema.SeparateGroupCountIn(mod);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            PluginFailure.ThrowIfNotTheFilesAnswer(ex, file);
+            return null;
         }
     }
 
     // Mutagen's group enumerator throws out of MoveNext and cannot be resumed, so everything it yielded
     // first is kept and the type carries the diagnosis for what never arrived.
-    private bool RecordsRemainAfterTopUp(string tableName, IEnumerator<IMajorRecordGetter> records, List<IMajorRecordGetter> pending)
+    private IEnumerable<HeldRecord> RecordsOf(string tableName, RecordTableSchema schema)
     {
-        try
+        using var records = schema.RecordsIn(mod).GetEnumerator();
+        while (true)
         {
-            while (pending.Count < SerializeBatchSize)
+            try
             {
-                if (!records.MoveNext()) return false;
-                pending.Add(records.Current);
+                if (!records.MoveNext()) yield break;
             }
-            return true;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            PluginFailure.ThrowIfNotTheFilesAnswer(ex, file);
-            _failures.Add(new RecordTypeFailure(tableName, PluginDiagnosis.FromParseException(ex).Describe()));
-            return false;
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                PluginFailure.ThrowIfNotTheFilesAnswer(ex, file);
+                _failures.Add(new RecordTypeFailure(tableName, PluginDiagnosis.FromParseException(ex).Describe()));
+                yield break;
+            }
+            yield return new HeldRecord(tableName, schema, records.Current);
         }
     }
 
+    // The header's count of what the plugin holds, groups included: a share of the records needs no
+    // more than an estimate, and walking the plugin to count it costs a read of every group.
+    private int RecordCountInHeader() =>
+        Get(Get(Get(mod, "ModHeader"), "Stats"), "NumRecords") is uint count ? (int)Math.Min(count, int.MaxValue) : 0;
+
+    private static bool RecordsRemainAfterTopUp(IEnumerator<HeldRecord> records, List<HeldRecord> pending)
+    {
+        while (pending.Count < SerializeBatchSize)
+        {
+            if (!records.MoveNext()) return false;
+            pending.Add(records.Current);
+        }
+        return true;
+    }
+
     // Serialization is CPU-bound and independent per record, so it runs in parallel.
-    private List<PluginDocument> SerializedPrefix(string tableName, RecordTableSchema schema, List<IMajorRecordGetter> records)
+    private List<PluginDocument> SerializedPrefix(List<HeldRecord> records)
     {
         var documents = new PluginDocument[records.Count];
         var taken = -1;
@@ -101,7 +211,8 @@ internal sealed class MutagenModDocuments(
                 while (!loop.ShouldExitCurrentIteration && Interlocked.Read(ref chars) < SerializeBatchChars
                     && (next = Interlocked.Increment(ref taken)) < records.Count)
                 {
-                    documents[next] = Document(tableName, schema, records[next]);
+                    var (tableName, schema, record) = records[next];
+                    documents[next] = Document(tableName, schema, record);
                     Interlocked.Add(ref chars, documents[next].Text.Length);
                 }
             });
