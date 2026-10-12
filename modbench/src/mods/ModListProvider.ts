@@ -50,6 +50,7 @@ function modContextValue(mod: Pick<Mod, 'nexusId' | 'enabled'>, facts: ModFacts 
 interface ModFacts {
   readonly holdsPlugin: boolean;
   readonly tracked: boolean;
+  readonly sourceFolder?: string;
   readonly fileOrderConflict: boolean;
 }
 
@@ -86,10 +87,10 @@ export class ModNode extends vscode.TreeItem {
     this.resourceUri = modRowUri(mod.name);
     this.nexusModId = mod.nexusId;
     this.description = mod.version ?? '';
-    this.tooltip = [mod.name, mod.version, mod.nexusId, mod.archiveFilename]
+    this.tooltip = [mod.name, mod.version, mod.nexusId, mod.archiveFilename, facts?.sourceFolder && `built from ${facts.sourceFolder}`]
       .filter((s): s is string => !!s)
       .join(' · ');
-    this.iconPath = new vscode.ThemeIcon('package');
+    this.iconPath = new vscode.ThemeIcon(facts?.tracked ? 'repo' : 'package');
     this.contextValue = modContextValue(mod, facts);
     this.checkboxState = mod.enabled
       ? vscode.TreeItemCheckboxState.Checked
@@ -326,8 +327,10 @@ export class ModListProvider
     const folders = this.instanceValue.foldersByMod.get(m.name) ?? [];
     const shown = shownUnder(parentShown, this.matches, m.name);
     const found = shown === 'matching' ? narrowToMatches(files, folders, this.matches) : { files, folders };
+    const tracked = this.instanceValue.trackedMods.has(m.name);
     return new ModNode(m, {
-      holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked: this.instanceValue.trackedMods.has(m.name),
+      holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked,
+      sourceFolder: tracked ? this.instanceValue.paths.sourceDirs.get(m.name) : undefined,
       fileOrderConflict: filesInConflict(this.instanceValue, m.name).length > 0,
     }, found.files, found.folders, shown);
   }

@@ -22,6 +22,8 @@ interface ModsKeyContext {
   readonly singleRow: boolean;
   /** One row, and open folder takes it. */
   readonly singleOpenFolderRow: boolean;
+  /** One row, and a mod with a repository. */
+  readonly singleOpenSourceRow: boolean;
   /** One row, and a file in a file order conflict. */
   readonly singleGoToModRow: boolean;
   /** One row, and a file that loses its file order conflict. */
@@ -50,6 +52,7 @@ export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (ro
     selectionKind: kinds.size === 1 ? onlyKind : undefined,
     singleRow: onlyRow !== undefined,
     singleOpenFolderRow: openFolderArgument({ focused: onlyRow, selection }) !== undefined,
+    singleOpenSourceRow: onlyRow?.kind === 'mod' && onlyRow.facts?.tracked === true,
     singleGoToModRow: onlyRow?.kind === 'file' && onlyRow.conflict !== 'none',
     singleCompareFileRow: onlyRow?.kind === 'file' && onlyRow.conflict === 'loses',
     singleOpenConflictsRow: onlyRow?.kind === 'mod' && onlyRow.facts?.fileOrderConflict === true,

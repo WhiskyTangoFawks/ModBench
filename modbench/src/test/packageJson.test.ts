@@ -555,7 +555,7 @@ describe('package.json command titles and categories', () => {
     expect(RETIRED_AHEAD_OF_CODE.filter((id) => !declared.has(id))).toEqual([]);
   });
 
-  const SPECIFIED_AHEAD_OF_CODE = ['modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges', 'modbench.modlist.clean', 'modbench.mod.openSource', 'modbench.mod.init'];
+  const SPECIFIED_AHEAD_OF_CODE = ['modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges', 'modbench.modlist.clean', 'modbench.mod.init'];
 
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
@@ -1017,6 +1017,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   it('mod menu: open, change, create, source control, copy, then destroy', () => {
     expect(placed(rowMenu(MOD_ROW))).toEqual([
       ['modbench.mod.openFolder', '1_open'],
+      ['modbench.mod.openSource', '1_open'],
       ['modbench.mod.openConflicts', '1_open'],
       ['modbench.mod.viewOnNexus', '1_open'],
       ['modbench.mod.enable', '2_change'],
@@ -1042,6 +1043,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     placed(inModsView('view/item/context').filter((e) => holds(e.when, { view: 'modbench.modList', viewItem })));
 
   const OPEN_FOLDER_ENTRY: [string, string] = ['modbench.mod.openFolder', '1_open'];
+  const OPEN_SOURCE_ENTRY: [string, string] = ['modbench.mod.openSource', '1_open'];
   const OPEN_CONFLICTS_ENTRY: [string, string] = ['modbench.mod.openConflicts', '1_open'];
   const VIEW_ON_NEXUS_ENTRY: [string, string] = ['modbench.mod.viewOnNexus', '1_open'];
   const GO_TO_MOD_ENTRY: [string, string] = ['modbench.mod.goToMod', '1_open'];
@@ -1065,8 +1067,8 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     [contextOf(new ModNode({ kind: 'mod', name: 'X', enabled: true })), [OPEN_FOLDER_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     [contextOf(new ModNode({ kind: 'mod', name: 'X', enabled: false, nexusId: '1' })), [OPEN_FOLDER_ENTRY, VIEW_ON_NEXUS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod enabled holdsPlugin untracked', [OPEN_FOLDER_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, TRACK_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod enabled holdsPlugin tracked', [OPEN_FOLDER_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, BUILD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod disabled tracked', [OPEN_FOLDER_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, BUILD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod enabled holdsPlugin tracked', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, BUILD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod disabled tracked', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, BUILD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod enabled holdsPlugin', [OPEN_FOLDER_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod enabled untracked', [OPEN_FOLDER_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod enabled untracked fileOrderConflict', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
@@ -1117,6 +1119,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.createEmpty', {}],
     ['modbench.mod.install', {}],
     ['modbench.mod.openFolder', { 'modbench.mod.singleOpenFolderRow': true }],
+    ['modbench.mod.openSource', { 'modbench.mod.singleOpenSourceRow': true }],
     ['modbench.mod.goToMod', { 'modbench.mod.singleGoToModRow': true }],
     ['modbench.mod.openConflicts', { 'modbench.mod.singleOpenConflictsRow': true }],
     ['modbench.mod.compareFile', { 'modbench.mod.singleCompareFileRow': true }],
