@@ -2113,7 +2113,7 @@ describe('PluginsTreeProvider — changed outside Modbench', () => {
 });
 
 describe('PluginsTreeProvider — a healthy plugin row after a reconcile', () => {
-  it('states only its kind and where track and compile apply, with no description and the base tooltip', async () => {
+  it('states only its kind and where track applies, with no description and the base tooltip', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('A.esp'), held('B.esp')]);
 

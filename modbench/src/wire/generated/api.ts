@@ -126,7 +126,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each mod's manifest from the mod as it is (ADR-0022). A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the stage-progress notification. */
+        /** @description Writes each mod's manifest from the mod as it is (ADR-0022), and into the build folder each delta a changed file needs. A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the stage-progress notification. */
         post: operations["StageModlist"];
         delete?: never;
         options?: never;
@@ -1382,10 +1382,14 @@ export interface components {
             modsTotal: number;
         };
         /** @enum {string} */
-        StageRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "ManifestNotWritten";
+        StageRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "NotWritten";
         StageRequest: {
             mods: components["schemas"]["StageModRequest"][];
             gameFiles: components["schemas"]["StageGameFileRequest"][];
+            dataFolder: string;
+            buildFolder: string;
+            /** Format: double */
+            deltaShare?: number | null;
         };
         StageResponse: {
             applied: components["schemas"]["StagedModResponse"][];

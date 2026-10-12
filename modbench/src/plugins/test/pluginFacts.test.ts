@@ -263,16 +263,6 @@ describe('PluginFacts — what a row states about its plugin', () => {
     expect(facts.conditions(A)).toEqual(conditions);
   });
 
-  it('answers compile for any plugin tracked, a read-only one included', () => {
-    const facts = new PluginFacts();
-    expect(facts.anyCompilable()).toBe(false);
-
-    facts.reconciled([held(), held({ name: 'B.esp' })], []);
-    expect(facts.anyCompilable()).toBe(false);
-
-    facts.reconciled([held(), held({ name: 'B.esp', isTracked: true, isImmutable: true })], []);
-    expect(facts.anyCompilable()).toBe(true);
-  });
 });
 
 describe('PluginFacts — which plugins mEdit holds and the record filter', () => {

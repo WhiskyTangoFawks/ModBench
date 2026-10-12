@@ -601,6 +601,22 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect((await readModlist()).some((e) => e.name === '../Escaped')).toBe(false);
     });
 
+    it('trashes the source folder with the mod folder, and lands the mod with the source\'s failure when the source cannot be trashed', async () => {
+      await mkdir(join(dir, 'source', 'Harder VATS'), { recursive: true });
+      const failing = vi.fn(async (path: string) => {
+        if (path === join(dir, 'source', 'Harder VATS')) throw new Error('the trash refused it');
+        await rm(path, { recursive: true });
+      });
+
+      const outcome = await modlistCommands(adapterOver(dir)).uninstallMods('Default', [{ name: 'Harder VATS' }], failing);
+
+      expect(outcome).toEqual({
+        applied: true, outcome: { landed: [{ name: 'Harder VATS', sourceRefusal: 'the trash refused it' }], refused: [] },
+      });
+      expect((await readModlist()).some((e) => e.name === 'Harder VATS')).toBe(false);
+      expect(failing.mock.calls.map(([path]) => path)).toEqual([join(dir, 'mods', 'Harder VATS'), join(dir, 'source', 'Harder VATS')]);
+    });
+
     it('removes every selected mod\'s line in one write', async () => {
       const { adapter, calls } = watchedAdapter(dir);
 

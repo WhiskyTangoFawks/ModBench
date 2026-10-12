@@ -236,10 +236,16 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: { applied: [{ mod: 'ModA', tracked: [first] }], refused: [{ item: 'ModC', refusal: 'ModProvidesNoPlugin', message: 'ModC provides no plugin.' }] },
       reads: { landed: [{ mod: 'ModA', tracked: [first] }], refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }] },
       path: '/plugins/track', body: { mods: ['ModA', 'ModC'] } },
-    { name: 'compile', verb: (c) => c.compile([first, second]),
-      answer: { applied: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginNotTracked', message: 'Second.esp is not tracked, so there is no source to compile.' }] },
-      reads: { landed: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp is not tracked, so there is no source to compile.' }] },
-      path: '/plugins/compile', body: { plugins: [first, second] } },
+    { name: 'build', verb: (c) => c.build(['ModA', 'ModC']),
+      answer: {
+        applied: [{ mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginSourceUnreadable', message: 'Second.esp has no readable source.' }] }],
+        refused: [{ item: 'ModC', refusal: 'GitUnavailable', message: 'git was not found on PATH.' }],
+      },
+      reads: {
+        landed: [{ mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp has no readable source.' }] }],
+        refused: [{ item: 'ModC', reason: 'git was not found on PATH.' }],
+      },
+      path: '/build', body: { mods: ['ModA', 'ModC'] } },
     { name: 'decompile', verb: (c) => c.decompile([first, second]),
       answer: { applied: [first], refused: [{ item: second, refusal: 'NotInTrackedMod', message: 'Second.esp is not in a tracked mod.' }] },
       reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a tracked mod.' }] },
@@ -362,7 +368,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'), status: 409,
         body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename the source of "Old.esp"' },
       { name: 'track', verb: (c) => c.track(['ModA', 'ModB']), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not track 2 mods' },
-      { name: 'compile', verb: (c) => c.compile([first, second]), status: 503, body: detail, text: detail, refusal: 'Could not compile 2 plugins' },
+      { name: 'build', verb: (c) => c.build(['ModA', 'ModB']), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
       { name: 'decompile', verb: (c) => c.decompile([first, second]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
     ];
 
