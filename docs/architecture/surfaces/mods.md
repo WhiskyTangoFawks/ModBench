@@ -34,10 +34,10 @@ As a user, I want:
 | Label | the mod's name | MO2 |
 | Check box | checked when the mod is enabled | MO2 |
 | Description | the `meta.ini` version, then stale when the mod is stale ([modlist-source.md](modlist-source.md), Status) | MO2 |
-| Icon | `$(package)` | |
+| Icon | `$(package)`, or `$(repo)` for a source mod | |
 | Indicators | a badge at the right edge, and a colour on the label, for each indicator that holds ([Indicators](#indicators)) | MO2's Conflicts and Flags columns |
 | Badge | git's `M`, `U` and `D` in git's colours, while the instance has a repository, and the word stale in the description | [modlist-source.md](modlist-source.md), Status |
-| Tooltip | name, version, Nexus mod ID and installation file, each only when known | MO2's columns |
+| Tooltip | name, version, Nexus mod ID and installation file, each only when known, and, for a source mod, its source folder and that the folder is built from it | MO2's columns |
 | Identity | the row's kind and the mod's name, so selection and expansion survive a change on disk. A mod and a separator can share a name. | |
 
 ### Separator
@@ -82,6 +82,16 @@ A mod row carries an indicator for each status that holds. A disabled mod carrie
 
 The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. Source: mo2.md, divergence 12
 
+## A source mod
+
+A source mod's folder is its build's output ([ADR-0007](../../adr/0007-plugin-edits-are-git-working-tree-changes.md)). As a user, I want:
+
+1. Its row to open into the folder's files as any mod's, since they are what the game gets. The source is in the Explorer and Source Control, and `open source` shows it. Source: catalog `open source`
+2. Rename and exclude or include to write the build configuration and the folder together, so the folder already equals the next build's output: rename changes the output folder's name (Rename mod, story 3), and exclude or include its exclusions, which build writes as `.mohidden`. Source: ADR-0007
+3. No gesture that changes content the build makes. A record edit goes to plugin source, a plugin created lands in it, and decompile reads the folder into it. Source: ADR-0006; ADR-0007
+4. A file I change in the folder to show as modified, and build to overwrite it and name it. A lock on the folder is mine to add with VS Code's `files.readonlyInclude`. Source: modlist-source.md, Status; VS Code's interaction
+5. Uninstall to send the folder and the source to the trash, and the confirmation to say so. Source: Confirm what destroys
+
 ## Order and view state
 
 As a user, I want:
@@ -103,7 +113,7 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod. Collapse All last. |
-| Mod menu | open folder · open conflicts (the mod has a file order conflict) · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add separator · create empty mod · install… · track (the mod has no repository and holds a plugin) · build (a source mod) · stage · discard changes… · clean… (the instance has a repository) · copy value · uninstall |
+| Mod menu | open folder · open source (a source mod) · open conflicts (the mod has a file order conflict) · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add separator · create empty mod · install… · track (the mod has no repository and holds a plugin) · build (a source mod) · stage · discard changes… · clean… (the instance has a repository) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · copy value · delete |
 | Overwrite menu | open folder |
 | File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · copy value |
@@ -174,7 +184,7 @@ As a user, I want:
 4. A build whose configuration names an output folder that is not this mod's folder refused, naming both, so a folder renamed outside Modbench is never overwritten. Source: ADR-0003
 5. Build to save the mod's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugins are built from what I see. A file VS Code does not save refuses build, naming it. Source: VS Code's save before run; ADR-0001; Never silently wrong
 6. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
-7. From the palette with no mod, a pick of the source mods. Source: No dead entries
+7. From the palette with no mod, a pick of every source in the source folder, one with no folder included, so a clone builds its mods back. Source: No dead entries
 8. A plugin whose header flag limits its FormIDs, light or medium, refused when its records fall outside that range, naming the records, what limits the plugin, its flag, its `.esl` extension or both, and what lifts that limit: clear the flag, rename the plugin off `.esl`, or both. Changing the records' FormIDs works in every case. The rest of the mod builds, and the refused plugin is left as it was.
 9. A plugin whose plugin source is unreadable refused the same way, naming it and pointing at decompile. Source: Never silently wrong
 10. An interrupted build to leave each file old or new, and none to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Building again fixes it. This is an exception to A failed gesture writes nothing.
@@ -203,7 +213,7 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 
 ### Uninstall
 
-As a user, I want one confirmation for the whole selection, naming the mod when there is one and listing the mods when there are several, and saying the folders go to the trash. Source: Confirm what destroys; MO2's recycle bin
+As a user, I want one confirmation for the whole selection, naming the mod when there is one and listing the mods when there are several, and saying the folders go to the trash, and a source mod's source with them. Source: Confirm what destroys; MO2's recycle bin; A source mod, story 5
 
 ### Go to mod
 
