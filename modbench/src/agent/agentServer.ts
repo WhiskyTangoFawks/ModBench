@@ -8,6 +8,7 @@ import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import { INSTANCE_READS, Refusal } from './instanceReads';
+import { SOURCE_PROBLEMS } from './sourceProblems';
 
 const AGENT_PORT_SETTING = 'modbench.agent.port';
 
@@ -44,6 +45,7 @@ function mcpServerOf({ instance, log }: AgentServerOptions): McpServer {
   for (const read of INSTANCE_READS) {
     server.registerTool(read.name, { description: read.description }, () => answer(log, read.name, () => read.of(currentValue(instance))));
   }
+  server.registerTool(SOURCE_PROBLEMS.name, { description: SOURCE_PROBLEMS.description }, () => answer(log, SOURCE_PROBLEMS.name, SOURCE_PROBLEMS.of));
   return server;
 }
 

@@ -1,4 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+type Held = [{ scheme: string; fsPath: string }, { severity: number; range: { start: { line: number } }; message: string }[]][];
+const diagnosticsHeld = vi.hoisted(() => ({ held: [] as Held }));
+vi.mock('vscode', () => ({
+  languages: { getDiagnostics: () => diagnosticsHeld.held },
+  DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3, 0: 'Error', 1: 'Warning', 2: 'Information', 3: 'Hint' },
+}));
 import { createServer, request, type OutgoingHttpHeaders, type Server } from 'node:http';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -75,7 +82,7 @@ describe('the agent server, given an instance value', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_mods', 'list_plugins', 'list_profiles']);
+    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_mods', 'list_plugins', 'list_profiles', 'list_source_problems']);
   });
 
   it('reads the profiles and the active one', async () => {
@@ -106,6 +113,21 @@ describe('the agent server, given an instance value', () => {
     const client = await clientOf(new FakeInstance(VALUE));
 
     expect(await read(client, 'list_downloads')).toEqual([{ name: 'rocks.7z', status: 'Installed', excluded: false }]);
+  });
+
+  it('reads the problems on plugin source files only, as the Problems panel holds them', async () => {
+    const client = await clientOf(new FakeInstance(VALUE));
+    const problem = (severity: number, line: number, message: string) => ({ severity, range: { start: { line } }, message });
+    diagnosticsHeld.held = [
+      [{ scheme: 'file', fsPath: '/i/mods/Rocks/plugin-source/Rocks.esp.json' }, [problem(0, 4, 'bad reference'), problem(1, 9, 'odd value')]],
+      [{ scheme: 'file', fsPath: '/i/mods/Rocks/readme.json' }, [problem(0, 0, 'not source')]],
+      [{ scheme: 'untitled', fsPath: '/i/mods/Rocks/plugin-source/Other.esp.json' }, [problem(0, 0, 'not a file')]],
+    ];
+
+    expect(await read(client, 'list_source_problems')).toEqual([
+      { file: '/i/mods/Rocks/plugin-source/Rocks.esp.json', severity: 'Error', line: 5, message: 'bad reference' },
+      { file: '/i/mods/Rocks/plugin-source/Rocks.esp.json', severity: 'Warning', line: 10, message: 'odd value' },
+    ]);
   });
 
   it('reads the value as it stands on each request', async () => {
