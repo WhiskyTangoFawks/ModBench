@@ -26,7 +26,7 @@ As a user, I want:
 6. Open from the palette, with no record given, to ask for one by EditorID, FormID or FormKey. Source: catalog `open`
 7. A tab I leave and come back to to be as I left it: the rows I expanded, the columns I collapsed, the focused cell and the scroll. Source: VS Code keeps a tab's place
 8. A record given without a plugin, from the palette, Referenced By or Go to record, to open the winning copy's file. Source: xEdit lands on the winning copy
-9. An untracked plugin's copy, or the copy of a plugin whose plugin source is unreadable, to open as a document mEdit renders from the plugin, read-only. It is not a file, so the file features above do not reach it. Source: ADR-0007; ADR-0001
+9. An unsource plugin's copy, or the copy of a plugin whose plugin source is unreadable, to open as a document mEdit renders from the plugin, read-only. It is not a file, so the file features above do not reach it. Source: ADR-0007; ADR-0001
 10. A child record, such as a placed reference, to open in a tab of its own, though it shares its cell's file. A change in either tab shows in both. A container's tab shows its own fields, never its child lists. Source: plugin-source.md, The tree, story 3; ruling
 11. A group's metadata file in plugin source to open in the text editor, as any JSON file does. Source: ADR-0001; Existing tools
 12. Records of different record types opened at once to open one grid too. Source: xedit.md, divergence 31
@@ -72,9 +72,9 @@ As a user, I want:
 | `(read-only)` | the game folder provides the plugin | that the game's plugins are not edited | ruling |
 | `(in Overwrite)` | the plugin is in Overwrite | that Overwrite is not a mod, and a plugin moved into a mod can be tracked | ruling |
 | `(untracked)` | the plugin is not tracked | that Track, in this header's menu, makes it editable | ADR-0007 |
-| `(plugin source unreadable)` | the plugin is tracked, and its plugin source is missing or cannot be read | why, and that decompile, in this header's menu, makes it editable | Never silently wrong |
+| `(plugin source unreadable)` | the plugin is a source plugin, and its plugin source is missing or cannot be read | why, and that decompile, in this header's menu, makes it editable | Never silently wrong |
 | `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that the game ignores this copy's own fields | xEdit; [editor-fields.md](editor-fields.md) |
-| `(tracked)` | the plugin is tracked | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007 |
+| `(source)` | the plugin is a source plugin | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007 |
 
 A column shows one status, the first in this table that applies. A Partial Form or overridden column is dimmed, header and cells alike, so it reads as outside the conflict after the header scrolls away.
 
@@ -132,7 +132,7 @@ The row menus follow VS Code's groups: open, change, source control, copy, then 
 | Where | Items, in order |
 |---|---|
 | Cell | go to record (on a FormLink that resolves) · open field value (on a text field) · add (on an array, or an element of one) · remove (on an element) · move up · move down (on an element) · copy value |
-| Column header | referenced by · track (in a mod with no repository) · decompile (in a source mod) · build (in a source mod) · copy… · delete (tracked) |
+| Column header | referenced by · init (a mod with no source) · decompile (in a source mod) · build (in a source mod) · copy… · delete (tracked) |
 | Keys, on the focused cell | F2: edit. Ctrl+C: copy value. Ctrl+X: cut. Ctrl+V: paste. Delete: remove, or clear. Alt+Up, Alt+Down: move. |
 
 As a user, I want:
@@ -141,7 +141,7 @@ As a user, I want:
 2. Open field value to open the field's text in a text editor tab beside the panel, titled `<field> [<file name>]`. Each save writes it; closing without saving writes nothing. Opened again, the same tab shows. In a column that cannot be edited, the tab is read-only, so a long value can still be read. Source: xedit.md, divergences 2 and 6; catalog `open field value`
 3. Copy on a column to copy that plugin's copy of the record, asking for the mode and then the destination, as in Plugins. Source: catalog `copy`; xEdit's column header menu
 4. Delete on a column to remove that plugin's copy of the record, after one confirmation naming it. Source: catalog `delete`; xEdit's column header menu
-5. Decompile on a column to act on that column's plugin, and track and build on its plugin's mod. Source: catalog `decompile`, `track`, `build`
+5. Decompile on a column to act on that column's plugin, and init and build on its plugin's mod. Source: catalog `decompile`, `init`, `build`
 
 ## Reporting
 

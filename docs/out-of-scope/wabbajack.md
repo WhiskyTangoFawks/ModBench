@@ -21,8 +21,8 @@ What the manifest and its gestures do differently.
 |---|---|---|---|---|
 | 1 | What is recorded | Every mod and every profile, enabled or not | The enabled mods of the chosen profiles | Ruling: the repository is the user's instance, not a release. |
 | 2 | The record's shape | One manifest per mod, in the mod folder | One JSON file for the whole list | ADR-0022. |
-| 3 | Where a file comes from | The mod's installation files and the game folder | Any archive the user ever downloaded, by hash, nested archives included | Ruling: the mod manager's provenance is the truth, and a reader can see why a file has no source. |
-| 4 | A file nothing yields, or whose delta is too large | The manifest says it has no source, and restore skips the mod | Compile fails unless the path is tagged | Ruling: the gap is in the diff, and the rest of the modlist commits. |
+| 3 | Where a file comes from | The mod's installation files and the game folder | Any archive the user ever downloaded, by hash, nested archives included | Ruling: the mod manager's provenance is the truth, and a reader can see why a file has no provider. |
+| 4 | A file nothing yields, or whose delta is too large | The manifest says it has no provider, and restore skips the mod | Compile fails unless the path is tagged | Ruling: the gap is in the diff, and the rest of the modlist commits. |
 | 5 | Deltas | Build outputs keyed by the file and both hashes, packaged and published by the user | Inlined in the `.wabbajack` file | ADR-0022: git cannot hold them, and packaging is the user's choice. |
 | 6 | A missing installation file when the manifest is written | The mod is refused, naming the file | The archive is dropped and compile continues | Ruling: Never silently wrong. |
 | 7 | A missing downloaded file at discard changes | Discard changes lands every mod whose downloaded files are present, and names each mod it could not with the file it lacks. Fetching is the user's. | Install stops when any archive cannot be fetched | Ruling: a mod gone from Nexus never blocks the rest, and restore downloads nothing. |
