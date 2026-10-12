@@ -1,6 +1,3 @@
-"""mEdit built from this checkout and started over a copy of DevList, holding the load order Modbench
-would send for it. A test reaches it at the URL `fixture_medit` yields, and its writes land in the
-copy."""
 import contextlib
 import json
 import pathlib
@@ -24,6 +21,8 @@ PLUGINS = [
 ]
 BOOT_TIMEOUT_S = 180
 LOAD_ORDER_TIMEOUT_S = 120
+REQUEST_TIMEOUT_S = 10
+STOP_GRACE_S = 5
 POLL_S = 0.1
 
 
@@ -48,8 +47,16 @@ def fixture_medit():
                 hand_load_order(url, snapshot(instance, game))
                 yield url
             finally:
-                process.terminate()
-                process.wait()
+                stop(process)
+
+
+def stop(process):
+    process.terminate()
+    try:
+        process.wait(timeout=STOP_GRACE_S)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
 
 
 def built_medit():
@@ -73,7 +80,7 @@ def await_health(process, url, output):
         if process.poll() is not None:
             raise RuntimeError(f'mEdit exited before it answered /health:\n{output.read_text(errors="replace")}')
         try:
-            call('GET', url + '/health')
+            call('GET', url + '/health', timeout=within(deadline))
             return
         except OSError:
             time.sleep(POLL_S)
@@ -100,10 +107,10 @@ def snapshot(instance, game):
 
 
 def hand_load_order(url, body):
-    version = call('PUT', url + '/load-order', body)['version']
     deadline = time.monotonic() + LOAD_ORDER_TIMEOUT_S
+    version = call('PUT', url + '/load-order', body, timeout=within(deadline))['version']
     while time.monotonic() < deadline:
-        status = call('GET', url + '/load-order/status')
+        status = call('GET', url + '/load-order/status', timeout=within(deadline))
         if status['version'] >= version and status['state'] not in ('None', 'Reconciling'):
             if status['state'] != 'Ready':
                 raise RuntimeError(f'mEdit did not take the load order: {status}')
@@ -112,9 +119,13 @@ def hand_load_order(url, body):
     raise TimeoutError(f'mEdit did not index the load order within {LOAD_ORDER_TIMEOUT_S}s')
 
 
-def call(method, url, body=None):
+def within(deadline):
+    return max(POLL_S, min(REQUEST_TIMEOUT_S, deadline - time.monotonic()))
+
+
+def call(method, url, body=None, timeout=REQUEST_TIMEOUT_S):
     request = urllib.request.Request(
         url, method=method, data=None if body is None else json.dumps(body).encode(),
         headers={'Content-Type': 'application/json'})
-    with urllib.request.urlopen(request, timeout=LOAD_ORDER_TIMEOUT_S) as response:
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.load(response)
