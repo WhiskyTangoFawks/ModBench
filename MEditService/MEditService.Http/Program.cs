@@ -121,6 +121,7 @@ try
 
     app.MapLoadOrderEndpoints();
     app.MapPluginEndpoints();
+    app.MapModEndpoints();
     app.MapRecordEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapWorldspaceEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapContainerChildEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
