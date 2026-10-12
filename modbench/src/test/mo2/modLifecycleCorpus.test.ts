@@ -58,21 +58,19 @@ describe('mod lifecycle corpus (uninstall)', () => {
     expect(after.has('mods/Harder VATS/meta.ini')).toBe(false);
   });
 
-  it('renameMod moves the folder with its repository, plugin source and meta.ini, and renames the line in each profile — nothing else', async () => {
+  it('renameMod moves the folder with its files and meta.ini, and renames the line in each profile, its repository beside mods/ staying where it is — nothing else', async () => {
     const folder = (name: string) => join(dir, 'mods', name);
-    await mkdir(join(folder('Harder VATS'), '.git'));
-    await mkdir(join(folder('Harder VATS'), 'plugin-source'));
-    await writeFile(join(folder('Harder VATS'), '.git', 'HEAD'), 'ref: refs/heads/main\n');
-    await writeFile(join(folder('Harder VATS'), 'plugin-source', 'a.psc'), 'Scriptname a\n');
+    await mkdir(join(folder('Harder VATS'), 'Scripts'));
+    await writeFile(join(folder('Harder VATS'), 'Scripts', 'a.pex'), 'a\n');
+    await mkdir(join(dir, 'source', 'Harder VATS', '.git'), { recursive: true });
+    await writeFile(join(dir, 'source', 'Harder VATS', '.git', 'HEAD'), 'ref: refs/heads/main\n');
     const before = await snapshotTree(dir);
 
     await modlistCommands(adapterOver(dir)).renameMod(PROFILE, [PROFILE, 'Secondary'], 'Harder VATS', 'Harder VATS 2');
     const after = await snapshotTree(dir);
 
     const moved = [...before.keys()].filter((path) => path.startsWith('mods/Harder VATS/'));
-    expect(moved).toEqual(expect.arrayContaining([
-      'mods/Harder VATS/meta.ini', 'mods/Harder VATS/.git/HEAD', 'mods/Harder VATS/plugin-source/a.psc',
-    ]));
+    expect(moved).toEqual(expect.arrayContaining(['mods/Harder VATS/meta.ini', 'mods/Harder VATS/Scripts/a.pex']));
     for (const path of moved) {
       expect(after.get(path.replace('mods/Harder VATS/', 'mods/Harder VATS 2/')), path).toEqual(before.get(path));
     }

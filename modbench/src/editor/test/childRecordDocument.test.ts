@@ -71,7 +71,7 @@ interface FileSystem {
 const isFileSystem = (value: unknown): value is FileSystem =>
   typeof value === 'object' && value !== null && 'readFile' in value && 'writeFile' in value && 'onDidChangeFile' in value;
 
-const CELL_FILE = '/mods/ModA/plugin-source/A.esp/Cells/Cell.json';
+const CELL_FILE = '/source/ModA/plugin-source/A.esp/Cells/Cell.json';
 const modA = { name: 'A.esp', origin: 'ModA' };
 const placed = { formKey: '000803:A.esp', plugin: modA };
 const childUri = (path: string, query: string) => h.uri('modbench-child-record', path, query);

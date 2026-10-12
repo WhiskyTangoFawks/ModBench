@@ -131,7 +131,7 @@ export const UNLIMITED_RECORDS = 2147483647;
  *  not read. */
 export type PluginDependants = components['schemas']['PluginDependantsResponse'];
 /** What is wrong in a tracked active plugin's source, per plugin: each problem names the referring
- *  record and its source file relative to the mod folder. */
+ *  record and its source file relative to the mod's source folder. */
 export type PluginProblems = components['schemas']['PluginProblems'];
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
 export type WorkingTreeStatesBeneath = components['schemas']['WorkingTreeStatesBeneath'];
@@ -187,7 +187,7 @@ export type RecordFilter = components['schemas']['FilterRequest'];
 export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
-  createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused>;
+  createPlugin(plugin: PluginAddress, folder: string, sourceFolder: string | undefined): Promise<PluginCreatedResponse | WriteRefused>;
   // The changes renaming the plugin source makes over the unsaved documents mEdit holds, and the name its tree is
   // filed under. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
   getRenameSourceChanges(plugin: PluginAddress, newName: string): Promise<RenameSourceChangesOutcome | WriteRefused>;

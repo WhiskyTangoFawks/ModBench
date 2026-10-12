@@ -7,7 +7,7 @@ import type { AskQuestion } from '../ports/dialog';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { SourceEditing } from '../drivingLib/sourceEditing';
-import { originFiles } from '../instanceLoader/loadOrderSnapshot';
+import { sourceFiles } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance, InstanceValue, PluginSyncArguments } from '../instanceLoader/instance';
 import { reportSyncFailures, type Sync, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
 import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider';
@@ -193,7 +193,7 @@ function registerPluginGestures(
     registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
     registerCompileCommand({
       client, instance, reporter: reporterFor('plugin.compile'), problems: compileProblems,
-      originFiles: (origin) => originFiles(instance.value, origin), saveUnsaved: saveUnsavedPluginSource,
+      sourceFiles: (origin) => sourceFiles(instance.value, origin), saveUnsaved: saveUnsavedPluginSource,
     }, selection),
     registerRecordCreateCommand({
       client, reporter: reporterFor('record.create'), write: recordWrite, source: sourceEditing,

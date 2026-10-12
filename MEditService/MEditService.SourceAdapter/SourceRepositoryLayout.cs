@@ -13,20 +13,18 @@ namespace MEditService.SourceAdapter;
 /// legally contain <c>" - "</c>, so splitting the file name is ambiguous.</summary>
 internal sealed record SourceRecordIdentity(string PluginFileName, string RecordType);
 
-/// <summary>Where a record with a file of its own lands, relative to the mod folder.
+/// <summary>Where a record with a file of its own lands, relative to the source folder.
 /// <see cref="SourceRepositoryLayout.PlacementFor"/> is the only thing that computes one.</summary>
 internal readonly record struct SourcePlacement(string RelativePath);
 
 /// <summary>The source tree's layout: the only type spelling the root folder, the door's file names
 /// and the JSON suffix. The instance places a new document and mints the levels above it.</summary>
-internal sealed class SourceRepositoryLayout(string modFolder, GameRelease release, SourceRepositoryLocator locator, ISourceFiles files)
+internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease release, SourceRepositoryLocator locator, ISourceFiles files)
 {
-    private readonly string _modFolder = modFolder;
+    private readonly string _sourceFolder = sourceFolder;
     private readonly GameRelease _release = release;
 
-    /// <summary>Plain, not dot-prefixed: the plugin's source is first-class, not hidden metadata. The
-    /// deployer exclusion matches this name at the mod root only, so a nested folder that merely
-    /// shares it still deploys.</summary>
+    /// <summary>Plain, not dot-prefixed: the plugin's source is first-class, not hidden metadata.</summary>
     internal const string RootFolderName = "plugin-source";
 
     /// <summary>The whole-mod door's own name for a group or block level's metadata file, written for
@@ -42,16 +40,16 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
     /// <summary>The mod's own display name, for a caller naming it in a message without reaching
     /// for the path itself.</summary>
-    internal static string ModNameIn(string modFolder) =>
-        Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar));
+    internal static string ModNameIn(string sourceFolder) =>
+        Path.GetFileName(sourceFolder.TrimEnd(Path.DirectorySeparatorChar));
 
-    internal static string RootIn(string modFolder, string pluginFileName) =>
-        Path.Combine(modFolder, RootFor(pluginFileName));
+    internal static string RootIn(string sourceFolder, string pluginFileName) =>
+        Path.Combine(sourceFolder, RootFor(pluginFileName));
 
     /// <summary>The folder of the mod's plugin source holding <paramref name="pluginFileName"/>'s tree: the one spelled
     /// so, else the only one spelled so without case, as a ModKey compares a name. Else why there is none.</summary>
-    internal static Answer<string, SourceFailure> TreeNameIn(string modFolder, string pluginFileName) =>
-        SourceFailure.Answer(() => NamedIn(Path.Combine(modFolder, RootFolderName), pluginFileName))
+    internal static Answer<string, SourceFailure> TreeNameIn(string sourceFolder, string pluginFileName) =>
+        SourceFailure.Answer(() => NamedIn(Path.Combine(sourceFolder, RootFolderName), pluginFileName))
             .Then<string>(named => named switch
             {
                 _ when named.Contains(pluginFileName, StringComparer.Ordinal) => pluginFileName,
@@ -80,21 +78,21 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
     /// <summary>The folder of the mod's plugin source that <paramref name="fullPath"/> sits in, as the path spells
     /// it; null for a path outside the plugin source.</summary>
-    internal static string? TreeFolderHolding(string modFolder, string fullPath)
+    internal static string? TreeFolderHolding(string sourceFolder, string fullPath)
     {
-        var sources = Path.GetFullPath(Path.Combine(modFolder, RootFolderName));
+        var sources = Path.GetFullPath(Path.Combine(sourceFolder, RootFolderName));
         return SourceRepositoryLocator.IsUnder(sources, fullPath)
             ? Path.GetRelativePath(sources, fullPath).Split(Path.DirectorySeparatorChar)[0]
             : null;
     }
 
-    /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and
+    /// <summary>One plugin's serialized tree as the files a source folder holds — what Track and
     /// decompile write.</summary>
     internal static IReadOnlyList<TreeFile> PristineFilesOf(
         string pluginFileName, IEnumerable<TreeFile> treeFiles) =>
         [.. treeFiles.Select(file => PlacedFileOf(pluginFileName, file))];
 
-    /// <summary>One file of the door's tree where the mod folder holds it.</summary>
+    /// <summary>One file of the door's tree where the source folder holds it.</summary>
     internal static TreeFile PlacedFileOf(string pluginFileName, TreeFile doorFile) =>
         new(doorFile.RelativePath == DocumentFileNames.Root
                 ? HeaderDocumentFor(pluginFileName)
@@ -197,10 +195,10 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
                 : []);
 
     /// <summary>The plugin header's own document, named for its FormKey: a header has no EditorID.</summary>
-    internal static string HeaderDocumentIn(string modFolder, string pluginFileName) =>
-        Path.Combine(modFolder, HeaderDocumentFor(pluginFileName));
+    internal static string HeaderDocumentIn(string sourceFolder, string pluginFileName) =>
+        Path.Combine(sourceFolder, HeaderDocumentFor(pluginFileName));
 
-    /// <summary>The plugin header's own document, relative to the mod folder.</summary>
+    /// <summary>The plugin header's own document, relative to the source folder.</summary>
     internal static string HeaderDocumentFor(string pluginFileName) =>
         Path.Combine(RootFor(pluginFileName), HeaderDocumentLeaf(pluginFileName));
 
@@ -334,7 +332,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         || Path.GetFileName(filePath).Equals(GroupRecordDataFileName, StringComparison.Ordinal);
 
     /// <summary>Whether <paramref name="path"/> names the header's own document. A suffix, not an
-    /// equality: the caller may spell it absolute, relative to the mod folder, or as git does.</summary>
+    /// equality: the caller may spell it absolute, relative to the source folder, or as git does.</summary>
     internal static bool IsHeaderDocumentPath(string path, string pluginFileName) =>
         IsHeaderDocumentPath(Segments(path), pluginFileName);
 
@@ -376,13 +374,13 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
         var (levels, blockPath) = types.IsCell(identity.RecordType)
             ? InteriorCellBlocksIn(
-                Path.Combine(_modFolder, RootFor(plugin.Name), groupFolder), FormKey.Factory(identity.FormKey).ID)
+                Path.Combine(_sourceFolder, RootFor(plugin.Name), groupFolder), FormKey.Factory(identity.FormKey).ID)
             : ([], null);
 
         var where = PlacementFor(
             plugin.Name, identity.RecordType, identity.FormKey, identity.EditorId, _release, blockPath);
         return (levels, locator.Unit(
-            Path.Combine(_modFolder, where.RelativePath), identity.FormKey, identity.RecordType, isEmbedded: false));
+            Path.Combine(_sourceFolder, where.RelativePath), identity.FormKey, identity.RecordType, isEmbedded: false));
     }
 
     // The block level documents an exterior cell at the placement needs and the tree lacks, outermost
@@ -431,7 +429,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         if (placement.ParentWorldspace is not { } worldspace)
             throw new InvalidOperationException("An exterior cell's placement names no worldspace to place it under.");
 
-        if (locator.FindOwnUnit(Path.Combine(_modFolder, RootFor(plugin.Name)), plugin, worldspace) is not { } document)
+        if (locator.FindOwnUnit(Path.Combine(_sourceFolder, RootFor(plugin.Name)), plugin, worldspace) is not { } document)
         {
             throw new InvalidOperationException(
                 $"{plugin.Name}'s tree holds no document for worldspace {worldspace}, so an exterior cell " +
@@ -449,7 +447,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
                 .With(x ?? 0, RecordTypes.BlockNumberXMember)
                 .With(y ?? 0, RecordTypes.BlockNumberYMember));
 
-    private DocumentChange LevelDocument(string fullPath, string text) => new(Path.GetRelativePath(_modFolder, fullPath), text);
+    private DocumentChange LevelDocument(string fullPath, string text) => new(Path.GetRelativePath(_sourceFolder, fullPath), text);
 
     // Block = ID mod 10 and sub-block = ID / 10 mod 10: the formula of Mutagen's AddInteriorCell.
     private (IReadOnlyList<DocumentChange> Levels, List<string> BlockPath) InteriorCellBlocksIn(

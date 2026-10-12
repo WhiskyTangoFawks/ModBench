@@ -8,7 +8,7 @@ import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from './codecs/modlistText';
 import { factsOf, listDir } from './files';
 import type { FileOrigin, OriginFile, OriginFiles, OriginFolder } from './instanceAdapter';
-import { isExcludedName, isPluginSourceFolder, isTempWrite, originDir, overwriteDir } from './layout';
+import { isExcludedName, isExtraction, isTempWrite, originDir, overwriteDir } from './layout';
 
 // The mod's metadata is MO2's, not the mod's content: nearly every mod has one.
 const NOT_CONTENT = new Set([MOD_META_FILE_NAME]);
@@ -83,12 +83,9 @@ async function walkLink(walk: Walk, path: string, ancestors: ReadonlySet<string>
 
 async function walkDir(walk: Walk, dir: string, ancestors: ReadonlySet<string>): Promise<void> {
   for (const dirent of await listDir(dir)) {
-    if (dirent.name.startsWith('.') || isTempWrite(dirent.name)) continue;
+    if (isTempWrite(dirent.name) || (dir === walk.root && isExtraction(dirent.name))) continue;
     const path = childOf(dir, dirent.name);
     if (dirent.isDirectory()) {
-      // At the mod root only: a nested folder that happens to share the name is ordinary content,
-      // not the plugin's tracked source.
-      if (dir === walk.root && isPluginSourceFolder(dirent.name)) continue;
       await descend(walk, path, ancestors);
     } else if (dirent.isFile()) {
       keep(walk, path);

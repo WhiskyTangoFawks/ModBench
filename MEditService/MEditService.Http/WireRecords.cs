@@ -23,15 +23,14 @@ internal sealed record LoadOrderPlugin(string Name, string Path, string Origin, 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum PluginProviderKind { Mod, Game, None }
 
-// Only Kind Mod has a Mod and a Folder.
-internal sealed record PluginProviderRequest(PluginProviderKind Kind, string? Mod = null, string? Folder = null)
+internal sealed record PluginProviderRequest(PluginProviderKind Kind, string? Mod = null, string? Folder = null, string? SourceFolder = null)
 {
     internal PluginProvider? ToProvider() => Kind switch
     {
-        PluginProviderKind.Game when Mod is null && Folder is null => PluginProvider.Game,
-        PluginProviderKind.None when Mod is null && Folder is null => PluginProvider.NoMod,
-        PluginProviderKind.Mod when !string.IsNullOrEmpty(Mod) && !string.IsNullOrEmpty(Folder) =>
-            new PluginProvider.FromMod(Mod, Folder),
+        PluginProviderKind.Game when Mod is null && Folder is null && SourceFolder is null => PluginProvider.Game,
+        PluginProviderKind.None when Mod is null && Folder is null && SourceFolder is null => PluginProvider.NoMod,
+        PluginProviderKind.Mod when !string.IsNullOrEmpty(Mod) && !string.IsNullOrEmpty(Folder) && !string.IsNullOrEmpty(SourceFolder) =>
+            new PluginProvider.FromMod(Mod, Folder, SourceFolder),
         _ => null,
     };
 }

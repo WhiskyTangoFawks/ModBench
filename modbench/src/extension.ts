@@ -18,7 +18,7 @@ import { applyWorkspaceChanges } from './drivingLib/applyWorkspaceChanges';
 import { oneAtATime } from './drivingLib/oneAtATime';
 import { Instance } from './instanceLoader/instance';
 import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
-import { originFiles, NO_ORIGIN_FILES, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
+import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import type { InstanceAdapter } from './instanceAdapter/instanceAdapter';
@@ -70,7 +70,7 @@ interface InstanceSide {
   /** Absent together, on the path with no instance to read. */
   instance?: Instance;
   toolboxProvider: ToolboxProvider;
-  originFiles: OriginFilesOf;
+  sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
   downloadsSelection: () => readonly DownloadsTreeNode[];
 }
@@ -84,7 +84,7 @@ const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
 function buildBareSide(own: Own): InstanceSide {
   return {
     toolboxProvider: own(new ToolboxProvider({ instance: undefined })),
-    originFiles: NO_ORIGIN_FILES,
+    sourceFiles: NO_SOURCE_FILES,
     copyValue: [], downloadsSelection: () => [],
   };
 }
@@ -125,7 +125,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
   const plugins = own(pluginsBox.onInstance({
     instance, instanceRoot, commands: pluginsCommands({ adapter, client }), pluginSync, trackSelection, modsView: MODS_KEY_ARGS.view,
-    saveUnsavedPluginSource: (plugin) => savePluginSource((origin) => originFiles(instance.value, origin), plugin),
+    saveUnsavedPluginSource: (plugin) => savePluginSource((origin) => sourceFiles(instance.value, origin), plugin),
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
@@ -165,7 +165,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   return {
     instance, toolboxProvider,
-    originFiles: (origin) => originFiles(instance.value, origin),
+    sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue],
     downloadsSelection: () => downloadsView.selection,
   };
@@ -256,7 +256,7 @@ export function activate(context: vscode.ExtensionContext): void {
     editor,
     serveAgent({ port: agentPort(), instance: views.instance, reporter: reporterFor('agent'), log: outputChannel }),
     createSourceLanguage({
-      client: meditClient, originFiles: (origin) => views.originFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
+      client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     }),
   );
 }

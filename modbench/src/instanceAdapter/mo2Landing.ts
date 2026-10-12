@@ -5,7 +5,7 @@ import { parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, write } from './files';
 import type { ExtractedEntry, InstanceAdapter, ModMeta, OwnedMetaKeys } from './instanceAdapter';
 import {
-  fileInFolder, isRepositoryOrPluginSource, modMetaFileIn, modsDir, newModExtractionPrefix, upgradeExtractionPrefix,
+  fileInFolder, modMetaFileIn, modsDir, newModExtractionPrefix, upgradeExtractionPrefix,
 } from './layout';
 import { errnoCode } from '../ports/errno';
 import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
@@ -59,15 +59,12 @@ export function mo2Landing(context: Mo2Context): Mo2Landing {
         path,
         copyIn: (source) => copyTree(source, path),
         async land(root, keys) {
-          const repositoryOrPluginSourceEntry = (await listDir(root)).map((d) => d.name).find(isRepositoryOrPluginSource);
-          if (repositoryOrPluginSourceEntry !== undefined) return { refused: true, repositoryOrPluginSourceEntry };
           const carried = await get(modMetaFileIn(folder), '');
           for (const { name } of await listDir(folder)) {
             const entry = fileInFolder(folder, name);
-            if (entry !== path && !isRepositoryOrPluginSource(name)) await remove(entry);
+            if (entry !== path) await remove(entry);
           }
           await settleInto(folder, path, root, setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried))));
-          return { refused: false };
         },
         abandon: () => remove(path),
       };

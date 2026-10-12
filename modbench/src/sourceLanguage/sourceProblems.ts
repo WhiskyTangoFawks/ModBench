@@ -1,5 +1,5 @@
 import type { MEditClient, PluginProblems } from '../client';
-import type { OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
+import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { pluginAddressKey } from '../wire/pluginAddress';
@@ -15,7 +15,7 @@ export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 
 export interface SourceProblemsDeps {
   client: Pick<MEditClient, 'getPluginProblems' | 'onNotification' | 'onReconnected' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'onUnsavedHandOver'>;
-  originFiles: OriginFilesOf;
+  sourceFiles: SourceFilesOf;
   readText: (path: string) => Promise<string>;
   reporter: Pick<Reporter, 'shownOnSurface'>;
   /** Replaces every problem published before. */
@@ -58,13 +58,13 @@ interface Placed { ofPlugin: Map<string, Contribution | undefined>; unplaced: Un
 const nameOf = ({ name, origin }: { name: string; origin: string }) => `"${name}" (${origin})`;
 const isLink = (problem: SourceProblem) => problem.fieldPath != null;
 
-async function placed(answer: PluginProblems[], { originFiles, readText }: SourceProblemsDeps): Promise<Placed> {
+async function placed(answer: PluginProblems[], { sourceFiles, readText }: SourceProblemsDeps): Promise<Placed> {
   const unplaced: Unplaced[] = [];
   const unread: Told[] = [];
   const ofPlugin = new Map(await Promise.all(answer.map(async ({ plugin, problems, failure, failureKind }) => {
-    const files = originFiles(plugin.origin);
+    const files = sourceFiles(plugin.origin);
     const key = pluginAddressKey(plugin);
-    const why = files === undefined ? `The instance holds no folder for ${plugin.origin}.` : failure;
+    const why = files === undefined ? `The instance holds no source folder for ${plugin.origin}.` : failure;
     if (why != null) unplaced.push({ key, message: `The Problems panel keeps the last problems of ${nameOf(plugin)}.`, why, plugin: nameOf(plugin), told: files === undefined || failureKind !== 'LaterRead' });
     if (files === undefined) return [key, undefined] as const;
     const contribution: Contribution = { links: new Map(), stops: new Map() };

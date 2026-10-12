@@ -72,6 +72,7 @@ function makeMo2() {
             ['Disabled Mod', '/instance/mods/Disabled Mod'],
             ['Holding Mod', '/instance/mods/Holding Mod'],
           ]),
+          sourceDirs: new Map([['Winning Mod', '/instance/source/Winning Mod']]),
         },
       }),
     },
@@ -113,7 +114,7 @@ describe('registerCreatePluginCommand', () => {
 
     expect(client.calls).toEqual([
       extensionsQuery,
-      { method: 'createPlugin', args: [{ name: 'MyPatch.esp', origin: 'Winning Mod' }, '/instance/mods/Winning Mod'] },
+      { method: 'createPlugin', args: [{ name: 'MyPatch.esp', origin: 'Winning Mod' }, '/instance/mods/Winning Mod', '/instance/source/Winning Mod'] },
     ]);
     expect(reporter.landings).toEqual(['Created "MyPatch.esp" in Winning Mod.']);
     expect(reporter.reports).toEqual([]);

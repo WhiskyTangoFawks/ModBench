@@ -15,20 +15,23 @@ public sealed class TrackHandlerTests : IDisposable
 
     private readonly ScratchDirectory _instanceRoot = new("medit-track-handler-");
     private readonly LoadOrderHolder _holder = new();
-    private readonly string _modFolder;
+    private readonly PluginProvider.FromMod _mod;
 
     public TrackHandlerTests()
     {
-        _modFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
+        _mod = new PluginProvider.FromMod(
+            Origin,
+            Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName,
+            Path.Combine(_instanceRoot, "source", Origin));
         var gameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
 
-        var pluginPath = Path.Combine(_modFolder, PluginName);
+        var pluginPath = Path.Combine(_mod.Folder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("FixtureNpc");
         mod.WriteToBinary(pluginPath);
 
         Snapshot = SnapshotPlugins.Snapshot(gameDirectory, _instanceRoot, GameRelease.Fallout4,
-            [new LoadOrderEntry(PluginName, pluginPath, Origin, 0, Enabled: true, Winning: true)]);
+            [new LoadOrderEntry(PluginName, pluginPath, Origin, 0, Enabled: true, Winning: true, NamedProvider: _mod)]);
     }
 
     private LoadOrderSnapshot Snapshot { get; }
@@ -36,15 +39,17 @@ public sealed class TrackHandlerTests : IDisposable
     public void Dispose() => _instanceRoot.Dispose();
 
     [Fact]
-    public async Task Track_OverTheHeldLoadOrder_TracksThePluginIntoItsModFolder()
+    public async Task Track_OverTheHeldLoadOrder_TracksThePluginIntoItsSourceFolder_AndWritesNothingInItsModFolder()
     {
         _holder.Apply(Snapshot);
         var handler = TestEditService.TrackHandler(_holder);
+        var modFolderBefore = TreeSnapshot.Of(_mod.Folder);
 
         var result = await handler.TrackAsync([Origin]);
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Landed).Outcome.Tracked);
-        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(PluginName, Origin, "", new PluginProvider.FromMod(Origin, _modFolder), Line: null)));
+        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(PluginName, Origin, "", _mod, Line: null)));
+        Assert.Equal(modFolderBefore, TreeSnapshot.Of(_mod.Folder));
     }
 
     [Fact]

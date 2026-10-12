@@ -11,10 +11,10 @@ namespace MEditService.SourceAdapter;
 /// <summary>The changes a write session applies, put, remove and rekey, each by identity; and the
 /// write made directly, the whole-plugin replacement. Every write forgets what the locator remembered of the tree.</summary>
 internal sealed class SourceRepositoryWrites(
-    string modFolder, GameRelease release, SourceRepositoryLocator locator, SourceRepositoryLayout layout, SourceRepositoryGit git,
+    string sourceFolder, GameRelease release, SourceRepositoryLocator locator, SourceRepositoryLayout layout, SourceRepositoryGit git,
     ISourceFiles files)
 {
-    private readonly string _modFolder = modFolder;
+    private readonly string _sourceFolder = sourceFolder;
     private readonly GameRelease _release = release;
 
     internal static CellPlacement PlacementIn(string worldspace, SourceDocument cell) =>
@@ -42,7 +42,7 @@ internal sealed class SourceRepositoryWrites(
         }
 
         var path = unit.IsDirectoryPerRecord ? PathShape.DirectoryOf(unit.FullPath) : unit.FullPath;
-        return new SourceChanges([], [Path.GetRelativePath(_modFolder, path)], []);
+        return new SourceChanges([], [Path.GetRelativePath(_sourceFolder, path)], []);
     }
 
     /// <summary>What putting a document changes: a held one's as <see cref="ChangesToRewrite"/> says, a new one's
@@ -179,21 +179,21 @@ internal sealed class SourceRepositoryWrites(
     private SourceChanges Written(string fullPath, string text) => new([], [], [Document(fullPath, text)]);
 
     private SourceMove Moved(string from, string to) =>
-        new(Path.GetRelativePath(_modFolder, from), Path.GetRelativePath(_modFolder, to));
+        new(Path.GetRelativePath(_sourceFolder, from), Path.GetRelativePath(_sourceFolder, to));
 
-    private DocumentChange Document(string fullPath, string text) => new(Path.GetRelativePath(_modFolder, fullPath), text);
+    private DocumentChange Document(string fullPath, string text) => new(Path.GetRelativePath(_sourceFolder, fullPath), text);
 
     internal void ReplaceSourceFrom(string pluginFileName, IReadOnlyList<TreeFile> files, string binarySha256)
     {
-        // A mod folder another tool removed is not written back into being.
-        if (!SourceRepositoryGit.IsTracked(_modFolder))
-            throw SourceStopException.Inaccessible($"'{_modFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
+        // A source folder another tool removed is not written back into being.
+        if (!SourceRepositoryGit.IsTracked(_sourceFolder))
+            throw SourceStopException.Inaccessible($"'{_sourceFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
 
-        var root = SourceRepositoryLayout.RootIn(_modFolder, pluginFileName);
-        var journal = new WriteJournal(_modFolder);
+        var root = SourceRepositoryLayout.RootIn(_sourceFolder, pluginFileName);
+        var journal = new WriteJournal(_sourceFolder);
         try
         {
-            var incoming = files.ToDictionary(file => Path.GetFullPath(Path.Combine(_modFolder, file.RelativePath)));
+            var incoming = files.ToDictionary(file => Path.GetFullPath(Path.Combine(_sourceFolder, file.RelativePath)));
             var held = Directory.Exists(root)
                 ? Directory.GetFiles(root, "*", SearchOption.AllDirectories)
                     .ToDictionary(Path.GetFullPath, File.ReadAllBytes)
@@ -203,7 +203,7 @@ internal sealed class SourceRepositoryWrites(
             journal.WriteAll(
                 incoming.Where(file => !held.TryGetValue(file.Key, out var bytes) || !bytes.AsSpan().SequenceEqual(file.Value.Content))
                     .Select(file => file.Value),
-                _modFolder);
+                _sourceFolder);
             git.ParkDecompiled(pluginFileName, binarySha256);
         }
         catch (Exception cause) when (cause is not OutOfMemoryException)
@@ -221,9 +221,9 @@ internal sealed class SourceRepositoryWrites(
     /// move, top down, and each document whose text changes, or is unsaved, is written at its moved path.</summary>
     internal SourceChanges ChangesToRenameSource(string from, string to)
     {
-        var held = files.FilesIn(SourceRepositoryLayout.RootIn(_modFolder, from), "*", SearchOption.AllDirectories)
+        var held = files.FilesIn(SourceRepositoryLayout.RootIn(_sourceFolder, from), "*", SearchOption.AllDirectories)
             .Order(StringComparer.Ordinal)
-            .Select(path => (Path: path, Relative: Path.GetRelativePath(_modFolder, path), Bytes: files.ReadAllBytes(path)))
+            .Select(path => (Path: path, Relative: Path.GetRelativePath(_sourceFolder, path), Bytes: files.ReadAllBytes(path)))
             .ToList();
         var renamed = held.Select(file => PluginSourceRename.Renamed(file.Relative, file.Bytes, from, to)).ToList();
         var documents = held.Zip(renamed)

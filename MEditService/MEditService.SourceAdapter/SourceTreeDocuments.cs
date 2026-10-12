@@ -12,7 +12,7 @@ namespace MEditService.SourceAdapter;
 /// into a mod.</summary>
 internal sealed class SourceTreeDocuments : IPluginDocuments
 {
-    private readonly string _modFolder;
+    private readonly string _sourceFolder;
     private readonly string _pluginFileName;
     private readonly ISourceFiles _files;
     private readonly GameRelease _release;
@@ -22,15 +22,15 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     private readonly string _headerRelativePath;
 
     internal SourceTreeDocuments(
-        string modFolder, string pluginFileName, GameRelease release, ISourceFiles files)
+        string sourceFolder, string pluginFileName, GameRelease release, ISourceFiles files)
     {
-        _modFolder = modFolder;
+        _sourceFolder = sourceFolder;
         _files = files;
         _pluginFileName = pluginFileName;
         _release = release;
         _containers = new ContainerDocuments(release);
         _types = RecordTypes.For(release);
-        _root = SourceRepositoryLayout.RootIn(modFolder, pluginFileName);
+        _root = SourceRepositoryLayout.RootIn(sourceFolder, pluginFileName);
         _headerRelativePath = SourceRepositoryLayout.HeaderDocumentFor(pluginFileName);
     }
 
@@ -40,7 +40,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         get
         {
-            var path = Path.Combine(_modFolder, _headerRelativePath);
+            var path = Path.Combine(_sourceFolder, _headerRelativePath);
             var text = Read(path)
                 ?? throw new FileNotFoundException(
                     $"'{_pluginFileName}' is tracked but its source tree holds no root " +
@@ -66,7 +66,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         if (!_files.DirectoryExists(_root)) yield break;
 
-        var holders = new OneDocumentPerFormKey(_modFolder);
+        var holders = new OneDocumentPerFormKey(_sourceFolder);
         foreach (var groupDirectory in _files.DirectoriesIn(_root))
         {
             var folder = Path.GetFileName(groupDirectory);
@@ -140,7 +140,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         if (SourceRepositoryLayout.CarriesNoRecord(file)) yield break;
 
-        var relativePath = Path.GetRelativePath(_modFolder, file);
+        var relativePath = Path.GetRelativePath(_sourceFolder, file);
         if (relativePath.Equals(_headerRelativePath, StringComparison.Ordinal)) yield break;
         if (Read(file) is not { } text) yield break;
 
@@ -148,7 +148,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         // degrades to the binary and says so, which is visible; dropping it here would not be.
         var declared = DocumentText.FormKeyDeclaredIn(text, relativePath, _pluginFileName);
         if (DocumentTokens.WhyNotADocument(text) is { } why) throw Unreadable(file, $"it is no JSON document: {why}");
-        _ = RequireReadable(_modFolder, DocumentTokens.EditorIdIn(text), file, declared);
+        _ = RequireReadable(_sourceFolder, DocumentTokens.EditorIdIn(text), file, declared);
 
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
             ?? _types.RecordTypeNamed(DocumentTokens.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator))
@@ -188,25 +188,25 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     /// read refuses: an EditorID that is no string, or an embedded child that is untyped or holds one.</summary>
     internal void RefuseUnreadable(string recordType, string formKey, string text, string file)
     {
-        _ = RequireReadable(_modFolder, DocumentTokens.EditorIdIn(text), file, formKey);
-        foreach (var embedded in EmbeddedTexts(recordType, formKey, text)) _ = RequireReadable(_modFolder, embedded.Child, file);
+        _ = RequireReadable(_sourceFolder, DocumentTokens.EditorIdIn(text), file, formKey);
+        foreach (var embedded in EmbeddedTexts(recordType, formKey, text)) _ = RequireReadable(_sourceFolder, embedded.Child, file);
     }
 
     /// <summary>The EditorID of the record at a document's root, refusing as that document one that is no string.</summary>
-    internal static string? RequireReadable(string modFolder, EditorIdRead editorId, string file, string? formKey) =>
+    internal static string? RequireReadable(string sourceFolder, EditorIdRead editorId, string file, string? formKey) =>
         editorId.WhyUnreadable is { } why
-            ? throw SourceStopException.UnreadableIn(modFolder, file, $"its {why}", formKey)
+            ? throw SourceStopException.UnreadableIn(sourceFolder, file, $"its {why}", formKey)
             : editorId.EditorId;
 
     /// <summary>The child's record type, refusing as the file holding it a child none resolves for, or
     /// one whose EditorID is no string.</summary>
-    internal static string RequireReadable(string modFolder, ContainerDocuments.ChildDocument child, string ownerFile)
+    internal static string RequireReadable(string sourceFolder, ContainerDocuments.ChildDocument child, string ownerFile)
     {
-        var type = child.RecordType ?? throw SourceStopException.UnreadableIn(modFolder, ownerFile, child.WhyUntyped, child.FormKey);
+        var type = child.RecordType ?? throw SourceStopException.UnreadableIn(sourceFolder, ownerFile, child.WhyUntyped, child.FormKey);
         if (child.Document.EditorId.WhyUnreadable is { } why)
         {
             throw SourceStopException.UnreadableIn(
-                modFolder, ownerFile, $"its '{child.SlotName}' names '{child.FormKey}', whose {why}", child.FormKey);
+                sourceFolder, ownerFile, $"its '{child.SlotName}' names '{child.FormKey}', whose {why}", child.FormKey);
         }
         return type;
     }
@@ -216,7 +216,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         foreach (var (child, text, directOwner) in EmbeddedTexts(ownerRecordType, ownerFormKey, ownerText))
         {
-            var childType = RequireReadable(_modFolder, child, ownerFile);
+            var childType = RequireReadable(_sourceFolder, child, ownerFile);
             // The one embedded cell: a worldspace's top cell, outside every exterior block grid.
             var cell = _types.IsCell(childType)
                 ? CellPlacement.TopCellOf(directOwner).Structure
@@ -285,5 +285,5 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     }
 
     private SourceStopException Unreadable(string file, string because, string? formKey = null) =>
-        SourceStopException.UnreadableIn(_modFolder, file, because, formKey);
+        SourceStopException.UnreadableIn(_sourceFolder, file, because, formKey);
 }

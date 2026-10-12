@@ -4,7 +4,7 @@ import type { DataFolderPlugins, GameFolder, ModFolders, OriginFile, PluginEntry
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { buildFileConflictIndex, FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
 import {
-  buildLoadOrderRows, loadOrderSnapshotOf, originFiles, pluginsLoadedWithNoLineOf, providedPluginsOf, type LoadOrderPlugin,
+  buildLoadOrderRows, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, providedPluginsOf, sourceFiles, type LoadOrderPlugin,
   type LoadOrderPluginLine,
 } from '../loadOrderSnapshot';
 import type { PluginAddress } from '../../wire/pluginAddress';
@@ -278,36 +278,29 @@ describe('buildLoadOrderRows, a name neither a mod winner nor a game folder foun
   });
 });
 
-describe('originFiles', () => {
-  const MOD_FOLDER = join('/instance', 'mods', 'TS Mod');
+describe('sourceFiles', () => {
+  const SOURCE_FOLDER = join('/instance', 'source', 'TS Mod');
   const value = instanceValueFixture({
     gameFolder: GAME_FOLDER,
     paths: {
-      overwriteDir: OVERWRITE, downloadsDir: undefined,
-      modDirs: new Map([['TS Mod', MOD_FOLDER], ['Data', join('/instance', 'mods', 'Data')], ['overwrite', join('/instance', 'mods', 'overwrite')]]),
+      overwriteDir: OVERWRITE, downloadsDir: undefined, modDirs: new Map([['TS Mod', join('/instance', 'mods', 'TS Mod')]]),
+      sourceDirs: new Map([['TS Mod', SOURCE_FOLDER], ['Data', join('/instance', 'source', 'Data')], ['overwrite', join('/instance', 'source', 'overwrite')]]),
     },
   });
-  const fileOf = (origin: string) => present(originFiles(value, origin), `the ${origin} origin's files`).file('plugin-source/x.json');
+  const fileOf = (origin: string) => present(sourceFiles(value, origin), `the ${origin} origin's source`).file('plugin-source/x.json');
 
-  it('names a file inside the mod folder the Instance adapter answered for a mod origin', () => {
-    expect(fileOf('TS Mod')).toBe(join(MOD_FOLDER, 'plugin-source', 'x.json'));
+  it('names a file inside the source folder the Instance adapter answered for a mod origin, not its mod folder', () => {
+    expect(fileOf('TS Mod')).toBe(join(SOURCE_FOLDER, 'plugin-source', 'x.json'));
   });
 
-  it('names a file inside the Overwrite folder for the overwrite origin, a reserved origin never a folder under mods/', () => {
-    expect(fileOf('overwrite/')).toBe(join(OVERWRITE, 'plugin-source', 'x.json'));
+  it.each(['Data', 'overwrite'])('names a file inside the source folder of a mod called %s, never a reserved origin of that word', (name) => {
+    expect(fileOf(name)).toBe(join('/instance', 'source', name, 'plugin-source', 'x.json'));
   });
 
-  it('names a file inside the game\u2019s Data folder for the Data origin', () => {
-    expect(fileOf('Data/')).toBe(join(DATA_FOLDER, 'plugin-source', 'x.json'));
-  });
-
-  it.each(['Data', 'overwrite'])('names a file inside the mod folder of a mod called %s, never the reserved folder of that word', (name) => {
-    expect(fileOf(name)).toBe(join('/instance', 'mods', name, 'plugin-source', 'x.json'));
-  });
-
-  it('answers nothing for a mod with no folder, and for the Data origin while the game folder is not found', () => {
-    expect(originFiles(value, 'Other Mod')).toBeUndefined();
-    expect(originFiles({ ...value, gameFolder: GAME_FOLDER_NOT_FOUND }, 'Data/')).toBeUndefined();
+  it('answers nothing for a mod with no source folder, nor for Overwrite and the game folder, which are no mod', () => {
+    expect(sourceFiles(value, 'Other Mod')).toBeUndefined();
+    expect(sourceFiles(value, 'overwrite/')).toBeUndefined();
+    expect(sourceFiles(value, 'Data/')).toBeUndefined();
   });
 });
 
@@ -349,24 +342,26 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     return { all, holding: (entry) => all.find((f) => f.kind === entry.kind && f.name === entry.name) };
   };
   const modFolders = modFoldersOf('ModA', 'ModS', 'ModF', 'ModD', 'ModO', 'ModU', 'ModM', 'ModOff');
-  const provider = (origin: string) => origin === 'Data/' ? { kind: 'Game' } : { kind: 'Mod', mod: origin, folder: folderOf(origin) };
+  const sourceDirOf = (mod: string) => `/mo2/source/${mod}`;
+  const sourceDirs = new Map(modFolders.all.map(({ name }) => [name, sourceDirOf(name)]));
+  const provider = (origin: string) => origin === 'Data/' ? { kind: 'Game' } : { kind: 'Mod', mod: origin, folder: folderOf(origin), sourceFolder: sourceDirOf(origin) };
   const sent = ({ name, path, origin, line, winning }: LoadOrderPlugin) => ({ name, path, origin, provider: provider(origin), line, lineNamesIt: line !== null && winning });
   const address = ({ name, origin }: { name: string; origin: string }) => ({ name, origin });
   const outcomeOf = (plugins: LoadOrderPluginRow[], folders: ModFolders = modFolders) =>
-    loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: folders });
+    loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: folders, sourceDirs });
   const snapshotOf = (plugins: LoadOrderPluginRow[], pluginsLoadedWithNoLine: readonly PluginAddress[] = []) => {
-    const outcome = loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine, modFolders });
+    const outcome = loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine, modFolders, sourceDirs });
     return outcome !== undefined && 'refusal' in outcome ? undefined : outcome;
   };
   const inGameFolder = (name: string): PluginAddress => ({ name, origin: 'Data/' });
 
   it('is undefined — no put at all — while the game folder\'s plugins cannot be listed, as a snapshot lacking the game\'s masters is not sent', () => {
-    expect(loadOrderSnapshotOf({ plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: undefined, modFolders }))
+    expect(loadOrderSnapshotOf({ plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: undefined, modFolders, sourceDirs }))
       .toBeUndefined();
   });
 
   it('is undefined — no put at all — when the game folder is not found', () => {
-    expect(loadOrderSnapshotOf({ plugins: [row('a.esp', 'ModA', 0)], gameFolder: NOT_FOUND, pluginsLoadedWithNoLine: [], modFolders }))
+    expect(loadOrderSnapshotOf({ plugins: [row('a.esp', 'ModA', 0)], gameFolder: NOT_FOUND, pluginsLoadedWithNoLine: [], modFolders, sourceDirs }))
       .toBeUndefined();
   });
 
@@ -451,14 +446,14 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(snapshot?.plugins.filter((p) => p.name.toLowerCase() === 'master.esm')).toHaveLength(1);
   });
 
-  it('names what provides each plugin: its mod with the mod\'s own folder, not the plugin\'s directory, the game for Data, no mod for overwrite', () => {
+  it('names what provides each plugin: its mod with the mod\'s own folder, not the plugin\'s directory, and its source folder, the game for Data, no mod for overwrite', () => {
     const inMod = row('a.esp', 'ModA', 0);
     const inGame = { ...row('b.esp', 'Data/', 1), path: '/game/Data/b.esp' };
     const stray = { ...row('c.esp', 'overwrite/', null), path: '/instance/overwrite/c.esp' };
 
     const providers = snapshotOf([inMod, inGame, stray])?.plugins.map((p) => p.provider);
 
-    expect(providers).toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA' }, { kind: 'Game' }, { kind: 'None' }]);
+    expect(providers).toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA', sourceFolder: '/mo2/source/ModA' }, { kind: 'Game' }, { kind: 'None' }]);
   });
 
   it('is a refusal naming each plugin and its mod when no mod folder is the mod\'s, never a snapshot without them', () => {
