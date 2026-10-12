@@ -12,6 +12,8 @@
          which is what lets a handler registration see the internal module the handlers share, and a
          type used directly should not depend on another package continuing to drag it in. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.4" />
+    <PackageReference Include="SharpCompress" Version="0.41.0" />
+    <PackageReference Include="System.IO.Hashing" Version="10.0.8" />
     <PackageReference Include="Roslynator.Analyzers" Version="4.15.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -25,6 +27,7 @@
   <ItemGroup>
     <ProjectReference Include="..\MEditService.RepositoriesLib\MEditService.RepositoriesLib.csproj" />
     <ProjectReference Include="..\MEditService.SourceAdapter\MEditService.SourceAdapter.csproj" />
+    <ProjectReference Include="..\MEditService.ModFolderAdapter\MEditService.ModFolderAdapter.csproj" />
     <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
     <!-- The kernel, by the band's rule (target-architecture.d2 medit_kernel). -->
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
