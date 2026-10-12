@@ -115,8 +115,8 @@ internal sealed class PluginIngest
         if (batch.Count > 0) yield return batch;
     }
 
-    // Reading a batch of documents and preparing one each keep the cores busy, and only the appender
-    // is sequential. Each stage runs a batch ahead of the next, so the ingest holds at most five.
+    // Reading a batch of documents and preparing one each keep the cores busy. Each stage runs a batch
+    // ahead of the next, so the ingest holds at most five.
     private static IEnumerable<List<PreparedRecord>> Pipelined(
         IEnumerable<List<PluginDocument>> batches, Func<List<PluginDocument>, List<PreparedRecord>> prepare)
     {
@@ -124,22 +124,24 @@ internal sealed class PluginIngest
         using var read = new BlockingCollection<List<PluginDocument>>(boundedCapacity: 1);
         using var prepared = new BlockingCollection<List<PreparedRecord>>(boundedCapacity: 1);
         ExceptionDispatchInfo? failure = null;
-        bool Stops(Exception ex)
+        bool StopsTheOthers(Exception ex)
         {
             if (!stop.IsCancellationRequested) Interlocked.CompareExchange(ref failure, ExceptionDispatchInfo.Capture(ex), null);
             stop.Cancel();
             return false;
         }
-        void Stage(Action work, BlockingCollection<List<PreparedRecord>>? completes, BlockingCollection<List<PluginDocument>>? completesRead)
+        // A stage blocks on its queue for the whole ingest, so it takes a thread of its own rather than
+        // one the parallel work inside the stages needs.
+        Task Stage(Action work, Action complete) => Task.Factory.StartNew(() =>
         {
             try { work(); }
-            catch (Exception ex) when (Stops(ex)) { throw; }
-            finally { completes?.CompleteAdding(); completesRead?.CompleteAdding(); }
-        }
+            catch (Exception ex) when (StopsTheOthers(ex)) { throw; }
+            finally { complete(); }
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         var stages = new[]
         {
-            Task.Run(() => Stage(() => { foreach (var batch in batches) read.Add(batch, stop.Token); }, null, read)),
-            Task.Run(() => Stage(() => { foreach (var batch in read.GetConsumingEnumerable(stop.Token)) prepared.Add(prepare(batch), stop.Token); }, prepared, null)),
+            Stage(() => { foreach (var batch in batches) read.Add(batch, stop.Token); }, read.CompleteAdding),
+            Stage(() => { foreach (var batch in read.GetConsumingEnumerable(stop.Token)) prepared.Add(prepare(batch), stop.Token); }, prepared.CompleteAdding),
         };
         var consumed = prepared.GetConsumingEnumerable(stop.Token).GetEnumerator();
         try

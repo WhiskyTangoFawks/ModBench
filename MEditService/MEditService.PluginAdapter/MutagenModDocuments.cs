@@ -6,6 +6,7 @@ using System.Runtime.ExceptionServices;
 using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
@@ -61,7 +62,7 @@ internal sealed class MutagenModDocuments(
 
     // DuckDB reads 2048 consecutive rows at once, so a group of multi-megabyte documents in one run
     // holds gigabytes. Each table with a group of its own is spread over the plugin by its share of
-    // the records. The tables that share a walk follow one another in one stream, so no walk is held twice.
+    // the records.
     private IEnumerable<HeldRecord> Spread()
     {
         var tables = schemas.Where(table => table.Key != PluginHeader.RecordType).ToList();
@@ -94,14 +95,15 @@ internal sealed class MutagenModDocuments(
         }
     }
 
-    // One walk of the plugin reads each group once, where a walk per table reads its container's whole
-    // group again for each table nested in it. A walk Mutagen stops partway leaves each table to its
-    // own walk, past the records it already gave, so each table Mutagen cannot read reports itself.
+    // Mutagen's overlay reads a group anew on every walk, and a nested table's walk reads its
+    // container's whole group, so the tables that share a walk take their records from one walk of the
+    // plugin. Mutagen's walk cannot resume once it throws: each table then walks on its own from the
+    // last record it was given, and one whose walk does not pass that record reports so.
     private IEnumerable<HeldRecord> SharedRecords(IReadOnlyList<KeyValuePair<string, RecordTableSchema>> tables)
     {
-        var schemaOf = tables.ToDictionary(table => table.Key, table => table.Value, StringComparer.Ordinal);
-        var given = new Dictionary<string, int>(StringComparer.Ordinal);
         var types = RecordTypes.For(mod.GameRelease);
+        var named = tables.ToDictionary(table => table.Key, table => table.Value, StringComparer.Ordinal);
+        var given = new Dictionary<string, (int Count, FormKey Last)>(StringComparer.Ordinal);
         var stoppedPartway = false;
         bool Continues(IEnumerator<IMajorRecordGetter> walk)
         {
@@ -120,16 +122,29 @@ internal sealed class MutagenModDocuments(
         {
             while (Continues(walk))
             {
-                var tableName = types.RecordTypeOf(walk.Current);
-                if (!schemaOf.TryGetValue(tableName, out var schema)) continue;
-                given[tableName] = given.GetValueOrDefault(tableName) + 1;
-                yield return new HeldRecord(tableName, schema, walk.Current);
+                var record = walk.Current;
+                var table = types.RecordTypeNamed(record.GetType().Name) is { } name && named.TryGetValue(name, out var schema)
+                    ? KeyValuePair.Create(name, schema)
+                    : tables.FirstOrDefault(candidate => candidate.Value.Holds(record, types));
+                if (table.Value is null) continue;
+                given[table.Key] = (given.GetValueOrDefault(table.Key).Count + 1, record.FormKey);
+                yield return new HeldRecord(table.Key, table.Value, record);
             }
             if (!stoppedPartway) yield break;
         }
         foreach (var (tableName, schema) in tables)
         {
-            foreach (var record in RecordsOf(tableName, schema).Skip(given.GetValueOrDefault(tableName))) yield return record;
+            var (count, last) = given.GetValueOrDefault(tableName);
+            foreach (var record in RecordsOf(tableName, schema).Skip(count > 0 ? count - 1 : 0).Select((record, index) => (record, index)))
+            {
+                if (count > 0 && record.index == 0)
+                {
+                    if (record.record.Getter.FormKey == last) continue;
+                    _failures.Add(new RecordTypeFailure(tableName, $"Mutagen stopped reading the plugin after {last}, and the {tableName} records cannot be read past it."));
+                    break;
+                }
+                yield return record.record;
+            }
         }
     }
 

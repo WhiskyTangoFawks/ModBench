@@ -41,20 +41,16 @@ public sealed class PluginDocumentReadTests
     [Theory]
     [InlineData("weap")]
     [InlineData("stat")]
-    public void OpenDocuments_SpreadsATopLevelGroupsRecordsAcrossTheStream_SoNoTwoArriveTogether(string recordType)
+    public void OpenDocuments_SpreadsATopLevelGroupsRecordsAcrossTheStream_AmongTheRecordsOfTheOthers(string recordType)
     {
         using var data = new PluginFixtureBuilder("documents-spread")
             .WithPlugin(PluginName, mod =>
             {
                 var cell = new Cell(mod) { EditorID = "SpreadCell" };
-                foreach (var placed in Enumerable.Range(0, 12)) cell.Temporary.Add(new PlacedObject(mod) { EditorID = $"Placed{placed}" });
-                var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-                subBlock.Cells.Add(cell);
-                var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-                block.SubBlocks.Add(subBlock);
-                mod.Cells.Records.Add(block);
-                foreach (var weapon in Enumerable.Range(0, 4)) mod.Weapons.AddNew($"Weapon{weapon}");
-                foreach (var statics in Enumerable.Range(0, 4)) mod.Statics.AddNew($"Static{statics}");
+                cell.Temporary.AddRange(Enumerable.Range(0, 12).Select(placed => new PlacedObject(mod) { EditorID = $"Placed{placed}" }));
+                mod.AddInteriorCells(cell);
+                mod.Weapons.Set(Enumerable.Range(0, 4).Select(weapon => new Weapon(mod) { EditorID = $"Weapon{weapon}" }));
+                mod.Statics.Set(Enumerable.Range(0, 4).Select(statics => new Static(mod) { EditorID = $"Static{statics}" }));
             })
             .Build();
         var path = Path.Combine(data.DataFolder, PluginName);
@@ -65,7 +61,7 @@ public sealed class PluginDocumentReadTests
             .Where(d => d.RecordType == recordType).Select(d => d.position).ToList();
 
         Assert.Equal(4, positions.Count);
-        Assert.All(positions.Zip(positions.Skip(1), (before, after) => after - before), gap => Assert.True(gap > 1, $"{recordType} documents at {string.Join(", ", positions)}"));
+        Assert.All(positions.Zip(positions.Skip(1), (before, after) => after - before), gap => Assert.True(gap > 2, $"{recordType} documents at {string.Join(", ", positions)}"));
     }
 
     [Fact]
@@ -132,12 +128,8 @@ public sealed class PluginDocumentReadTests
             .WithPlugin(PluginName, mod =>
             {
                 var cell = new Cell(mod) { EditorID = "BeforeTheQuests" };
-                foreach (var placed in Enumerable.Range(0, 3)) cell.Temporary.Add(new PlacedObject(mod) { EditorID = $"Placed{placed}" });
-                var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-                subBlock.Cells.Add(cell);
-                var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-                block.SubBlocks.Add(subBlock);
-                mod.Cells.Records.Add(block);
+                cell.Temporary.AddRange(Enumerable.Range(0, 3).Select(placed => new PlacedObject(mod) { EditorID = $"Placed{placed}" }));
+                mod.AddInteriorCells(cell);
             })
             .Build();
         var path = Path.Combine(data.DataFolder, PluginName);

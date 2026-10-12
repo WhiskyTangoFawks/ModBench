@@ -76,8 +76,12 @@ public sealed class RecordTableSchema
     /// yields every variant a cell holds, so each record is checked. Lazy: Mutagen's group
     /// enumerator cannot resume after it throws.</summary>
     public IEnumerable<IMajorRecordGetter> RecordsIn(IModGetter mod) =>
-        mod.EnumerateMajorRecords(RecordType, throwIfUnknown: false)
-            .Where(record => RecordType.IsInstanceOfType(record) || RecordTypes.For(mod.GameRelease).RecordTypeOf(record) == TableName);
+        mod.EnumerateMajorRecords(RecordType, throwIfUnknown: false).Where(record => Holds(record, RecordTypes.For(mod.GameRelease)));
+
+    /// <summary>Whether <paramref name="record"/> is one of this table's: its class, or a class the
+    /// game's GRUPs file under this table.</summary>
+    public bool Holds(IMajorRecordGetter record, RecordTypes types) =>
+        RecordType.IsInstanceOfType(record) || types.RecordTypeNamed(record.GetType().Name) == TableName;
 
     // A ModHeader cannot carry the Partial Form flag.
     public bool IsPartialForm(Document document) => !IsHeader && document.IsPartialForm(RecordType);
@@ -100,8 +104,8 @@ public sealed class RecordTableSchema
         }
     }
 
-    /// <summary>The count of this table's records when they fill a top-level group that no other
-    /// table's walk reads; null when a walk is shared, as a container's walk reads its children.</summary>
+    /// <summary>The count of this table's records when they fill a top-level group of their own and
+    /// hold no child records; null when its walk reads other tables' records, as a container's does.</summary>
     public int? SeparateGroupCountIn(IModGetter mod) =>
         ContainerChildFields.EnumerateChildFieldsFor(RecordType) is null && mod.TryGetTopLevelGroup(RecordType) is { } group
             ? group.Count
