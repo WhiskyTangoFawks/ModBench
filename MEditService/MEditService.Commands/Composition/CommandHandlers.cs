@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Commands.Build;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
@@ -101,6 +102,12 @@ public static class CommandHandlers
                 sp.GetRequiredService<ILogger<PluginCompileService>>()),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ISourceAdapter>()));
+
+        services.AddSingleton(sp => new BuildHandler(
+            sp.GetRequiredService<CompilePluginHandler>(),
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<ISourceAdapter>(),
+            sp.GetRequiredService<INotificationPublisher>()));
 
         services.AddSingleton(sp => new CreatePluginHandler(
             sp.GetRequiredService<IPluginAdapter>(),

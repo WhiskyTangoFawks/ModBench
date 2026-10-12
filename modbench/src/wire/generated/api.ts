@@ -134,6 +134,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/build": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["BuildMod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications/stream": {
         parameters: {
             query?: never;
@@ -736,6 +752,27 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        BuildProgress: {
+            mod?: string | null;
+            /** Format: int32 */
+            modsDone: number;
+            /** Format: int32 */
+            modsTotal: number;
+        };
+        /** @enum {string} */
+        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder";
+        BuildRequest: {
+            mods: string[];
+        };
+        BuildResponse: {
+            applied: components["schemas"]["BuiltModResponse"][];
+            refused: components["schemas"]["ModBuildRefusal"][];
+        };
+        BuiltModResponse: {
+            mod: string;
+            compiled: components["schemas"]["CompiledPlugin"][];
+            refused: components["schemas"]["PluginCompileRefusal"][];
+        };
         CellChildRecords: {
             persistent: components["schemas"]["ChildRecordSummary"][];
             temporary: components["schemas"]["ChildRecordSummary"][];
@@ -1005,6 +1042,11 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        ModBuildRefusal: {
+            item: string;
+            refusal: components["schemas"]["BuildRefusal"];
+            message: string;
+        };
         ModStageRefusal: {
             item: string;
             refusal: components["schemas"]["StageRefusal"];
@@ -1030,6 +1072,7 @@ export interface components {
             sequence: number;
             loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
             trackProgress?: components["schemas"]["TrackProgress"] | null;
+            buildProgress?: components["schemas"]["BuildProgress"] | null;
             changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
             pluginWithUnreadableSources?: components["schemas"]["PluginWithUnreadableSource"][] | null;
             recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;
@@ -1728,6 +1771,57 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    BuildMod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuildRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

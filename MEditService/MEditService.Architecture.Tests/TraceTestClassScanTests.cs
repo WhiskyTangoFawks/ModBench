@@ -7,7 +7,7 @@ public sealed class TraceTestClassScanTests
     private const string Endpoints = "MEditService.Http.Tests";
 
     private static readonly string[] SpecifiedAheadOfCode =
-        ["build-mod", "discard-changes", "init-mod"];
+        ["discard-changes", "init-mod"];
 
     [Fact]
     public void EveryTraceThatDrawsAnMEditActor_HasATestClassNamedForIt()
