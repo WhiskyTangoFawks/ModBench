@@ -1,4 +1,4 @@
-export const DRIVING_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'sourceLanguage', 'drivingLib'];
+export const DRIVING_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'sourceLanguage', 'drivingLib', 'agent'];
 export const BOXES = [
     ...DRIVING_BOXES,
     'modOrderCommands', 'pluginsCommands', 'instanceCommands', 'downloadsCommands', 'install', 'coreLib',
