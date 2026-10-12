@@ -1,4 +1,5 @@
 using MEditService.Commands.Build;
+using MEditService.ModFolderAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -33,6 +34,9 @@ internal static class ModlistEndpoints
         }
         if (req.GameFiles is not { } gameFiles || gameFiles.Any(file => string.IsNullOrWhiteSpace(file.Path) || file.Size is null || string.IsNullOrWhiteSpace(file.Hash)))
             return Results.Problem("The game files the mods override are required, each with a path, a size and a hash.", statusCode: 400);
+        if (mods.SelectMany(mod => mod.InstallationFiles ?? []).Any(file => !FileHash.IsHash(file.Hash) || file.Entries.Any(entry => !FileHash.IsHash(entry.Hash)))
+            || gameFiles.Any(file => !FileHash.IsHash(file.Hash)))
+            return Results.Problem("Every hash is xxHash64 as Wabbajack writes it: eight bytes in base64.", statusCode: 400);
         if (string.IsNullOrWhiteSpace(req.DataFolder) || string.IsNullOrWhiteSpace(req.BuildFolder) || req.DeltaShare is not (>= 0 and <= 1))
             return Results.Problem("The game's data folder, the build folder and a delta share from 0 to 1 are required.", statusCode: 400);
 

@@ -44,13 +44,31 @@ public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepositor
         return delta.Exists ? delta.Length : null;
     }
 
-    public void WriteDelta(string buildFolder, string path, string baseHash, string fileHash, byte[] delta)
+    public bool WriteDelta(string buildFolder, string path, string baseHash, string fileHash, Func<Stream, bool> write)
     {
         Directory.CreateDirectory(buildFolder);
         var named = Path.Combine(buildFolder, ManifestText.DeltaName(path, baseHash, fileHash));
         var partial = named + ".partial";
-        File.WriteAllBytes(partial, delta);
-        File.Move(partial, named, overwrite: true);
+        try
+        {
+            bool keep;
+            using (var delta = new FileStream(partial, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+                keep = write(delta);
+            if (keep) File.Move(partial, named, overwrite: true);
+            return keep;
+        }
+        finally
+        {
+            File.Delete(partial);
+        }
+    }
+
+    public Stream CreateScratchFile(string buildFolder)
+    {
+        Directory.CreateDirectory(buildFolder);
+        return new FileStream(
+            Path.Combine(buildFolder, Path.GetRandomFileName() + ".scratch"),
+            FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, bufferSize: 1 << 16, FileOptions.DeleteOnClose);
     }
 
     private HashedFile Hashed(string modFolder, string path, long size, LineStamp? line)

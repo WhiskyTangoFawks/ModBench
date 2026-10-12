@@ -49,16 +49,21 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
                 $"'{mod.Name}' was not staged: {string.Join(", ", missing)} not in the downloads folder.");
         }
 
+        List<(string Name, InstallationFileToStage File)> installationFiles =
+            [.. mod.InstallationFiles.Select(file => (repository.InstallationFileName(file.Path), file))];
+        var deltas = new DeltaMaker(repository, instance, mod.Folder, installationFiles);
         Manifest manifest;
         try
         {
             var files = repository.Files(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal));
-            List<(string Name, InstallationFileToStage File)> installationFiles =
-                [.. mod.InstallationFiles.Select(file => (repository.InstallationFileName(file.Path), file))];
             var builder = new ManifestBuilder(installationFiles, instance.GameFiles);
-            var providers = new DeltaMaker(repository, instance, mod.Folder, installationFiles)
-                .Keep([.. files.Select(file => (file, builder.ProviderOf(file)))]);
+            var providers = deltas.Keep([.. files.Select(file => (file, builder.ProviderOf(file)))]);
             manifest = builder.Manifest([.. files.Zip(providers, (file, provider) => new ManifestFile(file.Path, file.Hash, file.Stamp, provider))]);
+        }
+        catch (Exception e) when (deltas.NotWritten && e is IOException or UnauthorizedAccessException)
+        {
+            return ItemAnswer<StageRefusal, StagedMod>.Refused(
+                StageRefusal.NotWritten, $"'{mod.Name}' was not staged: a delta could not be written: {e.Message}");
         }
         catch (DirectoryNotFoundException)
         {
@@ -78,7 +83,7 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return ItemAnswer<StageRefusal, StagedMod>.Refused(
-                StageRefusal.ManifestNotWritten, $"'{mod.Name}' was not staged: its manifest could not be written: {e.Message}");
+                StageRefusal.NotWritten, $"'{mod.Name}' was not staged: its manifest could not be written: {e.Message}");
         }
 
         return ItemAnswer<StageRefusal, StagedMod>.Landed(new StagedMod(

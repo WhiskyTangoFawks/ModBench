@@ -36,7 +36,8 @@ public enum StageRefusal
     /// file.</summary>
     ModFilesUnreadable,
 
-    ManifestNotWritten,
+    /// <summary>The mod's manifest, or a delta it needs, could not be written.</summary>
+    NotWritten,
 }
 
 /// <summary>A mod whose manifest is as its folder says. ManifestWritten is false when the manifest was already so.

@@ -1382,7 +1382,7 @@ export interface components {
             modsTotal: number;
         };
         /** @enum {string} */
-        StageRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "ManifestNotWritten";
+        StageRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "NotWritten";
         StageRequest: {
             mods: components["schemas"]["StageModRequest"][];
             gameFiles: components["schemas"]["StageGameFileRequest"][];

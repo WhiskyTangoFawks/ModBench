@@ -8,6 +8,9 @@ namespace MEditService.Commands.Build;
 internal sealed class DeltaMaker(
     IModFolderRepository repository, InstanceToStage instance, string modFolder, IReadOnlyList<(string Name, InstallationFileToStage File)> installationFiles)
 {
+    /// <summary>True once the build folder refused a delta, whose exception then ends Keep.</summary>
+    public bool NotWritten { get; private set; }
+
     public FileProvider[] Keep(IReadOnlyList<(HashedFile File, FileProvider Provider)> proposed)
     {
         var providers = proposed.Select(p => BaseHashOf(p.Provider) is null ? p.Provider : new FileProvider.NoProvider()).ToArray();
@@ -29,7 +32,7 @@ internal sealed class DeltaMaker(
                 ArchiveExtractor.Extract(archive, (path, content) =>
                 {
                     if (!wanted.Contains(path)) return;
-                    using var basis = new MemoryStream();
+                    using var basis = Written(() => repository.CreateScratchFile(instance.BuildFolder));
                     content.CopyTo(basis);
                     foreach (var delta in wanted[path]) Make(delta, basis);
                 });
@@ -52,10 +55,25 @@ internal sealed class DeltaMaker(
         {
             basis.Position = 0;
             using var target = repository.OpenFile(modFolder, delta.File.Path);
-            var made = OctodiffDelta.Make(basis, target);
-            if (!WithinShare(made.Length, delta.File)) return;
-            repository.WriteDelta(instance.BuildFolder, delta.File.Path, delta.BaseHash, delta.File.Hash, made);
-            providers[delta.At] = delta.Provider;
+            var kept = Written(() => repository.WriteDelta(instance.BuildFolder, delta.File.Path, delta.BaseHash, delta.File.Hash, made =>
+            {
+                OctodiffDelta.Write(basis, target, made);
+                return WithinShare(made.Length, delta.File);
+            }));
+            if (kept) providers[delta.At] = delta.Provider;
+        }
+    }
+
+    private T Written<T>(Func<T> write)
+    {
+        try
+        {
+            return write();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            NotWritten = true;
+            throw;
         }
     }
 

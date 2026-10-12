@@ -184,7 +184,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         var build = Path.Combine(_root, "build");
 
-        _repository.WriteDelta(build, "meshes/a.nif", HashOfHello, HashOfHelloWithACapitalO, [1, 2, 3]);
+        Assert.True(_repository.WriteDelta(build, "meshes/a.nif", HashOfHello, HashOfHelloWithACapitalO, Writing([1, 2, 3], keep: true)));
 
         Assert.Equal([$"a.nif.{DeltaFromHelloToHelloWithACapitalO}"], Directory.GetFiles(build).Select(Path.GetFileName));
         Assert.Equal(3, _repository.DeltaSize(build, "meshes/a.nif", HashOfHello, HashOfHelloWithACapitalO));
@@ -194,10 +194,56 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void ADeltaTheBuildFolderDoesNotHold_HasNoSize()
     {
         var build = Path.Combine(_root, "build");
-        _repository.WriteDelta(build, "a.nif", HashOfHello, HashOfHelloWithACapitalO, [1]);
+        _repository.WriteDelta(build, "a.nif", HashOfHello, HashOfHelloWithACapitalO, Writing([1], keep: true));
 
         Assert.Null(_repository.DeltaSize(build, "a.nif", HashOfHelloWithACapitalO, HashOfHello));
     }
+
+    [Fact]
+    public void ADeltaNotKept_LeavesNothingInTheBuildFolder()
+    {
+        var build = Path.Combine(_root, "build");
+
+        Assert.False(_repository.WriteDelta(build, "a.nif", HashOfHello, HashOfHelloWithACapitalO, Writing([1], keep: false)));
+
+        Assert.Empty(Directory.GetFiles(build));
+    }
+
+    [Fact]
+    public void ADeltaWhoseWritingFails_LeavesNothingInTheBuildFolder()
+    {
+        var build = Path.Combine(_root, "build");
+
+        Assert.Throws<IOException>(() => _repository.WriteDelta(build, "a.nif", HashOfHello, HashOfHelloWithACapitalO, delta =>
+        {
+            delta.WriteByte(1);
+            throw new IOException("the base went away");
+        }));
+
+        Assert.Empty(Directory.GetFiles(build));
+    }
+
+    [Fact]
+    public void AScratchFile_IsASeekableFileInTheBuildFolder_GoneOnceClosed()
+    {
+        var build = Path.Combine(_root, "build");
+
+        using (var scratch = _repository.CreateScratchFile(build))
+        {
+            scratch.Write([1, 2, 3]);
+            scratch.Position = 1;
+            Assert.Equal(2, scratch.ReadByte());
+            Assert.Single(Directory.GetFiles(build));
+        }
+
+        Assert.Empty(Directory.GetFiles(build));
+    }
+
+    private static Func<Stream, bool> Writing(byte[] delta, bool keep) => stream =>
+    {
+        stream.Write(delta);
+        return keep;
+    };
 
     private static Manifest Manifest(params ManifestFile[] files) => new([], [], files);
 

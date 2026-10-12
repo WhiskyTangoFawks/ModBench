@@ -14,6 +14,7 @@ public sealed class StageModlistTraceTests : HostedTests
     private const string HashOfKept = "gO3vE0ddOto=";
     private const string HashOfOriginal = "PclCUmd0Z4s=";
     private const string HashOfVanilla = "/Qk9lLVYbZs=";
+    private const string HashOfTheZip = "AAECAwQFBgc=";
 
     private readonly ScratchDirectory _instance = new("trace-stage-modlist-");
 
@@ -42,17 +43,16 @@ public sealed class StageModlistTraceTests : HostedTests
         }
     }
 
-    private (JsonObject Whole, JsonObject InstallationFile, JsonObject GameFile) Request(string downloadName)
+    private (JsonObject Whole, JsonObject InstallationFile, JsonObject Entry, JsonObject GameFile) Request(string downloadName)
     {
+        var entry = new JsonObject { ["path"] = "kept.txt", ["hash"] = HashOfKept };
         var installationFile = new JsonObject
         {
             ["path"] = Path.Combine(Downloads, downloadName),
             ["source"] = "nexus:1:2",
             ["size"] = 7,
-            ["hash"] = "WHOLE",
-            ["entries"] = new JsonArray(
-                new JsonObject { ["path"] = "kept.txt", ["hash"] = HashOfKept },
-                new JsonObject { ["path"] = "edited.txt", ["hash"] = HashOfOriginal }),
+            ["hash"] = HashOfTheZip,
+            ["entries"] = new JsonArray(entry, new JsonObject { ["path"] = "edited.txt", ["hash"] = HashOfOriginal }),
         };
         var gameFile = new JsonObject { ["path"] = "Game.esm", ["size"] = 7, ["hash"] = HashOfVanilla };
         var whole = new JsonObject
@@ -63,48 +63,42 @@ public sealed class StageModlistTraceTests : HostedTests
             ["buildFolder"] = BuildFolder,
             ["deltaShare"] = 0.5,
         };
-        return (whole, installationFile, gameFile);
+        return (whole, installationFile, entry, gameFile);
     }
 
     private Task<HttpResponseMessage> Stage(string downloadName) => Client.PostAsJsonAsync("/modlist/stage", Request(downloadName).Whole);
 
     [Theory]
-    [InlineData("installationFile", "size")]
-    [InlineData("installationFile", "hash")]
-    [InlineData("installationFile", "entries")]
-    [InlineData("request", "gameFiles")]
-    [InlineData("request", "dataFolder")]
-    [InlineData("request", "buildFolder")]
-    [InlineData("request", "deltaShare")]
-    [InlineData("gameFile", "path")]
-    [InlineData("gameFile", "size")]
-    [InlineData("gameFile", "hash")]
-    public async Task StagingWithAFieldMissing_Is400(string holder, string field)
+    [InlineData("installationFile", "size", null)]
+    [InlineData("installationFile", "hash", null)]
+    [InlineData("installationFile", "hash", "\"WHOLE\"")]
+    [InlineData("installationFile", "entries", null)]
+    [InlineData("entry", "hash", "\"WHOLE\"")]
+    [InlineData("request", "gameFiles", null)]
+    [InlineData("request", "dataFolder", null)]
+    [InlineData("request", "buildFolder", null)]
+    [InlineData("request", "deltaShare", null)]
+    [InlineData("request", "deltaShare", "-0.1")]
+    [InlineData("request", "deltaShare", "1.1")]
+    [InlineData("gameFile", "path", null)]
+    [InlineData("gameFile", "size", null)]
+    [InlineData("gameFile", "hash", null)]
+    [InlineData("gameFile", "hash", "\"WHOLE\"")]
+    public async Task StagingWithAFieldMissingOrMalformed_Is400(string holder, string field, string? json)
     {
         ModInstalledFromADownload(edited: false);
         var request = Request("Mod.zip");
-        (holder switch
+        var held = holder switch
         {
             "installationFile" => request.InstallationFile,
+            "entry" => request.Entry,
             "gameFile" => request.GameFile,
             _ => request.Whole,
-        }).Remove(field);
+        };
+        if (json is null) held.Remove(field);
+        else held[field] = JsonNode.Parse(json);
 
         var response = await Client.PostAsJsonAsync("/modlist/stage", request.Whole);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Theory]
-    [InlineData(-0.1)]
-    [InlineData(1.1)]
-    public async Task StagingWithADeltaShareOutside0To1_Is400(double share)
-    {
-        ModInstalledFromADownload(edited: false);
-        var request = Request("Mod.zip").Whole;
-        request["deltaShare"] = share;
-
-        var response = await Client.PostAsJsonAsync("/modlist/stage", request);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -124,7 +118,7 @@ public sealed class StageModlistTraceTests : HostedTests
         Assert.Empty(staged.GetProperty("noProvider").EnumerateArray());
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
         var manifest = File.ReadAllLines(Path.Combine(ModFolder, Mod + ".manifest"));
-        Assert.Equal("{\"installationFile\":\"Mod.zip\",\"size\":7,\"hash\":\"WHOLE\",\"source\":\"nexus:1:2\"}", manifest[0]);
+        Assert.Equal($"{{\"installationFile\":\"Mod.zip\",\"size\":7,\"hash\":\"{HashOfTheZip}\",\"source\":\"nexus:1:2\"}}", manifest[0]);
         Assert.Equal($"{{\"gameFile\":\"Game.esm\",\"size\":7,\"hash\":\"{HashOfVanilla}\"}}", manifest[1]);
         Assert.Equal(
             ["Game.esm", "edited.txt", "kept.txt"],

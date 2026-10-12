@@ -29,5 +29,10 @@ public interface IModFolderRepository
     /// null when there is none.</summary>
     long? DeltaSize(string buildFolder, string path, string baseHash, string fileHash);
 
-    void WriteDelta(string buildFolder, string path, string baseHash, string fileHash, byte[] delta);
+    /// <summary>Hands <paramref name="write"/> the delta's stream, and keeps the delta only when it answers true.
+    /// True when kept.</summary>
+    bool WriteDelta(string buildFolder, string path, string baseHash, string fileHash, Func<Stream, bool> write);
+
+    /// <summary>An empty seekable file in <paramref name="buildFolder"/>, deleted when closed.</summary>
+    Stream CreateScratchFile(string buildFolder);
 }

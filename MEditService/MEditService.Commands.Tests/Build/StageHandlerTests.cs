@@ -62,6 +62,56 @@ public sealed class StageHandlerTests
         return Encoding.ASCII.GetString(output.ToArray());
     }
 
+    private static SparseStream StoredZipOfZeros(string name, long size, uint crc)
+    {
+        var zip = new SparseStream();
+        var nameBytes = Encoding.ASCII.GetBytes(name);
+        using (var writer = new BinaryWriter(zip, Encoding.ASCII, leaveOpen: true))
+        {
+            writer.Write(0x04034b50);
+            Entry(writer);
+            writer.Write(nameBytes);
+            writer.Flush();
+            var centralAt = zip.Position + size;
+            zip.Position = centralAt;
+            writer.Write(0x02014b50);
+            writer.Write((short)20);
+            Entry(writer);
+            writer.Write((short)0);
+            writer.Write((short)0);
+            writer.Write((short)0);
+            writer.Write(0);
+            writer.Write(0);
+            writer.Write(nameBytes);
+            writer.Flush();
+            var centralSize = zip.Position - centralAt;
+            writer.Write(0x06054b50);
+            writer.Write((short)0);
+            writer.Write((short)0);
+            writer.Write((short)1);
+            writer.Write((short)1);
+            writer.Write((uint)centralSize);
+            writer.Write((uint)centralAt);
+            writer.Write((short)0);
+        }
+        zip.Position = 0;
+        return zip;
+
+        void Entry(BinaryWriter writer)
+        {
+            writer.Write((short)20);
+            writer.Write((short)0);
+            writer.Write((short)0);
+            writer.Write((short)0);
+            writer.Write((short)0x21);
+            writer.Write(crc);
+            writer.Write((uint)size);
+            writer.Write((uint)size);
+            writer.Write((short)nameBytes.Length);
+            writer.Write((short)0);
+        }
+    }
+
     private static byte[] Zip(params (string Path, string Text)[] entries)
     {
         using var buffer = new MemoryStream();
@@ -183,6 +233,33 @@ public sealed class StageHandlerTests
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Broken", StageRefusal.ModFilesUnreadable), (refused.Item, refused.Refusal));
         Assert.Contains("Broken.zip", refused.Message);
+        Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
+    }
+
+    [Fact]
+    public void ACopyLargerThanAnArrayCanHold_IsTheBaseOfADelta()
+    {
+        const long Size = (1L << 31) + 4096;
+        const uint CrcOfTheZeros = 0x5c7b2279;
+        var edited = new string('\0', 4096) + "edited";
+        _folders.WithFile(Mod, "big.bin", edited).WithStream(string.Empty, "dl/Big.zip", () => StoredZipOfZeros("big.bin", Size, CrcOfTheZeros));
+
+        Landed(ModFrom("Mod", new InstallationFileToStage("dl/Big.zip", null, Size, "#zip", [new HashedEntry("big.bin", "#zeros")])));
+
+        Assert.Equal(new FileProvider.InstallationFileDelta("Big.zip", "big.bin", "#zeros"), FileOf(Mod, "big.bin").Provider);
+    }
+
+    [Fact]
+    public void AModWhoseDeltaCannotBeWritten_IsRefusedSayingSo_AndTheOthersLand()
+    {
+        _folders.WithFile("mods/Locked", "a.txt", Edited).WithFile("mods/Fine", "a.txt", "hello");
+        _folders.UnwritableBuildFolders.Add(BuildFolder);
+
+        var result = Handler.Stage([ModFrom("Locked", Downloaded("dl/Locked.zip", ("a.txt", Original))), ModFrom("Fine")], Instance());
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(("Locked", StageRefusal.NotWritten), (refused.Item, refused.Refusal));
+        Assert.StartsWith("'Locked' was not staged: a delta could not be written:", refused.Message, StringComparison.Ordinal);
         Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
     }
 
@@ -314,7 +391,7 @@ public sealed class StageHandlerTests
         var result = Handler.Stage([ModFrom("Locked"), ModFrom("Fine")], Instance());
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(("Locked", StageRefusal.ManifestNotWritten), (refused.Item, refused.Refusal));
+        Assert.Equal(("Locked", StageRefusal.NotWritten), (refused.Item, refused.Refusal));
         Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
     }
 

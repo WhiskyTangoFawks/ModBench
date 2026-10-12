@@ -5,9 +5,9 @@ namespace MEditService.ModFolderAdapter;
 
 /// <summary>The hash a manifest carries: xxHash64 with seed 0, written as Wabbajack writes it, the eight
 /// little-endian bytes in base64.</summary>
-internal static class FileHash
+public static class FileHash
 {
-    public static string Of(Stream content)
+    internal static string Of(Stream content)
     {
         var algorithm = new XxHash64();
         algorithm.Append(content);
@@ -24,5 +24,5 @@ internal static class FileHash
 
     /// <summary>The hash's bytes in lowercase hex, as Wabbajack names a patch: one name on a file system that
     /// ignores case.</summary>
-    public static string Hex(string hash) => Convert.ToHexStringLower(Convert.FromBase64String(hash));
+    internal static string Hex(string hash) => Convert.ToHexStringLower(Convert.FromBase64String(hash));
 }
