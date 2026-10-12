@@ -42,6 +42,16 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal("archive", ReadAll(content));
     }
 
+    [Fact]
+    public void InstallationFile_DescribesTheNamedFileWithoutReadingIt()
+    {
+        var modified = Stamp.AddSeconds(5);
+        Write("mod.7z", "archive", modified);
+        var path = Path.Combine(_root, "mod.7z");
+
+        Assert.Equal(new ModFile(path, 7, modified), _repository.InstallationFile(path));
+    }
+
     private void Write(string relative, string text, DateTime modified)
     {
         var path = Path.Combine(_root, relative);

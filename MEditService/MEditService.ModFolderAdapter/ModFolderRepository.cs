@@ -9,6 +9,12 @@ public sealed class ModFolderRepository : IModFolderRepository
                 file.Length,
                 file.LastWriteTimeUtc))];
 
+    public ModFile InstallationFile(string path)
+    {
+        var file = new FileInfo(path);
+        return new ModFile(path, file.Length, file.LastWriteTimeUtc);
+    }
+
     public Stream OpenFile(string modFolder, string path) =>
         OpenInstallationFile(Path.Combine(modFolder, path));
 
