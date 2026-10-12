@@ -67,7 +67,7 @@ class InTheSlot(unittest.TestCase):
                               capture_output=True, text=True, timeout=60, env=clean | env)
 
     def test_a_gate_run_that_builds_or_tests_runs_in_the_build_slot(self):
-        for flag in ("--backend", "--frontend", "--api-drift", "--docs"):
+        for flag in ("--backend", "--frontend", "--api-drift", "--docs", "--scripts"):
             with self.subTest(flag=flag):
                 run = self.gates(flag)
                 self.assertEqual(run.stdout, f"slot-run: bash {self.validate / 'run-gates.sh'} {flag}\n")
