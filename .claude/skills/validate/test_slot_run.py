@@ -36,7 +36,7 @@ class SlotRun(unittest.TestCase):
         self.log = self.dir / "log"
         self.log.touch()
         self.env = {k: v for k, v in os.environ.items()
-                    if k not in ("BUILD_SLOT_HELD", "MSBUILDDISABLENODEREUSE", "SharedCompilationId")}
+                    if k not in ("BUILD_SLOT_HELD", "MEDIT_BUILD_SLOTS", "MSBUILDDISABLENODEREUSE", "SharedCompilationId")}
         self.env |= {"PATH": f"{tools}:{os.environ['PATH']}", "LOG": str(self.log)}
 
     def slot_run(self, command, **env):

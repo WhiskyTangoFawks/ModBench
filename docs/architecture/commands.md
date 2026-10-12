@@ -154,7 +154,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | move | writes | `modbench.mod.move` | mods or separators | target: a separator, above a mod, or the view's end | MO2 mod list | Move mods in mod order. | update-load-order-file |
 | uninstall | writes | `modbench.mod.uninstall` | mods | - | MO2 mod list | Move a mod folder to the trash and remove its line. | update-load-order-file |
 | create empty mod | writes | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
-| install | writes | `modbench.mod.install` | source: archive, folder or downloaded file | target mod, for an upgrade | MO2 mod list; MO2 Downloads | Install a source as a new mod, or over an installed mod as an upgrade. | install-mod |
+| install | writes | `modbench.mod.install` | source: archive, folder or downloaded file | name, for a new mod; target mod, for an upgrade | MO2 mod list; MO2 Downloads | Install a source as a new mod, or over an installed mod as an upgrade. | install-mod |
 | init | writes | `modbench.mod.init` | mods | - | git init | Put a mod under git: a repository in the source folder holding its plugin source, the files no installation file yields as its assets, and a build configuration naming this folder as the output, in one commit. On a plugin row or an Editor column, it acts on the plugin's mod. | init-mod |
 | build | writes | `modbench.mod.build` | mods | - | none | Write a source mod's folder from its source as its build configuration says: extract what its installation files provide, copy its assets, compile its plugins, pack loose files into archives where configured, and write its manifest. Untracked files stay. On a plugin row or an Editor column, it acts on the plugin's mod. | build-mod |
 | sort direction | reads | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
@@ -173,8 +173,8 @@ A separator is a row in mod order.
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
-| add | writes | `modbench.separator.add` | mod or separator (the anchor) | position: above a mod, and the mod joins the new separator; below a separator, after its mods | MO2 mod list | Add a mod separator next to a mod or a separator. | update-load-order-file |
-| rename | writes | `modbench.separator.rename` | separator | - | MO2 mod list | Rename a mod separator. | update-load-order-file |
+| add | writes | `modbench.separator.add` | mod or separator (the anchor) | name; position: above a mod, and the mod joins the new separator; below a separator, after its mods | MO2 mod list | Add a mod separator next to a mod or a separator. | update-load-order-file |
+| rename | writes | `modbench.separator.rename` | separator | name | MO2 mod list | Rename a mod separator. | update-load-order-file |
 | delete | writes | `modbench.separator.delete` | separators | - | MO2 mod list | Delete a mod separator. The mods under it join the separator above, or become ungrouped when it was the first. | update-load-order-file |
 
 ## Plugin
@@ -183,7 +183,7 @@ A separator is a row in mod order.
 |---|---|---|---|---|---|---|---|
 | enable / disable | writes | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Flip each plugin's line in `plugins.txt`. Enable all is select all, then this gesture. | update-load-order-file |
 | move | writes | `modbench.plugin.move` | plugins | target: the row it is dropped on, or the view's end. Several plugins move as one block | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | update-load-order-file |
-| create | writes | `modbench.plugin.create` | - | place: Overwrite or an enabled mod | xEdit navigator | Create an empty plugin in Overwrite or in a mod. | create-plugin |
+| create | writes | `modbench.plugin.create` | - | name; place: Overwrite or an enabled mod | xEdit navigator | Create an empty plugin in Overwrite or in a mod. | create-plugin |
 | decompile | writes | `modbench.plugin.decompile` | plugins | - | none | Read each plugin's bytes into its plugin source, in the working tree of the checked-out branch. It commits nothing. | decompile-plugin |
 | sort direction | reads | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
 | reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the system's file manager. | none |

@@ -1,6 +1,6 @@
 import { createSync, type Sync, type SyncChannel } from './drivingLib/syncFailureReport';
 import type { Instance, InstanceValue, ModSyncArguments, PluginSyncArguments } from './instanceLoader/instance';
-import type { ModSyncResult } from './modlist/modlist';
+import type { ModSyncResult } from './modOrderCommands/modOrderCommands';
 import type { PluginSyncResult } from './pluginsCommands/plugins';
 
 export interface InstanceSyncs {

@@ -17,7 +17,7 @@ import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
 import { ToolboxProvider } from '../toolbox/ToolboxProvider';
-import { modSyncOver, type ModSyncResult } from '../modlist/modlist';
+import { modSyncOver, type ModSyncResult } from '../modOrderCommands/modOrderCommands';
 
 const noModSync = () => Promise.resolve<ModSyncResult>({ applied: true, added: [], dropped: [] });
 

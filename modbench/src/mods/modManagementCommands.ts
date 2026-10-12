@@ -13,7 +13,7 @@ import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
-import type { ModlistCommands, MovePlace, OriginFileMark, SelectionResult } from '../modlist/modlist';
+import type { ModlistCommands, MovePlace, OriginFileMark, SelectionResult } from '../modOrderCommands/modOrderCommands';
 import { FILE_MARKS, fileLabel } from './modFiles';
 import { endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
 import { errorMessage } from '../ports/errorMessage';
