@@ -1,42 +1,55 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json.Nodes;
+using MEditService.Codec.Schema;
 
 namespace MEditService.Codec.Serialization;
 
-/// <summary>Where in a document the reader fails. Mutagen throws with no position, but a document reads
-/// once the member at fault is left out, since a field left out is the field at its default.</summary>
+/// <summary>Where in a document the reader fails. Mutagen throws with no position, but a member that fails
+/// alone, in a document stripped to its identity and that member, is a member at fault.</summary>
 internal static class ReadFault
 {
-    /// <summary>The reader's refusal of <paramref name="text"/>, naming the field it fails on where one
-    /// can be found; <paramref name="reads"/> says whether a document reads.</summary>
-    internal static string Describe(Exception thrown, string text, Func<string, bool> reads)
-    {
-        if (JsonNode.Parse(text) is not JsonObject root || FieldIn(root, [], reads) is not { } field) return thrown.Message;
+    private const string NullFormKey = "Null";
 
-        var named = Spell(field);
-        return IsRewrapped(thrown)
-            ? $"{named} holds a value of the wrong type."
-            : $"{named}: {thrown.Message}";
+    /// <summary>The reader's refusal of <paramref name="text"/>, naming every field it fails on where any can
+    /// be found; <paramref name="thrownBy"/> is what reading a document throws, or null.</summary>
+    internal static string Describe(Exception thrown, string text, Func<string, Exception?> thrownBy)
+    {
+        if (JsonNode.Parse(text) is not JsonObject root || thrownBy(Only(root, [])) is not null) return Unlocated(thrown);
+
+        var faults = FaultsIn(root, [], thrownBy).ToList();
+        return faults.Count > 0 ? string.Join("; ", faults.Select(fault => Say(fault.Path, fault.Thrown))) : Unlocated(thrown);
     }
 
-    private const string NullFormKey = "Null";
+    private static string Unlocated(Exception thrown) =>
+        IsRewrapped(thrown) && thrown.InnerException is NullReferenceException inner ? inner.Message : thrown.Message;
 
     // The generated reader's own NotImplementedException and NullReferenceException arrive as a
     // "No record type matches" refusal, which is not what a mistyped or null value is.
     private static bool IsRewrapped(Exception thrown) =>
         thrown is NotSupportedException { InnerException: NotImplementedException or NullReferenceException };
 
-    private static string[]? FieldIn(JsonObject root, string[] path, Func<string, bool> reads)
+    private static string Say(string[] path, Exception thrown) =>
+        IsRewrapped(thrown) ? $"{Spell(path)} holds a value of the wrong type." : $"{Spell(path)}: {thrown.Message}";
+
+    private static IEnumerable<(string[] Path, Exception Thrown)> FaultsIn(
+        JsonObject root, string[] path, Func<string, Exception?> thrownBy)
     {
-        var owner = NodeAt(root, path);
-        foreach (var key in KeysOf(owner))
+        foreach (var key in KeysOf(NodeAt(root, path)))
         {
             string[] memberPath = [.. path, key];
-            if (!reads(Without(root, memberPath))) continue;
+            if (thrownBy(Only(root, memberPath)) is not { } thrown) continue;
 
-            return NodeAt(root, memberPath) is null ? memberPath : FieldIn(root, memberPath, reads) ?? memberPath;
+            var inner = FaultsIn(root, memberPath, thrownBy).ToList();
+            if (inner.Count > 0)
+            {
+                foreach (var fault in inner) yield return fault;
+            }
+            else
+            {
+                yield return (memberPath, thrown);
+            }
         }
-        return null;
     }
 
     private static string[] KeysOf(JsonNode? node) => node switch
@@ -61,30 +74,52 @@ internal static class ReadFault
         return node;
     }
 
-    private static string Without(JsonObject root, string[] path)
+    // The document stripped to its identity and the member at path. The identity is the type it names and
+    // a FormKey, which is the null one unless the member at path is the FormKey itself.
+    private static string Only(JsonObject root, string[] path)
     {
-        var copy = root.DeepClone();
-        var key = path[^1];
-        switch (NodeAt(copy, path[..^1]))
+        var copy = (JsonObject)root.DeepClone();
+        var member = path.Length > 0 ? path[0] : null;
+        foreach (var name in copy.Select(entry => entry.Key).ToArray())
         {
-            case JsonArray list:
-                list.RemoveAt(int.Parse(key, CultureInfo.InvariantCulture));
-                break;
-            case JsonObject owner when key == RecordMembers.FormKey:
-                owner[key] = NullFormKey;
-                break;
-            case JsonObject owner:
-                _ = owner.Remove(key);
-                break;
-            default:
-                break;
+            if (name != member && name != RecordMembers.FormKey && name != LoquiUnions.UnionTypeDiscriminator) _ = copy.Remove(name);
+        }
+        if (member != RecordMembers.FormKey && copy.ContainsKey(RecordMembers.FormKey)) copy[RecordMembers.FormKey] = NullFormKey;
+
+        JsonNode? node = member is null ? null : copy[member];
+        foreach (var key in path.Skip(1))
+        {
+            node = node switch
+            {
+                JsonObject owner => KeepOnly(owner, key),
+                JsonArray list => KeepOnly(list, int.Parse(key, CultureInfo.InvariantCulture)),
+                _ => null,
+            };
         }
         return copy.ToJsonString();
     }
 
+    private static JsonNode? KeepOnly(JsonObject owner, string key)
+    {
+        foreach (var name in owner.Select(entry => entry.Key).ToArray())
+        {
+            if (name != key) _ = owner.Remove(name);
+        }
+        return owner[key];
+    }
+
+    private static JsonNode? KeepOnly(JsonArray list, int index)
+    {
+        for (var at = list.Count - 1; at >= 0; at--)
+        {
+            if (at != index) list.RemoveAt(at);
+        }
+        return list[0];
+    }
+
     private static string Spell(string[] path)
     {
-        var spelled = new System.Text.StringBuilder();
+        var spelled = new StringBuilder();
         foreach (var key in path)
         {
             if (int.TryParse(key, CultureInfo.InvariantCulture, out _)) _ = spelled.Append('[').Append(key).Append(']');

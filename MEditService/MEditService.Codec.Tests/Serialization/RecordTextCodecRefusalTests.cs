@@ -117,8 +117,7 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     {
         var why = Why(Edited(WeaponText(), root => root["Weight"] = JsonNode.Parse(weight)));
 
-        Assert.StartsWith("Weight", why, StringComparison.Ordinal);
-        Assert.DoesNotContain("MutagenObjectType", why, StringComparison.Ordinal);
+        Assert.Equal("Weight holds a value of the wrong type.", why);
     }
 
     [Theory]
@@ -130,7 +129,18 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
         var why = Why(Edited(WeaponText(), root => root["Keywords"] = new JsonArray(JsonNode.Parse(link))));
 
         Assert.StartsWith("Keywords[0]", why, StringComparison.Ordinal);
-        Assert.DoesNotContain("MutagenObjectType", why, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TwoFieldsOfTheWrongType_AreRefused_NamingBoth()
+    {
+        var why = Why(Edited(WeaponText(), root =>
+        {
+            root["Weight"] = true;
+            root["Keywords"] = new JsonArray(true);
+        }));
+
+        Assert.Equal("Keywords[0]: Unable to cast object of type 'System.Boolean' to type 'System.String'.; Weight holds a value of the wrong type.", why);
     }
 
     [Fact]

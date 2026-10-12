@@ -49,20 +49,20 @@ public static class RecordTextCodec
         }
         catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
-            return ReadFault.Describe(ex, text, source => ReadsWithoutThrowing(Produce, source));
+            return ReadFault.Describe(ex, text, source => ThrownBy(Produce, source));
         }
     }
 
-    private static bool ReadsWithoutThrowing(Func<string, string> produce, string source)
+    private static Exception? ThrownBy(Func<string, string> produce, string source)
     {
         try
         {
             _ = produce(source);
-            return true;
+            return null;
         }
         catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
-            return false;
+            return ex;
         }
     }
 
