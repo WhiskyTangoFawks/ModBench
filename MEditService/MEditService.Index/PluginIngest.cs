@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using DuckDB.NET.Data;
@@ -50,10 +51,12 @@ internal sealed class PluginIngest
         var timer = Stopwatch.StartNew();
         var counters = new PhaseCounters();
         var records = 0;
-        foreach (var batch in Batches(documents.Records))
+        foreach (var prepared in Pipelined(Batches(documents.Records), batch => Prepared(batch, schemas, counters)))
         {
-            AppendBatch(batch, schemas, plugin, origin, counters);
-            records += batch.Count;
+            var appendTimer = Stopwatch.StartNew();
+            Append(prepared, plugin, origin);
+            counters.AppendMs += appendTimer.ElapsedMilliseconds;
+            records += prepared.Count;
         }
 
         if (schemas.ContainsKey(PluginHeader.RecordType))
@@ -112,9 +115,56 @@ internal sealed class PluginIngest
         if (batch.Count > 0) yield return batch;
     }
 
-    private void AppendBatch(
-        List<PluginDocument> batch, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        string plugin, string origin, PhaseCounters counters)
+    // Reading a batch of documents and preparing one each keep the cores busy, and only the appender
+    // is sequential. Each stage runs a batch ahead of the next, so the ingest holds at most five.
+    private static IEnumerable<List<PreparedRecord>> Pipelined(
+        IEnumerable<List<PluginDocument>> batches, Func<List<PluginDocument>, List<PreparedRecord>> prepare)
+    {
+        using var stop = new CancellationTokenSource();
+        using var read = new BlockingCollection<List<PluginDocument>>(boundedCapacity: 1);
+        using var prepared = new BlockingCollection<List<PreparedRecord>>(boundedCapacity: 1);
+        ExceptionDispatchInfo? failure = null;
+        bool Stops(Exception ex)
+        {
+            if (!stop.IsCancellationRequested) Interlocked.CompareExchange(ref failure, ExceptionDispatchInfo.Capture(ex), null);
+            stop.Cancel();
+            return false;
+        }
+        void Stage(Action work, BlockingCollection<List<PreparedRecord>>? completes, BlockingCollection<List<PluginDocument>>? completesRead)
+        {
+            try { work(); }
+            catch (Exception ex) when (Stops(ex)) { throw; }
+            finally { completes?.CompleteAdding(); completesRead?.CompleteAdding(); }
+        }
+        var stages = new[]
+        {
+            Task.Run(() => Stage(() => { foreach (var batch in batches) read.Add(batch, stop.Token); }, null, read)),
+            Task.Run(() => Stage(() => { foreach (var batch in read.GetConsumingEnumerable(stop.Token)) prepared.Add(prepare(batch), stop.Token); }, prepared, null)),
+        };
+        var consumed = prepared.GetConsumingEnumerable(stop.Token).GetEnumerator();
+        try
+        {
+            while (true)
+            {
+                bool next;
+                try { next = consumed.MoveNext(); }
+                catch (OperationCanceledException) when (failure is not null) { break; }
+                if (!next) break;
+                yield return consumed.Current;
+            }
+        }
+        finally
+        {
+            stop.Cancel();
+            SpinWait.SpinUntil(() => stages.All(stage => stage.IsCompleted));
+            foreach (var stage in stages) _ = stage.Exception;
+            consumed.Dispose();
+        }
+        failure?.Throw();
+    }
+
+    private List<PreparedRecord> Prepared(
+        List<PluginDocument> batch, IReadOnlyDictionary<string, RecordTableSchema> schemas, PhaseCounters counters)
     {
         // Per-document work is CPU-bound and independent, so it runs in parallel; only the appender
         // writes stay sequential.
@@ -132,9 +182,7 @@ internal sealed class PluginIngest
             throw;
         }
         counters.PrepareMs += batchTimer.ElapsedMilliseconds;
-        batchTimer.Restart();
-        Append(prepared, plugin, origin);
-        counters.AppendMs += batchTimer.ElapsedMilliseconds;
+        return prepared;
     }
 
     private void Append(List<PreparedRecord> prepared, string plugin, string origin)
