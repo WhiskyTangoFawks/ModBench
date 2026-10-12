@@ -22,7 +22,8 @@ import { originFiles, NO_ORIGIN_FILES, type OriginFilesOf } from './instanceLoad
 import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import type { InstanceAdapter } from './instanceAdapter/instanceAdapter';
-import { attachPort, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
+import { serveAgent } from './agent/agentServer';
+import { agentPort, attachPort, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
 import { createPlugins, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
@@ -253,6 +254,7 @@ export function activate(context: vscode.ExtensionContext): void {
     views,
     plugins,
     editor,
+    serveAgent({ port: agentPort(), instance: views.instance, reporter: reporterFor('agent'), log: outputChannel }),
     createSourceLanguage({
       client: meditClient, originFiles: (origin) => views.originFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     }),
