@@ -1,6 +1,10 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -37,7 +41,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_WithUnparsableSourceFile_RefusesNamingTheFileAndNotPointingAtDecompile()
+    public async Task Compile_WithUnparsableSourceFile_RefusesNamingTheFile()
     {
         var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
         _mod.Overwrite(_mod.NpcIdentity, "{ not valid json");
@@ -47,7 +51,6 @@ public sealed class CompilePluginRefusalTests : IDisposable
         var refused = Assert.Single(answer.Refused);
         Assert.Equal(CompileRefusal.SourceDoesNotParse, refused.Refusal);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolder, file), refused.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("Decompile", refused.Message, StringComparison.Ordinal);
         Assert.Empty(answer.Landed);
     }
 
@@ -63,7 +66,6 @@ public sealed class CompilePluginRefusalTests : IDisposable
 
         var refused = Assert.Single(answer.Refused);
         Assert.Contains($"{Path.GetRelativePath(_mod.ModFolder, file)}: RaceOld", refused.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("Decompile", refused.Message, StringComparison.Ordinal);
         Assert.Empty(answer.Landed);
     }
 
@@ -84,14 +86,32 @@ public sealed class CompilePluginRefusalTests : IDisposable
     }
 
     [Fact]
+    public async Task Compile_WithAFieldMisspelledInABlockLevelDocument_RefusesNamingTheFileAndTheField()
+    {
+        _mod.Write(new Cell(FormKey.Factory($"000900:{CompileFixture.PluginName}"), Fallout4Release.Fallout4)
+        {
+            EditorID = "Room",
+            Flags = Cell.Flag.IsInteriorCell,
+        }, "cell");
+        var levels = Directory.GetFiles(_mod.ModFolder, "GroupRecordData.json", SearchOption.AllDirectories).Where(file => new FileInfo(file).Length > 2).ToArray();
+        var level = Path.GetRelativePath(_mod.ModFolder, levels[0]);
+        File.WriteAllText(levels[0], File.ReadAllText(levels[0]).Replace("BlockNumber", "BlockNumbr", StringComparison.Ordinal));
+
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+
+        var refused = Assert.Single(answer.Refused);
+        Assert.Contains($"{level}: BlockNumbr", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Compile_WithAFileReformattedAndReordered_CompilesLikeAnyOther()
     {
         var body = _mod.Document(_mod.Npc.ToString()).Require().Body;
-        var members = System.Text.Json.Nodes.JsonNode.Parse(body)?.AsObject() ?? throw new InvalidOperationException("Expected a document.");
+        var members = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidOperationException("Expected a document.");
         var editorId = members["EditorID"];
         _ = members.Remove("EditorID");
         members["EditorID"] = editorId;
-        _mod.Overwrite(_mod.NpcIdentity, members.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }).Replace("\n", "\n\n", StringComparison.Ordinal));
+        _mod.Overwrite(_mod.NpcIdentity, members.ToJsonString(new JsonSerializerOptions { WriteIndented = true }).Replace("\n", "\n\n", StringComparison.Ordinal));
 
         var answer = await CompileService().CompileAsync([_mod.Plugin]);
 

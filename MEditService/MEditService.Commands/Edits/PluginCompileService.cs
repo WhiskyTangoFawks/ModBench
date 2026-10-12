@@ -111,7 +111,7 @@ internal sealed class PluginCompileService(
 
         if (!repository.Compare(plugin, await tree.SerializeTreeAsync()).Holds(out var comparison, out unread))
             return SourceDoesNotParse(plugin, unread);
-        var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(comparison.Divergence, plugin);
+        var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(comparison.Divergences, plugin);
         if (roundTripRefusal != null)
             return CompileResult.Refused(CompileRefusal.SourceDoesNotRoundTrip, roundTripRefusal);
 
@@ -217,20 +217,25 @@ internal sealed class PluginCompileService(
 
     // No live subrecord-inventory gate here, deliberately: that loss class arises only when Track
     // parses an external binary, never from Compile.
-    private static string? RefuseIfSourceDoesNotRoundTrip(SourceDivergence? found, PluginAddress plugin)
+    private static string? RefuseIfSourceDoesNotRoundTrip(IReadOnlyList<SourceDivergence> found, PluginAddress plugin)
     {
-        if (found is not { } divergence) return null;
+        if (found.Count == 0) return null;
 
-        if (divergence.Kind != SourceDivergenceKind.Unproduced)
+        var remedy = found.Any(divergence => divergence.Kind == SourceDivergenceKind.Unproduced) ? $" {RegenerateTheSource}" : "";
+        return $"{plugin.Name} does not round-trip through its own source: {string.Join("; ", found.Select(Describe))}.{remedy}";
+    }
+
+    private static string Describe(SourceDivergence divergence)
+    {
+        if (divergence.Kind == SourceDivergenceKind.Unproduced)
         {
-            var offender = divergence.Kind == SourceDivergenceKind.HeaderChanged ? "the plugin header" : divergence.Path;
-            return $"{plugin.Name} does not round-trip through its own source: {offender} does not match " +
-                $"what the current codec would produce from it. {RegenerateTheSource}";
+            return $"{divergence.Path} is in the source, but the current codec produces no such file from it, so nothing it " +
+                "holds reaches the plugin (a document left over from an earlier source layout, or a stray file)";
         }
 
-        return $"{plugin.Name} does not round-trip through its own source: {divergence.Path} is in the source, " +
-            "but the current codec produces no such file from it, so nothing it holds reaches the plugin " +
-            $"(a document left over from an earlier source layout, or a stray file). {RegenerateTheSource}";
+        var offender = divergence.Kind == SourceDivergenceKind.HeaderChanged ? "the plugin header" : divergence.Path;
+        var field = divergence.Field is null ? "" : $": {divergence.Field}";
+        return $"{offender}{field} does not match what the current codec would produce from it";
     }
 
     private static CompileDiagnostic MisplacedDiagnostic(MisplacedFile file) =>

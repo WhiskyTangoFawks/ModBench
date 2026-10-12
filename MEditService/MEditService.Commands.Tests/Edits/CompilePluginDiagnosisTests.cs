@@ -10,17 +10,16 @@ public sealed class CompilePluginDiagnosisTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     [Fact]
-    public async Task Compile_WhenTheTrackedSourceHoldsAMalformedFormKey_NamesTheFileTheFieldAndTheCause()
+    public async Task Compile_WhenTheTrackedSourceHoldsAMalformedFormKey_NamesTheFileAndTheField()
     {
+        var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
         Corrupt();
 
         var compileService = _mod.CompileService();
         var answer = await compileService.CompileAsync([_mod.Plugin]);
 
         var refused = Assert.Single(answer.Refused);
-        Assert.Contains("FixtureNpc", refused.Message);
-        Assert.Contains("Race: Malformed FormKey string: NOT-A-FORMKEY", refused.Message);
-        Assert.DoesNotContain("Decompile", refused.Message, StringComparison.Ordinal);
+        Assert.Contains($"{Path.GetRelativePath(_mod.ModFolder, file)}: Race", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -9,19 +9,21 @@ public static class DocumentMeaning
 {
     private const string Root = "the document";
 
-    /// <summary>Whether two documents mean the same; two that are no JSON mean the same only as bytes.</summary>
-    public static bool AreSame(byte[] first, byte[] second)
+    /// <summary>The path of the first member where the document <paramref name="held"/> differs in meaning
+    /// from <paramref name="produced"/>, or null when they mean the same. Two that are no JSON mean the same
+    /// only as bytes, and differ at the whole document.</summary>
+    public static string? FirstDifference(byte[] held, byte[] produced)
     {
-        if (first.AsSpan().SequenceEqual(second)) return true;
+        if (held.AsSpan().SequenceEqual(produced)) return null;
         try
         {
-            using var written = JsonDocument.Parse(first);
-            using var produced = JsonDocument.Parse(second);
-            return FirstDifference(written.RootElement, produced.RootElement) is null;
+            using var written = JsonDocument.Parse(held);
+            using var read = JsonDocument.Parse(produced);
+            return FirstDifference(written.RootElement, read.RootElement);
         }
         catch (JsonException)
         {
-            return false;
+            return Root;
         }
     }
 
