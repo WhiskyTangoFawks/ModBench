@@ -97,7 +97,7 @@ function restrictedImports({ vscode, packages, path, client = false, inAdapter =
 // A view fires the commands the root bound to the Instance adapter; it takes only types from the core box.
 /** @type {Record<string, string[]>} */
 const BOUND_COMMAND_BOXES = {
-    mods: ['modlist/modlist', 'install/install'],
+    mods: ['modOrderCommands/modOrderCommands', 'install/install'],
     downloads: ['downloadsCommands/downloads'],
     toolbox: ['instanceCommands/instanceCommands'],
     plugins: ['pluginsCommands/plugins', 'pluginsCommands/renamePlugin'],
@@ -363,7 +363,7 @@ export default defineConfig(
                     './src/instanceAdapter/tsconfig.json',
                     './src/coreLib/tsconfig.json',
                     './src/instanceLoader/tsconfig.json',
-                    './src/modlist/tsconfig.json',
+                    './src/modOrderCommands/tsconfig.json',
                     './src/pluginsCommands/tsconfig.json',
                     './src/instanceCommands/tsconfig.json',
                     './src/downloadsCommands/tsconfig.json',

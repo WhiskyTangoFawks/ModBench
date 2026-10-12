@@ -11,7 +11,7 @@
     { "path": "../drivingLib" },
     { "path": "../instanceLoader" },
     { "path": "../install" },
-    { "path": "../modlist" },
+    { "path": "../modOrderCommands" },
     { "path": "../ports" },
     { "path": "../wire" }
   ],

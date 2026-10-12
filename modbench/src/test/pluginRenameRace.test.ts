@@ -23,7 +23,7 @@ vi.mock('vscode', async () => {
 import { Instance } from '../instanceLoader/instance';
 import { instanceSyncs } from '../syncWiring';
 import { pluginSyncOver } from '../pluginsCommands/plugins';
-import { modSyncOver } from '../modlist/modlist';
+import { modSyncOver } from '../modOrderCommands/modOrderCommands';
 import { registerRenamePluginCommand } from '../plugins/pluginRenameCommand';
 import { PluginNode } from '../plugins/pluginRows';
 import { recordingReporter, scriptedDialog } from './surfacingDoubles';
