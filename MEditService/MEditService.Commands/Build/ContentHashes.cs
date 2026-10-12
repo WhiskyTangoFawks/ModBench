@@ -3,7 +3,7 @@ using System.Diagnostics;
 using MEditService.ModFolderAdapter;
 using MEditService.RepositoriesLib;
 
-namespace MEditService.Commands.Engine;
+namespace MEditService.Commands.Build;
 
 /// <summary>The hashes of an installation file and its entries, and of the files of a folder. A file whose
 /// stamp matches the last read, and is old enough to trust, is not read again.</summary>
@@ -24,9 +24,9 @@ internal sealed class ContentHashes(IModFolderRepository repository, TimeProvide
             return new HashedInstallationFile(whole.Length, hash, entries);
         }) ?? throw new UnreachableException();
 
-    public IReadOnlyList<HashedFile> OfModFolder(string modFolder, string modName)
+    public IReadOnlyList<HashedFile> OfModFolder(string modFolder, string modName, IReadOnlySet<string> committed)
     {
-        var files = repository.Files(modFolder, modName);
+        var files = repository.Files(modFolder, modName).Where(file => !committed.Contains(file.Path)).ToList();
         var hashed = files.Select(file => OfFile(modFolder, file)).ToList();
         MemoOf(modFolder).Retain(files.Select(file => file.Path).ToHashSet(StringComparer.Ordinal));
         return hashed;

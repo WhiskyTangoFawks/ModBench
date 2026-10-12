@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Hashing;
 
-namespace MEditService.Commands.Engine;
+namespace MEditService.Commands.Build;
 
 /// <summary>The hash a manifest carries: xxHash64 with seed 0, written as Wabbajack writes it, the eight
 /// little-endian bytes in base64.</summary>

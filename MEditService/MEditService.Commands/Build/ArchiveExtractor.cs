@@ -1,7 +1,7 @@
 using SharpCompress.Archives;
 using SharpCompress.Common;
 
-namespace MEditService.Commands.Engine;
+namespace MEditService.Commands.Build;
 
 /// <summary>Reads the entries of a zip, 7z or rar installation file. A solid archive and any 7z are read in the one
 /// forward pass SharpCompress allows them; any other is read entry by entry.</summary>

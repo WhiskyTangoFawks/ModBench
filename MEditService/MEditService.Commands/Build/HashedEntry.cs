@@ -1,6 +1,6 @@
 using MEditService.RepositoriesLib;
 
-namespace MEditService.Commands.Engine;
+namespace MEditService.Commands.Build;
 
 internal sealed record HashedEntry(string Path, long Size, FileHash Hash);
 

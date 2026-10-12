@@ -2,7 +2,7 @@ using MEditService.Commands.Edits;
 using MEditService.ModFolderAdapter;
 using MEditService.Ports;
 
-namespace MEditService.Commands.Engine;
+namespace MEditService.Commands.Build;
 
 /// <summary>The Stage gesture: each mod's manifest from the mod as it is (ADR-0022). A mod lands or is refused on
 /// its own, and a mod whose manifest is already so changes nothing.</summary>
@@ -77,7 +77,7 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
         Manifest manifest;
         try
         {
-            files = _hashes.OfModFolder(mod.Folder, mod.Name);
+            files = _hashes.OfModFolder(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal));
             manifest = new ManifestBuilder(installationFiles, path => GameFile(dataFolder, path)).Build(files);
         }
         catch (DirectoryNotFoundException)

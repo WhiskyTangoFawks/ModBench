@@ -1,4 +1,4 @@
-using MEditService.Commands.Engine;
+using MEditService.Commands.Build;
 
 namespace MEditService.Http.Endpoints;
 
@@ -31,7 +31,8 @@ internal static class ModlistEndpoints
 
         var result = handler.Stage(
             [.. mods.Select(mod => new ModToStage(
-                mod.Name, mod.Folder, [.. (mod.InstallationFiles ?? []).Select(file => new InstallationFileToStage(file.Path, file.Source))]))],
+                mod.Name, mod.Folder, [.. (mod.InstallationFiles ?? []).Select(file => new InstallationFileToStage(file.Path, file.Source))],
+                mod.CommittedFiles ?? []))],
             req.DataFolder, cancel);
 
         var logger = loggerFactory.CreateLogger(nameof(ModlistEndpoints));
@@ -45,7 +46,8 @@ internal static class ModlistEndpoints
 /// <summary>The mods to stage, and the game's data folder their files may come from.</summary>
 internal sealed record StageRequest(IReadOnlyList<StageModRequest> Mods, string DataFolder);
 
-internal sealed record StageModRequest(string Name, string Folder, IReadOnlyList<StageInstallationFileRequest> InstallationFiles);
+internal sealed record StageModRequest(
+    string Name, string Folder, IReadOnlyList<StageInstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles);
 
 /// <summary>An installation file by its path, and where the mod manager says it comes from.</summary>
 internal sealed record StageInstallationFileRequest(string Path, string? Source);

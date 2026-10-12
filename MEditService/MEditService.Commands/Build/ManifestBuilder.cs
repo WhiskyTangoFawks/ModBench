@@ -1,6 +1,6 @@
 using MEditService.ModFolderAdapter;
 
-namespace MEditService.Commands.Engine;
+namespace MEditService.Commands.Build;
 
 /// <summary>A mod's manifest from the mod as it is: each file is named for the first provider that holds its
 /// bytes, and a file nothing holds has no provider.</summary>

@@ -1,10 +1,12 @@
 using System.Text.Json.Serialization;
 
-namespace MEditService.Commands.Engine;
+namespace MEditService.Commands.Build;
 
-/// <summary>A mod to stage: its name, its folder and the installation files the mod manager records it as
-/// installed from, in the order it records them.</summary>
-public sealed record ModToStage(string Name, string Folder, IReadOnlyList<InstallationFileToStage> InstallationFiles);
+/// <summary>A mod to stage: its name, its folder, the installation files the mod manager records it as
+/// installed from, in the order it records them, and the files of the folder the repository commits itself,
+/// by path, which the manifest does not name.</summary>
+public sealed record ModToStage(
+    string Name, string Folder, IReadOnlyList<InstallationFileToStage> InstallationFiles, IReadOnlyList<string> CommittedFiles);
 
 /// <summary>An installation file by its path in the downloads folder, and where the mod manager says it comes from.</summary>
 public sealed record InstallationFileToStage(string Path, string? Source);

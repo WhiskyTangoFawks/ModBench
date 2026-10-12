@@ -1313,6 +1313,7 @@ export interface components {
             name: string;
             folder: string;
             installationFiles: components["schemas"]["StageInstallationFileRequest"][];
+            committedFiles: string[];
         };
         StageProgress: {
             mod?: string | null;

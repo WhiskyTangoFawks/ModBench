@@ -1,13 +1,13 @@
 using System.IO.Compression;
 using System.Text;
-using MEditService.Commands.Engine;
+using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.ModFolderAdapter;
 using MEditService.Ports;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
 
-namespace MEditService.Commands.Tests.Engine;
+namespace MEditService.Commands.Tests.Build;
 
 public sealed class StageHandlerTests
 {
@@ -28,7 +28,7 @@ public sealed class StageHandlerTests
     private StageHandler Handler => new(_folders, _notifications, _time);
 
     private static ModToStage ModFrom(string name, params string[] installationFiles) =>
-        new(name, $"mods/{name}", [.. installationFiles.Select(path => new InstallationFileToStage(path, Source: null))]);
+        new(name, $"mods/{name}", [.. installationFiles.Select(path => new InstallationFileToStage(path, Source: null))], []);
 
     private IEnumerable<StageProgress> Progress =>
         _notifications.Notifications.OfType<StageProgressNotification>().Select(n => n.Progress);
@@ -48,7 +48,7 @@ public sealed class StageHandlerTests
         _folders.WithFile(Mod, "meshes/a.nif", "hello", modified: 7);
         _folders.WithBytes(string.Empty, "dl/Mod.zip", Zip(("meshes/a.nif", "hello")));
 
-        Landed(new ModToStage("Mod", Mod, [new InstallationFileToStage("dl/Mod.zip", "nexus:1")]));
+        Landed(new ModToStage("Mod", Mod, [new InstallationFileToStage("dl/Mod.zip", "nexus:1")], []));
 
         var line = FileOf(Mod, "meshes/a.nif");
         Assert.IsType<FileProvider.FirstInstallationFile>(line.Provider);
@@ -243,6 +243,17 @@ public sealed class StageHandlerTests
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Locked", StageRefusal.ManifestNotWritten), (refused.Item, refused.Refusal));
         Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
+    }
+
+    [Fact]
+    public void AFileTheRepositoryCommitsItself_HasNoLineAndIsNotReported()
+    {
+        _folders.WithFile(Mod, "meta.ini", "hello").WithFile(Mod, "a.txt", "hello");
+
+        var staged = Landed(ModFrom("Mod") with { CommittedFiles = ["meta.ini"] });
+
+        Assert.Equal(["a.txt"], _folders.Manifests[Mod].Files.Select(f => f.Path));
+        Assert.Equal(["a.txt"], staged.NoProvider);
     }
 
     [Fact]
