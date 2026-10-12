@@ -25,8 +25,7 @@ public sealed class BuildModTraceTests : HostedTests
 
     private string _builtFolder = string.Empty;
 
-    // The fixture folders each plugin of its own: a mod's plugins share one folder.
-    private async Task LoadedAndTracked()
+    private async Task LoadedWithOneModFolderAndTracked()
     {
         _builtFolder = Path.GetDirectoryName(_instance.Plugins.Single(p => p.Name == Plugin).Path).Require();
         var second = _instance.Plugins.Single(p => p.Name == SecondPlugin);
@@ -46,7 +45,7 @@ public sealed class BuildModTraceTests : HostedTests
     [Fact]
     public async Task BuildingAMod_CompilesEveryPluginOfItFromItsSource_AndReportsItsProgress()
     {
-        await LoadedAndTracked();
+        await LoadedWithOneModFolderAndTracked();
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         var otherFormKey = await Client.FirstFormKey(SecondPlugin, Origin);
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
@@ -73,7 +72,7 @@ public sealed class BuildModTraceTests : HostedTests
     [Fact]
     public async Task BuildingAModWhoseSourceIsUntracked_LandsItWithEachPluginRefusedByName()
     {
-        await LoadedAndTracked();
+        await LoadedWithOneModFolderAndTracked();
 
         var answer = await Answer(await Client.Build([UntrackedOrigin, Origin]));
 
@@ -101,7 +100,7 @@ public sealed class BuildModTraceTests : HostedTests
     [Fact]
     public async Task BuildingNoMod_Is400()
     {
-        await LoadedAndTracked();
+        await LoadedWithOneModFolderAndTracked();
 
         Assert.Equal(HttpStatusCode.BadRequest, (await Client.Build([])).StatusCode);
     }
@@ -109,7 +108,7 @@ public sealed class BuildModTraceTests : HostedTests
     [Fact]
     public async Task BuildingAModWithoutAName_Is400()
     {
-        await LoadedAndTracked();
+        await LoadedWithOneModFolderAndTracked();
 
         Assert.Equal(HttpStatusCode.BadRequest, (await Client.Build([" "])).StatusCode);
     }

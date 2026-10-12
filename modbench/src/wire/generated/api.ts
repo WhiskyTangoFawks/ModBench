@@ -117,7 +117,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/mods/build": {
+    "/build": {
         parameters: {
             query?: never;
             header?: never;

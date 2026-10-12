@@ -8,7 +8,7 @@ internal static class ModEndpoints
     {
         // A missing load order or git refuses the whole selection once; every other refusal is an item of
         // the answer.
-        app.MapPost("/mods/build", Build)
+        app.MapPost("/build", Build)
             .WithName("BuildMod")
             .WithTags("Mods")
             .Produces<BuildResponse>()

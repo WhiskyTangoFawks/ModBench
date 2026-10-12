@@ -72,7 +72,7 @@ internal static class Wire
         client.PostAsJsonAsync("/plugins/compile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }) });
 
     internal static Task<HttpResponseMessage> Build(this HttpClient client, IEnumerable<string> mods) =>
-        client.PostAsJsonAsync("/mods/build", new { mods });
+        client.PostAsJsonAsync("/build", new { mods });
 
     /// <summary>An edit as Modbench makes one: mEdit answers the changes the edit makes, and each move and then each
     /// document is saved. The answer is mEdit's.</summary>
