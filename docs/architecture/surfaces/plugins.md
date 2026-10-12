@@ -1,6 +1,6 @@
 # Plugins
 
-The Plugins surface shows the plugin order and, beneath each plugin, its records. It is one tree over two templates: its plugin rows follow MO2's plugin list ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)), and the records beneath them follow xEdit's navigator ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)). Where it departs, [mo2.md](../../out-of-scope/mo2.md) and [xedit.md](../../out-of-scope/xedit.md) say why. Its gestures are in [commands.md](../commands.md) under Plugin and Record, `track` under Mod, and Every view. What every view shares is in [common.md](common.md).
+The Plugins surface shows the plugin order and, beneath each plugin, its records. It is one tree over two templates: its plugin rows follow MO2's plugin list ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)), and the records beneath them follow xEdit's navigator ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)). Where it departs, [mo2.md](../../out-of-scope/mo2.md) and [xedit.md](../../out-of-scope/xedit.md) say why. Its gestures are in [commands.md](../commands.md) under Plugin and Record, `track` and `build` under Mod, and Every view. What every view shares is in [common.md](common.md).
 
 Each story cites its source. A story with no source is owned here.
 

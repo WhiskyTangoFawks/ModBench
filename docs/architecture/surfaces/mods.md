@@ -33,7 +33,7 @@ As a user, I want:
 |---|---|---|
 | Label | the mod's name | MO2 |
 | Check box | checked when the mod is enabled | MO2 |
-| Description | the `meta.ini` version | MO2 |
+| Description | the `meta.ini` version, then stale when the mod is stale ([modlist-source.md](modlist-source.md), Status) | MO2 |
 | Icon | `$(package)` | |
 | Indicators | a badge at the right edge, and a colour on the label, for each indicator that holds ([Indicators](#indicators)) | MO2's Conflicts and Flags columns |
 | Badge | git's `M`, `U` and `D` in git's colours, while the instance has a repository, and the word stale in the description | [modlist-source.md](modlist-source.md), Status |

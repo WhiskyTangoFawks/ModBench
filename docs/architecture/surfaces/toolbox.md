@@ -32,7 +32,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 |---|---|
 | Title bar | 1: refresh. Overflow: open settings. |
 | Profile menu | switch |
-| Modlist menu | init (no repository) |
+| Modlist menu | init (no repository) · stage · discard changes… · clean… (a repository) |
 | Keys | Enter: the row's gesture, as a click does. |
 
 ## Pickers, prompts and confirmations

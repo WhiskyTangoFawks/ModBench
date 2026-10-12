@@ -1,6 +1,6 @@
 # Wabbajack: divergences and omissions
 
-Where Wabbajack has an answer, the manifest and restore adopt it ([ADR-0023](../adr/0023-wabbajack-is-the-reference-for-the-manifest-git-for-its-gestures.md)). This file lists every place they do not.
+Where Wabbajack has an answer, the manifest and its gestures adopt it ([ADR-0023](../adr/0023-wabbajack-is-the-reference-for-the-manifest-git-for-its-gestures.md)). This file lists every place they do not.
 
 What Wabbajack does: its source, a grep-only clone at `references/wabbajack/`.
 
@@ -15,7 +15,7 @@ What Wabbajack does: its source, a grep-only clone at `references/wabbajack/`.
 
 ## Divergences
 
-What the manifest and restore do differently.
+What the manifest and its gestures do differently.
 
 | # | Where | Modbench | Wabbajack | Why |
 |---|---|---|---|---|
@@ -25,7 +25,7 @@ What the manifest and restore do differently.
 | 4 | A file nothing yields, or whose delta is too large | The manifest says it has no source, and restore skips the mod | Compile fails unless the path is tagged | Ruling: the gap is in the diff, and the rest of the modlist commits. |
 | 5 | Deltas | Build outputs keyed by the file and both hashes, packaged and published by the user | Inlined in the `.wabbajack` file | ADR-0022: git cannot hold them, and packaging is the user's choice. |
 | 6 | A missing installation file when the manifest is written | The mod is refused, naming the file | The archive is dropped and compile continues | Ruling: Never silently wrong. |
-| 7 | A missing downloaded file at discard changes | Restore restores every mod whose downloaded files are present, and names each mod it could not with the file it lacks. Fetching is the user's. | Install stops when any archive cannot be fetched | Ruling: a mod gone from Nexus never blocks the rest, and restore downloads nothing. |
+| 7 | A missing downloaded file at discard changes | Discard changes lands every mod whose downloaded files are present, and names each mod it could not with the file it lacks. Fetching is the user's. | Install stops when any archive cannot be fetched | Ruling: a mod gone from Nexus never blocks the rest, and restore downloads nothing. |
 | 8 | Untracked files | Left by every rebuild and shown; clean trashes them after listing them | Deleted from the install folder by its deletion rules, after one confirmation | ADR-0023: git's untracked files. |
 | 9 | Configuration paths | Committed with the paths they hold, and a clone edits them | Rewritten to placeholders and back | Ruling: a developer edits a config. |
 | 10 | Words | init, stage, discard changes, clean, in VS Code's labels for git | compile, install | ADR-0023: git supplies the gestures and their names. |
