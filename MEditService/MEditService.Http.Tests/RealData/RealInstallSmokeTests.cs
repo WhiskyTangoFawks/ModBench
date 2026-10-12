@@ -68,6 +68,9 @@ public sealed class RealInstallSmokeTests(RealInstallSmokeTests.OneGameLoadedAtA
 
     public sealed class OneGameLoadedAtATime : IAsyncLifetime, IAsyncDisposable
     {
+        // Starfield's masters take about ten minutes to index on an eight-core laptop.
+        private static readonly TimeSpan IndexingTime = TimeSpan.FromMinutes(30);
+
         private GameRelease? _release;
         private ScratchDirectory? _instanceRoot;
         private MEditHost? _host;
@@ -86,10 +89,10 @@ public sealed class RealInstallSmokeTests(RealInstallSmokeTests.OneGameLoadedAtA
             _instanceRoot = new ScratchDirectory("medit-smoke-");
             _host = new MEditHost();
             var client = _host.CreateClient();
-            client.Timeout = TimeSpan.FromMinutes(10);
+            client.Timeout = IndexingTime;
 
             var load = await client.PutLoadOrderAndAwaitReady(
-                SnapshotPlugins.Body(dataDir.Path, _instanceRoot.Path, entries, release.ToString()), TimeSpan.FromMinutes(10));
+                SnapshotPlugins.Body(dataDir.Path, _instanceRoot.Path, entries, release.ToString()), IndexingTime);
             Assert.True(load.StatusCode == HttpStatusCode.OK,
                 $"{release}: PUT /load-order answered {load.StatusCode}: {await load.Content.ReadAsStringAsync()}");
             (_release, _client) = (release, client);
