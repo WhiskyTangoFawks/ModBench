@@ -7,6 +7,7 @@ Every file in both data bands has one owner: the repository that reads and write
 - A downloaded file's hash and the hashes of its entries come from the Instance adapter, which owns the downloaded files, and reach mEdit's engine as state beside the installation file ([ADR-0013](0013-mod-management-hands-editing-the-load-order.md)). The engine reads a downloaded file's bytes to write a mod folder, never to know what it holds.
 - A mod folder file's hash is its manifest line, which the Mod folder adapter writes and reads back by the line's stamp, as git's index trusts its own. Stage and status trust the same line.
 - A plugin file's hash is the Plugin adapter's; a plugin source document's is the Source adapter's. The record index stamps what they answer.
+- A game file's hash comes from the Instance adapter too. The instance knows which game it runs and where its folder is, so it supplies the game folder with the hash of each game file a mod file overrides, and mEdit reads the game folder to write, never to know.
 
 ## Alternatives rejected
 
