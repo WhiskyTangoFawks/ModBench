@@ -68,4 +68,32 @@ public sealed class LoadOrderLocalizedTests
             Assert.Contains(detail.Fields, f => f.Value?.ToString()?.Contains("The Overwrite Door") == true);
         }
     }
+
+    [Fact]
+    public void ALocalizedPluginWhoseStringsFileIsMissing_ReadsItsNameAsAnErrorNamingTheFile()
+    {
+        var holder = new LoadOrderHolder();
+        FormKey doorFormKey = default;
+        var data = new PluginFixtureBuilder("load-order-localized-missing")
+            .WithPlugin("Fixture.esp", mod =>
+            {
+                var door = mod.Doors.AddNew("MainDoor");
+                door.Name = new TranslatedString(Language.English, "The Big Door");
+                mod.UsingLocalization = true;
+                doorFormKey = door.FormKey;
+            })
+            .Build();
+        using (data)
+        {
+            Directory.Delete(Path.Combine(data.DataFolder, "Strings"), recursive: true);
+
+            using var index = Indexes.Open(holder);
+            index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
+
+            var detail = index.CopyIn(doorFormKey.ToString(), new PluginAddress("Fixture.esp", PluginOrigin.DataDirectory));
+            var name = Assert.Single(detail.Require().Fields, f => f.Metadata.Name == "Name");
+            Assert.Equal("<Error: No strings file>", name.Value?.ToString());
+            Assert.Equal("Fixture_English.STRINGS", name.CheckError);
+        }
+    }
 }
