@@ -1823,7 +1823,7 @@ describe('A FormKey in plugin source', () => {
 
   it('shows its record in a plugin source folder the adapter names in another case', async () => {
     await activated();
-    const other = await documentAt('Mods', 'Plugin-Source', 'Held.esp', 'Gun.json');
+    const other = await documentAt('Source', 'Held Mod', 'Plugin-Source', 'Held.esp', 'Gun.json');
 
     assert.deepStrictEqual(await hoverTextsIn(other, '000801'), heldHover);
   });
