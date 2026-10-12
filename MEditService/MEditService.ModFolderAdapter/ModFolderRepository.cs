@@ -1,3 +1,5 @@
+using MEditService.RepositoriesLib;
+
 namespace MEditService.ModFolderAdapter;
 
 public sealed class ModFolderRepository : IModFolderRepository
@@ -6,14 +8,9 @@ public sealed class ModFolderRepository : IModFolderRepository
         [.. new DirectoryInfo(modFolder).EnumerateFiles("*", SearchOption.AllDirectories)
             .Select(file => new ModFile(
                 Path.GetRelativePath(modFolder, file.FullName).Replace('\\', '/'),
-                file.Length,
-                file.LastWriteTimeUtc))];
+                FileStamp.Of(file.FullName)))];
 
-    public ModFile InstallationFile(string path)
-    {
-        var file = new FileInfo(path);
-        return new ModFile(path, file.Length, file.LastWriteTimeUtc);
-    }
+    public ModFile InstallationFile(string path) => new(path, FileStamp.Of(path));
 
     public Stream OpenFile(string modFolder, string path) =>
         OpenInstallationFile(Path.Combine(modFolder, path));

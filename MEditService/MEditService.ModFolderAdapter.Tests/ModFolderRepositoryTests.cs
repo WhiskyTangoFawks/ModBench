@@ -1,31 +1,30 @@
+using MEditService.TestSupport;
+
 namespace MEditService.ModFolderAdapter.Tests;
 
 public sealed class ModFolderRepositoryTests : IDisposable
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("modfolder-adapter-").FullName;
-    private static readonly DateTime Stamp = new(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    private readonly ScratchDirectory _root = new("modfolder-adapter-");
     private readonly ModFolderRepository _repository = new();
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose() => _root.Dispose();
 
     [Fact]
-    public void Files_ListsEveryFileByForwardSlashPathWithItsSizeAndModifiedTime()
+    public void Files_ListsEveryFileByForwardSlashPathWithItsSize()
     {
-        var modified = Stamp.AddSeconds(5);
-        Write("readme.txt", "abc", modified);
-        Write(Path.Combine("meshes", "deep", "a.nif"), "hello", modified);
+        Write("readme.txt", "abc");
+        Write(Path.Combine("meshes", "deep", "a.nif"), "hello");
 
         var files = _repository.Files(_root).OrderBy(f => f.Path, StringComparer.Ordinal).ToList();
 
-        Assert.Equal(
-            [new ModFile("meshes/deep/a.nif", 5, modified), new ModFile("readme.txt", 3, modified)],
-            files);
+        Assert.Equal(["meshes/deep/a.nif", "readme.txt"], files.Select(f => f.Path));
+        Assert.Equal([5L, 3L], files.Select(f => f.Stamp?.Size));
     }
 
     [Fact]
     public void OpenFile_ReadsTheBytesOfAFileUnderTheModFolder()
     {
-        Write(Path.Combine("meshes", "a.nif"), "hello", Stamp);
+        Write(Path.Combine("meshes", "a.nif"), "hello");
 
         using var content = _repository.OpenFile(_root, "meshes/a.nif");
 
@@ -35,7 +34,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void OpenInstallationFile_ReadsTheBytesOfTheNamedFile()
     {
-        Write("mod.7z", "archive", Stamp);
+        Write("mod.7z", "archive");
 
         using var content = _repository.OpenInstallationFile(Path.Combine(_root, "mod.7z"));
 
@@ -45,19 +44,20 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void InstallationFile_DescribesTheNamedFileWithoutReadingIt()
     {
-        var modified = Stamp.AddSeconds(5);
-        Write("mod.7z", "archive", modified);
+        Write("mod.7z", "archive");
         var path = Path.Combine(_root, "mod.7z");
 
-        Assert.Equal(new ModFile(path, 7, modified), _repository.InstallationFile(path));
+        var described = _repository.InstallationFile(path);
+
+        Assert.Equal(path, described.Path);
+        Assert.Equal(7, described.Stamp?.Size);
     }
 
-    private void Write(string relative, string text, DateTime modified)
+    private void Write(string relative, string text)
     {
         var path = Path.Combine(_root, relative);
         new FileInfo(path).Directory?.Create();
         File.WriteAllText(path, text);
-        File.SetLastWriteTimeUtc(path, modified);
     }
 
     private static string ReadAll(Stream content)

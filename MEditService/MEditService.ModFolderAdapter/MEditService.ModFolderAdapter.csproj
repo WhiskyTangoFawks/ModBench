@@ -17,4 +17,9 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The band's lib (target-architecture.d2 medit_repositories). -->
+    <ProjectReference Include="..\MEditService.RepositoriesLib\MEditService.RepositoriesLib.csproj" />
+  </ItemGroup>
+
 </Project>

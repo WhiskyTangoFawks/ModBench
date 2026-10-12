@@ -2,13 +2,12 @@ using System.IO.Compression;
 using System.Text;
 using MEditService.Commands.Engine;
 using MEditService.ModFolderAdapter;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.Commands.Tests.Engine;
 
 public sealed class ContentHashesTests
 {
-    private static readonly DateTime Stamp = new(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
     private const string SolidSevenZipOfReadmeAndMeshes =
         "N3q8ryccAASFw+b/iQAAAAAAAAAhAAAAAAAAAK4I884BAAdoZWxsb2FiYwAAAIEzB64PzpwGxQkqrtOqhSYoExi7AyVngQOezpXEuqLOOoBYsuFpeARf9NpgbpmG3b+bdRTEowyJRFK25qT5PK7zQvu4KHFnhr9zmjxOQ7xeo5AN1N93PPjN90VRVAkntNgibYgKm0tJNViYtf0deiHHsbke5Gci3AAAABcGDAEJfQAHCwEAASMDAQEFXQAQAAAMgKIKAVdAT/MAAA==";
 
@@ -63,7 +62,7 @@ public sealed class ContentHashesTests
     [Fact]
     public void ModFolderFiles_AreHashedByPath()
     {
-        var repository = new FakeModFolders().WithFile("meshes/a.nif", "hello", Stamp).WithFile("readme.txt", "", Stamp);
+        var repository = new FakeModFolders().WithFile("meshes/a.nif", "hello").WithFile("readme.txt", "");
 
         var hashes = new ContentHashes(repository).OfModFolder("mod");
 
@@ -74,7 +73,7 @@ public sealed class ContentHashesTests
     [Fact]
     public void AModFolderFileWhoseSizeAndTimeAreUnchanged_IsNotReadAgain()
     {
-        var repository = new FakeModFolders().WithFile("a.txt", "hello", Stamp);
+        var repository = new FakeModFolders().WithFile("a.txt", "hello");
         var hashes = new ContentHashes(repository);
 
         hashes.OfModFolder("mod");
@@ -86,11 +85,11 @@ public sealed class ContentHashesTests
     [Fact]
     public void AModFolderFileWhoseTimeChanged_IsHashedAgain()
     {
-        var repository = new FakeModFolders().WithFile("a.txt", "hello", Stamp);
+        var repository = new FakeModFolders().WithFile("a.txt", "hello");
         var hashes = new ContentHashes(repository);
         hashes.OfModFolder("mod");
 
-        repository.WithFile("a.txt", "hellO", Stamp.AddSeconds(1));
+        repository.WithFile("a.txt", "hellO", modified: 1);
         var second = hashes.OfModFolder("mod");
 
         Assert.Equal(2, repository.Opens);
@@ -100,11 +99,36 @@ public sealed class ContentHashesTests
     [Fact]
     public void AModFolderFileWhoseSizeChanged_IsHashedAgainAtTheSameTime()
     {
-        var repository = new FakeModFolders().WithFile("a.txt", "hello", Stamp);
+        var repository = new FakeModFolders().WithFile("a.txt", "hello");
         var hashes = new ContentHashes(repository);
         hashes.OfModFolder("mod");
 
-        repository.WithFile("a.txt", "hello!", Stamp);
+        repository.WithFile("a.txt", "hello!");
+        hashes.OfModFolder("mod");
+
+        Assert.Equal(2, repository.Opens);
+    }
+
+    [Fact]
+    public void AModFolderFileWhoseChangeTimeMoved_IsHashedAgainAtTheSameSizeAndModifiedTime()
+    {
+        var repository = new FakeModFolders().WithFile("a.txt", "hello");
+        var hashes = new ContentHashes(repository);
+        hashes.OfModFolder("mod");
+
+        repository.WithFile("a.txt", "hellO", changed: 1);
+        var second = hashes.OfModFolder("mod");
+
+        Assert.Equal(FileHash.Of(new MemoryStream(Encoding.ASCII.GetBytes("hellO"))), second["a.txt"]);
+    }
+
+    [Fact]
+    public void AModFolderFileTheFileSystemCannotStamp_IsReadEveryTime()
+    {
+        var repository = new FakeModFolders().WithUnstampedFile("a.txt", "hello");
+        var hashes = new ContentHashes(repository);
+
+        hashes.OfModFolder("mod");
         hashes.OfModFolder("mod");
 
         Assert.Equal(2, repository.Opens);
@@ -126,26 +150,33 @@ public sealed class ContentHashesTests
 
     private sealed class FakeModFolders : IModFolderRepository
     {
-        private readonly Dictionary<string, (byte[] Bytes, DateTime Modified)> _files = [];
+        private readonly Dictionary<string, (byte[] Bytes, FileStamp? Stamp)> _files = [];
 
         public int Opens { get; private set; }
 
-        public FakeModFolders WithFile(string path, string text, DateTime modified)
+        public FakeModFolders WithFile(string path, string text, long modified = 0, long changed = 0)
         {
-            _files[path] = (Encoding.ASCII.GetBytes(text), modified);
+            var bytes = Encoding.ASCII.GetBytes(text);
+            _files[path] = (bytes, new FileStamp(bytes.Length, modified, changed));
+            return this;
+        }
+
+        public FakeModFolders WithUnstampedFile(string path, string text)
+        {
+            _files[path] = (Encoding.ASCII.GetBytes(text), null);
             return this;
         }
 
         public FakeModFolders WithInstallationFile(string path, byte[] bytes)
         {
-            _files[path] = (bytes, Stamp);
+            _files[path] = (bytes, new FileStamp(bytes.Length, 0, 0));
             return this;
         }
 
         public IReadOnlyList<ModFile> Files(string modFolder) =>
-            [.. _files.Select(f => new ModFile(f.Key, f.Value.Bytes.Length, f.Value.Modified))];
+            [.. _files.Select(f => new ModFile(f.Key, f.Value.Stamp))];
 
-        public ModFile InstallationFile(string path) => Files(path).Single(f => f.Path == path);
+        public ModFile InstallationFile(string path) => new(path, _files[path].Stamp);
 
         public Stream OpenFile(string modFolder, string path) => Open(path);
 

@@ -30,6 +30,8 @@
     <!-- One test project per box: the drawn list plus the kernel, mirroring
          MEditService.ModFolderAdapter's own ProjectReference list. -->
     <ProjectReference Include="..\MEditService.ModFolderAdapter\MEditService.ModFolderAdapter.csproj" />
+    <ProjectReference Include="..\MEditService.RepositoriesLib\MEditService.RepositoriesLib.csproj" />
+    <ProjectReference Include="..\MEditService.TestSupport\MEditService.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>
