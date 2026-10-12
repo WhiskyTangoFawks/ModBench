@@ -422,7 +422,7 @@ public sealed class TrackModTests
     }
 
     [Fact]
-    public async Task TrackMod_ARecordWithANullFormId_RefusesNamingItsFile_SinceItsSourceCannotBeReadBack()
+    public async Task TrackMod_ARecordWithANullFormId_RefusesNamingIt_SinceThePluginIsMalformed()
     {
         using var modFolder = new ScratchDirectory("medit-track-null-formid-");
         using var gameDir = new ScratchDirectory("medit-track-null-formid-game-");
@@ -441,8 +441,7 @@ public sealed class TrackModTests
 
         Assert.Equal((false, TrackRefusal.RoundTripFailed), (result.Applied, result.Refusal));
         Assert.Equal(
-            $"Fixture.esp does not round-trip through its own source: {Path.Combine("Npcs", "NullGuy - Null.json")} — unknown: " +
-            "Malformed FormKey string: NullGuy",
+            "Fixture.esp cannot become source: NPC_ 00000000 holds the null FormID, so the plugin is malformed.",
             result.Message);
         Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }

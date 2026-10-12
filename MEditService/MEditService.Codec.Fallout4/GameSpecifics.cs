@@ -38,13 +38,32 @@ internal static class GameSpecifics
             type => $"{type.FormType}:{string.Join(",", type.Links.Select(link => link.FormKey))}"),
     ];
 
-    public static IMajorRecordGetter NormalizeRecord(IMajorRecordGetter record)
+    public static bool Normalizes(IMajorRecordGetter record) =>
+        record is IQuestGetter || FunctionConditions.CanReach(record.GetType());
+
+    public static void Normalize(IMajorRecord copy)
     {
-        if (record is not IQuestGetter quest) return record;
-        var copy = quest.DeepCopy();
-        copy.Timestamp = 0;
-        copy.Unknown = 0;
-        foreach (var topic in copy.DialogTopics) GameCodec.ZeroTopicGroupFields(topic);
-        return copy;
+        FunctionConditions.ForEach(copy, node =>
+        {
+            if (node is FunctionConditionData data) KeepTheWrittenParameterViews(data);
+        });
+        if (copy is not Quest quest) return;
+        quest.Timestamp = 0;
+        quest.Unknown = 0;
+        foreach (var topic in quest.DialogTopics) GameCodec.ZeroTopicGroupFields(topic);
+    }
+
+    private static readonly RecordGraph FunctionConditions = new(type => type == typeof(ConditionData) || type == typeof(FunctionConditionData));
+
+    // Each parameter is four bytes Mutagen reads as both a number and a record. It writes the view the
+    // function reads, and its reread derives the other from the master list, which a compile prunes
+    // (ADR-0008).
+    private static void KeepTheWrittenParameterViews(FunctionConditionData data)
+    {
+        var (one, two, _) = Condition.GetParameterTypes(data.Function);
+        if (one.GetCategory() == Condition.ParameterCategory.Form) data.ParameterOneNumber = 0;
+        else data.ParameterOneRecord.SetToNull();
+        if (two.GetCategory() == Condition.ParameterCategory.Form) data.ParameterTwoNumber = 0;
+        else data.ParameterTwoRecord.SetToNull();
     }
 }
