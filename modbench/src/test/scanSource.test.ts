@@ -32,10 +32,10 @@ describe('the source roots', () => {
 
 describe('isTestSupport', () => {
   it.each([
-    ['modlist/x.test.ts'],
-    ['modlist/View.test.tsx'],
+    ['modOrderCommands/x.test.ts'],
+    ['modOrderCommands/View.test.tsx'],
     ['test/double.ts'],
-    ['modlist/test/double.ts'],
+    ['modOrderCommands/test/double.ts'],
     ['test/integration/run.ts'],
     ['a\\test\\b.ts'],
     ['integration/run.ts'],
@@ -43,7 +43,7 @@ describe('isTestSupport', () => {
     expect(isTestSupport(path)).toBe(true);
   });
 
-  it.each([['modlist/x.ts'], ['extension.ts'], ['latest/x.ts'], ['modlist/attestation.ts']])('does not hold %s', (path) => {
+  it.each([['modOrderCommands/x.ts'], ['extension.ts'], ['latest/x.ts'], ['modOrderCommands/attestation.ts']])('does not hold %s', (path) => {
     expect(isTestSupport(path)).toBe(false);
   });
 });
@@ -179,7 +179,7 @@ describe('boxesIn and referencesOf, parameterised by root', () => {
 
   it('defaults to the real source tree', () => {
     expect(boxesIn().map((box) => box.name)).toContain('loadOrderFileCodec');
-    expect(referencesOf('modlist')).toEqual(['coreLib', 'instanceAdapter', 'ports']);
+    expect(referencesOf('modOrderCommands')).toEqual(['coreLib', 'instanceAdapter', 'ports']);
   });
 });
 

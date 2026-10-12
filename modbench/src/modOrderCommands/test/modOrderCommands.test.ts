@@ -12,7 +12,7 @@ import {
 import {
   modSyncOver,
   modlistCommands,
-} from '../modlist';
+} from '../modOrderCommands';
 import { adapterOver, readModlistEntries } from '../../test/mo2/adapterOver';
 import type { InstanceAdapter, ModFolder, ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 

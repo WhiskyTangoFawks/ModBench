@@ -44,7 +44,7 @@ medit_core: "MEDIT · Core — the write side; it references the kernel and the 
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
-  modlist: "mod order commands\nowns: the mod order" {class: core}
+  modordercommands: "mod order commands\nowns: the mod order" {class: core}
   sourcecommands: "source commands\nowns: init, stage, discard changes, clean, track and build\nhides: nothing: it hands the instance's facts to mEdit" {class: core}
   pluginscommands: "plugins commands\nowns: changes to the plugin order\nhides: the plugin-order rules" {class: core}
   instancecommands: "instance commands\nowns: changes to the instance as a whole" {class: core}
