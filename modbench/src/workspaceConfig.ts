@@ -16,6 +16,10 @@ export function gameDirectoryOverrides(): GameDirectoryOverrides {
   return { gameDirectory: meditConfig().get<string>('mods.gameDirectory') };
 }
 
+export function agentPort(): number {
+  return meditConfig().get<number>('agent.port', 47200);
+}
+
 export function attachPort(): number | undefined {
   return meditConfig().get<number | null>('attachToBackendPort') ?? undefined;
 }

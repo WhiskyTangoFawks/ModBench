@@ -27,7 +27,8 @@
     { "path": "./src/downloads" },
     { "path": "./src/plugins" },
     { "path": "./src/editor" },
-    { "path": "./src/sourceLanguage" }
+    { "path": "./src/sourceLanguage" },
+    { "path": "./src/agent" }
   ],
   "include": ["src/**/*.test.ts", "src/**/test/**/*.ts"],
   "exclude": ["src/test/integration"]
