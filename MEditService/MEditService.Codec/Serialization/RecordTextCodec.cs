@@ -19,6 +19,7 @@ public static class RecordTextCodec
 {
     private static readonly MutagenSerializationWriterKernel<NewtonsoftJsonSerializationWriterKernel, JsonWritingUnit> WriterKernel = new();
     private static readonly NewtonsoftJsonSerializationReaderKernel ReaderKernel = new();
+    private static readonly ConcurrentDictionary<(Type Record, GameRelease Release), Type?> GeneratedSerializationTypes = new();
 
     // Closed generic MethodInfos, resolved once per record type. TWriter/TReaderKernel never vary,
     // so the cache key never carries them.
@@ -76,7 +77,20 @@ public static class RecordTextCodec
         // No \r anywhere: the kernel's indentation uses the platform newline. No trailing newline:
         // Finalize writes the closing brace and nothing after, as does the source tree, so adding
         // one would diverge from the whole-mod door's document shape.
-        return TranslatedStringValues.InLanguageOrder([.. buffer.ToArray().Where(b => b != (byte)'\r')]);
+        return TranslatedStringValues.InLanguageOrder(WithoutCarriageReturns(buffer.GetBuffer().AsSpan(0, (int)buffer.Length)));
+    }
+
+    private static byte[] WithoutCarriageReturns(ReadOnlySpan<byte> written)
+    {
+        var kept = new byte[written.Length - written.Count((byte)'\r')];
+        var at = 0;
+        foreach (var range in written.Split((byte)'\r'))
+        {
+            var segment = written[range];
+            segment.CopyTo(kept.AsSpan(at));
+            at += segment.Length;
+        }
+        return kept;
     }
 
     /// <summary>The instance the codec builds for an empty document of a Loqui class: every member
@@ -221,8 +235,8 @@ public static class RecordTextCodec
     // By the record class an overlay reader stands for: an interface scan matched an ancestor's
     // narrower serializer and silently produced truncated text.
     private static Type? LookupGeneratedSerializationType(Type recordType, GameRelease gameRelease) =>
-        GameCodecs.For(gameRelease).GeneratedSerializers
-            .GetType($"{recordType.Namespace}.{RecordTypes.ClassNameOf(recordType)}_Serialization");
+        GeneratedSerializationTypes.GetOrAdd((recordType, gameRelease), static key => GameCodecs.For(key.Release).GeneratedSerializers
+            .GetType($"{key.Record.Namespace}.{RecordTypes.ClassNameOf(key.Record)}_Serialization"));
 
     // Derived from the record type's namespace, not a named game, as LookupGeneratedSerializationType
     // derives it: hardcoding "Fallout4" would have a Skyrim record report a path the lookup never tried.
