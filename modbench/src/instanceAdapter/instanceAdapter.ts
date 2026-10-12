@@ -379,7 +379,8 @@ export interface InstanceAdapter {
   checkPluginRename(
     origin: FileOrigin, from: string, to: string, gameRelease: string | undefined,
   ): Promise<{ applied: true } | { applied: false; refusal: string }>;
-  /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
+  /** Moves the folder that holds `entry` out of mods/ into the trash, and a mod's source folder with
+   *  it; false when no folder holds it. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
   /** Makes the folder of a mod that is new. Refuses a folder already there, whatever it holds,
    *  matched as the manager matches names. */

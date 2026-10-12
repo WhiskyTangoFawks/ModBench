@@ -10,7 +10,7 @@ import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrgan
 import { spliceDownloadMeta, trashDownloadMeta } from './downloadMeta';
 import { ensureDir, exists, putIfChanged, rename } from './files';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from './instanceAdapter';
-import { downloadFile, pluginsFile, settingsFile } from './layout';
+import { downloadFile, modSourceDir, pluginsFile, settingsFile } from './layout';
 import { currentDownloadsDir, entryKey, folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 
 type Mo2Changes = Pick<InstanceAdapter,
@@ -78,6 +78,8 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
       const folder = await folderHolding(context, entry);
       if (folder === undefined) return false;
       await trash(folder.path);
+      const source = entry.kind === 'mod' ? modSourceDir(instanceRoot, entry.name) : undefined;
+      if (source !== undefined && (await exists(source))) await trash(source);
       return true;
     },
 

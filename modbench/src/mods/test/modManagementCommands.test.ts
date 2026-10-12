@@ -44,7 +44,7 @@ const {
 import {
   registerCreateEmptyModCommand, registerModContextCommands, registerModEnableCommands, registerFileExclusionCommands,
   registerModMoveCommand,
-  registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand,
+  registerOpenFolderCommand, registerOpenSourceCommand, registerSeparatorCommands, registerViewOnNexusCommand,
   modsCopyValueText,
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
@@ -252,6 +252,32 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     }]);
     expect(uninstallMods).toHaveBeenCalledWith(
       'Default', [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
+  });
+
+  const facts = { holdsPlugin: true, tracked: true, fileOrderConflict: false };
+
+  it('says the source goes to the trash with the folder of a source mod', async () => {
+    uninstallMods.mockResolvedValueOnce({ applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
+    const ask = scriptedDialog('Uninstall');
+
+    registerModContextCommands({ commands, instance, viewSelection: () => [], reporter: recordingReporter(), ask, trash, log });
+    await invoke('modbench.mod.uninstall', new ModNode(modA.mod, facts));
+
+    expect(ask.asked[0]?.message).toBe('Uninstall "Mod A"? Its folder and its source will be moved to the system trash.');
+  });
+
+  it('names the source mods whose source goes with the folders, for a selection of several', async () => {
+    uninstallMods.mockResolvedValueOnce({
+      applied: true, outcome: { landed: [{ name: 'Mod A' }, { name: 'Mod B' }], refused: [] },
+    });
+    const ask = scriptedDialog('Uninstall');
+
+    registerModContextCommands({ commands, instance, viewSelection: () => [], reporter: recordingReporter(), ask, trash, log });
+    const sourceA = new ModNode(modA.mod, facts);
+    await invoke('modbench.mod.uninstall', sourceA, [sourceA, modB]);
+
+    expect(ask.asked[0]?.message).toBe(
+      'Uninstall "Mod A", "Mod B"? Their folders will be moved to the system trash, and the source of "Mod A" with them.');
   });
 
   it('asks one modal listing every mod, for a selection of several', async () => {
@@ -1388,5 +1414,50 @@ describe('rename mod refuses in its prompt', () => {
     expect(renameModNameRefusal).toHaveBeenCalledWith('Default', 'mod a', 'Mod B');
     expect(await validate('')).toBeUndefined();
     expect(renameModNameRefusal).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('open source: a source mod\'s source folder', () => {
+  beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
+
+  const instance = {
+    ...instanceThatReads,
+    value: instanceValueFixture({
+      trackedMods: new Set(['Source Mod']),
+      paths: {
+        overwriteDir: undefined, downloadsDir: '', modDirs: new Map(),
+        sourceDirs: new Map([['Source Mod', '/instance/source/Source Mod'], ['Plain Mod', '/instance/source/Plain Mod']]),
+      },
+    }),
+  };
+  const revealed = (): (string | undefined)[] =>
+    executeCommand.mock.calls.filter((c) => c[0] === 'revealInExplorer').map((c) => c[1]?.fsPath);
+
+  it('reveals the clicked source mod\'s source folder, as the value names it', async () => {
+    registerOpenSourceCommand(instance, recordingReporter(), () => []);
+    await invoke('modbench.mod.openSource', new ModNode({ kind: 'mod', name: 'Source Mod', enabled: true }));
+
+    expect(revealed()).toEqual(['/instance/source/Source Mod']);
+  });
+
+  it('refuses a mod with no repository, naming it, though the value has a path where one would be', async () => {
+    const reporter = recordingReporter();
+
+    registerOpenSourceCommand(instance, reporter, () => []);
+    await invoke('modbench.mod.openSource', new ModNode({ kind: 'mod', name: 'Plain Mod', enabled: true }));
+
+    expect(revealed()).toEqual([]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to open the source of "Plain Mod".', detail: 'It is not a source mod.' },
+    ]);
+  });
+
+  it('reveals nothing from the palette over a selection of several rows', async () => {
+    const mod = new ModNode({ kind: 'mod', name: 'Source Mod', enabled: true });
+
+    registerOpenSourceCommand(instance, recordingReporter(), () => [mod, mod]);
+    await invoke('modbench.mod.openSource');
+
+    expect(revealed()).toEqual([]);
   });
 });

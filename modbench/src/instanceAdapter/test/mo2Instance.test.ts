@@ -894,6 +894,19 @@ describe('the MO2 Instance adapter', () => {
     });
   });
 
+  it('moves a mod\'s source folder to the trash with its folder, so a mod installed again under the name reads as untracked', async () => {
+    const trashed: string[] = [];
+    const trash = (path: string): Promise<void> => {
+      trashed.push(path);
+      return Promise.resolve();
+    };
+    await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
+
+    await adapter.trashEntryFolder({ kind: 'mod', name: 'Harder VATS' }, trash);
+
+    expect(trashed).toEqual([join(root, 'mods', 'Harder VATS'), join(root, 'source', 'Harder VATS')]);
+  });
+
   describe('excluding and including a file of a mod or Overwrite', () => {
     const modOrigin = { kind: 'mod' as const, name: 'Harder VATS' };
     const overwrite = { kind: 'runtimeOutput' as const };
