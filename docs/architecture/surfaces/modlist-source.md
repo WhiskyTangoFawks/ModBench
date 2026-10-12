@@ -19,7 +19,7 @@ As a user, I want:
 A mod's installation files are the downloaded files the mod manager records the mod as installed from. As a user, I want:
 
 1. One manifest in each mod folder, named for the mod, so a mod installed, uninstalled or renamed reads as a file added, removed or renamed in a diff, and two branches that change two mods merge. Source: ADR-0022; wabbajack.md, divergence 2
-2. The manifest to name the mod's installation files and the game files its files come from, each with its size, its hash and where the mod manager says it comes from, and then one line for each file in the mod folder naming its provider: an installation file, a delta, the game folder or the mod's source. Source: Wabbajack's archives and directives
+2. The manifest to name the mod's installation files and the game files its files come from, each with its size, its hash and where the mod manager says it comes from, and then one line for each file in the mod folder the repository does not commit, naming its provider: an installation file, a delta, the game folder or the mod's source. Source: Wabbajack's archives and directives
 3. A file's line to say nothing when the first installation file holds it at the same path, so the ordinary case is the short one. Otherwise it names the path inside an installation file, the delta that makes it, or that it has no provider.
 4. A file to come only from the mod's installation files or from the game folder. A file none of them yields has no provider. Source: wabbajack.md, divergences 3 and 4
 5. A file whose bytes differ from an installation file's copy to be a delta from that copy, and a plugin cleaned from the game's own to be a delta from the game file. Source: Wabbajack's patched files
