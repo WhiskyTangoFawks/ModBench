@@ -3,7 +3,7 @@ using MEditService.RepositoriesLib;
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>What a mod's manifest says: the installation files and game files its files come from, then each
-/// file's provider. Hashes are the engine's text and the adapter keeps them as written.</summary>
+/// file's provider. A source's hash is the Instance adapter's text, kept as written (ADR-0024).</summary>
 public sealed record Manifest(
     IReadOnlyList<ManifestSource> InstallationFiles,
     IReadOnlyList<ManifestSource> GameFiles,

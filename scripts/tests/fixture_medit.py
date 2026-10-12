@@ -93,7 +93,7 @@ def snapshot(instance, game):
         folder = instance / 'mods' / mod
         plugins.append({
             'name': name, 'path': str(folder / name), 'origin': mod,
-            'provider': {'kind': 'Mod', 'mod': mod, 'folder': str(folder)},
+            'provider': {'kind': 'Mod', 'mod': mod, 'folder': str(folder), 'sourceFolder': str(instance / 'source' / mod)},
             'line': line, 'lineNamesIt': True,
         })
     return {

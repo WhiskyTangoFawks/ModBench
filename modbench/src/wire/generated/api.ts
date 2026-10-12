@@ -1350,9 +1350,23 @@ export interface components {
             sourceRelativePath: string;
             message: string;
         };
+        StageGameFileRequest: {
+            path: string;
+            /** Format: int64 */
+            size?: number | null;
+            hash: string;
+        };
+        StageInstallationFileEntryRequest: {
+            path: string;
+            hash: string;
+        };
         StageInstallationFileRequest: {
             path: string;
             source?: string | null;
+            /** Format: int64 */
+            size?: number | null;
+            hash: string;
+            entries: components["schemas"]["StageInstallationFileEntryRequest"][];
         };
         StageModRequest: {
             name: string;
@@ -1368,10 +1382,10 @@ export interface components {
             modsTotal: number;
         };
         /** @enum {string} */
-        StageRefusal: "None" | "InstallationFileMissing" | "InstallationFileUnreadable" | "ModFolderMissing" | "ModFilesUnreadable" | "ManifestNotWritten";
+        StageRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "ManifestNotWritten";
         StageRequest: {
             mods: components["schemas"]["StageModRequest"][];
-            dataFolder: string;
+            gameFiles: components["schemas"]["StageGameFileRequest"][];
         };
         StageResponse: {
             applied: components["schemas"]["StagedModResponse"][];
