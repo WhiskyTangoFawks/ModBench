@@ -40,7 +40,7 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
 
     private ItemAnswer<StageRefusal, StagedMod> StageMod(ModToStage mod, IReadOnlyList<GameFileToStage> gameFiles)
     {
-        var missing = mod.InstallationFiles.Where(file => repository.InstallationFile(file.Path) is null)
+        var missing = mod.InstallationFiles.Where(file => !repository.InstallationFileExists(file.Path))
             .Select(file => $"'{repository.InstallationFileName(file.Path)}'").ToList();
         if (missing.Count > 0)
         {

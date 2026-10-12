@@ -82,21 +82,12 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void InstallationFile_DescribesTheNamedFileWithoutReadingIt()
+    public void AnInstallationFile_ExistsOnlyWhenItIsThere()
     {
         Write("mod.7z", "archive");
-        var path = Path.Combine(_root, "mod.7z");
 
-        var described = _repository.InstallationFile(path);
-
-        Assert.Equal(path, described?.Path);
-        Assert.Equal(7, described?.Stamp?.Size);
-    }
-
-    [Fact]
-    public void AnInstallationFileThatIsNotThere_IsNull()
-    {
-        Assert.Null(_repository.InstallationFile(Path.Combine(_root, "absent.7z")));
+        Assert.True(_repository.InstallationFileExists(Path.Combine(_root, "mod.7z")));
+        Assert.False(_repository.InstallationFileExists(Path.Combine(_root, "absent.7z")));
     }
 
     [Fact]

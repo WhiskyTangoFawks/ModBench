@@ -38,8 +38,7 @@ internal sealed class FakeModFolders : IModFolderRepository
         return [.. files.Select(f => new HashedFile(f.Key.Path, Encoding.ASCII.GetString(f.Value.Bytes), f.Value.Stamp))];
     }
 
-    public StampedFile? InstallationFile(string path) =>
-        _files.TryGetValue((string.Empty, path), out var file) ? new StampedFile(path, file.Stamp) : null;
+    public bool InstallationFileExists(string path) => _files.ContainsKey((string.Empty, path));
 
     public string InstallationFileName(string path) => path[(path.LastIndexOf('/') + 1)..];
 

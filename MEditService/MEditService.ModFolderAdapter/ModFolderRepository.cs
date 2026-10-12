@@ -18,7 +18,7 @@ public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepositor
         return [.. paths.Select(path => Hashed(modFolder, path, lines.TryGetValue(path, out var line) ? line : null))];
     }
 
-    public StampedFile? InstallationFile(string path) => File.Exists(path) ? new(path, FileStamp.Of(path)) : null;
+    public bool InstallationFileExists(string path) => File.Exists(path);
 
     public string InstallationFileName(string path) => Path.GetFileName(path);
 

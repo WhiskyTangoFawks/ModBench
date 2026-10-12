@@ -23,23 +23,23 @@ internal static class ModlistEndpoints
         var mods = req.Mods ?? [];
         if (mods.Count == 0) return Results.Problem("At least one mod is required.", statusCode: 400);
         if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.Folder)
-            || (mod.InstallationFiles ?? []).Any(file => string.IsNullOrWhiteSpace(file.Path) || string.IsNullOrWhiteSpace(file.Hash)
-                || file.Entries is null || file.Entries.Any(entry => string.IsNullOrWhiteSpace(entry.Path) || string.IsNullOrWhiteSpace(entry.Hash)))))
+            || (mod.InstallationFiles ?? []).Any(file => string.IsNullOrWhiteSpace(file.Path) || file.Size is null
+                || string.IsNullOrWhiteSpace(file.Hash) || file.Entries is null || file.Entries.Any(entry => string.IsNullOrWhiteSpace(entry.Path) || string.IsNullOrWhiteSpace(entry.Hash)))))
         {
             return Results.Problem(
-                "Every mod needs a name and a folder, and every installation file a path, a hash and its entries, each with a path and a hash.",
+                "Every mod needs a name and a folder, and every installation file a path, a size, a hash and its entries, each with a path and a hash.",
                 statusCode: 400);
         }
-        if (req.GameFiles is not { } gameFiles || gameFiles.Any(file => string.IsNullOrWhiteSpace(file.Path) || string.IsNullOrWhiteSpace(file.Hash)))
-            return Results.Problem("The game files the mods override are required, each with a path and a hash.", statusCode: 400);
+        if (req.GameFiles is not { } gameFiles || gameFiles.Any(file => string.IsNullOrWhiteSpace(file.Path) || file.Size is null || string.IsNullOrWhiteSpace(file.Hash)))
+            return Results.Problem("The game files the mods override are required, each with a path, a size and a hash.", statusCode: 400);
 
         var result = handler.Stage(
             [.. mods.Select(mod => new ModToStage(
                 mod.Name, mod.Folder,
                 [.. (mod.InstallationFiles ?? []).Select(file => new InstallationFileToStage(
-                    file.Path, file.Source, file.Size, file.Hash, [.. file.Entries.Select(entry => new HashedEntry(entry.Path, entry.Hash))]))],
+                    file.Path, file.Source, file.Size.GetValueOrDefault(), file.Hash, [.. file.Entries.Select(entry => new HashedEntry(entry.Path, entry.Hash))]))],
                 mod.CommittedFiles ?? []))],
-            [.. gameFiles.Select(file => new GameFileToStage(file.Path, file.Size, file.Hash))],
+            [.. gameFiles.Select(file => new GameFileToStage(file.Path, file.Size.GetValueOrDefault(), file.Hash))],
             cancel);
 
         var logger = loggerFactory.CreateLogger(nameof(ModlistEndpoints));
@@ -59,13 +59,13 @@ internal sealed record StageModRequest(
 /// <summary>An installation file by its path, where the mod manager says it comes from, and its size, hash and
 /// entries as the Instance adapter knows them (ADR-0024).</summary>
 internal sealed record StageInstallationFileRequest(
-    string Path, string? Source, long Size, string Hash, IReadOnlyList<StageInstallationFileEntryRequest> Entries);
+    string Path, string? Source, long? Size, string Hash, IReadOnlyList<StageInstallationFileEntryRequest> Entries);
 
 /// <summary>An entry of an installation file by its forward-slash path inside it.</summary>
 internal sealed record StageInstallationFileEntryRequest(string Path, string Hash);
 
 /// <summary>A game file by its forward-slash path under the game's data folder.</summary>
-internal sealed record StageGameFileRequest(string Path, long Size, string Hash);
+internal sealed record StageGameFileRequest(string Path, long? Size, string Hash);
 
 internal sealed record StagedModResponse(string Mod, bool ManifestWritten, IReadOnlyList<string> NoProvider);
 

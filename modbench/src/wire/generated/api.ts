@@ -1351,7 +1351,7 @@ export interface components {
         StageGameFileRequest: {
             path: string;
             /** Format: int64 */
-            size: number;
+            size?: number | null;
             hash: string;
         };
         StageInstallationFileEntryRequest: {
@@ -1362,7 +1362,7 @@ export interface components {
             path: string;
             source?: string | null;
             /** Format: int64 */
-            size: number;
+            size?: number | null;
             hash: string;
             entries: components["schemas"]["StageInstallationFileEntryRequest"][];
         };
