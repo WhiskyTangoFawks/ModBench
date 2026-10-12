@@ -6,8 +6,6 @@ public sealed class TraceTestClassScanTests
 {
     private const string Endpoints = "MEditService.Http.Tests";
 
-    /// <summary>Traces specified ahead of their code (commands.md: a gesture the catalog has and
-    /// the model cannot hold is a ticket). One leaves the list with the class that covers it.</summary>
     private static readonly string[] SpecifiedAheadOfCode =
         ["build-mod", "discard-changes", "stage-modlist", "track-mod"];
 
