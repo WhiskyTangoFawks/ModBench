@@ -12,6 +12,7 @@ public sealed class BannedApiScopeTests
         "MEditService.Http",
         "MEditService.Index",
         "MEditService.LoadOrder",
+        "MEditService.ModFolderAdapter",
         "MEditService.Ports",
         "MEditService.SourceAdapter",
     ];
@@ -61,7 +62,7 @@ public sealed class BannedApiScopeTests
     }
 
     [Fact]
-    public void TheMutagenBanFile_IncludesExactlyTheSevenNamedProductionProjects()
+    public void TheMutagenBanFile_IncludesExactlyTheNamedProductionProjects()
     {
         var props = LoadBuildProps();
 

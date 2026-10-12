@@ -6,23 +6,22 @@ namespace MEditService.RepositoriesLib;
 /// to trust (ADR-0003). The owner holds the instance and with it the state.</summary>
 public sealed class StampGatedMemo<TValue>(TimeProvider timeProvider) where TValue : class
 {
-    // A file system stamps a change with a clock coarser than a read is quick, and a network share's
-    // clock is not this machine's: a stamp this recent may not change for a write that follows it.
-    private const int SettledAfterSeconds = 2;
-
     private readonly ConcurrentDictionary<string, (FileStamp Stamp, TValue Value)> _known = new(StringComparer.Ordinal);
 
     /// <summary>The remembered value while the file's stamp is unchanged, else <paramref name="read"/>'s
     /// answer. A null answer is passed on and remembers nothing.</summary>
-    public TValue? Of(string path, Func<TValue?> read)
+    public TValue? Of(string path, Func<TValue?> read) => Of(path, FileStamp.Of(path), read);
+
+    /// <summary>As <see cref="Of(string, Func{TValue?})"/>, for a caller whose adapter already took the
+    /// file's <paramref name="stamp"/>. The key need not be a path.</summary>
+    public TValue? Of(string path, FileStamp? stamp, Func<TValue?> read)
     {
-        var stamp = FileStamp.Of(path);
         if (stamp is { } current && _known.TryGetValue(path, out var known) && known.Stamp == current)
             return known.Value;
 
         var readFrom = timeProvider.GetUtcNow();
         var value = read();
-        if (stamp is { } before && value is not null && before.ChangedBefore(readFrom.AddSeconds(-SettledAfterSeconds)))
+        if (stamp is { } before && value is not null && before.SettledAt(readFrom))
             _known[path] = (before, value);
         else
             _known.TryRemove(path, out _);
