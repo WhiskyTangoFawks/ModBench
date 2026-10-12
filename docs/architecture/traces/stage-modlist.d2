@@ -34,7 +34,7 @@ engine."per mod: hash, match, a delta for each changed file; refused when an ins
 engine -> port: "progress, per mod" {class: push}
 engine -> modfolderadapter: "each manifest that changed · each delta" {class: track}
 modfolderadapter -> modfolder: "manifests · the build folder" {class: track}
-engine -> http: "landed or refused, per mod, and each file with no source" {class: track}
+engine -> http: "landed or refused, per mod, and each file with no provider" {class: track}
 http -> client: "landed or refused, per mod" {class: track}
 client -> sourcecommands: the outcome {class: track}
 sourcecommands -> driving: "the outcome" {class: track}

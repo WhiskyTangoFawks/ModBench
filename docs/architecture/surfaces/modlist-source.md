@@ -2,7 +2,7 @@
 
 The modlist source is what git holds of an instance: each mod's manifest, the profiles and the mod manager's configuration. Discard changes rebuilds a mod from its manifest ([ADR-0022](../../adr/0022-a-mod-is-restored-from-its-manifest.md)), and I commit, diff, branch and merge the source in Source Control as I would any source. Its template is Wabbajack ([ADR-0023](../../adr/0023-wabbajack-is-the-reference-for-the-manifest-git-for-its-gestures.md)); where it departs, [wabbajack.md](../../out-of-scope/wabbajack.md) says why. Its gestures are in [commands.md](../commands.md) under Modlist, and their home is VS Code's Source Control view (Menus and keys). What every view shares is in [common.md](common.md).
 
-Each story cites its source. A story with no source is owned here.
+Each story cites its source. A story with no provider is owned here.
 
 ## The repository
 
@@ -19,13 +19,13 @@ As a user, I want:
 A mod's installation files are the downloaded files the mod manager records the mod as installed from. As a user, I want:
 
 1. One manifest in each mod folder, named for the mod, so a mod installed, uninstalled or renamed reads as a file added, removed or renamed in a diff, and two branches that change two mods merge. Source: ADR-0022; wabbajack.md, divergence 2
-2. The manifest to name the mod's installation files and the game files its files come from, each with its size, its hash and where the mod manager says it comes from, and then one line for each file in the mod folder. Source: Wabbajack's archives and directives
-3. A file's line to say nothing when the first installation file holds it at the same path, so the ordinary case is the short one. Otherwise it names the path inside an installation file, the delta that makes it, or that it has no source.
-4. A file to come only from the mod's installation files or from the game folder. A file none of them yields has no source. Source: wabbajack.md, divergences 3 and 4
+2. The manifest to name the mod's installation files and the game files its files come from, each with its size, its hash and where the mod manager says it comes from, and then one line for each file in the mod folder naming its provider: an installation file, a delta, the game folder or the mod's source. Source: Wabbajack's archives and directives
+3. A file's line to say nothing when the first installation file holds it at the same path, so the ordinary case is the short one. Otherwise it names the path inside an installation file, the delta that makes it, or that it has no provider.
+4. A file to come only from the mod's installation files or from the game folder. A file none of them yields has no provider. Source: wabbajack.md, divergences 3 and 4
 5. A file whose bytes differ from an installation file's copy to be a delta from that copy, and a plugin cleaned from the game's own to be a delta from the game file. Source: Wabbajack's patched files
-6. A delta larger than a share of its file, which I set, to count as no source, because a delta that size is the file. Source: ADR-0022
+6. A delta larger than a share of its file, which I set, to count as no provider, because a delta that size is the file. Source: ADR-0022
 7. An excluded file to come back excluded: its line carries its full name, `.mohidden` included. Source: MO2
-8. A source mod's manifest to be what its last build wrote. With a remote, each file the source provides names the remote and the commit; with none, the manifest reads as an mod with no source's, with deltas. Source: ADR-0022
+8. A source mod's manifest to be what its last build wrote. With a remote, each file the source provides names the remote and the commit; with none, the manifest reads as an mod with no provider's, with deltas. Source: ADR-0022
 9. The manifest to hold no path from this machine, so a clone rebuilds anywhere. Source: Wabbajack
 
 ## Deltas
@@ -59,7 +59,7 @@ As a user, I want:
 1. Stage to write only what changed, so an unchanged mod changes nothing and Source Control holds only what I did. Source: plugin-source.md, The tree, story 2
 2. No confirmation. The manifests are derived from the mods, and git holds what stage replaces. This is an exception to Confirm what destroys.
 3. A mod refused when one of its installation files is not in the downloads folder, naming the mod and the file, and its manifest left as it was. The other mods land. Source: wabbajack.md, divergence 6
-4. A file with no source written as such and reported, so the gap is in the diff and the rest of the modlist commits. Source: wabbajack.md, divergence 4
+4. A file with no provider written as such and reported, so the gap is in the diff and the rest of the modlist commits. Source: wabbajack.md, divergence 4
 5. A source mod's manifest left to its build, and the mod reported when its folder differs from what the build wrote. Source: ADR-0022
 6. It commits nothing. Source: catalog `stage`
 
@@ -70,7 +70,7 @@ As a user, I want:
 1. Every file a manifest names to come back with the bytes it fixes, and no other file touched. A file whose bytes already match is left alone, so a discard after a checkout costs only what the checkout changed. Source: ADR-0022; ADR-0023
 2. One confirmation, as VS Code's Discard Changes asks, naming the mods when I selected some and saying that changes not staged and committed are lost. Source: Confirm what destroys; VS Code's interaction
 3. A source mod with a remote rebuilt from its source at the commit the manifest names, and the source cloned when it is absent. One at another commit is skipped and named with the commit, because Modbench never moves my repository. Source: ADR-0022; ADR-0003
-4. A mod skipped, and named with what it lacks, when an installation file, a delta or a game file its manifest names is missing or has other bytes, or when a file has no source. Every other mod lands. Nothing is downloaded. Source: wabbajack.md, divergence 7
+4. A mod skipped, and named with what it lacks, when an installation file, a delta or a game file its manifest names is missing or has other bytes, or when a file has no provider. Every other mod lands. Nothing is downloaded. Source: wabbajack.md, divergence 7
 5. A file the build makes, a compiled plugin or a packed archive, to come back as the build makes it, which can differ in bytes. Only what comes from a downloaded file is byte-checked. Source: ADR-0006
 6. A discard interrupted part way to say so, naming the mods it did not finish. Discarding again is the recovery. This is an exception to A failed gesture writes nothing. Source: mods.md, What install does, story 5
 

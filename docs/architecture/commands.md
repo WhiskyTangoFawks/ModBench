@@ -44,7 +44,7 @@ A toggle or an opposite pair (enable and disable, move up and move down) is one 
 - Confirm what destroys. A gesture that deletes an object, or replaces a whole object, asks first. It asks once for the whole selection. An edit to a value inside a record changes the record and deletes nothing, so it does not ask. No other gesture asks. A surface can name an exception, with its reason.
 - A gesture that writes ends when the read model shows it. It writes its file and keeps no copy of the new state. The view then asks for a read, and the gesture ends when the read model shows the change. A selection writes every item, then asks for one read. The read model's value always wins. It reads an unsaved document in place of its file, so a file's own editor and every other view show one value ([ADR-0001](../adr/0001-modbench-is-a-vscode-extension.md)).
 - A gesture on plugin source edits its documents: mEdit answers the changes, and VS Code applies them as one workspace edit, as a refactoring, open documents included. VS Code saves them as it saves any refactoring ([ADR-0001](../adr/0001-modbench-is-a-vscode-extension.md)). Every other gesture writes through a repository.
-- A tracked plugin is its files. A gesture on its records reads and writes its plugin source, so it works whether the plugin is active or not. Only a judgement against other plugins needs the load order. A plugin that is not active is judged at its line in `plugins.txt`. With no line, no judgement applies, and the gesture lands.
+- A source plugin is its files. A gesture on its records reads and writes its plugin source, so it works whether the plugin is active or not. Only a judgement against other plugins needs the load order. A plugin that is not active is judged at its line in `plugins.txt`. With no line, no judgement applies, and the gesture lands.
 - Doing nothing is not an error. A gesture whose result equals the current state writes nothing and says nothing.
 - No lifecycle gestures for mEdit. The backend starts with the extension. No gesture starts, stops or reloads it.
 - One filter. Every list has the same name filter (common.md, The name filter).
@@ -155,7 +155,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | uninstall | writes | `modbench.mod.uninstall` | mods | - | MO2 mod list | Move a mod folder to the trash and remove its line. | update-load-order-file |
 | create empty mod | writes | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
 | install | writes | `modbench.mod.install` | source: archive, folder or downloaded file | target mod, for an upgrade | MO2 mod list; MO2 Downloads | Install a source as a new mod, or over an installed mod as an upgrade. | install-mod |
-| track | writes | `modbench.mod.track` | mods | - | none | Put a mod under git: a repository in the source folder holding its plugin source, the files no installation file yields as its assets, and a build configuration naming this folder as the output, in one commit. On a plugin row or an Editor column, it acts on the plugin's mod. | track-mod |
+| init | writes | `modbench.mod.init` | mods | - | git init | Put a mod under git: a repository in the source folder holding its plugin source, the files no installation file yields as its assets, and a build configuration naming this folder as the output, in one commit. On a plugin row or an Editor column, it acts on the plugin's mod. | init-mod |
 | build | writes | `modbench.mod.build` | mods | - | none | Write a source mod's folder from its source as its build configuration says: extract what its installation files provide, copy its assets, compile its plugins, pack loose files into archives where configured, and write its manifest. Untracked files stay. On a plugin row or an Editor column, it acts on the plugin's mod. | build-mod |
 | sort direction | reads | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
 | open folder | reads | `modbench.mod.openFolder` | mod, or overwrite, or a file or folder in one | - | MO2 mod list, Overwrite row | Show a mod's folder, or a file or folder in it, in VS Code's Explorer. The Overwrite row opens the overwrite folder. | none |
@@ -187,7 +187,7 @@ A separator is a row in mod order.
 | decompile | writes | `modbench.plugin.decompile` | plugins | - | none | Read each plugin's bytes into its plugin source, in the working tree of the checked-out branch. It commits nothing. | decompile-plugin |
 | sort direction | reads | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
 | reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the system's file manager. | none |
-| rename | writes | `modbench.plugin.rename` | plugin | name | none | Rename a tracked plugin: its file, its plugin source and its line in every profile's `plugins.txt`. | rename-plugin |
+| rename | writes | `modbench.plugin.rename` | plugin | name | none | Rename a source plugin: its file, its plugin source and its line in every profile's `plugins.txt`. | rename-plugin |
 
 ## Record
 

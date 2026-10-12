@@ -1,6 +1,6 @@
-# A tracked plugin's truth is its source
+# A source plugin's truth is its source
 
-Software compiles source into a binary. Modding runs the other way: the plugin is what the game loads and what every other tool reads and writes, so an untracked plugin is its own truth. Track decompiles a plugin into a source that git versions, and from then on the source is the truth and compile derives the binary from it ([ADR-0007](0007-plugin-edits-are-git-working-tree-changes.md)).
+Software compiles source into a binary. Modding runs the other way: the plugin is what the game loads and what every other tool reads and writes, so a plugin with no source is its own truth. Track decompiles a plugin into a source that git versions, and from then on the source is the truth and compile derives the binary from it ([ADR-0007](0007-plugin-edits-are-git-working-tree-changes.md)).
 
 ## Consequences
 
