@@ -10,6 +10,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     mods: [],
     modFolders: [],
     trackedMods: new Set(),
+    sourceMods: new Set(),
     profiles: ['Default'],
     files: new FileConflictLookup(),
     filesByMod: new Map(),

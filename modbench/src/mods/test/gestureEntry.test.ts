@@ -150,6 +150,16 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([], byRow).singleOpenConflictsRow).toBe(false);
   });
 
+  it('open source sees exactly one selected mod that holds a repository', () => {
+    const facts = (tracked: boolean) => ({ holdsPlugin: false, tracked, fileOrderConflict: false });
+    const source = new ModNode({ kind: 'mod', name: 'Source', enabled: true }, facts(true));
+    const plain = new ModNode({ kind: 'mod', name: 'Plain', enabled: true }, facts(false));
+    expect(modsKeyContext([source], byRow).singleOpenSourceRow).toBe(true);
+    expect(modsKeyContext([plain], byRow).singleOpenSourceRow).toBe(false);
+    expect(modsKeyContext([source, plain], byRow).singleOpenSourceRow).toBe(false);
+    expect(modsKeyContext([group], byRow).singleOpenSourceRow).toBe(false);
+  });
+
   it('open folder sees exactly one selected row it takes: a mod, Overwrite, a file or a folder', () => {
     const file = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds', excluded: false, excludedByName: false };
     const folder = new FolderNode(enabledMod, { kind: 'mod', name: 'On' }, { relativePath: 'x', path: '/instance/mods/On/x', excluded: false }, [file], [], 'x');

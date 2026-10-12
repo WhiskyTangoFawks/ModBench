@@ -10,7 +10,7 @@ import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFo
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, trackedRepositoriesOver, type Editor } from './editor';
 import { createSourceLanguage, formKeyLocation } from './sourceLanguage';
-import { savePluginSource } from './sourceLanguage/dirtyPluginSource';
+import { saveModPluginSource } from './sourceLanguage/dirtyPluginSource';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
 import type { SourceEditing } from './drivingLib/sourceEditing';
@@ -35,6 +35,7 @@ import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolb
 import { openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { pluginsCommands, pluginSyncOver } from './pluginsCommands/plugins';
+import { sourceCommands } from './sourceCommands/sourceCommands';
 import { modSyncOver, modlistCommands } from './modOrderCommands/modOrderCommands';
 import { warnIfFomod } from './install/fomodWarning';
 import { installCommands } from './install/install';
@@ -51,7 +52,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants'>;
+  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -124,8 +125,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const trackSelection = selectionInFocusedView(
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
   const plugins = own(pluginsBox.onInstance({
-    instance, instanceRoot, commands: pluginsCommands({ adapter, client }), pluginSync, trackSelection, modsView: MODS_KEY_ARGS.view,
-    saveUnsavedPluginSource: (plugin) => savePluginSource((origin) => sourceFiles(instance.value, origin), plugin),
+    instance, instanceRoot, commands: pluginsCommands({ adapter, client }), sourceCommands: sourceCommands({ client }), pluginSync, trackSelection, modsView: MODS_KEY_ARGS.view,
+    saveUnsavedPluginSource: (mod) => saveModPluginSource((origin) => sourceFiles(instance.value, origin), mod),
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));

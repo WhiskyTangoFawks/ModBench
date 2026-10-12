@@ -8,6 +8,7 @@
     "types": ["node", "vscode"]
   },
   "references": [
+    { "path": "../sourceCommands" },
     { "path": "../client" },
     { "path": "../drivingLib" },
     { "path": "../instanceAdapter" },
