@@ -738,6 +738,17 @@ describe('ModListProvider', () => {
       expect([loser.iconPath, loser.description, loser.tooltip]).toEqual([{ id: 'package' }, '1.2', 'Loser · 1.2 · 42 · loser.7z']);
     });
 
+    it('shows $(repo) for a source mod, and its source folder in the tooltip as what the folder is built from', async () => {
+      const value = { ...(await contested()), trackedMods: new Set(['Loser']), paths: { ...instanceValueFixture().paths, sourceDirs: new Map([['Loser', '/instance/source/Loser'], ['Winner', '/instance/source/Winner']]) } };
+      const provider = makeProvider([], { instance: new FakeInstance(value) });
+      const rows = (await provider.getChildren()).filter((n): n is ModNode => n instanceof ModNode);
+      const [winner, loser] = [rows.find((n) => n.mod.name === 'Winner'), rows.find((n) => n.mod.name === 'Loser')];
+
+      expect([winner?.iconPath, loser?.iconPath]).toEqual([{ id: 'package' }, { id: 'repo' }]);
+      expect(winner?.tooltip).toBe('Winner');
+      expect(loser?.tooltip).toBe('Loser · 1.2 · 42 · loser.7z · built from /instance/source/Loser');
+    });
+
     it('carries a URI of its own, on no file: scheme, for its indicators to decorate', async () => {
       const [winner, loser] = [present((await rowOf('Winner')).resourceUri, 'its URI'), present((await rowOf('Loser')).resourceUri, 'its URI')];
 

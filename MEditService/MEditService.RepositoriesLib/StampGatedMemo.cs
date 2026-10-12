@@ -6,10 +6,6 @@ namespace MEditService.RepositoriesLib;
 /// to trust (ADR-0003). The owner holds the instance and with it the state.</summary>
 public sealed class StampGatedMemo<TValue>(TimeProvider timeProvider) where TValue : class
 {
-    // A file system stamps a change with a clock coarser than a read is quick, and a network share's
-    // clock is not this machine's: a stamp this recent may not change for a write that follows it.
-    private const int SettledAfterSeconds = 2;
-
     private readonly ConcurrentDictionary<string, (FileStamp Stamp, TValue Value)> _known = new(StringComparer.Ordinal);
 
     /// <summary>The remembered value while the file's stamp is unchanged, else <paramref name="read"/>'s
@@ -22,7 +18,7 @@ public sealed class StampGatedMemo<TValue>(TimeProvider timeProvider) where TVal
 
         var readFrom = timeProvider.GetUtcNow();
         var value = read();
-        if (stamp is { } before && value is not null && before.ChangedBefore(readFrom.AddSeconds(-SettledAfterSeconds)))
+        if (stamp is { } before && value is not null && before.SettledAt(readFrom))
             _known[path] = (before, value);
         else
             _known.TryRemove(path, out _);

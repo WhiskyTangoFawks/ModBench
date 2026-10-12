@@ -894,6 +894,20 @@ describe('the MO2 Instance adapter', () => {
     });
   });
 
+  it('moves a mod\'s source folder to the trash, and answers false when it has none', async () => {
+    const trashed: string[] = [];
+    const trash = (path: string): Promise<void> => {
+      trashed.push(path);
+      return Promise.resolve();
+    };
+    await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
+
+    expect(await adapter.trashSourceFolder('Harder VATS', trash)).toBe(true);
+    expect(await adapter.trashSourceFolder('Unofficial Fallout 4 Patch', trash)).toBe(false);
+
+    expect(trashed).toEqual([join(root, 'source', 'Harder VATS')]);
+  });
+
   describe('excluding and including a file of a mod or Overwrite', () => {
     const modOrigin = { kind: 'mod' as const, name: 'Harder VATS' };
     const overwrite = { kind: 'runtimeOutput' as const };

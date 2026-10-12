@@ -220,6 +220,14 @@ describe('the Plugins view registers its own gestures', () => {
     expect(h.commands.has(command)).toBe(true);
   });
 
+  it('offers modbench.mod.build from the palette every source in the source folder, the modlist listing it or not', async () => {
+    pluginsView(instanceValueFixture({ sourceMods: new Set(['Cloned And Unlisted']), trackedMods: new Set() }));
+
+    await present(h.commands.get('modbench.mod.build'), 'the modbench.mod.build handler')();
+
+    expect(h.picked).toEqual([['Cloned And Unlisted']]);
+  });
+
   it('runs plugin sync with the instance\'s sync arguments', async () => {
     const sync = vi.fn(() => Promise.resolve({ applied: true as const, wrote: false, added: [], dropped: [] }));
     pluginsView(instanceValueFixture(), { pluginSync: createPluginSync(sync, silentChannel) });
