@@ -894,7 +894,7 @@ describe('the MO2 Instance adapter', () => {
     });
   });
 
-  it('moves a mod\'s source folder to the trash with its folder, so a mod installed again under the name reads as untracked', async () => {
+  it('moves a mod\'s source folder to the trash, and answers false when it has none', async () => {
     const trashed: string[] = [];
     const trash = (path: string): Promise<void> => {
       trashed.push(path);
@@ -902,9 +902,10 @@ describe('the MO2 Instance adapter', () => {
     };
     await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
 
-    await adapter.trashEntryFolder({ kind: 'mod', name: 'Harder VATS' }, trash);
+    expect(await adapter.trashSourceFolder('Harder VATS', trash)).toBe(true);
+    expect(await adapter.trashSourceFolder('Unofficial Fallout 4 Patch', trash)).toBe(false);
 
-    expect(trashed).toEqual([join(root, 'mods', 'Harder VATS'), join(root, 'source', 'Harder VATS')]);
+    expect(trashed).toEqual([join(root, 'source', 'Harder VATS')]);
   });
 
   describe('excluding and including a file of a mod or Overwrite', () => {

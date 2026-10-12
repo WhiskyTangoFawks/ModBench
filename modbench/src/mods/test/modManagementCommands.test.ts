@@ -256,6 +256,20 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
 
   const facts = { holdsPlugin: true, tracked: true, fileOrderConflict: false };
 
+  it('warns, naming the source, of a mod uninstalled whose source could not be trashed, and does not report the uninstall failed', async () => {
+    uninstallMods.mockResolvedValueOnce({
+      applied: true, outcome: { landed: [{ name: 'Mod A', sourceRefusal: 'the trash refused it' }], refused: [] },
+    });
+    const reporter = recordingReporter();
+
+    registerModContextCommands({ commands, instance, viewSelection: () => [], reporter, ask: scriptedDialog('Uninstall'), trash, log });
+    await invoke('modbench.mod.uninstall', modA);
+
+    expect(reporter.reports).toEqual([
+      { severity: 'warning', message: '"Mod A" was uninstalled, but its source folder could not be moved to the trash.', detail: 'the trash refused it' },
+    ]);
+  });
+
   it('says the source goes to the trash with the folder of a source mod', async () => {
     uninstallMods.mockResolvedValueOnce({ applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
     const ask = scriptedDialog('Uninstall');

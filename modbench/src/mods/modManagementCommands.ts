@@ -181,6 +181,9 @@ export function registerModContextCommands(
           reporter.selectionOutcome(
             `Could not uninstall ${result.outcome.refused.length} of ${mods.length} mods.`, result.outcome, (m) => m.name);
           for (const item of result.outcome.landed) {
+            if (item.sourceRefusal !== undefined) {
+              reporter.report('warning', `"${item.name}" was uninstalled, but its source folder could not be moved to the trash.`, item.sourceRefusal);
+            }
             if (item.lineRefusal !== undefined) {
               reporter.report('warning',
                 `"${item.name}" was uninstalled, but its ${instance.value.managerNames.modOrderFile} line could not be removed.`, item.lineRefusal);

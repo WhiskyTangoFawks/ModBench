@@ -14,7 +14,7 @@ import { downloadFile, modSourceDir, pluginsFile, settingsFile } from './layout'
 import { currentDownloadsDir, entryKey, folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 
 type Mo2Changes = Pick<InstanceAdapter,
-  | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'markDownloadedFile'
+  | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
   | 'trashDownloadedFileMeta' | 'selectProfile'>;
 
 function listedPlugin(order: readonly PluginEntry[], plugin: string): string {
@@ -78,8 +78,13 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
       const folder = await folderHolding(context, entry);
       if (folder === undefined) return false;
       await trash(folder.path);
-      const source = entry.kind === 'mod' ? modSourceDir(instanceRoot, entry.name) : undefined;
-      if (source !== undefined && (await exists(source))) await trash(source);
+      return true;
+    },
+
+    async trashSourceFolder(mod, trash) {
+      const source = modSourceDir(instanceRoot, mod);
+      if (source === undefined || !(await exists(source))) return false;
+      await trash(source);
       return true;
     },
 
