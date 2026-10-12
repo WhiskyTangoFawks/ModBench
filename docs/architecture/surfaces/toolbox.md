@@ -1,6 +1,6 @@
 # Toolbox
 
-The Toolbox shows the instance itself: which game it is for and which profile is active, with the gestures that act on the whole instance. Its template is MO2's top bar, run box and profile combo ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../../out-of-scope/mo2.md) says why (divergence 1). Its gestures are in [commands.md](../commands.md) under Instance and Profile. What every view shares is in [common.md](common.md).
+The Toolbox shows the instance itself: which game it is for and which profile is active, with the gestures that act on the whole instance. Its template is MO2's top bar, run box and profile combo ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../../out-of-scope/mo2.md) says why (divergence 1). Its gestures are in [commands.md](../commands.md) under Instance, Profile and Modlist. What every view shares is in [common.md](common.md).
 
 Each story cites its source. A story with no source is owned here.
 
@@ -16,6 +16,7 @@ As a user, I want every row to read the instance value and nothing else, so the 
 |---|---|---|---|---|
 | Game | the game the instance is for, as the mod manager's configuration names it | `$(game)` | the game folder | none |
 | Profile | the active profile's name | `$(account)` | "Switch profile" | `switch` |
+| Modlist | untracked, or tracked ([modlist-source.md](modlist-source.md)) | `$(source-control)` | "Track modlist", or the ignore list's path when tracked | `track` when untracked, else `update` |
 
 As a user, I want the game folder to be the one my setting names, else the one the mod manager's configuration names, else the one Modbench finds on this machine.
 
@@ -31,6 +32,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 |---|---|
 | Title bar | 1: refresh. Overflow: open settings. |
 | Profile menu | switch |
+| Modlist menu | track (untracked) · update (tracked) · restore… (tracked) |
 | Keys | Enter: the row's gesture, as a click does. |
 
 ## Pickers, prompts and confirmations

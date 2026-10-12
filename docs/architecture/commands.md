@@ -2,7 +2,7 @@
 
 This file owns the UX vocabulary and the catalog of gestures. `CONTEXT.md` owns the domain vocabulary. A gesture or command the code has and this file lacks is a defect in the code. A gesture this file has and the model cannot hold is a ticket.
 
-- Object: a domain noun the user acts on: Instance, Profile, Mod, Separator, Plugin, Record, Downloaded file. `CONTEXT.md` defines each one. Settings is Modbench's own configuration, which VS Code stores at user and workspace scope. It is the object of `open settings` only, and `CONTEXT.md` does not define it, because it is not a domain noun.
+- Object: a domain noun the user acts on: Instance, Profile, Modlist, Mod, Separator, Plugin, Record, Downloaded file. `CONTEXT.md` defines each one. Settings is Modbench's own configuration, which VS Code stores at user and workspace scope. It is the object of `open settings` only, and `CONTEXT.md` does not define it, because it is not a domain noun.
 - Surface: what a driving box presents to the user. One surface per driving box on the Modbench side. A surface shows objects and offers their gestures. A VS Code view or an editor realizes it.
 - Gesture: one thing the user does to an object. One row in the tables below, under the object it changes. The Gesture column holds the verb the user sees, in a menu or a label.
 - Exclude and hide: to exclude is to mark an object durably on disk. The mark leaves the object out of something until include clears it, as the Downloads list leaves out an excluded downloaded file. To hide acts on the view alone. It changes nothing on disk and ends with the window, like hide excluded or a name filter.
@@ -12,7 +12,7 @@ This file owns the UX vocabulary and the catalog of gestures. `CONTEXT.md` owns 
 - Command ID: the registered interface and the source of truth, which the code reflects. It is `modbench.<object>.<verb>`, in camelCase, and the object owns it (`modbench.mod.enable`, `modbench.downloadedFile.delete`). `-` means the gesture has none. A gesture every list view does to whatever it shows is `modbench.<verb>`, in Every view.
 - Options: the inputs a gesture needs besides its Argument, such as a mode, a destination or a position. A picker asks for each Option the caller did not supply. An Option may be computed and multi-valued, such as a checked list with defaults.
 - Argument: the value that identifies the object or objects to the gesture, such as a plugin as `(origin, filename)`, or a FormKey. For a gesture that creates an object, it identifies the container, when the entry point is on the container's row. A create from a title icon has none, and its container is an Option. It is the same on every surface that offers the gesture. Singular means the clicked row, and plural means the whole selection.
-- Template: the source, xEdit ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)) or MO2 ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)) gesture this row follows, read from [the xEdit audit](../research/xedit-surface-audit.md), [the xEdit grid audit](../research/xedit-ux-audit.md) and [the MO2 audit](../research/mo2-surface-audit.md). `none` means the template has no such gesture: the row is an addition or a divergence, and needs a ruling.
+- Template: the source, xEdit ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)), MO2 ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)) or Wabbajack ([ADR-0023](../adr/0023-wabbajack-is-the-reference-for-the-manifest-and-restore.md)) gesture this row follows, read from [the xEdit audit](../research/xedit-surface-audit.md), [the xEdit grid audit](../research/xedit-ux-audit.md), [the MO2 audit](../research/mo2-surface-audit.md) and `references/wabbajack/`. `none` means the template has no such gesture: the row is an addition or a divergence, and needs a ruling.
 - Trace: the sequence diagram of the gesture's flow. `-` means the trace is still to draw, and drawing it is part of designing the gesture. `none` means the gesture has no flow between boxes: its specification is this row and its surface.
 - Ruled out: a gesture the maintainer has cut is not in any table. See [Ruling a gesture out](#ruling-a-gesture-out).
 
@@ -61,7 +61,7 @@ Rules for the title bar of a view.
 
 ## Ruling a gesture out
 
-A template is a standalone program. Modbench is not. A gesture leaves this file for one of these reasons, and each reason is a row in the summary table of [xedit.md](../out-of-scope/xedit.md) or [mo2.md](../out-of-scope/mo2.md):
+A template is a standalone program. Modbench is not. A gesture leaves this file for one of these reasons, and each reason is a row in the summary table of [xedit.md](../out-of-scope/xedit.md), [mo2.md](../out-of-scope/mo2.md) or [wabbajack.md](../out-of-scope/wabbajack.md):
 
 - VS Code provides it. Settings, editor history, the file tab, tasks, Problems and Output.
 - Standalone application. The template manages its own startup, save or options.
@@ -89,6 +89,7 @@ A gesture that fits none of these stays in the tables. A new reason is added to 
 | Plugin source | Referenced By, Ctrl + click | - | [plugin-source.md](surfaces/plugin-source.md) |
 | Agent | - | - | [agent.md](surfaces/agent.md) |
 | Scripts | Apply Script | - | [scripts.md](surfaces/scripts.md) |
+| Modlist source | - | - | [modlist-source.md](surfaces/modlist-source.md) |
 
 The xEdit Messages tab is not a surface. Failures go to the Output and the surface their severity calls for (ADR-0019); diagnostics go to the Problems panel.
 
@@ -104,6 +105,7 @@ The xEdit Messages tab is not a surface. Failures go to the Output and the surfa
 | Editor, Referenced By | VS Code's References view | - | opened by the gesture |
 | Mods, the conflict table | an editor tab | - | opened by the user |
 | Plugin source, the text editor | an editor tab | - | opened by the user |
+| Modlist source, the manifests | an editor tab, and Source Control | - | opened by the user |
 
 No view defaults to the Secondary Side Bar: it is the home of chat. A user can still move any view there.
 
@@ -130,6 +132,16 @@ What every list view does to whatever it shows, whatever the object. common.md s
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
 | switch | writes | `modbench.profile.switch` | profile | - | MO2 profile combo | Change the active MO2 profile. With no Argument, a picker lists the profiles. | update-load-order-file |
+
+## Modlist
+
+The instance's mods and profiles as git holds them ([modlist-source.md](surfaces/modlist-source.md)).
+
+| Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
+|---|---|---|---|---|---|---|---|
+| track | writes | `modbench.modlist.track` | - | - | none | Put the instance under git: the repository, its ignore list, every manifest, and one commit. | - |
+| update | writes | `modbench.modlist.update` | - | - | Wabbajack compile | Write every mod's manifest from the mod as it is, and each delta a changed file needs. It commits nothing. | - |
+| restore | writes | `modbench.modlist.restore` | mods, or none for every mod | - | Wabbajack install | Rebuild each mod's folder from its manifest and the downloads it names. | - |
 
 ## Mod
 
