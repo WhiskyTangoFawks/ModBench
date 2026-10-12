@@ -141,8 +141,8 @@ public sealed class PluginDocumentReadTests
         var read = documents.Records.Select(d => d.RecordType).ToList();
 
         Assert.Equal(["cell", "refr", "refr", "refr"], read.Order(StringComparer.Ordinal));
-        var quests = Assert.Single(documents.Failures, failure => failure.RecordType == "qust");
-        Assert.Contains("MISC", quests.Diagnosis, StringComparison.Ordinal);
+        Assert.Equal(["dial", "dlbr", "info", "qust", "scen"], documents.Failures.Select(failure => failure.RecordType).Order(StringComparer.Ordinal));
+        Assert.All(documents.Failures, failure => Assert.Contains("MISC", failure.Diagnosis, StringComparison.Ordinal));
     }
 
     [Fact]
