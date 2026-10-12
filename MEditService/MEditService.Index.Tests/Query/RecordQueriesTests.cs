@@ -786,6 +786,23 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
+    public void GetPluginRecordTypes_CountsNoRecordAnotherOfThePluginsRecordsHolds_WhateverTheCaseItIsAskedIn()
+    {
+        var index = Reconciled(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
+        {
+            var room = new Cell(mod) { EditorID = "Room" };
+            room.Temporary.Add(new PlacedObject(mod) { EditorID = "Chair" });
+            room.Temporary.Add(new PlacedObject(mod) { EditorID = "Table" });
+            mod.AddInteriorCells(room);
+            mod.Statics.AddNew("Rock");
+        }, origin: PluginKey.Origin));
+
+        var counts = index.Queries.GetPluginRecordTypes(PluginKey with { Name = PluginName.ToUpperInvariant() }).Value();
+
+        Assert.Equal([("cell", 1), ("stat", 1)], counts.Select(c => (c.Type, c.Count)).Order());
+    }
+
+    [Fact]
     public void GetPluginRecordTypes_MarksOnlyTheTypeWhoseCountCarriesAFailure()
     {
         var fixture = Built(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
