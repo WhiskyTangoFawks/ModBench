@@ -43,8 +43,12 @@ class SlotRun(unittest.TestCase):
         return subprocess.run(["bash", str(self.script), "bash", "-c", command],
                               capture_output=True, text=True, timeout=30, env=self.env | env)
 
-    def test_a_run_waits_for_the_one_build_slot(self):
+    def test_a_run_waits_for_one_of_two_build_slots(self):
         run = self.slot_run("echo ran")
+        self.assertEqual(run.stdout, "in_slot build 2\nran\n")
+
+    def test_the_build_slot_count_follows_the_environment(self):
+        run = self.slot_run("echo ran", MEDIT_BUILD_SLOTS="1")
         self.assertEqual(run.stdout, "in_slot build 1\nran\n")
 
     def test_the_slot_watches_the_directory_the_run_started_in(self):
@@ -73,7 +77,7 @@ class SlotRun(unittest.TestCase):
 
     def test_where_systemd_gives_no_scope_the_run_is_unscoped(self):
         run = self.slot_run('echo "ran ${SharedCompilationId-on the shared server}"; exit 7', NO_SCOPE="1")
-        self.assertEqual(run.stdout, "in_slot build 1\nran on the shared server\n")
+        self.assertEqual(run.stdout, "in_slot build 2\nran on the shared server\n")
         self.assertEqual(run.returncode, 7)
         self.assertNotIn("systemctl", self.log.read_text())
 
