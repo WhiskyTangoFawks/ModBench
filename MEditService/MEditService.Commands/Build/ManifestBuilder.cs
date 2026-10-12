@@ -6,31 +6,29 @@ namespace MEditService.Commands.Build;
 /// bytes, and a file nothing holds has no provider.</summary>
 internal sealed class ManifestBuilder
 {
-    private readonly List<(string Name, string? Source, HashedInstallationFile Content)> _installationFiles;
-    private readonly Func<string, HashedFile?> _gameFile;
-    private readonly List<(string Name, ILookup<FileHash, HashedEntry> ByHash, Dictionary<string, HashedEntry> ByPath)> _indexes;
+    private readonly List<(string Name, InstallationFileToStage File)> _installationFiles;
+    private readonly Dictionary<string, GameFileToStage> _gameFiles = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<(string Name, ILookup<string, HashedEntry> ByHash, Dictionary<string, HashedEntry> ByPath)> _indexes;
     private readonly Dictionary<string, ManifestSource> _gameFilesUsed = new(StringComparer.Ordinal);
 
-    public ManifestBuilder(
-        IEnumerable<(string Name, string? Source, HashedInstallationFile Content)> installationFiles,
-        Func<string, HashedFile?> gameFile)
+    public ManifestBuilder(IEnumerable<(string Name, InstallationFileToStage File)> installationFiles, IEnumerable<GameFileToStage> gameFiles)
     {
         _installationFiles = [.. installationFiles];
-        _gameFile = gameFile;
+        foreach (var gameFile in gameFiles) _gameFiles.TryAdd(gameFile.Path, gameFile);
         _indexes =
         [
             .. _installationFiles.Select(file => (
                 file.Name,
-                file.Content.Entries.ToLookup(entry => entry.Hash),
-                IndexByPath(file.Content.Entries))),
+                file.File.Entries.ToLookup(entry => entry.Hash, StringComparer.Ordinal),
+                IndexByPath(file.File.Entries))),
         ];
     }
 
     public Manifest Build(IReadOnlyList<HashedFile> files)
     {
-        var manifestFiles = files.Select(file => new ManifestFile(file.Path, file.Hash.ToString(), file.Stamp, ProviderOf(file))).ToList();
+        var manifestFiles = files.Select(file => new ManifestFile(file.Path, file.Hash, file.Stamp, ProviderOf(file))).ToList();
         return new Manifest(
-            [.. _installationFiles.Select(file => new ManifestSource(file.Name, file.Content.Size, file.Content.Hash.ToString(), file.Source))],
+            [.. _installationFiles.Select(file => new ManifestSource(file.Name, file.File.Size, file.File.Hash, file.File.Source))],
             [.. _gameFilesUsed.Values],
             manifestFiles);
     }
@@ -55,10 +53,10 @@ internal sealed class ManifestBuilder
             return new FileProvider.InstallationFileEntry(name, entry.Path);
         }
 
-        if (_gameFile(file.Path) is { } game && game.Hash == file.Hash)
+        if (_gameFiles.TryGetValue(file.Path, out var game) && game.Hash == file.Hash)
         {
-            _gameFilesUsed[file.Path] = new ManifestSource(file.Path, game.Size, game.Hash.ToString());
-            return new FileProvider.GameFile(file.Path);
+            _gameFilesUsed[game.Path] = new ManifestSource(game.Path, game.Size, game.Hash);
+            return new FileProvider.GameFile(game.Path);
         }
 
         return new FileProvider.NoProvider();

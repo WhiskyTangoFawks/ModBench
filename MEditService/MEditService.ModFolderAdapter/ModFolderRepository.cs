@@ -3,28 +3,24 @@ using MEditService.RepositoriesLib;
 
 namespace MEditService.ModFolderAdapter;
 
-public sealed class ModFolderRepository : IModFolderRepository
+public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepository
 {
     private const string ManifestExtension = ".manifest";
 
-    public IReadOnlyList<StampedFile> Files(string modFolder, string modName) =>
-        [.. new DirectoryInfo(modFolder).EnumerateFiles("*", SearchOption.AllDirectories)
-            .Select(file => new StampedFile(
-                Path.GetRelativePath(modFolder, file.FullName).Replace('\\', '/'),
-                FileStamp.Of(file.FullName)))
-            .Where(file => file.Path != ManifestName(modName))];
+    public IReadOnlyList<HashedFile> Files(string modFolder, string modName, IReadOnlySet<string> leftOut)
+    {
+        var paths = new DirectoryInfo(modFolder).EnumerateFiles("*", SearchOption.AllDirectories)
+            .Select(file => Path.GetRelativePath(modFolder, file.FullName).Replace('\\', '/'))
+            .Where(path => path != ManifestName(modName) && !leftOut.Contains(path))
+            .ToList();
+        var manifest = Path.Combine(modFolder, ManifestName(modName));
+        var lines = File.Exists(manifest) ? ManifestText.LineStamps(File.ReadAllText(manifest, Encoding.UTF8)) : [];
+        return [.. paths.Select(path => Hashed(modFolder, path, lines.TryGetValue(path, out var line) ? line : null))];
+    }
 
     public StampedFile? InstallationFile(string path) => File.Exists(path) ? new(path, FileStamp.Of(path)) : null;
 
-    public StampedFile? GameFile(string dataFolder, string path) => InstallationFile(Path.Combine(dataFolder, path));
-
     public string InstallationFileName(string path) => Path.GetFileName(path);
-
-    public Stream OpenFile(string folder, string path) =>
-        OpenInstallationFile(Path.Combine(folder, path));
-
-    public Stream OpenInstallationFile(string path) =>
-        new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
 
     public bool WriteManifest(string modFolder, string modName, Manifest manifest)
     {
@@ -34,6 +30,17 @@ public sealed class ModFolderRepository : IModFolderRepository
 
         File.WriteAllText(path, text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         return true;
+    }
+
+    private HashedFile Hashed(string modFolder, string path, LineStamp? line)
+    {
+        var stamp = FileStamp.Of(Path.Combine(modFolder, path));
+        if (stamp is { } now && line is { } known && known.Size == now.Size && known.Modified == now.Modified)
+            return new HashedFile(path, known.Hash, now);
+
+        var readFrom = time.GetUtcNow();
+        using var content = new FileStream(Path.Combine(modFolder, path), FileMode.Open, FileAccess.Read, FileShare.Read);
+        return new HashedFile(path, FileHash.Of(content), stamp is { } read && read.SettledAt(readFrom) ? read : null);
     }
 
     private static string ManifestName(string modName) => modName + ManifestExtension;
