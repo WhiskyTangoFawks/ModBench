@@ -7,7 +7,7 @@ install.label: install
 source: @../target-architecture.modbench_repositories.modlistsource
 source.label: Modlist source
 instance: @../target-architecture.modbench_data.instance
-instance.label: "Instance\nmods · downloaded files · the build folder"
+instance.label: "Instance\nmods · downloaded files · the build folder · the source folder"
 gamedata: @../target-architecture.modbench_data.gamedata
 gamedata.label: Game folder
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
@@ -23,6 +23,11 @@ instance -> source: "each manifest · installation files and deltas: bytes" {cla
 gamedata -> source: "game files: bytes" {class: compile}
 source -> install: "per mod: each file's bytes, or what the mod lacks" {class: compile}
 install."a mod that lacks anything is skipped; the rest are written"
+
+tracked: "a tracked mod with a remote" {
+  install -> source: "the remote and the commit: clone when absent" {class: compile}
+  install."build-mod, at the manifest's commit; skipped and named when the source is at another commit"
+}
 install -> instanceadapter: "each mod's files, whole · the mod folders with no manifest, to the trash" {class: compile}
 instanceadapter -> instance: "the folders" {class: compile}
 install -> driving: "landed, with each skipped mod and what it lacks" {class: compile}

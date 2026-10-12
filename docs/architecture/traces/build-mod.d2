@@ -21,7 +21,7 @@ install -> source: "the mods" {class: compile}
 instance -> source: "each mod's build configuration and assets · installation files: bytes" {class: compile}
 source -> install: "per mod: the output folder, the base files, the assets, the archives to pack" {class: compile}
 install."refused when the output folder is not the mod's"
-install -> client: "compile-plugin, per plugin · pack archive, per archive" {class: compile}
+install -> client: "compile-plugin, per plugin · each archive's loose files, to pack" {class: compile}
 install -> instanceadapter: "the mod's files, whole · the files the build did not make, named" {class: compile}
 instanceadapter -> instance: "the folder" {class: compile}
 install -> source: "the manifest the build wrote" {class: compile}

@@ -168,7 +168,7 @@ As a user, I want:
 As a user, I want:
 
 1. Build to write the mod folder from the source, without asking: the base is what the installation files provide, the source's assets override it, each plugin compiles from its plugin source, and the manifest is written last. A tracked plugin's source is the truth, and build makes the folder from it. Source: catalog `build`; ADR-0006; ADR-0007
-2. The build configuration in the source to name the output folder and, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy. Source: ADR-0007
+2. The build configuration in the source to name the output folder and, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
 3. A file in the folder the build did not make to be removed and named, so nothing a tool wrote there is lost in silence. Source: Never silently wrong
 4. A build whose configuration names an output folder that is not this mod's folder refused, naming both, so a folder renamed outside Modbench is never overwritten. Source: ADR-0003
 5. Build to save the mod's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugins are built from what I see. A file VS Code does not save refuses build, naming it. Source: VS Code's save before run; ADR-0001; Never silently wrong

@@ -544,6 +544,11 @@ describe('package.json command titles and categories', () => {
     expect(SPECIFIED_AHEAD_OF_CODE.filter((id) => declared.has(id))).toEqual([]);
   });
 
+  it('still registers every gesture named as retired ahead of its code, so the list expires with the code', () => {
+    const declared = new Set(commands.map((c) => c.command));
+    expect(RETIRED_AHEAD_OF_CODE.filter((id) => !declared.has(id))).toEqual([]);
+  });
+
   const SPECIFIED_AHEAD_OF_CODE = ['modbench.modlist.track', 'modbench.modlist.update', 'modbench.modlist.restore', 'modbench.mod.build'];
 
   const INTERNAL_COMMANDS = [
