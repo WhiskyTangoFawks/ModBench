@@ -11,6 +11,7 @@ internal sealed class FakeModFolders : IModFolderRepository
     private readonly Dictionary<(string Folder, string Path), (byte[] Bytes, FileStamp? Stamp)> _files = [];
     private readonly Dictionary<string, string> _manifests = [];
     private readonly HashSet<string> _folders = [];
+    private readonly Dictionary<(string Folder, string Path), Func<Stream>> _streams = [];
 
     public int Opens { get; private set; }
 
@@ -33,6 +34,13 @@ internal sealed class FakeModFolders : IModFolderRepository
     {
         _folders.Add(folder);
         _files[(folder, path)] = (bytes, new FileStamp(bytes.Length, modified, changed));
+        return this;
+    }
+
+    public FakeModFolders WithStream(string folder, string path, Func<Stream> open)
+    {
+        _folders.Add(folder);
+        _streams[(folder, path)] = open;
         return this;
     }
 
@@ -85,8 +93,9 @@ internal sealed class FakeModFolders : IModFolderRepository
     private StampedFile? Described(string folder, string path) =>
         _files.TryGetValue((folder, path), out var file) ? new StampedFile(path, file.Stamp) : null;
 
-    private MemoryStream Open(string folder, string path)
+    private Stream Open(string folder, string path)
     {
+        if (_streams.TryGetValue((folder, path), out var open)) return open();
         if (Unreadable.Contains((folder, path))) throw new IOException($"{path} is held by another process");
         Opens++;
         return new MemoryStream(_files[(folder, path)].Bytes);

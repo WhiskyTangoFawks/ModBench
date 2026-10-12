@@ -29,12 +29,12 @@ public sealed class ModFolderRepository : IModFolderRepository
     public void WriteFile(string folder, string path, Action<Stream> write)
     {
         var target = Path.Combine(folder, path);
-        Directory.CreateDirectory(Path.GetDirectoryName(target) ?? folder);
-        var partial = Path.Combine(Path.GetDirectoryName(target) ?? folder, Path.GetRandomFileName());
+        var partial = Path.Combine(folder, ".medit_tmp_" + Path.GetRandomFileName() + ".tmp");
         try
         {
             using (var content = new FileStream(partial, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
                 write(content);
+            Directory.CreateDirectory(Path.GetDirectoryName(target) ?? folder);
             File.Move(partial, target, overwrite: true);
         }
         finally

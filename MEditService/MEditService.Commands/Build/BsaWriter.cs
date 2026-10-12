@@ -5,8 +5,6 @@ using K4os.Compression.LZ4.Streams;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>Writes a BSA of version 103, 104 or 105, with the names of its folders and files and none embedded in
-/// the data. Its layout and its hashes are read off the game's own archives.</summary>
 internal static class BsaWriter
 {
     private const uint LongRecordVersion = 105;
@@ -15,6 +13,10 @@ internal static class BsaWriter
     private const uint FlagsWithoutAWriter = 0x40 | 0x100 | 0x200;
     private const int HeaderLength = 36;
     private const int FileRecordLength = 16;
+    private const long CompressionFlipBit = 1 << 30;
+
+    private static readonly Encoding Windows1252 = CodePagesEncodingProvider.Instance.GetEncoding(
+        1252, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback) ?? throw new InvalidOperationException("Windows-1252 is missing.");
 
     private sealed record Entry(PackedFile Packed, byte[] Spelling, ulong Digest);
 
@@ -41,7 +43,7 @@ internal static class BsaWriter
         var stored = folders.SelectMany(folder => folder.Entries).Select(file => Store(output, file.Packed, variant.Version, compressed)).ToList();
 
         using var head = new MemoryStream();
-        using var writer = new BinaryWriter(head, Encoding.Latin1, leaveOpen: true);
+        using var writer = new BinaryWriter(head, Encoding.UTF8, leaveOpen: true);
         writer.Write("BSA\0"u8);
         writer.Write(variant.Version);
         writer.Write((uint)HeaderLength);
@@ -117,23 +119,28 @@ internal static class BsaWriter
 
     private static byte[] Terminated(string name, PackedFile file)
     {
-        var bytes = Encoding.Latin1.GetBytes(name);
-        if (Encoding.Latin1.GetString(bytes) != name)
+        try
+        {
+            return [.. Windows1252.GetBytes(name), 0];
+        }
+        catch (EncoderFallbackException)
+        {
             throw new InvalidDataException($"'{file.Source}' has characters a BSA cannot spell.");
-        return [.. bytes, 0];
+        }
     }
 
     private static (uint Size, uint Offset) Store(Stream output, PackedFile file, uint version, bool compressed)
     {
         using var content = file.Open();
         var offset = checked((uint)output.Position);
+        RefuseASizeTheFlagBitReads(file, content.Length);
         if (!compressed)
         {
             content.CopyTo(output);
-            return (checked((uint)content.Length), offset);
+            return ((uint)content.Length, offset);
         }
 
-        using (var writer = new BinaryWriter(output, Encoding.Latin1, leaveOpen: true))
+        using (var writer = new BinaryWriter(output, Encoding.UTF8, leaveOpen: true))
             writer.Write(checked((uint)content.Length));
         if (version == LongRecordVersion)
         {
@@ -146,13 +153,21 @@ internal static class BsaWriter
             content.CopyTo(zlib);
         }
 
-        return (checked((uint)(output.Position - offset)), offset);
+        var stored = output.Position - offset;
+        RefuseASizeTheFlagBitReads(file, stored);
+        return ((uint)stored, offset);
+    }
+
+    private static void RefuseASizeTheFlagBitReads(PackedFile file, long size)
+    {
+        if (size >= CompressionFlipBit)
+            throw new InvalidDataException($"'{file.Source}' is too large for a BSA: a size of 1 GiB or more reads as a compression flag.");
     }
 
     private static ulong Hash(string name, string extension)
     {
         if (name.Length == 0) return 0;
-        var chars = Encoding.Latin1.GetBytes(name);
+        var chars = Windows1252.GetBytes(name);
         var low = chars[^1] | (chars.Length >= 3 ? (uint)chars[^2] << 8 : 0) | (uint)(byte)chars.Length << 16 | (uint)chars[0] << 24;
         low |= extension switch
         {
@@ -162,7 +177,7 @@ internal static class BsaWriter
             ".wav" => 0x80000000u,
             _ => 0u,
         };
-        var high = Polynomial(chars.AsSpan(1..Math.Max(1, chars.Length - 2))) + Polynomial(Encoding.Latin1.GetBytes(extension));
+        var high = Polynomial(chars.AsSpan(1..Math.Max(1, chars.Length - 2))) + Polynomial(Windows1252.GetBytes(extension));
         return ((ulong)high << 32) + low;
     }
 

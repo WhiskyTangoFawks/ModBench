@@ -1,7 +1,5 @@
 namespace MEditService.Commands.Build;
 
-/// <summary>The kind of archive to pack and the header fields of the game release it is for. The packer holds no
-/// game: the release's table says which variant its archives are.</summary>
 public interface IArchiveVariant;
 
 public enum Ba2Contents

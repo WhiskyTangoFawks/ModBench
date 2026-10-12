@@ -164,6 +164,30 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal(["mod.ba2"], Directory.GetFiles(_root).Select(Path.GetFileName));
     }
 
+    [Fact]
+    public void WriteFile_WhileWriting_HoldsTheBytesInAHiddenFileOfNoModExtension()
+    {
+        string[] during = [];
+
+        _repository.WriteFile(_root, "mod.ba2", content =>
+        {
+            content.Write("new"u8);
+            during = [.. Directory.GetFiles(_root).Select(Path.GetFileName).OfType<string>()];
+        });
+
+        var held = Assert.Single(during);
+        Assert.StartsWith(".medit_tmp_", held);
+        Assert.EndsWith(".tmp", held);
+    }
+
+    [Fact]
+    public void WriteFile_WhenTheWriteThrows_CreatesNoFolderForThePath()
+    {
+        Assert.Throws<InvalidDataException>(() => _repository.WriteFile(_root, "archives/mod.ba2", _ => throw new InvalidDataException("cannot")));
+
+        Assert.Empty(Directory.GetFileSystemEntries(_root));
+    }
+
     private void Write(string relative, string text)
     {
         var path = Path.Combine(_root, relative);

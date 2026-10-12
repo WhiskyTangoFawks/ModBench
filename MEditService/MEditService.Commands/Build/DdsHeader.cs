@@ -3,7 +3,6 @@ using System.Text;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>What a texture archive records of a DDS file; its pixel data follows <see cref="Length"/> bytes of header.</summary>
 internal sealed record DdsHeader(int Length, ushort Width, ushort Height, byte Mips, byte DxgiFormat, bool IsCubeMap)
 {
     private const int MainLength = 128;
@@ -12,6 +11,9 @@ internal sealed record DdsHeader(int Length, ushort Width, ushort Height, byte M
     private const uint RgbFlag = 0x40;
     private const uint LuminanceFlag = 0x20000;
     private const uint CubeMapCaps = 0x200;
+    private const uint VolumeCaps = 0x200000;
+    private const uint CubeMapMisc = 0x4;
+    private const uint Texture2D = 3;
 
     private static readonly Dictionary<string, byte> FormatOfFourCc = new()
     {
@@ -40,21 +42,29 @@ internal sealed record DdsHeader(int Length, ushort Width, ushort Height, byte M
         var mips = Math.Max(1u, U32(header, 28));
         if (height is 0 or > ushort.MaxValue || width is 0 or > ushort.MaxValue || mips > byte.MaxValue)
             throw Refusal(source, "its size is out of range");
+        if ((U32(header, 112) & VolumeCaps) != 0)
+            throw Refusal(source, "a volume texture is not a 2D texture");
 
-        var format = FormatOf(header, source);
-        var length = MainLength;
-        if (Encoding.ASCII.GetString(header, 84, 4) == "DX10" && (U32(header, 80) & FourCcFlag) != 0)
+        var extended = (U32(header, 80) & FourCcFlag) != 0 && Encoding.ASCII.GetString(header, 84, 4) == "DX10";
+        var isCube = (U32(header, 112) & CubeMapCaps) != 0;
+        byte format;
+        if (extended)
         {
             if (dds.ReadAtLeast(header.AsSpan(MainLength), ExtensionLength, throwOnEndOfStream: false) < ExtensionLength)
                 throw Refusal(source, "its extended header is cut short");
-            length += ExtensionLength;
             var dxgi = U32(header, MainLength);
-            format = dxgi is > 0 and <= byte.MaxValue
-                ? (byte)dxgi
-                : throw Refusal(source, $"DXGI format {dxgi} has no place in an archive");
+            if (dxgi is 0 or > byte.MaxValue) throw Refusal(source, $"DXGI format {dxgi} has no place in an archive");
+            if (U32(header, MainLength + 4) != Texture2D || U32(header, MainLength + 12) != 1)
+                throw Refusal(source, "it is not a single 2D texture");
+            format = (byte)dxgi;
+            isCube |= (U32(header, MainLength + 8) & CubeMapMisc) != 0;
+        }
+        else
+        {
+            format = FormatOf(header, source);
         }
 
-        return new DdsHeader(length, (ushort)width, (ushort)height, (byte)mips, format, (U32(header, 112) & CubeMapCaps) != 0);
+        return new DdsHeader(extended ? MainLength + ExtensionLength : MainLength, (ushort)width, (ushort)height, (byte)mips, format, isCube);
     }
 
     private static byte FormatOf(byte[] header, string source)
@@ -63,7 +73,7 @@ internal sealed record DdsHeader(int Length, ushort Width, ushort Height, byte M
         if ((flags & FourCcFlag) != 0)
         {
             var fourCc = Encoding.ASCII.GetString(header, 84, 4);
-            return FormatOfFourCc.TryGetValue(fourCc, out var known) || fourCc == "DX10"
+            return FormatOfFourCc.TryGetValue(fourCc, out var known)
                 ? known
                 : throw Refusal(source, $"its pixel format '{fourCc}' has no place in an archive");
         }
@@ -79,7 +89,7 @@ internal sealed record DdsHeader(int Length, ushort Width, ushort Height, byte M
     }
 
     private static InvalidDataException Refusal(string source, string why) =>
-        new($"'{source}' cannot go into a texture archive: {why}.");
+        new InvalidDataException($"'{source}' cannot go into a texture archive: {why}.");
 
     private static uint U32(byte[] bytes, int at) => BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(at));
 }

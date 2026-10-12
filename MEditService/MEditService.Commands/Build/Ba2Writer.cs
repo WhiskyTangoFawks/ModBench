@@ -1,35 +1,40 @@
 using System.IO.Compression;
 using System.Text;
+using K4os.Compression.LZ4;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>Writes the Fallout 4 form of a BA2 (version 1), general or texture. Its layout and its hashes are read
-/// off the game's own archives; no other version is written.</summary>
 internal static class Ba2Writer
 {
-    private const uint SupportedVersion = 1;
-    private const int HeaderLength = 24;
     private const int GeneralEntryLength = 36;
     private const int TextureEntryLength = 48;
     private const uint GeneralFlags = 0x00100100;
     private const uint Unaligned = 0xBAADF00D;
     private const byte TileMode = 8;
     private const ushort TextureChunkLength = 24;
+    private const uint Lz4Compression = 3;
 
     private static readonly uint[] CrcTable = [.. Enumerable.Range(0, 256).Select(Row)];
 
+    private enum Codec
+    {
+        None,
+        Zlib,
+        Lz4Block,
+    }
+
     public static void Write(Stream output, Ba2Variant variant, IReadOnlyList<PackedFile> files)
     {
-        if (variant.Version != SupportedVersion) throw new NotSupportedException($"BA2 version {variant.Version} is not written.");
-
         var textures = variant.Contents == Ba2Contents.Textures;
+        var codec = CodecOf(variant);
+        var headerLength = variant.Version switch { 2 => 32, 3 => 36, _ => 24 };
         using var entries = new MemoryStream();
         using var entryWriter = new BinaryWriter(entries, Encoding.UTF8, leaveOpen: true);
-        output.Position = HeaderLength + (textures ? TextureEntryLength : GeneralEntryLength) * (long)files.Count;
+        output.Position = headerLength + (textures ? TextureEntryLength : GeneralEntryLength) * (long)files.Count;
         foreach (var file in files)
         {
-            if (textures) WriteTexture(output, entryWriter, file, variant.Compressed);
-            else WriteGeneral(output, entryWriter, file, variant.Compressed);
+            if (textures) WriteTexture(output, entryWriter, file, codec);
+            else WriteGeneral(output, entryWriter, file, codec);
         }
 
         var nameTable = output.Position;
@@ -41,30 +46,47 @@ internal static class Ba2Writer
             names.Write(name);
         }
 
-        names.Flush();
         output.Position = 0;
         names.Write("BTDX"u8);
-        names.Write(SupportedVersion);
+        names.Write(variant.Version);
         names.Write(textures ? "DX10"u8 : "GNRL"u8);
         names.Write((uint)files.Count);
         names.Write((ulong)nameTable);
+        if (variant.Version is 2 or 3) names.Write(1ul);
+        if (variant.Version == 3) names.Write(Lz4Compression);
+        names.Flush();
         entries.WriteTo(output);
     }
 
-    private static void WriteGeneral(Stream output, BinaryWriter entry, PackedFile file, bool compressed)
+    private static Codec CodecOf(Ba2Variant variant)
+    {
+        var written = (variant.Version, variant.Contents, variant.Compressed) switch
+        {
+            (1 or 2, _, false) => Codec.None,
+            (1 or 2, _, true) => Codec.Zlib,
+            (7 or 8, Ba2Contents.General, false) => Codec.None,
+            (7 or 8, Ba2Contents.General, true) => Codec.Zlib,
+            (3, Ba2Contents.Textures, true) => Codec.Lz4Block,
+            _ => (Codec?)null,
+        };
+        return written ?? throw new NotSupportedException(
+            $"A {(variant.Compressed ? "compressed" : "stored")} {variant.Contents} BA2 of version {variant.Version} is not written.");
+    }
+
+    private static void WriteGeneral(Stream output, BinaryWriter entry, PackedFile file, Codec codec)
     {
         using var content = file.Open();
         var offset = output.Position;
-        var (stored, whole) = Store(output, content, content.Length, compressed);
+        var (stored, whole) = Store(output, content, content.Length, codec);
         WriteIdentity(entry, file);
         entry.Write(GeneralFlags);
         entry.Write((ulong)offset);
-        entry.Write(compressed ? stored : 0u);
+        entry.Write(codec == Codec.None ? 0u : stored);
         entry.Write(whole);
         entry.Write(Unaligned);
     }
 
-    private static void WriteTexture(Stream output, BinaryWriter entry, PackedFile file, bool compressed)
+    private static void WriteTexture(Stream output, BinaryWriter entry, PackedFile file, Codec codec)
     {
         using var content = file.Open();
         var header = DdsHeader.Read(content, file.Source);
@@ -72,7 +94,7 @@ internal static class Ba2Writer
         if (pixels <= 0) throw new InvalidDataException($"'{file.Source}' cannot go into a texture archive: it holds no pixels.");
 
         var offset = output.Position;
-        var (stored, whole) = Store(output, content, pixels, compressed);
+        var (stored, whole) = Store(output, content, pixels, codec);
         WriteIdentity(entry, file);
         entry.Write((byte)0);
         entry.Write((byte)1);
@@ -84,24 +106,31 @@ internal static class Ba2Writer
         entry.Write((byte)(header.IsCubeMap ? 1 : 0));
         entry.Write(TileMode);
         entry.Write((ulong)offset);
-        entry.Write(compressed ? stored : 0u);
+        entry.Write(codec == Codec.None ? 0u : stored);
         entry.Write(whole);
         entry.Write((ushort)0);
         entry.Write((ushort)(header.Mips - 1));
         entry.Write(Unaligned);
     }
 
-    private static (uint Stored, uint Whole) Store(Stream output, Stream content, long length, bool compressed)
+    private static (uint Stored, uint Whole) Store(Stream output, Stream content, long length, Codec codec)
     {
         var start = output.Position;
-        if (compressed)
+        switch (codec)
         {
-            using var zlib = new ZLibStream(output, CompressionLevel.Optimal, leaveOpen: true);
-            content.CopyTo(zlib);
-        }
-        else
-        {
-            content.CopyTo(output);
+            case Codec.Zlib:
+                using (var zlib = new ZLibStream(output, CompressionLevel.Optimal, leaveOpen: true))
+                    content.CopyTo(zlib);
+                break;
+            case Codec.Lz4Block:
+                var raw = new byte[length];
+                content.ReadExactly(raw);
+                var block = new byte[LZ4Codec.MaximumOutputSize(raw.Length)];
+                output.Write(block, 0, LZ4Codec.Encode(raw, block, LZ4Level.L09_HC));
+                break;
+            default:
+                content.CopyTo(output);
+                break;
         }
 
         return (checked((uint)(output.Position - start)), checked((uint)length));
