@@ -21,7 +21,7 @@ const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
 const copy = { formKey: GUN, plugin: modA };
 const NAME = 'Gun - 000801_A.esp.json';
-const CELL_FILE = '/mods/ModA/plugin-source/A.esp/Cells/Cell.json';
+const CELL_FILE = '/source/ModA/plugin-source/A.esp/Cells/Cell.json';
 
 const untracked = (renderedFileName: string): RecordDocumentClient => ({
   getRecordOwner: () => Promise.resolve(undefined),

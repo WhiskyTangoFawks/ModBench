@@ -82,7 +82,7 @@ public sealed class PluginWriterSaveTests
         var before = File.ReadAllBytes(pluginPath);
         var adapter = TestAdapters.Mutagen();
         var source = (await adapter.ReadSourceOfAsync(
-            new RegisteredPlugin("Fixture.esp", "FixtureMod", pluginPath, new PluginProvider.FromMod("FixtureMod", folder), Line: null),
+            new RegisteredPlugin("Fixture.esp", "FixtureMod", pluginPath, new PluginProvider.FromMod("FixtureMod", folder, folder), Line: null),
             EmptyLoadOrder.Of(GameRelease.Fallout4), new PluginStrings(folder, folder))).Answered();
         var tree = (await adapter.ReadTreeAsync(source.Files, EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 

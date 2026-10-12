@@ -22,8 +22,8 @@ const modA = { name: 'A.esp', origin: 'ModA' };
 const modB = { name: 'B.esp', origin: 'ModB' };
 const GUN = '000900:A.esp';
 const STAND = '000700:Fallout4.esm';
-const GUN_FILE = '/mods/ModA/plugin-source/A.esp/Gun.json';
-const STAND_FILE = '/mods/ModB/plugin-source/B.esp/Stand.json';
+const GUN_FILE = '/source/ModA/plugin-source/A.esp/Gun.json';
+const STAND_FILE = '/source/ModB/plugin-source/B.esp/Stand.json';
 
 const plugin = (address: typeof modA, over: Partial<PluginMetadata> = {}): PluginMetadata => ({
   ...address, path: `/mods/${address.origin}/${address.name}`, isLight: false, isMaster: false, isBlueprint: false, masters: [],

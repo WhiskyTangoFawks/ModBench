@@ -65,7 +65,7 @@ const QUEST_HOLDS = [
 const CREATABLE = [
   { type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' },
 ];
-const NEW_NPC = { formKey: '000900:MyPatch.esp', moves: [], deletions: [], documents: [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
+const NEW_NPC = { formKey: '000900:MyPatch.esp', moves: [], deletions: [], documents: [{ path: '/source/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
 
 function harness(viewSelection: readonly PluginsTreeNode[] = []) {
   const client = new InMemoryMEditClient();

@@ -1,23 +1,23 @@
 namespace MEditService.SourceAdapter;
 
-/// <summary>The git repository under one mod folder (ADR-0007): whether it is tracked, what it
+/// <summary>The git repository under one source folder (ADR-0007): whether it is tracked, what it
 /// committed, and the refs that remember the binary Modbench last wrote. Every verb tolerates the
 /// folder having vanished since last observed.</summary>
-internal sealed class SourceRepositoryGit(string modFolder)
+internal sealed class SourceRepositoryGit(string sourceFolder)
 {
     private const string BinaryTrailer = "Binary-SHA256";
     private const string EarlierBinaryTrailer = "Earlier-Binary-SHA256";
     private const string EmptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
-    private readonly string _modFolder = modFolder;
-    private readonly string _gitDir = Path.Combine(modFolder, ".git");
+    private readonly string _sourceFolder = sourceFolder;
+    private readonly string _gitDir = Path.Combine(sourceFolder, ".git");
 
-    /// <summary>True exactly when <paramref name="modFolder"/> holds a repository whose <c>main</c>
+    /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c>
     /// exists. A <c>.git</c> with no <c>main</c> is Track's own, half made, or
     /// <see cref="HoldsAnotherRepository"/>.</summary>
-    internal static bool IsTracked(string modFolder)
+    internal static bool IsTracked(string sourceFolder)
     {
-        var gitDir = Path.Combine(modFolder, ".git");
+        var gitDir = Path.Combine(sourceFolder, ".git");
         return Directory.Exists(gitDir) && HasMainBranch(gitDir);
     }
 
@@ -26,9 +26,9 @@ internal sealed class SourceRepositoryGit(string modFolder)
 
     /// <summary>A <c>.git</c> with no <c>main</c> and no Track mark: someone else's, which Track never
     /// writes to (ADR-0003). The mark is a config key set right after <c>git init</c>.</summary>
-    internal static bool HoldsAnotherRepository(string modFolder)
+    internal static bool HoldsAnotherRepository(string sourceFolder)
     {
-        var gitDir = Path.Combine(modFolder, ".git");
+        var gitDir = Path.Combine(sourceFolder, ".git");
         return Directory.Exists(gitDir) && !HasMainBranch(gitDir) && !IsMarkedAsTracks(gitDir);
     }
 
@@ -65,9 +65,9 @@ internal sealed class SourceRepositoryGit(string modFolder)
         Directory.Delete(_gitDir, recursive: true);
     }
 
-    internal string Run(params string[] args) => GitCli.Run(_gitDir, _modFolder, args);
+    internal string Run(params string[] args) => GitCli.Run(_gitDir, _sourceFolder, args);
 
-    internal bool TryRun(out string stdout, params string[] args) => GitCli.TryRun(_gitDir, _modFolder, out stdout, args);
+    internal bool TryRun(out string stdout, params string[] args) => GitCli.TryRun(_gitDir, _sourceFolder, out stdout, args);
 
     // git speaks forward slashes on every platform, Windows included, while the layout builds
     // its paths with Path.Combine.
@@ -80,7 +80,7 @@ internal sealed class SourceRepositoryGit(string modFolder)
     /// a missing glob-shaped path, show exits 0 with empty output — a lying empty string.</summary>
     internal string? ReadCommittedSourceText(string relativePath)
     {
-        if (!IsTracked(_modFolder)) return null;
+        if (!IsTracked(_sourceFolder)) return null;
 
         return TryRun(out var stdout, "cat-file", "-p", $"HEAD:{ToGitPath(relativePath)}") ? stdout : null;
     }
@@ -109,7 +109,7 @@ internal sealed class SourceRepositoryGit(string modFolder)
 
     internal IReadOnlyList<string> LastWrittenBinarySha256s(string pluginFileName)
     {
-        if (!IsTracked(_modFolder)) return [];
+        if (!IsTracked(_sourceFolder)) return [];
 
         if (!TryRun(out var body, "log", "-1", "--format=%B", LastCompileRef(pluginFileName)))
             return [];

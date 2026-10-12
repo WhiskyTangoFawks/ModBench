@@ -8,7 +8,7 @@ import {
   type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
-import { dataFolderFile, dataFolderOf } from '../tables/gamePaths';
+import { dataFolderFile } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
 import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 
@@ -34,7 +34,7 @@ export interface LoadOrderPlugin {
   winning: boolean;
 }
 
-type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string } | { kind: 'Game' } | { kind: 'None' };
+type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string; sourceFolder: string } | { kind: 'Game' } | { kind: 'None' };
 
 // `lineNamesIt`: the line names this copy of its filename, for Editing's judgements (ADR-0013).
 type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin' | 'line'> & { provider: SnapshotProvider; lineNamesIt: boolean };
@@ -58,28 +58,22 @@ export interface LoadOrderPluginLine extends Omit<LoadOrderPlugin, 'path'> {
   readonly path: undefined;
 }
 
-/** The files inside one origin's folder, by the relative path a source tree names them with. */
-export interface OriginFiles {
+/** The files inside a mod's source folder, by the relative path a source tree names them with. */
+export interface SourceFiles {
   file(relativePath: string): string;
 }
 
-/** `originFiles` bound to one generation of the value, for a caller that holds no value of its
+/** `sourceFiles` bound to one generation of the value, for a caller that holds no value of its
  *  own. */
-export type OriginFilesOf = (origin: string) => OriginFiles | undefined;
+export type SourceFilesOf = (origin: string) => SourceFiles | undefined;
 
-export const NO_ORIGIN_FILES: OriginFilesOf = () => undefined;
+export const NO_SOURCE_FILES: SourceFilesOf = () => undefined;
 
-/** The files of the folder the Instance adapter answered for the origin (ADR-0012). `undefined`
- *  when it answered none. */
-export function originFiles(value: Pick<InstanceValue, 'paths' | 'gameFolder'>, origin: string): OriginFiles | undefined {
-  const folder = originFolder(value, origin);
+/** The files of the source folder the Instance adapter answered for the origin's mod (ADR-0007).
+ *  `undefined` for Overwrite and the game folder, which are no mod (ADR-0012). */
+export function sourceFiles(value: Pick<InstanceValue, 'paths'>, origin: string): SourceFiles | undefined {
+  const folder = byOrigin(origin, { overwrite: undefined, data: undefined, mod: (name) => value.paths.sourceDirs.get(name) });
   return folder === undefined ? undefined : { file: (relativePath) => fileInFolder(folder, relativePath) };
-}
-
-function originFolder({ paths, gameFolder }: Pick<InstanceValue, 'paths' | 'gameFolder'>, origin: string): string | undefined {
-  return byOrigin(origin, {
-    overwrite: paths.overwriteDir, data: dataFolderOf(gameFolder), mod: (name) => paths.modDirs.get(name),
-  });
 }
 
 // Overwrite and the game folder are reserved origins, never mods (ADR-0012).
@@ -188,6 +182,8 @@ export function loadOrderSnapshotOf(value: {
   readonly gameFolder: GameFolder;
   readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
   readonly modFolders: ModFolders | undefined;
+  /** Each mod's source folder, by mod name. */
+  readonly sourceDirs: ReadonlyMap<string, string>;
 }): LoadOrderSnapshotValue | LoadOrderSnapshotRefusal | undefined {
   // Without the game's masters the snapshot would be silently wrong (principles.md), so the index
   // keeps what it holds until the folder can be read (common.md, States, story 5).
@@ -201,7 +197,8 @@ export function loadOrderSnapshotOf(value: {
     data: { kind: 'Game' },
     mod: (name) => {
       const folder = value.modFolders?.holding({ kind: 'mod', name });
-      return folder === undefined ? undefined : { kind: 'Mod', mod: name, folder: folder.path };
+      const sourceFolder = value.sourceDirs.get(name);
+      return folder === undefined || sourceFolder === undefined ? undefined : { kind: 'Mod', mod: name, folder: folder.path, sourceFolder };
     },
   });
   const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p) =>

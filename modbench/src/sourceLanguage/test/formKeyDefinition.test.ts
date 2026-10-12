@@ -21,7 +21,7 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 
 const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
-const GUN_FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+const GUN_FILE = '/source/ModA/plugin-source/A.esp/Weapons/Gun.json';
 const GUN_TEXT = `{\n  "FormKey": "${GUN}",\n  "EditorID": "Gun"\n}`;
 const REFERENCING = `{ "FormKey": "000700:A.esp", "Armor": "${GUN}" }`;
 const AT_GUN = REFERENCING.indexOf(GUN) + 1;

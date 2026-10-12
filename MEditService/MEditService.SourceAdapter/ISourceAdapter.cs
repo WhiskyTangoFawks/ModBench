@@ -5,36 +5,36 @@ using Mutagen.Bethesda;
 namespace MEditService.SourceAdapter;
 
 /// <summary>What the record index reads of tracked plugins' source trees, and the writes the commands make to them. Each
-/// answers the folder as it stands now: a mod manager can replace it wholesale.</summary>
+/// answers the folder as it stands now: another tool can change it.</summary>
 public interface ISourceAdapter
 {
     bool SourceReads(RegisteredPlugin plugin);
 
     bool IsTracked(RegisteredPlugin plugin);
 
-    /// <summary>True exactly when <paramref name="modFolder"/> holds a repository whose <c>main</c> exists.</summary>
-    bool IsTracked(string modFolder);
+    /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c> exists.</summary>
+    bool IsTracked(string sourceFolder);
 
     /// <summary>Why the plugin's source does not read though its mod is tracked: no folder, twin folders, or a plugin
     /// source that cannot be listed. Null when it reads, and when its mod is not tracked.</summary>
     SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin);
 
-    /// <summary>The reads over the folder of the mod providing <paramref name="plugin"/>, tree or not; null
+    /// <summary>The reads over the source folder of the mod providing <paramref name="plugin"/>, tree or not; null
     /// when no mod provides it. One serves a batch, so what it learns of the tree is learned once.</summary>
     ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release);
 
     /// <summary>The reads over <paramref name="plugin"/>'s source tree; null when it has none that reads.</summary>
     ISourceRepositoryReads? TreeOf(RegisteredPlugin plugin, GameRelease release);
 
-    /// <summary>The repository over <paramref name="provider"/>'s folder, or null when the folder is not tracked and so
+    /// <summary>The repository over <paramref name="provider"/>'s source folder, or null when the folder is not tracked and so
     /// has no source tree to answer from.</summary>
     ISourceRepository? Open(PluginProvider.FromMod provider, GameRelease release);
 
-    /// <summary>The repository over <paramref name="provider"/>'s folder, tracked or not. It refuses the last-written
+    /// <summary>The repository over <paramref name="provider"/>'s source folder, tracked or not. It refuses the last-written
     /// record of a plugin another mod provides (ADR-0012): a repository knows only its folder.</summary>
     ISourceRepository OverFolder(PluginProvider.FromMod provider, GameRelease release);
 
-    /// <summary>A session over <paramref name="provider"/>'s folder, reading each of <paramref name="held"/>'s texts in
+    /// <summary>A session over <paramref name="provider"/>'s source folder, reading each of <paramref name="held"/>'s texts in
     /// place of the file at its absolute path.</summary>
     IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held);
 
@@ -47,7 +47,7 @@ public interface ISourceAdapter
 
     /// <summary>A <c>.git</c> with no <c>main</c> that Track did not mark as its own: someone else's, which Track never
     /// writes to (ADR-0003).</summary>
-    bool HoldsAnotherRepository(string modFolder);
+    bool HoldsAnotherRepository(string sourceFolder);
 
     /// <summary>Why git cannot be run here, so no repository can be made or written; null when it can.</summary>
     SourceFailure? WhyGitCannotRun();
@@ -58,7 +58,7 @@ public interface ISourceAdapter
     /// <summary>A repository for a mod that has none: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>, of
     /// each plugin's door tree. Answers each plugin refused, every one when no repository was made.</summary>
     IReadOnlyList<(string Plugin, string Reason)> Track(
-        string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins);
+        string sourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins);
 
     /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="ISourceRepository.TreeOf"/> answers it once
     /// written: what a round-trip gate compiles, so that it compiles what is written.</summary>

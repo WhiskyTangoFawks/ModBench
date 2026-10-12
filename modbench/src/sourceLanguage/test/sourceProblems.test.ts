@@ -3,7 +3,7 @@ import { feedSourceProblems, type ProblemsByFile } from '../sourceProblems';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { PluginProblems } from '../../client';
 import type { NotificationEvent } from '../../client/test/InMemoryMEditClient';
-import type { OriginFilesOf } from '../../instanceLoader/loadOrderSnapshot';
+import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 
 const MISSING = '000ABC:Absent.esp';
 const REFERRER = '000800:Refers.esp';
@@ -24,9 +24,9 @@ const reconciledAgain = (client: InMemoryMEditClient) => {
   client.emit(loadOrderStatus(true));
 };
 
-const modFolders: OriginFilesOf = (origin) => ({ file: (relativePath) => `/mods/${origin}/${relativePath}` });
+const sourceFolders: SourceFilesOf = (origin) => ({ file: (relativePath) => `/source/${origin}/${relativePath}` });
 
-function feed(files: Record<string, string>, originFiles = modFolders, answeredAtSubscribe?: PluginProblems[] | PromiseLike<PluginProblems[]>) {
+function feed(files: Record<string, string>, sourceFiles = sourceFolders, answeredAtSubscribe?: PluginProblems[] | PromiseLike<PluginProblems[]>) {
   const client = new InMemoryMEditClient();
   if (answeredAtSubscribe) client.setQueryAnswerOnce('getPluginProblems', answeredAtSubscribe);
   const published: ProblemsByFile[] = [];
@@ -34,7 +34,7 @@ function feed(files: Record<string, string>, originFiles = modFolders, answeredA
   const status: (string | undefined)[] = [];
   feedSourceProblems({
     client,
-    originFiles,
+    sourceFiles,
     readText: (path) => path in files ? Promise.resolve(files[path] ?? '') : Promise.reject(new Error(`no ${path}`)),
     reporter,
     publish: (problems) => published.push(problems),
@@ -53,11 +53,11 @@ function feed(files: Record<string, string>, originFiles = modFolders, answeredA
 describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', () => {
   it('puts a reference to a missing record on its file, spanning the FormKey no active plugin holds', async () => {
     const text = `{\n  "FormKey": "${REFERRER}",\n  "Race": "${MISSING}"\n}`;
-    const { answered } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': text });
+    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': text });
 
     const shown = await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
-    expect([...shown]).toEqual([['/mods/ReferringMod/Refers.esp/Npc.json', [{
+    expect([...shown]).toEqual([['/source/ReferringMod/Refers.esp/Npc.json', [{
       message: `Race: [${MISSING}] <Error: Could not be resolved>`,
       start: { line: 2, character: 10 },
       end: { line: 2, character: 10 + MISSING.length + 2 },
@@ -68,33 +68,33 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     const lines = ['{', '  "FormKey": "000800:Refers.esp",', '  "Temporary": [',
       `    { "FormKey": "000801:Refers.esp", "Base": "${MISSING}" },`,
       `    { "FormKey": "000802:Refers.esp", "Base": "${MISSING}" }`, '  ]', '}'];
-    const { answered } = feed({ '/mods/ReferringMod/Refers.esp/Cell.json': lines.join('\n') });
+    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Cell.json': lines.join('\n') });
     const placed = (formKey: string) => problem({ formKey, sourceRelativePath: 'Refers.esp/Cell.json', message: formKey });
 
     const shown = await answered([{ plugin: PLUGIN, problems: [placed('000802:Refers.esp'), placed('000801:Refers.esp')] }]);
 
-    expect(shown.get('/mods/ReferringMod/Refers.esp/Cell.json')?.map(({ message, start }) => [message, start.line])).toEqual([
+    expect(shown.get('/source/ReferringMod/Refers.esp/Cell.json')?.map(({ message, start }) => [message, start.line])).toEqual([
       ['000802:Refers.esp', 4], ['000801:Refers.esp', 3],
     ]);
   });
 
   it('keeps a problem at the first line of a file that does not spell its missing record', async () => {
-    const { answered } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `{ "FormKey": "${REFERRER}" }` });
+    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `{ "FormKey": "${REFERRER}" }` });
 
     const shown = await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
-    expect(shown.get('/mods/ReferringMod/Refers.esp/Npc.json')?.map(({ start, end }) => [start, end])).toEqual([
+    expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ start, end }) => [start, end])).toEqual([
       [{ line: 0, character: 0 }, { line: 0, character: 0 }],
     ]);
   });
 
   it('spans the FormKey a file declares when another file claims it too', async () => {
     const text = `{\n  "FormKey": "${REFERRER}",\n  "Race": "${MISSING}"\n}`;
-    const { answered } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': text });
+    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': text });
 
     const shown = await answered([{ plugin: PLUGIN, problems: [problem({ targetFormKey: null, message: 'claimed twice' })] }]);
 
-    expect(shown.get('/mods/ReferringMod/Refers.esp/Npc.json')?.map(({ start, end }) => [start, end])).toEqual([
+    expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ start, end }) => [start, end])).toEqual([
       [{ line: 1, character: 13 }, { line: 1, character: 13 + REFERRER.length + 2 }],
     ]);
   });
@@ -102,12 +102,12 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
   it('spans each link at its own field path when one record names the same missing record in many', async () => {
     const items = Array.from({ length: 11 }, () => `    { "Item": "${MISSING}" }`);
     const text = ['{', `  "FormKey": "${REFERRER}",`, `  "Voice": "${MISSING}",`, '  "Items": [', items.join(',\n'), '  ]', '}'].join('\n');
-    const { answered } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': text });
+    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': text });
     const at = (fieldPath: string) => problem({ fieldPath, message: fieldPath });
 
     const shown = await answered([{ plugin: PLUGIN, problems: [at('Items[10].Item'), at('Items[2].Item'), at('Voice')] }]);
 
-    expect(shown.get('/mods/ReferringMod/Refers.esp/Npc.json')?.map(({ message, start }) => [message, start.line])).toEqual([
+    expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ message, start }) => [message, start.line])).toEqual([
       ['Items[10].Item', 14], ['Items[2].Item', 6], ['Voice', 2],
     ]);
   });
@@ -118,9 +118,9 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
     const shown = await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
-    expect(shown.get('/mods/ReferringMod/Refers.esp/Npc.json')?.map(({ start }) => start)).toEqual([{ line: 0, character: 0 }]);
+    expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ start }) => start)).toEqual([{ line: 0, character: 0 }]);
     expect(reporter.shownOnSurface.mock.calls).toEqual([
-      ['warning', 'The Problems panel shows the problems of "/mods/ReferringMod/Refers.esp/Npc.json" on its first line.', 'no /mods/ReferringMod/Refers.esp/Npc.json'],
+      ['warning', 'The Problems panel shows the problems of "/source/ReferringMod/Refers.esp/Npc.json" on its first line.', 'no /source/ReferringMod/Refers.esp/Npc.json'],
     ]);
   });
 
@@ -128,7 +128,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     ['a save re-derives its rows', 'rows-changed'],
     ['mEdit re-reads its plugin', 'plugin-changed'],
   ])('clears a problem when %s and mEdit answers none', async (_, kind) => {
-    const { answered } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
     const shown = await answered([{ plugin: PLUGIN, problems: [] }], { kind, plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
@@ -137,7 +137,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
   });
 
   it('asks again when the notification stream reconnects', async () => {
-    const { client, answered, published } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    const { client, answered, published } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
     await answered([]);
 
     client.setQueryAnswer('getPluginProblems', [{ plugin: PLUGIN, problems: [problem()] }]);
@@ -169,7 +169,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
   });
 
   it('shows mEdit\'s answer at subscribe, and asks again on a save before any load-order-status', async () => {
-    const { client, published } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` }, modFolders, [{ plugin: PLUGIN, problems: [problem()] }]);
+    const { client, published } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` }, sourceFolders, [{ plugin: PLUGIN, problems: [problem()] }]);
     await vi.waitFor(() => { expect(published.map((problems) => problems.size)).toEqual([1]); });
 
     client.setQueryAnswer('getPluginProblems', [{ plugin: PLUGIN, problems: [] }]);
@@ -191,7 +191,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
 
   it('asks nothing on a save when the index began reconciling while the ask at subscribe was in flight', async () => {
     let answer!: (problems: PluginProblems[]) => void;
-    const { client, published, answered } = feed({}, modFolders, new Promise<PluginProblems[]>((resolve) => { answer = resolve; }));
+    const { client, published, answered } = feed({}, sourceFolders, new Promise<PluginProblems[]>((resolve) => { answer = resolve; }));
     client.emit(loadOrderStatus(false));
     answer([]);
     await vi.waitFor(() => { expect(published).toHaveLength(1); });
@@ -241,27 +241,27 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
   });
 
   it('shows the problems mEdit placed for a plugin whose other problems it could not place', async () => {
-    const { answered, reporter } = feed({ '/mods/ReferringMod/Refers.esp/Stray.json': '{' });
+    const { answered, reporter } = feed({ '/source/ReferringMod/Refers.esp/Stray.json': '{' });
     const stray = problem({ formKey: null, targetFormKey: null, fieldPath: null, sourceRelativePath: 'Refers.esp/Stray.json', message: 'unreadable' });
 
     const shown = await answered([{ plugin: PLUGIN, problems: [stray], failure: 'Refers.esp\'s source could not place 000800:Refers.esp.', failureKind: 'Placement' }]);
 
-    expect([...shown.keys()]).toEqual(['/mods/ReferringMod/Refers.esp/Stray.json']);
+    expect([...shown.keys()]).toEqual(['/source/ReferringMod/Refers.esp/Stray.json']);
     expect(reporter.shownOnSurface).toHaveBeenCalledTimes(1);
   });
 
-  it('tells of a plugin whose mod the instance holds no folder for, rather than dropping its problems', async () => {
+  it('tells of a plugin whose mod the instance holds no source folder for, rather than dropping its problems', async () => {
     const { answered, reporter } = feed({}, () => undefined);
 
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
     expect(reporter.shownOnSurface.mock.calls).toEqual([
-      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'The instance holds no folder for ReferringMod.'],
+      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'The instance holds no source folder for ReferringMod.'],
     ]);
   });
 
   it('keeps the last answer when mEdit cannot answer, saying so in the Output once for each reason', async () => {
-    const { client, answered, published, reporter } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    const { client, answered, published, reporter } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
     client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
     client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
@@ -278,7 +278,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
   });
 
   it('publishes no answer that a later one overtook', async () => {
-    const { client, answered, published } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    const { client, answered, published } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
     let overtaken!: (answer: PluginProblems[]) => void;
     client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { overtaken = resolve; }));
     reconciledAgain(client);
@@ -304,7 +304,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
   });
 
   it('publishes an older answer when the ask that overtook it fails', async () => {
-    const { client, published } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    const { client, published } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
     let older!: (answer: PluginProblems[]) => void;
     client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { older = resolve; }));
     client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
@@ -318,7 +318,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
   });
 
   it('says in the language status that it shows the last good read, and why, until the next good answer clears it', async () => {
-    const { client, answered, status } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    const { client, answered, status } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
     client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
     reconciledAgain(client);
@@ -331,7 +331,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
 
   it('keeps the problems of a plugin mEdit cannot place while the rest publishes, and says so in the language status', async () => {
     const other = { name: 'Other.esp', origin: 'OtherMod' };
-    const files = { '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"`, '/mods/OtherMod/Other.esp/Npc.json': `"${MISSING}"` };
+    const files = { '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"`, '/source/OtherMod/Other.esp/Npc.json': `"${MISSING}"` };
     const { answered, status } = feed(files);
     await answered([{ plugin: PLUGIN, problems: [problem()] }, { plugin: other, problems: [] }]);
     const why = 'Refers.esp is tracked but no mod folder provides it.';
@@ -341,12 +341,12 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
       { plugin: other, problems: [problem({ sourceRelativePath: 'Other.esp/Npc.json' })] },
     ]);
 
-    expect([...shown.keys()].sort()).toEqual(['/mods/OtherMod/Other.esp/Npc.json', '/mods/ReferringMod/Refers.esp/Npc.json']);
+    expect([...shown.keys()].sort()).toEqual(['/source/OtherMod/Other.esp/Npc.json', '/source/ReferringMod/Refers.esp/Npc.json']);
     expect(status.at(-1)).toBe(`Showing the last good read: "Refers.esp" (ReferringMod): ${why}`);
   });
 
   it('drops the kept problems of a plugin once mEdit places it again', async () => {
-    const { answered, status } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    const { answered, status } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
     await answered([{ plugin: PLUGIN, problems: [], failure: 'unplaced' }]);
 
@@ -366,7 +366,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
   });
 
   describe('for a plugin mEdit cannot place', () => {
-    const FILE = '/mods/ReferringMod/Refers.esp/Npc.json';
+    const FILE = '/source/ReferringMod/Refers.esp/Npc.json';
     const stop = (message: string) => problem({ formKey: null, targetFormKey: null, fieldPath: null, message });
     const unplaced = (...problems: PluginProblems['problems']): PluginProblems[] => [{ plugin: PLUGIN, problems, failure: 'unplaced' }];
     const messagesOn = (shown: ProblemsByFile) => shown.get(FILE)?.map(({ message }) => message);

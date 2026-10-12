@@ -2,7 +2,7 @@ using MEditService.RepositoriesLib;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>Writes to one mod folder's plugin source, answered as the changes they make, written nowhere
+/// <summary>Writes to one source folder's plugin source, answered as the changes they make, written nowhere
 /// (ADR-0001).</summary>
 public interface IWriteSession
 {

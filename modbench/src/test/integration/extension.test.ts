@@ -417,7 +417,7 @@ const HELD_FORM_KEY = '000801:Held.esp';
 const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
 const RENDERED_REFERRER_FORM_KEY = '000803:Fallout4.esm';
 const TRACKED_FILE = path.join(
-  mkdtempSync(path.join(os.tmpdir(), 'modbench-tracked-')), TRACKED_ORIGIN, 'plugin-source', TRACKED_PLUGIN, 'Weapons', 'TrackedGun.json');
+  mkdtempSync(path.join(os.tmpdir(), 'modbench-tracked-')), 'source', TRACKED_ORIGIN, 'plugin-source', TRACKED_PLUGIN, 'Weapons', 'TrackedGun.json');
 mkdirSync(path.dirname(TRACKED_FILE), { recursive: true });
 writeFileSync(TRACKED_FILE, JSON.stringify({
   FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun', Model: HELD_FORM_KEY, Placed: [
@@ -500,11 +500,12 @@ describe('the Problems language status selector', () => {
   };
 
   it('matches a JSON document under plugin source, whatever the folder\'s case', async () => {
-    assert.ok(await matches('Mod', 'Plugin-Source', 'A.esp', 'Npc.json') > 0);
+    assert.ok(await matches('Source', 'Mod', 'Plugin-Source', 'A.esp', 'Npc.json') > 0);
   });
 
-  it('does not match a JSON document outside plugin source', async () => {
+  it('does not match a JSON document outside plugin source, nor plugin source a mod folder ships', async () => {
     assert.strictEqual(await matches('Mod', 'package.json'), 0);
+    assert.strictEqual(await matches('mods', 'Mod', 'plugin-source', 'A.esp', 'Npc.json'), 0);
   });
 });
 
@@ -1781,7 +1782,7 @@ describe('A FormKey in plugin source', () => {
 
   before(async () => {
     folder = mkdtempSync(path.join(os.tmpdir(), 'medit-plugin-source-'));
-    const file = path.join(folder, 'plugin-source', 'Held.esp', 'Gun.json');
+    const file = path.join(folder, 'source', 'Held Mod', 'plugin-source', 'Held.esp', 'Gun.json');
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY, Name: 'Rusty Gun', Mode: 'Auto' }, null, 2));
     document = await vscode.workspace.openTextDocument(file);
@@ -1822,7 +1823,7 @@ describe('A FormKey in plugin source', () => {
 
   it('shows its record in a plugin source folder the adapter names in another case', async () => {
     await activated();
-    const other = await documentAt('Mods', 'Plugin-Source', 'Held.esp', 'Gun.json');
+    const other = await documentAt('Source', 'Held Mod', 'Plugin-Source', 'Held.esp', 'Gun.json');
 
     assert.deepStrictEqual(await hoverTextsIn(other, '000801'), heldHover);
   });
@@ -1840,7 +1841,7 @@ describe('A FormKey in plugin source', () => {
   });
 
   const definitionsOf = async (formKey: string): Promise<vscode.Location[]> => {
-    const referencing = path.join(folder, 'plugin-source', 'Held.esp', 'References', `${formKey.replace(':', '_')}.json`);
+    const referencing = path.join(folder, 'source', 'Held Mod', 'plugin-source', 'Held.esp', 'References', `${formKey.replace(':', '_')}.json`);
     mkdirSync(path.dirname(referencing), { recursive: true });
     writeFileSync(referencing, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: formKey }));
     const doc = await vscode.workspace.openTextDocument(referencing);
@@ -1998,7 +1999,7 @@ describe('An unsaved document in plugin source', () => {
 
   before(() => {
     folder = mkdtempSync(path.join(os.tmpdir(), 'medit-unsaved-'));
-    file = path.join(folder, 'plugin-source', 'Held.esp', 'Typed.json');
+    file = path.join(folder, 'source', 'Held Mod', 'plugin-source', 'Held.esp', 'Typed.json');
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, EditorID: 'Saved' }));
   });
@@ -2043,16 +2044,24 @@ describe('An unsaved document in plugin source', () => {
 describe('The Problems panel on plugin source', () => {
   const MESSAGE = `Armor: [${NOT_HELD_FORM_KEY}] <Error: Could not be resolved>`;
   const SOURCE_FILE = path.join('plugin-source', 'Held.esp', 'Gun.json');
-  const file = path.join(FIXTURE_GAME_DIRECTORY, 'Data', SOURCE_FILE);
-  const plugin = { name: 'Held.esp', origin: 'Data/' };
+  const plugin = { name: 'Held.esp', origin: 'Held Mod' };
+  const modDir = path.join(root, 'mods', plugin.origin);
+  const sourceDir = path.join(root, 'source', plugin.origin);
+  const file = path.join(sourceDir, SOURCE_FILE);
+  let original = '';
 
-  before(() => {
+  before(async () => {
+    original = readFileSync(modlistPath, 'utf8');
+    mkdirSync(modDir, { recursive: true });
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY }, null, 2));
+    await waitFor('mod sync to give the new folder its line', () => readFileSync(modlistPath, 'utf8').includes(plugin.origin));
   });
   after(() => {
     pluginProblems = [];
-    rmSync(path.join(FIXTURE_GAME_DIRECTORY, 'Data', 'plugin-source'), { recursive: true, force: true });
+    writeFileSync(modlistPath, original);
+    rmSync(modDir, { recursive: true, force: true });
+    rmSync(path.join(root, 'source'), { recursive: true, force: true });
   });
 
   const saved = (problems: PluginProblems['problems']) => {
@@ -2061,10 +2070,12 @@ describe('The Problems panel on plugin source', () => {
   };
   const shown = () => vscode.languages.getDiagnostics(vscode.Uri.file(file)).filter((diagnostic) => diagnostic.message === MESSAGE);
 
-  it('carries a reference to a record no active plugin holds on its file, spanning that FormKey, and clears it when a save answers none', async () => {
-    saved([{ formKey: HELD_FORM_KEY, targetFormKey: NOT_HELD_FORM_KEY, sourceRelativePath: SOURCE_FILE, message: MESSAGE }]);
-
-    const [problem] = await waitFor('the problem on its file', () => { const found = shown(); return found.length > 0 && found; });
+  it('carries a reference to a record no active plugin holds on its file in its mod\'s source folder, spanning that FormKey, and clears it when a save answers none', async () => {
+    const [problem] = await waitFor('the problem on its file once the instance holds the mod', () => {
+      saved([{ formKey: HELD_FORM_KEY, targetFormKey: NOT_HELD_FORM_KEY, sourceRelativePath: SOURCE_FILE, message: MESSAGE }]);
+      const found = shown();
+      return found.length > 0 && found;
+    });
     const document = await vscode.workspace.openTextDocument(file);
     assert.strictEqual(document.getText(problem?.range), `"${NOT_HELD_FORM_KEY}"`);
 

@@ -133,7 +133,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
         TrackedOver(modFolder);
-        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
+        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder, modFolder), GameRelease.Fallout4);
 
         Assert.Throws<ArgumentException>(() => repository.WriteBinary(new PluginAddress("Test.esp", "OtherMod"), "ABC", () => { }).Value());
         Assert.Empty(repository.LastWrittenBinarySha256s(Test).Value());
@@ -144,7 +144,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
         TrackedOver(modFolder);
-        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
+        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder, modFolder), GameRelease.Fallout4);
 
         Assert.Throws<ArgumentException>(() => repository.LastWrittenBinarySha256s(new PluginAddress("Test.esp", "OtherMod")).Value());
     }
@@ -154,7 +154,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
         TrackedOver(modFolder);
-        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
+        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder, modFolder), GameRelease.Fallout4);
 
         Assert.Throws<ArgumentException>(() => repository.ReplaceSourceFrom(new PluginAddress("Test.esp", "OtherMod"), [], "ABC"));
         Assert.Empty(repository.LastWrittenBinarySha256s(Test).Value());
@@ -165,7 +165,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
         TrackedOver(modFolder);
-        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TESTMOD", modFolder), GameRelease.Fallout4);
+        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TESTMOD", modFolder, modFolder), GameRelease.Fallout4);
 
         repository.WriteBinary(Test, "ABC", () => { }).Value();
 

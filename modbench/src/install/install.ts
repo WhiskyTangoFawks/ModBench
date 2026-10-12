@@ -86,17 +86,10 @@ async function settle(
     await opened.extraction.land(root, keys);
     return { applied: true, wrote: true, isFomod };
   }
-  let landed;
   try {
-    landed = await opened.extraction.land(root, keys);
+    await opened.extraction.land(root, keys);
   } catch (err) {
     return { applied: false, refusal: `Upgrading "${name}" failed partway and was not rolled back: ${errorMessage(err)}` };
-  }
-  if (landed.refused) {
-    return {
-      applied: false,
-      refusal: `Cannot upgrade "${name}": the release holds "${landed.repositoryOrPluginSourceEntry}", which is the mod's own repository or plugin source.`,
-    };
   }
   return { applied: true, wrote: true, isFomod };
 }
