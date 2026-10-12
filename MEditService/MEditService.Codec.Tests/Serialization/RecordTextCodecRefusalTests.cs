@@ -23,6 +23,7 @@ public sealed class RecordTextCodecRefusalTests
             EditorID = "Gun",
             Name = "A gun",
             Weight = 2.5f,
+            Keywords = [new FormLink<IKeywordGetter>(new FormKey(ModKey.FromFileName("Fallout4.esm"), 0x12))],
         };
         return RecordTextCodec.SerializeToText(weapon, Release);
     }
@@ -108,12 +109,54 @@ public sealed class RecordTextCodecRefusalTests
         Assert.NotNull(Why(WeaponText() + "\n{}"));
     }
 
-    [Fact]
-    public void AMalformedFormKey_IsRefused_WithTheReadersWords()
+    [Theory]
+    [InlineData("true")]
+    [InlineData("null")]
+    [InlineData("{}")]
+    public void AWeightOfTheWrongTypeOrNull_IsRefused_NamingTheField_NotTheRecordType(string weight)
     {
-        var why = Why(Edited(WeaponText(), root => root["FormKey"] = "not a form key"));
+        var why = Why(Edited(WeaponText(), root => root["Weight"] = JsonNode.Parse(weight)));
 
-        Assert.False(string.IsNullOrWhiteSpace(why));
+        Assert.StartsWith("Weight", why, StringComparison.Ordinal);
+        Assert.DoesNotContain("MutagenObjectType", why, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("true")]
+    [InlineData("\"not a form key\"")]
+    public void ALinkInAListThatIsNoFormKey_IsRefused_NamingTheListAndItsPlace(string link)
+    {
+        var why = Why(Edited(WeaponText(), root => root["Keywords"] = new JsonArray(JsonNode.Parse(link))));
+
+        Assert.StartsWith("Keywords[0]", why, StringComparison.Ordinal);
+        Assert.DoesNotContain("MutagenObjectType", why, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AMalformedFormKey_IsRefused_NamingTheField()
+    {
+        Assert.StartsWith("FormKey", Why(Edited(WeaponText(), root => root["FormKey"] = "not a form key")), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnEnumValueThatDoesNotExist_IsRefused_NamingTheField()
+    {
+        var cell = RecordTextCodec.SerializeToText(
+            new Cell(new FormKey(ModKey.FromFileName("Refusal.esp"), 0x801), Fallout4Release.Fallout4) { Flags = Cell.Flag.IsInteriorCell },
+            Release);
+
+        var why = RecordTextCodec.WhyNotARecord(Edited(cell, root => root["Flags"] = new JsonArray("NoSuchFlag")), Release, "cell");
+
+        Assert.StartsWith("Flags", why, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASyntaxError_IsRefused_WithItsLineAndPosition()
+    {
+        var why = Why(WeaponText().Replace("\"Weight\"", "\"Weight\" 1 ", StringComparison.Ordinal));
+
+        Assert.Contains("LineNumber", why, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -38,18 +38,31 @@ public static class RecordTextCodec
     public static string? WhyNotARecord(string text, GameRelease gameRelease, string? recordType)
     {
         if (!Document.TryRead(text, out var written, out var whyNot)) return whyNot;
+        string Produce(string source) => recordType == PluginHeader.RecordType
+            ? Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(source), gameRelease)))
+            : RoundTrip(source, gameRelease, recordType);
         try
         {
-            var produced = recordType == PluginHeader.RecordType
-                ? Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(text), gameRelease)))
-                : RoundTrip(text, gameRelease, recordType);
-            return DocumentMeaning.FirstDifference(written.Element, Document.Parse(produced).Element) is { } at
+            return DocumentMeaning.FirstDifference(written.Element, Document.Parse(Produce(text)).Element) is { } at
                 ? $"{at} does not match what the current codec would produce from it."
                 : null;
         }
         catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
-            return ex.Message;
+            return ReadFault.Describe(ex, text, source => ReadsWithoutThrowing(Produce, source));
+        }
+    }
+
+    private static bool ReadsWithoutThrowing(Func<string, string> produce, string source)
+    {
+        try
+        {
+            _ = produce(source);
+            return true;
+        }
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
+        {
+            return false;
         }
     }
 
