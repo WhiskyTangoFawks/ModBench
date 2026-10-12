@@ -1,0 +1,29 @@
+# Update modlist, green: each mod's manifest from the mod as it is, and each delta a changed file needs.
+...@../styles
+shape: sequence_diagram
+toolbox: @../target-architecture.modbench_driving.toolbox
+toolbox.label: Toolbox
+commands: @../target-architecture.modbench_core.modlistsourcecommands
+commands.label: modlist source commands
+source: @../target-architecture.modbench_repositories.modlistsource
+source.label: Modlist source
+instance: @../target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · downloaded files · the build folder"
+gamedata: @../target-architecture.modbench_data.gamedata
+gamedata.label: Game folder
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+views: "every view" {class: driving}
+
+toolbox -> commands: "update, with the instance value" {class: track}
+commands -> source: "the mods, each with its installation files" {class: track}
+instance -> source: "each mod's files and installation files: bytes" {class: track}
+gamedata -> source: "game files: bytes" {class: track}
+source."per mod: hash, match, a delta for each changed file; a mod whose installation file is missing is refused"
+source -> instance: "each manifest that changed · each delta, in the build folder" {class: track}
+commands -> toolbox: "landed, with each refused mod and each file with no source" {class: track}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader -> views: value {class: loadorder}

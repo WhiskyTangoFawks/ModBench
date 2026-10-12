@@ -139,9 +139,9 @@ The instance's mods and profiles as git holds them ([modlist-source.md](surfaces
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
-| track | writes | `modbench.modlist.track` | - | - | none | Put the instance under git: the repository, its ignore list, every manifest, and one commit. | - |
-| update | writes | `modbench.modlist.update` | - | - | Wabbajack compile | Write every mod's manifest from the mod as it is, and each delta a changed file needs. It commits nothing. | - |
-| restore | writes | `modbench.modlist.restore` | mods, or none for every mod | - | Wabbajack install | Rebuild each mod's folder from its manifest and the downloads it names. | - |
+| track | writes | `modbench.modlist.track` | - | - | none | Put the instance under git: the repository, its ignore list, every manifest, and one commit. | track-modlist |
+| update | writes | `modbench.modlist.update` | - | - | Wabbajack compile | Write every mod's manifest from the mod as it is, and each delta a changed file needs. It commits nothing. | update-modlist |
+| restore | writes | `modbench.modlist.restore` | mods, or none for every mod | - | Wabbajack install | Rebuild each mod's folder from its manifest and the downloads it names. | restore-modlist |
 
 ## Mod
 

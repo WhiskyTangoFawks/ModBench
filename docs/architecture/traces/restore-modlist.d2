@@ -1,0 +1,31 @@
+# Restore modlist, orange: each mod's folder from its manifest and the downloads it names.
+...@../styles
+shape: sequence_diagram
+driving: "Toolbox · Mods" {class: driving}
+install: @../target-architecture.modbench_core.install
+install.label: install
+source: @../target-architecture.modbench_repositories.modlistsource
+source.label: Modlist source
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instance: @../target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · downloaded files · the build folder"
+gamedata: @../target-architecture.modbench_data.gamedata
+gamedata.label: Game folder
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+views: "every view" {class: driving}
+
+driving."the confirmation"
+driving -> install: "restore: the mods, or every mod, with the instance value" {class: compile}
+install -> source: "the mods" {class: compile}
+instance -> source: "each manifest · installation files and deltas: bytes" {class: compile}
+gamedata -> source: "game files: bytes" {class: compile}
+source -> install: "per mod: each file's bytes, or what the mod lacks" {class: compile}
+install."a mod that lacks anything is skipped; the rest are written"
+install -> instanceadapter: "each mod's files, whole · the mod folders with no manifest, to the trash" {class: compile}
+instanceadapter -> instance: "the folders" {class: compile}
+install -> driving: "landed, with each skipped mod and what it lacks" {class: compile}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader -> views: value {class: loadorder}

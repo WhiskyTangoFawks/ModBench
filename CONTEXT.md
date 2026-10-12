@@ -64,7 +64,7 @@ A mod entry that groups other mods in the list and holds no files. A mod belongs
 Avoid: group, category
 
 ## Tracked mod
-A mod whose folder holds a `.git` repository and the plugin source of every plugin it provides, each a tracked plugin. It follows one git workflow.
+A mod with a repository of its own in the source folder beside `mods/`, holding the plugin source of every plugin it provides, each a tracked plugin. It follows one git workflow.
 
 # Git workflow
 How a tracked mod uses its `main` branch. The user chooses. Two kinds exist: authored and vendored.
@@ -110,7 +110,7 @@ A plugin that another plugin lists as a dependency. A master loads earlier.
 Avoid: parent plugin (an override's plugin is not its child)
 
 # Plugin source
-The deserialized form of a plugin, held in a tracked mod's folder.
+The deserialized form of a plugin, held in a tracked mod's repository.
 
 Avoid: source, text mirror, Spriggit tree
 

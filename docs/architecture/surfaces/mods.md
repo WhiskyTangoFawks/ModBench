@@ -22,7 +22,7 @@ As a user, I want:
 6. A separator with no mods to show no expander. Source: VS Code
 7. A mod or Overwrite to open into its files as a folder tree: folders first, then files, each by name. A disabled mod opens too. One with no files shows no expander. Source: VS Code's Explorer
 8. The name of a file the game does not get to be greyed. The game does not get a file when another copy wins its path, when it is excluded, or when its mod is disabled. Source: MO2
-9. Only the files Modbench deploys from the mod to show: not `meta.ini`, the repository or plugin source. An excluded file shows its full name, `.mohidden` included. A folder with that suffix is excluded with everything in it, and is greyed. Source: MO2
+9. Only the files Modbench deploys from the mod to show: not `meta.ini` or the manifest. An excluded file shows its full name, `.mohidden` included. A folder with that suffix is excluded with everything in it, and is greyed. Source: MO2
 10. The same grey and badges on the same files in VS Code's Explorer. Source: VS Code
 
 ## A row
@@ -181,7 +181,7 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 
 1. Install never to merge into an existing folder, or to replace one I did not confirm.
 2. A new mod to appear at the winning end of the mod order, disabled, as any folder new in `mods/` does.
-3. An upgrade to replace the mod's files in place, and to keep its folder name, its repository and its plugin source (`.git`, `.gitignore` and `plugin-source/`). Source: ADR-0007
+3. An upgrade to replace the mod's files in place, and to keep its folder name and its manifest. Its repository is beside `mods/`, and an upgrade never touches it. Source: ADR-0007; ADR-0022
 4. An upgrade to keep every `meta.ini` value the new file does not know, so an unknown version never blanks a known one. Source: ADR-0017
 5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery, and a tracked mod's plugin source stays in git. This is an exception to A failed gesture writes nothing.
 

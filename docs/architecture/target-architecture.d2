@@ -41,7 +41,8 @@ medit_core: "MEDIT · Core — the write side; it references the kernel and the 
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
-  modlist: "modlist commands\nowns: the mod order" {class: core}
+  modlist: "mod order commands\nowns: the mod order" {class: core}
+  modlistsourcecommands: "modlist source commands\nowns: track and update" {class: core}
   pluginscommands: "plugins commands\nowns: changes to the plugin order\nhides: the plugin-order rules" {class: core}
   instancecommands: "instance commands\nowns: changes to the instance as a whole" {class: core}
   downloadscommands: "downloads commands\nowns: changes to the downloaded files" {class: core}
@@ -84,6 +85,7 @@ medit_repositories: "MEDIT · Repositories — the only boxes that read or write
 modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the one reader and writer of the instance" {
   class: band; grid-rows: 1
   instanceadapter: "Instance adapter — MO2 is one implementation\nowns: the instance\nhides: the mod manager" {class: repositories}
+  modlistsource: "Modlist source\nowns: the manifests, the deltas and the instance repository\nhides: git, hashing and the delta format" {class: repositories}
   deployment: "deployment\nowns: making the game see the instance\nhides: the deployment model" {class: repositories}
   client: "mEdit client\nowns: Modbench's one reach to mEdit\nhides: the transport and the process" {class: repositories}
 }

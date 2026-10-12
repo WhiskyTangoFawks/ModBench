@@ -1,0 +1,31 @@
+# Track modlist, green: the repository, its ignore list, every manifest, one commit.
+...@../styles
+shape: sequence_diagram
+toolbox: @../target-architecture.modbench_driving.toolbox
+toolbox.label: Toolbox
+commands: @../target-architecture.modbench_core.modlistsourcecommands
+commands.label: modlist source commands
+source: @../target-architecture.modbench_repositories.modlistsource
+source.label: Modlist source
+instance: @../target-architecture.modbench_data.instance
+instance.label: "Instance\nthe repository · each mod's manifest"
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+views: "every view" {class: driving}
+
+toolbox -> commands: "track, with the instance value" {class: track}
+commands -> source: "the repository and its ignore list" {class: track}
+source -> instance: "the repository" {class: track}
+commands."update-modlist, every mod"
+commands -> source: "commit: Track modlist" {class: track}
+source -> instance: "the commit" {class: track}
+commands -> toolbox: "landed, with each refused mod" {class: track}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader -> views: value {class: loadorder}
+
+refused: "refused, before any write" {
+  commands -> toolbox: "the refusal: the instance already holds a repository" {class: track}
+}
