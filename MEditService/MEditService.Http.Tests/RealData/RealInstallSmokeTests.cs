@@ -68,7 +68,7 @@ public sealed class RealInstallSmokeTests(RealInstallSmokeTests.OneGameLoadedAtA
 
     public sealed class OneGameLoadedAtATime : IAsyncLifetime, IAsyncDisposable
     {
-        // Starfield's masters take about ten minutes to index on an eight-core laptop.
+        // Starfield's masters take about thirteen minutes to index in a Debug build on an eight-core laptop.
         private static readonly TimeSpan IndexingTime = TimeSpan.FromMinutes(30);
 
         private GameRelease? _release;

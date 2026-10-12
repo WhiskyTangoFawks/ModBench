@@ -47,11 +47,8 @@ internal static class NavigatorSql
 
     // Joined rather than a correlated NOT EXISTS, which DuckDB answers by materializing the records
     // beside it, bodies and all: a plugin's bodies outgrow the memory the index is held to.
-    internal static string Unheld(string alias) => $"""
-
-        ANTI JOIN ({Held}) holder
-            ON holder.child = {alias}.form_key AND holder.plugin = {alias}.plugin AND holder.origin = {alias}.origin
-        """;
+    internal static string Unheld(string alias) =>
+        $" ANTI JOIN ({Held}) holding ON holding.child = {alias}.form_key AND holding.plugin = {alias}.plugin AND holding.origin = {alias}.origin";
 
     /// <summary>A FormID is its filename's active load index, then its ID; a light plugin's take the
     /// FE prefix, so follow every full plugin's. Read off registrations, which land before the
