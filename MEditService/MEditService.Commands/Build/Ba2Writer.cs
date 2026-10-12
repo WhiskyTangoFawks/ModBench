@@ -26,7 +26,7 @@ internal static class Ba2Writer
     public static void Write(Stream output, Ba2Variant variant, IReadOnlyList<PackedFile> files)
     {
         var textures = variant.Contents == Ba2Contents.Textures;
-        var codec = CodecOf(variant);
+        var codec = CodecOf(variant) ?? throw new InvalidOperationException($"{variant} is not written.");
         var headerLength = variant.Version switch { 2 => 32, 3 => 36, _ => 24 };
         using var entries = new MemoryStream();
         using var entryWriter = new BinaryWriter(entries, Encoding.UTF8, leaveOpen: true);
@@ -58,20 +58,16 @@ internal static class Ba2Writer
         entries.WriteTo(output);
     }
 
-    private static Codec CodecOf(Ba2Variant variant)
-    {
-        var written = (variant.Version, variant.Contents, variant.Compressed) switch
+    public static bool Writes(Ba2Variant variant) => CodecOf(variant) is not null;
+
+    private static Codec? CodecOf(Ba2Variant variant) =>
+        (variant.Version, variant.Contents, variant.Compressed) switch
         {
             (1 or 2, _, false) => Codec.None,
             (1 or 2, _, true) => Codec.Zlib,
-            (7 or 8, Ba2Contents.General, false) => Codec.None,
-            (7 or 8, Ba2Contents.General, true) => Codec.Zlib,
             (3, Ba2Contents.Textures, true) => Codec.Lz4Block,
-            _ => (Codec?)null,
+            _ => null,
         };
-        return written ?? throw new NotSupportedException(
-            $"A {(variant.Compressed ? "compressed" : "stored")} {variant.Contents} BA2 of version {variant.Version} is not written.");
-    }
 
     private static void WriteGeneral(Stream output, BinaryWriter entry, PackedFile file, Codec codec)
     {

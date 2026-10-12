@@ -25,12 +25,13 @@ internal static class BsaWriter
         public int BlockLength => 1 + Spelling.Length + FileRecordLength * Entries.Count;
     }
 
+    public static bool Writes(BsaVariant variant) =>
+        variant.Version is >= 103 and <= LongRecordVersion
+        && (variant.ArchiveFlags & FolderAndFileNames) == FolderAndFileNames
+        && (variant.ArchiveFlags & FlagsWithoutAWriter) == 0;
+
     public static void Write(Stream output, BsaVariant variant, IReadOnlyList<PackedFile> files)
     {
-        if (variant.Version is < 103 or > LongRecordVersion) throw new NotSupportedException($"BSA version {variant.Version} is not written.");
-        if ((variant.ArchiveFlags & FolderAndFileNames) != FolderAndFileNames || (variant.ArchiveFlags & FlagsWithoutAWriter) != 0)
-            throw new NotSupportedException($"BSA archive flags {variant.ArchiveFlags:X} are not written.");
-
         var folders = Groups(files);
         var fileNames = folders.SelectMany(folder => folder.Entries).Select(file => file.Spelling).ToList();
         var folderRecordLength = variant.Version == LongRecordVersion ? 24 : 16;

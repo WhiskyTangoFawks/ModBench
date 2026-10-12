@@ -27,7 +27,7 @@ public sealed class ArchivePackerTests : IDisposable
 
     public static TheoryData<uint, bool> GeneralBa2s => new()
     {
-        { 1, false }, { 1, true }, { 2, false }, { 2, true }, { 7, false }, { 7, true }, { 8, false }, { 8, true },
+        { 1, false }, { 1, true }, { 2, false }, { 2, true },
     };
 
     public static TheoryData<uint, bool> TextureBa2s => new() { { 1, false }, { 1, true }, { 2, false }, { 2, true }, { 3, true } };
@@ -39,8 +39,8 @@ public sealed class ArchivePackerTests : IDisposable
         { 3, Ba2Contents.General, true },
         { 3, Ba2Contents.General, false },
         { 3, Ba2Contents.Textures, false },
-        { 7, Ba2Contents.Textures, true },
-        { 8, Ba2Contents.Textures, false },
+        { 7, Ba2Contents.General, false },
+        { 8, Ba2Contents.General, true },
     };
 
     public static TheoryData<uint, uint> BsasNotWritten => new()
@@ -322,6 +322,16 @@ public sealed class ArchivePackerTests : IDisposable
         _folders.Unreadable.Add((Mod, Scripts));
 
         var refusal = Refused(Ba2, Meshes, Scripts);
+
+        Assert.Equal(ArchiveRefusal.NotWritten, refusal.Reason);
+    }
+
+    [Fact]
+    public void AStreamThatCannotBeRead_IsNotAVariantRefusal()
+    {
+        _folders.WithStream(Mod, Scripts, () => throw new NotSupportedException("no reads"));
+
+        var refusal = Refused(Ba2, Scripts);
 
         Assert.Equal(ArchiveRefusal.NotWritten, refusal.Reason);
     }

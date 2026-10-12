@@ -8,26 +8,16 @@ public sealed class ArchivePacker(IModFolderRepository repository)
     {
         try
         {
+            if (!(variant switch { Ba2Variant ba2 => Ba2Writer.Writes(ba2), BsaVariant bsa => BsaWriter.Writes(bsa), _ => false }))
+                return new PackRefusal(ArchiveRefusal.VariantNotWritten, $"{variant} is not written.");
+
             var packed = Named(modFolder, files);
             repository.WriteFile(modFolder, archivePath, output =>
             {
-                switch (variant)
-                {
-                    case Ba2Variant ba2:
-                        Ba2Writer.Write(output, ba2, packed);
-                        break;
-                    case BsaVariant bsa:
-                        BsaWriter.Write(output, bsa, packed);
-                        break;
-                    default:
-                        throw new NotSupportedException($"{variant.GetType().Name} is not an archive variant.");
-                }
+                if (variant is Ba2Variant ba2) Ba2Writer.Write(output, ba2, packed);
+                else BsaWriter.Write(output, (BsaVariant)variant, packed);
             });
             return null;
-        }
-        catch (NotSupportedException e)
-        {
-            return new PackRefusal(ArchiveRefusal.VariantNotWritten, e.Message);
         }
         catch (InvalidDataException e)
         {
@@ -37,7 +27,7 @@ public sealed class ArchivePacker(IModFolderRepository repository)
         {
             return new PackRefusal(ArchiveRefusal.FileNotPackable, "A size or offset in the archive would exceed 4 GiB.");
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             return new PackRefusal(ArchiveRefusal.NotWritten, $"The archive was not written: {e.Message}");
         }
