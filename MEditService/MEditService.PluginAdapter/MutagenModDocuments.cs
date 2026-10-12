@@ -95,10 +95,8 @@ internal sealed class MutagenModDocuments(
         }
     }
 
-    // Mutagen's overlay reads a group anew on every walk, and a nested table's walk reads its
-    // container's whole group, so the tables that share a walk take their records from one walk of the
-    // plugin. Mutagen's walk cannot resume once it throws: each table then walks on its own from the
-    // last record it was given, and one whose walk does not pass that record reports so.
+    // Mutagen reads a group anew on every walk, and a nested table's walk reads its container's
+    // group. A walk cannot resume once it throws, so each table then walks alone past its last record.
     private IEnumerable<HeldRecord> SharedRecords(IReadOnlyList<KeyValuePair<string, RecordTableSchema>> tables)
     {
         var types = RecordTypes.For(mod.GameRelease);
