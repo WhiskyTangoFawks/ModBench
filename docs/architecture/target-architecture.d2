@@ -84,7 +84,7 @@ medit_repositories: "MEDIT · Repositories — the only boxes that read or write
   class: band; grid-rows: 1
   sourceadapter: "Source adapter\nowns: a source mod's folder: plugin source, assets,\nbuild configuration and repository\nhides: layout and git" {class: repositories}
   pluginadapter: "Plugin adapter\nowns: the plugin files\nhides: the binary format" {class: repositories}
-  modfolderadapter: "Mod folder adapter\nowns: a mod folder, its manifest and the build folder\nhides: the manifest's text" {class: repositories}
+  modfolderadapter: "Mod folder adapter\nowns: a mod folder, its manifest and the build folder,\nand what it reads: downloaded files and the game folder\nhides: the manifest's text" {class: repositories}
 }
 modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the one reader and writer of the mod manager's files" {
   class: band; grid-rows: 1
@@ -97,12 +97,12 @@ medit_data: "MEDIT · Systems of record" {
   class: band; grid-rows: 1
   source: "Mod source\nthe source folder beside mods/, in git" {class: sor}
   plugin: "Plugin files" {class: sor}
-  modfolder: "Mod folders\nfiles · manifests · the build folder" {class: sor}
+  modfolder: "Mod folders\nfiles · manifests · the build folder ·\ndownloaded files and game files, read" {class: sor}
   tools: "Other tools\nthe mod manager, xEdit, CK, the game — at any time" {class: other}
 }
 modbench_data: "MODBENCH · Systems of record; mEdit is the left column and always running" {
   class: band; grid-rows: 1
-  instance: "Instance\nthe mod manager's files · each profile's plugins.txt ·\nmods · Overwrite · downloaded files ·\nthe manifests · the repository" {class: sor}
+  instance: "Instance\nthe mod manager's files · each profile's plugins.txt ·\nmods · Overwrite · downloaded files ·\nthe manifests · the repository · the source folder" {class: sor}
   gamedata: "Game folder\nthe game's own plugins and files" {class: sor}
   tools: "Other tools\nthe mod manager, the user, the game — at any time" {class: other}
   medit: "mEdit\nthe left column" {class: driving}

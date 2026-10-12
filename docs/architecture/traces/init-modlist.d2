@@ -15,7 +15,7 @@ views: "every view" {class: driving}
 
 driving -> sourcecommands: "init, with the instance value" {class: track}
 sourcecommands."refused when the instance already holds a repository"
-sourcecommands -> git: "init the instance folder" {class: outside}
+sourcecommands -> git: "the instance folder, as a repository" {class: outside}
 sourcecommands -> instanceadapter: "the ignore list" {class: track}
 instanceadapter -> instance: "the ignore list" {class: track}
 sourcecommands -> driving: "landed, or the refusal" {class: track}

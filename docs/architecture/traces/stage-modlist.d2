@@ -4,20 +4,20 @@ shape: sequence_diagram
 driving: "Toolbox · Mods · Source Control" {class: driving}
 sourcecommands: @../target-architecture.modbench_core.sourcecommands
 sourcecommands.label: source commands
+instance: @../target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · downloaded files · the repository"
 client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
 engine: @../target-architecture.medit_core.commands.engine
 engine.label: Build engine
-port: @../target-architecture.medit_kernel.ports
-port.label: Ports
-modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
-modfolderadapter.label: Mod folder adapter
 modfolder: @../target-architecture.medit_data.modfolder
 modfolder.label: "Mod folders\nfiles · manifests · the build folder"
-instance: @../target-architecture.modbench_data.instance
-instance.label: "Instance\nmods · downloaded files · the repository"
+modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
+modfolderadapter.label: Mod folder adapter
+port: @../target-architecture.medit_kernel.ports
+port.label: Ports
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader

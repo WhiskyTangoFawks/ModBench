@@ -41,7 +41,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. Each mod to carry git's own status against its manifest, in git's letters and colours, while the instance has a repository: modified when a file's bytes differ from the manifest, untracked when the mod has no manifest or holds a file no manifest names, deleted when a file the manifest names is gone. Source: ADR-0023; plugins.md, A row, Badge
+1. Each mod to carry git's own status against its manifest, in git's letters and colours, while the instance has a repository: modified when a file's bytes differ from the manifest, untracked when the mod has no manifest or holds a file no manifest names, deleted when a file the manifest names is gone. Source: ADR-0023; VS Code's source control badges; plugins.md, A row, Badge
 2. A mod to read stale when its manifest changed after its folder was last built or discarded, so a checkout or merge outside Modbench shows what it left behind. The Toolbox counts the stale mods. Source: ADR-0023
 3. Status to cost a stat of each file, never a hash: the manifest carries each file's size and time beside its hash, and a file whose two match is trusted, as git's index trusts its own. Source: Existing tools
 

@@ -9,8 +9,6 @@ http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
 commands: @../target-architecture.medit_core.commands.edits
 commands.label: Record edits
-port: @../target-architecture.medit_kernel.ports
-port.label: Ports
 plugin: @../target-architecture.medit_data.plugin
 pluginadapter: @../target-architecture.medit_repositories.pluginadapter
 pluginadapter.label: Plugin adapter
@@ -20,14 +18,13 @@ source: @../target-architecture.medit_data.source
 indexer: @../target-architecture.medit_readmodel.index.indexer
 indexer.label: Indexer
 
-plugins -> client: "decompile plugin: decompile · for track, every plugin of the mod (track-mod)" {class: edit}
+plugins -> client: "decompile plugin: the plugins" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 plugin -> pluginadapter: bytes {class: track}
 pluginadapter -> commands: bytes {class: track}
-commands."the round-trip gate, per plugin; for track, every plugin's before any write"
+commands."the round-trip gate, per plugin"
 commands -> sourceadapter: documents, per plugin {class: track}
-commands -> port: track progress, per plugin {class: push}
 sourceadapter -> source: documents {class: track}
 
 commands -> http: "applied or refusal, per item" {class: edit}
@@ -36,7 +33,7 @@ client -> plugins: the outcome {class: edit}
 indexer."the next snapshot: index-load-order"
 
 
-refused: "refused: nothing of that plugin written; for track, nothing of the mod" {
+refused: "refused: nothing of that plugin written" {
   commands -> http: "the refusal" {class: edit}
   http -> client: the refusal {class: edit}
   client -> plugins: the refusal {class: edit}

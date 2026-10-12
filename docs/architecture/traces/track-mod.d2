@@ -4,6 +4,8 @@ shape: sequence_diagram
 driving: "Toolbox · Mods · Source Control" {class: driving}
 sourcecommands: @../target-architecture.modbench_core.sourcecommands
 sourcecommands.label: source commands
+instance: @../target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · downloaded files · the repository"
 client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
@@ -12,18 +14,16 @@ engine: @../target-architecture.medit_core.commands.engine
 engine.label: Build engine
 edits: @../target-architecture.medit_core.commands.edits
 edits.label: Record edits
-port: @../target-architecture.medit_kernel.ports
-port.label: Ports
-modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
-modfolderadapter.label: Mod folder adapter
 modfolder: @../target-architecture.medit_data.modfolder
 modfolder.label: "Mod folders\nfiles · manifests · the build folder"
+modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
+modfolderadapter.label: Mod folder adapter
+port: @../target-architecture.medit_kernel.ports
+port.label: Ports
 sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
 source: @../target-architecture.medit_data.source
 source.label: Mod source
-instance: @../target-architecture.modbench_data.instance
-instance.label: "Instance\nmods · downloaded files · the repository"
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
