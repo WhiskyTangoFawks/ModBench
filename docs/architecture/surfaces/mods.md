@@ -160,8 +160,23 @@ As a user, I want:
 
 1. A prompt filled with the current name. Esc, an empty name or the same name renames nothing. Source: MO2
 2. A name another mod has, compared without case, refused in the prompt, so Windows and Linux agree. A name with a path separator refused. Source: MO2 compares without case; Refuse, do not repair
-3. The mod to keep its place in mod order, its enabled state and its separator in every profile. Its folder keeps its repository, its plugin source and its `meta.ini`, and its plugins keep their `plugins.txt` lines. Source: MO2
+3. The mod to keep its place in mod order, its enabled state and its separator in every profile. Its folder keeps its `meta.ini` and its manifest, and its plugins keep their `plugins.txt` lines. For a tracked mod, rename changes the output folder in the build configuration and renames the folder; the repository stays where it is. Source: MO2; ADR-0007
 4. The folder renamed first. A rename that renamed the folder and then failed on a profile's mod order to say so, naming the profile. That profile loses the mod's place, and `mod sync` places it as a new folder when the profile is active. This is an exception to A failed gesture writes nothing.
+
+### Build
+
+As a user, I want:
+
+1. Build to write the mod folder from the source, without asking: the base is what the installation files provide, the source's assets override it, each plugin compiles from its plugin source, and the manifest is written last. A tracked plugin's source is the truth, and build makes the folder from it. Source: catalog `build`; ADR-0006; ADR-0007
+2. The build configuration in the source to name the output folder and, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy. Source: ADR-0007
+3. A file in the folder the build did not make to be removed and named, so nothing a tool wrote there is lost in silence. Source: Never silently wrong
+4. A build whose configuration names an output folder that is not this mod's folder refused, naming both, so a folder renamed outside Modbench is never overwritten. Source: ADR-0003
+5. Build to save the mod's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugins are built from what I see. A file VS Code does not save refuses build, naming it. Source: VS Code's save before run; ADR-0001; Never silently wrong
+6. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
+7. From the palette with no mod, a pick of the tracked mods. Source: No dead entries
+8. A plugin whose header flag limits its FormIDs, light or medium, refused when its records fall outside that range, naming the records, what limits the plugin, its flag, its `.esl` extension or both, and what lifts that limit: clear the flag, rename the plugin off `.esl`, or both. Changing the records' FormIDs works in every case. The rest of the mod builds, and the refused plugin is left as it was.
+9. A plugin whose plugin source is unreadable refused the same way, naming it and pointing at decompile. Source: Never silently wrong
+10. An interrupted build to leave each file old or new, and none to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Building again fixes it. This is an exception to A failed gesture writes nothing.
 
 ### Delete separator
 

@@ -544,7 +544,7 @@ describe('package.json command titles and categories', () => {
     expect(SPECIFIED_AHEAD_OF_CODE.filter((id) => declared.has(id))).toEqual([]);
   });
 
-  const SPECIFIED_AHEAD_OF_CODE = ['modbench.modlist.track', 'modbench.modlist.update', 'modbench.modlist.restore'];
+  const SPECIFIED_AHEAD_OF_CODE = ['modbench.modlist.track', 'modbench.modlist.update', 'modbench.modlist.restore', 'modbench.mod.build'];
 
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
@@ -1175,6 +1175,7 @@ const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'mod
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
 const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_TO_THE_SIDE, OPEN_REFERENCE];
+const RETIRED_AHEAD_OF_CODE = ['modbench.plugin.compile'];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);
@@ -1186,7 +1187,7 @@ describe('package.json registers every command under its catalog Command ID', ()
   });
 
   it('registers no ID that is not in the catalog', () => {
-    const offenders = registered.filter((id) => !catalog.has(id) && !ENTRY_POINTS.includes(id));
+    const offenders = registered.filter((id) => !catalog.has(id) && !ENTRY_POINTS.includes(id) && !RETIRED_AHEAD_OF_CODE.includes(id));
     expect(
       offenders,
       offenders.map((id) => `${id} is not a Command ID in docs/architecture/commands.md. The catalog is the `

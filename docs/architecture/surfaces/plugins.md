@@ -126,7 +126,7 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · rename… (tracked) · create record… · track (in a mod with no repository) · decompile (in a tracked mod) · compile (tracked) · copy value |
+| Plugin menu | reveal · enable or disable · rename… (tracked) · create record… · track (in a mod with no repository) · decompile (in a tracked mod) · build (in a tracked mod) · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open to the side · referenced by · create record… (on a container record) · copy… · copy value · delete |
@@ -170,26 +170,14 @@ As a user, I want:
 As a user, I want:
 
 1. No prompt. While it runs, the view's message line names the mod and the phase. Source: catalog `track`
-2. The repository to track `plugin-source/` and `.gitignore`, and nothing else. Source: ADR-0006
-3. One commit, `Track <mod>`, holding the source of every plugin the mod provides.
+2. The repository to track `plugin-source/`, the mod's assets, the build configuration and `.gitignore`, and nothing else. The assets are the files no installation file yields. Source: ADR-0007
+3. One commit, `Track <mod>`, holding the source of every plugin the mod provides, the assets and the build configuration.
 4. Each file's line endings kept as written.
 5. A track that refuses any plugin to write nothing and leave no repository, naming each refused plugin and why.
 
 ### Decompile
 
 As a user, I want one confirmation for the selection, naming the plugins and saying that decompile replaces their source in the working tree from their bytes. Source: catalog `decompile`; Confirm what destroys
-
-### Compile
-
-As a user, I want:
-
-1. `compile` to build from the working tree, without asking: a tracked plugin's plugin source is the truth, and compile builds the plugin from it.
-2. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
-3. From the palette with no plugin, a pick of the tracked plugins. Source: No dead entries
-4. A plugin whose header flag limits its FormIDs, light or medium, refused when its records fall outside that range, naming the records, what limits the plugin, its flag, its `.esl` extension or both, and what lifts that limit: clear the flag, rename the plugin off `.esl`, or both. Changing the records' FormIDs works in every case.
-5. An interrupted compile to leave the old binary or the new one, and neither to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Compiling again fixes it. This is an exception to A failed gesture writes nothing.
-6. A plugin whose plugin source is unreadable refused, naming it and pointing at decompile. Source: Never silently wrong
-7. `compile` to save the plugin's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugin is built from what I see. A file VS Code does not save refuses compile, naming it. Source: VS Code's save before run; ADR-0001; Never silently wrong
 
 ### Rename plugin
 

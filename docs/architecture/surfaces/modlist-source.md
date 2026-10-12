@@ -9,7 +9,7 @@ Each story cites its source. A story with no source is owned here.
 As a user, I want:
 
 1. The instance folder to be the repository, so a change I make in the mod manager or in Modbench is a working-tree change in Source Control. Source: ADR-0022
-2. The ignore list to be a whitelist: every manifest, each mod's `meta.ini`, each profile's mod order, plugin order and INIs, and the mod manager's configuration. Everything else is ignored, the build folder included. Source: ADR-0022
+2. The ignore list to be a whitelist: every manifest, each mod's `meta.ini`, each profile's mod order, plugin order and INIs, and the mod manager's configuration. Everything else is ignored, the build folder and the source folder included.
 3. Every mod and every profile in the commit, enabled or not. A disabled mod is still mine. Source: wabbajack.md, divergence 1
 4. The mod manager's configuration committed with the paths it holds. A clone on another machine edits them. Source: wabbajack.md, divergence 9
 5. Commit, diff, history, branches and merge to be VS Code's. Modbench adds no gesture for them. Source: Existing tools
@@ -25,14 +25,14 @@ A mod's installation files are the downloaded files the mod manager records the 
 5. A file whose bytes differ from an installation file's copy to be a delta from that copy, and a plugin cleaned from the game's own to be a delta from the game file. Source: Wabbajack's patched files
 6. A delta larger than a share of its file, which I set, to count as no source, because a delta that size is the file. Source: ADR-0022
 7. An excluded file to restore excluded: its line carries its full name, `.mohidden` included. Source: MO2
-8. A tracked mod's plugin to be a file like any other here, and the manifest to know nothing of plugin source. Source: ADR-0022
+8. A tracked mod's manifest to be what its last build wrote. With a remote, each file the source provides names the remote and the commit; with none, the manifest reads as an untracked mod's, with deltas. Source: ADR-0022
 9. The manifest to hold no path from this machine, so a clone restores anywhere. Source: Wabbajack
 
 ## Deltas
 
 As a user, I want:
 
-1. Update to write each delta as a build output, in a build folder at the instance root that git ignores, never in the downloads folder. Source: ADR-0022
+1. Update to write each delta, for an untracked mod or a tracked mod with no remote, as a build output in a build folder at the instance root that git ignores, never in the downloads folder.
 2. A delta's name to carry the file it makes and the hashes of both ends, so a file edited again gets a new delta, every older commit keeps a valid one, and I can tell what a delta is from its name. Source: ADR-0022
 3. To publish deltas as I choose, one by one or packed, and nothing of Modbench to pack or upload them. Source: ADR-0022; wabbajack.md, divergence 5
 4. Restore to find a delta by its name: in the build folder, loose in the downloads folder, or inside any downloaded file. The manifest says nothing of where I put it, so repacking changes no manifest.
@@ -41,7 +41,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. No prompt. Track creates the repository with its ignore list, runs update, and makes one commit, `Track modlist`. Source: catalog `track`; plugins.md, Track
+1. No prompt. Track creates the repository with its ignore list, writes every manifest as update writes them, and makes one commit, `Track modlist`. Source: catalog `track`; plugins.md, Track
 2. Track refused when the instance folder already holds a repository, naming it. Source: Refuse, do not repair
 3. A mod update refuses to be named, and the commit to hold every other manifest. Source: Update, story 3
 
@@ -54,17 +54,20 @@ As a user, I want:
 3. A mod refused when one of its installation files is not in the downloads folder, naming the mod and the file, and its manifest left as it was. The other mods land. Source: wabbajack.md, divergence 6; A selection is one gesture, and each item lands on its own
 4. A file with no source written as such and reported, so the gap is in the diff and the rest of the modlist commits. Source: wabbajack.md, divergence 4
 5. It commits nothing. Source: catalog `update`
+6. A tracked mod's manifest left to its build, and the mod reported when its folder differs from what the build wrote. Source: ADR-0022
 
 ## Restore
 
 As a user, I want:
 
-1. Restore to make each mod's folder match its manifest: every file the manifest names, with the bytes it fixes. A file the manifest does not name is removed. With no Argument, every mod, and a mod folder with no manifest goes to the trash, as uninstall sends it. With mods as its Argument, those mods only. Source: ADR-0022; wabbajack.md, divergence 8
+1. Restore to make each mod's folder match its manifest: every file the manifest names, with the bytes it fixes. A file the manifest does not name is removed. With no Argument, every mod, and a mod folder with no manifest goes to the trash, as uninstall sends it. With mods as its Argument, those mods only. A tracked mod with a remote is built from its source at the commit the manifest names, and the source is cloned when it is absent. Source: ADR-0022; wabbajack.md, divergences 8 and 11
 2. One confirmation, saying that restore replaces the mods from their manifests and that a change not updated and committed is lost. It names the mods when I selected some, and each mod folder the manifest does not name, since those go to the trash. It says when the manifests have uncommitted changes. Source: Confirm what destroys
 3. A mod skipped, and named with what it lacks, when an installation file, a delta or a game file its manifest names is missing or has other bytes, or when a file has no source. Every other mod restores. Restore downloads nothing. Source: wabbajack.md, divergence 7; A selection is one gesture, and each item lands on its own
 4. Every file restore writes to have the bytes the manifest fixes, or restore says which did not. Source: Never silently wrong; Wabbajack checks every file it writes
 5. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. This is an exception to A failed gesture writes nothing. Source: mods.md, What install does, story 5
 6. The views to show the result as they show any change on disk. Source: common, A view, story 2
+7. A tracked mod whose source is present at another commit skipped and named with the commit, because restore never moves my repository. Source: ADR-0022; ADR-0003
+8. A file the build makes, a compiled plugin or a packed archive, restored to what the build makes, which can differ in bytes. Restore checks the bytes of what comes from downloaded files. Source: ADR-0006
 
 ## Reporting
 
