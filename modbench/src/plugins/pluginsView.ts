@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { MEditClient, PluginAddress } from '../client';
 import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
 import type { PluginsCommands } from '../pluginsCommands/plugins';
+import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
@@ -27,7 +28,7 @@ import { registerRenamePluginCommand, type RenamePluginDeps } from './pluginRena
 import { registerRecordCreateCommand } from './createRecordCommand';
 import { createdRecordSelection } from './createdRecordSelection';
 import {
-  CompileProblems, registerCompileCommand, registerDecompileCommand, registerTrackCommand, type CompileDeps, type DecompileDeps,
+  BuildProblems, registerBuildCommand, registerDecompileCommand, registerTrackCommand, type DecompileDeps,
   type TrackDeps,
 } from './pluginRowCommands';
 import { registerPluginMoveCommand } from './pluginMoveCommand';
@@ -46,11 +47,12 @@ export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, line, enabled and winning for every plugin. */
   instance: PluginsInstance & Pick<Instance, 'quiet'>;
   commands: PluginsCommands;
+  sourceCommands: SourceCommands;
   /** The record browser that supplies a plugin row's children. */
   recordBrowser: RecordBrowser;
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the index
    *  status. */
-  client: PluginFactsClient & RenamePluginDeps['client'] & TrackDeps['client'] & DecompileDeps['client'] & CompileDeps['client']
+  client: PluginFactsClient & RenamePluginDeps['client'] & TrackDeps['client'] & DecompileDeps['client']
     & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onLoadOrderStatus' | 'onReconnected' | 'onStatusChanged' | 'setFilter' | 'clearFilter' | 'createPlugin'>;
   statusBar: StatusBar;
   /** Registers the tracked mods' repositories: a reconcile reached Ready, or a track landed. */
@@ -58,9 +60,9 @@ export interface PluginsViewDeps {
   ask: AskQuestion;
   recordWrite: RecordWrite;
   sourceEditing: SourceEditing;
-  /** Saves a plugin's unsaved plugin source; answers the paths VS Code left unsaved, or undefined when the plugin has no folder. */
-  saveUnsavedPluginSource: (plugin: PluginAddress) => Promise<string[] | undefined>;
-  /** The rows of the focused Mods or Plugins view, which the palette's track acts on. */
+  /** Saves a mod's unsaved plugin source; answers the paths VS Code left unsaved, or undefined when the mod has no source folder. */
+  saveUnsavedPluginSource: (mod: string) => Promise<string[] | undefined>;
+  /** The rows of the focused Mods or Plugins view, which the palette's track and build act on. */
   trackSelection: () => readonly unknown[];
   /** The Mods view's id, whose bar a track from a Mods row runs under. */
   modsView: string;
@@ -117,7 +119,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     showCollapseAll: true,
   });
   const selected = survivingSelection(view, (row) => tree.shownRow(row));
-  const showKeyContext = () => { publishKeyContext(selected.rows(), tree); };
+  const showKeyContext = () => { publishKeyContext(selected.rows(), tree, instance); };
   showKeyContext();
   const keyContextSubscriptions = [view.onDidChangeSelection(showKeyContext), tree.onDidChangeTreeData(showKeyContext)];
   const nameFilter = registerPluginsNameFilter(view, tree, joinSyncMessages(pluginSync, loadOrderPut, recordBrowser.beneathFailure));
@@ -128,8 +130,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     client, facts: tree.facts, recordBrowser, progress, statusBar, showRecordFilter, registerRepositories: registerInBackground, log,
     reporter: reporterFor('loadOrder'),
   });
-  const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
-  const compileProblems = new CompileProblems(compileDiagnostics);
+  const buildProblems = new BuildProblems(vscode.languages.createDiagnosticCollection('modbench-build'));
   const unsubscribe = subscribeTreeToNotifications(client, recordBrowser, () => { void tree.facts.refresh(); });
   // Disposed in order: what reads the tree and the view goes before them.
   const recordDecorations = new RecordDecorationProvider(recordBrowser, () => tree.lockedRowUris());
@@ -143,7 +144,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, lens),
     ...registerPluginEnableCommands(
       commands, instance, selected.rows, reporterFor('pluginListTree.enableDisable')),
-    ...registerPluginGestures(deps, { tree, view, progress, selection: selected.rows, compileProblems }),
+    ...registerPluginGestures(deps, { tree, view, progress, selection: selected.rows, buildProblems }),
     registerPluginMoveCommand(commands, instance, { selection: selected.rows, movePlaces: (names) => tree.movePlaces(names) },
       reporterFor('pluginListTree.move')),
     ...registerFilterCommands({
@@ -159,7 +160,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     vscode.window.registerFileDecorationProvider(new ImplicitMasterDecorationProvider(() => tree.lockedRowUris())),
     nameFilter,
     ...keyContextSubscriptions,
-    selected, view, tree, changedOutsideDiagnostics, failedToReadDiagnostics, loadDiagnostics, compileDiagnostics,
+    selected, view, tree, changedOutsideDiagnostics, failedToReadDiagnostics, loadDiagnostics, buildProblems,
   );
   return {
     view, nameFilter,
@@ -171,18 +172,18 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   };
 }
 
-function publishKeyContext(selection: readonly PluginsTreeNode[], tree: PluginsTreeProvider): void {
+function publishKeyContext(selection: readonly PluginsTreeNode[], tree: PluginsTreeProvider, instance: Pick<Instance, 'value'>): void {
   for (const [name, value] of Object.entries(pluginsKeyContext(selection, (row) => tree.isEnabled(row)))) {
     void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
   }
-  void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', tree.facts.rows.anyCompilable());
+  void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.trackedMods.size > 0);
 }
 
 function registerPluginGestures(
-  { instance, commands, client, ask, registerRepositories, pluginSync, reporterFor, recordWrite, sourceEditing, saveUnsavedPluginSource, trackSelection, modsView }: PluginsViewDeps,
-  { tree, view, progress, selection, compileProblems }: {
+  { instance, commands, sourceCommands, client, ask, registerRepositories, pluginSync, reporterFor, recordWrite, sourceEditing, saveUnsavedPluginSource, trackSelection, modsView }: PluginsViewDeps,
+  { tree, view, progress, selection, buildProblems }: {
     tree: PluginsTreeProvider; view: vscode.TreeView<PluginsTreeNode>; progress: PluginsViewProgress;
-    selection: () => readonly PluginsTreeNode[]; compileProblems: CompileProblems;
+    selection: () => readonly PluginsTreeNode[]; buildProblems: BuildProblems;
   },
 ): vscode.Disposable[] {
   return [
@@ -190,11 +191,12 @@ function registerPluginGestures(
       progress, instance, client, reporter: reporterFor('mod.track'), onTracked: registerRepositories,
       modDirs: () => instance.value.paths.modDirs, modsView,
     }, trackSelection),
-    registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
-    registerCompileCommand({
-      client, instance, reporter: reporterFor('plugin.compile'), problems: compileProblems,
+    registerBuildCommand({
+      commands: sourceCommands, instance, reporter: reporterFor('mod.build'), problems: buildProblems,
       sourceFiles: (origin) => sourceFiles(instance.value, origin), saveUnsaved: saveUnsavedPluginSource,
-    }, selection),
+      modDirs: () => instance.value.paths.modDirs, sourceMods: () => instance.value.trackedMods, modsView,
+    }, trackSelection),
+    registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
     registerRecordCreateCommand({
       client, reporter: reporterFor('record.create'), write: recordWrite, source: sourceEditing,
       createdRecords: createdRecordSelection({ client, rowOf: (place, formKey) => tree.recordRow(place, formKey), view }),

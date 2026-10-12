@@ -502,17 +502,17 @@ describe('RecordPanel — column header native right-click menu', () => {
     expect(JSON.parse(headerContext)).toEqual({
       webviewSection: 'recordHeader',
       argument: { kind: 'record', plugin: { name: 'MyMod.esp', origin: 'ModA' }, formKey: '000001:Fallout4.esm' },
-      compilable: false, editable: false, inMod: 'none', preventDefaultContextMenuItems: true,
+      editable: false, inMod: 'none', preventDefaultContextMenuItems: true,
     });
   });
 
   it.each([
-    ['a tracked, editable', { isTracked: true, isImmutable: false }, true, true],
-    ['an untracked', { isTracked: false, isImmutable: false }, false, false],
-    ['a tracked, plugin-source-unreadable', { isTracked: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }, true, false],
-    ['a read-only', { isTracked: true, isImmutable: true }, false, false],
-    ['an untracked read-only', { isTracked: false, isImmutable: true }, false, false],
-  ])('the header of %s plugin says whether compile and delete apply to it, compile on a tracked column, delete only where the plugin source reads too', async (_what, facts, compilable, editable) => {
+    ['a tracked, editable', { isTracked: true, isImmutable: false }, true],
+    ['an untracked', { isTracked: false, isImmutable: false }, false],
+    ['a tracked, plugin-source-unreadable', { isTracked: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }, false],
+    ['a read-only', { isTracked: true, isImmutable: true }, false],
+    ['an untracked read-only', { isTracked: false, isImmutable: true }, false],
+  ])('the header of %s plugin says whether delete applies to it, only where the plugin is tracked and its plugin source reads', async (_what, facts, editable) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const compare = compareResultFixture({
       conflictAll: 'OnlyOne',
@@ -531,7 +531,7 @@ describe('RecordPanel — column header native right-click menu', () => {
 
     await waitFor(() => {
       const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
-      expect(parseJsonRecord(headerContext)).toMatchObject({ compilable, editable });
+      expect(parseJsonRecord(headerContext)).toMatchObject({ editable });
     });
   });
 
@@ -589,7 +589,7 @@ describe('RecordPanel — column header native right-click menu', () => {
     expect(client.load).toHaveBeenCalledTimes(1);
   });
 
-  it('offers no compile on a column whose tracked state is unknown, when the page is given no plugin facts a column is neither tracked nor untracked', async () => {
+  it('offers no delete on a column whose tracked state is unknown, when the page is given no plugin facts a column is neither tracked nor untracked', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const compare = compareResultFixture({
       conflictAll: 'OnlyOne',
@@ -611,7 +611,7 @@ describe('RecordPanel — column header native right-click menu', () => {
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
     const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
-    expect(parseJsonRecord(headerContext)).toMatchObject({ compilable: false, editable: false, inMod: 'none' });
+    expect(parseJsonRecord(headerContext)).toMatchObject({ editable: false, inMod: 'none' });
   });
 });
 

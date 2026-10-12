@@ -127,6 +127,7 @@ import type { InstanceValue } from '../../instanceLoader/instance';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { pluginsCommandsOver } from '../../test/mo2/adapterOver';
+import { sourceCommands } from '../../sourceCommands/sourceCommands';
 import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { settled } from '../../test/settled';
@@ -178,7 +179,7 @@ function pluginsView(
   const recordBrowser = new RecordBrowser(client);
   const reporters = new Map<string, RecordingReporter>();
   const plugins = createPluginsView({
-    instance, commands: pluginsCommandsOver('/instance'), recordBrowser, client,
+    instance, commands: pluginsCommandsOver('/instance'), sourceCommands: sourceCommands({ client }), recordBrowser, client,
     pluginSync,
     channel: silentChannel,
     dataFolderFile: () => undefined, log: () => undefined,
@@ -212,7 +213,7 @@ beforeEach(() => {
 
 describe('the Plugins view registers its own gestures', () => {
   it.each([
-    'modbench.plugin.move', 'modbench.mod.track', 'modbench.plugin.decompile', 'modbench.plugin.compile', 'modbench.record.create',
+    'modbench.plugin.move', 'modbench.mod.track', 'modbench.plugin.decompile', 'modbench.mod.build', 'modbench.record.create',
     'modbench.plugin.rename', 'modbench.plugin.create', 'modbench.plugin.sync',
   ])('registers %s with the view', (command) => {
     pluginsView();
@@ -230,7 +231,6 @@ describe('the Plugins view registers its own gestures', () => {
   });
 
   it.each([
-    ['modbench.plugin.compile', 'plugin.compile', 'Could not list the plugins to compile.'],
     ['modbench.plugin.create', 'newPlugin', 'Could not look up which extensions a plugin may take.'],
   ])('runs %s under its own reporter', async (command, tag, message) => {
     const { reporters } = pluginsView();
@@ -283,6 +283,7 @@ describe('the Plugins view says what it knows of a plugin\'s tracking and editab
       });
       const onInstance = () => plugins.onInstance({
         instance: new FakeInstance(value), instanceRoot: '/instance', commands: pluginsCommandsOver('/instance'),
+        sourceCommands: sourceCommands({ client: new InMemoryMEditClient() }),
         pluginSync: syncRefusing().pluginSync, saveUnsavedPluginSource: () => Promise.resolve([]), trackSelection: () => [],
         modsView: 'modbench.modList', dataFolderFile: () => undefined,
       });

@@ -31,8 +31,10 @@ export type CopyText = Schemas['CopyText'];
 export type TrackStatus = Schemas['TrackProgress'];
 export type ChangedPlugin = Schemas['ChangedPlugin'];
 
-/** A plugin compile wrote — `POST /plugins/compile` — with the diagnostics the reference check
- *  left. */
+/** The `build-progress` notification's payload, subscribed alongside the in-flight `POST /build`. */
+export type BuildStatus = Schemas['BuildProgress'];
+
+/** A plugin a build compiled, with the diagnostics the reference check left. */
 export type CompiledPlugin = Schemas['CompiledPlugin'];
 export type CompileDiagnostic = Schemas['CompileDiagnostic'];
 

@@ -2,7 +2,7 @@ import type { components } from '../wire/generated/api';
 import {
   type CompiledPlugin, type CompileDiagnostic,
   type ChangedPlugin,
-  type TrackStatus, type PluginMetadata, type PluginDiagnosisReport,
+  type TrackStatus, type BuildStatus, type PluginMetadata, type PluginDiagnosisReport,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellChildRecords, type CellSummary,
   type ChildRecordSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
@@ -42,7 +42,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'external-change',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'build-progress', 'external-change',
   'plugin-source-unreadable', 'record-filter-cleared',
 ] as const;
 
@@ -55,6 +55,7 @@ export type NotificationKind = typeof NOTIFICATION_KINDS[number];
 export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
   'track-progress': TrackStatus;
+  'build-progress': BuildStatus;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
   'plugin-source-unreadable': { plugins: (PluginAddress & UnreadableSource)[] };
   'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
@@ -158,10 +159,17 @@ export interface TrackOutcome {
   refused: readonly ItemRefusal<string>[];
 }
 
-/** Compile's answer: each plugin compiled, with its diagnostics, or refused with its reason. */
-export interface CompileOutcome {
-  landed: readonly CompiledPlugin[];
+interface BuiltMod {
+  mod: string;
+  compiled: readonly CompiledPlugin[];
   refused: readonly ItemRefusal<PluginAddress>[];
+}
+
+/** Build's answer: each mod built, with the plugins it compiled and the plugins it refused, or
+ *  refused as a mod with its reason. */
+export interface BuildOutcome {
+  landed: readonly BuiltMod[];
+  refused: readonly ItemRefusal<string>[];
 }
 
 export type GridPosition = components['schemas']['GridPosition'];
@@ -215,7 +223,7 @@ export interface MEditClient {
   decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
-  compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused>;
+  build(mods: readonly string[], options?: { onProgress?: (status: BuildStatus) => void }): Promise<BuildOutcome | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).
@@ -318,7 +326,7 @@ export interface MEditClient {
 }
 
 export type {
-  TrackStatus, PluginMetadata, PluginDiagnosisReport,
+  TrackStatus, BuildStatus, PluginMetadata, PluginDiagnosisReport,
   RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary, CompileDiagnostic,
   LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsResponse,
