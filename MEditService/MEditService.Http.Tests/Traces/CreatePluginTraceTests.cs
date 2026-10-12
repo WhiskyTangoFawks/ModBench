@@ -23,6 +23,22 @@ public sealed class CreatePluginTraceTests : HostedTests
     private static Task<HttpResponseMessage> Create(HttpClient client, string name, string folder) =>
         client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name, folder });
 
+    [Fact]
+    public async Task CreatingAPluginInASourceMod_LandsItsSourceInTheSourceFolderTheRequestNames()
+    {
+        var fx = Owned(await Loaded());
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        var folder = OtherTool.ModFolderOf(fx, Origin);
+        var sourceFolder = Directory.CreateDirectory(Path.Combine(fx.Root, "source", Origin)).FullName;
+        foreach (var entry in new[] { ".git", ".gitignore", "plugin-source" })
+            Directory.Move(Path.Combine(folder, entry), Path.Combine(sourceFolder, entry));
+
+        var created = await Client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name = "New.esp", folder, sourceFolder });
+
+        created.EnsureSuccessStatusCode();
+        Assert.True(Directory.Exists(PluginSourceRoot.In(sourceFolder, "New.esp")));
+    }
+
     private async Task<string> HeldAsTheServiceReportsIt() =>
         await Client.GetStringAsync(new Uri("/load-order/status", UriKind.Relative));
 
