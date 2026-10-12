@@ -2,9 +2,8 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to stage: its name, its folder, the installation files the mod manager records it as
-/// installed from, in the order it records them, and the files of the folder the repository commits itself,
-/// by path, which the manifest does not name.</summary>
+/// <summary>A mod to stage, with its installation files in the mod manager's order and the paths of its files
+/// the repository commits itself, which the manifest does not name.</summary>
 public sealed record ModToStage(
     string Name, string Folder, IReadOnlyList<InstallationFileToStage> InstallationFiles, IReadOnlyList<string> CommittedFiles);
 
