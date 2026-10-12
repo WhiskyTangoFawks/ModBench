@@ -119,14 +119,14 @@ describe('the agent server, given an instance value', () => {
     const client = await clientOf(new FakeInstance(VALUE));
     const problem = (severity: number, line: number, message: string) => ({ severity, range: { start: { line } }, message });
     diagnosticsHeld.held = [
-      [{ scheme: 'file', fsPath: '/i/mods/Rocks/plugin-source/Rocks.esp.json' }, [problem(0, 4, 'bad reference'), problem(1, 9, 'odd value')]],
+      [{ scheme: 'file', fsPath: '/i/source/Rocks/plugin-source/Rocks.esp.json' }, [problem(0, 4, 'bad reference'), problem(1, 9, 'odd value')]],
       [{ scheme: 'file', fsPath: '/i/mods/Rocks/readme.json' }, [problem(0, 0, 'not source')]],
-      [{ scheme: 'untitled', fsPath: '/i/mods/Rocks/plugin-source/Other.esp.json' }, [problem(0, 0, 'not a file')]],
+      [{ scheme: 'untitled', fsPath: '/i/source/Rocks/plugin-source/Other.esp.json' }, [problem(0, 0, 'not a file')]],
     ];
 
     expect(await read(client, 'list_source_problems')).toEqual([
-      { file: '/i/mods/Rocks/plugin-source/Rocks.esp.json', severity: 'Error', line: 5, message: 'bad reference' },
-      { file: '/i/mods/Rocks/plugin-source/Rocks.esp.json', severity: 'Warning', line: 10, message: 'odd value' },
+      { file: '/i/source/Rocks/plugin-source/Rocks.esp.json', severity: 'Error', line: 5, message: 'bad reference' },
+      { file: '/i/source/Rocks/plugin-source/Rocks.esp.json', severity: 'Warning', line: 10, message: 'odd value' },
     ]);
   });
 

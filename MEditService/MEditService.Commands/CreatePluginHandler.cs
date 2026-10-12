@@ -21,26 +21,25 @@ public sealed class CreatePluginHandler
     internal CreatePluginHandler(IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, ILogger<CreatePluginHandler> logger) =>
         (_adapter, _holder, _source, _decompiler) = (adapter, holder, source, new PluginDecompiler(logger, adapter, source));
 
-    private async Task<PluginCreateResult> LandSourceIfTracked(LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string written)
+    private async Task<PluginCreateResult> LandSourceIfTracked(
+        LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written)
     {
+        if (sourceFolder is null) return new PluginCreateResult();
+
+        var mod = new PluginProvider.FromMod(address.Origin, folder, sourceFolder);
         var modKey = ModKey.FromFileName(address.Name);
-        var path = _adapter.PathOfEmpty(modKey, folder);
-        var provider = string.Equals(address.Origin, PluginOrigin.Overwrite, StringComparison.OrdinalIgnoreCase)
-            ? PluginProvider.NoMod
-            : loadOrder.Plugins.FirstOrDefault(p => string.Equals(p.Origin, address.Origin, StringComparison.OrdinalIgnoreCase))?.Provider
-                ?? new PluginProvider.FromMod(address.Origin, folder);
-        var plugin = new RegisteredPlugin(address.Name, address.Origin, path, provider, Line: null);
+        var plugin = new RegisteredPlugin(address.Name, address.Origin, _adapter.PathOfEmpty(modKey, folder), mod, Line: null);
         if (!_source.IsTracked(plugin)) return new PluginCreateResult();
 
         var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, folder, onParsed: () => { }, default);
         var failure = decompiled.Source is { } source
-            ? _source.OverFolder((PluginProvider.FromMod)provider, loadOrder.GameRelease)
+            ? _source.OverFolder(mod, loadOrder.GameRelease)
                 .ReplaceSourceFrom(address, source.Files, source.BinarySha256)?.Reason
             : decompiled.Message;
         if (failure is null) return new PluginCreateResult();
 
         return new PluginCreateResult(PluginCreateRefusal.WriteFailed,
-            $"Could not write {address.Name}'s source into {folder}: {failure} {TakeBack(modKey, address.Name, folder, written)}");
+            $"Could not write {address.Name}'s source into {mod.SourceFolder}: {failure} {TakeBack(modKey, address.Name, folder, written)}");
     }
 
     private string TakeBack(ModKey modKey, string name, string folder, string written)
@@ -56,8 +55,8 @@ public sealed class CreatePluginHandler
     }
 
     /// <summary>Refuses with <see cref="PluginCreateRefusal.NoLoadOrder"/>, writing nothing, when no load order
-    /// is held, since the release comes from it.</summary>
-    public async Task<PluginCreateResult> CreatePlugin(PluginAddress plugin, string folder)
+    /// is held, since the release comes from it. <paramref name="sourceFolder"/> is the mod's, null for Overwrite.</summary>
+    public async Task<PluginCreateResult> CreatePlugin(PluginAddress plugin, string folder, string? sourceFolder)
     {
         if (_holder.Held is not { Snapshot: var loadOrder })
             return new PluginCreateResult(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
@@ -79,7 +78,7 @@ public sealed class CreatePluginHandler
 
         return created.Outcome switch
         {
-            EmptyPluginWrite.Written => await LandSourceIfTracked(loadOrder, plugin, folder, created.Written),
+            EmptyPluginWrite.Written => await LandSourceIfTracked(loadOrder, plugin, folder, sourceFolder, created.Written),
             EmptyPluginWrite.FolderGone => new PluginCreateResult(PluginCreateRefusal.FolderGone,
                 $"The folder {folder} has gone, so {plugin.Name} was not created."),
             EmptyPluginWrite.FileExists => new PluginCreateResult(PluginCreateRefusal.FileExists,

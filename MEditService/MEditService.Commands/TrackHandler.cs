@@ -64,20 +64,20 @@ public sealed class TrackHandler
                 $"'{modName}' provides no plugin in the load order, so there is nothing to track.");
         }
 
-        var modFolder = ((PluginProvider.FromMod)plugins[0].Provider).Folder;
+        var mod = (PluginProvider.FromMod)plugins[0].Provider;
 
         // Track takes a mod with no repository (ADR-0007).
-        if (_source.IsTracked(modFolder))
+        if (_source.IsTracked(mod.SourceFolder))
         {
             return ItemAnswer<TrackRefusal, TrackedMod>.Refused(TrackRefusal.AlreadyTracked,
-                $"'{modFolder}' is already tracked. To put a plugin's source into its working tree, decompile it.");
+                $"'{mod.SourceFolder}' is already tracked. To put a plugin's source into its working tree, decompile it.");
         }
 
         // A .git with no main that Track did not mark is someone else's, never written to (ADR-0003).
-        if (_source.HoldsAnotherRepository(modFolder))
+        if (_source.HoldsAnotherRepository(mod.SourceFolder))
         {
             return ItemAnswer<TrackRefusal, TrackedMod>.Refused(TrackRefusal.AlreadyTracked,
-                $"'{modFolder}' already holds a repository Track did not make, with no main branch.");
+                $"'{mod.SourceFolder}' already holds a repository Track did not make, with no main branch.");
         }
 
         var verified = new List<(RegisteredPlugin Plugin, PluginSource Source)>();
@@ -87,7 +87,7 @@ public sealed class TrackHandler
             cancel.ThrowIfCancellationRequested();
             SetProgress(modName, TrackPhase.Parsing, done, total);
             var decompiled = await _decompiler.DecompileAsync(
-                loadOrder, plugin, modFolder, onParsed: () => SetProgress(modName, TrackPhase.Serializing, done, total), cancel);
+                loadOrder, plugin, mod.Folder, onParsed: () => SetProgress(modName, TrackPhase.Serializing, done, total), cancel);
             if (decompiled.Source is { } source)
             {
                 verified.Add((plugin, source));
@@ -109,7 +109,7 @@ public sealed class TrackHandler
         if (refused.Count == 0)
         {
             SetProgress(modName, TrackPhase.Committing, total, total);
-            refused = Commit(modFolder, verified);
+            refused = Commit(mod.SourceFolder, verified);
         }
 
         if (refused.Count == 0) return ItemAnswer<TrackRefusal, TrackedMod>.Landed(new TrackedMod([.. plugins.Select(p => p.Key)]));
@@ -120,15 +120,15 @@ public sealed class TrackHandler
 
     // The adapter writes nothing when any plugin's files fail (plugins.md, Track, story 5).
     private List<ItemRefused<PluginAddress, TrackRefusal>> Commit(
-        string modFolder, List<(RegisteredPlugin Plugin, PluginSource Source)> verified)
+        string sourceFolder, List<(RegisteredPlugin Plugin, PluginSource Source)> verified)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("Tracking {PluginCount} plugin(s) into {ModFolder}: {FileCount} source files",
-                verified.Count, modFolder, verified.Sum(v => v.Source.Files.Count));
+            _logger.LogInformation("Tracking {PluginCount} plugin(s) into {SourceFolder}: {FileCount} source files",
+                verified.Count, sourceFolder, verified.Sum(v => v.Source.Files.Count));
         }
 
-        var failed = _source.Track(modFolder,
+        var failed = _source.Track(sourceFolder,
             [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Name, v.Source.BinarySha256)))]);
 
         var refused = new List<ItemRefused<PluginAddress, TrackRefusal>>();

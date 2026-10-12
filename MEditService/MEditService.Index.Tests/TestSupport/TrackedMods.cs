@@ -39,7 +39,7 @@ internal static class TrackedMods
     }
 
     internal static ISourceRepository RepositoryOf(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>
-        TestAdapters.Source().OverFolder(new PluginProvider.FromMod(entry.Origin, entry.ModFolderOf()), release);
+        TestAdapters.Source().OverFolder(new PluginProvider.FromMod(entry.Origin, entry.ModFolderOf(), entry.ModFolderOf()), release);
 
     internal static PluginAddress KeyOf(this LoadOrderEntry entry) => new(entry.Name, entry.Origin);
 

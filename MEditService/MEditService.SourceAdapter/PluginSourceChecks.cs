@@ -4,7 +4,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>A plugin's whole source tree, and the file the read stopped at, relative to the mod folder.
+/// <summary>A plugin's whole source tree, and the file the read stopped at, relative to the source folder.
 /// Files is empty when one is named: half a tree compiles to a binary missing records.</summary>
 public sealed record PluginSourceFiles(IReadOnlyList<TreeFile> Files, string? Unreadable);
 
@@ -17,7 +17,7 @@ public enum SourceDivergenceKind
 }
 
 /// <summary>The first file where a plugin's source and what the whole-mod door writes for it differ,
-/// as the mod folder spells it.</summary>
+/// as the source folder spells it.</summary>
 public sealed record SourceDivergence(SourceDivergenceKind Kind, string Path);
 
 /// <summary>A record's file held at HeldPath, where the layout puts it at BelongsAt, both as the mod

@@ -39,8 +39,8 @@ beforeEach(forgetRegistrations);
 describe('a file\'s tab an edit moves the file of', () => {
   const plugin = { name: 'A.esp', origin: 'ModA' };
   const NPC = '000800:A.esp';
-  const FILE = '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json';
-  const MOVED = '/mods/ModA/plugin-source/A.esp/Npcs/Renamed.json';
+  const FILE = '/source/ModA/plugin-source/A.esp/Npcs/Npc.json';
+  const MOVED = '/source/ModA/plugin-source/A.esp/Npcs/Renamed.json';
   const place = { collapsedRows: ['Bounds'], collapsedColumns: ['A.esp|ModA'], focusedCell: { rowKey: 'Bounds', plugin: null }, scroll: { top: 40, left: 12 } };
 
   async function shownOn(provider: vscode.CustomTextEditorProvider, path: string) {
@@ -93,7 +93,7 @@ describe('a file\'s tab an edit moves the file of', () => {
 });
 
 describe('a file mEdit answers holds no record', () => {
-  const METADATA = '/mods/ModA/plugin-source/A.esp/Cells/GroupRecordData.json';
+  const METADATA = '/source/ModA/plugin-source/A.esp/Cells/GroupRecordData.json';
   const uri = vscode.Uri.file(METADATA);
   const reopened = () => executed().filter(([id]) => id === 'vscode.openWith');
   const inStead = { viewColumn: 1, preview: true, preserveFocus: true, background: true };
@@ -150,8 +150,8 @@ describe('a file mEdit answers holds no record', () => {
 describe('a child record\'s tab, on mEdit\'s report of its record', () => {
   const plugin = { name: 'A.esp', origin: 'ModA' };
   const PLACED = '000801:A.esp';
-  const CELL_FILE = '/mods/ModA/plugin-source/A.esp/Cells/Cell.json';
-  const OTHER_CELL_FILE = '/mods/ModA/plugin-source/A.esp/Cells/Other.json';
+  const CELL_FILE = '/source/ModA/plugin-source/A.esp/Cells/Cell.json';
+  const OTHER_CELL_FILE = '/source/ModA/plugin-source/A.esp/Cells/Other.json';
   const query = `formKey=${encodeURIComponent(PLACED)}&name=${plugin.name}&origin=${plugin.origin}`;
   const childUri = { scheme: 'modbench-child-record', path: CELL_FILE, query, toString: () => `modbench-child-record:${CELL_FILE}?${query}` };
   const changed = { kind: 'rows-changed' as const, plugin: plugin.name, origin: plugin.origin, keys: [PLACED], sequence: 1 };

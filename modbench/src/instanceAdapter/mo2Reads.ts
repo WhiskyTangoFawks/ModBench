@@ -15,8 +15,8 @@ import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileRead, type GameFolder, type InstanceAdapter,
 } from './instanceAdapter';
 import {
-  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadNameAt, downloadSidecarFile, isTempWrite, modDir, modlistFile,
-  modMetaFile, pluginsFile, profilesDir, settingsFile,
+  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadNameAt, downloadSidecarFile, isTempWrite, modlistFile,
+  modMetaFile, modSourceDir, pluginsFile, profilesDir, settingsFile,
 } from './layout';
 import { folderHolding, listedAs, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
@@ -74,6 +74,9 @@ async function answerOrReason<T>(read: () => Promise<T>): Promise<FileRead<T>> {
 
 // The tables key each release on the game's name as `gameName=` spells it.
 const gameOf = (gameName: string) => ({ gameName, gameRelease: gameReleaseForGame(gameName) });
+
+const sourceTracked = (folder: string | undefined): Promise<boolean> =>
+  (folder === undefined ? Promise.resolve(false) : isTracked(folder));
 
 export function mo2Reads(context: Mo2Context): Mo2Reads {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch } = context;
@@ -144,7 +147,9 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
 
     originFiles: (origin) => originFilesIn(instanceRoot, origin),
 
-    modTracked: (mod) => isTracked(modDir(instanceRoot, mod)),
+    sourceFolder: (mod) => modSourceDir(instanceRoot, mod),
+
+    modTracked: (mod) => sourceTracked(modSourceDir(instanceRoot, mod)),
 
     fileStamp: (path) => answerOrReason(() => stampOf(path)),
 

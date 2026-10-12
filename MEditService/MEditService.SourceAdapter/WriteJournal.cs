@@ -23,15 +23,15 @@ internal enum UnrestoredReason
     RestoreFailed,
 }
 
-/// <summary>One thing a rollback left standing (ADR-0019): a path relative to the mod folder, or a
+/// <summary>One thing a rollback left standing (ADR-0019): a path relative to the source folder, or a
 /// description of a change outside the file tree. Detail is the operating system's reason for a refusal.</summary>
 internal sealed record Unrestored(
     UnrestoredReason Reason, string? RelativePath = null, string? Description = null, string? Detail = null);
 
-/// <summary>Everything a Source adapter act creates, replaces, removes and mints under one mod folder. One
+/// <summary>Everything a Source adapter act creates, replaces, removes and mints under one source folder. One
 /// rollback restores exactly that, leaves what another program wrote (ADR-0003) and answers what it
 /// could not restore as data (ADR-0019).</summary>
-internal sealed class WriteJournal(string modFolder)
+internal sealed class WriteJournal(string sourceFolder)
 {
     private interface IEntry;
 
@@ -139,7 +139,7 @@ internal sealed class WriteJournal(string modFolder)
         if (unrestored.Count == 0) return message;
         var sentences = unrestored.Select(Sentence);
         return $"{message} Not put back: {string.Join(" ", sentences)}".Replace(
-            modFolder + Path.DirectorySeparatorChar, "", StringComparison.Ordinal);
+            sourceFolder + Path.DirectorySeparatorChar, "", StringComparison.Ordinal);
     }
 
     private static string Sentence(Unrestored left)
@@ -186,7 +186,7 @@ internal sealed class WriteJournal(string modFolder)
                 {
                     unrestored.Add(new Unrestored(
                         UnrestoredReason.RestoreFailed,
-                        putBack.Path is null ? null : Path.GetRelativePath(modFolder, putBack.Path),
+                        putBack.Path is null ? null : Path.GetRelativePath(sourceFolder, putBack.Path),
                         putBack.Description,
                         ex.Message));
                 }
@@ -263,7 +263,7 @@ internal sealed class WriteJournal(string modFolder)
     }
 
     private Unrestored Named(string path, UnrestoredReason reason, string? detail = null) =>
-        new(reason, Path.GetRelativePath(modFolder, path), Detail: detail);
+        new(reason, Path.GetRelativePath(sourceFolder, path), Detail: detail);
 
     private static string TempPathFor(string path) =>
         Path.Combine(PathShape.DirectoryOf(path), ".medit_tmp_" + Path.GetRandomFileName() + ".tmp");

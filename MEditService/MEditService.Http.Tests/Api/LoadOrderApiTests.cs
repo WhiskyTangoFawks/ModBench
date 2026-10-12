@@ -36,17 +36,19 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     }
 
     [Theory]
-    [InlineData("Game", "ModA", null)]
-    [InlineData("None", null, "/mods/ModA")]
-    [InlineData("Mod", "ModA", null)]
-    [InlineData("Mod", null, "/mods/ModA")]
-    public async Task PutLoadOrder_AProviderWhoseModAndFolderDisagreeWithItsKind_Returns400(string kind, string? mod, string? folder)
+    [InlineData("Game", "ModA", null, null)]
+    [InlineData("None", null, "/mods/ModA", null)]
+    [InlineData("Game", null, null, "/source/ModA")]
+    [InlineData("Mod", "ModA", null, "/source/ModA")]
+    [InlineData("Mod", null, "/mods/ModA", "/source/ModA")]
+    [InlineData("Mod", "ModA", "/mods/ModA", null)]
+    public async Task PutLoadOrder_AProviderWhoseModAndFoldersDisagreeWithItsKind_Returns400(string kind, string? mod, string? folder, string? sourceFolder)
     {
         var response = await _client.PutAsJsonAsync("/load-order", new
         {
             gameDirectory = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
-            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, Provider = new { Kind = kind, Mod = mod, Folder = folder } }),
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, Provider = new { Kind = kind, Mod = mod, Folder = folder, SourceFolder = sourceFolder } }),
             active = SnapshotPlugins.Active(_fixture.Plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
             gameRelease = "Fallout4",

@@ -3,7 +3,7 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Index;
 
-/// <summary>A <see cref="MissingReference"/> with its referring record's file, relative to the mod
+/// <summary>A <see cref="MissingReference"/> with its referring record's file, relative to the source
 /// folder. <paramref name="Failure"/> says why the tree names none: a file changed outside Modbench.</summary>
 internal sealed record MissingReferenceOnFile(MissingReference Reference, string? SourceRelativePath, string? Failure);
 

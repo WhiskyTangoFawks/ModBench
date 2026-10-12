@@ -27,8 +27,8 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { RecordEditEnvelope } from '../../wire/messages';
 
-const FILE = '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json';
-const MOVED = '/mods/ModA/plugin-source/A.esp/Npcs/Renamed.json';
+const FILE = '/source/ModA/plugin-source/A.esp/Npcs/Npc.json';
+const MOVED = '/source/ModA/plugin-source/A.esp/Npcs/Renamed.json';
 const plugin = { name: 'A.esp', origin: 'ModA' };
 const address = { formKey: '000800:A.esp', plugin };
 const height: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'Height' }], value: 0.75 };

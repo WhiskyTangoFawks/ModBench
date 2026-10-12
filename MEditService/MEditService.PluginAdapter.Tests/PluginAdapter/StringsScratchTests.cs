@@ -53,7 +53,7 @@ public sealed class StringsScratchTests : IDisposable
     {
         OpenDocuments().Dispose();
         (await Adapter.ReadSourceOfAsync(
-            new RegisteredPlugin(PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder), Line: null),
+            new RegisteredPlugin(PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder, _modFolder), Line: null),
             _loadOrder, _strings)).Answered();
 
         Assert.Empty(Directory.EnumerateFileSystemEntries(_temp));
