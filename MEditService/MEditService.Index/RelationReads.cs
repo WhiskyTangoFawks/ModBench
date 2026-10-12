@@ -101,8 +101,8 @@ internal sealed class RelationReads(
         var filter = query.Scope == RecordQueryScope.Navigator ? store.Filter : null;
         var scope = query is { Scope: RecordQueryScope.Search, Plugin: not null } ? RecordScope.EveryRegisteredPlugin : RecordScope.Active;
         var (where, paramValues) = BuildWhere(
-            query.Plugin?.Name, query.Search, filter?.Listing, query.Origin, query.RecordTypes,
-            query.GroupOnly ? NavigatorSql.NotHeld("r") : null, query.SearchFormKey);
+            query.Plugin?.Name, query.Search, filter?.Listing, query.Origin, query.RecordTypes, query.SearchFormKey);
+        var unheld = query.GroupOnly ? NavigatorSql.Unheld("r") : "";
         var dataParams = new List<string>(paramValues);
         var holdings = HoldingsOf(query.Plugin?.Name, query.Origin, dataParams);
         var cols = $"""
@@ -120,14 +120,14 @@ internal sealed class RelationReads(
             {FullNameOf("r")} AS full_name
             """;
 
-        var total = DuckDbSql.Scalar<long>(connection, $"SELECT COUNT(*) FROM {scope.Records} r{where}", [.. paramValues]);
+        var total = DuckDbSql.Scalar<long>(connection, $"SELECT COUNT(*) FROM {scope.Records} r{unheld}{where}", [.. paramValues]);
 
         // xEdit's navigator lists a group in FormID order, and its record picker lists by EditorID.
         // (plugin, origin) makes either order total, so LIMIT/OFFSET pages stably.
         var order = query.GroupOnly ? NavigatorSql.FormIdOrder("form_key") : "editor_id, form_key";
         var items = DuckDbSql.Rows(connection, $"""
             WITH RECURSIVE {NavigatorSql.AboveAFailure(scope, holdings)}
-            SELECT {cols} FROM {scope.Records} r{where}
+            SELECT {cols} FROM {scope.Records} r{unheld}{where}
             ORDER BY {order}, plugin, origin
             LIMIT {query.Limit} OFFSET {query.Offset}
             """, ReadSummary, [.. dataParams]);
@@ -159,10 +159,10 @@ internal sealed class RelationReads(
     {
         using var connection = store.OpenReadConnection();
         var (where, paramValues) = BuildWhere(
-            plugin.Name, null, store.Filter.Listing, plugin.Origin, recordTypes: null, NavigatorSql.NotHeld("r"));
+            plugin.Name, null, store.Filter.Listing, plugin.Origin);
         var counts = DuckDbSql.Rows(connection, $"""
             SELECT record_type, COUNT(*), BOOL_OR(parse_diagnosis IS NOT NULL)
-            FROM records r{where}
+            FROM records r{NavigatorSql.Unheld("r")}{where}
             GROUP BY record_type
             """, reader => new RecordTypeCount(reader.GetString(0), (int)reader.GetInt64(1), reader.GetBoolean(2)), [.. paramValues]);
 
@@ -188,8 +188,8 @@ internal sealed class RelationReads(
         var types = DuckDbSql.Rows(connection, $"""
             WITH RECURSIVE {NavigatorSql.AboveAFailure(RecordScope.Active, "WHERE h.plugin = $1 AND h.origin = $2")}
             SELECT DISTINCT r.record_type FROM records r
-            JOIN above_failure a ON a.form_key = r.form_key AND a.plugin = r.plugin AND a.origin = r.origin
-            WHERE r.plugin = $1 AND r.origin = $2 AND {NavigatorSql.NotHeld("r")}
+            JOIN above_failure a ON a.form_key = r.form_key AND a.plugin = r.plugin AND a.origin = r.origin{NavigatorSql.Unheld("r")}
+            WHERE r.plugin = $1 AND r.origin = $2
             """, reader => reader.GetString(0), plugin.Name, plugin.Origin);
         return new HashSet<string>(types, StringComparer.OrdinalIgnoreCase);
     }
@@ -213,13 +213,12 @@ internal sealed class RelationReads(
             WITH RECURSIVE {NavigatorSql.AboveAChange(scope, "WHERE h.plugin = $1 AND h.origin = $2", store.Filter.AlsoKeeps("f"))}
             SELECT FALSE AS is_group, form_key AS row_key, fact AS state FROM above_change
             UNION
-            SELECT TRUE, r.record_type, r.working_tree_state FROM {scope.Records} r
+            SELECT TRUE, r.record_type, r.working_tree_state FROM {scope.Records} r{NavigatorSql.Unheld("r")}
             WHERE r.plugin = $1 AND r.origin = $2 AND r.working_tree_state <> '{WorkingTreeState.None.Stored()}'
-              AND r.record_type <> '{PluginHeader.RecordType}' AND {NavigatorSql.NotHeld("r")}{store.Filter.AlsoKeeps("r")}
+              AND r.record_type <> '{PluginHeader.RecordType}'{store.Filter.AlsoKeeps("r")}
             UNION
             SELECT TRUE, r.record_type, a.fact FROM above_change a
-            JOIN {scope.Records} r ON r.form_key = a.form_key AND r.plugin = a.plugin AND r.origin = a.origin
-            WHERE {NavigatorSql.NotHeld("r")}
+            JOIN {scope.Records} r ON r.form_key = a.form_key AND r.plugin = a.plugin AND r.origin = a.origin{NavigatorSql.Unheld("r")}
             """, reader => (IsGroup: reader.GetBoolean(0), Key: reader.GetString(1), State: WorkingTreeStates.FromStored(reader.GetString(2))),
             plugin.Name, plugin.Origin);
 
@@ -521,7 +520,7 @@ internal sealed class RelationReads(
     // both or neither.
     private static (string where, List<string> paramValues) BuildWhere(
         string? plugin, string? search, string? filterCondition = null, string? origin = null,
-        IReadOnlyList<string>? recordTypes = null, string? groupCondition = null, string? searchFormKey = null)
+        IReadOnlyList<string>? recordTypes = null, string? searchFormKey = null)
     {
         var conditions = new List<string>();
         var values = new List<string>();
@@ -568,8 +567,6 @@ internal sealed class RelationReads(
         }
         if (filterCondition != null)
             conditions.Add(filterCondition);
-        if (groupCondition != null)
-            conditions.Add(groupCondition);
 
         var where = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
         return (where, values);
