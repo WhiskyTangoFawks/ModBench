@@ -158,10 +158,17 @@ export interface TrackOutcome {
   refused: readonly ItemRefusal<string>[];
 }
 
-/** Compile's answer: each plugin compiled, with its diagnostics, or refused with its reason. */
-export interface CompileOutcome {
-  landed: readonly CompiledPlugin[];
+interface BuiltMod {
+  mod: string;
+  compiled: readonly CompiledPlugin[];
   refused: readonly ItemRefusal<PluginAddress>[];
+}
+
+/** Build's answer: each mod built, with the plugins it compiled and the plugins it refused, or
+ *  refused as a mod with its reason. */
+export interface BuildOutcome {
+  landed: readonly BuiltMod[];
+  refused: readonly ItemRefusal<string>[];
 }
 
 export type GridPosition = components['schemas']['GridPosition'];
@@ -215,7 +222,7 @@ export interface MEditClient {
   decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
-  compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused>;
+  build(mods: readonly string[]): Promise<BuildOutcome | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).

@@ -39,12 +39,6 @@ export const isContainerRow = (row: PluginsTreeNode): boolean => hasFlags(row, '
 const every = (selection: readonly PluginsTreeNode[], qualifies: (row: PluginsTreeNode) => boolean): boolean =>
   selection.length > 0 && selection.every(qualifies);
 
-/** The one selected plugin compile applies to: compile's Argument from the palette. */
-export function compilableSelected(selection: readonly PluginsTreeNode[]): RowOf<'plugin'> | undefined {
-  const only = onlySelected(selection, 'plugin');
-  return hasFlags(only, 'tracked', 'editable') ? only : undefined;
-}
-
 /** What the Plugins palette entries' and keys' `when` clauses read off the selection, since
  *  neither is handed a row. */
 export interface PluginsKeyContext {

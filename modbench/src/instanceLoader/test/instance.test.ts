@@ -259,6 +259,17 @@ describe('Instance — the value', () => {
     expect([...instance.value.trackedMods]).toEqual(['Harder VATS']);
   });
 
+  it('carries every repository under the source folder as a source mod, listed in the mod order or not, with its source folder', async () => {
+    const { root, instance } = realInstance();
+    await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
+    await mkdir(join(root, 'source', 'Cloned And Unlisted', '.git'), { recursive: true });
+
+    await instance.refresh();
+
+    expect([...instance.value.sourceMods].sort()).toEqual(['Cloned And Unlisted', 'Harder VATS']);
+    expect(instance.value.paths.sourceDirs.get('Cloned And Unlisted')).toBe(join(root, 'source', 'Cloned And Unlisted'));
+  });
+
   it('carries a folder under mods with no line for the active profile as a mod folder, never as a mod, so mod sync hears of it though the Mods tree renders `mods` alone', async () => {
     const { root, instance } = realInstance();
     await mkdir(join(root, 'mods', 'Hand Extracted Mod'), { recursive: true });
