@@ -147,7 +147,7 @@ describe('registerRecordLifecycleCommands', () => {
     const UNTRACKED_NODE = carrying(UNTRACKED);
     const deleteCalls = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'getDeleteChanges').map(c => c.args[0]);
 
-    const COLUMN_HEADER = { webviewSection: 'recordHeader', ...carrying(FIRST), compilable: true, editable: true, preventDefaultContextMenuItems: true };
+    const COLUMN_HEADER = { webviewSection: 'recordHeader', ...carrying(FIRST), editable: true, preventDefaultContextMenuItems: true };
 
     it.each([['a row', RECORD_NODE], ['the Editor\'s column header', COLUMN_HEADER]])(
       'sends the clicked record alone from %s when no selection comes with it', async (_label, arg) => {
@@ -407,7 +407,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   const SECOND_NODE = carrying(SECOND, 'Second');
   const PATCH = { name: 'Patch.esp', origin: 'PatchMod' };
   const OTHER = { name: 'Other.esp', origin: 'OtherMod' };
-  const HEADER = { webviewSection: 'recordHeader', ...carrying(SOURCE), compilable: true, editable: true, preventDefaultContextMenuItems: true };
+  const HEADER = { webviewSection: 'recordHeader', ...carrying(SOURCE), editable: true, preventDefaultContextMenuItems: true };
 
   afterEach(() => { viewSelection = []; });
   beforeEach(function dropUnansweredPicksSoTheyDoNotAnswerTheNextTest() { showQuickPick.mockReset(); });

@@ -41,7 +41,7 @@ function rowIdentity(kind: 'mod' | 'separator', name: string): string {
 function modContextValue(mod: Pick<Mod, 'nexusId' | 'enabled'>, facts: ModFacts | undefined): string {
   const flags = [
     mod.nexusId !== undefined && 'hasNexus', mod.enabled ? 'enabled' : 'disabled',
-    facts?.holdsPlugin === true && 'holdsPlugin', facts?.tracked === false && 'untracked',
+    facts?.holdsPlugin === true && 'holdsPlugin', facts !== undefined && (facts.tracked ? 'tracked' : 'untracked'),
     facts?.fileOrderConflict === true && 'fileOrderConflict',
   ];
   return ['mod', ...flags.filter((f): f is string => f !== false)].join(' ');

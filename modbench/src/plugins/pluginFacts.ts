@@ -104,7 +104,6 @@ export class PluginFacts {
   private reachableFailures = new ByPluginAddress<PluginLoadFailure>();
   private expansionOverride?: ExpansionOverride;
   private indexFailure?: string;
-  private compilable = false;
   private noMatchAnywhere = false;
   private laterFailures = new Map<string, string>();
 
@@ -161,7 +160,6 @@ export class PluginFacts {
       pluginAddressKey(p),
       `"${p.name}" (${p.origin}): ${p.laterReadFailure.map((f) => `${f.sourceRelativePath}: ${f.message}`).join('; ')}`,
     ] as const]));
-    this.compilable = plugins.some((p) => p.isTracked);
     this.noMatchAnywhere = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
   }
 
@@ -226,11 +224,6 @@ export class PluginFacts {
    *  answered. `hasMatchingRecords` only ever answers false while a filter is active. */
   hiddenByRecordFilter(address: PluginAddress): boolean {
     return this.matches?.get(address) === false;
-  }
-
-  /** Whether compile applies to any plugin. */
-  anyCompilable(): boolean {
-    return this.compilable;
   }
 
   private statuses(address: PluginAddress): PluginStatus[] {

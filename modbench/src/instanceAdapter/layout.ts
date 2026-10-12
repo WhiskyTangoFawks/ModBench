@@ -135,11 +135,11 @@ export const modSourceDir = (instanceRoot: string, modName: string): string | un
   return folder === undefined ? undefined : join(instanceRoot, SOURCE, folder);
 };
 
+/** The folder beside `mods/` that holds every mod's source folder (ADR-0007). */
+export const sourceRootDir = (instanceRoot: string): string => join(instanceRoot, SOURCE);
+
 /** The git directory whose presence is what "tracked" means (ADR-0007). */
 export const repositoryGitDir = (sourceFolder: string): string => join(sourceFolder, GIT_DIR);
-
-/** A plugin's plugin source folder, relative to its mod's source folder. */
-export const pluginSourceFolderOf = (pluginName: string): string => join(PLUGIN_SOURCE_FOLDER, pluginName);
 
 // Matched without case, as Windows matches a name, on every platform alike.
 const named = (name: string | undefined, as: string): boolean => name?.toLowerCase() === as;

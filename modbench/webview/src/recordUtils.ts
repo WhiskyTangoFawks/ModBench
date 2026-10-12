@@ -75,7 +75,7 @@ export function arrayParentContext(
 }
 
 export function headerCellContext(
-  formKey: string, plugin: string, origin: string, menu: Pick<ColumnHeaderContext, 'compilable' | 'editable' | 'inMod'>,
+  formKey: string, plugin: string, origin: string, menu: Pick<ColumnHeaderContext, 'editable' | 'inMod'>,
 ): ColumnHeaderContext {
   return {
     webviewSection: 'recordHeader', argument: { kind: 'record', plugin: pluginAddressOf({ plugin, origin }), formKey },

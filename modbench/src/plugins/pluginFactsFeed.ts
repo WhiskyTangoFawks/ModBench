@@ -25,7 +25,7 @@ export interface PluginFactsFeedDeps {
 }
 
 export type PluginRowFacts = Pick<PluginFacts,
-  'expansion' | 'indexFailureMessage' | 'laterReadFailureMessage' | 'noRecordMatchMessage' | 'hiddenByRecordFilter' | 'anyCompilable'
+  'expansion' | 'indexFailureMessage' | 'laterReadFailureMessage' | 'noRecordMatchMessage' | 'hiddenByRecordFilter'
   | 'icon' | 'description' | 'tooltipLines' | 'contextFlags' | 'conditions'>;
 
 /** mEdit's answers about each plugin, ordered into the facts the Plugins tree's rows read: the
