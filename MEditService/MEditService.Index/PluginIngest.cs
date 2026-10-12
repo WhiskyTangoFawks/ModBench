@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using DuckDB.NET.Data;
@@ -50,10 +51,12 @@ internal sealed class PluginIngest
         var timer = Stopwatch.StartNew();
         var counters = new PhaseCounters();
         var records = 0;
-        foreach (var batch in Batches(documents.Records))
+        foreach (var prepared in Pipelined(Batches(documents.Records), batch => Prepared(batch, schemas, counters)))
         {
-            AppendBatch(batch, schemas, plugin, origin, counters);
-            records += batch.Count;
+            var appendTimer = Stopwatch.StartNew();
+            Append(prepared, plugin, origin);
+            counters.AppendMs += appendTimer.ElapsedMilliseconds;
+            records += prepared.Count;
         }
 
         if (schemas.ContainsKey(PluginHeader.RecordType))
@@ -112,9 +115,58 @@ internal sealed class PluginIngest
         if (batch.Count > 0) yield return batch;
     }
 
-    private void AppendBatch(
-        List<PluginDocument> batch, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        string plugin, string origin, PhaseCounters counters)
+    // Reading a batch of documents and preparing one each keep the cores busy. Each stage runs a batch
+    // ahead of the next, so the ingest holds at most five.
+    private static IEnumerable<List<PreparedRecord>> Pipelined(
+        IEnumerable<List<PluginDocument>> batches, Func<List<PluginDocument>, List<PreparedRecord>> prepare)
+    {
+        using var stop = new CancellationTokenSource();
+        using var read = new BlockingCollection<List<PluginDocument>>(boundedCapacity: 1);
+        using var prepared = new BlockingCollection<List<PreparedRecord>>(boundedCapacity: 1);
+        ExceptionDispatchInfo? failure = null;
+        bool StopsTheOthers(Exception ex)
+        {
+            if (!stop.IsCancellationRequested) Interlocked.CompareExchange(ref failure, ExceptionDispatchInfo.Capture(ex), null);
+            stop.Cancel();
+            return false;
+        }
+        // A stage blocks on its queue for the whole ingest, so it takes a thread of its own rather than
+        // one the parallel work inside the stages needs.
+        Task Stage(Action work, Action complete) => Task.Factory.StartNew(() =>
+        {
+            try { work(); }
+            catch (Exception ex) when (StopsTheOthers(ex)) { throw; }
+            finally { complete(); }
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        var stages = new[]
+        {
+            Stage(() => { foreach (var batch in batches) read.Add(batch, stop.Token); }, read.CompleteAdding),
+            Stage(() => { foreach (var batch in read.GetConsumingEnumerable(stop.Token)) prepared.Add(prepare(batch), stop.Token); }, prepared.CompleteAdding),
+        };
+        var consumed = prepared.GetConsumingEnumerable(stop.Token).GetEnumerator();
+        try
+        {
+            while (true)
+            {
+                bool next;
+                try { next = consumed.MoveNext(); }
+                catch (OperationCanceledException) when (failure is not null) { break; }
+                if (!next) break;
+                yield return consumed.Current;
+            }
+        }
+        finally
+        {
+            stop.Cancel();
+            SpinWait.SpinUntil(() => stages.All(stage => stage.IsCompleted));
+            foreach (var stage in stages) _ = stage.Exception;
+            consumed.Dispose();
+        }
+        failure?.Throw();
+    }
+
+    private List<PreparedRecord> Prepared(
+        List<PluginDocument> batch, IReadOnlyDictionary<string, RecordTableSchema> schemas, PhaseCounters counters)
     {
         // Per-document work is CPU-bound and independent, so it runs in parallel; only the appender
         // writes stay sequential.
@@ -132,9 +184,7 @@ internal sealed class PluginIngest
             throw;
         }
         counters.PrepareMs += batchTimer.ElapsedMilliseconds;
-        batchTimer.Restart();
-        Append(prepared, plugin, origin);
-        counters.AppendMs += batchTimer.ElapsedMilliseconds;
+        return prepared;
     }
 
     private void Append(List<PreparedRecord> prepared, string plugin, string origin)

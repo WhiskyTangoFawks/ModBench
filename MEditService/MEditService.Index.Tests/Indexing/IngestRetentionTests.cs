@@ -15,7 +15,7 @@ public sealed class IngestRetentionTests : IDisposable
 {
     private const string Plugin = "Streamed.esp";
     private const string Target = "000800:Streamed.esp";
-    private const int MegabyteRecordCount = 40;
+    private const int MegabyteRecordCount = 160;
     private const int MegabyteEditorId = 1 << 20;
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("streamed-ingest").WithPlugin(Plugin).Build();
