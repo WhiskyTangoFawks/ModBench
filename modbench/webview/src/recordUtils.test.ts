@@ -187,10 +187,10 @@ describe('cellContext, every cell\'s own items and every menu its cell is the ta
 
 describe('headerCellContext, unconditional on the column\'s read-only-ness, as copying from an immutable column is the headline use case', () => {
   it('identifies the header cell, carrying the column\'s own record identity', () => {
-    expect(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', { compilable: true, editable: true, inMod: 'tracked' })).toEqual({
+    expect(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', { editable: true, inMod: 'tracked' })).toEqual({
       webviewSection: 'recordHeader',
       argument: { kind: 'record', plugin: { name: 'MyMod.esp', origin: 'ModA' }, formKey: '000001:Fallout4.esm' },
-      compilable: true, editable: true, inMod: 'tracked', preventDefaultContextMenuItems: true,
+      editable: true, inMod: 'tracked', preventDefaultContextMenuItems: true,
     });
   });
 });

@@ -146,13 +146,10 @@ export interface ColumnHeaderContext {
   webviewSection: 'recordHeader';
   // commands.md, Argument: the column's record, as its plugin's address and its FormKey.
   argument: ArgumentOf<'record'>;
-  // commands.md, compile: the column's plugin is tracked and not read-only. It stays offered when
-  // the plugin source is unreadable, and refuses.
-  compilable: boolean;
-  // commands.md, delete: compilable, and the plugin source reads.
+  // commands.md, delete: the column's plugin is tracked and not read-only, and the plugin source reads.
   editable: boolean;
-  // editor.md, Menus and keys: track is offered on a plugin in an untracked mod, decompile on one in
-  // a tracked mod. None is a plugin in no mod: the game's and Overwrite's.
+  // editor.md, Menus and keys: track is offered on a plugin in an untracked mod, decompile and build on one
+  // in a tracked mod. None is a plugin in no mod: the game's and Overwrite's.
   inMod: ModRepository | 'none';
   preventDefaultContextMenuItems: true;
 }
