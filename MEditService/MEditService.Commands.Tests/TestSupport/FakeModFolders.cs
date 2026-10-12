@@ -51,6 +51,8 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public StampedFile? GameFile(string gameFolder, string path) => Described(gameFolder, path);
 
+    public string InstallationFileName(string path) => path[(path.LastIndexOf('/') + 1)..];
+
     public Stream OpenFile(string folder, string path) => Open(folder, path);
 
     public Stream OpenInstallationFile(string path) => Open(string.Empty, path);

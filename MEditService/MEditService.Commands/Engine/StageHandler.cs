@@ -47,7 +47,7 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
         foreach (var file in mod.InstallationFiles)
         {
             if (repository.InstallationFile(file.Path) is { } stamped) described.Add((file, stamped));
-            else missing.Add($"'{Path.GetFileName(file.Path)}'");
+            else missing.Add($"'{repository.InstallationFileName(file.Path)}'");
         }
 
         if (missing.Count > 0)
@@ -60,7 +60,7 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
         List<(string Name, string? Source, HashedInstallationFile Content)> installationFiles = [];
         foreach (var (file, stamped) in described)
         {
-            var name = Path.GetFileName(file.Path);
+            var name = repository.InstallationFileName(file.Path);
             try
             {
                 installationFiles.Add((name, file.Source, _hashes.OfInstallationFile(stamped)));

@@ -19,6 +19,8 @@ public sealed record ManifestFile(string Path, string Hash, FileStamp? Stamp, Fi
 
 public abstract record FileProvider
 {
+    private FileProvider() { }
+
     /// <summary>The mod's first installation file holds the file at the same path.</summary>
     public sealed record FirstInstallationFile : FileProvider;
 

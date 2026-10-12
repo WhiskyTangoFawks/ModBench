@@ -18,6 +18,8 @@ public sealed class ModFolderRepository : IModFolderRepository
 
     public StampedFile? GameFile(string gameFolder, string path) => InstallationFile(Path.Combine(gameFolder, path));
 
+    public string InstallationFileName(string path) => Path.GetFileName(path);
+
     public Stream OpenFile(string folder, string path) =>
         OpenInstallationFile(Path.Combine(folder, path));
 

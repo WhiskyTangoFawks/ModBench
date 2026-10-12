@@ -15,6 +15,9 @@ public interface IModFolderRepository
     /// null when there is none.</summary>
     StampedFile? GameFile(string gameFolder, string path);
 
+    /// <summary>The name of the installation file at <paramref name="path"/>, without its folder.</summary>
+    string InstallationFileName(string path);
+
     Stream OpenFile(string folder, string path);
 
     Stream OpenInstallationFile(string path);
