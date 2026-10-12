@@ -58,7 +58,7 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public string InstallationFileName(string path) => path[(path.LastIndexOf('/') + 1)..];
 
-public Stream OpenInstallationFile(string path) => Open(string.Empty, path);
+    public Stream OpenInstallationFile(string path) => Open(string.Empty, path);
 
     public Stream OpenGameFile(string dataFolder, string path) => Open(dataFolder, path);
 
