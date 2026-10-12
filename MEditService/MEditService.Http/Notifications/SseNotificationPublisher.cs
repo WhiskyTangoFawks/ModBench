@@ -66,7 +66,8 @@ internal sealed record NotificationEvent(
     TrackProgress? TrackProgress = null,
     IReadOnlyList<ChangedPlugin>? ChangedPlugins = null,
     IReadOnlyList<PluginWithUnreadableSource>? PluginWithUnreadableSources = null,
-    RecordFilterClearedNotification? RecordFilterCleared = null)
+    RecordFilterClearedNotification? RecordFilterCleared = null,
+    StageProgress? StageProgress = null)
 {
     public static NotificationEvent From(INotification notification) => notification switch
     {
@@ -74,6 +75,7 @@ internal sealed record NotificationEvent(
         PluginChangedNotification n => new("plugin-changed", n.Plugin.Name, n.Plugin.Origin, [], n.Sequence),
         LoadOrderStatusNotification n => new("load-order-status", "", "", [], 0, LoadOrderStatus: n.Status),
         TrackProgressNotification n => new("track-progress", "", n.Progress.Mod ?? "", [], 0, TrackProgress: n.Progress),
+        StageProgressNotification n => new("stage-progress", "", n.Progress.Mod ?? "", [], 0, StageProgress: n.Progress),
         ExternalChangeNotification n => new("external-change", "", n.Origin, [], 0, ChangedPlugins: n.Plugins),
         PluginSourceUnreadableNotification n => new("plugin-source-unreadable", "", n.Origin, [], 0, PluginWithUnreadableSources: n.Plugins),
         RecordFilterClearedNotification n => new("record-filter-cleared", "", "", [], 0, RecordFilterCleared: n),

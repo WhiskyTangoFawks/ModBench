@@ -3,8 +3,8 @@ using SharpCompress.Common;
 
 namespace MEditService.Commands.Engine;
 
-/// <summary>Reads the entries of a zip, 7z or rar installation file. A solid archive is read in the one pass
-/// it allows; any other is read entry by entry.</summary>
+/// <summary>Reads the entries of a zip, 7z or rar installation file. A solid archive and any 7z are read in the one
+/// forward pass SharpCompress allows them; any other is read entry by entry.</summary>
 internal static class ArchiveExtractor
 {
     public static void Extract(Stream archive, Action<string, long, Stream> onEntry)

@@ -6,11 +6,13 @@ using MEditService.Codec.Serialization;
 using MEditService.Codec.Skyrim;
 using MEditService.Codec.Starfield;
 using MEditService.Commands.Composition;
+using MEditService.Commands.Engine;
 using MEditService.Http;
 using MEditService.Http.Endpoints;
 using MEditService.Http.Notifications;
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.ModFolderAdapter;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
@@ -79,6 +81,8 @@ try
     builder.Services.AddSingleton<IPluginAdapter, MutagenPluginAdapter>();
     builder.Services.AddSingleton<UnsavedDocuments>();
     builder.Services.AddSingleton<ISourceAdapter, GitSourceAdapter>();
+    builder.Services.AddSingleton<IModFolderRepository, ModFolderRepository>();
+    builder.Services.AddSingleton<StageHandler>();
     builder.Services.AddSingleton<LoadOrderHolder>();
     // One Index for the whole process (ADR-0014). Which file it opens comes from the
     // load request (ADR-0010), not from here.
@@ -120,6 +124,7 @@ try
     app.MapRecordEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapWorldspaceEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapContainerChildEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
+    app.MapModlistEndpoints();
     app.MapNotificationEndpoints();
     app.MapIndexEndpoints();
     app.MapUnsavedDocumentEndpoints();

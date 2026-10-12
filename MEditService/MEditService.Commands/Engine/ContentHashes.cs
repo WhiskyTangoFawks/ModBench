@@ -1,44 +1,44 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using MEditService.ModFolderAdapter;
 using MEditService.RepositoriesLib;
 
 namespace MEditService.Commands.Engine;
 
-/// <summary>The hashes of an installation file's entries and of a mod folder's files. A file whose stamp matches
-/// the last run is not read again.</summary>
-public sealed class ContentHashes(IModFolderRepository repository)
+/// <summary>The hashes of an installation file and its entries, and of the files of a folder. A file whose
+/// stamp matches the last read, and is old enough to trust, is not read again.</summary>
+internal sealed class ContentHashes(IModFolderRepository repository, TimeProvider time)
 {
-    private readonly ConcurrentDictionary<(string ModFolder, string Path), (FileStamp Stamp, FileHash Hash)> _folderFiles = new();
-    private readonly ConcurrentDictionary<string, (FileStamp Stamp, IReadOnlyList<HashedEntry> Entries)> _installationFiles = new();
+    private readonly ConcurrentDictionary<string, StampGatedMemo<HashedFile>> _folders = new(StringComparer.Ordinal);
+    private readonly StampGatedMemo<HashedInstallationFile> _installationFiles = new(time);
 
-    public IReadOnlyList<HashedEntry> OfInstallationFile(string path)
-    {
-        var stamp = repository.InstallationFile(path).Stamp;
-        if (stamp is { } now && _installationFiles.TryGetValue(path, out var known) && known.Stamp == now)
-            return known.Entries;
-
-        List<HashedEntry> entries = [];
-        using (var archive = repository.OpenInstallationFile(path))
+    public HashedInstallationFile OfInstallationFile(StampedFile file) =>
+        _installationFiles.Of(file.Path, file.Stamp, () =>
         {
+            using var whole = repository.OpenInstallationFile(file.Path);
+            var hash = FileHash.Of(whole);
+            List<HashedEntry> entries = [];
+            using var archive = repository.OpenInstallationFile(file.Path);
             ArchiveExtractor.Extract(archive, (entry, size, content) =>
                 entries.Add(new HashedEntry(entry, size, FileHash.Of(content))));
-        }
-        if (stamp is { } taken) _installationFiles[path] = (taken, entries);
-        return entries;
-    }
+            return new HashedInstallationFile(whole.Length, hash, entries);
+        }) ?? throw new UnreachableException();
 
-    public IReadOnlyDictionary<string, FileHash> OfModFolder(string modFolder) =>
-        repository.Files(modFolder).ToDictionary(file => file.Path, file => HashOf(modFolder, file));
-
-    private FileHash HashOf(string modFolder, ModFile file)
+    public IReadOnlyList<HashedFile> OfModFolder(string modFolder, string modName)
     {
-        var key = (modFolder, file.Path);
-        if (file.Stamp is { } now && _folderFiles.TryGetValue(key, out var known) && known.Stamp == now)
-            return known.Hash;
-
-        using var content = repository.OpenFile(modFolder, file.Path);
-        var hash = FileHash.Of(content);
-        if (file.Stamp is { } taken) _folderFiles[key] = (taken, hash);
-        return hash;
+        var files = repository.Files(modFolder, modName);
+        var hashed = files.Select(file => OfFile(modFolder, file)).ToList();
+        MemoOf(modFolder).Retain(files.Select(file => file.Path).ToHashSet(StringComparer.Ordinal));
+        return hashed;
     }
+
+    public HashedFile OfFile(string folder, StampedFile file) =>
+        MemoOf(folder).Of(file.Path, file.Stamp, () =>
+        {
+            using var content = repository.OpenFile(folder, file.Path);
+            return new HashedFile(file.Path, content.Length, file.Stamp, FileHash.Of(content));
+        }) ?? throw new UnreachableException();
+
+    private StampGatedMemo<HashedFile> MemoOf(string folder) =>
+        _folders.GetOrAdd(folder, _ => new StampGatedMemo<HashedFile>(time));
 }

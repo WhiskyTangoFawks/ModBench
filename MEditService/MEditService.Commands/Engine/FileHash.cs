@@ -5,7 +5,7 @@ namespace MEditService.Commands.Engine;
 
 /// <summary>The hash a manifest carries: xxHash64 with seed 0, written as Wabbajack writes it, the eight
 /// little-endian bytes in base64.</summary>
-public readonly record struct FileHash(ulong Code)
+internal readonly record struct FileHash(ulong Code)
 {
     public static FileHash Of(Stream content)
     {
@@ -13,9 +13,6 @@ public readonly record struct FileHash(ulong Code)
         algorithm.Append(content);
         return new FileHash(algorithm.GetCurrentHashAsUInt64());
     }
-
-    public static FileHash FromBase64(string text) =>
-        new(BinaryPrimitives.ReadUInt64LittleEndian(Convert.FromBase64String(text)));
 
     public override string ToString()
     {

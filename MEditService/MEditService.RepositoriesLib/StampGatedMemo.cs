@@ -14,9 +14,12 @@ public sealed class StampGatedMemo<TValue>(TimeProvider timeProvider) where TVal
 
     /// <summary>The remembered value while the file's stamp is unchanged, else <paramref name="read"/>'s
     /// answer. A null answer is passed on and remembers nothing.</summary>
-    public TValue? Of(string path, Func<TValue?> read)
+    public TValue? Of(string path, Func<TValue?> read) => Of(path, FileStamp.Of(path), read);
+
+    /// <summary>As <see cref="Of(string, Func{TValue?})"/>, for a caller whose adapter already took the
+    /// file's <paramref name="stamp"/>. The key need not be a path.</summary>
+    public TValue? Of(string path, FileStamp? stamp, Func<TValue?> read)
     {
-        var stamp = FileStamp.Of(path);
         if (stamp is { } current && _known.TryGetValue(path, out var known) && known.Stamp == current)
             return known.Value;
 
