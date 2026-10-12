@@ -16,7 +16,7 @@ As a user, I want every row to read the instance value and nothing else, so the 
 |---|---|---|---|---|
 | Game | the game the instance is for, as the mod manager's configuration names it | `$(game)` | the game folder | none |
 | Profile | the active profile's name | `$(account)` | "Switch profile" | `switch` |
-| Modlist | untracked, or tracked ([modlist-source.md](modlist-source.md)) | `$(source-control)` | "Track modlist", or the ignore list's path when tracked | `track` when untracked, else `update` |
+| Modlist | the branch checked out and how many mods are stale, or "no repository" ([modlist-source.md](modlist-source.md)) | `$(source-control)` | "Init", or the stale mods by name | `init` with no repository, else `discard changes` on the stale mods |
 
 As a user, I want the game folder to be the one my setting names, else the one the mod manager's configuration names, else the one Modbench finds on this machine.
 
@@ -32,7 +32,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 |---|---|
 | Title bar | 1: refresh. Overflow: open settings. |
 | Profile menu | switch |
-| Modlist menu | track (untracked) · update (tracked) · restore… (tracked) |
+| Modlist menu | init (no repository) |
 | Keys | Enter: the row's gesture, as a click does. |
 
 ## Pickers, prompts and confirmations

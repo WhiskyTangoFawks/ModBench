@@ -12,7 +12,7 @@ This file owns the UX vocabulary and the catalog of gestures. `CONTEXT.md` owns 
 - Command ID: the registered interface and the source of truth, which the code reflects. It is `modbench.<object>.<verb>`, in camelCase, and the object owns it (`modbench.mod.enable`, `modbench.downloadedFile.delete`). `-` means the gesture has none. A gesture every list view does to whatever it shows is `modbench.<verb>`, in Every view.
 - Options: the inputs a gesture needs besides its Argument, such as a mode, a destination or a position. A picker asks for each Option the caller did not supply. An Option may be computed and multi-valued, such as a checked list with defaults.
 - Argument: the value that identifies the object or objects to the gesture, such as a plugin as `(origin, filename)`, or a FormKey. For a gesture that creates an object, it identifies the container, when the entry point is on the container's row. A create from a title icon has none, and its container is an Option. It is the same on every surface that offers the gesture. Singular means the clicked row, and plural means the whole selection.
-- Template: the source, xEdit ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)), MO2 ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)) or Wabbajack ([ADR-0023](../adr/0023-wabbajack-is-the-reference-for-the-manifest-git-for-its-gestures.md)) gesture this row follows, read from [the xEdit audit](../research/xedit-surface-audit.md), [the xEdit grid audit](../research/xedit-ux-audit.md), [the MO2 audit](../research/mo2-surface-audit.md) and `references/wabbajack/`. `none` means the template has no such gesture: the row is an addition or a divergence, and needs a ruling.
+- Template: the source, xEdit ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)), MO2 ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)) Wabbajack or git ([ADR-0023](../adr/0023-wabbajack-is-the-reference-for-the-manifest-git-for-its-gestures.md)) gesture this row follows, read from [the xEdit audit](../research/xedit-surface-audit.md), [the xEdit grid audit](../research/xedit-ux-audit.md), [the MO2 audit](../research/mo2-surface-audit.md) and `references/wabbajack/`. `none` means the template has no such gesture: the row is an addition or a divergence, and needs a ruling.
 - Trace: the sequence diagram of the gesture's flow. `-` means the trace is still to draw, and drawing it is part of designing the gesture. `none` means the gesture has no flow between boxes: its specification is this row and its surface.
 - Ruled out: a gesture the maintainer has cut is not in any table. See [Ruling a gesture out](#ruling-a-gesture-out).
 
@@ -135,13 +135,14 @@ What every list view does to whatever it shows, whatever the object. common.md s
 
 ## Modlist
 
-The instance's mods and profiles as git holds them ([modlist-source.md](surfaces/modlist-source.md)).
+The instance's mods and profiles as git holds them ([modlist-source.md](surfaces/modlist-source.md)). Commit, branch, merge, log, diff and checkout are VS Code's; a checkout leaves mods stale, and discard changes rebuilds them.
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
-| track | writes | `modbench.modlist.track` | - | - | none | Put the instance under git: the repository, its ignore list, every manifest, and one commit. | track-modlist |
-| update | writes | `modbench.modlist.update` | - | - | Wabbajack compile | Write every mod with no source's manifest from the mod as it is, and each delta a changed file needs. A source mod whose folder differs from its build is reported, and its manifest left to the build. It commits nothing. | update-modlist |
-| restore | writes | `modbench.modlist.restore` | mods, or none for every mod | - | Wabbajack install | Rebuild each mod's folder from its manifest: from the downloaded files it names, or by building the source it names at that commit, cloned when absent. | restore-modlist |
+| init | writes | `modbench.modlist.init` | - | - | git init | Make the instance a repository with its ignore list. It stages nothing and commits nothing. | init-modlist |
+| stage | writes | `modbench.modlist.stage` | mods, or none for every mod | - | git add; Wabbajack compile | Write each mod's manifest from the mod as it is, and each delta a changed file needs. A source mod's manifest is left to its build. | stage-modlist |
+| discard changes | writes | `modbench.modlist.discardChanges` | mods, or none for every mod | - | git restore; VS Code's Discard Changes; Wabbajack install | Rebuild each mod's folder from its manifest: every file whose bytes differ, from the downloaded files it names, or by building the source it names at that commit, cloned when absent. Untracked files stay. | discard-changes |
+| clean | writes | `modbench.modlist.clean` | mods, or none for every mod | - | git clean | Send untracked files, and mod folders with no manifest, to the trash, after listing them. | clean-modlist |
 
 ## Mod
 
@@ -155,7 +156,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | create empty mod | writes | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
 | install | writes | `modbench.mod.install` | source: archive, folder or downloaded file | target mod, for an upgrade | MO2 mod list; MO2 Downloads | Install a source as a new mod, or over an installed mod as an upgrade. | install-mod |
 | track | writes | `modbench.mod.track` | mods | - | none | Put a mod under git: a repository in the source folder holding its plugin source, the files no installation file yields as its assets, and a build configuration naming this folder as the output, in one commit. On a plugin row or an Editor column, it acts on the plugin's mod. | track-mod |
-| build | writes | `modbench.mod.build` | mods | - | none | Write a source mod's folder from its source as its build configuration says: extract what its installation files provide, copy its assets, compile its plugins, pack loose files into archives where configured, and write its manifest. On a plugin row or an Editor column, it acts on the plugin's mod. | build-mod |
+| build | writes | `modbench.mod.build` | mods | - | none | Write a source mod's folder from its source as its build configuration says: extract what its installation files provide, copy its assets, compile its plugins, pack loose files into archives where configured, and write its manifest. Untracked files stay. On a plugin row or an Editor column, it acts on the plugin's mod. | build-mod |
 | sort direction | reads | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
 | open folder | reads | `modbench.mod.openFolder` | mod, or overwrite, or a file or folder in one | - | MO2 mod list, Overwrite row | Show a mod's folder, or a file or folder in it, in VS Code's Explorer. The Overwrite row opens the overwrite folder. | none |
 | view on Nexus | reads | `modbench.mod.viewOnNexus` | mod, or downloaded file | - | MO2 mod list; MO2 Downloads | Open the mod's Nexus page. The address comes from the mod's `meta.ini`, or from the downloaded file's `.meta`. | none |

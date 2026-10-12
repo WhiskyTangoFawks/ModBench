@@ -1,6 +1,6 @@
 # Mods
 
-The Mods surface shows the active profile's mod order: its mods, grouped by separators, and the Overwrite folder. Each mod and Overwrite opens into its files, and each file shows whether the game gets it. Its template is MO2's mod list ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../../out-of-scope/mo2.md) says why. Its gestures are in [commands.md](../commands.md) under Mod and Separator, and `restore` under Modlist. What every view shares is in [common.md](common.md). [mods-conflicts.md](mods-conflicts.md) holds the conflict table, which opens from a mod's row in an editor tab.
+The Mods surface shows the active profile's mod order: its mods, grouped by separators, and the Overwrite folder. Each mod and Overwrite opens into its files, and each file shows whether the game gets it. Its template is MO2's mod list ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../../out-of-scope/mo2.md) says why. Its gestures are in [commands.md](../commands.md) under Mod and Separator, and `stage`, `discard changes` and `clean` under Modlist. What every view shares is in [common.md](common.md). [mods-conflicts.md](mods-conflicts.md) holds the conflict table, which opens from a mod's row in an editor tab.
 
 Each story cites its source. A story with no source is owned here.
 
@@ -102,7 +102,7 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod. Collapse All last. |
-| Mod menu | open folder · open conflicts (the mod has a file order conflict) · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add separator · create empty mod · install… · track (the mod has no repository and holds a plugin) · build (the mod is tracked) · restore… (the instance is tracked) · copy value · uninstall |
+| Mod menu | open folder · open conflicts (the mod has a file order conflict) · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add separator · create empty mod · install… · track (the mod has no repository and holds a plugin) · build (a source mod) · stage · discard changes… · clean… (the instance has a repository) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · copy value · delete |
 | Overwrite menu | open folder |
 | File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · copy value |
