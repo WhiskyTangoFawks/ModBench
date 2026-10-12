@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using MEditService.Commands;
+using MEditService.Commands.Build;
 using MEditService.Commands.Edits;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
@@ -73,6 +74,16 @@ internal static class EndpointMapping
             // The request is sound; the machine lacks git, or git or the disk refused the write.
             TrackRefusal.GitUnavailable or TrackRefusal.CommitFailed => 500,
             // A data problem in the plugin itself, the status the record edits' own refusals use.
+            _ => 422,
+        });
+
+    /// <summary>Build's refusal of a whole selection, mapped as Compile's is (ADR-0019).</summary>
+    internal static IResult Refusal(SelectionRefusal<BuildRefusal> refusal) => Problem(
+        refusal.Refusal, BuildRefusal.NoLoadOrder, refusal.Message,
+        r => r switch
+        {
+            // The request is sound; the machine lacks git.
+            BuildRefusal.GitUnavailable => 500,
             _ => 422,
         });
 
