@@ -10,11 +10,11 @@ using Noggog;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-public sealed class RecordTextCodecRefusalTests
+public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
 {
-    private const GameRelease Release = GameRelease.Fallout4;
+    private readonly ScratchDirectory _tree = new("medit-refusal-tree-");
 
-    private static readonly Dictionary<string, string> RecordTypeOfGroupFolder = new() { ["Weapons"] = "weap", ["Globals"] = "glob" };
+    private const GameRelease Release = GameRelease.Fallout4;
 
     private static string WeaponText()
     {
@@ -100,13 +100,13 @@ public sealed class RecordTextCodecRefusalTests
     {
         var text = WeaponText();
 
-        Assert.NotNull(Why(text[..(text.Length / 2)]));
+        Assert.StartsWith("Expected end of string, but instead reached end of data", Why(text[..(text.Length / 2)]), StringComparison.Ordinal);
     }
 
     [Fact]
     public void TextAfterTheClosingBrace_IsRefused()
     {
-        Assert.NotNull(Why(WeaponText() + "\n{}"));
+        Assert.Contains("is invalid after a single JSON value", Why(WeaponText() + "\n{}"), StringComparison.Ordinal);
     }
 
     [Theory]
@@ -160,7 +160,26 @@ public sealed class RecordTextCodecRefusalTests
     }
 
     [Fact]
-    public async Task EveryDocumentOfAFreshlyDecompiledPlugin_IsARecord_TheHeaderAWeaponAGlobalAWorldspaceAndTwoCells()
+    public void AFloatSpelledWithMoreDigitsThanItsPrecision_IsTheSameRecord()
+    {
+        Assert.Null(Why(Edited(WeaponText(), root => root["Weight"] = JsonNode.Parse("2.5000000000001"))));
+    }
+
+    [Theory]
+    [InlineData("RecordData.json", PluginHeader.RecordType)]
+    [InlineData("Weapons/Gun - 000800_Fresh.esp.json", "weap")]
+    [InlineData("Globals/Gl - 000801_Fresh.esp.json", "glob")]
+    [InlineData("Worldspaces/Wrld - 000802_Fresh.esp/RecordData.json", "wrld")]
+    [InlineData("Worldspaces/Wrld - 000802_Fresh.esp/0, 0/0, 0/Outside - 000804_Fresh.esp/RecordData.json", "cell")]
+    [InlineData("Cells/0/0/Inside - 000805_Fresh.esp/RecordData.json", "cell")]
+    public async Task EveryDocumentOfAFreshlyDecompiledPlugin_IsARecord(string relativePath, string recordType)
+    {
+        var text = await File.ReadAllTextAsync(Path.Combine(_tree.Path, relativePath));
+
+        Assert.Null(RecordTextCodec.WhyNotARecord(text, Release, recordType));
+    }
+
+    public async Task InitializeAsync()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fresh.esp"), Fallout4Release.Fallout4);
         mod.Weapons.AddNew().EditorID = "Gun";
@@ -175,30 +194,10 @@ public sealed class RecordTextCodecRefusalTests
         var inside = new Cell(mod) { EditorID = "Inside" };
         inside.Temporary.Add(new PlacedObject(mod) { EditorID = "Ref" });
         mod.AddInteriorCells(inside);
-        using var folder = new ScratchDirectory("medit-refusal-tree-");
-        await Fallout4WholeMod.Serialize(mod, folder.Path);
-
-        var checkedFiles = 0;
-        var refused = new List<string>();
-        foreach (var file in Directory.EnumerateFiles(folder.Path, "*", SearchOption.AllDirectories))
-        {
-            var relative = Path.GetRelativePath(folder.Path, file).Replace('\\', '/');
-            if (RecordTypeOf(relative) is not { } recordType) continue;
-            checkedFiles++;
-            if (RecordTextCodec.WhyNotARecord(await File.ReadAllTextAsync(file), Release, recordType) is { } why)
-                refused.Add($"{relative}: {why}");
-        }
-
-        Assert.Empty(refused);
-        Assert.Equal(6, checkedFiles);
+        await Fallout4WholeMod.Serialize(mod, _tree.Path);
     }
 
-    private static string? RecordTypeOf(string relative)
-    {
-        if (relative.EndsWith("GroupRecordData.json", StringComparison.Ordinal)) return null;
-        if (relative == DocumentFileNames.Root) return PluginHeader.RecordType;
-        if (relative.StartsWith("Worldspaces/", StringComparison.Ordinal) && relative.Count(c => c == '/') == 2) return "wrld";
-        if (relative.EndsWith("/" + DocumentFileNames.Root, StringComparison.Ordinal)) return "cell";
-        return RecordTypeOfGroupFolder[relative.Split('/')[0]];
-    }
+    public Task DisposeAsync() => Task.CompletedTask;
+
+    public void Dispose() => _tree.Dispose();
 }

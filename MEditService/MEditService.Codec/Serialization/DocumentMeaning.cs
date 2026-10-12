@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Numerics;
 using System.Text.Json;
 
 namespace MEditService.Codec.Serialization;
@@ -35,10 +37,21 @@ public static class DocumentMeaning
             JsonValueKind.Object => ObjectDifference(written, produced, path),
             JsonValueKind.Array => ArrayDifference(written, produced, path),
             JsonValueKind.String => written.GetString() == produced.GetString() ? null : path,
-            JsonValueKind.Number => written.GetDouble().Equals(produced.GetDouble()) ? null : path,
+            JsonValueKind.Number => NumbersAgree(written, produced) ? null : path,
             _ => null,
         };
     }
+
+    // Integers by their digits, so none is rounded to a double. Any other number is the float the codec reads it as.
+    private static bool NumbersAgree(JsonElement written, JsonElement produced) =>
+        IsInteger(written) && IsInteger(produced)
+            ? BigInteger.Parse(written.GetRawText(), CultureInfo.InvariantCulture) == BigInteger.Parse(produced.GetRawText(), CultureInfo.InvariantCulture)
+            : written.GetDouble().Equals(produced.GetDouble()) || SameSingle(written, produced);
+
+    private static bool IsInteger(JsonElement number) => number.GetRawText().AsSpan().IndexOfAny(".eE") < 0;
+
+    private static bool SameSingle(JsonElement written, JsonElement produced) =>
+        written.TryGetSingle(out var first) && produced.TryGetSingle(out var second) && first.Equals(second);
 
     private static string? ObjectDifference(JsonElement written, JsonElement produced, string path)
     {
