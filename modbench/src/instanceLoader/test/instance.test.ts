@@ -834,6 +834,21 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.gameFolder).toEqual({ kind: 'found', root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
   });
 
+  it('hands the snapshot the archives the game\u2019s default INI lists, from the game folder, and tells that the profile keeps no INIs of its own', async () => {
+    const game = await mkdtemp(join(tmpdir(), 'medit-instance-archives-'));
+    roots.push(game);
+    await mkdir(join(game, 'Data'));
+    await writeFile(join(game, 'Data', 'Fallout4 - Interface.ba2'), '');
+    await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceStartUpArchiveList=Fallout4 - Interface.ba2\n');
+    const { instance, logs } = realInstance({ resolveGameFolder: () => Promise.resolve({ kind: 'found', root: game, dataFolder: join(game, 'Data') }) });
+
+    await instance.refresh();
+
+    const snapshot = instance.value.loadOrderSnapshot;
+    expect(snapshot !== undefined && 'archives' in snapshot ? snapshot.archives : snapshot).toEqual([join(game, 'Data', 'Fallout4 - Interface.ba2')]);
+    expect(logs).toContainEqual(expect.stringMatching(/^\[instance\] The profile Default keeps no game INIs of its own/));
+  });
+
   it('drops a download\u2019s Installed row once the mod that named it is gone, sidecar claim and all', async () => {
     const { root, instance } = realInstance();
     const archive = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';

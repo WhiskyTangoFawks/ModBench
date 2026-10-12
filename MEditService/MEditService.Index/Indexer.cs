@@ -813,7 +813,7 @@ internal sealed class Indexer : IDisposable
                 new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path),
                 scope.LoadOrder,
                 scope.Store.Schemas,
-                new PluginStrings(Path.GetDirectoryName(plugin.Path), scope.Held.DataFolderPath))
+                new PluginStrings(Path.GetDirectoryName(plugin.Path)))
             .Holds(out var opened, out var failure))
         {
             _logger.LogWarning(failure.Error, "Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);

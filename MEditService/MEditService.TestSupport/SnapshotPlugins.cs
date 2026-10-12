@@ -23,7 +23,7 @@ public static class SnapshotPlugins
         string dataFolder, string? instanceRoot, GameRelease gameRelease, IEnumerable<LoadOrderEntry> entries)
     {
         var list = entries.ToList();
-        return new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, Of(list), Active(list), LoadedWithNoLine(list), []);
+        return new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, Of(list), Active(list), LoadedWithNoLine(list), [], []);
     }
 
     /// <summary>The PUT /load-order body.</summary>
@@ -38,6 +38,8 @@ public static class SnapshotPlugins
             plugins = list.Select(p => p.Wire),
             active = Active(list),
             loadedWithNoLine = LoadedWithNoLine(list),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
             gameRelease,
         };
     }
