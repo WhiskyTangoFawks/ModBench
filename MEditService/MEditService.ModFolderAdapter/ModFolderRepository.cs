@@ -26,6 +26,23 @@ public sealed class ModFolderRepository : IModFolderRepository
     public Stream OpenInstallationFile(string path) =>
         new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
 
+    public void WriteFile(string folder, string path, Action<Stream> write)
+    {
+        var target = Path.Combine(folder, path);
+        Directory.CreateDirectory(Path.GetDirectoryName(target) ?? folder);
+        var partial = Path.Combine(Path.GetDirectoryName(target) ?? folder, Path.GetRandomFileName());
+        try
+        {
+            using (var content = new FileStream(partial, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+                write(content);
+            File.Move(partial, target, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(partial);
+        }
+    }
+
     public bool WriteManifest(string modFolder, string modName, Manifest manifest)
     {
         var path = Path.Combine(modFolder, ManifestName(modName));

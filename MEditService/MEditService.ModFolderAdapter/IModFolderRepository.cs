@@ -22,6 +22,10 @@ public interface IModFolderRepository
 
     Stream OpenInstallationFile(string path);
 
+    /// <summary>Writes the file at <paramref name="path"/> under <paramref name="folder"/> from what <paramref name="write"/>
+    /// puts in the seekable stream it is given. A write that throws leaves the folder as it was.</summary>
+    void WriteFile(string folder, string path, Action<Stream> write);
+
     /// <summary>Writes the mod's manifest into its folder, and only when its text differs from the one there.
     /// True when it wrote.</summary>
     bool WriteManifest(string modFolder, string modName, Manifest manifest);

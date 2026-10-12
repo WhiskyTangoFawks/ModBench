@@ -61,6 +61,15 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public Stream OpenInstallationFile(string path) => Open(string.Empty, path);
 
+    public Dictionary<(string Folder, string Path), byte[]> Written { get; } = [];
+
+    public void WriteFile(string folder, string path, Action<Stream> write)
+    {
+        using var content = new MemoryStream();
+        write(content);
+        Written[(folder, path)] = content.ToArray();
+    }
+
     public bool WriteManifest(string modFolder, string modName, Manifest manifest)
     {
         if (UnwritableManifests.Contains(modFolder)) throw new UnauthorizedAccessException($"{modFolder} is read-only");

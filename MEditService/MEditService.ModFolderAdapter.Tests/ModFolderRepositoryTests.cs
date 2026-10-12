@@ -131,6 +131,39 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Contains("café", System.Text.Encoding.UTF8.GetString(bytes));
     }
 
+    [Fact]
+    public void WriteFile_PutsTheStreamsBytesAtThePath_ReplacingWhatWasThere()
+    {
+        Write("mod.ba2", "old archive, longer than the new one");
+
+        _repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8));
+
+        Assert.Equal("new", File.ReadAllText(Path.Combine(_root, "mod.ba2")));
+    }
+
+    [Fact]
+    public void WriteFile_CreatesTheFoldersOfThePath()
+    {
+        _repository.WriteFile(_root, "archives/mod.ba2", content => content.Write("new"u8));
+
+        Assert.Equal("new", File.ReadAllText(Path.Combine(_root, "archives", "mod.ba2")));
+    }
+
+    [Fact]
+    public void WriteFile_WhenTheWriteThrows_LeavesTheFolderAsItWas()
+    {
+        Write("mod.ba2", "old");
+
+        Assert.Throws<InvalidDataException>(() => _repository.WriteFile(_root, "mod.ba2", content =>
+        {
+            content.Write("half"u8);
+            throw new InvalidDataException("cannot");
+        }));
+
+        Assert.Equal("old", File.ReadAllText(Path.Combine(_root, "mod.ba2")));
+        Assert.Equal(["mod.ba2"], Directory.GetFiles(_root).Select(Path.GetFileName));
+    }
+
     private void Write(string relative, string text)
     {
         var path = Path.Combine(_root, relative);
