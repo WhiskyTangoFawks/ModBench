@@ -31,7 +31,7 @@ views: "every view" {class: driving}
 driving."the confirmation"
 driving -> sourcecommands: "discard changes: the mods, or every mod, with the instance value" {class: compile}
 instance -> instanceadapter: "each downloaded file: bytes, when its index is stale" {class: compile}
-instanceadapter -> sourcecommands: "each installation file: hash and entries" {class: compile}
+instanceadapter -> sourcecommands: "each installation file: hash and entries · each game file a mod file overrides: hash" {class: compile}
 sourcecommands -> client: "discard: each mod's folder and installation files with their hashes and entries, the game folder" {class: compile}
 client -> http: envelope {class: compile}
 http -> engine: envelope {class: compile}

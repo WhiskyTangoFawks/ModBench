@@ -26,7 +26,7 @@ views: "every view" {class: driving}
 
 driving -> sourcecommands: "stage: the mods, or every mod, with the instance value" {class: track}
 instance -> instanceadapter: "each downloaded file: bytes, when its index is stale" {class: track}
-instanceadapter -> sourcecommands: "each installation file: hash and entries" {class: track}
+instanceadapter -> sourcecommands: "each installation file: hash and entries · each game file a mod file overrides: hash" {class: track}
 sourcecommands -> client: "stage: each mod's folder and installation files with their hashes and entries, the game folder" {class: track}
 client -> http: envelope {class: track}
 http -> engine: envelope {class: track}
