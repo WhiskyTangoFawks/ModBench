@@ -16,7 +16,7 @@ public sealed class ModFolderRepository : IModFolderRepository
 
     public StampedFile? InstallationFile(string path) => File.Exists(path) ? new(path, FileStamp.Of(path)) : null;
 
-    public StampedFile? GameFile(string gameFolder, string path) => InstallationFile(Path.Combine(gameFolder, path));
+    public StampedFile? GameFile(string dataFolder, string path) => InstallationFile(Path.Combine(dataFolder, path));
 
     public string InstallationFileName(string path) => Path.GetFileName(path);
 

@@ -27,12 +27,12 @@ internal static class ModlistEndpoints
         {
             return Results.Problem("Every mod needs a name and a folder, and every installation file a path.", statusCode: 400);
         }
-        if (string.IsNullOrWhiteSpace(req.GameFolder)) return Results.Problem("The game folder is required.", statusCode: 400);
+        if (string.IsNullOrWhiteSpace(req.DataFolder)) return Results.Problem("The game's data folder is required.", statusCode: 400);
 
         var result = handler.Stage(
             [.. mods.Select(mod => new ModToStage(
                 mod.Name, mod.Folder, [.. (mod.InstallationFiles ?? []).Select(file => new InstallationFileToStage(file.Path, file.Source))]))],
-            req.GameFolder, cancel);
+            req.DataFolder, cancel);
 
         var logger = loggerFactory.CreateLogger(nameof(ModlistEndpoints));
         foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Stage", item.Refusal, item.Message, item.Item);
@@ -42,8 +42,8 @@ internal static class ModlistEndpoints
     }
 }
 
-/// <summary>The mods to stage, and the game folder their files may come from.</summary>
-internal sealed record StageRequest(IReadOnlyList<StageModRequest> Mods, string GameFolder);
+/// <summary>The mods to stage, and the game's data folder their files may come from.</summary>
+internal sealed record StageRequest(IReadOnlyList<StageModRequest> Mods, string DataFolder);
 
 internal sealed record StageModRequest(string Name, string Folder, IReadOnlyList<StageInstallationFileRequest> InstallationFiles);
 

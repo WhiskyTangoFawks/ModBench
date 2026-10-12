@@ -6,9 +6,6 @@ namespace MEditService.Commands.Engine;
 /// bytes, and a file nothing holds has no provider.</summary>
 internal sealed class ManifestBuilder
 {
-    /// <summary>A mod folder's paths are relative to the game's Data folder.</summary>
-    internal const string GameDataFolder = "Data";
-
     private readonly List<(string Name, string? Source, HashedInstallationFile Content)> _installationFiles;
     private readonly Func<string, HashedFile?> _gameFile;
     private readonly List<(string Name, ILookup<FileHash, HashedEntry> ByHash, Dictionary<string, HashedEntry> ByPath)> _indexes;
@@ -58,11 +55,10 @@ internal sealed class ManifestBuilder
             return new FileProvider.InstallationFileEntry(name, entry.Path);
         }
 
-        var gamePath = $"{GameDataFolder}/{file.Path}";
-        if (_gameFile(gamePath) is { } game && game.Hash == file.Hash)
+        if (_gameFile(file.Path) is { } game && game.Hash == file.Hash)
         {
-            _gameFilesUsed[gamePath] = new ManifestSource(gamePath, game.Size, game.Hash.ToString());
-            return new FileProvider.GameFile(gamePath);
+            _gameFilesUsed[file.Path] = new ManifestSource(file.Path, game.Size, game.Hash.ToString());
+            return new FileProvider.GameFile(file.Path);
         }
 
         return new FileProvider.NoProvider();

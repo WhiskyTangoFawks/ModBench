@@ -14,6 +14,10 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public int Opens { get; private set; }
 
+    public HashSet<(string Folder, string Path)> Unreadable { get; } = [];
+
+    public HashSet<string> UnwritableManifests { get; } = [];
+
     public Dictionary<string, Manifest> Manifests { get; } = [];
 
     public FakeModFolders WithFolder(string folder)
@@ -59,6 +63,7 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public bool WriteManifest(string modFolder, string modName, Manifest manifest)
     {
+        if (UnwritableManifests.Contains(modFolder)) throw new UnauthorizedAccessException($"{modFolder} is read-only");
         var text = string.Join('\n', manifest.InstallationFiles.Select(s => s.ToString())
             .Concat(manifest.GameFiles.Select(s => s.ToString()))
             .Concat(manifest.Files.Select(f => f.ToString())));
@@ -73,6 +78,7 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     private MemoryStream Open(string folder, string path)
     {
+        if (Unreadable.Contains((folder, path))) throw new IOException($"{path} is held by another process");
         Opens++;
         return new MemoryStream(_files[(folder, path)].Bytes);
     }

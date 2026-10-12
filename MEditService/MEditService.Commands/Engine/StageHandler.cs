@@ -11,7 +11,7 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
     private readonly ContentHashes _hashes = new(repository, time);
 
     public SelectionResult<string, StageRefusal, StagedMod> Stage(
-        IReadOnlyList<ModToStage> mods, string gameFolder, CancellationToken cancel = default)
+        IReadOnlyList<ModToStage> mods, string dataFolder, CancellationToken cancel = default)
     {
         var distinct = mods.DistinctBy(mod => mod.Name, StringComparer.OrdinalIgnoreCase).ToList();
         List<ItemLanded<string, StagedMod>> landed = [];
@@ -22,7 +22,7 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
             {
                 cancel.ThrowIfCancellationRequested();
                 notifications.Publish(new StageProgressNotification(new StageProgress(mod.Name, done, distinct.Count)));
-                switch (StageMod(mod, gameFolder))
+                switch (StageMod(mod, dataFolder))
                 {
                     case ItemAnswer<StageRefusal, StagedMod>.Wrote wrote:
                         landed.Add(new ItemLanded<string, StagedMod>(mod.Name, wrote.Outcome));
@@ -40,7 +40,7 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
         return SelectionResult<string, StageRefusal, StagedMod>.PerItem(landed, refused);
     }
 
-    private ItemAnswer<StageRefusal, StagedMod> StageMod(ModToStage mod, string gameFolder)
+    private ItemAnswer<StageRefusal, StagedMod> StageMod(ModToStage mod, string dataFolder)
     {
         List<(InstallationFileToStage File, StampedFile Stamped)> described = [];
         List<string> missing = [];
@@ -65,8 +65,8 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
             {
                 installationFiles.Add((name, file.Source, _hashes.OfInstallationFile(stamped)));
             }
-            catch (Exception e) when (e is IOException or InvalidOperationException or InvalidDataException or NotSupportedException
-                or SharpCompress.Common.SharpCompressException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException or InvalidDataException
+                or NotSupportedException or SharpCompress.Common.SharpCompressException)
             {
                 return ItemAnswer<StageRefusal, StagedMod>.Refused(
                     StageRefusal.InstallationFileUnreadable, $"'{mod.Name}' was not staged: '{name}' cannot be read as an archive: {e.Message}");
@@ -74,21 +74,37 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
         }
 
         IReadOnlyList<HashedFile> files;
+        Manifest manifest;
         try
         {
             files = _hashes.OfModFolder(mod.Folder, mod.Name);
+            manifest = new ManifestBuilder(installationFiles, path => GameFile(dataFolder, path)).Build(files);
         }
         catch (DirectoryNotFoundException)
         {
             return ItemAnswer<StageRefusal, StagedMod>.Refused(StageRefusal.ModFolderMissing, $"'{mod.Name}' was not staged: its folder does not exist.");
         }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return ItemAnswer<StageRefusal, StagedMod>.Refused(
+                StageRefusal.ModFilesUnreadable, $"'{mod.Name}' was not staged: a file could not be read: {e.Message}");
+        }
 
-        var manifest = new ManifestBuilder(installationFiles, path => GameFile(gameFolder, path)).Build(files);
-        var written = repository.WriteManifest(mod.Folder, mod.Name, manifest);
+        bool written;
+        try
+        {
+            written = repository.WriteManifest(mod.Folder, mod.Name, manifest);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return ItemAnswer<StageRefusal, StagedMod>.Refused(
+                StageRefusal.ManifestNotWritten, $"'{mod.Name}' was not staged: its manifest could not be written: {e.Message}");
+        }
+
         return ItemAnswer<StageRefusal, StagedMod>.Landed(new StagedMod(
             written, [.. manifest.Files.Where(file => file.Provider is FileProvider.NoProvider).Select(file => file.Path).Order(StringComparer.Ordinal)]));
     }
 
-    private HashedFile? GameFile(string gameFolder, string path) =>
-        repository.GameFile(gameFolder, path) is { } stamped ? _hashes.OfFile(gameFolder, stamped) : null;
+    private HashedFile? GameFile(string dataFolder, string path) =>
+        repository.GameFile(dataFolder, path) is { } stamped ? _hashes.OfFile(dataFolder, stamped) : null;
 }

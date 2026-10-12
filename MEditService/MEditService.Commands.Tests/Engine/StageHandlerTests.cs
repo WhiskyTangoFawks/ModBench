@@ -4,6 +4,7 @@ using MEditService.Commands.Engine;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.ModFolderAdapter;
 using MEditService.Ports;
+using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
 
 namespace MEditService.Commands.Tests.Engine;
@@ -21,13 +22,16 @@ public sealed class StageHandlerTests
     private const string Game = "game";
 
     private readonly FakeModFolders _folders = new();
-    private readonly Notifications _notifications = new();
+    private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly FakeTimeProvider _time = new(DateTimeOffset.UnixEpoch.AddDays(1));
 
     private StageHandler Handler => new(_folders, _notifications, _time);
 
     private static ModToStage ModFrom(string name, params string[] installationFiles) =>
         new(name, $"mods/{name}", [.. installationFiles.Select(path => new InstallationFileToStage(path, Source: null))]);
+
+    private IEnumerable<StageProgress> Progress =>
+        _notifications.Notifications.OfType<StageProgressNotification>().Select(n => n.Progress);
 
     private ManifestFile FileOf(string folder, string path) => _folders.Manifests[folder].Files.Single(f => f.Path == path);
 
@@ -103,18 +107,18 @@ public sealed class StageHandlerTests
     }
 
     [Fact]
-    public void AFileTheGameFolderHoldsUnderData_NamesTheGameFile()
+    public void AFileTheGameDataFolderHolds_NamesTheGameFile()
     {
         _folders.WithFile(Mod, "Game.esm", "hello").WithFile(Mod, "Other.esm", "hello");
-        _folders.WithFile(Game, "Data/Game.esm", "hello").WithFile(Game, "Data/Other.esm", "hellO");
+        _folders.WithFile(Game, "Game.esm", "hello").WithFile(Game, "Other.esm", "hellO");
 
         var staged = Landed(ModFrom("Mod"));
 
-        Assert.Equal(new FileProvider.GameFile("Data/Game.esm"), FileOf(Mod, "Game.esm").Provider);
+        Assert.Equal(new FileProvider.GameFile("Game.esm"), FileOf(Mod, "Game.esm").Provider);
         Assert.IsType<FileProvider.NoProvider>(FileOf(Mod, "Other.esm").Provider);
         Assert.Equal(["Other.esm"], staged.NoProvider);
         var gameFile = Assert.Single(_folders.Manifests[Mod].GameFiles);
-        Assert.Equal(("Data/Game.esm", 5L, HashOfHello), (gameFile.Name, gameFile.Size, gameFile.Hash));
+        Assert.Equal(("Game.esm", 5L, HashOfHello), (gameFile.Name, gameFile.Size, gameFile.Hash));
     }
 
     [Fact]
@@ -200,6 +204,48 @@ public sealed class StageHandlerTests
     }
 
     [Fact]
+    public void AFileOfAModThatCannotBeRead_RefusesThatModNamingTheFile_AndTheOthersLand()
+    {
+        _folders.WithFile("mods/Held", "held.txt", "hello").WithFile("mods/Fine", "a.txt", "hello");
+        _folders.Unreadable.Add(("mods/Held", "held.txt"));
+
+        var result = Handler.Stage([ModFrom("Held"), ModFrom("Fine")], Game);
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(("Held", StageRefusal.ModFilesUnreadable), (refused.Item, refused.Refusal));
+        Assert.Contains("held.txt", refused.Message);
+        Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
+    }
+
+    [Fact]
+    public void AnInstallationFileThatCannotBeOpened_RefusesThatModNamingTheFile_AndTheOthersLand()
+    {
+        _folders.WithFile("mods/Held", "a.txt", "hello").WithFile("mods/Fine", "a.txt", "hello");
+        _folders.WithBytes(string.Empty, "dl/Held.zip", Zip(("a.txt", "hello")));
+        _folders.Unreadable.Add((string.Empty, "dl/Held.zip"));
+
+        var result = Handler.Stage([ModFrom("Held", "dl/Held.zip"), ModFrom("Fine")], Game);
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(("Held", StageRefusal.InstallationFileUnreadable), (refused.Item, refused.Refusal));
+        Assert.Contains("Held.zip", refused.Message);
+        Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
+    }
+
+    [Fact]
+    public void AManifestThatCannotBeWritten_RefusesThatMod_AndTheOthersLand()
+    {
+        _folders.WithFile("mods/Locked", "a.txt", "hello").WithFile("mods/Fine", "a.txt", "hello");
+        _folders.UnwritableManifests.Add("mods/Locked");
+
+        var result = Handler.Stage([ModFrom("Locked"), ModFrom("Fine")], Game);
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(("Locked", StageRefusal.ManifestNotWritten), (refused.Item, refused.Refusal));
+        Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
+    }
+
+    [Fact]
     public void AModNamedTwice_IsStagedOnce()
     {
         _folders.WithFile(Mod, "a.txt", "hello");
@@ -218,7 +264,7 @@ public sealed class StageHandlerTests
 
         Assert.Equal(
             [new StageProgress("A", 0, 2), new StageProgress("B", 1, 2), new StageProgress(null, 0, 0)],
-            _notifications.Progress);
+            Progress);
     }
 
     [Fact]
@@ -230,7 +276,7 @@ public sealed class StageHandlerTests
 
         Assert.Throws<OperationCanceledException>(() => Handler.Stage([ModFrom("Mod")], Game, cancelled.Token));
 
-        Assert.Equal([new StageProgress(null, 0, 0)], _notifications.Progress);
+        Assert.Equal([new StageProgress(null, 0, 0)], Progress);
     }
 
     [Theory]
@@ -289,6 +335,17 @@ public sealed class StageHandlerTests
         handler.Stage([ModFrom("Mod")], Game);
 
         Assert.Equal(2, _folders.Opens);
+        Assert.Null(FileOf(Mod, "a.txt").Stamp);
+    }
+
+    [Fact]
+    public void AFileChangedLongBeforeItWasRead_IsRecordedWithItsStamp()
+    {
+        _folders.WithFile(Mod, "a.txt", "hello", modified: 7, changed: 7);
+
+        Landed(ModFrom("Mod"));
+
+        Assert.Equal((5L, 7L), (FileOf(Mod, "a.txt").Stamp?.Size, FileOf(Mod, "a.txt").Stamp?.Modified));
     }
 
     [Fact]
@@ -330,17 +387,5 @@ public sealed class StageHandlerTests
             }
         }
         return buffer.ToArray();
-    }
-
-    private sealed class Notifications : INotificationPublisher
-    {
-        private readonly List<StageProgress> _progress = [];
-
-        public IReadOnlyList<StageProgress> Progress => _progress;
-
-        public void Publish(INotification notification)
-        {
-            if (notification is StageProgressNotification stage) _progress.Add(stage.Progress);
-        }
     }
 }

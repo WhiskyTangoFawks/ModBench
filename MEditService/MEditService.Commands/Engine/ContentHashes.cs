@@ -35,8 +35,10 @@ internal sealed class ContentHashes(IModFolderRepository repository, TimeProvide
     public HashedFile OfFile(string folder, StampedFile file) =>
         MemoOf(folder).Of(file.Path, file.Stamp, () =>
         {
+            var readFrom = time.GetUtcNow();
             using var content = repository.OpenFile(folder, file.Path);
-            return new HashedFile(file.Path, content.Length, file.Stamp, FileHash.Of(content));
+            var settled = file.Stamp is { } stamp && stamp.SettledAt(readFrom) ? stamp : (FileStamp?)null;
+            return new HashedFile(file.Path, content.Length, settled, FileHash.Of(content));
         }) ?? throw new UnreachableException();
 
     private StampGatedMemo<HashedFile> MemoOf(string folder) =>

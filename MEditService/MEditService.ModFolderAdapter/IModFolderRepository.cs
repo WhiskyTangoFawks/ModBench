@@ -11,9 +11,9 @@ public interface IModFolderRepository
     /// <summary>The file at <paramref name="path"/>, described under that path; null when there is none.</summary>
     StampedFile? InstallationFile(string path);
 
-    /// <summary>The file at <paramref name="path"/> under <paramref name="gameFolder"/>, described under that path;
+    /// <summary>The file at <paramref name="path"/> under the game's data folder <paramref name="dataFolder"/>, described under that path;
     /// null when there is none.</summary>
-    StampedFile? GameFile(string gameFolder, string path);
+    StampedFile? GameFile(string dataFolder, string path);
 
     /// <summary>The name of the installation file at <paramref name="path"/>, without its folder.</summary>
     string InstallationFileName(string path);

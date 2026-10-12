@@ -13,8 +13,13 @@ public readonly record struct FileStamp(long Size, long Modified, long Changed)
     public static FileStamp? Of(string path) =>
         OperatingSystem.IsWindows() ? WindowsFileStamp.Of(path) : LinuxFileStamp.Of(path);
 
-    internal bool ChangedBefore(DateTimeOffset moment) =>
-        Changed < (moment - DateTimeOffset.UnixEpoch).Ticks * (1_000_000_000 / TimeSpan.TicksPerSecond);
+    // A file system stamps a change with a clock coarser than a read is quick, and a network share's
+    // clock is not this machine's: a stamp this recent may not change for a write that follows it.
+    private const int SettledAfterSeconds = 2;
+
+    /// <summary>True once the file's last change is old enough that a later write would move the stamp.</summary>
+    public bool SettledAt(DateTimeOffset moment) =>
+        Changed < (moment.AddSeconds(-SettledAfterSeconds) - DateTimeOffset.UnixEpoch).Ticks * (1_000_000_000 / TimeSpan.TicksPerSecond);
 }
 
 internal static class LinuxFileStamp
