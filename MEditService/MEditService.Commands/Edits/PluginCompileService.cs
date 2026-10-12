@@ -61,6 +61,18 @@ internal sealed class PluginCompileService(
                 $"{plugin.Name}'s source folder holds no files, so there is nothing to compile. {RegenerateTheSource}");
         }
 
+        if (!repository.RecordFilesOf(plugin).Holds(out var recordFiles, out unread)) return SourceDoesNotParse(plugin, unread);
+        var refusedFiles = recordFiles
+            .Select(file => (file.Path, Reason: RecordTextCodec.WhyNotARecord(file.Text, loadOrder.GameRelease, file.RecordType)))
+            .Where(file => file.Reason is not null)
+            .ToList();
+        if (refusedFiles.Count > 0)
+        {
+            return CompileResult.Refused(
+                CompileRefusal.SourceDoesNotParse,
+                $"{plugin.Name} cannot be compiled: {string.Join("; ", refusedFiles.Select(file => $"{file.Path}: {file.Reason}"))}");
+        }
+
         var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin, repository, loadOrder);
         if (deserializeRefusal != null)
             return CompileResult.Refused(CompileRefusal.SourceDoesNotParse, deserializeRefusal);

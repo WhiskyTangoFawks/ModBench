@@ -3,9 +3,25 @@ using System.Text.Json;
 namespace MEditService.Codec.Serialization;
 
 /// <summary>Whether two documents mean the same: JSON values equal, spacing and key order aside.</summary>
-internal static class DocumentMeaning
+public static class DocumentMeaning
 {
     private const string Root = "the document";
+
+    /// <summary>Whether two documents mean the same; two that are no JSON mean the same only as bytes.</summary>
+    public static bool AreSame(byte[] first, byte[] second)
+    {
+        if (first.AsSpan().SequenceEqual(second)) return true;
+        try
+        {
+            using var written = JsonDocument.Parse(first);
+            using var produced = JsonDocument.Parse(second);
+            return FirstDifference(written.RootElement, produced.RootElement) is null;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>The path of the first member where <paramref name="written"/> and <paramref name="produced"/>
     /// differ, or null when they mean the same.</summary>

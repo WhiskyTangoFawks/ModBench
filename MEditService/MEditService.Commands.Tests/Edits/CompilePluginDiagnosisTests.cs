@@ -1,4 +1,3 @@
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 
@@ -11,7 +10,7 @@ public sealed class CompilePluginDiagnosisTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     [Fact]
-    public async Task Compile_WhenTheTrackedSourceHoldsAMalformedFormKey_NamesTheRecordNotJustTheRawExceptionText()
+    public async Task Compile_WhenTheTrackedSourceHoldsAMalformedFormKey_NamesTheFileTheFieldAndTheCause()
     {
         Corrupt();
 
@@ -20,9 +19,8 @@ public sealed class CompilePluginDiagnosisTests : IDisposable
 
         var refused = Assert.Single(answer.Refused);
         Assert.Contains("FixtureNpc", refused.Message);
-        Assert.Contains("Malformed FormKey string: NOT-A-FORMKEY", refused.Message);
-        Assert.Contains(PluginDiagnosis.UnknownClass, refused.Message);
-        Assert.Contains("Decompile the plugin to regenerate the source.", refused.Message);
+        Assert.Contains("Race: Malformed FormKey string: NOT-A-FORMKEY", refused.Message);
+        Assert.DoesNotContain("Decompile", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

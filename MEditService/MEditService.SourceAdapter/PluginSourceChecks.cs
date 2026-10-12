@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -28,7 +29,11 @@ public sealed record MisplacedFile(string FormKey, string HeldPath, string Belon
 /// differ from it only in where they sit. A misplaced file is no divergence: it compiles.</summary>
 public sealed record SourceComparison(SourceDivergence? Divergence, IReadOnlyList<MisplacedFile> Misplaced);
 
-/// <summary>The two questions asked of a plugin's source as files rather than as documents.</summary>
+/// <summary>A source file that carries a record, as the source folder spells it, with its text and the record type
+/// its path or its text names, null when neither does.</summary>
+public sealed record RecordFile(string Path, string Text, string? RecordType);
+
+/// <summary>The questions asked of a plugin's source as files rather than as documents.</summary>
 internal static class PluginSourceChecks
 {
     internal static IReadOnlyList<string> CollidingFormKeys(
@@ -52,6 +57,20 @@ internal static class PluginSourceChecks
         return colliding;
     }
 
+    internal static IReadOnlyList<RecordFile> RecordFilesOf(PluginSourceFiles source, GameRelease gameRelease)
+    {
+        var types = RecordTypes.For(gameRelease);
+        var records = new List<RecordFile>();
+        foreach (var file in source.Files.Where(file => !SourceRepositoryLayout.CarriesNoRecord(file.RelativePath)))
+        {
+            var text = System.Text.Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(file.Content));
+            var recordType = SourceRepositoryLayout.RecordTypeOf(file.RelativePath, gameRelease)
+                ?? types.RecordTypeNamed(DocumentTokens.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator));
+            records.Add(new RecordFile(file.RelativePath, text, recordType));
+        }
+        return records;
+    }
+
     internal static SourceComparison Compare(
         string pluginFileName, PluginSourceFiles source, IReadOnlyList<TreeFile> serialized)
     {
@@ -68,7 +87,7 @@ internal static class PluginSourceChecks
 
         foreach (var file in regenerated.Where(file => !belongingAt.Contains(file.RelativePath)))
         {
-            if (held.TryGetValue(file.RelativePath, out var content) && content.AsSpan().SequenceEqual(file.Content))
+            if (held.TryGetValue(file.RelativePath, out var content) && DocumentMeaning.AreSame(DocumentText.StripUtf8Bom(content), file.Content))
                 continue;
 
             return new SourceComparison(

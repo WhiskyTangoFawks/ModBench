@@ -24,7 +24,8 @@ public enum CompileRefusal
     /// closing that program.</summary>
     SourceFileHeld,
 
-    /// <summary>The source does not parse; the way out is Decompile.</summary>
+    /// <summary>A source file the Codec refuses, or one the whole-mod read cannot parse; the way out is the files
+    /// named.</summary>
     SourceDoesNotParse,
 
     /// <summary>The source does not round-trip through the codec (ADR-0006); the way out is
