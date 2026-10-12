@@ -55,7 +55,7 @@ vi.mock('vscode', () => {
 
 import { holdOneTextPerFile } from '../oneTextPerFile';
 
-const CELL = '/mods/ModA/plugin-source/A.esp/Cells/Cell.json';
+const CELL = '/source/ModA/plugin-source/A.esp/Cells/Cell.json';
 let made = 0;
 
 function document(scheme: string, text: string, isDirty = false, fsPath = CELL): FakeDocument {
@@ -95,7 +95,7 @@ beforeEach(() => {
 describe('the documents over one file', () => {
   it('give an unsaved change in one to each other document over the file, and to none over another', async () => {
     const [file, child] = [document('file', 'saved'), document('modbench-child-record', 'saved')];
-    const elsewhere = document('file', 'saved', false, '/mods/ModA/plugin-source/A.esp/Cells/Other.json');
+    const elsewhere = document('file', 'saved', false, '/source/ModA/plugin-source/A.esp/Cells/Other.json');
 
     changed(file, 'typed', true);
     await settled();

@@ -80,7 +80,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
         Assert.Equal(
             ["READ-FROM"],
-            TestAdapters.Source().OverFolder(new PluginProvider.FromMod(TrackedModName, _trackedMod), GameRelease.Fallout4).LastWrittenBinarySha256s(Tracked("Second.esp")).Value());
+            TestAdapters.Source().OverFolder(new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), GameRelease.Fallout4).LastWrittenBinarySha256s(Tracked("Second.esp")).Value());
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.NotInTrackedMod, refused.Refusal);
         Assert.Contains("Other.esp", refused.Message, StringComparison.Ordinal);
-        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("Other.esp", UntrackedModName, "", new PluginProvider.FromMod(UntrackedModName, _untrackedMod), Line: null)));
+        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("Other.esp", UntrackedModName, "", new PluginProvider.FromMod(UntrackedModName, _untrackedMod, _untrackedMod), Line: null)));
     }
 
     [PosixFact]
@@ -186,7 +186,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         mod.WriteToBinary(Path.Combine(modFolder, name));
     }
 
-    private ISourceRepository Repository => TestAdapters.Source().Open(new PluginProvider.FromMod(TrackedModName, _trackedMod), GameRelease.Fallout4).Require();
+    private ISourceRepository Repository => TestAdapters.Source().Open(new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), GameRelease.Fallout4).Require();
 
     private string SourceTextOf(string plugin) => string.Concat(
         TreeDocuments.Of(Repository, Tracked(plugin)).Select(document => document.Body).Order(StringComparer.Ordinal));

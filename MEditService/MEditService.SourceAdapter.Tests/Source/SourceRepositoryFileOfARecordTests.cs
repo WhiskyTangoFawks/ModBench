@@ -54,7 +54,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     private string HeaderFile => Path.Combine(_modFolder, PluginSourceRoot.HeaderDocument(PluginName));
 
     private ISourceRepository Repository =>
-        TestAdapters.Source().Open(new PluginProvider.FromMod(Origin, _modFolder), Release)
+        TestAdapters.Source().Open(new PluginProvider.FromMod(Origin, _modFolder, _modFolder), Release)
         ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private static LoadOrderEntry Entry(string modFolder, string origin) =>

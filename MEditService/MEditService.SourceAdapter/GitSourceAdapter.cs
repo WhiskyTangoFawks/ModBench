@@ -11,7 +11,7 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved) : ISourceAdapter
 
     public bool IsTracked(RegisteredPlugin plugin) => SourceRepository.IsTracked(plugin);
 
-    public bool IsTracked(string modFolder) => SourceRepository.IsTracked(modFolder);
+    public bool IsTracked(string sourceFolder) => SourceRepository.IsTracked(sourceFolder);
 
     public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => SourceRepository.WhySourceDoesNotRead(plugin);
 
@@ -35,15 +35,15 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved) : ISourceAdapter
 
     public string FileNameOf(RecordIdentity identity) => SourceRepository.FileNameOf(identity);
 
-    public bool HoldsAnotherRepository(string modFolder) => SourceRepository.HoldsAnotherRepository(modFolder);
+    public bool HoldsAnotherRepository(string sourceFolder) => SourceRepository.HoldsAnotherRepository(sourceFolder);
 
     public SourceFailure? WhyGitCannotRun() => SourceRepository.WhyGitCannotRun();
 
     public string? InstanceRootNotFound(string? instanceRoot) => SourceRepository.InstanceRootNotFound(instanceRoot);
 
     public IReadOnlyList<(string Plugin, string Reason)> Track(
-        string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins) =>
-        SourceRepository.Track(modFolder, plugins);
+        string sourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins) =>
+        SourceRepository.Track(sourceFolder, plugins);
 
     public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
         SourceRepository.ReadBackOf(pluginFileName, tree, gameRelease);

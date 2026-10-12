@@ -4,8 +4,8 @@ using MEditService.RepositoriesLib;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
-/// <summary>The Mod folder adapter's second implementation: folders, installation files and a game folder held in
-/// memory, a manifest written only when it differs from the one there.</summary>
+/// <summary>The Mod folder adapter's second implementation: folders and installation files held in memory, a
+/// file's hash its text, and a manifest written only when it differs from the one there.</summary>
 internal sealed class FakeModFolders : IModFolderRepository
 {
     private readonly Dictionary<(string Folder, string Path), (byte[] Bytes, FileStamp? Stamp)> _files = [];
@@ -13,19 +13,11 @@ internal sealed class FakeModFolders : IModFolderRepository
     private readonly HashSet<string> _folders = [];
     private readonly Dictionary<(string Folder, string Path), Func<Stream>> _streams = [];
 
-    public int Opens { get; private set; }
-
     public HashSet<(string Folder, string Path)> Unreadable { get; } = [];
 
     public HashSet<string> UnwritableManifests { get; } = [];
 
     public Dictionary<string, Manifest> Manifests { get; } = [];
-
-    public FakeModFolders WithFolder(string folder)
-    {
-        _folders.Add(folder);
-        return this;
-    }
 
     public FakeModFolders WithFile(string folder, string path, string text, long modified = 0, long changed = 0) =>
         WithBytes(folder, path, Encoding.ASCII.GetBytes(text), modified, changed);
@@ -46,28 +38,19 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public void Without(string folder, string path) => _files.Remove((folder, path));
 
-    public FakeModFolders WithUnstampedFile(string folder, string path, string text)
-    {
-        _folders.Add(folder);
-        _files[(folder, path)] = (Encoding.ASCII.GetBytes(text), null);
-        return this;
-    }
-
-    public IReadOnlyList<StampedFile> Files(string modFolder, string modName)
+    public IReadOnlyList<HashedFile> Files(string modFolder, string modName, IReadOnlySet<string> leftOut)
     {
         if (!_folders.Contains(modFolder)) throw new DirectoryNotFoundException(modFolder);
-        return [.. _files.Where(f => f.Key.Folder == modFolder).Select(f => new StampedFile(f.Key.Path, f.Value.Stamp))];
+        var files = _files.Where(f => f.Key.Folder == modFolder && !leftOut.Contains(f.Key.Path)).ToList();
+        if (files.FirstOrDefault(f => Unreadable.Contains(f.Key)) is { Key.Path: { } held }) throw new IOException($"{held} is held by another process");
+        return [.. files.Select(f => new HashedFile(f.Key.Path, Encoding.ASCII.GetString(f.Value.Bytes), f.Value.Stamp))];
     }
 
-    public StampedFile? InstallationFile(string path) => Described(string.Empty, path);
-
-    public StampedFile? GameFile(string gameFolder, string path) => Described(gameFolder, path);
+    public bool InstallationFileExists(string path) => _files.ContainsKey((string.Empty, path));
 
     public string InstallationFileName(string path) => path[(path.LastIndexOf('/') + 1)..];
 
     public Stream OpenFile(string folder, string path) => Open(folder, path);
-
-    public Stream OpenInstallationFile(string path) => Open(string.Empty, path);
 
     public Dictionary<(string Folder, string Path), byte[]> Written { get; } = [];
 
@@ -90,14 +73,10 @@ internal sealed class FakeModFolders : IModFolderRepository
         return true;
     }
 
-    private StampedFile? Described(string folder, string path) =>
-        _files.TryGetValue((folder, path), out var file) ? new StampedFile(path, file.Stamp) : null;
-
     private Stream Open(string folder, string path)
     {
         if (_streams.TryGetValue((folder, path), out var open)) return open();
         if (Unreadable.Contains((folder, path))) throw new IOException($"{path} is held by another process");
-        Opens++;
         return new MemoryStream(_files[(folder, path)].Bytes);
     }
 }

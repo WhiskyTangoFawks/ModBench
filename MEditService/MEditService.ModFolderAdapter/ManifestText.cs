@@ -20,6 +20,32 @@ internal static class ManifestText
         return text.ToString();
     }
 
+    public static Dictionary<string, LineStamp> LineStamps(string text)
+    {
+        Dictionary<string, LineStamp> stamps = new(StringComparer.Ordinal);
+        foreach (var line in text.Split('\n'))
+        {
+            try
+            {
+                using var parsed = JsonDocument.Parse(line);
+                var root = parsed.RootElement;
+                if (root.ValueKind == JsonValueKind.Object
+                    && root.TryGetProperty("path", out var path) && path.GetString() is { } file
+                    && root.TryGetProperty("hash", out var hash) && hash.GetString() is { } hashText
+                    && root.TryGetProperty("size", out var size) && size.TryGetInt64(out var bytes)
+                    && root.TryGetProperty("modified", out var modified) && modified.TryGetInt64(out var at))
+                {
+                    stamps[file] = new LineStamp(bytes, at, hashText);
+                }
+            }
+            catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException)
+            {
+                // A line that is not one of ours, as a merge conflict leaves, vouches for nothing.
+            }
+        }
+        return stamps;
+    }
+
     private static void Line(StringBuilder text, Action<Utf8JsonWriter> write)
     {
         using var buffer = new MemoryStream();
@@ -67,3 +93,6 @@ internal static class ManifestText
         writer.WriteEndObject();
     }
 }
+
+/// <summary>What a manifest's file line says of its file: the size and time it was hashed at, and the hash.</summary>
+internal readonly record struct LineStamp(long Size, long Modified, string Hash);

@@ -105,7 +105,7 @@ export function registerCreatePluginCommand(
       return;
     }
 
-    const result = await client.createPlugin({ name, origin: picked.origin }, place.folder);
+    const result = await client.createPlugin({ name, origin: picked.origin }, place.folder, place.sourceFolder);
     if (isRefused(result)) { reporter.report('error', result.message); return; }
     reporter.landed(`Created "${result.name}" in ${picked.label}.`);
   });
