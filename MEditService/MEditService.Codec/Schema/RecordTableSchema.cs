@@ -100,6 +100,13 @@ public sealed class RecordTableSchema
         }
     }
 
+    /// <summary>The count of this table's records when they fill a top-level group that no other
+    /// table's walk reads; null when a walk is shared, as a container's walk reads its children.</summary>
+    public int? SeparateGroupCountIn(IModGetter mod) =>
+        ContainerChildFields.EnumerateChildFieldsFor(RecordType) is null && mod.TryGetTopLevelGroup(RecordType) is { } group
+            ? group.Count
+            : null;
+
     /// <summary>Whether a record of this table can carry the Partial Form flag at all.</summary>
     public bool IsPartialFormable => PartialFormFlag.IsPartialFormable(RecordType);
 }

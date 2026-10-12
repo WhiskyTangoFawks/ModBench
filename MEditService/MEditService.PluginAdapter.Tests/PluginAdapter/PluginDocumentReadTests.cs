@@ -38,6 +38,36 @@ public sealed class PluginDocumentReadTests
         Assert.Null(npc.ParseDiagnosis);
     }
 
+    [Theory]
+    [InlineData("weap")]
+    [InlineData("stat")]
+    public void OpenDocuments_SpreadsATopLevelGroupsRecordsAcrossTheStream_SoNoTwoArriveTogether(string recordType)
+    {
+        using var data = new PluginFixtureBuilder("documents-spread")
+            .WithPlugin(PluginName, mod =>
+            {
+                var cell = new Cell(mod) { EditorID = "SpreadCell" };
+                foreach (var placed in Enumerable.Range(0, 12)) cell.Temporary.Add(new PlacedObject(mod) { EditorID = $"Placed{placed}" });
+                var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+                subBlock.Cells.Add(cell);
+                var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+                block.SubBlocks.Add(subBlock);
+                mod.Cells.Records.Add(block);
+                foreach (var weapon in Enumerable.Range(0, 4)) mod.Weapons.AddNew($"Weapon{weapon}");
+                foreach (var statics in Enumerable.Range(0, 4)) mod.Statics.AddNew($"Static{statics}");
+            })
+            .Build();
+        var path = Path.Combine(data.DataFolder, PluginName);
+
+        using var documents = Adapter.OpenDocuments(
+            new ModPath(ModKey.FromFileName(PluginName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+        var positions = documents.Records.Select((document, position) => (document.RecordType, position))
+            .Where(d => d.RecordType == recordType).Select(d => d.position).ToList();
+
+        Assert.Equal(4, positions.Count);
+        Assert.All(positions.Zip(positions.Skip(1), (before, after) => after - before), gap => Assert.True(gap > 1, $"{recordType} documents at {string.Join(", ", positions)}"));
+    }
+
     [Fact]
     public void OpenDocuments_YieldsThePluginHeaderAsTheWholeModDoorsRootDocument()
     {
