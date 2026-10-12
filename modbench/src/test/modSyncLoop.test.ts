@@ -10,7 +10,7 @@ import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { FakeInstance } from './mo2/fakeInstance';
 import { pastSequence, watcherFor } from './mo2/instanceLoop';
 import { instanceSyncs } from '../syncWiring';
-import { modSyncOver, type ModSyncResult } from '../modlist/modlist';
+import { modSyncOver, type ModSyncResult } from '../modOrderCommands/modOrderCommands';
 import { type PluginSyncResult } from '../pluginsCommands/plugins';
 import type { ModFolder } from '../instanceAdapter/instanceAdapter';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './mo2/corpusFixture';

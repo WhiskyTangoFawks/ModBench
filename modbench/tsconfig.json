@@ -8,7 +8,7 @@
     { "path": "./src/instanceAdapter" },
     { "path": "./src/coreLib" },
     { "path": "./src/instanceLoader" },
-    { "path": "./src/modlist" },
+    { "path": "./src/modOrderCommands" },
     { "path": "./src/pluginsCommands" },
     { "path": "./src/instanceCommands" },
     { "path": "./src/downloadsCommands" },

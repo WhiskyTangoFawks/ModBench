@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.box.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "../../out/projects/modlist"
+    "outDir": "../../out/projects/modOrderCommands"
   },
   "references": [
     { "path": "../coreLib" },

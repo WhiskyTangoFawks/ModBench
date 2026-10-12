@@ -34,7 +34,7 @@ import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolb
 import { openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { pluginsCommands, pluginSyncOver } from './pluginsCommands/plugins';
-import { modSyncOver, modlistCommands } from './modlist/modlist';
+import { modSyncOver, modlistCommands } from './modOrderCommands/modOrderCommands';
 import { warnIfFomod } from './install/fomodWarning';
 import { installCommands } from './install/install';
 import { downloadsCommands } from './downloadsCommands/downloads';
