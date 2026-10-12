@@ -46,7 +46,7 @@ public sealed class StageModlistTraceTests : HostedTests
                     installationFiles = new[] { new { path = Path.Combine(Downloads, archiveName), source = "nexus:1:2" } },
                 },
             },
-            gameFolder = Path.Combine(_instance, "game"),
+            dataFolder = Path.Combine(_instance, "game"),
         });
 
     [Fact]
@@ -99,7 +99,7 @@ public sealed class StageModlistTraceTests : HostedTests
     [Fact]
     public async Task StagingNoMod_Is400()
     {
-        var response = await Client.PostAsJsonAsync("/modlist/stage", new { mods = Array.Empty<object>(), gameFolder = "game" });
+        var response = await Client.PostAsJsonAsync("/modlist/stage", new { mods = Array.Empty<object>(), dataFolder = "game" });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
