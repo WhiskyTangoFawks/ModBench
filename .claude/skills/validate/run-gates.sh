@@ -4,6 +4,7 @@ BACKEND=false
 FRONTEND=false
 API_DRIFT=false
 DOCS=false
+SCRIPTS=false
 DETACH=false
 WAIT=false
 FAILED=false
@@ -15,6 +16,7 @@ while [[ $# -gt 0 ]]; do
     --frontend)  FRONTEND=true;  GATE_ARGS+=("$1"); shift ;;
     --api-drift) API_DRIFT=true; GATE_ARGS+=("$1"); shift ;;
     --docs)      DOCS=true;      GATE_ARGS+=("$1"); shift ;;
+    --scripts)   SCRIPTS=true;   GATE_ARGS+=("$1"); shift ;;
     --comments)                  GATE_ARGS+=("$1"); shift ;;
     --detach)    DETACH=true;    shift ;;
     --wait)      WAIT=true;      shift ;;
@@ -48,9 +50,9 @@ if [[ ${#GATE_ARGS[@]} -eq 0 ]]; then
   exec bash "$0" ${flags:---comments}
 fi
 
-# Every gate but the comment gate builds or tests: api-drift builds and boots a backend, and docs
-# runs both stacks' scans.
-if { $BACKEND || $FRONTEND || $API_DRIFT || $DOCS; } && [[ -z ${BUILD_SLOT_HELD:-} ]]; then
+# Every gate but the comment gate builds or tests: api-drift and scripts build and boot a backend,
+# and docs runs both stacks' scans.
+if { $BACKEND || $FRONTEND || $API_DRIFT || $DOCS || $SCRIPTS; } && [[ -z ${BUILD_SLOT_HELD:-} ]]; then
   exec bash "$ROOT/.claude/skills/validate/slot-run.sh" bash "$0" "${GATE_ARGS[@]}"
 fi
 
@@ -146,6 +148,12 @@ fi
 if $FRONTEND; then
   python3 "$ROOT/.claude/skills/validate/frontend_gates.py" "$ROOT" \
   || { echo "--- FRONTEND GATES FAILED ---"; FAILED=true; }
+fi
+
+if $SCRIPTS; then
+  echo "=== Gate 3: Scripts tests ==="
+  (cd "$ROOT/scripts" && python3 -m unittest discover -q) \
+  || { echo "--- SCRIPTS GATE FAILED ---"; FAILED=true; }
 fi
 
 if $API_DRIFT; then

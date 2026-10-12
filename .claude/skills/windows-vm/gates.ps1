@@ -17,6 +17,7 @@ if (-not (Test-Path modbench/node_modules/.lock-hash) -or (Get-Content modbench/
 Gate 'Backend format' MEditService 'dotnet format --verify-no-changes'
 Gate 'Backend build' MEditService 'dotnet build -v minimal'
 Gate 'Backend tests' MEditService 'dotnet test -v minimal'
+Gate 'Scripts tests' scripts 'python -m unittest discover -q'
 Gate 'Frontend lint' modbench 'npm run lint'
 Gate 'Frontend build' modbench 'npm run build'
 Gate 'Frontend unit tests' modbench 'npm run test:unit'
