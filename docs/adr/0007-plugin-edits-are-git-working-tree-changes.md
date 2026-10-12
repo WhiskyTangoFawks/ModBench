@@ -12,6 +12,6 @@ Plugin edits are git working-tree changes. A tracked mod's source ([ADR-0006](00
 - A staged pending-change model: per-field staged edits in a table, overlaid onto reads, grouped into closures that gated commit, shown in a bespoke tree. A home-grown working tree, diff and commit.
 - Git kept invisible: hidden gitdirs, automatic vendoring, automatic rebase, commit as save. Each piece existed to make git automatic; manual, eager tracking deletes them all.
 - A direct binary write path for untracked mods. Friction on untracked editing is wanted, and a second write path forever is the shoehorn returning.
-- A repo nested inside the source folder. Splinters a multi-plugin mod into several repos.
+- A repo nested inside `plugin-source/`. Splinters a multi-plugin mod into several repos.
 - Commit to the branch on compile, or compile refusing a dirty tree. Commit as save again.
 - Change-group gating at commit. Git's own model is that history may hold non-building states; the only door where plugin validity is at stake is compile.
