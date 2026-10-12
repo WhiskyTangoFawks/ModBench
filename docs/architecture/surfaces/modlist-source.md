@@ -9,7 +9,7 @@ Each story cites its source. A story with no provider is owned here.
 As a user, I want:
 
 1. The instance folder to be the repository, so a change I make in the mod manager or in Modbench is a working-tree change in Source Control. Source: ADR-0022
-2. The ignore list to be a whitelist: every manifest, each mod's `meta.ini`, each profile's mod order, plugin order and INIs, and the mod manager's configuration. Everything else is ignored, the build folder and the source folder included.
+2. The ignore list to be a whitelist: every manifest, each mod's `meta.ini`, each profile's mod order, plugin order and INIs, and the mod manager's configuration. Everything else is ignored, the build folder, the downloaded files' index and the source folder included.
 3. Every mod and every profile in the commit, enabled or not. A disabled mod is still mine. Source: wabbajack.md, divergence 1
 4. The mod manager's configuration committed with the paths it holds. A clone on another machine edits them. Source: wabbajack.md, divergence 9
 5. Commit, diff, history, branches and merge to be VS Code's. Modbench adds no gesture for them. Source: Existing tools
@@ -62,6 +62,7 @@ As a user, I want:
 4. A file with no provider written as such and reported, so the gap is in the diff and the rest of the modlist commits. Source: wabbajack.md, divergence 4
 5. A source mod's manifest left to its build, and the mod reported when its folder differs from what the build wrote. Source: ADR-0022
 6. It commits nothing. Source: catalog `stage`
+7. A file whose size and time match its manifest line kept with the line's hash, as status trusts it, so a stage after a stage reads nothing. Source: Status, story 3; ADR-0024
 
 ## Discard changes
 
