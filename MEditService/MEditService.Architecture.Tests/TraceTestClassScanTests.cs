@@ -6,6 +6,9 @@ public sealed class TraceTestClassScanTests
 {
     private const string Endpoints = "MEditService.Http.Tests";
 
+    private static readonly string[] SpecifiedAheadOfCode =
+        ["build-mod", "discard-changes", "stage-modlist", "track-mod"];
+
     [Fact]
     public void EveryTraceThatDrawsAnMEditActor_HasATestClassNamedForIt()
     {
@@ -13,6 +16,7 @@ public sealed class TraceTestClassScanTests
         var traces = TracesWithAnMEditActor(solution);
         var classes = DeclaredClasses(solution);
         var missing = traces
+            .Where(trace => !SpecifiedAheadOfCode.Contains(Path.GetFileNameWithoutExtension(trace)))
             .Where(trace => !classes.Contains(ClassNameFor(trace)))
             .Select(trace => $"traces/{Path.GetFileName(trace)}: no class {ClassNameFor(trace)} in {Endpoints}")
             .Order(StringComparer.Ordinal)
@@ -29,6 +33,22 @@ public sealed class TraceTestClassScanTests
             + "stream, a following query — with disk as setup and the other tool's hand, never as an "
             + "assertion:\n"
             + string.Join("\n", missing));
+    }
+
+    [Fact]
+    public void NoTraceSpecifiedAheadOfCode_HasItsTestClassYet()
+    {
+        var solution = ServiceProjects.SolutionDirectory();
+        var stems = TraceFileStems(solution);
+        var classes = DeclaredClasses(solution);
+        var stale = SpecifiedAheadOfCode
+            .Where(stem => !stems.Contains(stem) || classes.Contains(ClassNameFor(stem + ".d2")))
+            .ToList();
+
+        Assert.True(
+            stale.Count == 0,
+            "Each of these traces either names no file or has its test class now; remove it from "
+            + "SpecifiedAheadOfCode:\n" + string.Join("\n", stale));
     }
 
     [Fact]

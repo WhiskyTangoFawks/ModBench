@@ -529,15 +529,27 @@ describe('package.json command titles and categories', () => {
     expect(unexpectedGate).toEqual([]);
   });
 
-  it('offers every catalog gesture in the palette', () => {
+  it('offers every catalog gesture in the palette, but a gesture specified ahead of its code', () => {
     const gestureIds = catalogCommandIds(commandsMarkdown.slice(0, commandsMarkdown.indexOf('## System commands')));
     const declared = new Set(commands.map((c) => c.command));
-    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id) || !declared.has(id));
+    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id) || (!declared.has(id) && !SPECIFIED_AHEAD_OF_CODE.includes(id)));
     expect(
       hidden,
       'commands.md, Entry points are not gestures: every gesture is also in the command palette.',
     ).toEqual([]);
   });
+
+  it('registers no gesture the catalog lists as specified ahead of its code', () => {
+    const declared = new Set(commands.map((c) => c.command));
+    expect(SPECIFIED_AHEAD_OF_CODE.filter((id) => declared.has(id))).toEqual([]);
+  });
+
+  it('still registers every gesture named as retired ahead of its code, so the list expires with the code', () => {
+    const declared = new Set(commands.map((c) => c.command));
+    expect(RETIRED_AHEAD_OF_CODE.filter((id) => !declared.has(id))).toEqual([]);
+  });
+
+  const SPECIFIED_AHEAD_OF_CODE = ['modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges', 'modbench.modlist.clean', 'modbench.mod.build', 'modbench.mod.openSource'];
 
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
@@ -1168,6 +1180,7 @@ const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'mod
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
 const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_TO_THE_SIDE, OPEN_REFERENCE];
+const RETIRED_AHEAD_OF_CODE = ['modbench.plugin.compile'];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);
@@ -1179,7 +1192,7 @@ describe('package.json registers every command under its catalog Command ID', ()
   });
 
   it('registers no ID that is not in the catalog', () => {
-    const offenders = registered.filter((id) => !catalog.has(id) && !ENTRY_POINTS.includes(id));
+    const offenders = registered.filter((id) => !catalog.has(id) && !ENTRY_POINTS.includes(id) && !RETIRED_AHEAD_OF_CODE.includes(id));
     expect(
       offenders,
       offenders.map((id) => `${id} is not a Command ID in docs/architecture/commands.md. The catalog is the `

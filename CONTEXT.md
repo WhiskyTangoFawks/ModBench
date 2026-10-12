@@ -63,11 +63,13 @@ A mod entry that groups other mods in the list and holds no files. A mod belongs
 
 Avoid: group, category
 
-## Tracked mod
-A mod whose folder holds a `.git` repository and the plugin source of every plugin it provides, each a tracked plugin. It follows one git workflow.
+## Source mod
+A mod built from a repository of its own in the source folder beside `mods/`: the plugin source of every plugin it provides, each a tracked plugin, the mod's own assets, and its build configuration. It follows one git workflow.
+
+Avoid: tracked mod (git's tracked is a file in the index)
 
 # Git workflow
-How a tracked mod uses its `main` branch. The user chooses. Two kinds exist: authored and vendored.
+How a source mod uses its `main` branch. The user chooses. Two kinds exist: authored and vendored.
 
 ## Authored workflow
 A git workflow where `main` is the work itself.
@@ -110,7 +112,7 @@ A plugin that another plugin lists as a dependency. A master loads earlier.
 Avoid: parent plugin (an override's plugin is not its child)
 
 # Plugin source
-The deserialized form of a plugin, held in a tracked mod's folder.
+The deserialized form of a plugin, held in a source mod's repository.
 
 Avoid: source, text mirror, Spriggit tree
 
@@ -166,6 +168,11 @@ Avoid: session, loadout
 A mod file the instance keeps with its metadata. Installing it creates a mod, and the file stays.
 
 Avoid: download (as a noun; to download is to fetch a file), archive (that is a BA2 or BSA), package
+
+# Manifest
+The one file in a mod folder that names where each of the mod's files comes from. For a source mod the build writes it.
+
+Avoid: record (a plugin's unit of data), recipe, directives
 
 # Game folder
 The game installation: the Steam install or a stock game folder.

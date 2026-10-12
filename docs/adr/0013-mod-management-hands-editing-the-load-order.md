@@ -1,6 +1,6 @@
 # Mod Management hands Editing the load order
 
-Modbench's data is two layers. The file layer is the mods and their files, resolved by mod order. The record layer is the plugins and their records, resolved by plugin order. Mod Management owns the file layer and every file of the mod manager, and Editing reads none of them. So Mod Management alone decides which plugins are active, and hands Editing the load order as state, which Editing reconciles and never re-derives ([ADR-0002](0002-mod-management-and-editing-are-one-tool.md)).
+Modbench's data is two layers. The file layer is the mods and their files, resolved by mod order. The record layer is the plugins and their records, resolved by plugin order. Mod Management owns the file layer and every file of the mod manager, and Editing reads none of them. So Mod Management alone decides which plugins are active, and hands Editing the load order as state, and each mod's installation files and the game folder for the build, which Editing reconciles and never re-derives ([ADR-0002](0002-mod-management-and-editing-are-one-tool.md)).
 
 ## Consequences
 

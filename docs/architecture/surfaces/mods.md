@@ -1,6 +1,6 @@
 # Mods
 
-The Mods surface shows the active profile's mod order: its mods, grouped by separators, and the Overwrite folder. Each mod and Overwrite opens into its files, and each file shows whether the game gets it. Its template is MO2's mod list ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../../out-of-scope/mo2.md) says why. Its gestures are in [commands.md](../commands.md) under Mod and Separator. What every view shares is in [common.md](common.md). [mods-conflicts.md](mods-conflicts.md) holds the conflict table, which opens from a mod's row in an editor tab.
+The Mods surface shows the active profile's mod order: its mods, grouped by separators, and the Overwrite folder. Each mod and Overwrite opens into its files, and each file shows whether the game gets it. Its template is MO2's mod list ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../../out-of-scope/mo2.md) says why. Its gestures are in [commands.md](../commands.md) under Mod and Separator, and `stage`, `discard changes` and `clean` under Modlist. What every view shares is in [common.md](common.md). [mods-conflicts.md](mods-conflicts.md) holds the conflict table, which opens from a mod's row in an editor tab.
 
 Each story cites its source. A story with no source is owned here.
 
@@ -22,7 +22,7 @@ As a user, I want:
 6. A separator with no mods to show no expander. Source: VS Code
 7. A mod or Overwrite to open into its files as a folder tree: folders first, then files, each by name. A disabled mod opens too. One with no files shows no expander. Source: VS Code's Explorer
 8. The name of a file the game does not get to be greyed. The game does not get a file when another copy wins its path, when it is excluded, or when its mod is disabled. Source: MO2
-9. Only the files Modbench deploys from the mod to show: not `meta.ini`, the repository or plugin source. An excluded file shows its full name, `.mohidden` included. A folder with that suffix is excluded with everything in it, and is greyed. Source: MO2
+9. Only the files Modbench deploys from the mod to show: not `meta.ini` or the manifest. An excluded file shows its full name, `.mohidden` included. A folder with that suffix is excluded with everything in it, and is greyed. Source: MO2
 10. The same grey and badges on the same files in VS Code's Explorer. Source: VS Code
 
 ## A row
@@ -33,10 +33,11 @@ As a user, I want:
 |---|---|---|
 | Label | the mod's name | MO2 |
 | Check box | checked when the mod is enabled | MO2 |
-| Description | the `meta.ini` version | MO2 |
-| Icon | `$(package)` | |
+| Description | the `meta.ini` version, then stale when the mod is stale ([modlist-source.md](modlist-source.md), Status) | MO2 |
+| Icon | `$(package)`, or `$(repo)` for a source mod | |
 | Indicators | a badge at the right edge, and a colour on the label, for each indicator that holds ([Indicators](#indicators)) | MO2's Conflicts and Flags columns |
-| Tooltip | name, version, Nexus mod ID and installation file, each only when known | MO2's columns |
+| Badge | git's `M`, `U` and `D` in git's colours, while the instance has a repository, and the word stale in the description | [modlist-source.md](modlist-source.md), Status |
+| Tooltip | name, version, Nexus mod ID and installation file, each only when known, and, for a source mod, its source folder and that the folder is built from it | MO2's columns |
 | Identity | the row's kind and the mod's name, so selection and expansion survive a change on disk. A mod and a separator can share a name. | |
 
 ### Separator
@@ -81,6 +82,16 @@ A mod row carries an indicator for each status that holds. A disabled mod carrie
 
 The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. Source: mo2.md, divergence 12
 
+## A source mod
+
+A source mod's folder is its build's output ([ADR-0007](../../adr/0007-plugin-edits-are-git-working-tree-changes.md)). As a user, I want:
+
+1. Its row to open into the folder's files as any mod's, since they are what the game gets. The source is in the Explorer and Source Control, and `open source` shows it. Source: catalog `open source`
+2. Rename and exclude or include to write the build configuration and the folder together, so the folder already equals the next build's output: rename changes the output folder's name (Rename mod, story 3), and exclude or include its exclusions, which build writes as `.mohidden`. Source: ADR-0007
+3. No gesture that changes content the build makes. A record edit goes to plugin source, a plugin created lands in it, and decompile reads the folder into it. Source: ADR-0006; ADR-0007
+4. A file I change in the folder to show as modified, and build to overwrite it and name it. A lock on the folder is mine to add with VS Code's `files.readonlyInclude`. Source: modlist-source.md, Status; VS Code's interaction
+5. Uninstall to send the folder and the source to the trash, and the confirmation to say so. Source: Confirm what destroys
+
 ## Order and view state
 
 As a user, I want:
@@ -102,7 +113,7 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod. Collapse All last. |
-| Mod menu | open folder · open conflicts (the mod has a file order conflict) · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add separator · create empty mod · install… · track (the mod has no repository and holds a plugin) · copy value · uninstall |
+| Mod menu | open folder · open source (a source mod) · open conflicts (the mod has a file order conflict) · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add separator · create empty mod · install… · track (the mod has no repository and holds a plugin) · build (a source mod) · stage · discard changes… · clean… (the instance has a repository) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · copy value · delete |
 | Overwrite menu | open folder |
 | File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · copy value |
@@ -160,8 +171,23 @@ As a user, I want:
 
 1. A prompt filled with the current name. Esc, an empty name or the same name renames nothing. Source: MO2
 2. A name another mod has, compared without case, refused in the prompt, so Windows and Linux agree. A name with a path separator refused. Source: MO2 compares without case; Refuse, do not repair
-3. The mod to keep its place in mod order, its enabled state and its separator in every profile. Its folder keeps its repository, its plugin source and its `meta.ini`, and its plugins keep their `plugins.txt` lines. Source: MO2
+3. The mod to keep its place in mod order, its enabled state and its separator in every profile. Its folder keeps its `meta.ini` and its manifest, and its plugins keep their `plugins.txt` lines. For a source mod, rename changes the output folder in the build configuration and renames the folder; the repository stays where it is. Source: MO2; ADR-0007
 4. The folder renamed first. A rename that renamed the folder and then failed on a profile's mod order to say so, naming the profile. That profile loses the mod's place, and `mod sync` places it as a new folder when the profile is active. This is an exception to A failed gesture writes nothing.
+
+### Build
+
+As a user, I want:
+
+1. Build to write the mod folder from the source, without asking: the base is what the installation files provide, the source's assets override it, each plugin compiles from its plugin source, and the manifest is written last. A tracked plugin's source is the truth, and build makes the folder from it. Source: catalog `build`; ADR-0006; ADR-0007
+2. The build configuration in the source to name the output folder and, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
+3. A file in the folder the build did not make left where it is and shown as untracked. Clean removes it. Source: ADR-0023
+4. A build whose configuration names an output folder that is not this mod's folder refused, naming both, so a folder renamed outside Modbench is never overwritten. Source: ADR-0003
+5. Build to save the mod's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugins are built from what I see. A file VS Code does not save refuses build, naming it. Source: VS Code's save before run; ADR-0001; Never silently wrong
+6. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
+7. From the palette with no mod, a pick of every source in the source folder, one with no folder included, so a clone builds its mods back. Source: No dead entries
+8. A plugin whose header flag limits its FormIDs, light or medium, refused when its records fall outside that range, naming the records, what limits the plugin, its flag, its `.esl` extension or both, and what lifts that limit: clear the flag, rename the plugin off `.esl`, or both. Changing the records' FormIDs works in every case. The rest of the mod builds, and the refused plugin is left as it was.
+9. A plugin whose plugin source is unreadable refused the same way, naming it and pointing at decompile. Source: Never silently wrong
+10. An interrupted build to leave each file old or new, and none to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Building again fixes it. This is an exception to A failed gesture writes nothing.
 
 ### Delete separator
 
@@ -181,13 +207,13 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 
 1. Install never to merge into an existing folder, or to replace one I did not confirm.
 2. A new mod to appear at the winning end of the mod order, disabled, as any folder new in `mods/` does.
-3. An upgrade to replace the mod's files in place, and to keep its folder name, its repository and its plugin source (`.git`, `.gitignore` and `plugin-source/`). Source: ADR-0007
+3. An upgrade to replace the mod's files in place, and to keep its folder name and its manifest. Its repository is beside `mods/`, and an upgrade never touches it. Source: ADR-0007; ADR-0022
 4. An upgrade to keep every `meta.ini` value the new file does not know, so an unknown version never blanks a known one. Source: ADR-0017
-5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery, and a tracked mod's plugin source stays in git. This is an exception to A failed gesture writes nothing.
+5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery, and a source mod's plugin source stays in git. This is an exception to A failed gesture writes nothing.
 
 ### Uninstall
 
-As a user, I want one confirmation for the whole selection, naming the mod when there is one and listing the mods when there are several, and saying the folders go to the trash. Source: Confirm what destroys; MO2's recycle bin
+As a user, I want one confirmation for the whole selection, naming the mod when there is one and listing the mods when there are several, and saying the folders go to the trash, and a source mod's source with them. Source: Confirm what destroys; MO2's recycle bin; A source mod, story 5
 
 ### Go to mod
 
