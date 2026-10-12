@@ -15,11 +15,19 @@ def selected(*changed):
 
 
 class SelectGates(unittest.TestCase):
-    def test_backend_source_selects_backend_and_api_drift(self):
+    def test_backend_source_selects_backend_api_drift_and_the_scripts_it_answers(self):
         self.assertEqual(selected('MEditService/MEditService.Http/Program.cs'), [
             '--backend MEditService/MEditService.Http/Program.cs',
             '--api-drift MEditService/MEditService.Http/Program.cs',
+            '--scripts MEditService/MEditService.Http/Program.cs',
         ])
+
+    def test_scripts_and_the_fixture_instance_their_harness_loads_select_scripts(self):
+        self.assertEqual(selected('scripts/medit/__init__.py'), ['--scripts scripts/medit/__init__.py'])
+        self.assertEqual(selected('DevList/profiles/Dev/plugins.txt'), ['--scripts DevList/profiles/Dev/plugins.txt'])
+
+    def test_another_fixture_instance_selects_nothing(self):
+        self.assertEqual(selected('DevListSkyrim/profiles/Dev/plugins.txt'), [])
 
     def test_frontend_source_selects_frontend(self):
         self.assertEqual(selected('modbench/src/extension.ts'), ['--frontend modbench/src/extension.ts'])
@@ -40,6 +48,7 @@ class SelectGates(unittest.TestCase):
             '--frontend modbench/src/a.ts',
             '--backend MEditService/X/A.cs',
             '--api-drift MEditService/X/A.cs',
+            '--scripts MEditService/X/A.cs',
             '--docs docs/x.md',
         ])
 

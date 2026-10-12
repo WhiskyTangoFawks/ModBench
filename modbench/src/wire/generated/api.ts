@@ -117,6 +117,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/modlist/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Writes each mod's manifest from the mod as it is (ADR-0022). A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the stage-progress notification. */
+        post: operations["StageModlist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/build": {
         parameters: {
             query?: never;
@@ -1031,6 +1048,11 @@ export interface components {
             refusal: components["schemas"]["BuildRefusal"];
             message: string;
         };
+        ModStageRefusal: {
+            item: string;
+            refusal: components["schemas"]["StageRefusal"];
+            message: string;
+        };
         ModTrackRefusal: {
             item: string;
             refusal: components["schemas"]["TrackRefusal"];
@@ -1055,6 +1077,7 @@ export interface components {
             changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
             pluginWithUnreadableSources?: components["schemas"]["PluginWithUnreadableSource"][] | null;
             recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;
+            stageProgress?: components["schemas"]["StageProgress"] | null;
         };
         PathHop: {
             kind: string;
@@ -1326,6 +1349,52 @@ export interface components {
             fieldPath?: string | null;
             sourceRelativePath: string;
             message: string;
+        };
+        StageGameFileRequest: {
+            path: string;
+            /** Format: int64 */
+            size?: number | null;
+            hash: string;
+        };
+        StageInstallationFileEntryRequest: {
+            path: string;
+            hash: string;
+        };
+        StageInstallationFileRequest: {
+            path: string;
+            source?: string | null;
+            /** Format: int64 */
+            size?: number | null;
+            hash: string;
+            entries: components["schemas"]["StageInstallationFileEntryRequest"][];
+        };
+        StageModRequest: {
+            name: string;
+            folder: string;
+            installationFiles: components["schemas"]["StageInstallationFileRequest"][];
+            committedFiles: string[];
+        };
+        StageProgress: {
+            mod?: string | null;
+            /** Format: int32 */
+            modsDone: number;
+            /** Format: int32 */
+            modsTotal: number;
+        };
+        /** @enum {string} */
+        StageRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "ManifestNotWritten";
+        StageRequest: {
+            mods: components["schemas"]["StageModRequest"][];
+            gameFiles: components["schemas"]["StageGameFileRequest"][];
+        };
+        StageResponse: {
+            applied: components["schemas"]["StagedModResponse"][];
+            refused: components["schemas"]["ModStageRefusal"][];
+        };
+        StagedModResponse: {
+            mod: string;
+            manifestWritten: boolean;
+            noProvider: string[];
         };
         /** @enum {string} */
         TrackPhase: "Idle" | "Parsing" | "Serializing" | "Committing";
@@ -1685,6 +1754,39 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    StageModlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StageRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StageResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
