@@ -18,6 +18,10 @@ public sealed record HashedEntry(string Path, string Hash);
 /// Instance adapter knows it (ADR-0024).</summary>
 public sealed record GameFileToStage(string Path, long Size, string Hash);
 
+/// <summary>The instance's facts beyond its mods. DeltaShare is the share of its file a delta may reach before
+/// the file counts as no provider.</summary>
+public sealed record InstanceToStage(IReadOnlyList<GameFileToStage> GameFiles, string DataFolder, string BuildFolder, double DeltaShare);
+
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum StageRefusal
 {
@@ -28,7 +32,8 @@ public enum StageRefusal
 
     ModFolderMissing,
 
-    /// <summary>A file of the mod could not be read.</summary>
+    /// <summary>A file the mod is staged from could not be read: one of its own, an installation file or a game
+    /// file.</summary>
     ModFilesUnreadable,
 
     ManifestNotWritten,
