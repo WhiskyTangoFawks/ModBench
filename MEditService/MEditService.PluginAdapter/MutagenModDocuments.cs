@@ -68,7 +68,7 @@ internal sealed class MutagenModDocuments(
         var separate = tables
             .Select(table => (Count: SeparateGroupCount(table.Value), Table: table))
             .ToList();
-        var shared = separate.Where(s => s.Count is null).SelectMany(s => RecordsOf(s.Table.Key, s.Table.Value));
+        var shared = SharedRecords([.. separate.Where(s => s.Count is null).Select(s => s.Table)]);
         var streams = separate
             .Where(s => s.Count > 0)
             .Select(s => (Count: s.Count ?? 0, Records: RecordsOf(s.Table.Key, s.Table.Value).GetEnumerator()))
@@ -91,6 +91,45 @@ internal sealed class MutagenModDocuments(
         finally
         {
             foreach (var (_, records) in streams) records.Dispose();
+        }
+    }
+
+    // One walk of the plugin reads each group once, where a walk per table reads its container's whole
+    // group again for each table nested in it. A walk Mutagen stops partway leaves each table to its
+    // own walk, past the records it already gave, so each table Mutagen cannot read reports itself.
+    private IEnumerable<HeldRecord> SharedRecords(IReadOnlyList<KeyValuePair<string, RecordTableSchema>> tables)
+    {
+        var schemaOf = tables.ToDictionary(table => table.Key, table => table.Value, StringComparer.Ordinal);
+        var given = new Dictionary<string, int>(StringComparer.Ordinal);
+        var types = RecordTypes.For(mod.GameRelease);
+        var stoppedPartway = false;
+        bool Continues(IEnumerator<IMajorRecordGetter> walk)
+        {
+            try
+            {
+                return walk.MoveNext();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                PluginFailure.ThrowIfNotTheFilesAnswer(ex, file);
+                stoppedPartway = true;
+                return false;
+            }
+        }
+        using (var walk = mod.EnumerateMajorRecords().GetEnumerator())
+        {
+            while (Continues(walk))
+            {
+                var tableName = types.RecordTypeOf(walk.Current);
+                if (!schemaOf.TryGetValue(tableName, out var schema)) continue;
+                given[tableName] = given.GetValueOrDefault(tableName) + 1;
+                yield return new HeldRecord(tableName, schema, walk.Current);
+            }
+            if (!stoppedPartway) yield break;
+        }
+        foreach (var (tableName, schema) in tables)
+        {
+            foreach (var record in RecordsOf(tableName, schema).Skip(given.GetValueOrDefault(tableName))) yield return record;
         }
     }
 

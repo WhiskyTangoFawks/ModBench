@@ -126,6 +126,34 @@ public sealed class PluginDocumentReadTests
     }
 
     [Fact]
+    public void OpenDocuments_GivesAContainerWhoseGroupMutagenCannotEnumerate_ItsDiagnosis_AndReadsEveryRecordBeforeItOnce()
+    {
+        using var data = new PluginFixtureBuilder("documents-unenumerable-container")
+            .WithPlugin(PluginName, mod =>
+            {
+                var cell = new Cell(mod) { EditorID = "BeforeTheQuests" };
+                foreach (var placed in Enumerable.Range(0, 3)) cell.Temporary.Add(new PlacedObject(mod) { EditorID = $"Placed{placed}" });
+                var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+                subBlock.Cells.Add(cell);
+                var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+                block.SubBlocks.Add(subBlock);
+                mod.Cells.Records.Add(block);
+            })
+            .Build();
+        var path = Path.Combine(data.DataFolder, PluginName);
+        File.WriteAllBytes(path, RawPlugin.Concat(File.ReadAllBytes(path),
+            RawPlugin.Group("QUST", RawPlugin.Record("QUST", 0xA00, RawPlugin.EditorId("Quest")), RawPlugin.Misc(0xA01, "Stray"))));
+
+        using var documents = Adapter.OpenDocuments(
+            new ModPath(ModKey.FromFileName(PluginName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+        var read = documents.Records.Select(d => d.RecordType).ToList();
+
+        Assert.Equal(["cell", "refr", "refr", "refr"], read.Order(StringComparer.Ordinal));
+        var quests = Assert.Single(documents.Failures, failure => failure.RecordType == "qust");
+        Assert.Contains("MISC", quests.Diagnosis, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void OpenDocuments_GivesACellTheBlockCoordinatesItsGrupHierarchyPutsItAt()
     {
         using var data = CellFixture("documents-cell", out var extCellFormKey);
