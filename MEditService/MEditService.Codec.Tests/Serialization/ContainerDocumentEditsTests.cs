@@ -194,6 +194,24 @@ public sealed class ContainerDocumentEditsTests
     }
 
     [Fact]
+    public void EveryEmbeddedChild_AtEveryDepth_IsReadInOnePass_AsItsStandaloneText()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Append.esp"), Fallout4Release.Fallout4);
+        var persistent = new PlacedObject(mod) { EditorID = "PersistRef" };
+        var temporary = new PlacedObject(mod) { EditorID = "TempRef" };
+        var actor = new PlacedNpc(mod) { EditorID = "TempActor" };
+        var navmesh = new NavigationMesh(mod) { EditorID = "Navmesh" };
+        var topCell = new Cell(mod) { EditorID = "TopCell", Persistent = { persistent }, Temporary = { temporary, actor }, NavigationMeshes = { navmesh } };
+        var worldspace = new Worldspace(mod) { EditorID = "World", TopCell = topCell };
+
+        var children = ContainerDocumentEdits.EmbeddedChildTextsOf(Encoding.UTF8.GetBytes(Text(worldspace)), RecordTypeOf(worldspace), Release);
+
+        Assert.Equal(
+            new IMajorRecordGetter[] { topCell, persistent, temporary, actor, navmesh }.ToDictionary(record => record.FormKey.ToString(), Text),
+            children);
+    }
+
+    [Fact]
     public void AFormKeyNoSlotCarries_HasNoChildText() =>
         Assert.Null(ContainerDocumentEdits.ChildTextOf(
             Encoding.UTF8.GetBytes(Text(CellWithAPersistentRef().Cell)), RecordTypeOf(CellWithAPersistentRef().Cell), "FFFFFF:Append.esp", Release));

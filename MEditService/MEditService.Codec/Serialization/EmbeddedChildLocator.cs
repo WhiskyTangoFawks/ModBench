@@ -14,6 +14,9 @@ public readonly record struct EmbeddedChildSpan(
     bool SlotIsList,
     string? Discriminator);
 
+/// <summary>A child an owner's document carries, and where.</summary>
+internal readonly record struct EmbeddedChild(string FormKey, EmbeddedChildSpan Span);
+
 /// <summary>The byte span a child occupies in its owner's document, keyed on the schema's slot
 /// facts and reading nothing back as a live object. The splice and the document reads ask
 /// here.</summary>
@@ -22,23 +25,31 @@ public static class EmbeddedChildLocator
     private const string FormKeyMember = RecordMembers.FormKey;
 
     /// <summary>Where <paramref name="formKey"/> sits inside <paramref name="ownerBytes"/>, or null
-    /// when no child slot of the owner carries it. An owner whose record type names no slots reads
-    /// its document's own discriminator. Malformed text carries nothing.</summary>
+    /// when no child slot of the owner carries it.</summary>
     public static EmbeddedChildSpan? Find(
-        byte[] ownerBytes, string? ownerRecordType, string formKey, GameRelease release)
+        byte[] ownerBytes, string? ownerRecordType, string formKey, GameRelease release) =>
+        All(ownerBytes, ownerRecordType, release).FirstOrDefault(child => string.Equals(child.FormKey, formKey, StringComparison.Ordinal)) is { FormKey: not null } found
+            ? found.Span
+            : null;
+
+    /// <summary>Every child the owner's slots carry, at every depth and in the order of its text, a child's
+    /// own children before it. An owner whose record type names no slots reads its document's own
+    /// discriminator. Malformed text carries none.</summary>
+    internal static IReadOnlyList<EmbeddedChild> All(byte[] ownerBytes, string? ownerRecordType, GameRelease release)
     {
+        var found = new List<EmbeddedChild>();
         try
         {
             var reader = new Utf8JsonReader(ownerBytes);
-            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) return null;
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) return [];
 
-            // The owner's own key is not a child of itself, so only what the scan found below it counts.
             var types = RecordTypes.For(release);
-            return ScanObject(ref reader, OwnerTypeOf(ownerRecordType, ownerBytes, types), formKey, types).Deeper;
+            ScanObject(ref reader, OwnerTypeOf(ownerRecordType, ownerBytes, types), types, found);
+            return found;
         }
         catch (JsonException)
         {
-            return null;
+            return [];
         }
     }
 
@@ -47,15 +58,14 @@ public static class EmbeddedChildLocator
     internal static string? OwnerTypeOf(string? ownerRecordType, byte[] ownerBytes, RecordTypes types) =>
         types.ContainerTypeOf(ownerRecordType) ?? Document.Read(ownerBytes)?.StringAt(LoquiUnions.UnionTypeDiscriminator);
 
-    private readonly record struct ObjectScan(string? FormKey, string? Discriminator, EmbeddedChildSpan? Deeper);
+    private readonly record struct ObjectScan(string? FormKey, string? Discriminator);
 
     // Enters on the object's '{' and leaves on its '}'.
     private static ObjectScan ScanObject(
-        ref Utf8JsonReader reader, string? containerType, string formKey, RecordTypes slots)
+        ref Utf8JsonReader reader, string? containerType, RecordTypes slots, List<EmbeddedChild> found)
     {
         string? ownFormKey = null;
         string? discriminator = null;
-        EmbeddedChildSpan? found = null;
 
         while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
         {
@@ -75,45 +85,34 @@ public static class EmbeddedChildLocator
                 containerType ??= discriminator;
                 continue;
             }
-            if (found != null || !slots.IsEmbeddedSlotOf(containerType, member))
+            if (!slots.IsEmbeddedSlotOf(containerType, member))
             {
                 reader.Skip();
                 continue;
             }
 
-            found = reader.TokenType switch
-            {
-                JsonTokenType.StartObject => InSingleSlot(ref reader, formKey, memberStart, slots),
-                JsonTokenType.StartArray => InListSlot(ref reader, formKey, memberStart, slots),
-                _ => null,
-            };
+            if (reader.TokenType == JsonTokenType.StartObject) InSingleSlot(ref reader, memberStart, slots, found);
+            else if (reader.TokenType == JsonTokenType.StartArray) InListSlot(ref reader, memberStart, slots, found);
         }
 
-        return new ObjectScan(ownFormKey, discriminator, found);
+        return new ObjectScan(ownFormKey, discriminator);
     }
 
     // Enters on the slot value's '{' and leaves on its '}'.
-    private static EmbeddedChildSpan? InSingleSlot(
-        ref Utf8JsonReader reader, string formKey, int memberStart, RecordTypes slots)
+    private static void InSingleSlot(ref Utf8JsonReader reader, int memberStart, RecordTypes slots, List<EmbeddedChild> found)
     {
         var start = (int)reader.TokenStartIndex;
-        var scan = ScanObject(ref reader, null, formKey, slots);
+        var scan = ScanObject(ref reader, null, slots, found);
         var end = (int)reader.BytesConsumed;
 
-        if (scan.Deeper is { } deeper) return deeper;
-
-        return string.Equals(scan.FormKey, formKey, StringComparison.Ordinal)
-            ? new EmbeddedChildSpan(start, end, memberStart, end, SlotIsList: false, scan.Discriminator)
-            : null;
+        if (scan.FormKey is { } formKey)
+            found.Add(new EmbeddedChild(formKey, new EmbeddedChildSpan(start, end, memberStart, end, SlotIsList: false, scan.Discriminator)));
     }
 
-    private const int PendingSlotEnd = -1;
-
-    // Every element is walked even after a hit, so the reader leaves this slot on its ']'.
-    private static EmbeddedChildSpan? InListSlot(
-        ref Utf8JsonReader reader, string formKey, int memberStart, RecordTypes slots)
+    // An element's span names where its list ends, which is known only once the reader leaves the list on its ']'.
+    private static void InListSlot(ref Utf8JsonReader reader, int memberStart, RecordTypes slots, List<EmbeddedChild> found)
     {
-        EmbeddedChildSpan? found = null;
+        var elements = new List<int>();
 
         while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
         {
@@ -124,20 +123,15 @@ public static class EmbeddedChildLocator
             }
 
             var start = (int)reader.TokenStartIndex;
-            var scan = ScanObject(ref reader, null, formKey, slots);
+            var scan = ScanObject(ref reader, null, slots, found);
             var end = (int)reader.BytesConsumed;
-            if (found != null) continue;
+            if (scan.FormKey is not { } formKey) continue;
 
-            if (scan.Deeper is { } deeper)
-                found = deeper;
-            else if (string.Equals(scan.FormKey, formKey, StringComparison.Ordinal))
-                found = new EmbeddedChildSpan(start, end, memberStart, PendingSlotEnd, SlotIsList: true, scan.Discriminator);
+            elements.Add(found.Count);
+            found.Add(new EmbeddedChild(formKey, new EmbeddedChildSpan(start, end, memberStart, end, SlotIsList: true, scan.Discriminator)));
         }
 
-        // A hit from further down already names its own slot; only an element of this list waits for
-        // where the list ends.
-        return found is { SlotValueEnd: PendingSlotEnd } element
-            ? element with { SlotValueEnd = (int)reader.BytesConsumed }
-            : found;
+        var slotEnd = (int)reader.BytesConsumed;
+        foreach (var element in elements) found[element] = found[element] with { Span = found[element].Span with { SlotValueEnd = slotEnd } };
     }
 }

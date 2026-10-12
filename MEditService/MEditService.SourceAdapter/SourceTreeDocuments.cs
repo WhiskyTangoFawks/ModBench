@@ -233,14 +233,14 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         List<ContainerDocuments.ChildDocument> children = [.. _containers.ChildrenOf(ownerRecordType, Document.Parse(ownerText))];
 
-        var ownerBytes = Encoding.UTF8.GetBytes(ownerText);
+        var texts = ContainerDocumentEdits.EmbeddedChildTextsOf(Encoding.UTF8.GetBytes(ownerText), ownerRecordType, _release);
         foreach (var child in children)
         {
             if (!_types.IsEmbeddedSlot(ownerRecordType, child.SlotName)) continue;
 
             // The index holds the file's own bytes (ADR-0005), so a hand edit the codec would respell
             // reaches it as the file spells it.
-            var text = ContainerDocumentEdits.ChildTextOf(ownerBytes, ownerRecordType, child.FormKey, _release)
+            var text = texts.GetValueOrDefault(child.FormKey)
                 ?? throw new InvalidOperationException(
                     $"{ownerFormKey}'s '{child.SlotName}' names '{child.FormKey}', yet the span reader finds no text for it.");
             yield return (child, text, ownerFormKey);

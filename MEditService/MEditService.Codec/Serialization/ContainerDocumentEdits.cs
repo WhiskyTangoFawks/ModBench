@@ -55,6 +55,18 @@ public static class ContainerDocumentEdits
     public static string? ChildTextOf(byte[] ownerBytes, string? ownerRecordType, string formKey, GameRelease release) =>
         EmbeddedChildSplice.TextOf(ownerBytes, ownerRecordType, formKey, release);
 
+    /// <summary>The text of every child the owner embeds, at every depth, by FormKey: each as
+    /// <see cref="ChildTextOf"/> reads it, from one read of the owner.</summary>
+    public static IReadOnlyDictionary<string, string> EmbeddedChildTextsOf(byte[] ownerBytes, string? ownerRecordType, GameRelease release)
+    {
+        var texts = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (formKey, span) in EmbeddedChildLocator.All(ownerBytes, ownerRecordType, release))
+        {
+            if (!texts.ContainsKey(formKey)) texts[formKey] = EmbeddedChildSplice.Extract(ownerBytes, span, release);
+        }
+        return texts;
+    }
+
     /// <summary>The child's own text as the codec spells it standalone.</summary>
     public static string ChildTextAt(byte[] ownerBytes, EmbeddedChildSpan span, GameRelease release) =>
         EmbeddedChildSplice.Extract(ownerBytes, span, release);
