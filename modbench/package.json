@@ -51,6 +51,11 @@
           "default": null,
           "description": "Attach to an mEdit already running on this port instead of starting one. Never a fallback: if nothing answers, Modbench reports it. Leave unset: each window starts its own mEdit."
         },
+        "modbench.agent.port": {
+          "type": "number",
+          "default": 47200,
+          "description": "The port Modbench serves your agent's MCP server on, at http://127.0.0.1:<port>/mcp. Set another for a workspace so two windows each have their own."
+        },
         "modbench.mods.gameDirectory": {
           "type": "string",
           "default": "",
@@ -1621,6 +1626,7 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@vscode/codicons": "^0.0.46-24",
     "jsonc-parser": "^3.3.1",
     "openapi-fetch": "^0.17.0",

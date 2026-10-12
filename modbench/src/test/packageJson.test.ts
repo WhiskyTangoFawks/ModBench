@@ -483,6 +483,12 @@ describe('package.json contributes the port to attach to a running mEdit as a se
   });
 });
 
+describe('package.json contributes the port of the agent\'s MCP server as a setting (agent.md, Any agent, story 5)', () => {
+  it('a number with a default, so every workspace has the same port unless it sets another', () => {
+    expect(pkg.contributes.configuration.properties['modbench.agent.port']).toMatchObject({ type: 'number', default: 47200 });
+  });
+});
+
 describe('package.json contributes the Mods view\'s indicators and grey as settings (mods.md, Indicators)', () => {
   const { properties } = pkg.contributes.configuration;
 
