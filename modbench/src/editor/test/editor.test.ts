@@ -315,7 +315,7 @@ describe('Referenced By from the palette asks about the record tab in focus', ()
     client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', null);
     client.setQueryAnswer('getPlugins', activeA);
-    client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
+    client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/ModA/plugin-source/A.esp/Npcs/Npc.json' });
     client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
     client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], deletions: [], documents: [] });
     const { open } = makeEditor(client);
@@ -557,7 +557,7 @@ describe('a record tab whose record an edit of its FormID moved', () => {
     client.setQueryAnswer('getComparison', null);
     client.setQueryAnswer('getRecordsComparison', { compare: null, missing: [{ formKey: OLD, plugin: COPY_PLUGIN, reason: 'RecordGone', message: 'gone' }] });
     client.setQueryAnswer('getPlugins', activeA);
-    client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
+    client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/ModA/plugin-source/A.esp/Npcs/Npc.json' });
     client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
     const { open } = makeEditor(client);
     const tab = open(OLD);
@@ -584,7 +584,7 @@ describe('an edit of a FormID, fired with no panel', () => {
     client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', null);
     client.setQueryAnswer('getRecordsComparison', { compare: null, missing: [{ formKey: OLD, plugin: COPY_PLUGIN, reason: 'RecordGone', message: 'gone' }] });
-    client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
+    client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/ModA/plugin-source/A.esp/Npcs/Npc.json' });
     client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
     client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], deletions: [], documents: [] });
     const { open } = makeEditor(client);
@@ -618,7 +618,7 @@ describe('a record gesture from the palette', () => {
 
 describe('the Editor\'s file systems', () => {
   const FORM_KEY = '000803:A.esp';
-  const CELL_FILE = '/mods/ModA/plugin-source/A.esp/Cells/Cell.json';
+  const CELL_FILE = '/source/ModA/plugin-source/A.esp/Cells/Cell.json';
   const plugin = { name: 'A.esp', origin: 'ModA' };
 
   interface ReadableFileSystem { readFile(uri: unknown): Promise<Uint8Array> }
@@ -689,7 +689,7 @@ describe('the Editor\'s file systems', () => {
 
 describe('a record file\'s tab', () => {
   const GUN = '000801:A.esp';
-  const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+  const FILE = '/source/ModA/plugin-source/A.esp/Weapons/Gun.json';
   const holding = (formKey: string) => ({ formKey, plugin: 'A.esp', origin: 'ModA' });
   function fileClient(): InMemoryMEditClient {
     const client = new InMemoryMEditClient();
@@ -861,7 +861,7 @@ describe('a record file\'s tab', () => {
 
 describe('a file whose plugin is disabled, or in a disabled mod', () => {
   const GUN = '000801:A.esp';
-  const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+  const FILE = '/source/ModA/plugin-source/A.esp/Weapons/Gun.json';
   const typed = { plugin: COPY_PLUGIN, documentText: '{ "EditorID": "Typed" }' };
   const typedFile = { isDirty: true, getText: () => typed.documentText };
   const disabledA: ModFacts = { ...NO_MODS, standingOf: (plugin) => ({ kind: samePluginAddress(plugin, COPY_PLUGIN) ? 'disabled' : 'enabled' }) };
@@ -937,7 +937,7 @@ describe('a file whose plugin is disabled, or in a disabled mod', () => {
 
 describe('a file whose plugin is overridden', () => {
   const GUN = '000801:A.esp';
-  const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+  const FILE = '/source/ModA/plugin-source/A.esp/Weapons/Gun.json';
   const typedFile = { isDirty: true, getText: () => '{ "EditorID": "Typed" }' };
   const overriddenBy = (by: string | undefined): ModFacts => ({ ...NO_MODS, standingOf: () => (by === undefined ? { kind: 'enabled' } : { kind: 'overridden', by }) });
 
@@ -1003,7 +1003,7 @@ describe('a record tab closed while its read is in flight', () => {
     client.setQueryAnswer('getPlugins', []);
     const { openDocument } = makeEditor(client);
     const tab = await openDocument({
-      scheme: 'modbench-child-record', path: '/mods/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000803%3AA.esp&name=A.esp&origin=ModA',
+      scheme: 'modbench-child-record', path: '/source/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000803%3AA.esp&name=A.esp&origin=ModA',
     });
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: PLACED, columns: [] });
 
@@ -1018,7 +1018,7 @@ describe('a record tab closed while its read is in flight', () => {
 
 describe('a record tab closed', () => {
   const GUN = '000801:A.esp';
-  const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+  const FILE = '/source/ModA/plugin-source/A.esp/Weapons/Gun.json';
   const holding = { formKey: GUN, plugin: 'A.esp', origin: 'ModA' };
 
   it('before mEdit says which record its file holds shows nothing when the answer lands, nor is the record tab in focus', async () => {
@@ -1082,7 +1082,7 @@ describe('what a record tab\'s webview posts', () => {
     const path = [{ kind: 'member', name: 'Keywords' }];
     function editing(): InMemoryMEditClient {
       const editing = client();
-      editing.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
+      editing.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/ModA/plugin-source/A.esp/Npcs/Npc.json' });
       editing.setQueryAnswer('getRecordOfFile', { formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA' });
       editing.setQueryAnswer('getEditChanges', { applied: true, moves: [], deletions: [], documents: [] });
       return editing;
@@ -1283,7 +1283,7 @@ describe('what a record tab\'s webview posts', () => {
       mEdit.setQueryFailure('getComparison', { failed: 'unreachable' });
       const { openDocument, outputChannel } = makeEditor(mEdit);
       const tab = await openDocument({
-        scheme: 'modbench-child-record', path: '/mods/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000801%3AA.esp&name=A.esp&origin=ModA',
+        scheme: 'modbench-child-record', path: '/source/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000801%3AA.esp&name=A.esp&origin=ModA',
       });
 
       tab.receive(loadRequest);
@@ -1350,7 +1350,7 @@ describe('an untracked copy\'s tab', () => {
 
 describe('a child record\'s tab', () => {
   const PLACED = '000803:A.esp';
-  const CHILD = { scheme: 'modbench-child-record', path: '/mods/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000803%3AA.esp&name=A.esp&origin=ModA' };
+  const CHILD = { scheme: 'modbench-child-record', path: '/source/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000803%3AA.esp&name=A.esp&origin=ModA' };
 
   it('shows the child\'s record, not its container\'s, titled with the opened copy\'s name once its read is answered', async () => {
     const client = new InMemoryMEditClient();
@@ -1479,7 +1479,7 @@ describe('several records opened at once', () => {
   });
 
   it('leave alone a file\'s tab that shows no record yet, whose page asks its first read only once it does', async () => {
-    const GUN_FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+    const GUN_FILE = '/source/ModA/plugin-source/A.esp/Weapons/Gun.json';
     const client = severalClient();
     client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
     client.setQueryFailureOnce('getRecordOfFile', { failed: 'unreachable' });

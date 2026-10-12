@@ -28,9 +28,11 @@ export function pluginPlaces(value: Pick<InstanceValue, 'mods' | 'plugins'>, nam
   ].filter((place) => !holdsPlugin(value, { name, origin: place.origin }));
 }
 
-/** The place's folder; or what became of a mod between the pick and the answer, or that the
- *  value names no folder for Overwrite yet. */
-export type PlaceFolder = { readonly folder: string } | { readonly lost: 'gone' | 'disabled' | 'unread' };
+/** The place's folder, and a mod's source folder; or what became of a mod between the pick and the
+ *  answer, or that the value names no folder for Overwrite yet. */
+export type PlaceFolder =
+  | { readonly folder: string; readonly sourceFolder?: string }
+  | { readonly lost: 'gone' | 'disabled' | 'unread' };
 
 export function placeFolder(value: Pick<InstanceValue, 'mods' | 'paths'>, origin: string): PlaceFolder {
   if (origin === OVERWRITE_ORIGIN) {
@@ -39,6 +41,7 @@ export function placeFolder(value: Pick<InstanceValue, 'mods' | 'paths'>, origin
   }
   const mod = value.mods.find((entry) => entry.kind === 'mod' && entry.name === origin);
   const folder = value.paths.modDirs.get(origin);
-  if (mod === undefined || folder === undefined) return { lost: 'gone' };
-  return mod.enabled ? { folder } : { lost: 'disabled' };
+  const sourceFolder = value.paths.sourceDirs.get(origin);
+  if (mod === undefined || folder === undefined || sourceFolder === undefined) return { lost: 'gone' };
+  return mod.enabled ? { folder, sourceFolder } : { lost: 'disabled' };
 }

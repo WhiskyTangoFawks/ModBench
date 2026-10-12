@@ -41,6 +41,8 @@ interface InstancePaths {
   readonly downloadsDir: string | undefined;
   /** Each listed mod's own folder, by mod name; a mod with no folder has none. */
   readonly modDirs: ReadonlyMap<string, string>;
+  /** Each listed mod's source folder, by mod name, whether it is there or not. */
+  readonly sourceDirs: ReadonlyMap<string, string>;
 }
 
 /** One generation of the instance, whole. Every field comes from the same read of disk, so a
@@ -134,6 +136,7 @@ interface InstanceOptions {
 // Each listed mod's folder is matched as the manager matches names.
 function pathsOf(
   runtimeOutput: OriginFiles, downloaded: DownloadedFiles, entries: readonly ModlistEntry[], modFolders: ModFolders | undefined,
+  sourceFolder: (mod: string) => string | undefined,
 ): InstancePaths {
   return {
     overwriteDir: runtimeOutput.folder,
@@ -141,6 +144,10 @@ function pathsOf(
     modDirs: new Map(entries.flatMap((entry) => {
       const folder = entry.kind === 'mod' ? modFolders?.holding(entry) : undefined;
       return folder === undefined ? [] : [[entry.name, folder.path] as const];
+    })),
+    sourceDirs: new Map(entries.flatMap((entry) => {
+      const folder = entry.kind === 'mod' ? sourceFolder(entry.name) : undefined;
+      return folder === undefined ? [] : [[entry.name, folder] as const];
     })),
   };
 }
@@ -167,7 +174,7 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   loadOrderSnapshot: undefined,
   overwriteFiles: [],
   overwriteFolders: [],
-  paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map() },
+  paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map(), sourceDirs: new Map() },
   modSyncArguments: { profile: '', modFolders: [] },
   pluginSyncArguments: { profile: '', pluginOrder: [], provided: new Map(), inData: { kind: 'unresolved' }, loadedWithNoLine: undefined },
 });
@@ -427,6 +434,7 @@ export class Instance implements Subscription {
       ? await this.readInstalledInto(entries, modFolders?.all ?? [])
       : undefined;
     const modFolderList = modFolders?.all;
+    const paths = pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders, (mod) => adapter.sourceFolder(mod));
     const syncSource = {
       activeProfile: profile, modFolders: modFolderList, files: index.files, dataFolderPlugins, pluginsLoadedWithNoLine,
       pluginOrder,
@@ -454,10 +462,10 @@ export class Instance implements Subscription {
       gameFolder,
       dataFolderPlugins,
       pluginsLoadedWithNoLine,
-      loadOrderSnapshot: loadOrderSnapshotOf({ plugins, gameFolder, pluginsLoadedWithNoLine, modFolders }),
+      loadOrderSnapshot: loadOrderSnapshotOf({ plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs }),
       overwriteFiles: runtimeOutput.files,
       overwriteFolders: runtimeOutput.folders,
-      paths: pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders),
+      paths,
       modSyncArguments: modSyncArgumentsOf(syncSource),
       pluginSyncArguments: pluginSyncArgumentsOf(syncSource),
     };

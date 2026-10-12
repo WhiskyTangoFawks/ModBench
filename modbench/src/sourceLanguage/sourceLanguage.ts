@@ -13,7 +13,7 @@ import { workspaceSymbolsOf, type RecordSymbol } from './workspaceSymbols';
 import { handUnsavedPluginSource } from './handUnsaved';
 import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
 
-interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'originFiles'> {
+interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   reporter: Pick<Reporter, 'shownOnSurface'>;
   client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrTrackedPlugins' | 'getPlugins' | 'handUnsavedDocuments'> & RecordDocumentClient & SourceProblemsDeps['client'];
 }

@@ -5,11 +5,11 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>Documents by identity over one mod folder's plugin source, and the verbs that change it (ADR-0014). The
+/// <summary>Documents by identity over one source folder's plugin source, and the verbs that change it (ADR-0014). The
 /// verbs named <c>ChangesTo…</c> answer what they change and write nowhere.</summary>
 public interface ISourceRepository : ISourceRepositoryReads
 {
-    string ModFolder { get; }
+    string SourceFolder { get; }
 
     /// <summary>The record the tree holds at <paramref name="formKey"/>, or null when nothing carries
     /// it. A document named for the key whose text is no document is unreadable.</summary>
@@ -44,7 +44,7 @@ public interface ISourceRepository : ISourceRepositoryReads
     Answer<PluginSourceFiles, SourceFailure> TreeOf(PluginAddress plugin);
 
     /// <summary><paramref name="diagnosis"/> of a read of <see cref="TreeOf"/>'s tree, each file it names
-    /// named as this tree holds it, relative to the mod folder.</summary>
+    /// named as this tree holds it, relative to the source folder.</summary>
     Answer<PluginDiagnosis, SourceFailure> InSourceNames(PluginAddress plugin, PluginDiagnosis diagnosis);
 
     /// <summary>Which of <paramref name="formKeys"/> more than one document claims. Asked of the files, not of the

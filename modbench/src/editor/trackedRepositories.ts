@@ -7,22 +7,22 @@ import { answerOf } from '../wire/readFailed';
 function trackedFoldersOf(
   plugins: readonly Pick<PluginMetadata, 'name' | 'origin'>[],
   trackedMods: ReadonlySet<string>,
-  modDirs: ReadonlyMap<string, string>,
+  sourceDirs: ReadonlyMap<string, string>,
 ): Map<string, string> {
   const folders = new Map<string, string>();
   for (const plugin of plugins) {
     if (!trackedMods.has(plugin.origin)) continue;
-    const folder = modDirs.get(plugin.origin);
+    const folder = sourceDirs.get(plugin.origin);
     if (folder !== undefined) folders.set(pluginAddressKey(plugin), folder);
   }
   return folders;
 }
 
 async function registerTrackedRepositories<T>(
-  openRepository: (modFolder: string) => Promise<T | null>,
-  modFolders: readonly string[],
+  openRepository: (sourceFolder: string) => Promise<T | null>,
+  sourceFolders: readonly string[],
 ): Promise<Map<string, T | null>> {
-  const distinct = [...new Set(modFolders)];
+  const distinct = [...new Set(sourceFolders)];
   const repositories = new Map<string, T | null>();
   for (const folder of distinct) {
     repositories.set(folder, await openRepository(folder));
@@ -57,7 +57,7 @@ export interface TrackedRepositoriesDeps {
   readonly outputChannel: Pick<vscode.LogOutputChannel, 'warn' | 'error'>;
   /** The Instance value's own two facts this needs, read fresh at call time. */
   readonly trackedMods: () => ReadonlySet<string>;
-  readonly modDirs: () => ReadonlyMap<string, string>;
+  readonly sourceDirs: () => ReadonlyMap<string, string>;
 }
 
 export interface TrackedRepositories {
@@ -77,7 +77,7 @@ export function trackedRepositoriesOver(deps: TrackedRepositoriesDeps): TrackedR
   // One `openRepository` per distinct tracked folder (ADR-0007). A logged no-op when `vscode.git` is
   // unavailable: this only narrows the native UI, never blocks reading or editing.
   async function registerHeld(): Promise<void> {
-    const { client, outputChannel, trackedMods, modDirs } = deps;
+    const { client, outputChannel, trackedMods, sourceDirs } = deps;
     try {
       const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
       if (!gitExtension) {
@@ -88,7 +88,7 @@ export function trackedRepositoriesOver(deps: TrackedRepositoriesDeps): TrackedR
       const gitApi = exports.getAPI(1);
 
       const plugins = answerOf(await client.getPlugins());
-      const folders = trackedFoldersOf(plugins, trackedMods(), modDirs());
+      const folders = trackedFoldersOf(plugins, trackedMods(), sourceDirs());
       const folderRepositories = await registerTrackedRepositories(
         (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), [...folders.values()]);
       byPlugin = pluginRepositoriesOf(folders, folderRepositories);

@@ -22,7 +22,7 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
         _repository = SourceRepository.Over(mod, release).Over(this);
     }
 
-    /// <summary>A session over <paramref name="mod"/>'s folder, reading each of <paramref name="held"/>'s texts in
+    /// <summary>A session over <paramref name="mod"/>'s source folder, reading each of <paramref name="held"/>'s texts in
     /// place of the file at its absolute path.</summary>
     public static WriteSession Over(PluginProvider.FromMod mod, GameRelease release, IReadOnlyList<DocumentChange> held) =>
         new(mod, release, held);
@@ -90,7 +90,7 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
 
         try
         {
-            Apply(made.Under(_repository.ModFolder));
+            Apply(made.Under(_repository.SourceFolder));
         }
         catch (Exception ex) when (SourceFailure.Of(ex) is { } stopped)
         {

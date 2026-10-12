@@ -4,7 +4,7 @@ using MEditService.RepositoriesLib;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>The reads the record index makes of one mod folder's source.</summary>
+/// <summary>The reads the record index makes of one source folder's source.</summary>
 public interface ISourceRepositoryReads
 {
     RecordStamps StampsOf(PluginAddress plugin);

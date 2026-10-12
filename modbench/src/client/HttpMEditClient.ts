@@ -217,12 +217,12 @@ class HttpMEditClient implements MEditClient {
     return isRefused(answer) ? answer : spec.outcome(answer);
   }
 
-  async createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused> {
+  async createPlugin(plugin: PluginAddress, folder: string, sourceFolder: string | undefined): Promise<PluginCreatedResponse | WriteRefused> {
     const failMsg = `Could not create "${plugin.name}"`;
     const answer = await this.mutate({
       op: `createPlugin(${plugin.name}, ${plugin.origin})`,
       failMsg,
-      post: () => this.apiClient.POST('/plugins/create', { body: { origin: plugin.origin, name: plugin.name, folder } }),
+      post: () => this.apiClient.POST('/plugins/create', { body: { origin: plugin.origin, name: plugin.name, folder, sourceFolder } }),
     });
     return answer;
   }

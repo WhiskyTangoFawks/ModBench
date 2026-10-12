@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { relative, isAbsolute } from 'node:path';
 import { CONTAINER_SCHEMES } from '../drivingLib/recordDocument';
 import { isPluginSourcePath, pluginSourceFolderOf } from '../instanceAdapter/instanceAdapter';
-import type { OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
+import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { PluginAddress } from '../wire/pluginAddress';
 
 export const isPluginSourceDocument = ({ scheme, fsPath }: vscode.Uri): boolean =>
@@ -34,7 +34,7 @@ async function saveDirtyPluginSource(folder: string): Promise<string[]> {
 }
 
 /** Saves a plugin's unsaved plugin source; undefined when its origin has no folder. */
-export async function savePluginSource(originFiles: OriginFilesOf, { name, origin }: PluginAddress): Promise<string[] | undefined> {
-  const files = originFiles(origin);
+export async function savePluginSource(sourceFiles: SourceFilesOf, { name, origin }: PluginAddress): Promise<string[] | undefined> {
+  const files = sourceFiles(origin);
   return files && saveDirtyPluginSource(files.file(pluginSourceFolderOf(name)));
 }

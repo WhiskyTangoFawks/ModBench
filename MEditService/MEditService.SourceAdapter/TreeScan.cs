@@ -35,7 +35,7 @@ internal sealed class TreeScan
     internal OwnerDocument? DocumentHolding(string formKey)
     {
         var carrying = HoldersOf(formKey).Carrying;
-        return OneDocumentPerFormKey.TheOne([.. carrying.Select(owner => owner.FullPath)], formKey, ModFolder) is { } path
+        return OneDocumentPerFormKey.TheOne([.. carrying.Select(owner => owner.FullPath)], formKey, SourceFolder) is { } path
             ? carrying.Single(owner => owner.FullPath == path)
             : null;
     }
@@ -57,7 +57,7 @@ internal sealed class TreeScan
         [.. _byRoot.GetValueOrDefault(formKey, []).Where(document => KeysOf(document)?.AtRoot.Contains(formKey) == true)],
         [.. _byChild.GetValueOrDefault(formKey, []).Where(owner => KeysOf(owner.FullPath)?.Embedded.Contains(formKey) == true)]);
 
-    private string ModFolder => PathShape.DirectoryOf(PathShape.DirectoryOf(_sourceRoot));
+    private string SourceFolder => PathShape.DirectoryOf(PathShape.DirectoryOf(_sourceRoot));
 
     // One owner is verified for each of its many children, so its tokens are reused while its
     // bytes are unchanged.
@@ -92,7 +92,7 @@ internal sealed class TreeScan
 
             // A null type is an answer, not a skip: a path-ambiguous group's documents name
             // their own type, and dropping them leaves every child they carry unlocatable.
-            var recordType = SourceRepositoryLayout.RecordTypeOf(Path.GetRelativePath(ModFolder, documentPath), _release);
+            var recordType = SourceRepositoryLayout.RecordTypeOf(Path.GetRelativePath(SourceFolder, documentPath), _release);
 
             var owner = new OwnerDocument(documentPath, root, recordType);
             foreach (var (childFormKey, position) in keys)

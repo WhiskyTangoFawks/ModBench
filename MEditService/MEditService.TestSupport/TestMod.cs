@@ -6,8 +6,8 @@ public static class TestMod
 {
     public const string Name = "TestMod";
 
-    public static PluginProvider.FromMod In(string folder) => new(Name, folder);
+    public static PluginProvider.FromMod In(string folder) => new(Name, folder, folder);
 
-    /// <summary>The mod <paramref name="plugin"/>'s origin names, held in <paramref name="folder"/>.</summary>
-    public static PluginProvider.FromMod Of(PluginAddress plugin, string folder) => new(plugin.Origin, folder);
+    /// <summary>The mod <paramref name="plugin"/>'s origin names, held in <paramref name="folder"/>, its source with it.</summary>
+    public static PluginProvider.FromMod Of(PluginAddress plugin, string folder) => new(plugin.Origin, folder, folder);
 }

@@ -14,6 +14,7 @@ import { PLUGIN_EXTENSIONS } from './pluginFile';
 
 const PROFILES = 'profiles';
 const MODS = 'mods';
+const SOURCE = 'source';
 const DOWNLOADS = 'downloads';
 
 export const profilesDir = (instanceRoot: string): string => join(instanceRoot, PROFILES);
@@ -84,6 +85,10 @@ export const upgradeExtractionPrefix = (modFolder: string): string => join(modFo
 
 export const isNewModExtraction = (name: string): boolean => name.startsWith(NEW_MOD_EXTRACTION_PREFIX);
 
+/** Whether `name`, in a mod's folder, is an install's extraction in flight. */
+export const isExtraction = (name: string): boolean =>
+  isNewModExtraction(name) || name.startsWith(UPGRADE_EXTRACTION_PREFIX);
+
 export const overwriteDir = (instanceRoot: string): string => join(instanceRoot, OVERWRITE_DIR_NAME);
 
 /** MO2's own default when `download_directory` is unset. Every other download path function
@@ -123,30 +128,32 @@ export const fileInFolder = (folder: string, relativePath: string): string => jo
 const GIT_DIR = '.git';
 const PLUGIN_SOURCE_FOLDER = 'plugin-source';
 
+/** A mod's source folder, its repository, beside `mods/` (ADR-0007); `undefined` when its name
+ *  gives it none. */
+export const modSourceDir = (instanceRoot: string, modName: string): string | undefined => {
+  const folder = modFolderName(modName);
+  return folder === undefined ? undefined : join(instanceRoot, SOURCE, folder);
+};
+
 /** The git directory whose presence is what "tracked" means (ADR-0007). */
-export const modGitDir = (modFolder: string): string => join(modFolder, GIT_DIR);
+export const repositoryGitDir = (sourceFolder: string): string => join(sourceFolder, GIT_DIR);
 
-// Names in a mod folder match without case, as Windows matches them, on every platform alike.
-const nameKey = (name: string): string => name.toLowerCase();
-
-/** A plugin's plugin source folder, relative to its mod folder. */
+/** A plugin's plugin source folder, relative to its mod's source folder. */
 export const pluginSourceFolderOf = (pluginName: string): string => join(PLUGIN_SOURCE_FOLDER, pluginName);
 
-/** Whether an entry at a mod folder's root is its plugin source. */
-export const isPluginSourceFolder = (name: string): boolean => nameKey(name) === PLUGIN_SOURCE_FOLDER;
+// Matched without case, as Windows matches a name, on every platform alike.
+const named = (name: string | undefined, as: string): boolean => name?.toLowerCase() === as;
 
-/** Whether `path` is a file inside some folder that is plugin source. */
-export const isPluginSourcePath = (path: string): boolean => path.split(/[\\/]/).slice(0, -1).some(isPluginSourceFolder);
-
-const REPOSITORY_OR_PLUGIN_SOURCE_ENTRIES = new Set([GIT_DIR, '.gitignore', PLUGIN_SOURCE_FOLDER]);
-
-/** Whether an entry at a mod folder's root is its repository or its plugin source (ADR-0007),
- *  which an upgrade keeps (mods.md, What install does) and no release supplies. */
-export const isRepositoryOrPluginSource = (name: string): boolean => REPOSITORY_OR_PLUGIN_SOURCE_ENTRIES.has(nameKey(name));
+/** Whether `path` is a file inside a mod's plugin source: `source/<mod>/plugin-source/…`. */
+export const isPluginSourcePath = (path: string): boolean => {
+  const folders = path.split(/[\\/]/).slice(0, -1);
+  return folders.some((name, i) => named(name, PLUGIN_SOURCE_FOLDER) && named(folders[i - 2], SOURCE));
+};
 
 // Watch patterns, POSIX-separated and relative to the instance root: a `RelativePattern` takes a
 // glob, never a platform path, so these are built as text rather than with `join`.
 export const MODS_GLOB = `${MODS}/**`;
+export const SOURCE_GLOB = `${SOURCE}/**`;
 export const OVERWRITE_GLOB = `${OVERWRITE_DIR_NAME}/**`;
 export const MODLIST_GLOB = `${PROFILES}/*/${MODLIST_FILE_NAME}`;
 export const PLUGINS_GLOB = `${PROFILES}/*/${PLUGINS_FILE_NAME}`;
@@ -155,11 +162,11 @@ export const SETTINGS_WATCH_GLOB = SETTINGS_FILE_NAME;
 /** Downloads' own base is the resolved folder itself, so this glob is everything under it. */
 export const DOWNLOADS_WATCH_GLOB = '**';
 
-// A glob matches case, and a plugin's extension and its source folder are any case, so each letter is a class.
+// A glob matches case, and a plugin's extension and its source folders are any case, so each letter is a class.
 const anyCase = (text: string): string => text.replace(/./g, (c) => `[${c.toLowerCase()}${c.toUpperCase()}]`);
 
-/** Every file inside a folder that is plugin source, as `isPluginSourcePath` takes it. */
-export const PLUGIN_SOURCE_GLOB = `**/${anyCase(PLUGIN_SOURCE_FOLDER)}/**`;
+/** Every file inside a mod's plugin source, as `isPluginSourcePath` takes it. */
+export const PLUGIN_SOURCE_GLOB = `**/${anyCase(SOURCE)}/*/${anyCase(PLUGIN_SOURCE_FOLDER)}/**`;
 
 /** The plugin files at the root of the game folder's Data folder, the Data folder its base. */
 export const DATA_FOLDER_PLUGINS_GLOB = `*.{${[...PLUGIN_EXTENSIONS].map((ext) => anyCase(ext.slice(1))).join(',')}}`;

@@ -7,7 +7,7 @@ using MEditService.RepositoriesLib;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>A file of a plugin's tree, as the mod folder spells it, that could not be read as a
+/// <summary>A file of a plugin's tree, as the source folder spells it, that could not be read as a
 /// document, and the FormKey it was read for when one is known.</summary>
 public sealed record UnreadableFile(string SourceRelativePath, string Message, string? FormKey = null);
 
@@ -66,14 +66,14 @@ internal static class TreeStamps
 
     internal static string ContentStamp(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
-    internal static RecordStamps StampsOf(string modFolder, PluginAddress plugin, ISourceFiles files)
+    internal static RecordStamps StampsOf(string sourceFolder, PluginAddress plugin, ISourceFiles files)
     {
         var unreadable = new List<UnreadableFile>();
-        var holders = new OneDocumentPerFormKey(modFolder);
+        var holders = new OneDocumentPerFormKey(sourceFolder);
         var stamps = new Dictionary<string, string>(StringComparer.Ordinal);
         var unsaved = new HashSet<string>(StringComparer.Ordinal);
 
-        var root = SourceRepositoryLayout.RootIn(modFolder, plugin.Name);
+        var root = SourceRepositoryLayout.RootIn(sourceFolder, plugin.Name);
         foreach (var gone in Known.Keys.Where(tree => !Directory.Exists(tree))) Known.TryRemove(gone, out _);
         var known = Known.GetOrAdd(root, _ => new StampGatedMemo<KnownDocument>(TimeProvider.System));
         var listed = new HashSet<string>(StringComparer.Ordinal);
@@ -86,7 +86,7 @@ internal static class TreeStamps
                 if (SourceRepositoryLayout.CarriesNoRecord(file)) continue;
                 listed.Add(file);
 
-                var relativePath = Path.GetRelativePath(modFolder, file);
+                var relativePath = Path.GetRelativePath(sourceFolder, file);
                 // An unsaved text moves no file-system stamp, so it is read every time.
                 var readUnsaved = files.HoldsUnsavedText(file);
                 if (readUnsaved) unsaved.Add(relativePath);

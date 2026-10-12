@@ -19,10 +19,10 @@ describe('trackedRepositoriesOver', () => {
 
   function setup(
     status: () => Promise<unknown> = () => Promise.resolve(),
-    { plugins = OTHER_IN_MODB, trackedMods = ['ModB'], modDirs = { ModB: '/mods/ModB' }, open = () => Promise.resolve({ status }) }: {
+    { plugins = OTHER_IN_MODB, trackedMods = ['ModB'], sourceDirs = { ModB: '/source/ModB' }, open = () => Promise.resolve({ status }) }: {
       plugins?: readonly { name: string; origin: string }[];
       trackedMods?: readonly string[];
-      modDirs?: Record<string, string>;
+      sourceDirs?: Record<string, string>;
       open?: (uri: { fsPath: string }) => Promise<unknown>;
     } = {},
   ) {
@@ -33,7 +33,7 @@ describe('trackedRepositoriesOver', () => {
     const outputChannel = { warn: vi.fn(), error: vi.fn() };
     const tracked = trackedRepositoriesOver({
       client, outputChannel,
-      trackedMods: () => new Set(trackedMods), modDirs: () => new Map(Object.entries(modDirs)),
+      trackedMods: () => new Set(trackedMods), sourceDirs: () => new Map(Object.entries(sourceDirs)),
     });
     return { tracked, outputChannel };
   }
@@ -88,19 +88,19 @@ describe('trackedRepositoriesOver', () => {
   it('opens the folder of a tracked origin and none for its untracked sibling', async () => {
     const { tracked } = setup(undefined, {
       plugins: [{ name: 'Tracked.esp', origin: 'TrackedMod' }, { name: 'Untracked.esp', origin: 'UntrackedMod' }],
-      trackedMods: ['TrackedMod'], modDirs: { TrackedMod: '/mods/TrackedMod', UntrackedMod: '/mods/UntrackedMod' },
+      trackedMods: ['TrackedMod'], sourceDirs: { TrackedMod: '/source/TrackedMod', UntrackedMod: '/source/UntrackedMod' },
     });
 
     await tracked.registerRepositories();
 
-    expect(openRepository.mock.calls).toEqual([[{ fsPath: '/mods/TrackedMod' }]]);
+    expect(openRepository.mock.calls).toEqual([[{ fsPath: '/source/TrackedMod' }]]);
   });
 
   it('opens a folder once for two plugins sharing it, and refreshes the one repository for either', async () => {
     const status = vi.fn(() => Promise.resolve());
     const { tracked } = setup(status, {
       plugins: [{ name: 'A.esp', origin: 'SharedMod' }, { name: 'B.esp', origin: 'SharedMod' }],
-      trackedMods: ['SharedMod'], modDirs: { SharedMod: '/mods/SharedMod' },
+      trackedMods: ['SharedMod'], sourceDirs: { SharedMod: '/source/SharedMod' },
     });
     await tracked.registerRepositories();
 
@@ -116,8 +116,8 @@ describe('trackedRepositoriesOver', () => {
     const statusB = vi.fn(() => Promise.resolve());
     const { tracked } = setup(undefined, {
       plugins: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'Shared.esp', origin: 'ModB' }],
-      trackedMods: ['ModA', 'ModB'], modDirs: { ModA: '/mods/ModA', ModB: '/mods/ModB' },
-      open: ({ fsPath }) => Promise.resolve({ status: fsPath === '/mods/ModA' ? statusA : statusB }),
+      trackedMods: ['ModA', 'ModB'], sourceDirs: { ModA: '/source/ModA', ModB: '/source/ModB' },
+      open: ({ fsPath }) => Promise.resolve({ status: fsPath === '/source/ModA' ? statusA : statusB }),
     });
     await tracked.registerRepositories();
 

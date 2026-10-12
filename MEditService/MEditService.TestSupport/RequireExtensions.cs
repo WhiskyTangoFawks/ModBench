@@ -62,12 +62,12 @@ public static class RequireExtensions
     public static SourceFailure? Remove(this ISourceRepository repository, PluginAddress plugin, RecordIdentity identity) =>
         repository.SaveChanges(repository.ChangesToRemove(plugin, identity));
 
-    /// <summary>Saves <paramref name="changes"/> under the repository's mod folder as <see cref="EditSaving"/> does,
+    /// <summary>Saves <paramref name="changes"/> under the repository's source folder as <see cref="EditSaving"/> does,
     /// or answers why they were not answered.</summary>
     public static SourceFailure? SaveChanges(this ISourceRepository repository, Answer<SourceChanges, SourceFailure> changes)
     {
         if (!changes.Holds(out var made, out var failure)) return failure;
-        var (moves, deletions, documents) = made.Under(repository.ModFolder);
+        var (moves, deletions, documents) = made.Under(repository.SourceFolder);
         EditSaving.Save(
             moves.Select(move => (move.From, move.To)), deletions, documents.Select(document => (document.Path, document.Text)));
         return null;

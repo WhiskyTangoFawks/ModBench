@@ -898,6 +898,7 @@ export interface components {
             origin: string;
             name: string;
             folder: string;
+            sourceFolder?: string | null;
         };
         /** @enum {string} */
         DecompileRefusal: "None" | "PluginNotLoaded" | "NotInTrackedMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "AmbiguousSource" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
@@ -1133,6 +1134,7 @@ export interface components {
             kind: components["schemas"]["PluginProviderKind"];
             mod?: string | null;
             folder?: string | null;
+            sourceFolder?: string | null;
         };
         PluginRecordTypeCount: {
             type: string;

@@ -10,14 +10,15 @@ public record LoadOrderEntry(
 {
     public PluginAddress Key => new(Name, Origin);
 
-    /// <summary>The fixture's one provider rule: a mod's folder is the plugin's directory, unless
-    /// <see cref="NamedProvider"/> says otherwise.</summary>
+    /// <summary>The fixture's one provider rule: a mod's folder, and its source folder, is the plugin's
+    /// directory, unless <see cref="NamedProvider"/> says otherwise.</summary>
     public PluginProvider Provider => NamedProvider ?? Origin switch
     {
         _ when Is(PluginOrigin.DataDirectory) => PluginProvider.Game,
         _ when Is(PluginOrigin.Overwrite) => PluginProvider.NoMod,
-        _ => new PluginProvider.FromMod(
-            Origin, System.IO.Path.GetDirectoryName(Path) ?? throw new InvalidOperationException($"'{Path}' has no folder.")),
+        _ => System.IO.Path.GetDirectoryName(Path) is { } folder
+            ? new PluginProvider.FromMod(Origin, folder, folder)
+            : throw new InvalidOperationException($"'{Path}' has no folder."),
     };
 
     private bool Is(string reserved) => string.Equals(Origin, reserved, StringComparison.OrdinalIgnoreCase);
@@ -31,7 +32,7 @@ internal static class ProviderWire
 {
     public static object Of(PluginProvider provider) => provider switch
     {
-        PluginProvider.FromMod mod => new { Kind = "Mod", Mod = mod.Name, mod.Folder },
+        PluginProvider.FromMod mod => new { Kind = "Mod", Mod = mod.Name, mod.Folder, mod.SourceFolder },
         _ when provider == PluginProvider.Game => new { Kind = "Game" },
         _ => new { Kind = "None" },
     };

@@ -38,12 +38,12 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         return this;
     }
 
-    public bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.Folder);
+    public bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.SourceFolder);
 
     public bool IsTracked(string modFolder) => _mods.ContainsKey(modFolder);
 
     public bool SourceReads(RegisteredPlugin plugin) =>
-        plugin.Provider is PluginProvider.FromMod mod && _mods.TryGetValue(mod.Folder, out var tracked) && tracked.SourceReads;
+        plugin.Provider is PluginProvider.FromMod mod && _mods.TryGetValue(mod.SourceFolder, out var tracked) && tracked.SourceReads;
 
     public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => throw Unreached();
 
@@ -52,7 +52,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     public IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held)
     {
         SessionsOpened++;
-        return new FakeWriteSession(new FakeRepository(_mods[provider.Folder]));
+        return new FakeWriteSession(new FakeRepository(_mods[provider.SourceFolder]));
     }
 
     public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) => throw Unreached();
@@ -85,7 +85,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     private static NotSupportedException Unreached() => new("The fake Source adapter does not serve this verb.");
 
-    private sealed record FakeMod(string Folder, Dictionary<string, SourceDocument> Documents, bool SourceReads = true);
+    private sealed record FakeMod(string SourceFolder, Dictionary<string, SourceDocument> Documents, bool SourceReads = true);
 
     private sealed class FakeWriteSession(FakeRepository repository) : IWriteSession
     {
@@ -138,7 +138,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
                 return;
             }
 
-            var absolute = made.Under(repository.ModFolder);
+            var absolute = made.Under(repository.SourceFolder);
             Changes = Changes with
             {
                 Moves = [.. Changes.Moves, .. absolute.Moves],
@@ -150,7 +150,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     private sealed class FakeRepository(FakeMod mod) : ISourceRepository
     {
-        public string ModFolder => mod.Folder;
+        public string SourceFolder => mod.SourceFolder;
 
         public Answer<SourceDocument?, SourceFailure> RecordByFormKey(PluginAddress plugin, string formKey) =>
             SourceAnswer.Of(mod.Documents.GetValueOrDefault(formKey));
