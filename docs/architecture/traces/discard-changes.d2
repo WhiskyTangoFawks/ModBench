@@ -1,0 +1,57 @@
+# Discard changes, orange: each mod's folder back to its manifest; a source mod with a remote rebuilt from its source at the commit.
+...@../styles
+shape: sequence_diagram
+driving: "Toolbox · Mods · Source Control" {class: driving}
+sourcecommands: @../target-architecture.modbench_core.sourcecommands
+sourcecommands.label: source commands
+client: @../target-architecture.modbench_repositories.client
+client.label: mEdit client
+http: @../target-architecture.medit_driving.http
+http.label: HTTP endpoints
+engine: @../target-architecture.medit_core.commands.engine
+engine.label: Build engine
+port: @../target-architecture.medit_kernel.ports
+port.label: Ports
+modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
+modfolderadapter.label: Mod folder adapter
+modfolder: @../target-architecture.medit_data.modfolder
+modfolder.label: "Mod folders\nfiles · manifests · the build folder"
+sourceadapter: @../target-architecture.medit_repositories.sourceadapter
+sourceadapter.label: Source adapter
+source: @../target-architecture.medit_data.source
+source.label: Mod source
+instance: @../target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · downloaded files · the repository"
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+views: "every view" {class: driving}
+
+driving."the confirmation"
+driving -> sourcecommands: "discard changes: the mods, or every mod, with the instance value" {class: compile}
+sourcecommands -> client: "discard: each mod's folder and installation files, the game folder" {class: compile}
+client -> http: envelope {class: compile}
+http -> engine: envelope {class: compile}
+modfolder -> modfolderadapter: "each manifest · installation files, deltas, game files: bytes" {class: compile}
+modfolderadapter -> engine: "manifests and bytes" {class: compile}
+
+tracked: "a source mod with a remote" {
+  source -> sourceadapter: "the commit at HEAD, or absent" {class: compile}
+  sourceadapter -> engine: "the commit" {class: compile}
+  engine -> sourceadapter: "clone at the manifest's commit, when absent" {class: compile}
+  sourceadapter -> source: "the clone" {class: compile}
+  engine."build-mod at the manifest's commit; skipped and named when the source is at another commit"
+}
+
+engine."per mod: every file whose bytes differ is written; untracked files stay; a mod that lacks anything is skipped"
+engine -> port: "progress, per mod" {class: push}
+engine -> modfolderadapter: "each file whose bytes differ" {class: compile}
+modfolderadapter -> modfolder: "the files" {class: compile}
+engine -> http: "landed or skipped, per mod, with what it lacks" {class: compile}
+http -> client: "landed or skipped, per mod" {class: compile}
+client -> sourcecommands: the outcome {class: compile}
+sourcecommands -> driving: "the outcome" {class: compile}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader -> views: value {class: loadorder}

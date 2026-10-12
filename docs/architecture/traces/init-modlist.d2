@@ -1,0 +1,24 @@
+# Init modlist, green: the repository and its ignore list; nothing staged, nothing committed.
+...@../styles
+shape: sequence_diagram
+driving: "Toolbox · Mods · Source Control" {class: driving}
+sourcecommands: @../target-architecture.modbench_core.sourcecommands
+sourcecommands.label: source commands
+git: "VS Code's git" {class: other}
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instance: @../target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · downloaded files · the repository"
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+views: "every view" {class: driving}
+
+driving -> sourcecommands: "init, with the instance value" {class: track}
+sourcecommands."refused when the instance already holds a repository"
+sourcecommands -> git: "init the instance folder" {class: outside}
+sourcecommands -> instanceadapter: "the ignore list" {class: track}
+instanceadapter -> instance: "the ignore list" {class: track}
+sourcecommands -> driving: "landed, or the refusal" {class: track}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader -> views: value {class: loadorder}

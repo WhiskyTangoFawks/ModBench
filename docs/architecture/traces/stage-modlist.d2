@@ -1,0 +1,43 @@
+# Stage modlist, green: each mod's manifest from the mod as it is, and each delta a changed file needs.
+...@../styles
+shape: sequence_diagram
+driving: "Toolbox · Mods · Source Control" {class: driving}
+sourcecommands: @../target-architecture.modbench_core.sourcecommands
+sourcecommands.label: source commands
+client: @../target-architecture.modbench_repositories.client
+client.label: mEdit client
+http: @../target-architecture.medit_driving.http
+http.label: HTTP endpoints
+engine: @../target-architecture.medit_core.commands.engine
+engine.label: Build engine
+port: @../target-architecture.medit_kernel.ports
+port.label: Ports
+modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
+modfolderadapter.label: Mod folder adapter
+modfolder: @../target-architecture.medit_data.modfolder
+modfolder.label: "Mod folders\nfiles · manifests · the build folder"
+instance: @../target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · downloaded files · the repository"
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+views: "every view" {class: driving}
+
+driving -> sourcecommands: "stage: the mods, or every mod, with the instance value" {class: track}
+sourcecommands -> client: "stage: each mod's folder and installation files, the game folder" {class: track}
+client -> http: envelope {class: track}
+http -> engine: envelope {class: track}
+modfolder -> modfolderadapter: "each mod's files: bytes · each installation file: bytes" {class: track}
+modfolderadapter -> engine: "bytes" {class: track}
+engine."per mod: hash, match, a delta for each changed file; refused when an installation file is missing; a source mod's manifest is its build's"
+engine -> port: "progress, per mod" {class: push}
+engine -> modfolderadapter: "each manifest that changed · each delta" {class: track}
+modfolderadapter -> modfolder: "manifests · the build folder" {class: track}
+engine -> http: "landed or refused, per mod, and each file with no source" {class: track}
+http -> client: "landed or refused, per mod" {class: track}
+client -> sourcecommands: the outcome {class: track}
+sourcecommands -> driving: "the outcome" {class: track}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader -> views: value {class: loadorder}

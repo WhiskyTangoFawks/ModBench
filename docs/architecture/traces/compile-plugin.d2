@@ -1,14 +1,10 @@
 # Compile, orange: the step build runs per plugin (build-mod).
 ...@../styles
 shape: sequence_diagram
-commands_mb: @../target-architecture.modbench_core.sourcecommands
-commands_mb.label: source commands
-client: @../target-architecture.modbench_repositories.client
-client.label: mEdit client
-http: @../target-architecture.medit_driving.http
-http.label: HTTP endpoints
-commands: @../target-architecture.medit_core.commands
-commands.label: Commands
+engine: @../target-architecture.medit_core.commands.engine
+engine.label: Build engine
+commands: @../target-architecture.medit_core.commands.edits
+commands.label: Record edits
 source: @../target-architecture.medit_data.source
 sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
@@ -18,9 +14,7 @@ plugin: @../target-architecture.medit_data.plugin
 indexer: @../target-architecture.medit_readmodel.index.indexer
 indexer.label: Indexer
 
-commands_mb -> client: "compile: the plugins" {class: edit}
-client -> http: envelope {class: edit}
-http -> commands: envelope {class: edit}
+engine -> commands: "compile: the plugins" {class: edit}
 source -> sourceadapter: documents {class: compile}
 sourceadapter -> commands: documents {class: compile}
 commands."check the documents; derive the masters"
@@ -28,13 +22,9 @@ commands -> sourceadapter: "what Modbench last wrote" {class: compile}
 sourceadapter -> source: "what Modbench last wrote" {class: compile}
 commands -> pluginadapter: bytes {class: compile}
 pluginadapter -> plugin: "bytes · a localized plugin's strings" {class: compile}
-commands -> http: "applied, with the diagnostics, or refusal, per item" {class: edit}
-http -> client: "applied or refusal, per item" {class: edit}
-client -> commands_mb: the outcome {class: edit}
+commands -> engine: "applied, with the diagnostics, or refusal, per item" {class: edit}
 indexer."the next snapshot: index-load-order"
 
 refused: "refused, before any write" {
-  commands -> http: "the refusal" {class: edit}
-  http -> client: the refusal {class: edit}
-  client -> commands_mb: the refusal {class: edit}
+  commands -> engine: "the refusal" {class: edit}
 }
