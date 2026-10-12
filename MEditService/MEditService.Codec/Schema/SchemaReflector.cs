@@ -60,8 +60,14 @@ public sealed class SchemaReflector
         return null;
     }
 
+    private static readonly ConcurrentDictionary<GameCategory, Assembly?> GameModules = new();
+
     /// <summary>The game module assembly, or null when this build does not reference it.</summary>
-    internal static Assembly? GameModule(GameCategory category)
+    internal static Assembly? GameModule(GameCategory category) => GameModules.GetOrAdd(category, LoadedGameModule);
+
+    // A load of an assembly this build does not reference throws each time it is asked, and a loaded
+    // assembly stays loaded, so the answer is asked for once.
+    private static Assembly? LoadedGameModule(GameCategory category)
     {
         var assemblyName = AssemblyNameFor(category);
         var loaded = AppDomain.CurrentDomain.GetAssemblies()
