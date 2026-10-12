@@ -7,7 +7,7 @@ import type { MoveToTrash } from '../ports/trash';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { fileExtension, isPluginFile } from './pluginFile';
-export { fileInFolder, isPluginSourcePath, pluginSourceFolderOf, PLUGIN_SOURCE_GLOB } from './layout';
+export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
 
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
 export { OVERWRITE_ORIGIN } from './codecs/modlistText';
@@ -337,6 +337,8 @@ export interface InstanceAdapter {
   sourceFolder(mod: string): string | undefined;
   /** ADR-0007. */
   modTracked(mod: string): Promise<boolean>;
+  /** Every repository in the source folder, by its folder's name, whether the mod order lists it or not. */
+  sourceMods(): Promise<string[]>;
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** The content digest of an origin file, at the path it is read from: two files with one digest
@@ -379,6 +381,8 @@ export interface InstanceAdapter {
   ): Promise<{ applied: true } | { applied: false; refusal: string }>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
+  /** Moves a mod's source folder into the trash; false when it has none. */
+  trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
   /** Makes the folder of a mod that is new. Refuses a folder already there, whatever it holds,
    *  matched as the manager matches names. */
   extractNewMod(mod: string): Promise<NewModExtraction>;

@@ -18,6 +18,7 @@
     { "path": "./src/modOrderCommands" },
     { "path": "./src/pluginsCommands" },
     { "path": "./src/instanceCommands" },
+    { "path": "./src/sourceCommands" },
     { "path": "./src/downloadsCommands" },
     { "path": "./src/install" },
     { "path": "./src/client" },

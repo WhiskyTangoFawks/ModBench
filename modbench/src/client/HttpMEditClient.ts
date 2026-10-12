@@ -13,7 +13,7 @@ import { createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
-  type BackendStatus, type CellChildRecords, type CompileOutcome,
+  type BackendStatus, type CellChildRecords, type BuildOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -449,15 +449,17 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  /** Each plugin compiles or is refused on its own. A cause no plugin escapes, no load order,
-   *  refuses the whole selection. Never refreshes the tree: a compiled binary changes only bytes on
-   *  disk. */
-  async compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused> {
+  /** Each mod builds or is refused on its own, and each plugin of a built mod compiles or is
+   *  refused on its own. Never refreshes the tree: a build changes only bytes on disk. */
+  async build(mods: readonly string[]): Promise<BuildOutcome | WriteRefused> {
     return this.mutateEach({
-      verb: 'compile', noun: 'plugin', items: plugins,
-      op: (counted) => `compile(${counted})`,
-      post: () => this.apiClient.POST('/plugins/compile', { body: { plugins: [...plugins] } }),
-      outcome: selectionOutcome,
+      verb: 'build', noun: 'mod', items: mods,
+      op: (counted) => `build(${counted})`,
+      post: () => this.apiClient.POST('/build', { body: { mods: [...mods] } }),
+      outcome: (answer) => selectionOutcome({
+        applied: answer.applied.map((m) => ({ mod: m.mod, compiled: m.compiled, refused: itemRefusals(m.refused) })),
+        refused: answer.refused,
+      }),
     });
   }
 

@@ -822,6 +822,18 @@ describe('the MO2 Instance adapter', () => {
 
         expect([await adapter.modTracked('Harder VATS'), await adapter.modTracked('Unofficial Fallout 4 Patch')]).toEqual([true, false]);
       });
+
+      it('lists every repository under the source folder by its folder name, listed in the mod order or not, and no folder without a `.git`', async () => {
+        await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
+        await mkdir(join(root, 'source', 'Cloned And Unlisted', '.git'), { recursive: true });
+        await mkdir(join(root, 'source', 'No Repository'), { recursive: true });
+
+        expect((await adapter.sourceMods()).sort()).toEqual(['Cloned And Unlisted', 'Harder VATS']);
+      });
+
+      it('lists none when the instance has no source folder', async () => {
+        expect(await adapter.sourceMods()).toEqual([]);
+      });
     });
   });
 
@@ -880,6 +892,20 @@ describe('the MO2 Instance adapter', () => {
         join(root, 'mods', 'Harder VATS'), join(root, 'mods', 'Unassigned (Modlist Development)_separator'),
       ]);
     });
+  });
+
+  it('moves a mod\'s source folder to the trash, and answers false when it has none', async () => {
+    const trashed: string[] = [];
+    const trash = (path: string): Promise<void> => {
+      trashed.push(path);
+      return Promise.resolve();
+    };
+    await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
+
+    expect(await adapter.trashSourceFolder('Harder VATS', trash)).toBe(true);
+    expect(await adapter.trashSourceFolder('Unofficial Fallout 4 Patch', trash)).toBe(false);
+
+    expect(trashed).toEqual([join(root, 'source', 'Harder VATS')]);
   });
 
   describe('excluding and including a file of a mod or Overwrite', () => {

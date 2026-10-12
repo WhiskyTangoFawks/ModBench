@@ -121,11 +121,13 @@ export function registerModMoveCommand(
 
 // One question for the whole selection: naming the mod alone, or listing several, both saying
 // where the folders go (mods.md, Uninstall).
-async function confirmUninstall(names: readonly string[], ask: AskQuestion): Promise<boolean> {
+async function confirmUninstall(names: readonly string[], sourceMods: readonly string[], ask: AskQuestion): Promise<boolean> {
   const [only] = names;
+  const quoted = (list: readonly string[]) => list.map((n) => `"${n}"`).join(', ');
   const question = names.length === 1 && only !== undefined
-    ? `Uninstall "${only}"? Its folder will be moved to the system trash.`
-    : `Uninstall ${names.map((n) => `"${n}"`).join(', ')}? Their folders will be moved to the system trash.`;
+    ? `Uninstall "${only}"? Its folder${sourceMods.length > 0 ? ' and its source' : ''} will be moved to the system trash.`
+    : `Uninstall ${quoted(names)}? Their folders will be moved to the system trash${
+      sourceMods.length > 0 ? `, and the source of ${quoted(sourceMods)} with them` : ''}.`;
   return (await ask(question, { modal: true }, 'Uninstall')) === 'Uninstall';
 }
 
@@ -165,9 +167,11 @@ export function registerModContextCommands(
       registerGesture('modbench.mod.uninstall', viewSelection, async (entry) => {
         // The download to mark comes off the row the tree already holds, so the command walks
         // nothing to find it.
-        const mods = pluralArgument(entry, 'mod').map((n) => ({ name: n.mod.name, archiveFilename: n.mod.archiveFilename }));
+        const rows = pluralArgument(entry, 'mod');
+        const mods = rows.map((n) => ({ name: n.mod.name, archiveFilename: n.mod.archiveFilename }));
         if (mods.length === 0) return;
-        if (!(await confirmUninstall(mods.map((m) => m.name), ask))) return;
+        const sourceMods = rows.filter((n) => n.facts?.tracked === true).map((n) => n.mod.name);
+        if (!(await confirmUninstall(mods.map((m) => m.name), sourceMods, ask))) return;
         await runModsWriting(instance, async () => {
           const result = await commands.uninstallMods(instance.value.activeProfile, mods, trash);
           if (!result.applied) {
@@ -177,6 +181,9 @@ export function registerModContextCommands(
           reporter.selectionOutcome(
             `Could not uninstall ${result.outcome.refused.length} of ${mods.length} mods.`, result.outcome, (m) => m.name);
           for (const item of result.outcome.landed) {
+            if (item.sourceRefusal !== undefined) {
+              reporter.report('warning', `"${item.name}" was uninstalled, but its source folder could not be moved to the trash.`, item.sourceRefusal);
+            }
             if (item.lineRefusal !== undefined) {
               reporter.report('warning',
                 `"${item.name}" was uninstalled, but its ${instance.value.managerNames.modOrderFile} line could not be removed.`, item.lineRefusal);
@@ -308,6 +315,21 @@ export function registerOpenFolderCommand(
     await reportFailure(reporter, `Failed to open the folder of "${target.name}".`, async () => {
       if (target.folder === undefined) throw new Error('No folder holds it.');
       await vscode.commands.executeCommand('revealInExplorer', target.folder);
+    });
+  });
+}
+
+export function registerOpenSourceCommand(
+  instance: Pick<Instance, 'value'>, reporter: Reporter, viewSelection: () => readonly ModlistNode[],
+): vscode.Disposable {
+  return registerGesture('modbench.mod.openSource', viewSelection, async (entry) => {
+    const node = singularArgument(entry, 'mod');
+    if (node === undefined) return;
+    const { trackedMods, paths } = instance.value;
+    await reportFailure(reporter, `Failed to open the source of "${node.mod.name}".`, async () => {
+      const folder = trackedMods.has(node.mod.name) ? paths.sourceDirs.get(node.mod.name) : undefined;
+      if (folder === undefined) throw new Error('It is not a source mod.');
+      await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
     });
   });
 }

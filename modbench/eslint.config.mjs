@@ -100,7 +100,7 @@ const BOUND_COMMAND_BOXES = {
     mods: ['modOrderCommands/modOrderCommands', 'install/install'],
     downloads: ['downloadsCommands/downloads'],
     toolbox: ['instanceCommands/instanceCommands'],
-    plugins: ['pluginsCommands/plugins', 'pluginsCommands/renamePlugin'],
+    plugins: ['pluginsCommands/plugins', 'pluginsCommands/renamePlugin', 'sourceCommands/sourceCommands'],
 };
 /** The Plugins box reaches the Instance adapter for its plugin-file rule alone; no other view reaches it. */
 /** @type {Record<string, string[]>} */
@@ -366,6 +366,7 @@ export default defineConfig(
                     './src/modOrderCommands/tsconfig.json',
                     './src/pluginsCommands/tsconfig.json',
                     './src/instanceCommands/tsconfig.json',
+                    './src/sourceCommands/tsconfig.json',
                     './src/downloadsCommands/tsconfig.json',
                     './src/install/tsconfig.json',
                     './src/client/tsconfig.json',

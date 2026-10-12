@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import {
-  isRefused, type MEditClient, type CompileDiagnostic, type CompileOutcome, type PluginAddress, type TrackOutcome,
+  isRefused, type MEditClient, type CompileDiagnostic, type BuildOutcome, type PluginAddress, type TrackOutcome,
 } from '../client';
 import type { SourceFiles, SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance } from '../instanceLoader/instance';
@@ -11,14 +11,12 @@ import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { trackProgressMessage } from './trackProgress';
 import type { PluginsTreeNode } from './pluginRows';
-import { pickWithMarked } from '../drivingLib/pickWithMarked';
-import { compilableSelected, PLUGINS_KEY_ARGS } from './gestureEntry';
-import { gestureEntry, isClickedRow, selectionArgument, type GestureEntry } from '../drivingLib/gestureEntry';
+import { PLUGINS_KEY_ARGS } from './gestureEntry';
+import { gestureEntry, isClickedRow, selectionArgument } from '../drivingLib/gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
+import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import type { AskQuestion } from '../ports/dialog';
-import { errorMessage } from '../ports/errorMessage';
-import { answerOf } from '../wire/readFailed';
 
 /** The Plugins tree's one progress surface (plugins.md, States, story 2): a spinner over the
  *  view while the work runs, and the view's own message line. */
@@ -198,128 +196,134 @@ function reportDecompiled(reporter: Reporter, outcome: SelectionOutcome<PluginAd
   reporter.landed(more.length === 0 ? `Decompiled "${only.name}".` : `Decompiled ${outcome.landed.length} plugins.`);
 }
 
-/** What compile needs: the tracked plugins for the palette's pick, the compile itself, the
- *  Instance loader's refresh, where the diagnostics go, and how the user is told. */
-export interface CompileDeps {
-  client: Pick<MEditClient, 'getPlugins' | 'compile'>;
+/** What build needs: the build itself, the Instance loader's refresh, where the diagnostics go, and
+ *  how the user is told. */
+export interface BuildDeps {
+  commands: SourceCommands;
   instance: Pick<Instance, 'refresh'>;
   reporter: Reporter;
-  problems: CompileProblems;
+  problems: BuildProblems;
   sourceFiles: SourceFilesOf;
-  /** Saves the plugin's unsaved plugin source; answers the paths VS Code left unsaved, or undefined when the plugin has no folder. */
-  saveUnsaved: (plugin: PluginAddress) => Promise<string[] | undefined>;
+  /** Saves the mod's unsaved plugin source; answers the paths VS Code left unsaved, or undefined when the mod has no source folder. */
+  saveUnsaved: (mod: string) => Promise<string[] | undefined>;
+  /** The instance's mod folders by mod name, which say whether an origin is a mod. */
+  modDirs: () => ReadonlyMap<string, string>;
+  /** The mods that hold a repository. */
+  sourceMods: () => ReadonlySet<string>;
+  /** The Mods view's id, whose bar a gesture from a Mods row or the palette runs under. */
+  modsView: string;
 }
 
-/** commands.md, `compile`: the plugins, the selection included, from a Plugins row, a record tab's
- *  column header, or the palette's pick, built from the working tree. */
-export function registerCompileCommand(
-  deps: CompileDeps, viewSelection: () => readonly PluginsTreeNode[],
-): vscode.Disposable {
+const NOT_A_SOURCE_MOD = 'it is not a source mod';
+
+/** commands.md, `build`: the mods of Mods rows, plugin rows, a column header, the palette's
+ *  selection, or the palette's pick of every source mod, built from the working tree. */
+export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
   return vscode.commands.registerCommand(
-    'modbench.plugin.compile',
-    async (clicked?: unknown, selected?: readonly PluginsTreeNode[]) => {
-      const plugins = await argumentOf(deps, clicked, selected, viewSelection);
-      if (plugins !== undefined) await compilePlugins(deps, plugins);
+    'modbench.mod.build',
+    async (clicked?: unknown, selected?: readonly unknown[]) => {
+      const entry = gestureEntry(clicked, selected, paletteSelection, isClickedRow);
+      const targets = targetsOf(entry.selection, deps.modDirs());
+      const fromARow = entry.clicked !== undefined || targets.mods.some((mod) => deps.sourceMods().has(mod));
+      if (fromARow) {
+        const invokedFrom = entry.selection.some((row) => modArgumentOf(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
+        await buildMods(deps, targets, invokedFrom);
+        return;
+      }
+      const mods = await pickSourceMods(deps.sourceMods());
+      if (mods !== undefined) await buildMods(deps, { mods, refusedRows: [] }, deps.modsView);
     },
   );
 }
 
-async function argumentOf(
-  deps: CompileDeps, clicked: unknown, selected: readonly PluginsTreeNode[] | undefined,
-  viewSelection: () => readonly PluginsTreeNode[],
-): Promise<PluginAddress[] | undefined> {
-  const header = columnHeaderOf(clicked);
-  if (header) return [header];
-  const entry = gestureEntry(clicked, selected, viewSelection);
-  if (entry.clicked === undefined) return pickCompilable(deps, entry);
-  return selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
+// mods.md, Build, story 7: from the palette with no source mod selected, a pick of every source.
+async function pickSourceMods(sourceMods: ReadonlySet<string>): Promise<string[] | undefined> {
+  const items = [...sourceMods].sort().map((label) => ({ label }));
+  const picked = await vscode.window.showQuickPick(items, { canPickMany: true, placeHolder: 'Build which mods?' });
+  return picked?.map((item) => item.label);
 }
 
-// plugins.md, Compile, story 3: from the palette, a pick of the tracked, editable plugins. An
-// extension cannot tell whether the Plugins view has focus, so it always asks, a selected
-// compilable plugin first and marked.
-async function pickCompilable(deps: CompileDeps, entry: GestureEntry<PluginsTreeNode>): Promise<PluginAddress[] | undefined> {
-  const selected = compilableSelected(entry.selection);
-  const selectedKey = selected && pluginAddressKey({ name: selected.plugin.name, origin: selected.origin });
-  const isSelected = (item: { label: string; description: string }) => pluginAddressKey({ name: item.label, origin: item.description }) === selectedKey;
-  const plugins = await deps.client.getPlugins().then(answerOf).catch((err: unknown) => {
-    deps.reporter.report('error', 'Could not list the plugins to compile.', errorMessage(err));
-    return undefined;
-  });
-  if (plugins === undefined) return undefined;
-  const items = plugins
-    .filter((p) => p.isTracked)
-    .map((p) => ({ label: p.name, description: p.origin }))
-    .sort((a, b) => Number(isSelected(b)) - Number(isSelected(a)));
-  const choice = await pickWithMarked(items, items.find(isSelected), 'Compile which plugin?');
-  return choice && [{ name: choice.label, origin: choice.description }];
-}
-
-// Reported once when it lands. Nothing re-reads `GET /plugins` after it: a compiled binary changes
-// only bytes on disk, which the index's own mirror watch re-reads.
-async function compilePlugins(deps: CompileDeps, plugins: readonly PluginAddress[]): Promise<void> {
-  if (plugins.length === 0) return;
-  if (!(await savedFirst(deps, plugins))) return;
-  await runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
-    const outcome = await deps.client.compile(plugins);
-    if (isRefused(outcome)) { deps.reporter.report('error', outcome.message); return; }
-    publishLanded(deps, outcome);
-    reportCompiled(deps.reporter, outcome, plugins.length);
+async function buildMods(deps: BuildDeps, targets: TrackTargets, invokedFrom: string): Promise<void> {
+  const { reporter, commands, instance } = deps;
+  const sourceMods = deps.sourceMods();
+  const mods = targets.mods.filter((mod) => sourceMods.has(mod));
+  const refusedRows = [
+    ...targets.refusedRows,
+    ...targets.mods.filter((mod) => !sourceMods.has(mod)).map((mod) => ({ item: mod, reason: NOT_A_SOURCE_MOD })),
+  ];
+  if (mods.length === 0) {
+    if (refusedRows.length > 0) reportBuilt(reporter, { landed: [], refused: refusedRows });
+    return;
+  }
+  if (!(await savedFirst(deps, mods))) return;
+  await runWritingGesture(invokedFrom, instance, async () => {
+    const outcome = await commands.build(mods);
+    if (isRefused(outcome)) { reporter.report('error', outcome.message); return; }
+    for (const { compiled } of outcome.landed) {
+      for (const plugin of compiled) deps.problems.publish(plugin, deps.sourceFiles(plugin.origin), plugin.diagnostics);
+    }
+    reportBuilt(reporter, { landed: outcome.landed, refused: [...outcome.refused, ...refusedRows] });
   });
 }
 
-// plugins.md, Compile, story 7: the plugin is built from what the user sees, so its unsaved plugin
-// source is saved first, and a file VS Code does not save refuses the compile before anything is written.
-async function savedFirst(deps: CompileDeps, plugins: readonly PluginAddress[]): Promise<boolean> {
+// mods.md, Build, story 5: the plugins are built from what the user sees, so the mod's unsaved
+// plugin source is saved first, and a file VS Code does not save refuses the build before anything
+// is written.
+async function savedFirst(deps: BuildDeps, mods: readonly string[]): Promise<boolean> {
   const unsaved: string[] = [];
   const homeless: string[] = [];
-  for (const plugin of plugins) {
-    const left = await deps.saveUnsaved(plugin);
-    if (left === undefined) homeless.push(rowName(plugin));
+  for (const mod of mods) {
+    const left = await deps.saveUnsaved(mod);
+    if (left === undefined) homeless.push(mod);
     else unsaved.push(...left);
   }
   if (homeless.length > 0) {
-    deps.reporter.report('error', 'Could not compile: no folder for the plugin source of these plugins.', homeless.join('\n'));
+    deps.reporter.report('error', 'Could not build: no source folder for these mods.', homeless.join('\n'));
     return false;
   }
   if (unsaved.length === 0) return true;
-  deps.reporter.report('error', 'Could not compile: VS Code did not save its plugin source.', unsaved.join('\n'));
+  deps.reporter.report('error', 'Could not build: VS Code did not save its plugin source.', unsaved.join('\n'));
   return false;
-}
-
-function publishLanded(deps: CompileDeps, outcome: CompileOutcome): void {
-  for (const compiled of outcome.landed) deps.problems.publish(compiled, deps.sourceFiles(compiled.origin), compiled.diagnostics);
 }
 
 function diagnosticsWords(count: number): string {
   return `${count} ${count === 1 ? 'diagnostic' : 'diagnostics'}. See the Problems panel.`;
 }
 
-// plugins.md, Compile, story 2, and Reporting: one notification when it lands, naming each refused
-// plugin and why, and pointing at the Problems panel when it left diagnostics.
-function reportCompiled(reporter: Reporter, outcome: CompileOutcome, total: number): void {
-  const diagnostics = outcome.landed.reduce((sum, compiled) => sum + compiled.diagnostics.length, 0);
-  const [refused] = outcome.refused;
-  if (refused !== undefined) {
+// mods.md, Build, story 6, and common.md, Reporting: one notification when it lands, naming each
+// refused mod and plugin and why, and pointing at the Problems panel when it left diagnostics.
+function reportBuilt(reporter: Reporter, outcome: BuildOutcome): void {
+  const compiled = outcome.landed.flatMap((built) => built.compiled);
+  const refusedPlugins = outcome.landed.flatMap((built) => built.refused);
+  const diagnostics = compiled.reduce((sum, plugin) => sum + plugin.diagnostics.length, 0);
+  if (outcome.refused.length + refusedPlugins.length > 0) {
+    const counts = [
+      ...(outcome.refused.length > 0 ? [`${outcome.refused.length} of ${outcome.landed.length + outcome.refused.length} mods`] : []),
+      ...(refusedPlugins.length > 0 ? [`${refusedPlugins.length} of ${compiled.length + refusedPlugins.length} plugins`] : []),
+    ];
     const rest = diagnostics > 0 ? ` The rest compiled with ${diagnosticsWords(diagnostics)}` : '';
-    const what = total === 1 ? `"${refused.item.name}"` : `${outcome.refused.length} of ${total} plugins`;
-    reporter.selectionOutcome(
-      `Could not compile ${what}.${rest}`,
-      { landed: outcome.landed, refused: outcome.refused }, rowName);
+    reporter.selectionOutcome(`Could not build ${counts.join(' and ')}.${rest}`, {
+      landed: outcome.landed.map((built) => built.mod),
+      refused: [...outcome.refused, ...refusedPlugins.map(({ item, reason }) => ({ item: rowName(item), reason }))],
+    }, (name) => name);
     return;
   }
   const [only, ...more] = outcome.landed;
   if (only === undefined) return;
-  const what = more.length === 0 ? `"${only.name}"` : `${outcome.landed.length} plugins`;
-  reporter.landed(diagnostics > 0 ? `Compiled ${what} with ${diagnosticsWords(diagnostics)}` : `Compiled ${what}.`);
+  const what = more.length === 0 ? `"${only.mod}"` : `${outcome.landed.length} mods`;
+  reporter.landed(diagnostics > 0 ? `Built ${what} with ${diagnosticsWords(diagnostics)}` : `Built ${what}.`);
 }
 
-/** The compile diagnostics in the Problems panel. A plugin's compile replaces its own and no other
- *  plugin's, so one refused beside it in its mod keeps what its last compile found. */
-export class CompileProblems {
+/** The build's diagnostics in the Problems panel. A build replaces those of each plugin it compiled
+ *  and no other plugin's, so one refused beside it in its mod keeps what its last build found. */
+export class BuildProblems {
   private readonly published = new Map<string, vscode.Uri[]>();
 
   constructor(private readonly collection: vscode.DiagnosticCollection) {}
+
+  dispose(): void {
+    this.collection.dispose();
+  }
 
   publish(plugin: PluginAddress, files: SourceFiles | undefined, diagnostics: readonly CompileDiagnostic[]): void {
     const key = pluginAddressKey(plugin);

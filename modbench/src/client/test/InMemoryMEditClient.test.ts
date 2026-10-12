@@ -12,9 +12,9 @@ describe('InMemoryMEditClient — recorded calls', () => {
 
   it('records a command call with its arguments', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('compile', { landed: [], refused: [] });
-    await client.compile([{ name: 'MyMod.esp', origin: 'MyMod' }]);
-    expect(client.calls).toContainEqual({ method: 'compile', args: [[{ name: 'MyMod.esp', origin: 'MyMod' }]] });
+    client.setCommandResult('build', { landed: [], refused: [] });
+    await client.build(['MyMod']);
+    expect(client.calls).toContainEqual({ method: 'build', args: [['MyMod']] });
   });
 });
 
@@ -82,12 +82,12 @@ describe('InMemoryMEditClient — a queued once-form script', () => {
 describe('InMemoryMEditClient — a scripted command failure', () => {
   it('rejects every call with the scripted error until re-scripted', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandFailure('compile', new Error('the compile step failed'));
+    client.setCommandFailure('build', new Error('the build step failed'));
 
-    await expect(client.compile([{ name: 'MyMod.esp', origin: 'MyMod' }])).rejects.toThrow('the compile step failed');
+    await expect(client.build(['MyMod'])).rejects.toThrow('the build step failed');
 
-    client.setCommandResult('compile', { landed: [], refused: [] });
-    await expect(client.compile([{ name: 'MyMod.esp', origin: 'MyMod' }])).rejects.toThrow('the compile step failed');
+    client.setCommandResult('build', { landed: [], refused: [] });
+    await expect(client.build(['MyMod'])).rejects.toThrow('the build step failed');
   });
 });
 
