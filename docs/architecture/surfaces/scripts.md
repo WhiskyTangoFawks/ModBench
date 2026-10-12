@@ -28,7 +28,7 @@ As a user, I want:
 
 1. To create a plugin at the end of the load order, and in it to copy a record as an override or as new, create a record, edit a field and delete a record, as my gestures do. Source: xEdit; catalog, Plugin and Record
 2. Each write to be a working-tree change in the plugin's source, which I review, commit or discard in Source Control. Source: ADR-0007
-3. A script never to write an untracked plugin, and never to track, build or reorder plugins. Those are my gestures. Source: ADR-0007; ADR-0021
+3. A script never to write a plugin with no source, and never to init, build or reorder plugins. Those are my gestures. Source: ADR-0007; ADR-0021
 4. A query to see every write the script made before it. Source: Never silently wrong; ADR-0015
 5. A script's writes to reach every view as mine do. Source: common, A view, story 2; ADR-0015
 6. A write to a file I hold unsaved changes in to be refused, naming the file, so my unsaved text never reaches the disk through a script. Source: Never silently wrong

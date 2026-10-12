@@ -346,6 +346,91 @@ public sealed class ModelIdentityTests
         Assert.Contains("'TransientTypes'", divergence, StringComparison.Ordinal);
     }
 
+    public static TheoryData<string, Condition.Function, int, FormKey> ParametersAPrunedMasterRenumbers => new()
+    {
+        { "a perk the function reads", Condition.Function.HasPerk, 0, PerkInLastMaster },
+        { "a record an unused parameter would name", Condition.Function.IsAttacking, 0x0100_0800, FormKey.Null },
+    };
+
+    [Theory]
+    [MemberData(nameof(ParametersAPrunedMasterRenumbers))]
+    public async Task DivergenceFrom_WhenAPrunedMasterRenumbersAConditionParameter_ReturnsNull(
+        string _, Condition.Function function, int parameterOne, FormKey parameterOneRecord)
+    {
+        var original = PluginWithARecipeCondition(ConditionData(function, parameterOne, parameterOneRecord), UnreferencedMaster, PerkInLastMaster.ModKey);
+        var recompiled = PluginWithARecipeCondition(ConditionData(function, parameterOne, parameterOneRecord));
+
+        Assert.Null(await DivergenceWithOriginalMastersKeptAsync(original, recompiled));
+    }
+
+    [Fact]
+    public async Task DivergenceFrom_WhenAPrunedMasterRenumbersAConditionInADialogTopicsResponse_ReturnsNull()
+    {
+        var original = PluginWithATopicCondition(UnreferencedMaster, PerkInLastMaster.ModKey);
+        var recompiled = PluginWithATopicCondition();
+
+        Assert.Null(await DivergenceWithOriginalMastersKeptAsync(original, recompiled));
+    }
+
+    [Fact]
+    public async Task DivergenceFrom_WhenAConditionsFormParameterNamesAnotherRecord_NamesIt()
+    {
+        var original = PluginWithARecipeCondition(HasPerk(PerkInLastMaster), UnreferencedMaster, PerkInLastMaster.ModKey);
+        var recompiled = PluginWithARecipeCondition(HasPerk(new FormKey(PerkInLastMaster.ModKey, 0x801)));
+
+        Assert.Contains("ParameterOneRecord", await DivergenceWithOriginalMastersKeptAsync(original, recompiled), StringComparison.Ordinal);
+    }
+
+    private static readonly ModKey UnreferencedMaster = ModKey.FromFileName("Unreferenced.esm");
+    private static readonly FormKey PerkInLastMaster = new(ModKey.FromFileName("Perks.esm"), 0x800);
+
+    private static FunctionConditionData ConditionData(Condition.Function function, int parameterOne, FormKey parameterOneRecord)
+    {
+        var data = new FunctionConditionData { Function = function, ParameterOneNumber = parameterOne };
+        data.ParameterOneRecord.SetTo(parameterOneRecord);
+        return data;
+    }
+
+    private static FunctionConditionData HasPerk(FormKey perk) => ConditionData(Condition.Function.HasPerk, 0, perk);
+
+    private static Fallout4Mod PluginWithARecipeCondition(FunctionConditionData data, params ModKey[] masters)
+    {
+        var mod = PluginDeclaring(masters);
+        mod.ConstructibleObjects.AddNew("Recipe").Conditions.Add(new ConditionFloat { Data = data });
+        return mod;
+    }
+
+    private static Fallout4Mod PluginWithATopicCondition(params ModKey[] masters)
+    {
+        var mod = PluginDeclaring(masters);
+        var quest = mod.Quests.AddNew("Quest");
+        var topic = new DialogTopic(mod) { Quest = quest.ToLink() };
+        topic.Responses.Add(new DialogResponses(mod)
+        {
+            Conditions = { new ConditionFloat { Data = HasPerk(PerkInLastMaster) } },
+        });
+        quest.DialogTopics.Add(topic);
+        return mod;
+    }
+
+    private static Fallout4Mod PluginDeclaring(ModKey[] masters)
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        mod.ModHeader.MasterReferences.AddRange(masters.Select(master => new MasterReference { Master = master }));
+        return mod;
+    }
+
+    private static async Task<string?> DivergenceWithOriginalMastersKeptAsync(Fallout4Mod original, Fallout4Mod recompiled)
+    {
+        using var scratch = new ScratchDirectory("medit-modelidentity-pruned-");
+        var originalPath = Path.Combine(Directory.CreateDirectory(Path.Combine(scratch.Path, "original")).FullName, original.ModKey.FileName);
+        await original.BeginWrite.ToPath(originalPath).WithLoadOrderFromHeaderMasters().WithNoDataFolder().NoMastersListContentCheck().WriteAsync();
+        var recompiledPath = await Write(recompiled, Path.Combine(scratch.Path, "recompiled"));
+        return Adapter.DivergenceFrom(
+            original.ModKey.FileName, originalPath, recompiledPath, EmptyLoadOrder.Of(GameRelease.Fallout4),
+            new PluginStrings(null, scratch.Path)).Answered();
+    }
+
     private static void SetOpaqueHeaderFields(Fallout4Mod mod)
     {
         mod.ModHeader.INTV = new byte[] { 1, 0, 0, 0 };

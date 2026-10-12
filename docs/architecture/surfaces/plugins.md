@@ -1,6 +1,6 @@
 # Plugins
 
-The Plugins surface shows the plugin order and, beneath each plugin, its records. It is one tree over two templates: its plugin rows follow MO2's plugin list ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)), and the records beneath them follow xEdit's navigator ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)). Where it departs, [mo2.md](../../out-of-scope/mo2.md) and [xedit.md](../../out-of-scope/xedit.md) say why. Its gestures are in [commands.md](../commands.md) under Plugin and Record, `track` and `build` under Mod, and Every view. What every view shares is in [common.md](common.md).
+The Plugins surface shows the plugin order and, beneath each plugin, its records. It is one tree over two templates: its plugin rows follow MO2's plugin list ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)), and the records beneath them follow xEdit's navigator ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)). Where it departs, [mo2.md](../../out-of-scope/mo2.md) and [xedit.md](../../out-of-scope/xedit.md) say why. Its gestures are in [commands.md](../commands.md) under Plugin and Record, `init` and `build` under Mod, and Every view. What every view shares is in [common.md](common.md).
 
 Each story cites its source. A story with no source is owned here.
 
@@ -45,8 +45,8 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 | Failed to read | mEdit could not read it | `$(error)` red | failed to read |
 | Master issues | it is active, and a master in its header is not (xedit.md, divergence 28); once the snapshot is indexed | `$(error)` red | 1 master issue, N master issues |
 | Unreadable records | a record could not be read into its document | `$(error)` red | unreadable records |
-| Plugin source unreadable | it is tracked, and its plugin source is missing or cannot be read | `$(warning)` yellow | plugin source unreadable |
-| Changed outside Modbench | it is tracked, and its bytes differ from what Modbench last wrote, or either cannot be read | `$(warning)` yellow | changed outside Modbench |
+| Plugin source unreadable | it is a source plugin, and its plugin source is missing or cannot be read | `$(warning)` yellow | plugin source unreadable |
+| Changed outside Modbench | it is a source plugin, and its bytes differ from what Modbench last wrote, or either cannot be read | `$(warning)` yellow | changed outside Modbench |
 | Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
 
 - A master issue never disables the plugin or cascades to its dependants. The check box stays as I set it. Source: xedit.md, divergence 28
@@ -126,19 +126,19 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · rename… (tracked) · create record… · track (in a mod with no repository) · decompile (in a source mod) · build (in a source mod) · copy value |
+| Plugin menu | reveal · enable or disable · rename… (source) · create record… · init (a mod with no source) · decompile (in a source mod) · build (in a source mod) · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open to the side · referenced by · create record… (on a container record) · copy… · copy value · delete |
 | Check box | enable or disable |
-| Keys | Space: enable or disable. Enter: open, as a click does. F2: rename a tracked plugin. Delete: delete records. Ctrl+C: copy value. |
+| Keys | Space: enable or disable. Enter: open, as a click does. F2: rename a source plugin. Delete: delete records. Ctrl+C: copy value. |
 
 As a user, I want:
 
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's Argument in the catalog says. Source: catalog Argument
 2. A click on a record to open it in the record panel, and a click on an enabled plugin row to open its header, which is a record. A click on a disabled plugin row only selects it. Source: catalog `open`
 3. Enable or disable over a mixed selection to behave as in Mods (Menus and keys, story 2). Source: mods.md
-4. The gestures that edit a plugin's records absent on an untracked plugin and on a plugin whose plugin source is unreadable: create record and delete, and the plugin as a copy destination. Track or decompile is on its row. Source: No dead entries
+4. The gestures that edit a plugin's records absent on a plugin with no source and on a plugin whose plugin source is unreadable: create record and delete, and the plugin as a copy destination. Init or decompile is on its row. Source: No dead entries
 5. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its file name. Source: catalog `copy value`; [editor-fields.md](editor-fields.md)
 
 ## Drag and drop
@@ -165,15 +165,15 @@ As a user, I want:
 6. The new plugin empty: a header with no records and no masters, flagged by its extension: `.esm` a master, `.esl` a light plugin.
 7. A plugin created in a source mod to land with its plugin source, as working-tree changes I can review. Source: CONTEXT.md, Source mod
 
-### Track
+### Init
 
 As a user, I want:
 
-1. No prompt. While it runs, the view's message line names the mod and the phase. Source: catalog `track`
+1. No prompt. While it runs, the view's message line names the mod and the phase. Source: catalog `init`
 2. The repository to track `plugin-source/`, the mod's assets, the build configuration and `.gitignore`, and nothing else. The assets are the files no installation file yields. Source: ADR-0007
-3. One commit, `Track <mod>`, holding the source of every plugin the mod provides, the assets and the build configuration.
+3. One commit, `Init <mod>`, holding the source of every plugin the mod provides, the assets and the build configuration.
 4. Each file's line endings kept as written.
-5. A track that refuses any plugin to write nothing and leave no repository, naming each refused plugin and why.
+5. An init that refuses any plugin to write nothing and leave no repository, naming each refused plugin and why.
 
 ### Decompile
 

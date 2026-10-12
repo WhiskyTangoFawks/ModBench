@@ -549,7 +549,7 @@ describe('package.json command titles and categories', () => {
     expect(RETIRED_AHEAD_OF_CODE.filter((id) => !declared.has(id))).toEqual([]);
   });
 
-  const SPECIFIED_AHEAD_OF_CODE = ['modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges', 'modbench.modlist.clean', 'modbench.mod.build', 'modbench.mod.openSource'];
+  const SPECIFIED_AHEAD_OF_CODE = ['modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges', 'modbench.modlist.clean', 'modbench.mod.build', 'modbench.mod.openSource', 'modbench.mod.init'];
 
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
@@ -1180,7 +1180,7 @@ const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'mod
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
 const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_TO_THE_SIDE, OPEN_REFERENCE];
-const RETIRED_AHEAD_OF_CODE = ['modbench.plugin.compile'];
+const RETIRED_AHEAD_OF_CODE = ['modbench.plugin.compile', 'modbench.mod.track'];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);

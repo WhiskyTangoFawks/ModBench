@@ -51,21 +51,20 @@ internal static class ModelIdentity
     // field the mask disagrees on, else the codec document path that differs; null when none differs.
     private static Divergence? FindFirst(IModGetter original, IModGetter recompiled)
     {
+        var game = GameCodecs.For(recompiled.GameRelease);
         var originalFormKeys = new HashSet<FormKey>();
-        foreach (var (originalRecord, normalizedOriginal, recompiledRecord) in Normalized(original.EnumerateMajorRecords(), recompiled))
+        foreach (var (originalRecord, recompiledRecord) in Paired(original.EnumerateMajorRecords(), recompiled))
         {
             originalFormKeys.Add(originalRecord.FormKey);
-            if (recompiledRecord is not { } normalizedRecompiled)
+            if (recompiledRecord is null)
             {
                 return new Divergence(originalRecord.GetType().Name, originalRecord.FormKey, originalRecord.EditorID,
                     "is missing from the recompiled plugin.");
             }
 
-            // The mask lies by omission (a polymorphic hierarchy's derived-only fields bind through the
-            // base overload and are never compared), so a mask-equal pair is never the verdict; the codec
-            // document is.
-            var changed = FailingFields(normalizedOriginal, normalizedRecompiled).FirstOrDefault()
-                ?? FirstCodecDocumentDifference(normalizedOriginal, normalizedRecompiled, original.GameRelease);
+            var changed = FirstDifference(originalRecord, recompiledRecord, original.GameRelease) is null
+                ? null
+                : FirstDifference(game.NormalizeEncoding(originalRecord), game.NormalizeEncoding(recompiledRecord), original.GameRelease);
             if (changed != null)
             {
                 return new Divergence(originalRecord.GetType().Name, originalRecord.FormKey, originalRecord.EditorID,
@@ -86,17 +85,19 @@ internal static class ModelIdentity
         return null;
     }
 
-    // Both sides through the game's one definition of legitimate divergence (ADR-0006).
-    private static IEnumerable<(IMajorRecordGetter Original, IMajorRecordGetter Normalized, IMajorRecordGetter? Recompiled)> Normalized(
+    // The mask lies by omission (a polymorphic hierarchy's derived-only fields bind through the
+    // base overload and are never compared), so a mask-equal pair is never the verdict; the codec
+    // document is.
+    private static string? FirstDifference(IMajorRecordGetter original, IMajorRecordGetter recompiled, Mutagen.Bethesda.GameRelease release) =>
+        FailingFields(original, recompiled).FirstOrDefault() ?? FirstCodecDocumentDifference(original, recompiled, release);
+
+    // A pair that differs is compared again through the game's one definition of legitimate divergence
+    // (ADR-0006); one that does not skips its copy.
+    private static IEnumerable<(IMajorRecordGetter Original, IMajorRecordGetter? Recompiled)> Paired(
         IEnumerable<IMajorRecordGetter> original, IModGetter recompiled)
     {
-        var game = GameCodecs.For(recompiled.GameRelease);
         var recompiledByFormKey = recompiled.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
-        foreach (var record in original)
-        {
-            yield return (record, game.NormalizeEncoding(record),
-                recompiledByFormKey.TryGetValue(record.FormKey, out var other) ? game.NormalizeEncoding(other) : null);
-        }
+        return original.Select(record => (record, recompiledByFormKey.GetValueOrDefault(record.FormKey)));
     }
 
     /// <summary>Each <paramref name="held"/> record with every document path whose value <paramref name="written"/>
@@ -104,13 +105,17 @@ internal static class ModelIdentity
     public static IReadOnlyList<(IMajorRecordGetter Record, IReadOnlyList<string> Paths)> FindDrops(
         IReadOnlyList<(IMajorRecordGetter Record, string Text)> held, IModGetter written)
     {
+        var game = GameCodecs.For(written.GameRelease);
         var drops = new List<(IMajorRecordGetter, IReadOnlyList<string>)>();
-        foreach (var ((record, normalized, writtenRecord), text) in Normalized(held.Select(h => h.Record), written).Zip(held.Select(h => h.Text)))
+        foreach (var ((record, writtenRecord), text) in Paired(held.Select(h => h.Record), written).Zip(held.Select(h => h.Text)))
         {
             var recompiled = writtenRecord
                 ?? throw new InvalidOperationException($"Expected the plugin written from the tree to hold {record.FormKey}.");
+            if (string.Equals(text, RecordTextCodec.SerializeToText(recompiled, written.GameRelease), StringComparison.Ordinal)) continue;
+
+            var normalized = game.NormalizeEncoding(record);
             var heldText = ReferenceEquals(normalized, record) ? text : RecordTextCodec.SerializeToText(normalized, written.GameRelease);
-            var writtenText = RecordTextCodec.SerializeToText(recompiled, written.GameRelease);
+            var writtenText = RecordTextCodec.SerializeToText(game.NormalizeEncoding(recompiled), written.GameRelease);
             if (string.Equals(heldText, writtenText, StringComparison.Ordinal)) continue;
 
             using var heldDoc = System.Text.Json.JsonDocument.Parse(heldText);

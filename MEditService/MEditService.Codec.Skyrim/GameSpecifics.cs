@@ -31,5 +31,10 @@ internal static class GameSpecifics
 
     public static IReadOnlyList<string> TransientTypes(IGameModGetter _) => [];
 
-    public static IMajorRecordGetter NormalizeRecord(IMajorRecordGetter record) => record;
+    public static bool Normalizes(IMajorRecordGetter _) => false;
+
+    public static void Normalize(IMajorRecord _)
+    {
+        // Skyrim's rewrite respells nothing beyond the group fields every game shares.
+    }
 }

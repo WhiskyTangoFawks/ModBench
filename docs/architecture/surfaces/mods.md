@@ -113,7 +113,7 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod. Collapse All last. |
-| Mod menu | open folder · open source (a source mod) · open conflicts (the mod has a file order conflict) · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add separator · create empty mod · install… · track (the mod has no repository and holds a plugin) · build (a source mod) · stage · discard changes… · clean… (the instance has a repository) · copy value · uninstall |
+| Mod menu | open folder · open source (a source mod) · open conflicts (the mod has a file order conflict) · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add separator · create empty mod · install… · init (a mod with no source that holds a plugin) · build (a source mod) · stage · discard changes… · clean… (the instance has a repository) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · copy value · delete |
 | Overwrite menu | open folder |
 | File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · copy value |
@@ -178,7 +178,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. Build to write the mod folder from the source, without asking: the base is what the installation files provide, the source's assets override it, each plugin compiles from its plugin source, and the manifest is written last. A tracked plugin's source is the truth, and build makes the folder from it. Source: catalog `build`; ADR-0006; ADR-0007
+1. Build to write the mod folder from the source, without asking: the base is what the installation files provide, the source's assets override it, each plugin compiles from its plugin source, and the manifest is written last. A source plugin's source is the truth, and build makes the folder from it. Source: catalog `build`; ADR-0006; ADR-0007
 2. The build configuration in the source to name the output folder and, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
 3. A file in the folder the build did not make left where it is and shown as untracked. Clean removes it. Source: ADR-0023
 4. A build whose configuration names an output folder that is not this mod's folder refused, naming both, so a folder renamed outside Modbench is never overwritten. Source: ADR-0003

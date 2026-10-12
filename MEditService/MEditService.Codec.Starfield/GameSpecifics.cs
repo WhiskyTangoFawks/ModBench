@@ -49,13 +49,13 @@ internal static class GameSpecifics
             type => $"{type.FormType}:{string.Join(",", type.Links.Select(link => link.FormKey))}"),
     ];
 
-    public static IMajorRecordGetter NormalizeRecord(IMajorRecordGetter record)
+    public static bool Normalizes(IMajorRecordGetter record) => record is IQuestGetter;
+
+    public static void Normalize(IMajorRecord copy)
     {
-        if (record is not IQuestGetter quest) return record;
-        var copy = quest.DeepCopy();
-        copy.Timestamp = 0;
-        copy.Unknown = 0;
-        foreach (var topic in copy.DialogTopics) GameCodec.ZeroTopicGroupFields(topic);
-        return copy;
+        if (copy is not Quest quest) return;
+        quest.Timestamp = 0;
+        quest.Unknown = 0;
+        foreach (var topic in quest.DialogTopics) GameCodec.ZeroTopicGroupFields(topic);
     }
 }
