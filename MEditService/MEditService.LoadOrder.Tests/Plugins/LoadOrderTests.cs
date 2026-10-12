@@ -8,7 +8,7 @@ public sealed class LoadOrderTests
     private const string Instance = @"C:\MO2\Fallout4";
 
     private static RegisteredPlugin Registered(string name, string origin, int? line = null, bool lineNamesIt = true) =>
-        new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), new PluginProvider.FromMod(origin, Path.Combine(@"C:\MO2\mods", origin)),
+        new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), new PluginProvider.FromMod(origin, Path.Combine(@"C:\MO2\mods", origin), Path.Combine(@"C:\MO2\source", origin)),
             line is { } place ? new PluginLine(place, lineNamesIt) : null);
 
     private static LoadOrderSnapshot Order(RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
@@ -259,7 +259,7 @@ public sealed class LoadOrderTests
     {
         var game = new RegisteredPlugin("Vanilla.esp", "ModA", @"C:\Elsewhere\Vanilla.esp", PluginProvider.Game, Line: null);
         var stray = new RegisteredPlugin("Stray.esp", "ModA", @"C:\Elsewhere\Stray.esp", PluginProvider.NoMod, Line: null);
-        var inFolder = new PluginProvider.FromMod("ModA", @"C:\MO2\mods\ModA");
+        var inFolder = new PluginProvider.FromMod("ModA", @"C:\MO2\mods\ModA", @"C:\MO2\source\ModA");
         var mod = new RegisteredPlugin("A.esp", "ModA", @"C:\MO2\mods\ModA\deep\A.esp", inFolder, Line: null);
 
         var order = Order([game, stray, mod]);

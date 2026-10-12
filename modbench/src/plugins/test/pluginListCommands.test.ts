@@ -72,6 +72,7 @@ function makeMo2() {
             ['Disabled Mod', '/instance/mods/Disabled Mod'],
             ['Holding Mod', '/instance/mods/Holding Mod'],
           ]),
+          sourceDirs: new Map(),
         },
       }),
     },

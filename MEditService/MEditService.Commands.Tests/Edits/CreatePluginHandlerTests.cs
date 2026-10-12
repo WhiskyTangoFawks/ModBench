@@ -75,7 +75,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     }
 
     private static RegisteredPlugin Registered(string name, string origin, string folder) =>
-        new(name, origin, Path.Combine(folder, name), new PluginProvider.FromMod(origin, folder), Line: null);
+        new(name, origin, Path.Combine(folder, name), new PluginProvider.FromMod(origin, folder, folder), Line: null);
 
     [Fact]
     public async Task CreatePlugin_IntoATrackedMod_LandsItsSourceAsWorkingTreeChanges_AndLeavesTheOthersAsTheyWere()
@@ -175,7 +175,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         Assert.Equal(
             [Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(folder, "Second.esp"))))],
-            TestAdapters.Source().OverFolder(new PluginProvider.FromMod("ParkedMod", folder), GameRelease.Fallout4).LastWrittenBinarySha256s(new PluginAddress("Second.esp", "ParkedMod")).Value());
+            TestAdapters.Source().OverFolder(new PluginProvider.FromMod("ParkedMod", folder, folder), GameRelease.Fallout4).LastWrittenBinarySha256s(new PluginAddress("Second.esp", "ParkedMod")).Value());
     }
 
     private sealed class SourceUnreadableAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())

@@ -84,7 +84,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 describe('modbench.record.open on a copy, a record and the plugin it is in', () => {
   const GUN = '000801:A.esp';
   const plugin = { name: 'A.esp', origin: 'ModA' };
-  const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+  const FILE = '/source/ModA/plugin-source/A.esp/Weapons/Gun.json';
   const opened = () => executed().filter(([id]) => id === 'vscode.openWith').map(([, uri, viewType]) => [uri, viewType]);
 
   const inFile = (location: string, isContainersDocument = false) => ({ kind: isContainersDocument ? 'ContainersFile' as const : 'OwnFile' as const, location });

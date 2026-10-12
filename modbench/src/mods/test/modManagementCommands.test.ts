@@ -965,7 +965,7 @@ describe('open folder: one command for a mod, the Overwrite row, a file and a fo
   const instance = {
     ...instanceThatReads,
     value: instanceValueFixture({
-      paths: { overwriteDir: '/instance/overwrite', downloadsDir: '', modDirs: new Map([['My Mod', '/instance/mods/My Mod']]) },
+      paths: { overwriteDir: '/instance/overwrite', downloadsDir: '', modDirs: new Map([['My Mod', '/instance/mods/My Mod']]), sourceDirs: new Map() },
     }),
   };
   const revealed = (): (string | undefined)[] =>

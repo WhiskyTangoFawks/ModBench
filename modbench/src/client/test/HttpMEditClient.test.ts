@@ -179,10 +179,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const patch = { name: 'Patch.esp', origin: 'PatchMod' };
   const other = { name: 'Other.esp', origin: 'OtherMod' };
   const newPlugin = { name: 'New.esp', origin: 'ModA' };
-  const changes = { moves: [], deletions: [], documents: [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
-  const keptChanges = { record: kept, moves: [], deletions: ['/mods/ModA/plugin-source/MyPatch.esp/Npcs/Kept'], documents: [] };
-  const goneChanges = { record: gone, moves: [], deletions: [], documents: [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Cell.json', text: '{"cut": true}' }] };
-  const copied = { record: kept, destination: patch, moves: [], deletions: [], documents: [{ path: '/mods/PatchMod/plugin-source/Patch.esp/Header.json', text: '{"h":1}' }] };
+  const changes = { moves: [], deletions: [], documents: [{ path: '/source/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
+  const keptChanges = { record: kept, moves: [], deletions: ['/source/ModA/plugin-source/MyPatch.esp/Npcs/Kept'], documents: [] };
+  const goneChanges = { record: gone, moves: [], deletions: [], documents: [{ path: '/source/ModA/plugin-source/MyPatch.esp/Cell.json', text: '{"cut": true}' }] };
+  const copied = { record: kept, destination: patch, moves: [], deletions: [], documents: [{ path: '/source/PatchMod/plugin-source/Patch.esp/Header.json', text: '{"h":1}' }] };
   const diagnostic = { formKey: '000800:First.esp', sourceRelativePath: 'First.esp/Npc/A.json', message: 'Race: points at nothing' };
   const renamed: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'Renamed' };
   const editChanges = {
@@ -196,9 +196,9 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     { formKey: '000802:B.esp', plugin: { name: 'B.esp', origin: 'BMod' } },
   ];
   const documentText = { plugin: patch, documentText: '{}', alone: false };
-  const sharedFile = { kind: 'OwnFile', location: '/mods/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json' };
+  const sharedFile = { kind: 'OwnFile', location: '/source/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json' };
   const fileRecord = { formKey: sharedKey, plugin: 'Shared.esp', origin: 'ModA' };
-  const sourcePath = '/mods/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json';
+  const sourcePath = '/source/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json';
   const problems = [{
     plugin: { name: 'Refers.esp', origin: 'ReferringMod' },
     problems: [{ formKey: '000800:Refers.esp', targetFormKey: '000ABC:Absent.esp', sourceRelativePath: 'Refers.esp/Npcs/Npc.json', message: 'Race: 000ABC:Absent.esp is held by no active plugin' }],

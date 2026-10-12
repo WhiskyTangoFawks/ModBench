@@ -23,24 +23,26 @@ public sealed class CreatePluginHandler
 
     private async Task<PluginCreateResult> LandSourceIfTracked(LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string written)
     {
+        // Mod Management names a mod's source folder only with a plugin the mod provides (ADR-0013).
+        if (loadOrder.Plugins.FirstOrDefault(p => string.Equals(p.Origin, address.Origin, StringComparison.OrdinalIgnoreCase))?.Provider
+            is not PluginProvider.FromMod mod)
+        {
+            return new PluginCreateResult();
+        }
+
         var modKey = ModKey.FromFileName(address.Name);
-        var path = _adapter.PathOfEmpty(modKey, folder);
-        var provider = string.Equals(address.Origin, PluginOrigin.Overwrite, StringComparison.OrdinalIgnoreCase)
-            ? PluginProvider.NoMod
-            : loadOrder.Plugins.FirstOrDefault(p => string.Equals(p.Origin, address.Origin, StringComparison.OrdinalIgnoreCase))?.Provider
-                ?? new PluginProvider.FromMod(address.Origin, folder);
-        var plugin = new RegisteredPlugin(address.Name, address.Origin, path, provider, Line: null);
+        var plugin = new RegisteredPlugin(address.Name, address.Origin, _adapter.PathOfEmpty(modKey, folder), mod, Line: null);
         if (!_source.IsTracked(plugin)) return new PluginCreateResult();
 
         var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, folder, onParsed: () => { }, default);
         var failure = decompiled.Source is { } source
-            ? _source.OverFolder((PluginProvider.FromMod)provider, loadOrder.GameRelease)
+            ? _source.OverFolder(mod, loadOrder.GameRelease)
                 .ReplaceSourceFrom(address, source.Files, source.BinarySha256)?.Reason
             : decompiled.Message;
         if (failure is null) return new PluginCreateResult();
 
         return new PluginCreateResult(PluginCreateRefusal.WriteFailed,
-            $"Could not write {address.Name}'s source into {folder}: {failure} {TakeBack(modKey, address.Name, folder, written)}");
+            $"Could not write {address.Name}'s source into {mod.SourceFolder}: {failure} {TakeBack(modKey, address.Name, folder, written)}");
     }
 
     private string TakeBack(ModKey modKey, string name, string folder, string written)

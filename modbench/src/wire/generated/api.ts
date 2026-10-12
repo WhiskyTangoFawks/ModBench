@@ -1067,6 +1067,7 @@ export interface components {
             kind: components["schemas"]["PluginProviderKind"];
             mod?: string | null;
             folder?: string | null;
+            sourceFolder?: string | null;
         };
         PluginRecordTypeCount: {
             type: string;

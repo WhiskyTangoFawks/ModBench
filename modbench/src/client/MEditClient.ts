@@ -131,7 +131,7 @@ export const UNLIMITED_RECORDS = 2147483647;
  *  not read. */
 export type PluginDependants = components['schemas']['PluginDependantsResponse'];
 /** What is wrong in a tracked active plugin's source, per plugin: each problem names the referring
- *  record and its source file relative to the mod folder. */
+ *  record and its source file relative to the mod's source folder. */
 export type PluginProblems = components['schemas']['PluginProblems'];
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
 export type WorkingTreeStatesBeneath = components['schemas']['WorkingTreeStatesBeneath'];

@@ -37,7 +37,7 @@ public sealed class GameDataStringsTests : IDisposable
 
     private LoadOrderSnapshot LoadOrder => new(_dataFolder, null, GameRelease.SkyrimSE, [], [], [], _archivesTheGameLoads);
 
-    private RegisteredPlugin Plugin => new(PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder), Line: null);
+    private RegisteredPlugin Plugin => new(PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder, _modFolder), Line: null);
 
     private void MoveStringsIntoGameData(string archiveName) => LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_dataFolder, archiveName));
 

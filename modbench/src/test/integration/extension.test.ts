@@ -2043,16 +2043,24 @@ describe('An unsaved document in plugin source', () => {
 describe('The Problems panel on plugin source', () => {
   const MESSAGE = `Armor: [${NOT_HELD_FORM_KEY}] <Error: Could not be resolved>`;
   const SOURCE_FILE = path.join('plugin-source', 'Held.esp', 'Gun.json');
-  const file = path.join(FIXTURE_GAME_DIRECTORY, 'Data', SOURCE_FILE);
-  const plugin = { name: 'Held.esp', origin: 'Data/' };
+  const plugin = { name: 'Held.esp', origin: 'Held Mod' };
+  const modDir = path.join(root, 'mods', plugin.origin);
+  const sourceDir = path.join(root, 'source', plugin.origin);
+  const file = path.join(sourceDir, SOURCE_FILE);
+  let original = '';
 
-  before(() => {
+  before(async () => {
+    original = readFileSync(modlistPath, 'utf8');
+    mkdirSync(modDir, { recursive: true });
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY }, null, 2));
+    await waitFor('mod sync to give the new folder its line', () => readFileSync(modlistPath, 'utf8').includes(plugin.origin));
   });
   after(() => {
     pluginProblems = [];
-    rmSync(path.join(FIXTURE_GAME_DIRECTORY, 'Data', 'plugin-source'), { recursive: true, force: true });
+    writeFileSync(modlistPath, original);
+    rmSync(modDir, { recursive: true, force: true });
+    rmSync(path.join(root, 'source'), { recursive: true, force: true });
   });
 
   const saved = (problems: PluginProblems['problems']) => {
@@ -2061,10 +2069,12 @@ describe('The Problems panel on plugin source', () => {
   };
   const shown = () => vscode.languages.getDiagnostics(vscode.Uri.file(file)).filter((diagnostic) => diagnostic.message === MESSAGE);
 
-  it('carries a reference to a record no active plugin holds on its file, spanning that FormKey, and clears it when a save answers none', async () => {
-    saved([{ formKey: HELD_FORM_KEY, targetFormKey: NOT_HELD_FORM_KEY, sourceRelativePath: SOURCE_FILE, message: MESSAGE }]);
-
-    const [problem] = await waitFor('the problem on its file', () => { const found = shown(); return found.length > 0 && found; });
+  it('carries a reference to a record no active plugin holds on its file in its mod\'s source folder, spanning that FormKey, and clears it when a save answers none', async () => {
+    const [problem] = await waitFor('the problem on its file once the instance holds the mod', () => {
+      saved([{ formKey: HELD_FORM_KEY, targetFormKey: NOT_HELD_FORM_KEY, sourceRelativePath: SOURCE_FILE, message: MESSAGE }]);
+      const found = shown();
+      return found.length > 0 && found;
+    });
     const document = await vscode.workspace.openTextDocument(file);
     assert.strictEqual(document.getText(problem?.range), `"${NOT_HELD_FORM_KEY}"`);
 

@@ -26,6 +26,7 @@ const value = instanceValueFixture({
       ['Disabled Mod', join('/instance', 'mods', 'Disabled Mod')],
       ['Losing Mod', join('/instance', 'mods', 'Losing Mod')],
     ]),
+    sourceDirs: new Map(),
   },
 });
 

@@ -12,16 +12,16 @@ public enum RecordChange { Modified, Added }
 internal static class LastCommitComparison
 {
     internal static IReadOnlyDictionary<string, RecordChange> Of(
-        string modFolder, GameRelease release, SourceRepositoryGit git, SourceRepositoryLocator locator,
+        string sourceFolder, GameRelease release, SourceRepositoryGit git, SourceRepositoryLocator locator,
         PluginAddress plugin)
     {
-        using var expansion = new SourceTreeDocuments(modFolder, plugin.Name, release, DiskFiles.Instance);
+        using var expansion = new SourceTreeDocuments(sourceFolder, plugin.Name, release, DiskFiles.Instance);
         var committed = new Dictionary<string, string>(StringComparer.Ordinal);
         var working = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var (relativePath, heldAtLastCommit) in ChangedFiles(modFolder, git, plugin))
+        foreach (var (relativePath, heldAtLastCommit) in ChangedFiles(sourceFolder, git, plugin))
         {
-            var fullPath = Path.Combine(modFolder, relativePath);
+            var fullPath = Path.Combine(sourceFolder, relativePath);
             var committedText = heldAtLastCommit
                 ? git.ReadCommittedSourceText(relativePath)
                     ?? throw SourceStopException.GitFailed($"git cannot read what the last commit holds for '{fullPath}'.")
@@ -42,7 +42,7 @@ internal static class LastCommitComparison
     // Git's paths use forward slashes on every platform. An index column of ?, ! or A means the last
     // commit has no such file.
     private static IEnumerable<(string RelativePath, bool HeldAtLastCommit)> ChangedFiles(
-        string modFolder, SourceRepositoryGit git, PluginAddress plugin)
+        string sourceFolder, SourceRepositoryGit git, PluginAddress plugin)
     {
         if (git.WorkingTreeStatus(plugin.Name) is { } status)
         {
@@ -50,13 +50,13 @@ internal static class LastCommitComparison
                 entry.Path.Replace('/', Path.DirectorySeparatorChar), entry.Code is not ('?' or '!' or 'A')));
         }
 
-        if (SourceRepositoryGit.IsTracked(modFolder))
-            throw SourceStopException.GitFailed($"git cannot report what changed in '{modFolder}'.");
+        if (SourceRepositoryGit.IsTracked(sourceFolder))
+            throw SourceStopException.GitFailed($"git cannot report what changed in '{sourceFolder}'.");
 
-        var root = SourceRepositoryLayout.RootIn(modFolder, plugin.Name);
+        var root = SourceRepositoryLayout.RootIn(sourceFolder, plugin.Name);
         return Directory.Exists(root)
             ? Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
-                .Select(path => (Path.GetRelativePath(modFolder, path), false))
+                .Select(path => (Path.GetRelativePath(sourceFolder, path), false))
             : [];
     }
 

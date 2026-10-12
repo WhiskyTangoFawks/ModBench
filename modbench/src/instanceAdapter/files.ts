@@ -8,15 +8,15 @@ import {
 } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import {
-  isTempWriteOf, modGitDir, tempWritePath,
+  isTempWriteOf, repositoryGitDir, tempWritePath,
 } from './layout';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileStamp } from './instanceAdapter';
 
 /** ADR-0007, answered without the backend. */
-export function isTracked(modFolder: string): Promise<boolean> {
-  return exists(modGitDir(modFolder));
+export function isTracked(sourceFolder: string): Promise<boolean> {
+  return exists(repositoryGitDir(sourceFolder));
 }
 
 // One chain per path in flight: a file with no writer pending costs nothing, and two different

@@ -175,11 +175,11 @@ internal sealed class SourceStopException : InvalidOperationException
 
     internal static SourceStopException Unreadable(UnreadableFile file) => new(new SourceFailure.Unreadable(file.Message, file));
 
-    /// <summary>A file filed as a record in the tree under <paramref name="modFolder"/> that cannot be read
+    /// <summary>A file filed as a record in the tree under <paramref name="sourceFolder"/> that cannot be read
     /// <paramref name="because"/>.</summary>
-    internal static SourceStopException UnreadableIn(string modFolder, string file, string because, string? formKey = null) =>
+    internal static SourceStopException UnreadableIn(string sourceFolder, string file, string because, string? formKey = null) =>
         Unreadable(new UnreadableFile(
-            Path.GetRelativePath(modFolder, file),
+            Path.GetRelativePath(sourceFolder, file),
             $"'{file}' is filed as a record in this plugin's source tree, but {because}.",
             formKey));
 

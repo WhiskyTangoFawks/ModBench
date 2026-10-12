@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import {
   isRefused, type MEditClient, type CompileDiagnostic, type CompileOutcome, type PluginAddress, type TrackOutcome,
 } from '../client';
-import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
+import type { SourceFiles, SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { modArgumentOf, pluginArgumentOf, rowNameOf } from '../drivingLib/argument';
@@ -205,7 +205,7 @@ export interface CompileDeps {
   instance: Pick<Instance, 'refresh'>;
   reporter: Reporter;
   problems: CompileProblems;
-  originFiles: OriginFilesOf;
+  sourceFiles: SourceFilesOf;
   /** Saves the plugin's unsaved plugin source; answers the paths VS Code left unsaved, or undefined when the plugin has no folder. */
   saveUnsaved: (plugin: PluginAddress) => Promise<string[] | undefined>;
 }
@@ -288,7 +288,7 @@ async function savedFirst(deps: CompileDeps, plugins: readonly PluginAddress[]):
 }
 
 function publishLanded(deps: CompileDeps, outcome: CompileOutcome): void {
-  for (const compiled of outcome.landed) deps.problems.publish(compiled, deps.originFiles(compiled.origin), compiled.diagnostics);
+  for (const compiled of outcome.landed) deps.problems.publish(compiled, deps.sourceFiles(compiled.origin), compiled.diagnostics);
 }
 
 function diagnosticsWords(count: number): string {
@@ -321,7 +321,7 @@ export class CompileProblems {
 
   constructor(private readonly collection: vscode.DiagnosticCollection) {}
 
-  publish(plugin: PluginAddress, files: OriginFiles | undefined, diagnostics: readonly CompileDiagnostic[]): void {
+  publish(plugin: PluginAddress, files: SourceFiles | undefined, diagnostics: readonly CompileDiagnostic[]): void {
     const key = pluginAddressKey(plugin);
     for (const uri of this.published.get(key) ?? []) this.collection.delete(uri);
     if (files === undefined) {

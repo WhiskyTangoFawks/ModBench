@@ -4,8 +4,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { watch, mkdtempSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { watch } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { installCommands, type InstallAccess } from '../install';
@@ -55,8 +54,8 @@ async function makeExistingMod(root: string, name: string, tracked: boolean): Pr
   const modDir = join(root, 'mods', name);
   await mkdir(modDir, { recursive: true });
   if (tracked) {
-    await mkdir(join(modDir, '.git'), { recursive: true });
-    await writeFile(join(modDir, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+    await mkdir(join(root, 'source', name, '.git'), { recursive: true });
+    await writeFile(join(root, 'source', name, '.git', 'HEAD'), 'ref: refs/heads/main\n');
   }
   await writeFile(join(modDir, 'Stale.esp'), 'stale bytes');
   await writeFile(
@@ -71,17 +70,6 @@ function runnerFor(payloadRoot = 'Wrapper'): Runner {
     const dest = present(args.find((a) => a.startsWith('-o')), "the runner's -o argument").slice(2);
     await writePayload(join(dest, payloadRoot));
   };
-}
-
-const EMPTY_GLOBAL_GITCONFIG = join(mkdtempSync(join(tmpdir(), 'medit-git-config-')), 'gitconfig');
-writeFileSync(EMPTY_GLOBAL_GITCONFIG, '');
-const GIT_ENV_ISOLATED_FROM_THE_HOSTS_AUTOCRLF_AND_GPGSIGN = {
-  GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com',
-  GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com',
-  GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: EMPTY_GLOBAL_GITCONFIG,
-};
-function git(cwd: string, args: string[]): void {
-  execFileSync('git', args, { cwd, env: { ...process.env, ...GIT_ENV_ISOLATED_FROM_THE_HOSTS_AUTOCRLF_AND_GPGSIGN } });
 }
 
 async function pollUntil(condition: () => boolean, timeoutMs = 2000): Promise<void> {
@@ -260,17 +248,17 @@ describe('install commands', () => {
     assertOnlyChanged(before, await snapshotTree(root), new Set());
   });
 
-  it('upgrades a tracked target: .git survives byte-identical, the stale file goes, the release lands, meta.ini keeps owned keys, installedFiles and foreign keys', async () => {
+  it('upgrades a source mod: its repository beside mods/ survives byte-identical, the stale file goes, the release lands, meta.ini keeps owned keys, installedFiles and foreign keys', async () => {
     const name = 'Tracked Target';
     const modDir = await makeExistingMod(root, name, true);
-    const oldGitHead = await readFile(join(modDir, '.git', 'HEAD'));
+    const oldGitHead = await readFile(join(root, 'source', name, '.git', 'HEAD'));
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
     const outcome = await installCommands(access).installFromArchive({ kind: 'upgrade', name }, archive, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor(), modID: '111', fileID: '222' });
 
     expect(outcome).toMatchObject({ applied: true });
-    expect(await readFile(join(modDir, '.git', 'HEAD'))).toEqual(oldGitHead);
-    expect(await treeOf(modDir)).toEqual([...COMPLETE, '.git/HEAD'].sort());
+    expect(await readFile(join(root, 'source', name, '.git', 'HEAD'))).toEqual(oldGitHead);
+    expect(await treeOf(modDir)).toEqual(COMPLETE);
     const meta = await readFile(join(modDir, 'meta.ini'), 'utf8');
     expect(meta).toContain('gameName=Fallout 4');
     expect(meta).toContain('modid=111');
@@ -290,90 +278,6 @@ describe('install commands', () => {
     expect(outcome).toMatchObject({ applied: true });
     expect(await treeOf(modDir)).toEqual(COMPLETE);
   });
-
-  it('upgrades around the repository and the plugin source: .git, .gitignore and plugin-source/ survive', async () => {
-    const name = 'Tracked Target';
-    const modDir = await makeExistingMod(root, name, true);
-    await writeFile(join(modDir, '.gitignore'), '*\n!plugin-source/\n');
-    await mkdir(join(modDir, 'plugin-source', 'Tracked.esp'), { recursive: true });
-    await writeFile(join(modDir, 'plugin-source', 'Tracked.esp', 'RecordData.json'), '{}');
-
-    const outcome = await installCommands(access).installFromArchive({ kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
-
-    expect(outcome).toMatchObject({ applied: true });
-    expect(await treeOf(modDir)).toEqual(
-      [...COMPLETE, '.git/HEAD', '.gitignore', 'plugin-source/Tracked.esp/RecordData.json'].sort(),
-    );
-    expect(await readFile(join(modDir, '.gitignore'), 'utf8')).toBe('*\n!plugin-source/\n');
-  });
-
-  it('an upgrade over a tracked mod keeps its repository rebasable, run with the real git that must be on PATH: the edit branch rebases onto main cleanly, plugin source intact', async () => {
-    const name = 'Tracked Target';
-    const modDir = await makeExistingMod(root, name, false);
-    const sourceFile = join(modDir, 'plugin-source', 'Tracked.esp', 'RecordData.json');
-    await mkdir(join(modDir, 'plugin-source', 'Tracked.esp'), { recursive: true });
-    await writeFile(sourceFile, '{"baseline":true}\n');
-    await writeFile(join(modDir, '.gitignore'), 'meta.ini\n');
-    git(modDir, ['init', '-b', 'main']);
-    git(modDir, ['config', 'core.autocrlf', 'false']);
-    git(modDir, ['config', 'commit.gpgsign', 'false']);
-    git(modDir, ['add', '-A']);
-    git(modDir, ['commit', '-m', 'Baseline']);
-    git(modDir, ['checkout', '-b', 'edit']);
-    await writeFile(sourceFile, '{"baseline":true,"edited":true}\n');
-    git(modDir, ['commit', '-am', 'Edit a field']);
-    git(modDir, ['checkout', 'main']);
-
-    const outcome = await installCommands(access).installFromArchive({ kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
-
-    expect(outcome).toMatchObject({ applied: true });
-    git(modDir, ['add', '-A']);
-    git(modDir, ['commit', '-m', 'Release 2.0']);
-    git(modDir, ['checkout', 'edit']);
-
-    expect(() => git(modDir, ['rebase', 'main'])).not.toThrow();
-
-    expect(await readFile(sourceFile, 'utf8')).toBe('{"baseline":true,"edited":true}\n');
-    expect(() => git(modDir, ['check-ignore', 'meta.ini'])).not.toThrow();
-  });
-
-  it('upgrades a release that ships a root Source folder, as ordinary content, Skyrim SE\'s Creation Kit shipping script sources at a release\'s own root Source/', async () => {
-    const name = 'Untracked Target';
-    const modDir = await makeExistingMod(root, name, false);
-    const shipsSource: Runner = async (bin, args) => {
-      await runnerFor()(bin, args);
-      const dest = present(args.find((a) => a.startsWith('-o')), "the runner's -o argument").slice(2);
-      await mkdir(join(dest, 'Wrapper', 'Source'));
-      await writeFile(join(dest, 'Wrapper', 'Source', 'Script.psc'), '');
-    };
-
-    const outcome = await installCommands(access).installFromArchive({ kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: CORPUS_INI_GAME_NAME, run: shipsSource });
-
-    expect(outcome).toMatchObject({ applied: true });
-    expect(await treeOf(modDir)).toContain('Source/Script.psc');
-  });
-
-  it.each(['.GITIGNORE', 'Plugin-Source'])(
-    'refuses, before any write, a release that ships %s in another case than the kept entry, naming it, as Windows would otherwise move it onto the kept entry part way and elsewhere it would land beside it and drop out of the mod\'s files',
-    async (entry) => {
-      const name = 'Untracked Target';
-      const modDir = await makeExistingMod(root, name, false);
-      const before = await treeOf(modDir);
-      const shipsRepositoryOrPluginSource: Runner = async (bin, args) => {
-        await runnerFor()(bin, args);
-        const dest = present(args.find((a) => a.startsWith('-o')), "the runner's -o argument").slice(2);
-        await mkdir(join(dest, 'Wrapper', entry));
-      };
-
-      const outcome = await installCommands(access).installFromArchive({ kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: CORPUS_INI_GAME_NAME, run: shipsRepositoryOrPluginSource });
-
-      expect(outcome).toEqual({
-        applied: false,
-        refusal: `Cannot upgrade "${name}": the release holds "${entry}", which is the mod's own repository or plugin source.`,
-      });
-      expect(await treeOf(modDir)).toEqual(before);
-    },
-  );
 
   it('an upgrade that fails part way says so, naming the mod and what failed, and that nothing was rolled back, installing again being the recovery', async () => {
     const name = 'Untracked Target';
@@ -469,9 +373,7 @@ describe('install commands', () => {
 
   it('an upgrade whose extraction fails leaves the folder as it was, with the error shown', async () => {
     const name = 'Tracked Target';
-    const modDir = await makeExistingMod(root, name, true);
-    await mkdir(join(modDir, 'plugin-source'));
-    await writeFile(join(modDir, 'plugin-source', 'RecordData.json'), '{}');
+    await makeExistingMod(root, name, true);
     const before = await snapshotTree(root);
     const dies: Runner = async (bin, args) => {
       await runnerFor()(bin, args);

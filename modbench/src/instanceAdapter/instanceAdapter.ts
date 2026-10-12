@@ -175,13 +175,10 @@ export interface NewModExtraction extends ModExtraction {
 }
 
 export interface UpgradeExtraction extends ModExtraction {
-  /** Replaces the mod's contents with the tree at `root` around its repository and plugin source,
-   *  setting `keys` over the meta and keeping each value `keys` leaves undefined. A release
-   *  holding an entry of either is refused first. */
-  land(root: string, keys: OwnedMetaKeys): Promise<Upgraded>;
+  /** Replaces the mod's contents with the tree at `root`, setting `keys` over the meta and keeping
+   *  each value `keys` leaves undefined. */
+  land(root: string, keys: OwnedMetaKeys): Promise<void>;
 }
-
-type Upgraded = { readonly refused: false } | { readonly refused: true; readonly repositoryOrPluginSourceEntry: string };
 
 interface InstanceSettings {
   readonly profile: string;
@@ -336,6 +333,9 @@ export interface InstanceAdapter {
   entryFolder(entry: EntryRef): Promise<ModFolder | undefined>;
   /** An origin's files, none when its folder is not there. */
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
+  /** The mod's source folder, its repository's, beside its folder (ADR-0007); undefined when its
+   *  name gives it none. */
+  sourceFolder(mod: string): string | undefined;
   /** ADR-0007. */
   modTracked(mod: string): Promise<boolean>;
   /** The stamp of an origin file, at the path it is read from. */

@@ -249,9 +249,9 @@ describe('Instance — the value', () => {
       .toEqual({ kind: 'separator', name: 'Unassigned (Modlist Development)', enabled: false });
   });
 
-  it('carries each mod whose folder holds a repository as tracked, and no other, the mod\'s folder alone saying whether track is offered', async () => {
+  it('carries each mod whose source folder holds a repository as tracked, and no other, the source folder alone saying whether track is offered', async () => {
     const { root, instance } = realInstance();
-    await mkdir(join(root, 'mods', 'Harder VATS', '.git'), { recursive: true });
+    await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
 
     await instance.refresh();
 
@@ -1006,6 +1006,16 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.gameName).toBe('Rewritten Mid Recompute');
   });
 
+  it('carries each listed mod’s source folder beside mods/, whether it has a mod folder or not', async () => {
+    const { root, instance } = realInstance();
+
+    await instance.refresh();
+
+    const { paths, mods } = instance.value;
+    expect(paths.sourceDirs.get('[NODELETE] Radfall')).toBe(join(root, 'source', '[NODELETE] Radfall'));
+    expect(paths.sourceDirs.size).toBe(mods.filter((m) => m.kind === 'mod').length);
+  });
+
   it('carries the paths a view renders: overwrite/, downloads/ and each listed mod’s own folder, where it has one', async () => {
     const { root, instance } = realInstance();
 
@@ -1038,7 +1048,7 @@ describe('Instance — downloads, profile and game directory', () => {
     instances.push(instance);
 
     expect(instance.sequence).toBe(0);
-    expect(instance.value.paths).toEqual({ overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map() });
+    expect(instance.value.paths).toEqual({ overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map(), sourceDirs: new Map() });
   });
 });
 
@@ -1215,7 +1225,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
     expect(instance.value.pluginsLoadedWithNoLine).toEqual([{ name: 'DLCCoast.esm', origin: 'Consumer' }]);
   });
 
-  it('carries the load order snapshot put load order sends, keyed on the game folder it was derived from', async () => {
+  it('carries the load order snapshot put load order sends, keyed on the game folder it was derived from, each mod with its folder and its source folder', async () => {
     const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
     const dataFolder = join(root, 'Game', 'Data');
     await mkdir(dataFolder, { recursive: true });
@@ -1226,6 +1236,10 @@ describe('Instance — what a command is handed instead of probing for it', () =
 
     expect(instance.value.loadOrderSnapshot).toMatchObject({
       dataFolder,
+      plugins: [{
+        name: 'DLCCoast.esm',
+        provider: { kind: 'Mod', mod: 'Consumer', folder: join(root, 'mods', 'Consumer'), sourceFolder: join(root, 'source', 'Consumer') },
+      }],
       loadedWithNoLine: [{ name: 'DLCCoast.esm', origin: 'Consumer' }],
     });
     const { loadOrderSnapshot } = instance.value;
