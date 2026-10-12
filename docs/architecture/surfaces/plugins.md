@@ -126,7 +126,7 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · rename… (tracked) · create record… · track (in a mod with no repository) · decompile (in a tracked mod) · build (in a tracked mod) · copy value |
+| Plugin menu | reveal · enable or disable · rename… (tracked) · create record… · track (in a mod with no repository) · decompile (in a source mod) · build (in a source mod) · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open to the side · referenced by · create record… (on a container record) · copy… · copy value · delete |
@@ -163,7 +163,7 @@ As a user, I want:
 4. Esc at either step to create nothing. Source: Esc changes nothing
 5. The new plugin to appear at the winning end of the list, disabled. Source: catalog `plugin sync`
 6. The new plugin empty: a header with no records and no masters, flagged by its extension: `.esm` a master, `.esl` a light plugin.
-7. A plugin created in a tracked mod to land with its plugin source, as working-tree changes I can review. Source: CONTEXT.md, Tracked mod
+7. A plugin created in a source mod to land with its plugin source, as working-tree changes I can review. Source: CONTEXT.md, Source mod
 
 ### Track
 
@@ -236,7 +236,7 @@ By [common.md](common.md#reporting). As a user, I want:
 1. When mEdit cannot read active plugins, one notification naming them, beside each row's status: my picture of my records would otherwise be wrong. Source: ADR-0019
 2. Adding and removing `plugins.txt` lines for plugins found or gone to say nothing, the rows being the result, with a line in the Output. When a folder cannot be listed, or the game folder is not found, `plugins.txt` untouched, and the reason in the view's message line and the Output.
 3. Every message to name a gesture that exists and a view by its name.
-4. A notification for each tracked mod whose plugins changed outside Modbench, naming the mod and the plugins. It offers nothing to do. It comes once in a session for each new state of a plugin's bytes. Source: ADR-0003
+4. A notification for each source mod whose plugins changed outside Modbench, naming the mod and the plugins. It offers nothing to do. It comes once in a session for each new state of a plugin's bytes. Source: ADR-0003
 5. A warning, once in a session, for each plugin whose plugin source is unreadable, naming it and pointing at decompile. Story 4's notification leaves that plugin out.
 
 ## Test seam

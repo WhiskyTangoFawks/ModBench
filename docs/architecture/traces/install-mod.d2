@@ -33,7 +33,7 @@ instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> views: value {class: loadorder}
 instanceloader."mod sync: update-load-order-file"
-instanceloader."the next snapshot: index-load-order; in a tracked mod, detect-external-change"
+instanceloader."the next snapshot: index-load-order; in a source mod, detect-external-change"
 
 refused: "refused, before any write" {
   install -> downloads: "the refusal" {class: loadorder}

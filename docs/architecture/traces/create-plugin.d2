@@ -33,7 +33,7 @@ http -> commands: envelope {class: edit}
 commands -> pluginadapter: "an empty plugin: name, path, release" {class: edit}
 pluginadapter -> plugin: bytes {class: edit}
 pluginadapter -> commands: written or refusal {class: edit}
-tracked: "in a tracked mod" {
+tracked: "in a source mod" {
   commands -> sourceadapter: "the empty plugin's source" {class: edit}
   sourceadapter -> source: documents {class: edit}
 }
@@ -44,7 +44,7 @@ instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> activation: value {class: loadorder}
 activation -> pluginscommands: "plugin sync: update-load-order-file" {class: loadorder}
-instanceloader."the next snapshot: index-load-order; in a tracked mod, detect-external-change"
+instanceloader."the next snapshot: index-load-order; in a source mod, detect-external-change"
 
 refused: "refused, before any write" {
   commands -> http: "the refusal" {class: edit}

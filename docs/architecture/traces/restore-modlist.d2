@@ -26,7 +26,7 @@ gamedata -> source: "game files: bytes" {class: compile}
 source -> commands: "per mod: each file's bytes, or what the mod lacks" {class: compile}
 commands."a mod that lacks anything is skipped; the rest are written"
 
-tracked: "a tracked mod with a remote" {
+tracked: "a source mod with a remote" {
   commands -> modsourceadapter: "the remote and the commit: clone when absent" {class: compile}
   commands."build-mod, at the manifest's commit; skipped and named when the source is at another commit"
 }

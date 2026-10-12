@@ -1,6 +1,6 @@
 # Wabbajack: divergences and omissions
 
-Where Wabbajack has an answer, the manifest and restore adopt it ([ADR-0023](../adr/0023-wabbajack-is-the-reference-for-the-manifest-and-restore.md)). This file lists every place they do not.
+Where Wabbajack has an answer, the manifest and restore adopt it ([ADR-0023](../adr/0023-wabbajack-is-the-reference-for-the-manifest-git-for-its-gestures.md)). This file lists every place they do not.
 
 What Wabbajack does: its source, a grep-only clone at `references/wabbajack/`.
 
@@ -29,4 +29,4 @@ What the manifest and restore do differently.
 | 8 | What restore removes | Files in the mod folder the manifest does not name, and a mod folder with no manifest | Any file in the install folder its deletion rules allow, after one confirmation | Ruling: restore covers `mods/` only. |
 | 9 | Configuration paths | Committed with the paths they hold, and a clone edits them | Rewritten to placeholders and back | Ruling: a developer edits a config. |
 | 10 | Words | track, update, restore | compile, install | Ruling: restore is ADR-0022's word, and compile already runs from source to output elsewhere in Modbench. |
-| 11 | A tracked mod with a remote | Restored by building its source at a commit, cloned when absent | No such source; every file comes from an archive or the list | ADR-0022. |
+| 11 | A source mod with a remote | Restored by building its source at a commit, cloned when absent | No such source; every file comes from an archive or the list | ADR-0022. |

@@ -132,7 +132,7 @@ The row menus follow VS Code's groups: open, change, source control, copy, then 
 | Where | Items, in order |
 |---|---|
 | Cell | go to record (on a FormLink that resolves) · open field value (on a text field) · add (on an array, or an element of one) · remove (on an element) · move up · move down (on an element) · copy value |
-| Column header | referenced by · track (in a mod with no repository) · decompile (in a tracked mod) · compile (tracked) · copy… · delete (tracked) |
+| Column header | referenced by · track (in a mod with no repository) · decompile (in a source mod) · compile (tracked) · copy… · delete (tracked) |
 | Keys, on the focused cell | F2: edit. Ctrl+C: copy value. Ctrl+X: cut. Ctrl+V: paste. Delete: remove, or clear. Alt+Up, Alt+Down: move. |
 
 As a user, I want:
