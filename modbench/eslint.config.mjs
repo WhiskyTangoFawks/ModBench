@@ -33,7 +33,7 @@ const MESSAGE_API_SITES = [
 ];
 
 const PATHLESS_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'drivingLib', 'instanceLoader'];
-const PACKAGE_BOXES = ['client', 'sourceLanguage'];
+const PACKAGE_BOXES = ['client', 'sourceLanguage', 'agent'];
 const NOT_PRODUCTION = ['**/*.test.ts', '**/test/**'];
 
 const FS_IMPORT = {
@@ -376,6 +376,7 @@ export default defineConfig(
                     './src/editor/tsconfig.json',
                     './src/toolbox/tsconfig.json',
                     './src/sourceLanguage/tsconfig.json',
+                    './src/agent/tsconfig.json',
                 ],
                 tsconfigRootDir: import.meta.dirname,
             },

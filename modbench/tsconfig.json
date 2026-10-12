@@ -21,6 +21,7 @@
     { "path": "./src/plugins" },
     { "path": "./src/editor" },
     { "path": "./src/sourceLanguage" },
+    { "path": "./src/agent" },
     { "path": "./src" },
     { "path": "./webview" },
     { "path": "./eslint-rules" },

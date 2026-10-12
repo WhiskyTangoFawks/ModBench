@@ -26,7 +26,8 @@
     { "path": "./downloads" },
     { "path": "./plugins" },
     { "path": "./editor" },
-    { "path": "./sourceLanguage" }
+    { "path": "./sourceLanguage" },
+    { "path": "./agent" }
   ],
   "include": ["*.ts"],
   "exclude": ["**/*.test.ts"]
