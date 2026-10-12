@@ -9,9 +9,8 @@ public static class DocumentMeaning
 {
     private const string Root = "the document";
 
-    /// <summary>The path of the first member where the document <paramref name="held"/> differs in meaning
-    /// from <paramref name="produced"/>, or null when they mean the same. Two that are no JSON mean the same
-    /// only as bytes, and differ at the whole document.</summary>
+    /// <summary>The path of the first member where <paramref name="held"/> differs in meaning from
+    /// <paramref name="produced"/>, or null when they mean the same. Non-JSON differs at the whole document.</summary>
     public static string? FirstDifference(byte[] held, byte[] produced)
     {
         if (held.AsSpan().SequenceEqual(produced)) return null;

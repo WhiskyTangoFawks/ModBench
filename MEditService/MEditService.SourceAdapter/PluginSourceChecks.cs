@@ -1,6 +1,6 @@
+using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using System.Text;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -18,17 +18,16 @@ public enum SourceDivergenceKind
     Unproduced,
 }
 
-/// <summary>A file where a plugin's source and what the whole-mod door writes for it differ, as the source
-/// folder spells it, and the field that differs where the file holds the door's document with another meaning.</summary>
+/// <summary>A file where a plugin's source and what the whole-mod door writes differ, and the field that
+/// differs where the file holds the door's document with another meaning.</summary>
 public sealed record SourceDivergence(SourceDivergenceKind Kind, string Path, string? Field = null);
 
 /// <summary>A record's file held at HeldPath, where the layout puts it at BelongsAt, both as the mod
 /// folder spells them.</summary>
 public sealed record MisplacedFile(string FormKey, string HeldPath, string BelongsAt);
 
-/// <summary>Every file where a plugin's source and what the door writes for it part ways, a change before a
-/// file the door writes nowhere, and the files that differ from it only in where they sit. A misplaced file is
-/// no divergence: it compiles.</summary>
+/// <summary>Every file where a plugin's source and what the door writes part ways, changes before files the
+/// door writes nowhere, and the files that differ only in where they sit, which compile.</summary>
 public sealed record SourceComparison(IReadOnlyList<SourceDivergence> Divergences, IReadOnlyList<MisplacedFile> Misplaced);
 
 /// <summary>A source file that carries a record, as the source folder spells it, with its text and the record type
