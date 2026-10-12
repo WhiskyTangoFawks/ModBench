@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { Instance, InstanceValue, InstanceView, ModSyncArguments } from '../instanceLoader/instance';
 import type { InstallCommands } from '../install/install';
-import type { ModlistCommands } from '../modlist/modlist';
+import type { ModlistCommands } from '../modOrderCommands/modOrderCommands';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
