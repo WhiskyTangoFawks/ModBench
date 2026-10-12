@@ -6,7 +6,6 @@ using MEditService.PluginAdapter;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
@@ -72,11 +71,7 @@ internal sealed class PluginCompileService(
         // compile to a binary the game mis-addresses, so refuse it (compile-plugin, Refusals).
         if (tree.FormIdLimit(plugin.Name) is { } limited)
         {
-            var outOfRange = tree.FormKeys
-                .Where(key => key.ModKey == tree.ModKey
-                    && (key.ID < limited.Min || key.ID > limited.Max))
-                .Select(key => key.ToString())
-                .ToList();
+            var outOfRange = limited.Outside(tree.ModKey, tree.FormKeys).Select(key => key.ToString()).ToList();
             if (outOfRange.Count > 0)
             {
                 var renameOffEsl = limited.ByExtension ? " rename the plugin off .esl," : "";
