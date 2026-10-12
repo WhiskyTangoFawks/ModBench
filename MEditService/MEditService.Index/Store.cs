@@ -177,10 +177,15 @@ internal sealed class Store : IDisposable
         _connection?.Dispose();
     }
 
+    // DuckDB sizes its buffer pool from the machine's memory, and cannot see the share a desktop
+    // with other programs leaves it: a Starfield master's transaction filled 8 GB.
+    private const string MemoryLimit = "1GB";
+
     private static DuckDBConnection OpenFile(string databasePath)
     {
         var connection = new DuckDBConnection($"DataSource={databasePath}");
         connection.Open();
+        DuckDbSql.Execute(connection, $"SET GLOBAL memory_limit = '{MemoryLimit}'");
         return connection;
     }
 
