@@ -2,7 +2,7 @@
 
 This file owns the UX vocabulary and the catalog of gestures. `CONTEXT.md` owns the domain vocabulary. A gesture or command the code has and this file lacks is a defect in the code. A gesture this file has and the model cannot hold is a ticket.
 
-- Object: a domain noun the user acts on: Instance, Profile, Modlist, Mod, Separator, Plugin, Record, Downloaded file. `CONTEXT.md` defines each one. Settings is Modbench's own configuration, which VS Code stores at user and workspace scope. It is the object of `open settings` only, and `CONTEXT.md` does not define it, because it is not a domain noun.
+- Object: a domain noun the user acts on: Instance, Profile, Modlist, Mod, Separator, Plugin, Record, Downloaded file. `CONTEXT.md` defines each one. Settings is Modbench's own configuration, which VS Code stores at user and workspace scope. It is the object of `open settings` only, and `CONTEXT.md` does not define it, because it is not a domain noun. Modlist is the ordinary word, and `CONTEXT.md` does not define it either.
 - Surface: what a driving box presents to the user. One surface per driving box on the Modbench side. A surface shows objects and offers their gestures. A VS Code view or an editor realizes it.
 - Gesture: one thing the user does to an object. One row in the tables below, under the object it changes. The Gesture column holds the verb the user sees, in a menu or a label.
 - Exclude and hide: to exclude is to mark an object durably on disk. The mark leaves the object out of something until include clears it, as the Downloads list leaves out an excluded downloaded file. To hide acts on the view alone. It changes nothing on disk and ends with the window, like hide excluded or a name filter.
@@ -140,8 +140,8 @@ The instance's mods and profiles as git holds them ([modlist-source.md](surfaces
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
 | track | writes | `modbench.modlist.track` | - | - | none | Put the instance under git: the repository, its ignore list, every manifest, and one commit. | track-modlist |
-| update | writes | `modbench.modlist.update` | - | - | Wabbajack compile | Write every mod's manifest from the mod as it is, and each delta a changed file needs. It commits nothing. | update-modlist |
-| restore | writes | `modbench.modlist.restore` | mods, or none for every mod | - | Wabbajack install | Rebuild each mod's folder from its manifest and the downloads it names. | restore-modlist |
+| update | writes | `modbench.modlist.update` | - | - | Wabbajack compile | Write every untracked mod's manifest from the mod as it is, and each delta a changed file needs. A tracked mod whose folder differs from its build is reported, and its manifest left to the build. It commits nothing. | update-modlist |
+| restore | writes | `modbench.modlist.restore` | mods, or none for every mod | - | Wabbajack install | Rebuild each mod's folder from its manifest: from the downloaded files it names, or by building the source it names at that commit, cloned when absent. | restore-modlist |
 
 ## Mod
 
@@ -154,7 +154,8 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | uninstall | writes | `modbench.mod.uninstall` | mods | - | MO2 mod list | Move a mod folder to the trash and remove its line. | update-load-order-file |
 | create empty mod | writes | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
 | install | writes | `modbench.mod.install` | source: archive, folder or downloaded file | target mod, for an upgrade | MO2 mod list; MO2 Downloads | Install a source as a new mod, or over an installed mod as an upgrade. | install-mod |
-| track | writes | `modbench.mod.track` | mods | - | none | Put a mod under git: a repository holding its plugin source, in one commit. On a plugin row or an Editor column, it acts on the plugin's mod. | decompile-plugin |
+| track | writes | `modbench.mod.track` | mods | - | none | Put a mod under git: a repository in the source folder holding its plugin source, the files no installation file yields as its assets, and a build configuration naming this folder as the output, in one commit. On a plugin row or an Editor column, it acts on the plugin's mod. | decompile-plugin |
+| build | writes | `modbench.mod.build` | mods | - | none | Write a tracked mod's folder from its source as its build configuration says: extract what its installation files provide, copy its assets, compile its plugins, pack loose files into archives where configured, and write its manifest. | build-mod |
 | sort direction | reads | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
 | open folder | reads | `modbench.mod.openFolder` | mod, or overwrite, or a file or folder in one | - | MO2 mod list, Overwrite row | Show a mod's folder, or a file or folder in it, in VS Code's Explorer. The Overwrite row opens the overwrite folder. | none |
 | view on Nexus | reads | `modbench.mod.viewOnNexus` | mod, or downloaded file | - | MO2 mod list; MO2 Downloads | Open the mod's Nexus page. The address comes from the mod's `meta.ini`, or from the downloaded file's `.meta`. | none |

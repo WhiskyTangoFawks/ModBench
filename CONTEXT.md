@@ -64,7 +64,7 @@ A mod entry that groups other mods in the list and holds no files. A mod belongs
 Avoid: group, category
 
 ## Tracked mod
-A mod with a repository of its own in the source folder beside `mods/`, holding the plugin source of every plugin it provides, each a tracked plugin. It follows one git workflow.
+A mod built from a repository of its own in the source folder beside `mods/`: the plugin source of every plugin it provides, each a tracked plugin, the mod's own assets, and its build configuration. It follows one git workflow.
 
 # Git workflow
 How a tracked mod uses its `main` branch. The user chooses. Two kinds exist: authored and vendored.
@@ -168,9 +168,9 @@ A mod file the instance keeps with its metadata. Installing it creates a mod, an
 Avoid: download (as a noun; to download is to fetch a file), archive (that is a BA2 or BSA), package
 
 # Manifest
-The one file in a mod folder that names where each of the mod's files comes from. Restore rebuilds the mod from it.
+The one file in a mod folder that names where each of the mod's files comes from. For a tracked mod the build writes it.
 
-Avoid: record, recipe, directives
+Avoid: record (a plugin's unit of data), recipe, directives
 
 # Game folder
 The game installation: the Steam install or a stock game folder.
