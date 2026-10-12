@@ -235,7 +235,7 @@ internal static class PluginEndpoints
         if (Malformed(req) is { } malformed) return malformed;
 
         var plugin = new PluginAddress(req.Name, req.Origin);
-        var result = await create.CreatePlugin(plugin, req.Folder);
+        var result = await create.CreatePlugin(plugin, req.Folder, req.SourceFolder);
         if (result.Refusal is { } refusal)
         {
             EndpointMapping.LogRefusal(logger, "Create plugin", refusal, result.Message, plugin);
@@ -382,8 +382,8 @@ internal static class PluginEndpoints
 }
 
 /// <summary>The origin and the file name are the plugin (ADR-0012); the folder is where
-/// the instance holds that origin's files.</summary>
-internal sealed record CreatePluginRequest(string Origin, string Name, string Folder);
+/// the instance holds that origin's files, and the source folder the mod's repository's, none for Overwrite.</summary>
+internal sealed record CreatePluginRequest(string Origin, string Name, string Folder, string? SourceFolder = null);
 
 /// <summary>The plugins that list the plugin as a master, and those whose masters could not be read.</summary>
 internal sealed record PluginDependantsResponse(IReadOnlyList<PluginAddress> Dependants, IReadOnlyList<PluginAddress> Unreadable);

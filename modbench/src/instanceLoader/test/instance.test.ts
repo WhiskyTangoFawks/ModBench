@@ -15,6 +15,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 });
 
 import { Instance, type InstanceValue } from '../instance';
+import { factsOf } from '../instanceFacts';
 import { adapterOver, STEADY_WINDOW } from '../../test/mo2/adapterOver';
 
 const roots: string[] = [];
@@ -1006,14 +1007,16 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.gameName).toBe('Rewritten Mid Recompute');
   });
 
-  it('carries each listed mod’s source folder beside mods/, whether it has a mod folder or not', async () => {
+  it('carries the source folder the adapter answers for each listed mod, one with no mod folder too, and hands it to the facts', async () => {
     const { root, instance } = realInstance();
 
     await instance.refresh();
 
     const { paths, mods } = instance.value;
-    expect(paths.sourceDirs.get('[NODELETE] Radfall')).toBe(join(root, 'source', '[NODELETE] Radfall'));
-    expect(paths.sourceDirs.size).toBe(mods.filter((m) => m.kind === 'mod').length);
+    const listed = mods.filter((m) => m.kind === 'mod').map((m) => m.name);
+    expect(listed).toContain('[NODELETE] Radfall');
+    expect(paths.sourceDirs).toEqual(new Map(listed.map((name) => [name, adapterOver(root).sourceFolder(name)])));
+    expect(factsOf(instance).sourceDirs()).toBe(paths.sourceDirs);
   });
 
   it('carries the paths a view renders: overwrite/, downloads/ and each listed mod’s own folder, where it has one', async () => {

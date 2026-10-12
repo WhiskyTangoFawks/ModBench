@@ -844,6 +844,7 @@ export interface components {
             origin: string;
             name: string;
             folder: string;
+            sourceFolder?: string | null;
         };
         /** @enum {string} */
         DecompileRefusal: "None" | "PluginNotLoaded" | "NotInTrackedMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "AmbiguousSource" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";

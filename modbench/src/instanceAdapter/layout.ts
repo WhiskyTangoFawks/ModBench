@@ -142,10 +142,13 @@ export const repositoryGitDir = (sourceFolder: string): string => join(sourceFol
 export const pluginSourceFolderOf = (pluginName: string): string => join(PLUGIN_SOURCE_FOLDER, pluginName);
 
 // Matched without case, as Windows matches a name, on every platform alike.
-const isPluginSourceFolder = (name: string): boolean => name.toLowerCase() === PLUGIN_SOURCE_FOLDER;
+const named = (name: string | undefined, as: string): boolean => name?.toLowerCase() === as;
 
-/** Whether `path` is a file inside some folder that is plugin source. */
-export const isPluginSourcePath = (path: string): boolean => path.split(/[\\/]/).slice(0, -1).some(isPluginSourceFolder);
+/** Whether `path` is a file inside a mod's plugin source: `source/<mod>/plugin-source/…`. */
+export const isPluginSourcePath = (path: string): boolean => {
+  const folders = path.split(/[\\/]/).slice(0, -1);
+  return folders.some((name, i) => named(name, PLUGIN_SOURCE_FOLDER) && named(folders[i - 2], SOURCE));
+};
 
 // Watch patterns, POSIX-separated and relative to the instance root: a `RelativePattern` takes a
 // glob, never a platform path, so these are built as text rather than with `join`.
@@ -159,11 +162,11 @@ export const SETTINGS_WATCH_GLOB = SETTINGS_FILE_NAME;
 /** Downloads' own base is the resolved folder itself, so this glob is everything under it. */
 export const DOWNLOADS_WATCH_GLOB = '**';
 
-// A glob matches case, and a plugin's extension and its source folder are any case, so each letter is a class.
+// A glob matches case, and a plugin's extension and its source folders are any case, so each letter is a class.
 const anyCase = (text: string): string => text.replace(/./g, (c) => `[${c.toLowerCase()}${c.toUpperCase()}]`);
 
-/** Every file inside a folder that is plugin source, as `isPluginSourcePath` takes it. */
-export const PLUGIN_SOURCE_GLOB = `**/${anyCase(PLUGIN_SOURCE_FOLDER)}/**`;
+/** Every file inside a mod's plugin source, as `isPluginSourcePath` takes it. */
+export const PLUGIN_SOURCE_GLOB = `**/${anyCase(SOURCE)}/*/${anyCase(PLUGIN_SOURCE_FOLDER)}/**`;
 
 /** The plugin files at the root of the game folder's Data folder, the Data folder its base. */
 export const DATA_FOLDER_PLUGINS_GLOB = `*.{${[...PLUGIN_EXTENSIONS].map((ext) => anyCase(ext.slice(1))).join(',')}}`;

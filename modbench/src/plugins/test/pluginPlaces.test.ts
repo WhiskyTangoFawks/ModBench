@@ -26,7 +26,7 @@ const value = instanceValueFixture({
       ['Disabled Mod', join('/instance', 'mods', 'Disabled Mod')],
       ['Losing Mod', join('/instance', 'mods', 'Losing Mod')],
     ]),
-    sourceDirs: new Map(),
+    sourceDirs: new Map(['Winning Mod', 'Disabled Mod', 'Losing Mod'].map((mod) => [mod, join('/instance', 'source', mod)])),
   },
 });
 
@@ -50,9 +50,10 @@ describe('holdsPlugin', () => {
 });
 
 describe('placeFolder', () => {
-  it("answers Overwrite's folder and an enabled mod's folder as the value names them", () => {
+  it("answers Overwrite's folder, and an enabled mod's folder and source folder, as the value names them", () => {
     expect(placeFolder(value, 'overwrite/')).toEqual({ folder: join('/instance', 'overwrite') });
-    expect(placeFolder(value, 'Winning Mod')).toEqual({ folder: join('/instance', 'mods', 'Winning Mod') });
+    expect(placeFolder(value, 'Winning Mod'))
+      .toEqual({ folder: join('/instance', 'mods', 'Winning Mod'), sourceFolder: join('/instance', 'source', 'Winning Mod') });
   });
 
   it('answers a mod the value does not list as gone', () => {

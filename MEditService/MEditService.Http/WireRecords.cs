@@ -23,7 +23,6 @@ internal sealed record LoadOrderPlugin(string Name, string Path, string Origin, 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum PluginProviderKind { Mod, Game, None }
 
-// Only Kind Mod has a Mod, a Folder and a SourceFolder.
 internal sealed record PluginProviderRequest(PluginProviderKind Kind, string? Mod = null, string? Folder = null, string? SourceFolder = null)
 {
     internal PluginProvider? ToProvider() => Kind switch

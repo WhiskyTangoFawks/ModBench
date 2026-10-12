@@ -810,6 +810,12 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('a mod\'s repository', () => {
+      it('answers a mod\'s source folder beside mods/, whether or not it is there, and none for a name that reaches outside it', () => {
+        expect(adapter.sourceFolder('Harder VATS')).toBe(join(root, 'source', 'Harder VATS'));
+        expect(adapter.sourceFolder('No Such Mod')).toBe(join(root, 'source', 'No Such Mod'));
+        expect(adapter.sourceFolder('../Harder VATS')).toBeUndefined();
+      });
+
       it('answers tracked for a mod whose source folder beside mods/ holds a `.git`, and not for a mod whose own folder holds one', async () => {
         await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
         await mkdir(join(root, 'mods', 'Unofficial Fallout 4 Patch', '.git'));

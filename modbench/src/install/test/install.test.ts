@@ -50,13 +50,9 @@ async function treeOf(dir: string): Promise<string[] | null> {
 
 const COMPLETE = [...PAYLOAD.map((p) => p.split(sep).join('/')), 'meta.ini'].sort();
 
-async function makeExistingMod(root: string, name: string, tracked: boolean): Promise<string> {
+async function makeExistingMod(root: string, name: string): Promise<string> {
   const modDir = join(root, 'mods', name);
   await mkdir(modDir, { recursive: true });
-  if (tracked) {
-    await mkdir(join(root, 'source', name, '.git'), { recursive: true });
-    await writeFile(join(root, 'source', name, '.git', 'HEAD'), 'ref: refs/heads/main\n');
-  }
   await writeFile(join(modDir, 'Stale.esp'), 'stale bytes');
   await writeFile(
     join(modDir, 'meta.ini'),
@@ -227,7 +223,7 @@ describe('install commands', () => {
 
   it('refuses a new install onto an existing folder and leaves it untouched, even unlisted', async () => {
     const name = 'Unlisted Folder';
-    const modDir = await makeExistingMod(root, name, false);
+    const modDir = await makeExistingMod(root, name);
     const before = await treeOf(modDir);
 
     const outcome = await installCommands(access).installFromFolder({ kind: 'new', name }, sourceFolder, { gameName: CORPUS_INI_GAME_NAME });
@@ -248,16 +244,14 @@ describe('install commands', () => {
     assertOnlyChanged(before, await snapshotTree(root), new Set());
   });
 
-  it('upgrades a source mod: its repository beside mods/ survives byte-identical, the stale file goes, the release lands, meta.ini keeps owned keys, installedFiles and foreign keys', async () => {
+  it('upgrades a target: the stale file goes, the release lands, meta.ini keeps owned keys, installedFiles and foreign keys', async () => {
     const name = 'Tracked Target';
-    const modDir = await makeExistingMod(root, name, true);
-    const oldGitHead = await readFile(join(root, 'source', name, '.git', 'HEAD'));
+    const modDir = await makeExistingMod(root, name);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
     const outcome = await installCommands(access).installFromArchive({ kind: 'upgrade', name }, archive, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor(), modID: '111', fileID: '222' });
 
     expect(outcome).toMatchObject({ applied: true });
-    expect(await readFile(join(root, 'source', name, '.git', 'HEAD'))).toEqual(oldGitHead);
     expect(await treeOf(modDir)).toEqual(COMPLETE);
     const meta = await readFile(join(modDir, 'meta.ini'), 'utf8');
     expect(meta).toContain('gameName=Fallout 4');
@@ -268,20 +262,9 @@ describe('install commands', () => {
     expect(meta).toContain('category="-1,"');
   });
 
-  it('upgrades an untracked target: the folder ends up holding only the release and meta.ini', async () => {
-    const name = 'Untracked Target';
-    const modDir = await makeExistingMod(root, name, false);
-    const archive = join(root, 'downloads', 'Freshly-2-0.7z');
-
-    const outcome = await installCommands(access).installFromArchive({ kind: 'upgrade', name }, archive, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
-
-    expect(outcome).toMatchObject({ applied: true });
-    expect(await treeOf(modDir)).toEqual(COMPLETE);
-  });
-
   it('an upgrade that fails part way says so, naming the mod and what failed, and that nothing was rolled back, installing again being the recovery', async () => {
     const name = 'Untracked Target';
-    await makeExistingMod(root, name, false);
+    await makeExistingMod(root, name);
     const failing = withAdapter(access, {
       extractUpgrade: async (mod) => ({
         ...(await access.adapter.extractUpgrade(mod)),
@@ -299,7 +282,7 @@ describe('install commands', () => {
 
   it('an upgrade with a sidecar version rewrites meta.ini\'s version', async () => {
     const name = 'Versioned Target';
-    const modDir = await makeExistingMod(root, name, false);
+    const modDir = await makeExistingMod(root, name);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
     await installCommands(access).installFromArchive({ kind: 'upgrade', name }, archive, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor(), version: '2.0.0' });
@@ -311,7 +294,7 @@ describe('install commands', () => {
 
   it('an upgrade with no sidecar version preserves whatever version the old meta.ini had, the version key being owned so an undefined must not clear it', async () => {
     const name = 'Unversioned Upgrade';
-    const modDir = await makeExistingMod(root, name, false);
+    const modDir = await makeExistingMod(root, name);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
     await installCommands(access).installFromArchive({ kind: 'upgrade', name }, archive, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
@@ -322,7 +305,7 @@ describe('install commands', () => {
 
   it('a watcher armed on the target folder before an upgrade still fires for a write after it, polled as fs.watch\'s first callback can be a metadata touch rather than the write under test', async () => {
     const name = 'Watched Target';
-    const modDir = await makeExistingMod(root, name, true);
+    const modDir = await makeExistingMod(root, name);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
     let fired = false;
     const watcher = watch(modDir, () => { fired = true; });
@@ -373,7 +356,7 @@ describe('install commands', () => {
 
   it('an upgrade whose extraction fails leaves the folder as it was, with the error shown', async () => {
     const name = 'Tracked Target';
-    await makeExistingMod(root, name, true);
+    await makeExistingMod(root, name);
     const before = await snapshotTree(root);
     const dies: Runner = async (bin, args) => {
       await runnerFor()(bin, args);

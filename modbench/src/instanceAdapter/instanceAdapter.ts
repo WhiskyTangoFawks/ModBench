@@ -333,8 +333,7 @@ export interface InstanceAdapter {
   entryFolder(entry: EntryRef): Promise<ModFolder | undefined>;
   /** An origin's files, none when its folder is not there. */
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
-  /** The mod's source folder, its repository's, beside its folder (ADR-0007); undefined when its
-   *  name gives it none. */
+  /** The mod's source folder, its repository's (ADR-0007); undefined when its name gives it none. */
   sourceFolder(mod: string): string | undefined;
   /** ADR-0007. */
   modTracked(mod: string): Promise<boolean>;
