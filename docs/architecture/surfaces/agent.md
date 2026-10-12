@@ -19,8 +19,8 @@ As a user, I want:
 
 As a user, I want:
 
-1. My agent to name an object as the views show it: a plugin by its file name, a mod or a separator by its name, a record by its EditorID or FormKey, a downloaded file by its file name, and a file in a mod by its path in the mod.
-2. A name that means more than one thing to be refused, and the refusal to list each match, a plugin with its origin. Nothing is picked for my agent. Source: ADR-0012; Never silently wrong
+1. My agent to name an object as the views show it: a plugin by its file name, a mod or a separator by its name, a record by its EditorID or FormKey, a downloaded file by its file name, an archive or a folder outside my downloads by its path, and a file in a mod by its path in the mod.
+2. A name that means more than one thing to be refused, and the refusal to list each match as my agent can name it: a plugin with its origin, a mod or a separator with which of the two it is. Nothing is picked for my agent; it names the one it means as the refusal lists it. Source: ADR-0012; Never silently wrong
 3. My agent to name several objects in one request, as my selection does. Source: common, A view, story 6
 
 ## Records
