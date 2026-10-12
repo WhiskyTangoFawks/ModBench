@@ -2,7 +2,7 @@
 
 This file owns the UX vocabulary and the catalog of gestures. `CONTEXT.md` owns the domain vocabulary. A gesture or command the code has and this file lacks is a defect in the code. A gesture this file has and the model cannot hold is a ticket.
 
-- Object: a domain noun the user acts on: Instance, Profile, Mod, Separator, Plugin, Record, Downloaded file. `CONTEXT.md` defines each one. Settings is Modbench's own configuration, which VS Code stores at user and workspace scope. It is the object of `open settings` only, and `CONTEXT.md` does not define it, because it is not a domain noun.
+- Object: a domain noun the user acts on: Instance, Profile, Modlist, Mod, Separator, Plugin, Record, Downloaded file. `CONTEXT.md` defines each one. Settings is Modbench's own configuration, which VS Code stores at user and workspace scope. It is the object of `open settings` only, and `CONTEXT.md` does not define it, because it is not a domain noun. Modlist is the ordinary word, and `CONTEXT.md` does not define it either.
 - Surface: what a driving box presents to the user. One surface per driving box on the Modbench side. A surface shows objects and offers their gestures. A VS Code view or an editor realizes it.
 - Gesture: one thing the user does to an object. One row in the tables below, under the object it changes. The Gesture column holds the verb the user sees, in a menu or a label.
 - Exclude and hide: to exclude is to mark an object durably on disk. The mark leaves the object out of something until include clears it, as the Downloads list leaves out an excluded downloaded file. To hide acts on the view alone. It changes nothing on disk and ends with the window, like hide excluded or a name filter.
@@ -12,7 +12,7 @@ This file owns the UX vocabulary and the catalog of gestures. `CONTEXT.md` owns 
 - Command ID: the registered interface and the source of truth, which the code reflects. It is `modbench.<object>.<verb>`, in camelCase, and the object owns it (`modbench.mod.enable`, `modbench.downloadedFile.delete`). `-` means the gesture has none. A gesture every list view does to whatever it shows is `modbench.<verb>`, in Every view.
 - Options: the inputs a gesture needs besides its Argument, such as a mode, a destination or a position. A picker asks for each Option the caller did not supply. An Option may be computed and multi-valued, such as a checked list with defaults.
 - Argument: the value that identifies the object or objects to the gesture, such as a plugin as `(origin, filename)`, or a FormKey. For a gesture that creates an object, it identifies the container, when the entry point is on the container's row. A create from a title icon has none, and its container is an Option. It is the same on every surface that offers the gesture. Singular means the clicked row, and plural means the whole selection.
-- Template: the source, xEdit ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)) or MO2 ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)) gesture this row follows, read from [the xEdit audit](../research/xedit-surface-audit.md), [the xEdit grid audit](../research/xedit-ux-audit.md) and [the MO2 audit](../research/mo2-surface-audit.md). `none` means the template has no such gesture: the row is an addition or a divergence, and needs a ruling.
+- Template: the source, xEdit ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)), MO2 ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)) Wabbajack or git ([ADR-0023](../adr/0023-wabbajack-is-the-reference-for-the-manifest-git-for-its-gestures.md)) gesture this row follows, read from [the xEdit audit](../research/xedit-surface-audit.md), [the xEdit grid audit](../research/xedit-ux-audit.md), [the MO2 audit](../research/mo2-surface-audit.md) and `references/wabbajack/`. `none` means the template has no such gesture: the row is an addition or a divergence, and needs a ruling.
 - Trace: the sequence diagram of the gesture's flow. `-` means the trace is still to draw, and drawing it is part of designing the gesture. `none` means the gesture has no flow between boxes: its specification is this row and its surface.
 - Ruled out: a gesture the maintainer has cut is not in any table. See [Ruling a gesture out](#ruling-a-gesture-out).
 
@@ -61,7 +61,7 @@ Rules for the title bar of a view.
 
 ## Ruling a gesture out
 
-A template is a standalone program. Modbench is not. A gesture leaves this file for one of these reasons, and each reason is a row in the summary table of [xedit.md](../out-of-scope/xedit.md) or [mo2.md](../out-of-scope/mo2.md):
+A template is a standalone program. Modbench is not. A gesture leaves this file for one of these reasons, and each reason is a row in the summary table of [xedit.md](../out-of-scope/xedit.md), [mo2.md](../out-of-scope/mo2.md) or [wabbajack.md](../out-of-scope/wabbajack.md):
 
 - VS Code provides it. Settings, editor history, the file tab, tasks, Problems and Output.
 - Standalone application. The template manages its own startup, save or options.
@@ -89,6 +89,7 @@ A gesture that fits none of these stays in the tables. A new reason is added to 
 | Plugin source | Referenced By, Ctrl + click | - | [plugin-source.md](surfaces/plugin-source.md) |
 | Agent | - | - | [agent.md](surfaces/agent.md) |
 | Scripts | Apply Script | - | [scripts.md](surfaces/scripts.md) |
+| Modlist source | - | - | [modlist-source.md](surfaces/modlist-source.md) |
 
 The xEdit Messages tab is not a surface. Failures go to the Output and the surface their severity calls for (ADR-0019); diagnostics go to the Problems panel.
 
@@ -104,6 +105,7 @@ The xEdit Messages tab is not a surface. Failures go to the Output and the surfa
 | Editor, Referenced By | VS Code's References view | - | opened by the gesture |
 | Mods, the conflict table | an editor tab | - | opened by the user |
 | Plugin source, the text editor | an editor tab | - | opened by the user |
+| Modlist source, the manifests | an editor tab, and Source Control | - | opened by the user |
 
 No view defaults to the Secondary Side Bar: it is the home of chat. A user can still move any view there.
 
@@ -131,6 +133,17 @@ What every list view does to whatever it shows, whatever the object. common.md s
 |---|---|---|---|---|---|---|---|
 | switch | writes | `modbench.profile.switch` | profile | - | MO2 profile combo | Change the active MO2 profile. With no Argument, a picker lists the profiles. | update-load-order-file |
 
+## Modlist
+
+The instance's mods and profiles as git holds them ([modlist-source.md](surfaces/modlist-source.md)). Commit, branch, merge, log, diff and checkout are VS Code's; a checkout leaves mods stale, and discard changes rebuilds them.
+
+| Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
+|---|---|---|---|---|---|---|---|
+| init | writes | `modbench.modlist.init` | - | - | git init | Make the instance a repository with its ignore list. It stages nothing and commits nothing. | init-modlist |
+| stage | writes | `modbench.modlist.stage` | mods, or none for every mod | - | git add; Wabbajack compile | Write each mod's manifest from the mod as it is, and each delta a changed file needs. A source mod's manifest is left to its build. | stage-modlist |
+| discard changes | writes | `modbench.modlist.discardChanges` | mods, or none for every mod | - | git restore; VS Code's Discard Changes; Wabbajack install | Rebuild each mod's folder from its manifest: every file whose bytes differ, from the downloaded files it names, or by building the source it names at that commit, cloned when absent. Untracked files stay. | discard-changes |
+| clean | writes | `modbench.modlist.clean` | mods, or none for every mod | - | git clean | Send untracked files, and mod folders with no manifest, to the trash, after listing them. | clean-modlist |
+
 ## Mod
 
 The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
@@ -142,15 +155,17 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | uninstall | writes | `modbench.mod.uninstall` | mods | - | MO2 mod list | Move a mod folder to the trash and remove its line. | update-load-order-file |
 | create empty mod | writes | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
 | install | writes | `modbench.mod.install` | source: archive, folder or downloaded file | target mod, for an upgrade | MO2 mod list; MO2 Downloads | Install a source as a new mod, or over an installed mod as an upgrade. | install-mod |
-| track | writes | `modbench.mod.track` | mods | - | none | Put a mod under git: a repository holding its plugin source, in one commit. On a plugin row or an Editor column, it acts on the plugin's mod. | decompile-plugin |
+| track | writes | `modbench.mod.track` | mods | - | none | Put a mod under git: a repository in the source folder holding its plugin source, the files no installation file yields as its assets, and a build configuration naming this folder as the output, in one commit. On a plugin row or an Editor column, it acts on the plugin's mod. | track-mod |
+| build | writes | `modbench.mod.build` | mods | - | none | Write a source mod's folder from its source as its build configuration says: extract what its installation files provide, copy its assets, compile its plugins, pack loose files into archives where configured, and write its manifest. Untracked files stay. On a plugin row or an Editor column, it acts on the plugin's mod. | build-mod |
 | sort direction | reads | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
 | open folder | reads | `modbench.mod.openFolder` | mod, or overwrite, or a file or folder in one | - | MO2 mod list, Overwrite row | Show a mod's folder, or a file or folder in it, in VS Code's Explorer. The Overwrite row opens the overwrite folder. | none |
+| open source | reads | `modbench.mod.openSource` | mod | - | none | Show a source mod's source folder in VS Code's Explorer. | none |
 | view on Nexus | reads | `modbench.mod.viewOnNexus` | mod, or downloaded file | - | MO2 mod list; MO2 Downloads | Open the mod's Nexus page. The address comes from the mod's `meta.ini`, or from the downloaded file's `.meta`. | none |
 | open conflicts | reads | `modbench.mod.openConflicts` | mod | - | MO2 Information dialog, Conflicts tab | Open a mod's conflict table in an editor tab. | open-conflicts |
 | compare file | reads | `modbench.mod.compareFile` | a copy of a file in a mod or Overwrite | - | none | Open VS Code's diff editor on a mod's copy of a file and the winning copy. | none |
 | go to mod | reads | `modbench.mod.goToMod` | a copy of a file in a mod or Overwrite | other mod: a pick, when the copy wins over several | MO2 Information dialog, Conflicts tab, Go to... | Select, in Mods, the mod or Overwrite whose copy wins the file, or a mod whose copy it wins over. | none |
-| exclude / include file | writes | `modbench.mod.excludeFile`, `modbench.mod.includeFile` | files in mods or Overwrite | - | MO2 Information dialog, Conflicts tab, Hide; MO2 mod list, Restore hidden files | Keep each file from the game by renaming it with MO2's `.mohidden` suffix, or restore its name. | update-load-order-file |
-| rename | writes | `modbench.mod.rename` | mod | name | MO2 mod list | Rename a mod's folder and its name in every profile's `modlist.txt`. | update-load-order-file |
+| exclude / include file | writes | `modbench.mod.excludeFile`, `modbench.mod.includeFile` | files in mods or Overwrite | - | MO2 Information dialog, Conflicts tab, Hide; MO2 mod list, Restore hidden files | Keep each file from the game by renaming it with MO2's `.mohidden` suffix, or restore its name, and, in a source mod, the build configuration's exclusion with it. | update-load-order-file |
+| rename | writes | `modbench.mod.rename` | mod | name | MO2 mod list | Rename a mod's folder and its name in every profile's `modlist.txt`, and, for a source mod, its output folder in the build configuration. | update-load-order-file |
 
 ## Separator
 
@@ -169,7 +184,6 @@ A separator is a row in mod order.
 | enable / disable | writes | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Flip each plugin's line in `plugins.txt`. Enable all is select all, then this gesture. | update-load-order-file |
 | move | writes | `modbench.plugin.move` | plugins | target: the row it is dropped on, or the view's end. Several plugins move as one block | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | update-load-order-file |
 | create | writes | `modbench.plugin.create` | - | place: Overwrite or an enabled mod | xEdit navigator | Create an empty plugin in Overwrite or in a mod. | create-plugin |
-| compile | writes | `modbench.plugin.compile` | plugins | - | xEdit main menu | Write the plugin's binary from its plugin source. | compile-plugin |
 | decompile | writes | `modbench.plugin.decompile` | plugins | - | none | Read each plugin's bytes into its plugin source, in the working tree of the checked-out branch. It commits nothing. | decompile-plugin |
 | sort direction | reads | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
 | reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the system's file manager. | none |

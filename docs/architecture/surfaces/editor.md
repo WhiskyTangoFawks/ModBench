@@ -132,7 +132,7 @@ The row menus follow VS Code's groups: open, change, source control, copy, then 
 | Where | Items, in order |
 |---|---|
 | Cell | go to record (on a FormLink that resolves) · open field value (on a text field) · add (on an array, or an element of one) · remove (on an element) · move up · move down (on an element) · copy value |
-| Column header | referenced by · track (in a mod with no repository) · decompile (in a tracked mod) · compile (tracked) · copy… · delete (tracked) |
+| Column header | referenced by · track (in a mod with no repository) · decompile (in a source mod) · build (in a source mod) · copy… · delete (tracked) |
 | Keys, on the focused cell | F2: edit. Ctrl+C: copy value. Ctrl+X: cut. Ctrl+V: paste. Delete: remove, or clear. Alt+Up, Alt+Down: move. |
 
 As a user, I want:
@@ -141,7 +141,7 @@ As a user, I want:
 2. Open field value to open the field's text in a text editor tab beside the panel, titled `<field> [<file name>]`. Each save writes it; closing without saving writes nothing. Opened again, the same tab shows. In a column that cannot be edited, the tab is read-only, so a long value can still be read. Source: xedit.md, divergences 2 and 6; catalog `open field value`
 3. Copy on a column to copy that plugin's copy of the record, asking for the mode and then the destination, as in Plugins. Source: catalog `copy`; xEdit's column header menu
 4. Delete on a column to remove that plugin's copy of the record, after one confirmation naming it. Source: catalog `delete`; xEdit's column header menu
-5. Compile and decompile on a column to act on that column's plugin, and track on its plugin's mod. Source: catalog `compile`, `decompile`, `track`
+5. Decompile on a column to act on that column's plugin, and track and build on its plugin's mod. Source: catalog `decompile`, `track`, `build`
 
 ## Reporting
 
