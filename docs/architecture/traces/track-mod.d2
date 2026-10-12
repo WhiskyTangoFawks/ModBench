@@ -1,0 +1,37 @@
+# Track mod, green: the repository in the source folder, plugin source, assets, build configuration, one commit.
+...@../styles
+shape: sequence_diagram
+driving: "Plugins · Mods · Editor" {class: driving}
+commands: @../target-architecture.modbench_core.sourcecommands
+commands.label: source commands
+client: @../target-architecture.modbench_repositories.client
+client.label: mEdit client
+source: @../target-architecture.modbench_repositories.modlistsource
+source.label: Modlist source
+instance: @../target-architecture.modbench_data.instance
+instance.label: "Instance\nthe mod folder · installation files"
+modsourceadapter: @../target-architecture.modbench_repositories.modsourceadapter
+modsourceadapter.label: Mod source adapter
+modsource: @../target-architecture.modbench_data.modsource
+modsource.label: Mod source
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+views: "every view" {class: driving}
+
+driving -> commands: "track: the mods, with the instance value" {class: track}
+commands -> client: "decompile-plugin, every plugin of the mod" {class: track}
+commands -> source: "the mod" {class: track}
+instance -> source: "the mod's files and installation files: bytes" {class: track}
+source -> commands: "the files no installation file yields: the assets" {class: track}
+commands -> modsourceadapter: "the repository · plugin source, assets, the build configuration naming the folder · commit: Track <mod>" {class: track}
+modsourceadapter -> modsource: "the source folder" {class: track}
+commands -> driving: "landed, or the refusal naming each refused plugin" {class: track}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader -> views: value {class: loadorder}
+
+refused: "refused, before any write: nothing of the mod, and no repository" {
+  commands -> driving: "the refusal" {class: track}
+}

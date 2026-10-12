@@ -1,8 +1,8 @@
 # Compile, orange: the step build runs per plugin (build-mod).
 ...@../styles
 shape: sequence_diagram
-install: @../target-architecture.modbench_core.install
-install.label: install
+commands_mb: @../target-architecture.modbench_core.sourcecommands
+commands_mb.label: source commands
 client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
@@ -18,7 +18,7 @@ plugin: @../target-architecture.medit_data.plugin
 indexer: @../target-architecture.medit_readmodel.index.indexer
 indexer.label: Indexer
 
-install -> client: "compile: the plugins" {class: edit}
+commands_mb -> client: "compile: the plugins" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 source -> sourceadapter: documents {class: compile}
@@ -30,11 +30,11 @@ commands -> pluginadapter: bytes {class: compile}
 pluginadapter -> plugin: "bytes · a localized plugin's strings" {class: compile}
 commands -> http: "applied, with the diagnostics, or refusal, per item" {class: edit}
 http -> client: "applied or refusal, per item" {class: edit}
-client -> install: the outcome {class: edit}
+client -> commands_mb: the outcome {class: edit}
 indexer."the next snapshot: index-load-order"
 
 refused: "refused, before any write" {
   commands -> http: "the refusal" {class: edit}
   http -> client: the refusal {class: edit}
-  client -> install: the refusal {class: edit}
+  client -> commands_mb: the refusal {class: edit}
 }

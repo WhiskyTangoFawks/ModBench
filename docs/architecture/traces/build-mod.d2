@@ -2,12 +2,16 @@
 ...@../styles
 shape: sequence_diagram
 driving: "Mods · Plugins · Editor" {class: driving}
-install: @../target-architecture.modbench_core.install
-install.label: install
+commands: @../target-architecture.modbench_core.sourcecommands
+commands.label: source commands
+modsourceadapter: @../target-architecture.modbench_repositories.modsourceadapter
+modsourceadapter.label: Mod source adapter
+modsource: @../target-architecture.modbench_data.modsource
+modsource.label: "Mod source\nbuild configuration · assets · the repository"
 source: @../target-architecture.modbench_repositories.modlistsource
 source.label: Modlist source
 instance: @../target-architecture.modbench_data.instance
-instance.label: "Instance\nthe source folder · installation files · the mod folder"
+instance.label: "Instance\ncommandsation files · the mod folder"
 client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
@@ -16,17 +20,20 @@ instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
-driving -> install: "build: the mods, with the instance value" {class: compile}
-install -> source: "the mods" {class: compile}
-instance -> source: "each mod's build configuration and assets · installation files: bytes" {class: compile}
-source -> install: "per mod: the output folder, the base files, the assets, the archives to pack" {class: compile}
-install."refused when the output folder is not the mod's"
-install -> client: "compile-plugin, per plugin · each archive's loose files, to pack" {class: compile}
-install -> instanceadapter: "the mod's files, whole · the files the build did not make, named" {class: compile}
+driving -> commands: "build: the mods, with the instance value" {class: compile}
+commands -> modsourceadapter: "the mods" {class: compile}
+modsource -> modsourceadapter: "each mod's build configuration and assets · the commit" {class: compile}
+modsourceadapter -> commands: "per mod: the output folder, the assets, the archives to pack, the commit" {class: compile}
+commands -> source: "the mods" {class: compile}
+instance -> source: "commandsation files: bytes" {class: compile}
+source -> commands: "per mod: the base files" {class: compile}
+commands."refused when the output folder is not the mod's"
+commands -> client: "compile-plugin, per plugin · each archive's loose files, to pack" {class: compile}
+commands -> instanceadapter: "the mod's files, whole · the files the build did not make, named" {class: compile}
 instanceadapter -> instance: "the folder" {class: compile}
-install -> source: "the manifest the build wrote" {class: compile}
+commands -> source: "the manifest the build wrote" {class: compile}
 source -> instance: "the manifest" {class: compile}
-install -> driving: "landed, with each refused plugin and each removed file" {class: compile}
+commands -> driving: "landed, with each refused plugin and each removed file" {class: compile}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> views: value {class: loadorder}
