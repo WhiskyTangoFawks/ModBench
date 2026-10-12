@@ -6,6 +6,7 @@
     "types": ["node", "vscode"]
   },
   "references": [
+    { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },
     { "path": "../ports" }
   ],
