@@ -64,9 +64,14 @@ A mod entry that groups other mods in the list and holds no files. A mod belongs
 Avoid: group, category
 
 ## Source mod
-A mod built from a repository of its own in the source folder beside `mods/`: the plugin source of every plugin it provides, each a tracked plugin, the mod's own assets, and its build configuration. It follows one git workflow.
+A mod built from a repository of its own in the source folder beside `mods/`: the plugin source of every plugin it provides, each a source plugin, the mod's own assets, and its build configuration. It follows one git workflow.
 
 Avoid: tracked mod (git's tracked is a file in the index)
+
+## Source plugin
+A plugin whose truth is its plugin source, in a source mod.
+
+Avoid: tracked plugin (git's tracked is a file in the index)
 
 # Git workflow
 How a source mod uses its `main` branch. The user chooses. Two kinds exist: authored and vendored.
@@ -114,7 +119,7 @@ Avoid: parent plugin (an override's plugin is not its child)
 # Plugin source
 The deserialized form of a plugin, held in a source mod's repository.
 
-Avoid: source, text mirror, Spriggit tree
+Avoid: source (alone), text mirror, Spriggit tree
 
 # Vanilla
 The base game's own plugins and files.

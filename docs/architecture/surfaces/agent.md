@@ -30,9 +30,9 @@ As a user, I want:
 1. My agent to read any record in my load order, tracked or not: each plugin's copy, and the copy that wins. Source: editor.md; editor-conflicts.md
 2. My agent to find a record by its EditorID or FormKey, and the records that reference it. Source: plugin-source.md, In the text editor, stories 2 and 4
 3. My agent to query the index with one SQL SELECT, as the record filter does, and to get back the rows it selects. Source: catalog, Record, `filter`
-4. My agent to edit a tracked plugin by editing its source, so each edit is a working-tree change I review, commit or discard in Source Control. Source: ADR-0007
+4. My agent to edit a source plugin by editing its source, so each edit is a working-tree change I review, commit or discard in Source Control. Source: ADR-0007
 5. My agent to see the problems I see in the Problems panel for the source it changed. Source: plugin-source.md, In the text editor, story 6
-6. My agent never to edit an untracked plugin. Editing needs tracking, for my agent as for me. Source: ADR-0007
+6. My agent never to edit a plugin with no source. Editing needs a source, for my agent as for me. Source: ADR-0007
 7. My agent to open a record in an editor tab, to show me what it found. Source: catalog, Record, `open`
 8. My agent to change many records by a rule with a script, as I do. Source: scripts.md
 
