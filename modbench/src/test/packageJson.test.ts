@@ -529,15 +529,22 @@ describe('package.json command titles and categories', () => {
     expect(unexpectedGate).toEqual([]);
   });
 
-  it('offers every catalog gesture in the palette', () => {
+  it('offers every catalog gesture in the palette, but a gesture specified ahead of its code', () => {
     const gestureIds = catalogCommandIds(commandsMarkdown.slice(0, commandsMarkdown.indexOf('## System commands')));
     const declared = new Set(commands.map((c) => c.command));
-    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id) || !declared.has(id));
+    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id) || (!declared.has(id) && !SPECIFIED_AHEAD_OF_CODE.includes(id)));
     expect(
       hidden,
       'commands.md, Entry points are not gestures: every gesture is also in the command palette.',
     ).toEqual([]);
   });
+
+  it('registers no gesture the catalog lists as specified ahead of its code', () => {
+    const declared = new Set(commands.map((c) => c.command));
+    expect(SPECIFIED_AHEAD_OF_CODE.filter((id) => declared.has(id))).toEqual([]);
+  });
+
+  const SPECIFIED_AHEAD_OF_CODE = ['modbench.modlist.track', 'modbench.modlist.update', 'modbench.modlist.restore'];
 
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
