@@ -135,7 +135,8 @@ internal sealed class ConflictClassifier(ILogger logger)
         Dictionary<string, FieldMetadata> shapes,
         bool absentMeansDefault,
         DiffContext ctx,
-        bool ignoredInConflicts = false)
+        bool ignoredInConflicts = false,
+        bool partialFormTakesPart = false)
     {
         var carrying = ctx.ComparedOrder.Where(c => values.GetValueOrDefault(c.Column) != null).ToList();
         var winnerColumn = carrying.Count > 0 ? carrying.MaxBy(c => c.LoadOrderIndex).Column : ctx.RecordWinnerColumn;
@@ -153,7 +154,8 @@ internal sealed class ConflictClassifier(ILogger logger)
         // Escalate is associative and commutative over {NoConflict, Override, Conflict, ConflictBenign}
         // (Reduce never produces the terminal states), so folding children equals reducing the whole
         // subtree at once.
-        var ownState = ctx.Agree && !ignoredInConflicts && !ConflictRules.AllSame(values.Values, same)
+        var ownState = ctx.Agree && !ignoredInConflicts && !ConflictRules.AllSame(
+                values.Where(v => partialFormTakesPart || !ctx.PartialFormColumns.Contains(v.Key)).Select(v => v.Value), same)
             ? ConflictAll.ConflictBenign
             : ConflictRules.Reduce(cellStates.Values);
         var conflictAll = (children ?? []).Aggregate(ownState, (all, child) => ConflictRules.Escalate(all, child.ConflictAll));
@@ -184,7 +186,7 @@ internal sealed class ConflictClassifier(ILogger logger)
             if (!header && values.Values.All(v => v == null)) continue;
             var shapes = recordClass.ToDictionary(
                 kv => kv.Key, kv => DocumentNodes.Variant(membersOf[kv.Key].GetValueOrDefault(member.Name, member), kv.Value));
-            diffs.Add(DiffNode(member.Name, values, shapes, absentMeansDefault: true, ctx, member.IgnoredInConflicts));
+            diffs.Add(DiffNode(member.Name, values, shapes, absentMeansDefault: true, ctx, member.IgnoredInConflicts, partialFormTakesPart: !ownField));
         }
         return diffs;
     }
