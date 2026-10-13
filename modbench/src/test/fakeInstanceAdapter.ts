@@ -1,7 +1,7 @@
 import type {
   DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, HashedFile, InstallationFile,
   InstallOutcome, InstallSource, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
-  OwnedMetaKeys, PluginOrderChange, Subscription,
+  ModFolder, ModFolders, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
@@ -11,8 +11,6 @@ function noFilesFor(mods: readonly ModlistEntry[]): ReadonlyMap<string, OriginFi
     : [])));
 }
 
-/** An `InstanceReading` of an empty instance, every field overridable. A listed mod with no files
- *  given has none. */
 export function readingFixture(overrides: Partial<InstanceReading> = {}): InstanceReading {
   return {
     profile: 'Default',
@@ -38,8 +36,6 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
   };
 }
 
-/** A write the adapter was handed, with the arguments the caller chose. A change a caller decides
- *  is recorded as decided against the reading as it stood. */
 export type AdapterCall =
   | { readonly verb: 'changeModOrder'; readonly profile: string; readonly changes: readonly ModOrderChange[] }
   | { readonly verb: 'changePluginOrder'; readonly profile: string; readonly changes: readonly PluginOrderChange[] }
@@ -65,10 +61,8 @@ export interface InstanceAnswers {
   /** An origin file's size and hash by the path it is read from; a path not there is unreadable. */
   hashes?: ReadonlyMap<string, HashedFile>;
   stamps?: ReadonlyMap<string, FileStamp>;
-  /** The downloaded files a mod's installation records, by mod name. */
-  installationFiles?: ReadonlyMap<string, readonly InstallationFile[]>;
-  /** Mods whose installation files cannot be answered, by mod name, with why. */
-  unreadableInstallations?: ReadonlyMap<string, string>;
+  /** What the installation of each mod answers, by mod name; a mod not there records none. */
+  installations?: ReadonlyMap<string, FileRead<readonly InstallationFile[]>>;
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
   installed?: InstallOutcome;
@@ -76,36 +70,48 @@ export interface InstanceAnswers {
   goneDownloads?: ReadonlySet<string>;
   /** A write that rejects with the message this returns for it, after it is recorded. */
   refusals?: (call: AdapterCall) => string | undefined;
-  /** Origin files that are gone, by relative path: they get no mark. */
-  goneOriginFiles?: ReadonlySet<string>;
+  /** Origin files that are gone: they get no mark. */
+  goneOriginFiles?: readonly { readonly origin: FileOrigin; readonly relativePath: string }[];
   /** Entries with no folder to trash, by name. */
   foldersAbsent?: ReadonlySet<string>;
 }
 
 export interface FakeInstanceAdapter {
   readonly adapter: InstanceAdapter;
-  /** Every write, in the order it was handed over. */
-  readonly calls: AdapterCall[];
-  /** The paths whose hash was asked, in order. */
+  readonly calls: readonly AdapterCall[];
+  forgetCalls(): void;
   readonly hashed: string[];
   /** Every `reading()` after this answers the reading with these fields replaced. */
   read(next: Partial<InstanceReading>): void;
-  /** Tells every subscriber the instance changed. */
   changed(): void;
   /** Every `reading()` after this rejects with the message, until it is called with `undefined`. */
   failReading(message: string | undefined): void;
-  /** How many times the reading was asked for. */
   readonly readings: number;
   readonly subscribers: number;
 }
 
 const EXCLUDED_SUFFIX = '.excluded';
 
+const entryKey = (entry: EntryRef): string => (entry.kind === 'separator' ? `${entry.name}_separator` : entry.name).toLowerCase();
+const originKey = (origin: FileOrigin): string => (origin.kind === 'mod' ? `mod:${origin.name}` : origin.kind);
+
+/** The folders of the given entries, a bare name being a mod, held as the fake's `entryKey` folds names. */
+export function modFoldersOf(...entries: readonly (string | EntryRef)[]): ModFolders {
+  const all: ModFolder[] = entries.map((entry) => {
+    const ref: EntryRef = typeof entry === 'string' ? { kind: 'mod', name: entry } : entry;
+    return { ...ref, path: `/mods/${ref.name}` };
+  });
+  return { all, holding: (entry) => all.find((folder) => entryKey(folder) === entryKey(entry)) };
+}
+
+export const fileIn = (folder: string, relativePath: string): OriginFile =>
+  ({ relativePath, path: `${folder}/${relativePath}`, sourcePath: `${folder}/${relativePath}`, excluded: false, excludedByName: false });
+
 /** The Instance adapter's second implementation: reads answer from the reading and the answers,
  *  each write is recorded, and a decision a caller hands over runs against the reading. */
 export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(), answers: InstanceAnswers = {}): FakeInstanceAdapter {
   let current = reading;
-  const calls: AdapterCall[] = [];
+  let calls: AdapterCall[] = [];
   const hashed: string[] = [];
   const listeners = new Set<() => void>();
   let readings = 0;
@@ -127,10 +133,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
     modFolderPath: (mod) => Promise.resolve(`/mods/${mod}`),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
-    installationFiles: (mod) => {
-      const reason = answers.unreadableInstallations?.get(mod);
-      return Promise.resolve(reason === undefined ? { kind: 'read', answer: answers.installationFiles?.get(mod) ?? [] } : { kind: 'unreadable', reason });
-    },
+    installationFiles: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: [] }),
     managerFilesInModFolder: ['meta.ini'],
     fileStamp: (path) => answer(answers.stamps?.get(path), path),
     originFileHash: (path) => {
@@ -148,13 +151,13 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     markDownloadedFile: (name, mark) =>
       record({ verb: 'markDownloadedFile', name, mark }, answers.goneDownloads?.has(name) ? { gone: true } as const : { gone: false, wrote: true } as const),
     trashDownloadedFileMeta: (name) => record({ verb: 'trashDownloadedFileMeta', name }, true),
-    selectProfile: (profile) => record({ verb: 'selectProfile', profile }, { wrote: true }),
+    selectProfile: (profile) => record({ verb: 'selectProfile', profile }, { wrote: profile !== current.profile }),
     createModFolder: (mod) => record({ verb: 'createModFolder', mod }, undefined),
     renameModFolder: (from, to) => record({ verb: 'renameModFolder', from, to }, undefined),
     markOriginFile: (origin, relativePath, mark) =>
       record<OriginFileMarked>({ verb: 'markOriginFile', origin, relativePath, mark },
-        answers.goneOriginFiles?.has(relativePath) ? { gone: true } : { gone: false, wrote: true, relativePath }),
-    entryKey: (entry) => (entry.kind === 'separator' ? `${entry.name}_separator` : entry.name).toLowerCase(),
+        answers.goneOriginFiles?.some((gone) => originKey(gone.origin) === originKey(origin) && gone.relativePath === relativePath) ? { gone: true } : { gone: false, wrote: true, relativePath }),
+    entryKey,
     includedPath: (relativePath) => relativePath.split('/').map((segment) => segment.replace(EXCLUDED_SUFFIX, '')).join('/'),
     excludedSuffix: EXCLUDED_SUFFIX,
     renamePlugin: (origin, from, to, gameRelease) => record({ verb: 'renamePlugin', origin, from, to, gameRelease }, undefined),
@@ -169,7 +172,9 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   };
 
   return {
-    adapter, calls, hashed,
+    adapter, hashed,
+    get calls() { return calls; },
+    forgetCalls: () => { calls = []; },
     read: (next) => { current = { ...current, ...(next.mods !== undefined && next.modFiles === undefined ? { modFiles: noFilesFor(next.mods) } : {}), ...next }; },
     changed: () => { for (const listener of [...listeners]) listener(); },
     failReading: (message) => { readingFailure = message; },

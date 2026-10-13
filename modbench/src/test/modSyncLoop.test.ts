@@ -12,8 +12,8 @@ import { pastSequence, watcherFor } from './mo2/instanceLoop';
 import { instanceSyncs } from '../syncWiring';
 import { modSyncOver, type ModSyncResult } from '../modOrderCommands/modOrderCommands';
 import { type PluginSyncResult } from '../pluginsCommands/plugins';
-import type { InstanceReading, Mod, ModFolder, ModFolders } from '../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, readingFixture } from './fakeInstanceAdapter';
+import type { InstanceReading, Mod, ModFolder } from '../instanceAdapter/instanceAdapter';
+import { fakeInstanceAdapter, modFoldersOf, readingFixture } from './fakeInstanceAdapter';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './mo2/corpusFixture';
 import { adapterOver } from './mo2/adapterOver';
 import { STEADY_WINDOW } from './steadyWindow';
@@ -107,24 +107,19 @@ async function settledFakeInstance(overrides: Partial<InstanceReading>) {
   await instance.refresh();
   await modSync.settled();
   channel.info.mockClear();
-  fake.calls.length = 0;
+  fake.forgetCalls();
   return { fake, instance, channel, syncs, handed };
 }
 
-const folderOf = (name: string): ModFolder => ({ kind: 'mod', name, path: `/mods/${name}` });
-const foldersOf = (...names: string[]): ModFolders => {
-  const all = names.map(folderOf);
-  return { all, holding: (entry) => all.find((folder) => folder.kind === entry.kind && folder.name === entry.name) };
-};
 const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true });
 
 describe('mod sync, as the Instance value drives it', () => {
-  const listed = { mods: [mod('Harder VATS')], modFolders: foldersOf('Harder VATS') };
+  const listed = { mods: [mod('Harder VATS')], modFolders: modFoldersOf('Harder VATS') };
 
   it('drops the line of a folder deleted by hand, off the Instance value alone', async () => {
     const { fake, instance, syncs } = await settledFakeInstance(listed);
 
-    fake.read({ modFolders: foldersOf() });
+    fake.read({ modFolders: modFoldersOf() });
     await instance.refresh();
     await syncs[syncs.length - 1];
 
@@ -146,7 +141,7 @@ describe('mod sync, as the Instance value drives it', () => {
   it('hands the command the value\'s own mod folders, not a listing of its own', async () => {
     const { fake, instance, handed, syncs } = await settledFakeInstance(listed);
 
-    fake.read({ modFolders: foldersOf('Harder VATS', 'Hand Extracted Mod') });
+    fake.read({ modFolders: modFoldersOf('Harder VATS', 'Hand Extracted Mod') });
     await instance.refresh();
     await syncs[syncs.length - 1];
 

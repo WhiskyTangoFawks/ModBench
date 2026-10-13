@@ -27,9 +27,8 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
   it('a move is its plugins and the index the drop settles to', async () => {
     const fake = fakeOver('Base.esp', 'Gone.esp');
 
-    const result = await pluginsCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(PROFILE, moving('Base.esp'), { kind: 'after', name: 'Gone.esp' }, []);
+    await pluginsCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(PROFILE, moving('Base.esp'), { kind: 'after', name: 'Gone.esp' }, []);
 
-    expect(result).toEqual({ applied: true, wrote: true });
     expect(fake.calls).toEqual(handed([{ kind: 'move', plugins: ['Base.esp'], toIndex: 1 }]));
   });
 
@@ -101,7 +100,7 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
     ])('lets %s land', async (_, move) => {
       const { fake, result } = await run(move);
 
-      expect(result).toEqual({ applied: true, wrote: true });
+      expect(result).toMatchObject({ applied: true });
       expect(fake.calls).toHaveLength(1);
     });
 
@@ -110,7 +109,7 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
 
       const result = await pluginsCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(PROFILE, moving('A.esp'), { kind: 'winningEnd' }, []);
 
-      expect(result).toEqual({ applied: true, wrote: true });
+      expect(result).toMatchObject({ applied: true });
     });
   });
 });

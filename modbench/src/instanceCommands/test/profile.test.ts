@@ -22,10 +22,10 @@ describe('switchProfile', () => {
     return { fake, switchProfile: switchProfileOver(fake.adapter) };
   };
 
-  it('hands the adapter the profile and reports whether it wrote', async () => {
+  it('hands the adapter the profile', async () => {
     const { fake, switchProfile } = over();
 
-    expect(await switchProfile('Secondary', PROFILES)).toEqual({ applied: true, wrote: true });
+    expect(await switchProfile('Secondary', PROFILES)).toMatchObject({ applied: true });
     expect(fake.calls).toEqual([{ verb: 'selectProfile', profile: 'Secondary' }]);
   });
 

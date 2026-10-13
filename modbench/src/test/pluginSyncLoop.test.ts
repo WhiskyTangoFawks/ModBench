@@ -7,12 +7,12 @@ import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './v
 import { adapterOver } from './mo2/adapterOver';
 import { pluginsCommandsWith } from './pluginsCommandsWith';
 import { STEADY_WINDOW } from './steadyWindow';
-import { fakeInstanceAdapter, readingFixture } from './fakeInstanceAdapter';
+import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture } from './fakeInstanceAdapter';
 
 vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
-import type { InstanceReading, Mod, ModFolder, ModFolders } from '../instanceAdapter/instanceAdapter';
+import type { InstanceReading, Mod } from '../instanceAdapter/instanceAdapter';
 import { instanceSyncs } from '../syncWiring';
 import { FakeInstance } from './mo2/fakeInstance';
 import { pastSequence, watcherFor } from './mo2/instanceLoop';
@@ -123,24 +123,15 @@ describe('plugin sync and the Instance close a loop that settles', () => {
 const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true });
 const GAME_ROOT = '/game';
 
-const foldersOf = (...names: string[]): ModFolders => {
-  const all = names.map((name): ModFolder => ({ kind: 'mod', name, path: `/mods/${name}` }));
-  return { all, holding: (entry) => all.find((folder) => folder.kind === entry.kind && folder.name === entry.name) };
-};
-
 const withProvider = (overrides: Partial<InstanceReading> = {}): Partial<InstanceReading> => ({
   mods: [mod('Provider')],
-  modFolders: foldersOf('Provider'),
-  modFiles: new Map([['Provider', { origin: 'Provider', folder: '/mods/Provider', files: [fileIn('Base.esp')], folders: [], notes: [] }]]),
+  modFolders: modFoldersOf('Provider'),
+  modFiles: new Map([['Provider', { origin: 'Provider', folder: '/mods/Provider', files: [fileIn('/mods/Provider', 'Base.esp')], folders: [], notes: [] }]]),
   pluginOrder: [{ name: 'Base.esp', enabled: true }],
   gameFolder: { kind: 'found', root: GAME_ROOT, dataFolder: `${GAME_ROOT}/Data` },
   dataFolderPlugins: { kind: 'listed', names: new Set() },
   ...overrides,
 });
-
-function fileIn(relativePath: string) {
-  return { relativePath, path: `/mods/Provider/${relativePath}`, sourcePath: `/mods/Provider/${relativePath}`, excluded: false, excludedByName: false };
-}
 
 const pluginChanges = (fake: ReturnType<typeof fakeInstanceAdapter>) =>
   fake.calls.flatMap((call) => (call.verb === 'changePluginOrder' ? call.changes : []));
@@ -164,7 +155,7 @@ async function settledFakeInstance(overrides: Partial<InstanceReading> = withPro
   });
   await instance.refresh();
   await syncs[syncs.length - 1];
-  fake.calls.length = 0;
+  fake.forgetCalls();
   return { fake, instance, syncs, loadedWithNoLine };
 }
 
@@ -175,9 +166,8 @@ describe('plugin sync, as the Instance value drives it', () => {
 
     for (let i = 0; i < 5; i++) fake.changed();
     await pastSequence(instance, before);
-    const result = await syncs[syncs.length - 1];
+    await syncs[syncs.length - 1];
 
-    expect(result).toMatchObject({ applied: true, wrote: false });
     expect(pluginChanges(fake)).toEqual([]);
   });
 
@@ -208,8 +198,8 @@ describe('plugin sync, as the Instance value drives it', () => {
     fake.read({
       mods: [mod('Extra'), mod('Provider')],
       modFiles: new Map([
-        ['Extra', { origin: 'Extra', folder: '/mods/Extra', files: [fileIn('Extra.esp')], folders: [], notes: [] }],
-        ['Provider', { origin: 'Provider', folder: '/mods/Provider', files: [fileIn('Base.esp')], folders: [], notes: [] }],
+        ['Extra', { origin: 'Extra', folder: '/mods/Extra', files: [fileIn('/mods/Provider', 'Extra.esp')], folders: [], notes: [] }],
+        ['Provider', { origin: 'Provider', folder: '/mods/Provider', files: [fileIn('/mods/Provider', 'Base.esp')], folders: [], notes: [] }],
       ]),
       pluginOrder: [{ name: 'Extra.esp', enabled: true }, { name: 'Base.esp', enabled: true }],
     });

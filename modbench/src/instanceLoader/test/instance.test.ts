@@ -1,9 +1,9 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type {
-  DataFolderArchives, DataFolderPlugins, DownloadedFile, DownloadedFiles, GameFolder, InstanceAdapter, InstanceReading, Mod, ModFolder,
-  ModFolders, OriginFile, OriginFiles, Separator, SourceMods,
+  DataFolderArchives, DataFolderPlugins, DownloadedFile, DownloadedFiles, GameFolder, InstanceAdapter, InstanceReading, Mod,
+  OriginFiles, Separator, SourceMods,
 } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture } from '../../test/fakeInstanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { Instance, type InstanceValue } from '../instance';
 import { factsOf } from '../instanceFacts';
@@ -21,16 +21,8 @@ interface WindowState {
 const mod = (name: string, enabled = true, meta: Partial<Mod> = {}): Mod => ({ kind: 'mod', name, enabled, ...meta });
 const separator = (name: string): Separator => ({ kind: 'separator', name, enabled: false });
 
-const fileIn = (folder: string, relativePath: string): OriginFile =>
-  ({ relativePath, path: `${folder}/${relativePath}`, sourcePath: `${folder}/${relativePath}`, excluded: false, excludedByName: false });
-
 const filesOfMod = (name: string, ...relativePaths: string[]): OriginFiles =>
   ({ origin: name, folder: `/mods/${name}`, files: relativePaths.map((path) => fileIn(`/mods/${name}`, path)), folders: [], notes: [] });
-
-const modFoldersOf = (...names: string[]): ModFolders => {
-  const all: ModFolder[] = names.map((name) => ({ kind: 'mod', name, path: `/mods/${name}` }));
-  return { all, holding: (entry) => all.find((folder) => folder.kind === entry.kind && folder.name.toLowerCase() === entry.name.toLowerCase()) };
-};
 
 const sourceModsOf = (folders: Record<string, string>, notes: string[] = []): SourceMods => ({
   folders: new Map(Object.entries(folders)),

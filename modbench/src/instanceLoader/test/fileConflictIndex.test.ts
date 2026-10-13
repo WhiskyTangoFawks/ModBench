@@ -10,10 +10,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { modFilesOf, sourceOver } from '../../test/mo2/adapterOver';
-
-
-const fileIn = (folder: string, relativePath: string): OriginFile =>
-  ({ relativePath, path: `${folder}/${relativePath}`, sourcePath: `${folder}/${relativePath}`, excluded: false, excludedByName: false });
+import { fileIn } from '../../test/fakeInstanceAdapter';
 
 const modPath = (name: string, relativePath: string): string => `/mods/${name}/${relativePath}`;
 

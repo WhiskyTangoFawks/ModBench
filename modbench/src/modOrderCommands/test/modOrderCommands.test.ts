@@ -1,18 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { modSyncOver, modlistCommands } from '../modOrderCommands';
 import type {
-  EntryRef, ModFolder, ModFolders, ModlistEntry, ModOrderChange, MovePlace, OriginFileMark, SeparatorsPlace,
+  EntryRef, ModlistEntry, ModOrderChange, MovePlace, OriginFileMark, SeparatorsPlace,
 } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, refusing, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, modFoldersOf, refusing, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const mod = (name: string, enabled = true): ModlistEntry => ({ kind: 'mod', name, enabled });
 const separator = (name: string, enabled = false): ModlistEntry => ({ kind: 'separator', name, enabled });
-
-function foldersOf(...entries: EntryRef[]): ModFolders {
-  const all: ModFolder[] = entries.map((entry) => ({ ...entry, path: `/mods/${entry.name}` }));
-  return { all, holding: (entry) => all.find((folder) => folder.kind === entry.kind && folder.name === entry.name) };
-}
 
 const UNASSIGNED = 'Unassigned (Modlist Development)';
 const RADFALL = 'Radfall - All-In-One Survival Overhaul';
@@ -512,7 +507,7 @@ describe('markFiles', () => {
   });
 
   it('takes back the exclusion of a file gone from disk, and lands the rest', async () => {
-    const { mEdit, commands } = over(FIXTURE_ORDER, { goneOriginFiles: new Set(['gone.dds']) });
+    const { mEdit, commands } = over(FIXTURE_ORDER, { goneOriginFiles: [fileOf('Harder VATS', 'gone.dds')] });
     mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
     const marked = fileOf('Harder VATS', 'a.dds');
     const gone = fileOf('Harder VATS', 'gone.dds');
@@ -535,7 +530,7 @@ describe('markFiles', () => {
   });
 
   it('names both failures when the exclusion of a file that could not be marked cannot be taken back', async () => {
-    const { mEdit, commands } = over(FIXTURE_ORDER, { goneOriginFiles: new Set(['gone.dds']) });
+    const { mEdit, commands } = over(FIXTURE_ORDER, { goneOriginFiles: [fileOf('Harder VATS', 'gone.dds')] });
     mEdit.setCommandHandler('changeBuildConfiguration', (_, change) =>
       Promise.resolve(change.exclude === undefined ? { refused: true, message: 'the disk refused the write' } : { changed: true }));
     const gone = fileOf('Harder VATS', 'gone.dds');
@@ -581,9 +576,9 @@ describe('createEmptyMod', () => {
 
 describe('syncMods', () => {
   const syncing = (order: readonly ModlistEntry[], onDisk: readonly EntryRef[], answers: InstanceAnswers = {}) =>
-    ({ fake: fakeInstanceAdapter(readingFixture({ mods: order, modFolders: foldersOf(...onDisk) }), answers) });
+    ({ fake: fakeInstanceAdapter(readingFixture({ mods: order, modFolders: modFoldersOf(...onDisk) }), answers) });
   const sync = ({ fake }: ReturnType<typeof syncing>, handed: readonly EntryRef[], profile = 'Default') =>
-    modSyncOver(fake.adapter)({ profile, modFolders: foldersOf(...handed).all });
+    modSyncOver(fake.adapter)({ profile, modFolders: modFoldersOf(...handed).all });
   const folder = (name: string): EntryRef => ({ kind: 'mod', name });
   const sepFolder = (name: string): EntryRef => ({ kind: 'separator', name });
 

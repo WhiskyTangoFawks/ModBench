@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { InstallationFile } from '../../instanceAdapter/instanceAdapter';
+import type { FileRead, InstallationFile } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { sourceCommands } from '../sourceCommands';
 
@@ -10,7 +10,9 @@ const INSTALLED: InstallationFile = {
 
 const SOURCES: ReadonlyMap<string, string> = new Map([['ModA', '/instance/source/ModA'], ['ModB', '/instance/source/Old ModB']]);
 
-const adapterOver = (answers: InstanceAnswers = {}) => fakeInstanceAdapter(readingFixture(), answers).adapter;
+const fakeAdapter = (answers: InstanceAnswers = {}) => fakeInstanceAdapter(readingFixture(), answers).adapter;
+const recording = (files: readonly InstallationFile[]): FileRead<readonly InstallationFile[]> => ({ kind: 'read', answer: files });
+const unreadable = (reason: string): FileRead<readonly InstallationFile[]> => ({ kind: 'unreadable', reason });
 
 const BUILT = { landed: [{ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [] }], refused: [] };
 
@@ -18,7 +20,7 @@ describe('sourceCommands build', () => {
   it('hands mEdit each mod with the source folder that builds it, its folder and its installation files, and the release\'s archive variants', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
-    const adapter = adapterOver({ installationFiles: new Map([['ModA', [INSTALLED]]]) });
+    const adapter = fakeAdapter({ installations: new Map([['ModA', recording([INSTALLED])]]) });
 
     await sourceCommands({ client, adapter }).build(['ModA', 'ModB'], 'Fallout4', SOURCES);
 
@@ -36,7 +38,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
 
-    await sourceCommands({ client, adapter: adapterOver() }).build(['ModA'], undefined, SOURCES);
+    await sourceCommands({ client, adapter: fakeAdapter() }).build(['ModA'], undefined, SOURCES);
 
     expect(client.calls.map((call) => call.args[1])).toEqual([{ excludedSuffix: '.excluded', archives: null }]);
   });
@@ -44,7 +46,7 @@ describe('sourceCommands build', () => {
   it('refuses a mod no repository builds, or whose installation files cannot be answered, naming why, and builds the rest', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
-    const adapter = adapterOver({ unreadableInstallations: new Map([['ModB', 'its installation file is not indexed']]) });
+    const adapter = fakeAdapter({ installations: new Map([['ModB', unreadable('its installation file is not indexed')]]) });
 
     const outcome = await sourceCommands({ client, adapter }).build(['ModA', 'ModB', 'ModC'], 'Fallout4', SOURCES);
 
@@ -60,7 +62,7 @@ describe('sourceCommands init', () => {
   it('hands mEdit each mod with the source folder init makes its repository in, the installation files the mod manager records and its own files in the mod folder', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('init', { landed: [{ mod: 'ModA', plugins: [] }, { mod: 'ModB', plugins: [] }], refused: [] });
-    const adapter = adapterOver({ installationFiles: new Map([['ModA', [INSTALLED]]]) });
+    const adapter = fakeAdapter({ installations: new Map([['ModA', recording([INSTALLED])]]) });
 
     await sourceCommands({ client, adapter }).init(['ModA', 'ModB']);
 
@@ -76,7 +78,7 @@ describe('sourceCommands init', () => {
   it('refuses a mod whose installation files cannot be answered, naming why, and inits the rest', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('init', { landed: [{ mod: 'ModB', plugins: [] }], refused: [] });
-    const adapter = adapterOver({ unreadableInstallations: new Map([['ModA', 'its installation file is not indexed']]) });
+    const adapter = fakeAdapter({ installations: new Map([['ModA', unreadable('its installation file is not indexed')]]) });
 
     const outcome = await sourceCommands({ client, adapter }).init(['ModA', 'ModB']);
 
@@ -88,7 +90,7 @@ describe('sourceCommands init', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('init', { landed: [], refused: [] });
     const happened: unknown[] = [];
-    const adapter = adapterOver();
+    const adapter = fakeAdapter();
     const reading = { ...adapter, installationFiles: (mod: string) => { happened.push(`read ${mod}`); return adapter.installationFiles(mod); } };
 
     await sourceCommands({ client, adapter: reading }).init(['ModA', 'ModB'], { onProgress: (status) => happened.push(status) });
@@ -100,7 +102,7 @@ describe('sourceCommands init', () => {
   it('refuses a mod whose name gives it no source folder, naming why', async () => {
     const client = new InMemoryMEditClient();
 
-    const outcome = await sourceCommands({ client, adapter: adapterOver({ unsourcedMods: new Set(['Mods/ModA']) }) }).init(['Mods/ModA']);
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter({ unsourcedMods: new Set(['Mods/ModA']) }) }).init(['Mods/ModA']);
 
     expect(client.calls).toEqual([]);
     expect(outcome).toEqual({ landed: [], refused: [{ item: 'Mods/ModA', reason: 'its name gives it no source folder' }] });
@@ -108,7 +110,7 @@ describe('sourceCommands init', () => {
 
   it('calls mEdit with nothing when no mod\'s installation files can be answered', async () => {
     const client = new InMemoryMEditClient();
-    const adapter = adapterOver({ unreadableInstallations: new Map([['ModA', 'not indexed']]) });
+    const adapter = fakeAdapter({ installations: new Map([['ModA', unreadable('not indexed')]]) });
 
     const outcome = await sourceCommands({ client, adapter }).init(['ModA']);
 
