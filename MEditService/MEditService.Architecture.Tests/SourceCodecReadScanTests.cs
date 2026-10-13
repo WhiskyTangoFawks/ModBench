@@ -7,7 +7,7 @@ public sealed class SourceCodecReadScanTests
 {
     private static readonly (string Name, Regex Pattern)[] ForbiddenMembersAndTheBareTypeName =
     [
-        ("RecordTextCodec", new Regex(@"\bRecordTextCodec\b(?!\s*\.\s*BlankDocument\b)", RegexOptions.Compiled)),
+        ("RecordTextCodec", new Regex(@"\bRecordTextCodec\b(?!\s*\.\s*(?:BlankDocument|WhyNotARecord|WhyNotABlockLevel)\b)", RegexOptions.Compiled)),
         ("RoundTrip", new Regex(@"\bRoundTrip\b", RegexOptions.Compiled)),
         ("Deserialize", new Regex(@"\bDeserialize\b", RegexOptions.Compiled)),
         ("SerializeToText", new Regex(@"\bSerializeToText\b", RegexOptions.Compiled)),
@@ -27,9 +27,9 @@ public sealed class SourceCodecReadScanTests
             counts.Count == 0,
             "The Source folder touches a RecordTextCodec member outside its bound; the Codec owns a record as text and as document (target-architecture.d2): "
             + "a repository reads the kernel for facts about types and for the "
-            + "spelling of a layout level it mints, never for a record's content. Only "
-            + "RecordTypes (type facts, not counted here) and RecordTextCodec.BlankDocument "
-            + "(the level it mints) are permitted — read the type fact through RecordTypes or "
+            + "spelling of a layout level it mints, and for the Codec's verdict on a document, never for a record's content. Only "
+            + "RecordTypes (type facts, not counted here), RecordTextCodec.BlankDocument "
+            + "(the level it mints) and RecordTextCodec.WhyNotARecord and WhyNotABlockLevel (the verdict) are permitted — read the type fact through RecordTypes or "
             + "mint through BlankDocument instead:\n"
             + string.Join("\n", counts));
     }
@@ -45,14 +45,15 @@ public sealed class SourceCodecReadScanTests
     }
 
     [Fact]
-    public void TheScan_PermitsTypeDispatchAndBlankDocument_AndNamesAPlantedCodecReadOrWrite()
+    public void TheScan_PermitsTypeDispatchBlankDocumentAndTheVerdict_AndNamesAPlantedCodecReadOrWrite()
     {
         using var root = new ScratchDirectory("medit-source-codec-read-scan-");
         Directory.CreateDirectory(Path.Combine(root, "MEditService.SourceAdapter", "obj"));
         File.WriteAllText(
             Path.Combine(root, "MEditService.SourceAdapter", "Permitted.cs"),
             "var group = RecordTypes.For(release).GroupOf(recordType);\n"
-            + "var minted = RecordTextCodec.BlankDocument(level, release, identity);\n");
+            + "var minted = RecordTextCodec.BlankDocument(level, release, identity);\n"
+            + "var why = RecordTextCodec.WhyNotARecord(text, release, recordType);\n");
         File.WriteAllText(
             Path.Combine(root, "MEditService.SourceAdapter", "Planted.cs"),
             "internal static class Reader\n{\n"
