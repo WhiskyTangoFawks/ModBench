@@ -289,6 +289,9 @@ public sealed class SourceRepository : ISourceRepository
             return PluginSourceChecks.CollidingFormKeys(spelled.Name, Locator.FilesOf(spelled), formKeys, _release);
         });
 
+    public Answer<IReadOnlyList<RecordFile>, SourceFailure> RecordFilesOf(PluginAddress plugin) =>
+        SourceFailure.Answer(() => PluginSourceChecks.RecordFilesOf(Locator.FilesOf(Spelled(plugin)), _release));
+
     public Answer<SourceComparison, SourceFailure> Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>
         SourceFailure.Answer(() =>
         {
