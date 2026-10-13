@@ -42,7 +42,7 @@ export function adapterOver(root: string, answers: AdapterAnswers = {}): Instanc
     instanceRoot: root,
     gameDirectoryOverrides: () => ({}),
     gameDirectoryChanged: () => ({ dispose: () => {} }),
-    detectors: { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(null) },
+    detectors: { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(null), documents: () => Promise.reject(new Error('no known folder')) },
   });
   const { gameFolder, downloadedFiles } = answers;
   const fixed: Omit<InstanceAdapter, 'reading'> = {

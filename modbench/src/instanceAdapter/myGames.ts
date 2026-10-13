@@ -9,7 +9,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { factsOf } from './files';
 import type { GameDetectors } from './gameDirectory';
 
-export type MyGamesResolution = { readonly kind: 'found'; readonly folder: string } | { readonly kind: 'notFound'; readonly looked: readonly string[] };
+type MyGamesResolution = { readonly kind: 'found'; readonly folder: string } | { readonly kind: 'notFound'; readonly looked: readonly string[] };
 
 /** Answers where the release's My Games folder is, with each place looked at when it is nowhere. */
 export type MyGamesResolver = (release: string | undefined) => Promise<MyGamesResolution>;
