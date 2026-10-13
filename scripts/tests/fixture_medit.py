@@ -108,7 +108,7 @@ def snapshot(instance, game):
 
 def hand_load_order(url, body):
     deadline = time.monotonic() + LOAD_ORDER_TIMEOUT_S
-    version = call('PUT', url + '/load-order', body, timeout=within(deadline))['version']
+    version = call('PUT', url + '/load-order', body, timeout=deadline - time.monotonic())['version']
     while time.monotonic() < deadline:
         status = call('GET', url + '/load-order/status', timeout=within(deadline))
         if status['version'] >= version and status['state'] not in ('None', 'Reconciling'):
