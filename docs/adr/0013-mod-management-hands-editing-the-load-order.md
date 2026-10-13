@@ -5,6 +5,7 @@ Modbench's data is two layers. The file layer is the mods and their files, resol
 ## Consequences
 
 - Mod Management interprets no plugin binary and writes no record. A plugin's masters come from Editing, so two views never disagree over them.
+- Editing learns nothing about a file of the file layer by reading it. What a file is, where it came from and what it holds arrive from Mod Management as state, because a fact Editing derived for itself would be a second record of a file it does not own, and the two drift ([principles](../principles.md), Orthogonality).
 
 ## Alternatives rejected
 
@@ -12,3 +13,4 @@ Modbench's data is two layers. The file layer is the mods and their files, resol
 - Each plugin with its slot, enabled and winning facts, and Editing derives which plugins are active. One list carried two events, so Editing diffed it to learn which had happened. It kept a registered state between indexed and active. It re-derived a rule over Mod Management's own files.
 - Editing reads the plugins the game loads with no line, through Mutagen. Deciding the active plugins then spans both sides, and Mod Management waits on Editing before it can send. The game's masters are a short per-release list.
 - Editing reads `modlist.txt` and `plugins.txt` itself. Self-validating like the record index, but puts the mod manager's formats and mod order inside Editing, and `plugins.txt` alone cannot say which mod's file a name means.
+- Editing derives what it needs from the files it is handed. Local and fast, and a second record of the file layer in the process that does not own it.

@@ -59,7 +59,7 @@ internal static class ModlistEndpoints
     }
 }
 
-/// <summary>The mods to stage with the instance's facts (ADR-0024). DeltaShare is the share of its file a delta may
+/// <summary>The mods to stage with the instance's facts (ADR-0013). DeltaShare is the share of its file a delta may
 /// reach before the file has no provider.</summary>
 internal sealed record StageRequest(
     IReadOnlyList<StageModRequest> Mods, IReadOnlyList<StageGameFileRequest> GameFiles, string DataFolder, string BuildFolder, double? DeltaShare);
@@ -68,7 +68,7 @@ internal sealed record StageModRequest(
     string Name, string Folder, IReadOnlyList<StageInstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles);
 
 /// <summary>An installation file by its path, where the mod manager says it comes from, and its size, hash and
-/// entries as the Instance adapter knows them (ADR-0024).</summary>
+/// entries as the Instance adapter knows them (ADR-0013).</summary>
 internal sealed record StageInstallationFileRequest(
     string Path, string? Source, long? Size, string Hash, IReadOnlyList<StageInstallationFileEntryRequest> Entries);
 
