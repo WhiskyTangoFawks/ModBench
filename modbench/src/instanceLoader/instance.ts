@@ -325,7 +325,7 @@ export class Instance implements Subscription {
     for (const note of [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes]) log.info(`[instance] ${note}`);
     this.tellSkippedLinks(skippedLinks);
     for (const note of archiveListNotes) log.info(`[instance] ${note}`);
-    // An unreadable Data folder or archive list is an answer, never a failed read: the whole value
+    // An unreadable Data folder or its archives is an answer, never a failed read: the whole value
     // would otherwise go stale over a folder outside the instance.
     if (dataFolderPlugins.kind === 'unreadable') log.warn(`[instance] the game's Data folder could not be listed: ${dataFolderPlugins.reason}`);
     if (dataFolderArchives.kind === 'unreadable') {

@@ -168,8 +168,6 @@ const modsWithMeta = async (source: ReadingSource, profile: string): Promise<Mod
   Promise.all((await source.modOrder(profile)).map(async (entry) =>
     (entry.kind === 'mod' ? { ...entry, ...(await source.modMeta(entry.name)) } : entry)));
 
-// A mod order read mid-write can parse to no entries, and zero mods is legal, so an empty one is
-// read again after a settle before it is believed.
 async function settledMods(source: ReadingSource, profile: string): Promise<ModlistEntry[]> {
   const mods = await modsWithMeta(source, profile);
   if (mods.length > 0) return mods;
