@@ -13,6 +13,7 @@ import { mo2OriginFiles } from './mo2OriginFiles';
 import type { Mo2Context } from './mo2Context';
 import { mo2Landing } from './mo2Landing';
 import { mo2PluginRename } from './mo2PluginRename';
+import { mo2Archives } from './mo2Archives';
 import { mo2Installation } from './mo2Installation';
 import { mo2Reads } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
@@ -45,7 +46,7 @@ export function mo2InstanceAdapter({
   };
   return {
     names: { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX },
-    ...mo2Reads(context), ...mo2Installation(context), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context),
+    ...mo2Reads(context), ...mo2Archives(context), ...mo2Installation(context), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context),
     subscribe: (listener) => context.watch.subscribe(listener),
   };
 }

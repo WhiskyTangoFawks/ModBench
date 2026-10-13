@@ -413,6 +413,99 @@ describe('the MO2 Instance adapter', () => {
         expect(await adapter.creationClubList(notFound, 'Fallout4')).toEqual([]);
       });
     });
+
+    describe('the archives the game\'s INIs list, where Mod Management takes the archives the game loads from', () => {
+      let game: string;
+
+      beforeEach(async () => {
+        game = await mkdtemp(join(tmpdir(), 'mo2-instance-ini-'));
+      });
+      afterEach(() => rm(game, { recursive: true, force: true }));
+
+      const found = (): GameFolder => ({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
+      const profileFile = (name: string): string => join(root, 'profiles', 'Default', name);
+      const localSettings = (on: boolean): Promise<void> => writeFile(profileFile('settings.ini'), `[General]\nLocalSettings=${on}\n`);
+
+      it('lists the default INI\'s archives key by key, in the order the release loads its keys, whatever the case of section, key or file', async () => {
+        await writeFile(join(game, 'fallout4_default.ini'), [
+          '[Display]', 'sResourceArchiveList=Not An Archive.ba2',
+          '[archive]', 'SResourceArchiveList=Fallout4 - Voices.ba2, Fallout4 - Meshes.ba2',
+          '; sResourceArchiveList2=Commented.ba2', 'sResourceStartUpArchiveList=Fallout4 - Startup.ba2,Fallout4 - Interface.ba2,',
+        ].join('\r\n'));
+
+        expect(await adapter.archiveList('Default', found(), 'Fallout4')).toEqual({
+          archives: ['Fallout4 - Startup.ba2', 'Fallout4 - Interface.ba2', 'Fallout4 - Voices.ba2', 'Fallout4 - Meshes.ba2'],
+          notes: ['The profile Default keeps no game INIs of its own: the archives listed are its default INI\'s, and none the game\'s own INIs add.'],
+        });
+      });
+
+      it('takes a key the profile\'s own INIs give over the default INI\'s, the custom INI\'s over the main one\'s, when the profile keeps its own', async () => {
+        await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\nsResourceArchiveList2=Default2.ba2\n');
+        await writeFile(profileFile('fallout4.ini'), '[Archive]\nsResourceArchiveList=Main.ba2\nsResourceArchiveList2=Main2.ba2\n');
+        await writeFile(profileFile('Fallout4Custom.ini'), '[Archive]\nsResourceArchiveList2=Custom2.ba2\n');
+        await localSettings(true);
+
+        expect(await adapter.archiveList('Default', found(), 'Fallout4')).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
+      });
+
+      it('reads none of the profile\'s INIs while the profile keeps no game INIs of its own', async () => {
+        await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
+        await writeFile(profileFile('Fallout4.ini'), '[Archive]\nsResourceArchiveList=Left Behind.ba2\n');
+        await localSettings(false);
+
+        expect((await adapter.archiveList('Default', found(), 'Fallout4')).archives).toEqual(['Default.ba2']);
+      });
+
+      it.each([
+        ['the game folder was not found', (): GameFolder => ({ kind: 'notFound', looked: [], setting: 'setting' }), 'Fallout4'],
+        ['the release has no row', found, undefined],
+      ])('lists none when %s', async (_why, gameFolder, release) => {
+        await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
+
+        expect((await adapter.archiveList('Default', gameFolder(), release)).archives).toEqual([]);
+      });
+
+      it('lists after the INIs\' archives the ones the release loads whatever they list', async () => {
+        await writeFile(join(game, 'Fallout_default.ini'), '[Archive]\nSArchiveList=Fallout - Textures.bsa, Fallout - Meshes.bsa\n');
+
+        expect((await adapter.archiveList('Default', found(), 'FalloutNV')).archives)
+          .toEqual(['Fallout - Textures.bsa', 'Fallout - Meshes.bsa', 'Update.bsa']);
+      });
+    });
+
+    describe('the game folder\'s archives and strings files', () => {
+      let game: string;
+
+      beforeEach(async () => {
+        game = await mkdtemp(join(tmpdir(), 'mo2-instance-archives-'));
+      });
+      afterEach(() => rm(game, { recursive: true, force: true }));
+
+      const found = (): GameFolder => ({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
+
+      it('answers the release\'s archives at the Data folder\'s root and the strings files in its strings folder, by their paths in it', async () => {
+        const data = join(game, 'Data');
+        await mkdir(join(data, 'STRINGS'), { recursive: true });
+        await mkdir(join(data, 'Nested.ba2'), { recursive: true });
+        await writeFile(join(data, 'Fallout4 - Interface.BA2'), '');
+        await writeFile(join(data, 'Skyrim - Interface.bsa'), '');
+        await writeFile(join(data, 'STRINGS', 'Fallout4_en.STRINGS'), '');
+        await writeFile(join(data, 'STRINGS', 'readme.txt'), '');
+
+        expect(await adapter.gameFolderArchives(found(), 'Fallout4')).toEqual({
+          kind: 'listed', archives: ['Fallout4 - Interface.BA2'], stringsFiles: ['STRINGS/Fallout4_en.STRINGS'],
+        });
+      });
+
+      it('answers unresolved when the game folder was not found', async () => {
+        expect(await adapter.gameFolderArchives({ kind: 'notFound', looked: [], setting: 'setting' }, 'Fallout4')).toEqual({ kind: 'unresolved' });
+      });
+
+      it('answers unreadable, with why, when its Data folder cannot be listed', async () => {
+        expect(await adapter.gameFolderArchives(found(), 'Fallout4'))
+          .toEqual({ kind: 'unreadable', reason: expect.stringMatching(/ENOENT/) as unknown });
+      });
+    });
   });
 
   describe('the watch', () => {
@@ -471,18 +564,19 @@ describe('the MO2 Instance adapter', () => {
       expect(setting).toBeUndefined();
     });
 
-    it('signals a change to every profile\'s two order files, the settings, a mod\'s files, a mod\'s source and overwrite', () => {
+    it('signals a change to every profile\'s two order files and its INIs, the settings, a mod\'s files, a mod\'s source and overwrite', () => {
       let signals = 0;
       adapterAt(root).subscribe(() => { signals++; });
 
       const watchedPaths = [
         'profiles/Default/modlist.txt', 'profiles/Secondary/plugins.txt', 'ModOrganizer.ini',
         'mods/Harder VATS/Textures/a.dds', 'source/Harder VATS/plugin-source/Harder VATS.esp/a.json', 'overwrite/F4SE/Plugins/x.ini',
+        'profiles/Default/settings.ini', 'profiles/Default/fallout4.INI',
       ];
       const pathsHeardByNoWatcher = watchedPaths.filter((relative) => !fire(root, relative));
       expect(pathsHeardByNoWatcher).toEqual([]);
       expect(fire(root, 'profiles/Default/other.txt')).toBe(false);
-      expect(signals).toBe(6);
+      expect(signals).toBe(8);
     });
 
     it.each(['HEAD', 'refs/heads/main', 'packed-refs', ''])(
@@ -568,6 +662,26 @@ describe('the MO2 Instance adapter', () => {
 
         expect(fire(game, 'Fallout4.ccc')).toBe(true);
         expect(fire(game, 'Fallout4.ini')).toBe(false);
+      } finally {
+        await rm(game, { recursive: true, force: true });
+      }
+    });
+
+    it('follows the release\'s default INI, and the archives and strings files of the Data folder, in any case, once read', async () => {
+      const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-archives-'));
+      try {
+        const found: GameFolder = { kind: 'found', root: game, dataFolder: join(game, 'Data') };
+        const watched = adapterAt(root);
+        watched.subscribe(() => undefined);
+
+        await watched.archiveList('Default', found, 'Fallout4');
+        await watched.gameFolderArchives(found, 'Fallout4');
+
+        expect(fire(game, 'fallout4_default.INI')).toBe(true);
+        expect(fire(game, 'Fallout4Prefs.ini')).toBe(false);
+        const heardByNoWatcher = ['Fallout4 - Interface.BA2', 'Strings/Fallout4_en.STRINGS'].filter((name) => !fire(join(game, 'Data'), name));
+        expect(heardByNoWatcher).toEqual([]);
+        expect(fire(join(game, 'Data'), 'Skyrim - Interface.bsa')).toBe(false);
       } finally {
         await rm(game, { recursive: true, force: true });
       }

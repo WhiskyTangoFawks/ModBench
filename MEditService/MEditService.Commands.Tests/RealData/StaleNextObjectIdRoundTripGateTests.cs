@@ -68,7 +68,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         await scratch.CompileService().CompileLandedAsync(scratch.Plugin);
 
         var divergence = TestAdapters.Mutagen().DivergenceFrom(
-            fileName, original, scratch.PluginPath, EmptyLoadOrder.Of(GameRelease.Fallout4), new PluginStrings(null, before.Path)).Answered();
+            fileName, original, scratch.PluginPath, EmptyLoadOrder.Of(GameRelease.Fallout4), new PluginStrings(before.Path)).Answered();
         Assert.Null(divergence);
     }
 

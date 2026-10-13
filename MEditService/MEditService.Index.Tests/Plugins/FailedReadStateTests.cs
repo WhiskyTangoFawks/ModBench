@@ -80,7 +80,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ATreeWithADocumentDeclaringNoFormKey_NamesThatFile_WhileItsBinaryStandsIn()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         using var index = Reconciled();
         File.WriteAllText(StrayDocument, "{}");
 
@@ -94,7 +94,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ATreeWhoseFormKeyTwoDocumentsClaim_NamesEachOfThem_WithTheFormKey()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         using var index = Reconciled();
         var formKey = TheNpc(index).FormKey;
         var original = NpcDocument;
@@ -112,7 +112,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ATreeWhoseFormKeyTwoDocumentsClaimWhenFirstRead_NamesEachOfThem_WhileItsBinaryStandsIn()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         var original = NpcDocument;
         ClaimedTwice();
 
@@ -127,7 +127,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ATreeMended_NamesNoFile()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         using var index = Reconciled();
         ClaimedTwice();
         index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
@@ -154,7 +154,7 @@ public sealed class FailedReadStateTests : IDisposable
     public void ATreeThatFailsWhenItsModGainsARepository_LeavesTheBinaryServing_MarkedAsSuch()
     {
         using var index = Reconciled();
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         ClaimedTwice();
 
         index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
@@ -166,7 +166,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ATreeThatStillFailsAfterAChange_LeavesItsBinaryStandingIn()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         ClaimedTwice();
         using var index = Reconciled();
         var readsBefore = TreeReads();
@@ -182,7 +182,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ATreeThatStillFailsAfterAChange_WithNothingServing_SaysOnlyThatItFailed()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         ClaimedTwice();
         using var index = Reconciled(new FailsToOpen(PluginFailures.Unparsed(), atOpen: _ => true));
         Assert.True(Failed(index));
@@ -199,7 +199,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void AStandingFailureOfAPluginRespelledOnlyInCase_IsNamedAsSpelledNowAndNotReadAgain()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         ClaimedTwice();
         using var index = Reconciled(new FailsToOpen(PluginFailures.Unparsed(), atOpen: _ => true));
         Assert.True(Failed(index));
@@ -216,7 +216,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ATreeMendedWhileItsBinaryStoodInForIt_IsReadAgain()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         ClaimedTwice();
         Arm(TreeMoment.ReadEnds, Mend);
 
@@ -230,7 +230,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ATreeMendedDuringTheReadItFailedOnceRead_IsReadAgainAtTheNextSnapshot()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         using var index = Reconciled();
         ClaimedTwice();
         Arm(TreeMoment.ReadEnds, Mend);
@@ -244,7 +244,7 @@ public sealed class FailedReadStateTests : IDisposable
 
     private OpenedIndex ATreeWhoseStatusGitCannotReport_OnceARecordChanges()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         var index = Reconciled();
         var npc = NpcDocument;
         File.Copy(GitIndex, GitIndex + ".good");
@@ -282,7 +282,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ATreeWithAnUnreadableDocument_IsReadAgainAtEverySnapshot()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         using var index = Reconciled();
         File.WriteAllText(StrayDocument, "{}");
         index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
@@ -297,7 +297,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ATreeReadAgainAtEverySnapshot_ReadsTheBinaryInItsPlaceOncePerChangeOfItsBytes()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         File.WriteAllText(StrayDocument, "{}");
         using var adapter = new GatedPluginAdapter();
         using var index = Reconciled(adapter);
@@ -316,7 +316,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ATreeUnreadableWhenItsWholeReadBegan_IsReadAgainOnceReadable()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         using var index = Reconciled();
         var untyped = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(NpcDocument)).Require(), "Untyped")).FullName;
         Arm(TreeMoment.StampsTaken, () => File.WriteAllText(StrayDocument, "{}"));
@@ -368,7 +368,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ATreeDocumentHeldOnlyWhileTheTreeIsRead_IsReadAgainWithItsBytesUnchanged()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         var document = NpcDocument;
         Arm(TreeMoment.ReadBegins, () =>
         {
@@ -387,7 +387,7 @@ public sealed class FailedReadStateTests : IDisposable
     public void AJustTrackedTreeWhoseBinaryAlsoFails_SaysTheBinarysLastReadStillShows()
     {
         using var index = Reconciled(new FailsToOpen(PluginFailures.Unparsed(), atOpen: n => n == 2));
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         ClaimedTwice();
 
         index.NextSnapshotUntil(() => Failed(index), "the tree's and the binary's failure");
@@ -435,7 +435,7 @@ public sealed class FailedReadStateTests : IDisposable
     [InlineData("", "could not be read")]
     public void ATreeWhoseReadThrows_SaysWhy_NeverBlank_AndDecompileRepairsIt(string message, string expected)
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         void Throw()
         {
             Arm(TreeMoment.ReadBegins, Throw);
@@ -455,7 +455,7 @@ public sealed class FailedReadStateTests : IDisposable
     [InlineData(typeof(UnauthorizedAccessException))]
     public void ATreeWhoseReadThrowsAFileSystemRefusal_SaysWhy_AndDecompileDoesNotRepairIt(Type refusal)
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         void Throw()
         {
             Arm(TreeMoment.ReadBegins, Throw);
@@ -473,7 +473,7 @@ public sealed class FailedReadStateTests : IDisposable
     [PosixFact]
     public void ATreeWhoseDocumentCannotBeOpened_SaysWhy_AndDecompileDoesNotRepairIt()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         var document = NpcDocument;
         FileModes.Set(document, "000");
         try
@@ -493,7 +493,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void AWarmValidationThatThrows_ReadsThePluginWhole()
     {
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        TrackedMods.Track(Plugin);
         Reconciled().Dispose();
         var document = NpcDocument;
         File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{NpcEditorId}\"", "\"EditedNpc\"", StringComparison.Ordinal));

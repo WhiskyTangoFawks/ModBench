@@ -73,7 +73,7 @@ internal sealed class HeldPlugins
         var readTimer = Stopwatch.StartNew();
         if (!_adapter.ReadContent(
                 new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder,
-                new PluginStrings(Path.GetDirectoryName(plugin.Path), DataFolderPath))
+                new PluginStrings(Path.GetDirectoryName(plugin.Path)))
             .Holds(out var read, out var failure))
         {
             _logger.LogWarning(failure.Error, "Failed to open plugin {FileName} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);

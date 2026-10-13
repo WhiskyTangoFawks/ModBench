@@ -43,7 +43,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     [Fact]
     public void ATrackedCopy_IsItsFile()
     {
-        TrackedMods.Track(Entry, _fixture.GameDirectory);
+        TrackedMods.Track(Entry);
         using var index = Reconciled();
 
         Assert.Equal(new CopyDocument(CopyDocumentKind.OwnFile, NpcFile), index.Queries.GetCopyDocument(Plugin, Npc).Value());
@@ -52,7 +52,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     [Fact]
     public void ATrackedChildCopy_IsInItsContainersFile()
     {
-        TrackedMods.Track(Entry, _fixture.GameDirectory);
+        TrackedMods.Track(Entry);
         using var index = Reconciled();
 
         Assert.Equal(new CopyDocument(CopyDocumentKind.ContainersFile, CellFile), index.Queries.GetCopyDocument(Plugin, PlacedRef).Value());
@@ -61,7 +61,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     [Fact]
     public void ATrackedCopyInAPluginThatIsNotActive_IsItsFile()
     {
-        TrackedMods.Track(Entry, _fixture.GameDirectory);
+        TrackedMods.Track(Entry);
         using var index = Indexes.Reconciled(_fixture.GameDirectory, [Entry with { Enabled = false }]);
 
         Assert.Equal(new CopyDocument(CopyDocumentKind.OwnFile, NpcFile), index.Queries.GetCopyDocument(Plugin, Npc).Value());
@@ -70,7 +70,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     [Fact]
     public void ATrackedCopyWhoseFileIsGone_HasNoAnswer()
     {
-        TrackedMods.Track(Entry, _fixture.GameDirectory);
+        TrackedMods.Track(Entry);
         using var index = Reconciled();
 
         File.Delete(NpcFile);
@@ -89,7 +89,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     [Fact]
     public void ACopyInATrackedModWithNoSourceForItsPlugin_IsRenderedUnderTheLayoutsName()
     {
-        TrackedMods.Track(Entry, _fixture.GameDirectory);
+        TrackedMods.Track(Entry);
         Directory.Delete(PluginSourceRoot.In(Entry.ModFolderOf(), Plugin.Name), recursive: true);
         using var index = Reconciled();
 

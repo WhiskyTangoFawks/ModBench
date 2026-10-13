@@ -25,7 +25,8 @@ import { isPluginFile } from './pluginFile';
 type Mo2Reads = Omit<InstanceAdapter,
   | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
   | 'trashDownloadedFileMeta' | 'selectProfile' | 'markOriginFile' | 'renamePlugin' | 'checkPluginRename' | 'extractedEntries'
-  | 'extractNewMod' | 'extractUpgrade' | 'subscribe' | 'names' | 'installationFiles' | 'managerFilesInModFolder'>;
+  | 'extractNewMod' | 'extractUpgrade' | 'subscribe' | 'names' | 'archiveList' | 'gameFolderArchives' | 'installationFiles'
+  | 'managerFilesInModFolder'>;
 
 async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile[] | undefined> {
   const dirents = await readOrAbsent(() => listDir(downloadsDir), undefined);

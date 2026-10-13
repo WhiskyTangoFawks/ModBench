@@ -31,7 +31,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     internal static ILoadedMod OpenForRead(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
     {
-        var read = strings is { } named ? LocalizedStrings.ForRead(named, loadOrder?.Archives ?? [], modPath, gameRelease) : null;
+        var read = strings is { } named ? LocalizedStrings.ForRead(named, loadOrder, modPath, gameRelease) : null;
         try
         {
             var loaded = new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(read, MasterStyles.Of(modPath, loadOrder))), read);
@@ -64,7 +64,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var modPath = new ModPath(plugin.Path);
-        return Opened<IPluginRecords>(modPath, new PluginStrings(Path.GetDirectoryName(plugin.Path), loadOrder.DataFolderPath), loadOrder, loaded =>
+        return Opened<IPluginRecords>(modPath, new PluginStrings(Path.GetDirectoryName(plugin.Path)), loadOrder, loaded =>
             new ModRecordLookup(loaded.Getter, new PluginRecordBytes(modPath, loadOrder), schemas, loaded));
     }
 
@@ -190,18 +190,18 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     // field its form version shapes is read by another record's, or by none.
     internal static IMod OpenForWrite(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
-        => Import(modPath, gameRelease, strings, loadOrder?.Archives ?? [], MasterStyles.Of(modPath, loadOrder));
+        => Import(modPath, gameRelease, strings, loadOrder, MasterStyles.Of(modPath, loadOrder));
 
     internal static IMod OpenForWrite(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings, IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles)
-        => Import(modPath, gameRelease, strings, archives: [], masterStyles);
+        => Import(modPath, gameRelease, strings, loadOrder: null, masterStyles);
 
     // The setter resolves every string as it imports, so the folder it reads them from is done with after.
     private static IMod Import(
-        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, IReadOnlyList<string> archives,
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, LoadOrderSnapshot? loadOrder,
         IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles)
     {
-        using var read = strings is { } named ? LocalizedStrings.ForRead(named, archives, modPath, gameRelease) : null;
+        using var read = strings is { } named ? LocalizedStrings.ForRead(named, loadOrder, modPath, gameRelease) : null;
         return ModFactory.ImportSetter(modPath, gameRelease, (ReadParameters(read, masterStyles) ?? new BinaryReadParameters()) with { Parallel = false });
     }
 

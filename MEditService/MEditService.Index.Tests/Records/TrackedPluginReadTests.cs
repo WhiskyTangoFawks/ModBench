@@ -17,7 +17,7 @@ public sealed class TrackedPluginReadTests : IDisposable
 
     public TrackedPluginReadTests()
     {
-        TrackedMods.Track(_fixture.Plugins.Single(p => p.Name == Tracked.Name), _fixture.GameDirectory);
+        TrackedMods.Track(_fixture.Plugins.Single(p => p.Name == Tracked.Name));
         _index = Indexes.Open(_holder);
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
     }

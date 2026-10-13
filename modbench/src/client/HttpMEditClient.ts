@@ -269,7 +269,6 @@ class HttpMEditClient implements MEditClient {
   // `instanceRoot` scopes the backend's index (ADR-0010). The signal aborts the PUT itself rather
   // than leaving it to notice a dead socket.
   private async putLoadOrder(snapshot: LoadOrderSnapshot, signal: AbortSignal): Promise<LoadOrderOutcome> {
-    const { plugins, active, loadedWithNoLine, gameDirectory, instanceRoot, gameRelease } = snapshot;
     // The backend publishes its first tick as this PUT lands, so a PUT that outran the stream
     // loses every tick published before it connects — and with them the progressive chevrons.
     await this.notifications.whenConnected();
@@ -287,7 +286,7 @@ class HttpMEditClient implements MEditClient {
     let result;
     try {
       result = await this.apiClient.PUT('/load-order', {
-        body: { plugins, active, loadedWithNoLine, gameDirectory, instanceRoot, gameRelease },
+        body: snapshot,
         signal,
       });
     } catch (e) {

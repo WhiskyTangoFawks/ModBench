@@ -21,7 +21,7 @@ public sealed class InitModTests
     public async Task InitMod_OfAModThatProvidesNoPlugin_RefusesThatModWithoutThrowing()
     {
         using var gameDir = new ScratchDirectory("medit-init-noorigin-game-");
-        var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], []);
+        var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], [], []);
 
         var result = await InitEveryPluginOf.ModAsync(loadOrder, "NoSuchMod");
 
@@ -399,7 +399,7 @@ public sealed class InitModTests
 
         const string stringsFileNamedByIsoLanguageCodeNotByLanguageName = "Fixture_en.STRINGS";
         Assert.Contains(stringsFileNamedByIsoLanguageCodeNotByLanguageName, result.Message);
-        Assert.Contains(gameDir.Path, result.Message);
+        Assert.Contains(modFolder.Path, result.Message);
         Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }
 

@@ -547,9 +547,11 @@ describe('HttpMEditClient — sendLoadOrder', () => {
   const active = [{ name: 'Foo.esp', origin: 'A' }];
   const loadedWithNoLine = [{ name: 'Foo.esp', origin: 'A' }];
   const appliedBody = { applied: true, version: 1 };
-  const snapshot = { plugins, active, loadedWithNoLine, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' };
+  const archives = ['/game/Data/Foo - Main.ba2'];
+  const stringsFiles = ['/mods/A/Strings/Foo_en.STRINGS'];
+  const snapshot = { plugins, active, loadedWithNoLine, archives, stringsFiles, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' };
 
-  it('PUTs every plugin with its line, the active plugins, the game directory and the instance root', async () => {
+  it('PUTs every plugin with its line, the active plugins, the archives and strings files, the game directory and the instance root', async () => {
     let putBody: unknown;
     const { response, push } = pushableStreamResponse();
     const fetch = routedFetch([
@@ -564,7 +566,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     push(readyTickThatSettlesPutLoadOrder());
     await load;
 
-    expect(putBody).toEqual({ plugins, active, loadedWithNoLine, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' });
+    expect(putBody).toEqual({ plugins, active, loadedWithNoLine, archives, stringsFiles, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' });
   });
 
   it('holds the PUT until the notification stream has connected, as the backend publishes its first tick as the PUT lands and a PUT that outran the stream would lose every tick published before it connects', async () => {

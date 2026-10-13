@@ -151,6 +151,13 @@ export type DataFolderPlugins =
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
+/** The release's archives at the Data folder's root, and the strings files in its strings folder by
+ *  their paths in it, as the folder spells them; or why there is no answer, as for its plugins. */
+export type DataFolderArchives =
+  | { readonly kind: 'listed'; readonly archives: readonly string[]; readonly stringsFiles: readonly string[] }
+  | { readonly kind: 'unresolved' }
+  | { readonly kind: 'unreadable'; readonly reason: string };
+
 /** An entry directly in an extracted folder. */
 export interface ExtractedEntry {
   readonly name: string;
@@ -331,6 +338,12 @@ export interface InstanceAdapter {
   /** The plugins the game folder's Creation Club list names, in its order; none when the release
    *  has no Creation Club, the game folder is not found, or it holds no list. */
   creationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]>;
+  /** The archives the INIs list, in load order: the game folder's default INI, then the user's where the
+   *  manager keeps them, a key's last value winning. `notes` names each INI the game reads that this did not. */
+  archiveList(
+    profile: string, gameFolder: GameFolder, gameRelease: string | undefined,
+  ): Promise<{ readonly archives: readonly string[]; readonly notes: readonly string[] }>;
+  gameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined): Promise<DataFolderArchives>;
   /** The name of the downloaded file at `path`, the paths matched as the platform matches them;
    *  undefined when `path` is not in the downloads folder, or that folder cannot be resolved. */
   downloadedFileAt(path: string): Promise<string | undefined>;
