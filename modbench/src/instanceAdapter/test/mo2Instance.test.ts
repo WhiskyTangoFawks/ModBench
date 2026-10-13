@@ -1319,7 +1319,7 @@ describe('the MO2 Instance adapter', () => {
 
         const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
 
-        expect(answer).toEqual({ kind: 'unreadable', reason: expect.stringMatching(/ENOENT/) });
+        expect(answer.kind === 'unreadable' && answer.reason).toContain('ENOENT');
         expect(answer.kind === 'unreadable' && answer.reason).toContain(DOWNLOAD);
       });
 
