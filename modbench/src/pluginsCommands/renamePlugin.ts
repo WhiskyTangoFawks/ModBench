@@ -37,14 +37,8 @@ function listing(heading: string, plugins: readonly PluginAddress[]): string[] {
   return plugins.length === 0 ? [] : [heading, ...plugins.map(named)];
 }
 
-// What can be known before any write: the adapter's refusals, then one question when plugins list
-//  the plugin as a master or may. Writes nothing.
-async function confirmRename(
-  access: PluginRenameAccess, ask: AskQuestion, plugin: PluginAddress, newName: string, gameRelease: string | undefined,
-): Promise<RenameConfirmed> {
-  const checked = await access.adapter.checkPluginRename(fileOriginOf(plugin.origin), plugin.name, newName, gameRelease);
-  if (!checked.applied) return { confirmed: false, refusal: checked.refusal };
-
+// One question when plugins list the plugin as a master or may. Writes nothing.
+async function confirmRename(access: PluginRenameAccess, ask: AskQuestion, plugin: PluginAddress, newName: string): Promise<RenameConfirmed> {
   let dependants;
   try {
     dependants = answerOf(await access.client.getPluginDependants(plugin));
@@ -65,9 +59,6 @@ async function renamePlugin(
   access: PluginRenameAccess, source: { apply(changes: SourceChanges): Promise<boolean> }, plugin: PluginAddress, newName: string, gameRelease: string | undefined,
 ): Promise<PluginRenameResult> {
   const origin = fileOriginOf(plugin.origin);
-  const checked = await access.adapter.checkPluginRename(origin, plugin.name, newName, gameRelease);
-  if (!checked.applied) return { applied: false, sourceRenamed: false, refusal: checked.refusal };
-
   const changes = await access.client.getRenameSourceChanges(plugin, newName);
   if (isRefused(changes)) return { applied: false, sourceRenamed: false, refusal: changes.message };
   if (!await source.apply(changes)) return { applied: false, reported: true };

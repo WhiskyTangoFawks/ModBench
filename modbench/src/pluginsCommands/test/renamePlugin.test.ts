@@ -83,15 +83,13 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     expect(await snapshotTree(root)).toEqual(before);
   });
 
-  it('writes nothing, the source included, when the files would refuse', async () => {
+  it('reports the source renamed when the write refuses, naming what it refused', async () => {
     const before = await snapshotTree(root);
 
     const result = await rename('Renamed Patch.esp', { ...PLUGIN, name: 'Missing.esp' });
 
-    expect(result).toMatchObject({ applied: false, sourceRenamed: false });
+    expect(result).toMatchObject({ applied: false, sourceRenamed: true });
     expect('refusal' in result && result.refusal).toContain('Missing.esp');
-    expect(client.calls).toEqual([]);
-    expect(apply).not.toHaveBeenCalled();
     expect(await snapshotTree(root)).toEqual(before);
   });
 
@@ -106,12 +104,10 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
 
   it('puts a rename of Overwrite\'s plugin to the adapter as the run-time output', async () => {
     const adapter = adapterOver(root);
-    const checkOnAdapter = vi.spyOn(adapter, 'checkPluginRename').mockResolvedValue({ applied: true });
     const renamePluginOnAdapter = vi.spyOn(adapter, 'renamePlugin').mockResolvedValue();
 
     await pluginsCommandsWith(adapter, client).renamePlugin({ apply }, { name: 'Run.esp', origin: OVERWRITE_ORIGIN }, 'Ran.esp', 'Fallout4');
 
-    expect(checkOnAdapter).toHaveBeenCalledWith({ kind: 'runtimeOutput' }, 'Run.esp', 'Ran.esp', 'Fallout4');
     expect(renamePluginOnAdapter).toHaveBeenCalledWith({ kind: 'runtimeOutput' }, 'Run.esp', 'Ran.esp', 'Fallout4');
   });
 });
@@ -120,7 +116,7 @@ describe('confirmRename — what is known before any write', () => {
   let root: string;
   let client: InMemoryMEditClient;
   const confirm = (ask: ReturnType<typeof scriptedDialog>, plugin = PLUGIN) =>
-    pluginsCommandsWith(adapterOver(root), client).confirmRename(ask, plugin, 'Renamed Patch.esp', 'Fallout4');
+    pluginsCommandsWith(adapterOver(root), client).confirmRename(ask, plugin, 'Renamed Patch.esp');
   const dependants = (dependantPlugins: PluginAddress[], unreadable: PluginAddress[] = []) =>
     client.setQueryAnswer('getPluginDependants', { dependants: dependantPlugins, unreadable });
 
@@ -171,17 +167,6 @@ describe('confirmRename — what is known before any write', () => {
     dependants([CHILD]);
 
     expect(await confirm(scriptedDialog(undefined))).toEqual({ confirmed: false });
-  });
-
-  it('refuses, asking nothing, when the files would refuse', async () => {
-    dependants([CHILD]);
-    const ask = scriptedDialog('Rename');
-
-    const result = await confirm(ask, { ...PLUGIN, name: 'Missing.esp' });
-
-    expect(result).toMatchObject({ confirmed: false });
-    expect('refusal' in result && result.refusal).toContain('Missing.esp');
-    expect(ask.asked).toEqual([]);
   });
 
   it('refuses, asking nothing, when mEdit cannot say who depends on the plugin', async () => {

@@ -41,7 +41,7 @@ export function registerRenamePluginCommand(
     const newName = await promptRename('Rename plugin', plugin.name, refusal);
     if (newName === undefined) return;
 
-    const confirmed = await commands.confirmRename(ask, plugin, newName, instance.value.gameRelease);
+    const confirmed = await commands.confirmRename(ask, plugin, newName);
     if (!confirmed.confirmed) {
       if (confirmed.refusal !== undefined) reporter.report('error', confirmed.refusal);
       return;
