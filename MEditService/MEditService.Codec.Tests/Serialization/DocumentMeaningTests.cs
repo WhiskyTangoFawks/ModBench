@@ -13,6 +13,8 @@ public sealed class DocumentMeaningTests
     [InlineData("""{"A":[1,2]}""", "{\n  \"A\": [ 1, 2 ]\n}")]
     [InlineData("""{"A":2.5}""", """{"A":2.50}""")]
     [InlineData("""{"A":0.1}""", """{"A":0.10000000149011612}""")]
+    [InlineData("""{"A":1,"B":[]}""", """{"A":1}""")]
+    [InlineData("""{"A":1}""", """{"A":1,"B":[]}""")]
     public void TwoDocumentsOfOneMeaning_HaveNoDifference(string held, string produced)
     {
         Assert.Null(Difference(held, produced));
