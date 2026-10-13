@@ -6,7 +6,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { modlistCommands } from '../modOrderCommands';
-import { adapterOver, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
+import { adapterOver, readDownloadedFileMeta, sourceOver } from '../../test/mo2/adapterOver';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import { fakeArchiveReader } from '../../test/fakeArchiveReader';
 import type { ArchiveReader } from '../../instanceAdapter/instanceAdapter';
@@ -63,7 +63,7 @@ describe('installMod', () => {
     const outcome = await commands().installMod({ kind: 'archive', path: '/elsewhere/Freshly-1-0.7z' }, { kind: 'new', name: MOD }, GAME_NAME);
 
     expect(outcome).toEqual({ applied: true, isFomod: false });
-    expect(await adapterOver(root).modMeta(MOD)).toEqual({ archiveFilename: 'Freshly-1-0.7z' });
+    expect(await sourceOver(root).modMeta(MOD)).toEqual({ archiveFilename: 'Freshly-1-0.7z' });
     expect(await readDownloadedFileMeta(root, 'Freshly-1-0.7z')).toBeUndefined();
   });
 
@@ -74,7 +74,7 @@ describe('installMod', () => {
       { ...downloadedFile('Freshly-1-0.7z'), modID: '111', fileID: '222', version: '3.0.0' }, { kind: 'new', name: MOD }, GAME_NAME);
 
     expect(outcome).toEqual({ applied: true, isFomod: false });
-    expect(await adapterOver(root).modMeta(MOD)).toEqual({
+    expect(await sourceOver(root).modMeta(MOD)).toEqual({
       archiveFilename: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFiles: [{ nexusId: '111', fileId: '222' }],
     });
   });

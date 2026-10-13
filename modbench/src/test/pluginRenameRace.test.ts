@@ -3,7 +3,8 @@ import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, uriFrom } from './vscodeMock';
-import { adapterOver, pluginsCommandsWith, readPluginLines, STEADY_WINDOW, withReading } from './mo2/adapterOver';
+import { adapterOver, pluginsCommandsWith, readPluginLines, sourceOver, STEADY_WINDOW } from './mo2/adapterOver';
+import { readInstance, type ReadingSource } from '../instanceAdapter/mo2Reads';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
 
 const { handlers, showInputBox } = vi.hoisted(() => ({
@@ -48,14 +49,14 @@ describe('a rename while a recompute is reading', () => {
     await mkdir(join(root, 'Game', 'Data'), { recursive: true });
     const gameFolder = { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } as const;
     const writer = adapterOver(root, { gameFolder });
-    const reader = adapterOver(root, { gameFolder });
+    const reader = sourceOver(root, { gameFolder });
 
     let release!: () => void;
     const held = new Promise<void>((resolve) => { release = resolve; });
     let holding = false;
     let filesRead!: () => void;
     const filesReadBeforeRename = new Promise<void>((resolve) => { filesRead = resolve; });
-    const holdingReader = {
+    const holdingSource: ReadingSource = {
       ...reader,
       originFiles: async (origin: Parameters<typeof reader.originFiles>[0]) => {
         const files = await reader.originFiles(origin);
@@ -69,7 +70,7 @@ describe('a rename while a recompute is reading', () => {
     };
     instance = new Instance({
       window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} },
-      adapter: withReading(holdingReader),
+      adapter: { ...writer, reading: () => readInstance(holdingSource) },
     });
     const { pluginSync } = instanceSyncs({
       instance, syncMods: modSyncOver(writer), syncPlugins: pluginSyncOver(writer), channel: { error: () => {}, info: () => {} },

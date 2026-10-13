@@ -27,6 +27,7 @@ import { listDir } from '../files';
 import type { FileOrigin, InstanceAdapter } from '../instanceAdapter';
 import { mo2InstanceAdapter } from '../mo2Instance';
 import { fakeArchiveReader } from '../../test/fakeArchiveReader';
+import { readPluginLines } from '../../test/mo2/adapterOver';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 import { NO_DETECTORS } from '../../test/noDetectors';
 
@@ -95,7 +96,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
       expect(after.has(from), from).toBe(false);
       expect(after.get(to)?.toString(), to).toBe(before.get(from)?.toString());
     }
-    expect(await adapter.pluginOrder('Default')).toEqual([
+    expect(await readPluginLines(root)).toEqual([
       { name: 'NonAsciiRetexture.esp', enabled: true },
       { name: 'Renamed Patch.esp', enabled: true },
       { name: 'Unofficial Fallout 4 Patch.esp', enabled: true },
@@ -142,7 +143,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     const after = await snapshotTree(root);
     expect(after.has(`${MOD}/TRACKED PATCH MOD.esp`)).toBe(true);
     expect(after.has(`${MOD}/TRACKED PATCH MOD - Main.ba2`)).toBe(true);
-    expect((await adapter.pluginOrder('Default')).map((p) => p.name)).toContain('TRACKED PATCH MOD.esp');
+    expect((await readPluginLines(root)).map((p) => p.name)).toContain('TRACKED PATCH MOD.esp');
   });
 
   it('renames a plugin of Overwrite, which holds files as a mod does', async () => {

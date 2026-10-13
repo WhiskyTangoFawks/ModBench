@@ -28,13 +28,15 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, matchesGlob } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
-import { readInstance } from '../mo2Reads';
+import type { Mo2Context } from '../mo2Context';
+import { readingSource, readInstance, type ReadingSource } from '../mo2Reads';
 import { OVERWRITE_ORIGIN, type Subscription } from '../instanceAdapter';
 import type {
   ArchiveReader, GameFolder, InstallTarget, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
 } from '../instanceAdapter';
 import { tempWritePath } from '../layout';
 import { fakeArchiveReader } from '../../test/fakeArchiveReader';
+import { contextOver } from '../../test/mo2/adapterOver';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
 } from '../../test/mo2/corpusFixture';
@@ -53,8 +55,14 @@ const DOWNLOAD = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 const adapterAt = (
   instanceRoot: string, gameDirectory?: string, gameDirectoryChanged: (listener: () => void) => Subscription = () => ({ dispose: () => {} }),
   archives: ArchiveReader = fakeArchiveReader([]),
-): InstanceAdapter =>
-  mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides: () => ({ gameDirectory }), gameDirectoryChanged, detectors: NO_DETECTORS, archives });
+): InstanceAdapter => mo2InstanceAdapter({
+  instanceRoot, gameDirectoryOverrides: () => ({ gameDirectory }), gameDirectoryChanged, detectors: NO_DETECTORS, archives,
+});
+
+const watchedOver = (context: Mo2Context): ReadingSource & Pick<InstanceAdapter, 'subscribe'> =>
+  ({ ...readingSource(context), subscribe: (listener) => context.watch.subscribe(listener) });
+
+const sourceAt = (instanceRoot: string, gameDirectory?: string): ReadingSource => readingSource(contextOver(instanceRoot, { gameDirectory }));
 
 async function installHeld(root: string, target: InstallTarget): Promise<{ extraction: string; settle: () => Promise<void> }> {
   const release = fakeArchiveReader(['New.esp']);
@@ -96,10 +104,12 @@ async function isThere(path: string): Promise<boolean> {
 describe('the MO2 Instance adapter', () => {
   let root: string;
   let adapter: InstanceAdapter;
+  let source: ReadingSource;
 
   beforeEach(() => {
     root = cloneCorpusFixture();
     adapter = adapterAt(root);
+    source = sourceAt(root);
   });
   afterEach(async () => {
     vi.mocked(fsRename).mockImplementation(actualRename);
@@ -110,7 +120,7 @@ describe('the MO2 Instance adapter', () => {
 
   describe('parsed reads', () => {
     it('answers the selected profile and the game from the settings', async () => {
-      const settings = await adapter.settings();
+      const settings = await source.settings();
 
       expect(settings.profile).toBe('Default');
       expect(settings.gameName).toBe('Fallout 4');
@@ -189,7 +199,7 @@ describe('the MO2 Instance adapter', () => {
 
       it('reads the settings once, so one reading holds one generation of the ini', async () => {
         let reads = 0;
-        const counting = { ...adapter, settings: () => { reads++; return adapter.settings(); } };
+        const counting = { ...source, settings: () => { reads++; return source.settings(); } };
 
         await readInstance(counting);
 
@@ -198,9 +208,9 @@ describe('the MO2 Instance adapter', () => {
 
       it('answers every fact against the ini as it read it, even when the ini is rewritten mid-reading', async () => {
         const rewriting = {
-          ...adapter,
+          ...source,
           settings: async () => {
-            const settings = await adapter.settings();
+            const settings = await source.settings();
             await writeFile(join(root, INI), (await text(root, INI)).replace('gameName=Fallout 4', 'gameName=Rewritten'));
             return settings;
           },
@@ -220,7 +230,7 @@ describe('the MO2 Instance adapter', () => {
 
       it('reads each listed mod\'s meta once, so one reading holds one answer for it', async () => {
         const reads: string[] = [];
-        const counting = { ...adapter, modMeta: (mod: string) => { reads.push(mod); return adapter.modMeta(mod); } };
+        const counting = { ...source, modMeta: (mod: string) => { reads.push(mod); return source.modMeta(mod); } };
 
         const reading = await readInstance(counting);
 
@@ -231,12 +241,12 @@ describe('the MO2 Instance adapter', () => {
       it('does not read the meta of a folder the mod order does not list while the downloads are unresolved, so an unreadable one does not fail the reading', async () => {
         await mkdir(join(root, 'mods', 'Unlisted'));
         const unreadable = {
-          ...adapter,
+          ...source,
           settings: async () => ({
-            ...(await adapter.settings()),
+            ...(await source.settings()),
             downloadedFiles: () => Promise.resolve({ kind: 'unresolved' as const, reason: 'no downloads' }),
           }),
-          modMeta: (mod: string) => (mod === 'Unlisted' ? Promise.reject(new Error('EACCES')) : adapter.modMeta(mod)),
+          modMeta: (mod: string) => (mod === 'Unlisted' ? Promise.reject(new Error('EACCES')) : source.modMeta(mod)),
         };
 
         await expect(readInstance(unreadable)).resolves.toMatchObject({ downloadedFiles: { kind: 'unresolved' } });
@@ -263,7 +273,7 @@ describe('the MO2 Instance adapter', () => {
 
           const mods = (await reading).mods;
           expect(mods.length).toBeGreaterThan(0);
-          expect(mods.map((e) => e.name)).toEqual((await adapter.modOrder('Default')).map((e) => e.name));
+          expect(mods.map((e) => e.name)).toEqual((await source.modOrder('Default')).map((e) => e.name));
         } finally {
           vi.useRealTimers();
         }
@@ -291,7 +301,7 @@ describe('the MO2 Instance adapter', () => {
     it('answers no release for a game the tables hold none for, not one guessed from the name, which has the backend answer about another game', async () => {
       await writeFile(join(root, INI), '[General]\r\ngameName=Morrowind\r\nselected_profile=@ByteArray(Default)\r\n');
 
-      const settings = await adapter.settings();
+      const settings = await source.settings();
 
       expect(settings.gameName).toBe('Morrowind');
       expect(settings.gameRelease).toBeUndefined();
@@ -300,7 +310,7 @@ describe('the MO2 Instance adapter', () => {
     it('rejects when the settings name no selected profile', async () => {
       await writeFile(join(root, INI), '[General]\r\ngameName=Fallout 4\r\n');
 
-      await expect(adapter.settings()).rejects.toThrow(/selected_profile/);
+      await expect(source.settings()).rejects.toThrow(/selected_profile/);
     });
 
     it('finds the game folder the setting names', async () => {
@@ -308,7 +318,7 @@ describe('the MO2 Instance adapter', () => {
       try {
         await mkdir(join(game, 'Data'));
 
-        const folder = await (await adapterAt(root, game).settings()).gameFolder();
+        const folder = await (await sourceAt(root, game).settings()).gameFolder();
 
         expect(folder).toEqual({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
       } finally {
@@ -317,7 +327,7 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('answers each place it looked when no game folder is found', async () => {
-      const folder = await (await adapter.settings()).gameFolder();
+      const folder = await (await source.settings()).gameFolder();
 
       expect(folder.kind).toBe('notFound');
     });
@@ -327,7 +337,7 @@ describe('the MO2 Instance adapter', () => {
       await mkdir(join(root, 'downloads', 'a folder'));
       await writeFile(tempWritePath(join(root, 'downloads', 'manual.zip.meta')), 'half');
 
-      const downloads = await (await adapter.settings()).downloadedFiles();
+      const downloads = await (await source.settings()).downloadedFiles();
 
       if (downloads.kind !== 'listed') throw new Error(`expected listed, got ${downloads.reason}`);
       expect(downloads.downloadsDir).toBe(join(root, 'downloads'));
@@ -344,7 +354,7 @@ describe('the MO2 Instance adapter', () => {
       await writeFile(join(root, 'downloads', 'manual.zip'), 'zip');
       await writeFile(join(root, 'downloads', 'manual.zip.meta'), '');
 
-      const downloads = await (await adapter.settings()).downloadedFiles();
+      const downloads = await (await source.settings()).downloadedFiles();
 
       if (downloads.kind !== 'listed') throw new Error(`expected listed, got ${downloads.reason}`);
       expect(downloads.files?.find((file) => file.name === 'manual.zip')?.meta).toMatchObject({ status: 'Downloaded' });
@@ -353,12 +363,12 @@ describe('the MO2 Instance adapter', () => {
     it('answers no files, rather than none, when the downloads folder is not there', async () => {
       await rm(join(root, 'downloads'), { recursive: true });
 
-      expect(await (await adapter.settings()).downloadedFiles())
+      expect(await (await source.settings()).downloadedFiles())
         .toEqual({ kind: 'listed', downloadsDir: join(root, 'downloads'), files: undefined });
     });
 
     it('answers where the downloads are from the same read the profile came from, so a rewrite between two answers does not land two generations in one value', async () => {
-      const settings = await adapter.settings();
+      const settings = await source.settings();
       await writeFile(join(root, INI), '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n'
         + '[Settings]\r\ndownload_directory=@ByteArray(elsewhere)\r\n');
 
@@ -370,17 +380,17 @@ describe('the MO2 Instance adapter', () => {
     it('answers every profile, and no stray file beside them', async () => {
       await writeFile(join(root, 'profiles', 'stray.txt'), '');
 
-      expect((await adapter.profiles()).sort()).toEqual(['Default', 'Secondary']);
+      expect((await source.profiles()).sort()).toEqual(['Default', 'Secondary']);
     });
 
     it('answers no profiles when the instance has none', async () => {
       await rm(join(root, 'profiles'), { recursive: true });
 
-      expect(await adapter.profiles()).toEqual([]);
+      expect(await source.profiles()).toEqual([]);
     });
 
     it('answers the mods and separators in mod order, winning end first', async () => {
-      const order = await adapter.modOrder('Default');
+      const order = await source.modOrder('Default');
 
       expect(modNames(order).slice(0, 4)).toEqual([
         "mod:Ñoño's Retexture:true",
@@ -390,19 +400,12 @@ describe('the MO2 Instance adapter', () => {
       ]);
     });
 
-    it('answers the entry of a kind mod order lists, matched as MO2 matches names, or none, so a line another tool recased is not read as no entry', async () => {
-      expect(await adapter.orderEntry('Default', { kind: 'mod', name: 'harder vats' })).toMatchObject({ kind: 'mod', name: 'Harder VATS' });
-      expect(await adapter.orderEntry('Default', { kind: 'separator', name: ' unassigned (modlist development). ' }))
-        .toMatchObject({ kind: 'separator', name: 'Unassigned (Modlist Development)' });
-      expect(await adapter.orderEntry('Default', { kind: 'separator', name: 'Harder VATS' })).toBeUndefined();
-    });
-
     it('rejects a profile with no mod order to read', async () => {
-      await expect(adapter.modOrder('No Such Profile')).rejects.toThrow(/ENOENT/);
+      await expect(source.modOrder('No Such Profile')).rejects.toThrow(/ENOENT/);
     });
 
     it('answers a mod\'s meta', async () => {
-      expect(await adapter.modMeta('Unofficial Fallout 4 Patch')).toMatchObject({
+      expect(await source.modMeta('Unofficial Fallout 4 Patch')).toMatchObject({
         version: '2.1.5.0',
         nexusId: '4598',
         archiveFilename: DOWNLOAD,
@@ -410,17 +413,17 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('answers an empty meta for a mod with none', async () => {
-      expect(await adapter.modMeta('DragIn Manual Extract')).toEqual({});
+      expect(await source.modMeta('DragIn Manual Extract')).toEqual({});
     });
 
     it('rejects a meta that is there but cannot be read, not publishing an unreadable meta as an empty one', async () => {
       await mkdir(join(root, 'mods', 'DragIn Manual Extract', 'meta.ini'));
 
-      await expect(adapter.modMeta('DragIn Manual Extract')).rejects.toThrow(/EISDIR/);
+      await expect(source.modMeta('DragIn Manual Extract')).rejects.toThrow(/EISDIR/);
     });
 
     it('answers every mod folder as the entry it holds, with its path', async () => {
-      const folders = (await adapter.modFolders())?.all;
+      const folders = (await source.modFolders())?.all;
 
       expect(folders).toContainEqual({
         kind: 'mod', name: 'Unofficial Fallout 4 Patch', path: join(root, 'mods', 'Unofficial Fallout 4 Patch'),
@@ -435,11 +438,11 @@ describe('the MO2 Instance adapter', () => {
     it('answers no entry for a folder named as the reserved overwrite folder, which mod sync would otherwise list as a mod', async () => {
       await mkdir(join(root, 'mods', 'Overwrite'));
 
-      expect((await adapter.modFolders())?.all.map((f) => f.name)).not.toContain('Overwrite');
+      expect((await source.modFolders())?.all.map((f) => f.name)).not.toContain('Overwrite');
     });
 
     describe('a folder an install is extracting into', () => {
-      const listed = async (): Promise<string[]> => present(await adapter.modFolders(), 'the mod folders').all.map((f) => f.name);
+      const listed = async (): Promise<string[]> => present(await source.modFolders(), 'the mod folders').all.map((f) => f.name);
 
       it('is not listed while only its extraction is in it', async () => {
         const { settle } = await installHeld(root, { kind: 'new', name: 'New Mod' });
@@ -489,11 +492,11 @@ describe('the MO2 Instance adapter', () => {
         return actualReaddir(path, options);
       });
 
-      await expect(adapter.modFolders()).rejects.toThrow(/permission denied/);
+      await expect(source.modFolders()).rejects.toThrow(/permission denied/);
     });
 
     it('answers which mod folder holds an entry, matched as MO2 matches names, from the one listing', async () => {
-      const folders = present(await adapter.modFolders(), 'the mod folders');
+      const folders = present(await source.modFolders(), 'the mod folders');
 
       expect(folders.holding({ kind: 'mod', name: 'harder vats' })?.path).toBe(join(root, 'mods', 'Harder VATS'));
       expect(folders.holding({ kind: 'mod', name: 'No Such Mod' })).toBeUndefined();
@@ -502,7 +505,7 @@ describe('the MO2 Instance adapter', () => {
     it.skipIf(process.platform === 'win32')('(Windows cannot hold two names that differ only in case) answers each of two folders whose names differ only in case for the entry spelled as its own', async () => {
       await mkdir(join(root, 'mods', 'ModA'));
       await mkdir(join(root, 'mods', 'moda'));
-      const folders = present(await adapter.modFolders(), 'the mod folders');
+      const folders = present(await source.modFolders(), 'the mod folders');
 
       expect(folders.holding({ kind: 'mod', name: 'moda' })?.path).toBe(join(root, 'mods', 'moda'));
       expect(folders.holding({ kind: 'mod', name: 'ModA' })?.path).toBe(join(root, 'mods', 'ModA'));
@@ -512,7 +515,7 @@ describe('the MO2 Instance adapter', () => {
       await symlink(join(root, 'mods', 'Loop'), join(root, 'mods', 'Loop'));
       const skipped: string[] = [];
 
-      const folders = await adapter.modFolders((name) => skipped.push(name));
+      const folders = await source.modFolders((name) => skipped.push(name));
 
       expect(folders?.all.map((f) => f.name)).not.toContain('Loop');
       expect(skipped).toEqual(['Loop']);
@@ -521,11 +524,11 @@ describe('the MO2 Instance adapter', () => {
     it('answers undefined when there is no folder for mods at all', async () => {
       await rm(join(root, 'mods'), { recursive: true });
 
-      expect(await adapter.modFolders()).toBeUndefined();
+      expect(await source.modFolders()).toBeUndefined();
     });
 
     it('answers the plugins in plugin order, with their enabled state', async () => {
-      expect(await adapter.pluginOrder('Default')).toEqual([
+      expect(await source.pluginOrder('Default')).toEqual([
         { name: 'NonAsciiRetexture.esp', enabled: true },
         { name: 'Tracked Patch Mod.esp', enabled: true },
         { name: 'Unofficial Fallout 4 Patch.esp', enabled: true },
@@ -534,7 +537,7 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('rejects a profile with no plugin order to read', async () => {
-      await expect(adapter.pluginOrder('No Such Profile')).rejects.toThrow(/ENOENT/);
+      await expect(source.pluginOrder('No Such Profile')).rejects.toThrow(/ENOENT/);
     });
 
     describe('the game folder\'s plugins', () => {
@@ -554,7 +557,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(data, 'Patch.esp'), '');
         await writeFile(join(data, 'readme.txt'), '');
 
-        const plugins = await adapter.gameFolderPlugins(found(data));
+        const plugins = await source.gameFolderPlugins(found(data));
 
         expect(plugins).toEqual({ kind: 'listed', names: new Set(['Fallout4.ESM', 'Patch.esp']) });
       });
@@ -565,17 +568,17 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(data, 'Foo.esp'), '');
         await writeFile(join(data, 'foo.esp'), '');
 
-        expect(await adapter.gameFolderPlugins(found(data))).toEqual({ kind: 'listed', names: new Set(['Foo.esp', 'foo.esp']) });
+        expect(await source.gameFolderPlugins(found(data))).toEqual({ kind: 'listed', names: new Set(['Foo.esp', 'foo.esp']) });
       });
 
       it('answers unresolved when the game folder was not found', async () => {
         const notFound: GameFolder = { kind: 'notFound', looked: [], setting: 'setting' };
 
-        expect(await adapter.gameFolderPlugins(notFound)).toEqual({ kind: 'unresolved' });
+        expect(await source.gameFolderPlugins(notFound)).toEqual({ kind: 'unresolved' });
       });
 
       it('answers unreadable, with why, when the Data folder cannot be listed', async () => {
-        const plugins = await adapter.gameFolderPlugins(found(join(game, 'Missing')));
+        const plugins = await source.gameFolderPlugins(found(join(game, 'Missing')));
 
         if (plugins.kind !== 'unreadable') throw new Error(`expected unreadable, got ${plugins.kind}`);
         expect(plugins.reason).toMatch(/ENOENT/);
@@ -595,24 +598,24 @@ describe('the MO2 Instance adapter', () => {
       it('answers the plugins the release\'s list names, in its order', async () => {
         await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\r\nccBGSFO4001-PipBoy(Black).esl\r\n');
 
-        expect(await adapter.creationClubList(found(), 'Fallout4'))
+        expect(await source.creationClubList(found(), 'Fallout4'))
           .toEqual(['ccBGSFO4044-HellfirePowerArmor.esl', 'ccBGSFO4001-PipBoy(Black).esl']);
       });
 
       it('answers none when the game folder holds no list', async () => {
-        expect(await adapter.creationClubList(found(), 'Fallout4')).toEqual([]);
+        expect(await source.creationClubList(found(), 'Fallout4')).toEqual([]);
       });
 
       it('answers none for a release with no Creation Club', async () => {
         await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\n');
 
-        expect(await adapter.creationClubList(found(), 'Oblivion')).toEqual([]);
+        expect(await source.creationClubList(found(), 'Oblivion')).toEqual([]);
       });
 
       it('answers none when the game folder was not found', async () => {
         const notFound: GameFolder = { kind: 'notFound', looked: [], setting: 'setting' };
 
-        expect(await adapter.creationClubList(notFound, 'Fallout4')).toEqual([]);
+        expect(await source.creationClubList(notFound, 'Fallout4')).toEqual([]);
       });
     });
 
@@ -635,7 +638,7 @@ describe('the MO2 Instance adapter', () => {
           '; sResourceArchiveList2=Commented.ba2', 'sResourceStartUpArchiveList=Fallout4 - Startup.ba2,Fallout4 - Interface.ba2,',
         ].join('\r\n'));
 
-        expect((await adapter.archiveList('Default', found(), 'Fallout4')).archives)
+        expect((await source.archiveList('Default', found(), 'Fallout4')).archives)
           .toEqual(['Fallout4 - Startup.ba2', 'Fallout4 - Interface.ba2', 'Fallout4 - Voices.ba2', 'Fallout4 - Meshes.ba2']);
       });
 
@@ -643,7 +646,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
         await localSettings(false);
 
-        const { archives, notes } = await adapter.archiveList('Default', found(), 'Fallout4');
+        const { archives, notes } = await source.archiveList('Default', found(), 'Fallout4');
 
         expect(archives).toEqual(['Default.ba2']);
         expect(notes).toEqual([expect.stringMatching(/^The profile Default keeps no game INIs of its own/)]);
@@ -652,20 +655,16 @@ describe('the MO2 Instance adapter', () => {
       describe('while the profile keeps no game INIs of its own', () => {
         let documents: string;
         let myGames: string;
-        let myGamesAdapter: InstanceAdapter;
+        let myGamesSource: ReadingSource;
 
         beforeEach(async () => {
           const prefix = join(game, 'pfx');
           documents = join(prefix, 'drive_c', 'users', 'steamuser', 'Documents');
           myGames = join(documents, 'My Games', 'Fallout4');
           await mkdir(myGames, { recursive: true });
-          myGamesAdapter = mo2InstanceAdapter({
-            instanceRoot: root,
-            gameDirectoryOverrides: () => ({}),
-            gameDirectoryChanged: () => ({ dispose: () => {} }),
+          myGamesSource = readingSource(contextOver(root, {
             detectors: { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) },
-            archives: fakeArchiveReader([]),
-          });
+          }));
           await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\nsResourceArchiveList2=Default2.ba2\n');
           await localSettings(false);
         });
@@ -674,13 +673,13 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(myGames, 'Fallout4.ini'), '[Archive]\nsResourceArchiveList=Main.ba2\nsResourceArchiveList2=Main2.ba2\n');
           await writeFile(join(myGames, 'Fallout4Custom.ini'), '[Archive]\nsResourceArchiveList2=Custom2.ba2\n');
 
-          expect(await myGamesAdapter.archiveList('Default', found(), 'Fallout4')).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
+          expect(await myGamesSource.archiveList('Default', found(), 'Fallout4')).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
         });
 
         it('reads none of the profile\'s INIs', async () => {
           await writeFile(profileFile('Fallout4.ini'), '[Archive]\nsResourceArchiveList=Left Behind.ba2\n');
 
-          expect((await myGamesAdapter.archiveList('Default', found(), 'Fallout4')).archives).toEqual(['Default.ba2', 'Default2.ba2']);
+          expect((await myGamesSource.archiveList('Default', found(), 'Fallout4')).archives).toEqual(['Default.ba2', 'Default2.ba2']);
         });
       });
 
@@ -690,7 +689,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(profileFile('Fallout4Custom.ini'), '[Archive]\nsResourceArchiveList2=Custom2.ba2\n');
         await localSettings(true);
 
-        expect(await adapter.archiveList('Default', found(), 'Fallout4')).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
+        expect(await source.archiveList('Default', found(), 'Fallout4')).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
       });
 
       it('reads none of the profile\'s INIs while the profile keeps no game INIs of its own', async () => {
@@ -698,7 +697,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(profileFile('Fallout4.ini'), '[Archive]\nsResourceArchiveList=Left Behind.ba2\n');
         await localSettings(false);
 
-        expect((await adapter.archiveList('Default', found(), 'Fallout4')).archives).toEqual(['Default.ba2']);
+        expect((await source.archiveList('Default', found(), 'Fallout4')).archives).toEqual(['Default.ba2']);
       });
 
       it.each([
@@ -707,13 +706,13 @@ describe('the MO2 Instance adapter', () => {
       ])('lists none when %s', async (_why, gameFolder, release) => {
         await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
 
-        expect((await adapter.archiveList('Default', gameFolder(), release)).archives).toEqual([]);
+        expect((await source.archiveList('Default', gameFolder(), release)).archives).toEqual([]);
       });
 
       it('lists after the INIs\' archives the ones the release loads whatever they list', async () => {
         await writeFile(join(game, 'Fallout_default.ini'), '[Archive]\nSArchiveList=Fallout - Textures.bsa, Fallout - Meshes.bsa\n');
 
-        expect((await adapter.archiveList('Default', found(), 'FalloutNV')).archives)
+        expect((await source.archiveList('Default', found(), 'FalloutNV')).archives)
           .toEqual(['Fallout - Textures.bsa', 'Fallout - Meshes.bsa', 'Update.bsa']);
       });
     });
@@ -737,17 +736,17 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(data, 'STRINGS', 'Fallout4_en.STRINGS'), '');
         await writeFile(join(data, 'STRINGS', 'readme.txt'), '');
 
-        expect(await adapter.gameFolderArchives(found(), 'Fallout4')).toEqual({
+        expect(await source.gameFolderArchives(found(), 'Fallout4')).toEqual({
           kind: 'listed', archives: ['Fallout4 - Interface.BA2'], stringsFiles: ['STRINGS/Fallout4_en.STRINGS'],
         });
       });
 
       it('answers unresolved when the game folder was not found', async () => {
-        expect(await adapter.gameFolderArchives({ kind: 'notFound', looked: [], setting: 'setting' }, 'Fallout4')).toEqual({ kind: 'unresolved' });
+        expect(await source.gameFolderArchives({ kind: 'notFound', looked: [], setting: 'setting' }, 'Fallout4')).toEqual({ kind: 'unresolved' });
       });
 
       it('answers unreadable, with why, when its Data folder cannot be listed', async () => {
-        expect(await adapter.gameFolderArchives(found(), 'Fallout4'))
+        expect(await source.gameFolderArchives(found(), 'Fallout4'))
           .toEqual({ kind: 'unreadable', reason: expect.stringMatching(/ENOENT/) as unknown });
       });
     });
@@ -863,7 +862,7 @@ describe('the MO2 Instance adapter', () => {
 
     it('follows the downloads folder the last read of the settings resolved, signalling once when it moves, not the one where the instance began, so a download landing in the folder the settings name now is heard', async () => {
       let signals = 0;
-      const watched = adapterAt(root);
+      const watched = watchedOver(contextOver(root));
       watched.subscribe(() => { signals++; });
       await (await watched.settings()).downloadedFiles();
       expect(fire(join(root, 'downloads'), 'new.7z')).toBe(true);
@@ -883,7 +882,7 @@ describe('the MO2 Instance adapter', () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-game-'));
       try {
         await mkdir(join(game, 'Data'));
-          const watched = adapterAt(root, game);
+        const watched = watchedOver(contextOver(root, { gameDirectory: game }));
         watched.subscribe(() => undefined);
 
         await (await watched.settings()).gameFolder();
@@ -900,7 +899,7 @@ describe('the MO2 Instance adapter', () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-ccc-'));
       try {
         await mkdir(join(game, 'Data'));
-        const watched = adapterAt(root, game);
+        const watched = watchedOver(contextOver(root, { gameDirectory: game }));
         watched.subscribe(() => undefined);
 
         await (await watched.settings()).gameFolder();
@@ -916,7 +915,7 @@ describe('the MO2 Instance adapter', () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-archives-'));
       try {
         const found: GameFolder = { kind: 'found', root: game, dataFolder: join(game, 'Data') };
-        const watched = adapterAt(root);
+        const watched = watchedOver(contextOver(root));
         watched.subscribe(() => undefined);
 
         await watched.archiveList('Default', found, 'Fallout4');
@@ -939,13 +938,9 @@ describe('the MO2 Instance adapter', () => {
         const myGames = join(documents, 'My Games', 'Fallout4');
         await mkdir(myGames, { recursive: true });
         const found: GameFolder = { kind: 'found', root: prefix, dataFolder: join(prefix, 'Data') };
-        const watched = mo2InstanceAdapter({
-          instanceRoot: root,
-          gameDirectoryOverrides: () => ({}),
-          gameDirectoryChanged: () => ({ dispose: () => {} }),
+        const watched = watchedOver(contextOver(root, {
           detectors: { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) },
-          archives: fakeArchiveReader([]),
-        });
+        }));
         watched.subscribe(() => undefined);
 
         await watched.archiveList('Default', found, 'Fallout4');
@@ -958,7 +953,7 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('follows no game folder when none is found', async () => {
-      const watched = adapterAt(root);
+      const watched = watchedOver(contextOver(root));
       watched.subscribe(() => undefined);
       const before = live().length;
 
@@ -971,11 +966,12 @@ describe('the MO2 Instance adapter', () => {
   describe('get in mods/', () => {
     it('answers the folder that holds an entry, matched as MO2 matches names, or none', async () => {
       const harderVats = { kind: 'mod', name: 'Harder VATS', path: join(root, 'mods', 'Harder VATS') };
+      const folders = present((await adapter.reading()).modFolders, 'the mod folders');
 
-      expect(await adapter.entryFolder({ kind: 'mod', name: 'Harder VATS' })).toEqual(harderVats);
-      expect(await adapter.entryFolder({ kind: 'mod', name: 'harder vats' })).toEqual(harderVats);
-      expect(await adapter.entryFolder({ kind: 'mod', name: 'No Such Mod' })).toBeUndefined();
-      expect(await adapter.entryFolder({ kind: 'separator', name: 'Harder VATS' })).toBeUndefined();
+      expect(folders.holding({ kind: 'mod', name: 'Harder VATS' })).toEqual(harderVats);
+      expect(folders.holding({ kind: 'mod', name: 'harder vats' })).toEqual(harderVats);
+      expect(folders.holding({ kind: 'mod', name: 'No Such Mod' })).toBeUndefined();
+      expect(folders.holding({ kind: 'separator', name: 'Harder VATS' })).toBeUndefined();
     });
 
     it('answers the folder a mod builds into: the one that holds it, matched as MO2 matches names, else the one its name gives it', async () => {
@@ -985,13 +981,13 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('answers a mod named as a separator\'s folder with that separator\'s folder, MO2 knowing a mod by its folder\'s name and a folder named for a separator holding that separator', async () => {
-      expect(await adapter.entryFolder({ kind: 'mod', name: 'unassigned (modlist development)_SEPARATOR' })).toMatchObject({
+      expect((await adapter.reading()).modFolders?.holding({ kind: 'mod', name: 'unassigned (modlist development)_SEPARATOR' })).toMatchObject({
         kind: 'separator', name: 'Unassigned (Modlist Development)',
       });
     });
 
     it('finds a separator\'s folder by the name MO2 would give it, so a name asked for loosely finds it too', async () => {
-      expect(await adapter.entryFolder({ kind: 'separator', name: '  unassigned  (Modlist Development)..' })).toMatchObject({
+      expect((await adapter.reading()).modFolders?.holding({ kind: 'separator', name: '  unassigned  (Modlist Development)..' })).toMatchObject({
         kind: 'separator', name: 'Unassigned (Modlist Development)',
       });
     });
@@ -1007,7 +1003,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(folder, 'Textures', 'Source', 'kept.psc'), '');
         await writeFile(tempWritePath(join(folder, 'Textures', 'b.dds')), '');
 
-        const files = await adapter.originFiles(mod('Harder VATS'));
+        const files = await source.originFiles(mod('Harder VATS'));
 
         expect(files.origin).toBe('Harder VATS');
         expect(files.folder).toBe(folder);
@@ -1027,7 +1023,7 @@ describe('the MO2 Instance adapter', () => {
         await symlink(target, join(folder, 'Linked.esp'));
         await symlink(join(root, 'nowhere.esp'), join(folder, 'Broken.esp'));
 
-        const files = await adapter.originFiles(mod('Harder VATS'));
+        const files = await source.originFiles(mod('Harder VATS'));
 
         expect(files.files.find((f) => f.relativePath === 'Linked.esp'))
           .toEqual({ relativePath: 'Linked.esp', path: join(folder, 'Linked.esp'), sourcePath: await realpath(target), excluded: false, excludedByName: false });
@@ -1043,7 +1039,7 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(join(folder, 'plugin-source'), { recursive: true });
         await writeFile(join(folder, 'plugin-source', 'shipped.json'), '');
 
-        const paths = relativePaths((await adapter.originFiles(mod('Harder VATS'))).files);
+        const paths = relativePaths((await source.originFiles(mod('Harder VATS'))).files);
 
         expect(paths).toEqual(expect.arrayContaining(['.git/HEAD', '.gitignore', 'plugin-source/shipped.json']));
       });
@@ -1054,7 +1050,7 @@ describe('the MO2 Instance adapter', () => {
       ] as const)('leaves out the extraction of %s in flight', async (_, target) => {
         const { settle } = await installHeld(root, target);
 
-        const paths = relativePaths((await adapter.originFiles(mod(target.name))).files);
+        const paths = relativePaths((await source.originFiles(mod(target.name))).files);
 
         expect(paths.filter((path) => path.endsWith('New.esp'))).toEqual([]);
         await settle();
@@ -1069,7 +1065,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(root, folder, 'Hidden.esp.MOHIDDEN'), '');
         await writeFile(join(root, folder, 'Kept.esp'), '');
 
-        const files = await adapter.originFiles(origin);
+        const files = await source.originFiles(origin);
         const excludedOf = (entries: readonly { relativePath: string; excluded: boolean }[], relativePath: string) =>
           entries.find((entry) => entry.relativePath === relativePath)?.excluded;
 
@@ -1085,7 +1081,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(root, 'mods', 'Harder VATS', 'Hidden.esp.MOHIDDEN'), '');
         await writeFile(join(root, 'mods', 'Harder VATS', 'Kept.esp'), '');
 
-        const { files } = await adapter.originFiles(mod('Harder VATS'));
+        const { files } = await source.originFiles(mod('Harder VATS'));
         const byNameOf = (relativePath: string) => files.find((file) => file.relativePath === relativePath)?.excludedByName;
 
         expect(['Textures.mohidden/a.dds', 'Textures.mohidden/b.dds.mohidden', 'Hidden.esp.MOHIDDEN', 'Kept.esp'].map(byNameOf))
@@ -1098,7 +1094,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(shared, 'foo.dds'), '');
         await symlink(shared, join(root, 'mods', 'Harder VATS', 'linked'));
 
-        const files = await adapter.originFiles(mod('Harder VATS'));
+        const files = await source.originFiles(mod('Harder VATS'));
 
         expect(files.files.find((f) => f.relativePath === 'linked/foo.dds')?.path).toBe(join(root, 'mods', 'Harder VATS', 'linked', 'foo.dds'));
         expect(files.folders).toContainEqual({ relativePath: 'linked', path: join(root, 'mods', 'Harder VATS', 'linked'), excluded: false });
@@ -1110,7 +1106,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(folder, 'sibling.dds'), '');
         await symlink(folder, join(folder, 'loop'));
 
-        const files = await adapter.originFiles(mod('Cycle'));
+        const files = await source.originFiles(mod('Cycle'));
 
         expect(relativePaths(files.files)).toEqual(['sibling.dds']);
         expect(files.notes.join('\n')).toMatch(/cycle.*loop/);
@@ -1124,7 +1120,7 @@ describe('the MO2 Instance adapter', () => {
           return actualStat(path, ...rest);
         });
 
-        await expect(adapter.originFiles(mod('Harder VATS'))).rejects.toThrow(/permission denied/);
+        await expect(source.originFiles(mod('Harder VATS'))).rejects.toThrow(/permission denied/);
       });
 
       it.skipIf(process.platform === 'win32')('notes a FIFO and a link to one, and answers neither as a file, built with the POSIX mkfifo that Windows lacks', async () => {
@@ -1134,7 +1130,7 @@ describe('the MO2 Instance adapter', () => {
         execFileSync('mkfifo', [join(root, 'real-pipe')]);
         await symlink(join(root, 'real-pipe'), join(folder, 'linked-pipe'));
 
-        const files = await adapter.originFiles(mod('Pipes'));
+        const files = await source.originFiles(mod('Pipes'));
 
         expect(files.files).toEqual([]);
         expect(files.notes.join('\n')).toMatch(/pipe/);
@@ -1143,8 +1139,8 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('answers no files for a mod with no folder, or a name that gives it none', async () => {
-        expect((await adapter.originFiles(mod('No Such Mod'))).files).toEqual([]);
-        expect(await adapter.originFiles(mod('../profiles'))).toEqual({ origin: '../profiles', folder: undefined, files: [], folders: [], notes: [] });
+        expect((await source.originFiles(mod('No Such Mod'))).files).toEqual([]);
+        expect(await source.originFiles(mod('../profiles'))).toEqual({ origin: '../profiles', folder: undefined, files: [], folders: [], notes: [] });
       });
 
       it('lists everything the game wrote at run time, under the reserved origin, without writes in flight', async () => {
@@ -1152,7 +1148,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(folder, 'Stray.esp'), '');
         await writeFile(tempWritePath(join(folder, 'Stray.esp')), '');
 
-        const files = await adapter.originFiles({ kind: 'runtimeOutput' });
+        const files = await source.originFiles({ kind: 'runtimeOutput' });
 
         expect(files.origin).toBe(OVERWRITE_ORIGIN);
         expect(files.folder).toBe(folder);
@@ -1174,7 +1170,7 @@ describe('the MO2 Instance adapter', () => {
           return actualReaddir(path, options);
         });
 
-        const files = await adapter.originFiles(origin);
+        const files = await source.originFiles(origin);
 
         expect(relativePaths(files.files)).toContain(kept);
         expect(relativePaths(files.files)).not.toContain('Gone/Lost.esp');
@@ -1186,7 +1182,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(target, '');
         await symlink(target, join(root, 'overwrite', 'Linked.esp'));
 
-        const files = await adapter.originFiles({ kind: 'runtimeOutput' });
+        const files = await source.originFiles({ kind: 'runtimeOutput' });
 
         expect(relativePaths(files.files)).not.toContain('Linked.esp');
         expect(files.notes).toEqual([expect.stringMatching(/Linked\.esp/)]);
@@ -1195,7 +1191,7 @@ describe('the MO2 Instance adapter', () => {
       it('answers no files when there is no overwrite folder', async () => {
         await rm(join(root, 'overwrite'), { recursive: true });
 
-        expect((await adapter.originFiles({ kind: 'runtimeOutput' })).files).toEqual([]);
+        expect((await source.originFiles({ kind: 'runtimeOutput' })).files).toEqual([]);
       });
     });
 
@@ -1217,7 +1213,7 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(join(root, 'source', 'No Repository'), { recursive: true });
         await writeFile(join(root, 'source', 'No Repository', 'build.json'), '{ "output": "No Repository" }');
 
-        const { folders, notes } = await adapter.sourceMods();
+        const { folders, notes } = await source.sourceMods();
 
         expect(folders).toEqual(new Map([['Harder VATS', join(root, 'source', 'Harder VATS')], ['Renamed To', join(root, 'source', 'Renamed From')]]));
         expect(notes).toEqual([]);
@@ -1226,7 +1222,7 @@ describe('the MO2 Instance adapter', () => {
       it('answers the source folder that builds a mod, its name matched without case', async () => {
         await repository('Renamed From', '{ "output": "Renamed To" }');
 
-        const sourceMods = await adapter.sourceMods();
+        const sourceMods = await source.sourceMods();
 
         expect([sourceMods.folderOf('renamed to'), sourceMods.folderOf('Renamed From')]).toEqual([join(root, 'source', 'Renamed From'), undefined]);
       });
@@ -1239,7 +1235,7 @@ describe('the MO2 Instance adapter', () => {
       ])('leaves out a repository with %s, and says so', async (_, configuration) => {
         await repository('Unnamed', configuration);
 
-        const { folders, notes } = await adapter.sourceMods();
+        const { folders, notes } = await source.sourceMods();
 
         expect(folders).toEqual(new Map());
         expect(notes).toEqual([expect.stringContaining(join(root, 'source', 'Unnamed'))]);
@@ -1250,7 +1246,7 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(join(root, 'source', 'Unreadable', 'build.json'));
         await repository('Readable', '{ "output": "Readable" }');
 
-        const { folders, notes } = await adapter.sourceMods();
+        const { folders, notes } = await source.sourceMods();
 
         expect(folders).toEqual(new Map([['Readable', join(root, 'source', 'Readable')]]));
         expect(notes).toEqual([expect.stringContaining(join(root, 'source', 'Unreadable'))]);
@@ -1260,14 +1256,14 @@ describe('the MO2 Instance adapter', () => {
         await repository('Second', '{ "output": "SHARED" }');
         await repository('First', '{ "output": "Shared" }');
 
-        const { folders, notes } = await adapter.sourceMods();
+        const { folders, notes } = await source.sourceMods();
 
         expect(folders).toEqual(new Map([['Shared', join(root, 'source', 'First')]]));
         expect(notes).toEqual([expect.stringContaining(join(root, 'source', 'Second'))]);
       });
 
       it('lists none when the instance has no source folder', async () => {
-        const { folders, notes } = await adapter.sourceMods();
+        const { folders, notes } = await source.sourceMods();
 
         expect([folders, notes]).toEqual([new Map(), []]);
       });
@@ -1553,8 +1549,8 @@ describe('the MO2 Instance adapter', () => {
         return [];
       });
 
-      expect(seen).toEqual([modNames(await adapter.modOrder('Default'))]);
-      expect(folders).toEqual((await adapter.modFolders())?.all);
+      expect(seen).toEqual([modNames(await source.modOrder('Default'))]);
+      expect(folders).toEqual((await source.modFolders())?.all);
       expect(holding?.path).toBe(join(root, 'mods', 'Harder VATS'));
     });
 
@@ -1571,7 +1567,7 @@ describe('the MO2 Instance adapter', () => {
 
       expect(written).toEqual({ wrote: true });
       assertOnlyChanged(before, await snapshotTree(root), new Set([DEFAULT_MODLIST]));
-      expect(modNames(await adapter.modOrder('Default'))).toEqual([
+      expect(modNames(await source.modOrder('Default'))).toEqual([
         'separator:Orphan:false',
         'mod:New Mod:false',
         "mod:Ñoño's Retexture:true",
@@ -1593,7 +1589,7 @@ describe('the MO2 Instance adapter', () => {
         end: 'winning',
       }]);
 
-      expect(modNames(await adapter.modOrder('Default')).slice(0, 3)).toEqual([
+      expect(modNames(await source.modOrder('Default')).slice(0, 3)).toEqual([
         'mod:[NODELETE] Radfall:true',
         'mod:Unofficial Fallout 4 Patch:true',
         'separator:Radfall - All-In-One Survival Overhaul:false',
@@ -1603,25 +1599,25 @@ describe('the MO2 Instance adapter', () => {
     it('adds a separator with its folder', async () => {
       await change([{ kind: 'addSeparator', separator: 'New Separator', afterIndex: -1 }]);
 
-      expect(modNames(await adapter.modOrder('Default'))[0]).toBe('separator:New Separator:true');
+      expect(modNames(await source.modOrder('Default'))[0]).toBe('separator:New Separator:true');
       expect(await isThere(separatorFolder('New Separator'))).toBe(true);
     });
 
     it('renames a separator\'s line and its folder as one change', async () => {
       await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]);
 
-      expect(modNames(await adapter.modOrder('Default'))).toContain('separator:Core Mods:false');
+      expect(modNames(await source.modOrder('Default'))).toContain('separator:Core Mods:false');
       expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
       expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(false);
     });
 
     it('renames a mod\'s line in place, keeping its state, and nothing else', async () => {
       const before = await snapshotTree(root);
-      const order = modNames(await adapter.modOrder('Default'));
+      const order = modNames(await source.modOrder('Default'));
 
       expect(await change([{ kind: 'renameMod', from: 'harder vats', to: 'Harder VATS 2' }])).toEqual({ wrote: true });
 
-      expect(modNames(await adapter.modOrder('Default'))).toEqual(order.map((n) => n.replace('mod:Harder VATS:', 'mod:Harder VATS 2:')));
+      expect(modNames(await source.modOrder('Default'))).toEqual(order.map((n) => n.replace('mod:Harder VATS:', 'mod:Harder VATS 2:')));
       assertOnlyChanged(before, await snapshotTree(root), new Set([DEFAULT_MODLIST]));
     });
 
@@ -1831,7 +1827,7 @@ describe('the MO2 Instance adapter', () => {
           { kind: 'dropSeparator', separator: 'RADFALL - ALL-IN-ONE SURVIVAL OVERHAUL' },
         ]);
 
-        const order = modNames(await adapter.modOrder('Default'));
+        const order = modNames(await source.modOrder('Default'));
         expect(order).toContain('mod:Harder VATS:true');
         expect(order).not.toContain('separator:Radfall - All-In-One Survival Overhaul:false');
         expect(order.indexOf('mod:Cracked and Smudged Pip-Boy Screen:true'))
@@ -1848,7 +1844,7 @@ describe('the MO2 Instance adapter', () => {
       it('names a separator as MO2 names its folder, and refuses a name with nothing of it left', async () => {
         await change([{ kind: 'addSeparator', separator: '  Core:  Mods.  ', afterIndex: -1 }]);
 
-        expect(modNames(await adapter.modOrder('Default'))[0]).toBe('separator:Core Mods:true');
+        expect(modNames(await source.modOrder('Default'))[0]).toBe('separator:Core Mods:true');
         expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
         await expect(change([{ kind: 'addSeparator', separator: 'CON', afterIndex: -1 }])).rejects.toThrow(/Not a valid separator name/);
       });
@@ -1871,7 +1867,7 @@ describe('the MO2 Instance adapter', () => {
 
       expect(written).toEqual({ wrote: true });
       assertOnlyChanged(before, await snapshotTree(root), new Set([DEFAULT_PLUGINS]));
-      expect(await adapter.pluginOrder('Default')).toEqual([
+      expect(await source.pluginOrder('Default')).toEqual([
         { name: 'ccSBJFO4003-Grenade.esl', enabled: true },
         { name: 'Tracked Patch Mod.esp', enabled: false },
         { name: 'Unofficial Fallout 4 Patch.esp', enabled: true },
@@ -1888,7 +1884,7 @@ describe('the MO2 Instance adapter', () => {
         return [];
       });
 
-      expect(seen).toEqual([(await adapter.pluginOrder('Default')).map((p) => p.name)]);
+      expect(seen).toEqual([(await source.pluginOrder('Default')).map((p) => p.name)]);
     });
 
     it('finds each plugin a change names in any case, and writes it as plugin order lists it, a filename comparing as the game compares it, ignoring case', async () => {
@@ -1898,7 +1894,7 @@ describe('the MO2 Instance adapter', () => {
         { kind: 'drop', plugin: 'nonasciiretexture.ESP' },
       ]);
 
-      expect(await adapter.pluginOrder('Default')).toEqual([
+      expect(await source.pluginOrder('Default')).toEqual([
         { name: 'ccSBJFO4003-Grenade.esl', enabled: true },
         { name: 'Tracked Patch Mod.esp', enabled: false },
         { name: 'Unofficial Fallout 4 Patch.esp', enabled: true },
@@ -1906,10 +1902,10 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('writes nothing to add a plugin plugin order already lists in another case, doing nothing not being an error so a gesture that raced plugin sync to the same line does not fail', async () => {
-      const before = await adapter.pluginOrder('Default');
+      const before = await source.pluginOrder('Default');
 
       expect(await change([{ kind: 'add', plugin: 'TRACKED PATCH MOD.ESP' }])).toEqual({ wrote: false });
-      expect(await adapter.pluginOrder('Default')).toEqual(before);
+      expect(await source.pluginOrder('Default')).toEqual(before);
     });
 
     it('writes nothing when the changes are already true of plugin order', async () => {
@@ -1939,7 +1935,7 @@ describe('the MO2 Instance adapter', () => {
     it('marks a downloaded file installed, creating its metadata when it has none', async () => {
       expect(await adapter.markDownloadedFile('manual.zip', 'Installed')).toEqual({ gone: false, wrote: true });
 
-      const listed = await (await adapter.settings()).downloadedFiles();
+      const listed = await (await source.settings()).downloadedFiles();
       if (listed.kind !== 'listed') throw new Error(`expected listed, got ${listed.reason}`);
       expect(listed.files?.find((file) => file.name === 'manual.zip')?.meta?.status).toBe('Installed');
     });
@@ -2001,7 +1997,7 @@ describe('the MO2 Instance adapter', () => {
       expect(await adapter.selectProfile('Secondary')).toEqual({ wrote: true });
 
       assertOnlyChanged(before, await snapshotTree(root), new Set([INI]));
-      expect((await adapter.settings()).profile).toBe('Secondary');
+      expect((await source.settings()).profile).toBe('Secondary');
     });
 
     it('writes nothing when the profile is already selected, not rewriting an unwrapped value', async () => {
