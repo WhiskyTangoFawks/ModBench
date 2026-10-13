@@ -1227,7 +1227,7 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(join(root, 'source', 'No Repository'), { recursive: true });
         await writeFile(join(root, 'source', 'No Repository', 'build.json'), '{ "output": "No Repository" }');
 
-        const { folders, notes } = await adapter.sourceMods();
+        const { folders, notes } = await source.sourceMods();
 
         expect(folders).toEqual(new Map([['Harder VATS', join(root, 'source', 'Harder VATS')], ['Renamed To', join(root, 'source', 'Renamed From')]]));
         expect(notes).toEqual([]);
@@ -1236,7 +1236,7 @@ describe('the MO2 Instance adapter', () => {
       it('answers the source folder that builds a mod, its name matched without case', async () => {
         await repository('Renamed From', '{ "output": "Renamed To" }');
 
-        const sourceMods = await adapter.sourceMods();
+        const sourceMods = await source.sourceMods();
 
         expect([sourceMods.folderOf('renamed to'), sourceMods.folderOf('Renamed From')]).toEqual([join(root, 'source', 'Renamed From'), undefined]);
       });
@@ -1249,7 +1249,7 @@ describe('the MO2 Instance adapter', () => {
       ])('leaves out a repository with %s, and says so', async (_, configuration) => {
         await repository('Unnamed', configuration);
 
-        const { folders, notes } = await adapter.sourceMods();
+        const { folders, notes } = await source.sourceMods();
 
         expect(folders).toEqual(new Map());
         expect(notes).toEqual([expect.stringContaining(join(root, 'source', 'Unnamed'))]);
@@ -1260,7 +1260,7 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(join(root, 'source', 'Unreadable', 'build.json'));
         await repository('Readable', '{ "output": "Readable" }');
 
-        const { folders, notes } = await adapter.sourceMods();
+        const { folders, notes } = await source.sourceMods();
 
         expect(folders).toEqual(new Map([['Readable', join(root, 'source', 'Readable')]]));
         expect(notes).toEqual([expect.stringContaining(join(root, 'source', 'Unreadable'))]);
@@ -1270,14 +1270,14 @@ describe('the MO2 Instance adapter', () => {
         await repository('Second', '{ "output": "SHARED" }');
         await repository('First', '{ "output": "Shared" }');
 
-        const { folders, notes } = await adapter.sourceMods();
+        const { folders, notes } = await source.sourceMods();
 
         expect(folders).toEqual(new Map([['Shared', join(root, 'source', 'First')]]));
         expect(notes).toEqual([expect.stringContaining(join(root, 'source', 'Second'))]);
       });
 
       it('lists none when the instance has no source folder', async () => {
-        const { folders, notes } = await adapter.sourceMods();
+        const { folders, notes } = await source.sourceMods();
 
         expect([folders, notes]).toEqual([new Map(), []]);
       });
@@ -1286,11 +1286,60 @@ describe('the MO2 Instance adapter', () => {
         expect(await adapter.installationFiles('DragIn Manual Extract')).toEqual({ kind: 'read', answer: [] });
         expect(adapter.managerFilesInModFolder).toEqual(['meta.ini']);
       });
+    });
 
-      it('answers a mod installed from a downloaded file unreadable, naming the file, while no index of downloaded files is kept', async () => {
+    describe('a mod\'s installation files', () => {
+      const ENTRY = 'textures/a.dds';
+
+      it('answers the downloaded file its meta names, in the downloads folder, with its size and hash and each entry\'s', async () => {
+        const answer = await adapterAt(root, undefined, undefined, fakeArchiveReader([ENTRY])).installationFiles('Unofficial Fallout 4 Patch');
+
+        expect(answer).toEqual({
+          kind: 'read',
+          answer: [{ path: join(root, 'downloads', DOWNLOAD), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: ENTRY, hash: 'q7ZLRnu1+Os=' }] }],
+        });
+      });
+
+      describe('installed from a file outside the downloads folder, which MO2 records by its whole path', () => {
+        const recordingInstalledFrom = (path: string): Promise<void> =>
+          writeFile(join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\ninstallationFile=${path}\r\n`);
+
+        it('answers that file while it is there', async () => {
+          const elsewhere = join(root, 'elsewhere', 'Patch.7z');
+          await mkdir(join(root, 'elsewhere'));
+          await writeFile(elsewhere, 'hello');
+          await recordingInstalledFrom(elsewhere);
+
+          const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
+
+          expect(answer).toEqual({ kind: 'read', answer: [{ path: elsewhere, size: 5, hash: 'o22fiH2CxyY=', entries: [] }] });
+        });
+
+        it('answers the file of its name in the downloads folder once it is gone, as MO2 reinstalls it', async () => {
+          await recordingInstalledFrom(join(root, 'elsewhere', DOWNLOAD));
+
+          const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
+
+          expect(answer).toEqual({ kind: 'read', answer: [{ path: join(root, 'downloads', DOWNLOAD), size: 28, hash: 'yMPjZVarjmw=', entries: [] }] });
+        });
+      });
+
+      it('answers unreadable, naming the downloaded file and why, when it is gone', async () => {
+        await rm(join(root, 'downloads', DOWNLOAD));
+
+        const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
+
+        expect(answer.kind === 'unreadable' && answer.reason).toContain('ENOENT');
+        expect(answer.kind === 'unreadable' && answer.reason).toContain(DOWNLOAD);
+      });
+
+      it('answers unreadable, naming the downloaded file and why, when the downloads folder cannot be resolved', async () => {
+        await rm(join(root, INI));
+
         const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
 
         expect(answer.kind === 'unreadable' && answer.reason).toContain(DOWNLOAD);
+        expect(answer.kind === 'unreadable' && answer.reason).toContain(INI);
       });
     });
   });

@@ -362,7 +362,6 @@ export interface InstanceAdapter {
   modFolderPath(mod: string): Promise<string | undefined>;
   /** The source folder init makes a mod's repository in (ADR-0007); undefined when its name gives it none. */
   sourceFolder(mod: string): string | undefined;
-  sourceMods(): Promise<SourceMods>;
   /** The downloaded files the mod manager records `mod` as installed from, in its order. */
   installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
   /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */

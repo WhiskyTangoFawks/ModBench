@@ -50,13 +50,14 @@ export function mo2InstanceAdapter({
     watch: mo2Watch(instanceRoot, gameDirectoryChanged),
     ...replaced,
   };
+  const hashes = hashIndex(hashIndexDir(instanceRoot), archives);
   const names: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX };
   const source = readingSource(context);
   return {
     names,
     reading: () => readInstance(source),
-    ...mo2Reads(context), ...mo2Installation(context), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives),
-    ...hashIndex(hashIndexDir(instanceRoot), archives),
+    ...mo2Reads(context), ...mo2Installation(context, hashes), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives),
+    ...hashes,
     subscribe: (listener) => context.watch.subscribe(listener),
   };
 }

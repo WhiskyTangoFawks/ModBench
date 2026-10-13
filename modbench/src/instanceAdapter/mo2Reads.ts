@@ -154,12 +154,11 @@ export function readingSource(context: Mo2Context): ReadingSource {
   };
 }
 
-export function mo2Reads(context: Mo2Context): Pick<InstanceAdapter, 'modFolderPath' | 'sourceFolder' | 'sourceMods' | 'fileStamp'> {
+export function mo2Reads(context: Mo2Context): Pick<InstanceAdapter, 'modFolderPath' | 'sourceFolder' | 'fileStamp'> {
   const { instanceRoot } = context;
   return {
     modFolderPath: async (name) => (await folderHolding(context, { kind: 'mod', name }))?.path ?? entryDir(instanceRoot, { kind: 'mod', name }),
     sourceFolder: (mod) => modSourceDir(instanceRoot, mod),
-    sourceMods: () => sourceModsIn(instanceRoot),
     fileStamp: (path) => readOrReason(() => stampOf(path)),
   };
 }

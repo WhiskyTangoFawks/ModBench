@@ -13,7 +13,6 @@ const recording = (answers: Record<string, FileRead<readonly InstallationFile[]>
   installationFiles: (mod: string) => Promise.resolve(answers[mod] ?? { kind: 'read' as const, answer: [] }),
   managerFilesInModFolder: ['meta.ini'],
   sourceFolder: (mod: string) => (mod.includes('/') ? undefined : `/instance/source/${mod}`),
-  sourceMods: () => Promise.resolve({ folders: SOURCES, folderOf: (mod: string) => SOURCES.get(mod), notes: [] }),
   modFolderPath: (mod: string) => Promise.resolve(mod.includes('/') ? undefined : `/instance/mods/${mod}`),
   excludedSuffix: '.excluded',
 });
@@ -25,7 +24,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
 
-    await sourceCommands({ client, adapter: recording({ ModA: { kind: 'read', answer: [INSTALLED] } }) }).build(['ModA', 'ModB'], 'Fallout4');
+    await sourceCommands({ client, adapter: recording({ ModA: { kind: 'read', answer: [INSTALLED] } }) }).build(['ModA', 'ModB'], 'Fallout4', SOURCES);
 
     const ba2 = { ba2: { version: 1, compressed: true } };
     expect(client.calls).toEqual([{
@@ -41,7 +40,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
 
-    await sourceCommands({ client, adapter: recording({}) }).build(['ModA'], undefined);
+    await sourceCommands({ client, adapter: recording({}) }).build(['ModA'], undefined, SOURCES);
 
     expect(client.calls.map((call) => call.args[1])).toEqual([{ excludedSuffix: '.excluded', archives: null }]);
   });
@@ -51,7 +50,7 @@ describe('sourceCommands build', () => {
     client.setCommandResult('build', BUILT);
     const adapter = recording({ ModB: { kind: 'unreadable', reason: 'its installation file is not indexed' } });
 
-    const outcome = await sourceCommands({ client, adapter }).build(['ModA', 'ModB', 'ModC'], 'Fallout4');
+    const outcome = await sourceCommands({ client, adapter }).build(['ModA', 'ModB', 'ModC'], 'Fallout4', SOURCES);
 
     expect(client.calls).toEqual([{ method: 'build', args: [[expect.objectContaining({ name: 'ModA' })], expect.anything()] }]);
     expect(outcome).toEqual({
@@ -86,6 +85,19 @@ describe('sourceCommands init', () => {
 
     expect(client.calls.map((call) => call.args[0])).toEqual([[{ name: 'ModB', sourceFolder: '/instance/source/ModB', installationFiles: [], modManagerFiles: ['meta.ini'] }]]);
     expect(outcome).toEqual({ landed: [{ mod: 'ModB', plugins: [] }], refused: [{ item: 'ModA', reason: 'its installation file is not indexed' }] });
+  });
+
+  it('reports the phase of reading each mod\'s installation files, naming the mod, while the Instance adapter reads them', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('init', { landed: [], refused: [] });
+    const happened: unknown[] = [];
+    const adapter = recording({});
+    const reading = { ...adapter, installationFiles: (mod: string) => { happened.push(`read ${mod}`); return adapter.installationFiles(mod); } };
+
+    await sourceCommands({ client, adapter: reading }).init(['ModA', 'ModB'], { onProgress: (status) => happened.push(status) });
+
+    const phase = (mod: string) => ({ mod, phase: 'ReadingInstallationFiles' });
+    expect(happened).toEqual([phase('ModA'), 'read ModA', phase('ModB'), 'read ModB']);
   });
 
   it('refuses a mod whose name gives it no source folder, naming why', async () => {

@@ -68,7 +68,7 @@ public sealed class BuildHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task AnInstallationFileNotInTheDownloadsFolder_RefusesTheMod_WritingNothing()
+    public async Task AnInstallationFileGoneFromItsPath_RefusesTheMod_NamingThePath_WritingNothing()
     {
         var installed = Download(("a.txt", "a"));
         File.Delete(Downloaded);
@@ -77,7 +77,7 @@ public sealed class BuildHandlerTests : IDisposable
         var refused = Assert.Single((await Build(NoArchives, installed)).Refused);
 
         Assert.Equal(BuildRefusal.InstallationFileMissing, refused.Refusal);
-        Assert.Equal($"'{ModName}' was not built: its installation file '{Installed}' is not in the downloads folder.", refused.Message);
+        Assert.Equal($"'{ModName}' was not built: its installation file '{Downloaded}' is gone.", refused.Message);
         Assert.False(Directory.Exists(ModFolder));
     }
 
