@@ -834,6 +834,7 @@ describe('a child record of a tracked plugin', () => {
       await vscode.commands.executeCommand('workbench.action.keepEditor');
     }
     await openLoaded({ formKey: TRACKED_FORM_KEY, plugin, pinned: true });
+    await vscode.commands.executeCommand('workbench.action.moveEditorToRightGroup');
     const shows = (tab: vscode.Tab | undefined) =>
       tab?.input instanceof vscode.TabInputCustom ? [tab.input.uri.path, new URLSearchParams(tab.input.uri.query).get('formKey')] : [];
     await vscode.commands.executeCommand('workbench.action.focusSecondEditorGroup');
@@ -926,7 +927,7 @@ describe('a child record of a tracked plugin', () => {
     const shown = (document: vscode.TextDocument) => ({ text: document.getText(), unsaved: document.isDirty });
     const containerDocument = () => vscode.workspace.openTextDocument(vscode.Uri.file(cell));
     const openBoth = async () => {
-      await openRecord({ formKey: CELL_FORM_KEY, plugin });
+      await openRecord({ formKey: CELL_FORM_KEY, plugin, pinned: true });
       await openRecord({ ...childCopy, pinned: true });
       return { child: await childDocument(), container: await containerDocument() };
     };
