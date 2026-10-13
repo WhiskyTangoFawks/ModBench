@@ -54,5 +54,7 @@ public interface IQueries
     void ClearFilter();
     // The rows of one SELECT over the record views, each a JSON object of its columns; the filter in force does not narrow them.
     Answer<JsonElement[], IndexRefused> SelectRows(string sql);
+    // One object per name, in order; refused whole when any name means nothing or more than one thing.
+    Answer<IReadOnlyList<NamedObject>, IndexRefused> ResolveNames(IReadOnlyList<NameQuery> names);
     StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot);
 }

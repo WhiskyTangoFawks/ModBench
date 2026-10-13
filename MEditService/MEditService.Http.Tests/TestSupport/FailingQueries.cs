@@ -55,6 +55,8 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IQueries
 
     public Answer<JsonElement[], IndexRefused> SelectRows(string sql) => throw Failed();
 
+    public Answer<IReadOnlyList<NamedObject>, IndexRefused> ResolveNames(IReadOnlyList<NameQuery> names) => throw Failed();
+
     public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot) =>
         rebuildRefusal is null ? throw Failed() : new(StoreRebuildRefusal.HeldByAnotherWindow, rebuildRefusal);
 
