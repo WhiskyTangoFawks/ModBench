@@ -118,7 +118,7 @@ public sealed class BuildHandler
         if (mod.InstallationFiles.FirstOrDefault(file => !_modFolders.InstallationFileExists(file.Path)) is { } missing)
         {
             return Refused(mod, BuildRefusal.InstallationFileMissing,
-                $"its installation file '{_modFolders.InstallationFileName(missing.Path)}' is not in the downloads folder.");
+                $"its installation file '{missing.Path}' is gone.");
         }
 
         var inFolder = _modFolders.FilePaths(mod.Folder).ToHashSet(StringComparer.OrdinalIgnoreCase);
