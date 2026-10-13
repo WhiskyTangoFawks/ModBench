@@ -88,6 +88,19 @@ describe('sourceCommands init', () => {
     expect(outcome).toEqual({ landed: [{ mod: 'ModB', plugins: [] }], refused: [{ item: 'ModA', reason: 'its installation file is not indexed' }] });
   });
 
+  it('reports the phase of reading each mod\'s installation files, naming the mod, while the Instance adapter reads them', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('init', { landed: [], refused: [] });
+    const happened: unknown[] = [];
+    const adapter = recording({});
+    const reading = { ...adapter, installationFiles: (mod: string) => { happened.push(`read ${mod}`); return adapter.installationFiles(mod); } };
+
+    await sourceCommands({ client, adapter: reading }).init(['ModA', 'ModB'], { onProgress: (status) => happened.push(status) });
+
+    const phase = (mod: string) => ({ mod, phase: 'ReadingInstallationFiles' });
+    expect(happened).toEqual([phase('ModA'), 'read ModA', phase('ModB'), 'read ModB']);
+  });
+
   it('refuses a mod whose name gives it no source folder, naming why', async () => {
     const client = new InMemoryMEditClient();
 

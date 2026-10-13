@@ -5,6 +5,9 @@ import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/insta
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf, type Ba2Versions } from '../tables/gamePaths';
 
+/** mEdit's phases of init, and before them the Instance adapter's reading of each mod's installation files. */
+export type InitProgress = InitStatus | { readonly mod: string; readonly phase: 'ReadingInstallationFiles' };
+
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'init'>;
   adapter: Pick<InstanceAdapter,
@@ -37,12 +40,13 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
     /** A mod whose source folder or installation files the Instance adapter cannot answer is refused here, naming why,
      *  and mEdit inits the rest. */
     init: async (
-      mods: readonly string[], options: { onProgress?: (status: InitStatus) => void } = {},
+      mods: readonly string[], options: { onProgress?: (status: InitProgress) => void } = {},
     ): Promise<InitOutcome | WriteRefused> => {
       const sent: InitMod[] = [];
       const refused: ItemRefusal<string>[] = [];
       for (const mod of mods) {
         const sourceFolder = adapter.sourceFolder(mod);
+        options.onProgress?.({ mod, phase: 'ReadingInstallationFiles' });
         const installed = await adapter.installationFiles(mod);
         if (sourceFolder === undefined) refused.push({ item: mod, reason: 'its name gives it no source folder' });
         else if (installed.kind === 'unreadable') refused.push({ item: mod, reason: installed.reason });

@@ -6,6 +6,8 @@ sourcecommands: @../target-architecture.modbench_core.sourcecommands
 sourcecommands.label: source commands
 instance: @../target-architecture.modbench_data.instance
 instance.label: "Instance\nmods · downloaded files · the repository"
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
 client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
@@ -24,18 +26,19 @@ sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
 source: @../target-architecture.medit_data.source
 source.label: Mod source
-instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
-instanceadapter.label: Instance adapter
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
 driving -> sourcecommands: "track: the mods, with the instance value" {class: track}
+sourcecommands."the message line shows the phase reading its installation files"
+sourcecommands -> instanceadapter: "get: the mod's installation files" {class: track}
+instanceadapter -> sourcecommands: "each installation file's path, size, hash and entries, or the reason it could not be read: a reason refuses the mod" {class: track}
 sourcecommands -> client: "init: each mod's folder and installation files" {class: track}
 client -> http: envelope {class: track}
 http -> engine: envelope {class: track}
 engine -> edits: "decompile-plugin, every plugin of the mod" {class: track}
-modfolder -> modfolderadapter: "the mod's files and installation files: bytes" {class: track}
+modfolder -> modfolderadapter: "the mod's files: bytes" {class: track}
 modfolderadapter -> engine: "bytes" {class: track}
 engine."the files no installation file yields are the assets; the build configuration names this folder"
 engine -> port: "progress, per mod" {class: push}
