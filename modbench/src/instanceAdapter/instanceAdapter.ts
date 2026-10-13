@@ -443,9 +443,8 @@ export interface InstanceAdapter {
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
   /** Moves the source folder that builds the mod into the trash; false when none does. */
   trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
-  /** Puts the source's files in the target's folder: a new one, or the mod's own, its contents
-   *  replaced in place. The root is chosen inside the source, and `keys` go over the mod's meta.
-   *  Rejects with why: a new mod's folder goes, and an upgrade failed part way is not rolled back. */
+  /** Puts the source's files in a new folder, or in place of the mod's own. Rejects with why; a
+   *  new mod's folder goes, and an upgrade that failed part way is not rolled back. */
   install(source: InstallSource, target: InstallTarget, keys: OwnedMetaKeys): Promise<InstallOutcome>;
 
   // Subscribe: the instance changed.

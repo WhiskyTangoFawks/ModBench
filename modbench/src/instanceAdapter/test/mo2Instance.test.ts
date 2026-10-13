@@ -61,7 +61,6 @@ const adapterAt = (
 ): InstanceAdapter =>
   mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides: () => ({ gameDirectory }), gameDirectoryChanged, detectors: NO_DETECTORS, archives });
 
-/** An install held once its release is extracted, until `settle` lets it end, whatever its outcome. */
 async function installHeld(root: string, target: InstallTarget): Promise<{ extraction: string; settle: () => Promise<void> }> {
   const release = fakeArchiveReader(['New.esp']);
   let extracted: (path: string) => void = () => {};

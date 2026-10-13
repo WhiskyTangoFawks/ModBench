@@ -7,23 +7,16 @@ import type {
 import { goneFromDisk, modNameTakenRefusal } from '../coreLib/commandRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
 
-/** A downloaded file, by its name and path in the instance value, with the Nexus ids and version
- *  its metadata holds. */
-export interface DownloadedFileSource {
+/** What a mod is installed from: an archive or a folder the user picked, or a downloaded file by
+ *  its name and path in the instance value, with the Nexus ids and version its metadata holds. */
+export type ModSource = InstallSource | {
   readonly kind: 'downloadedFile';
   readonly name: string;
   readonly path: string;
   readonly modID?: string;
   readonly fileID?: string;
   readonly version?: string;
-}
-
-/** What a mod is installed from: an archive or a folder the user picked, or a downloaded file. */
-export type ModSource = InstallSource | DownloadedFileSource;
-
-/** `downloadRefusal` is set when the mod landed and its downloaded file could not be marked
- *  installed, so the install is not reported as failed (downloads.md, Reporting, story 1). */
-export type InstallResult = CommandResult<{ isFomod: boolean; downloadRefusal?: string }>;
+};
 
 function keysFor(source: ModSource, gameName: string): OwnedMetaKeys {
   if (source.kind === 'folder') return { gameName };
@@ -48,11 +41,11 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
   }
 }
 
-/** `modbench.mod.install`: the source into a new mod or over an installed one, then a downloaded
- *  file marked installed. */
+/** `modbench.mod.install`, then a downloaded file marked installed. `downloadRefusal` says why the
+ *  mark failed, so a landed install is not reported as failed (downloads.md, Reporting, story 1). */
 export async function installMod(
   adapter: InstanceAdapter, source: ModSource, target: InstallTarget, gameName: string,
-): Promise<InstallResult> {
+): Promise<CommandResult<{ isFomod: boolean; downloadRefusal?: string }>> {
   let outcome: InstallOutcome;
   try {
     const extracted = source.kind === 'downloadedFile' ? { kind: 'archive' as const, path: source.path } : source;
