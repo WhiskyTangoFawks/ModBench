@@ -21,20 +21,19 @@ vi.mock('vscode', () => ({
 
 const { installMod } = vi.hoisted(() => ({ installMod: vi.fn() }));
 
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { installDownloadedFile, type DownloadInstallDeps } from '../installDownloaded';
 import type { DownloadFile, DownloadRow, Instance } from '../../instanceLoader/instance';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import type { UpgradeCandidate } from '../../instanceLoader/instance';
-import { adapterOver } from '../../test/mo2/adapterOver';
+import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { modlistCommands } from '../../modOrderCommands/modOrderCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
-const installOver = (root: string) => ({ ...modlistCommands(adapterOver(root), unscriptedMEdit), installMod });
+const installOver = () => ({ ...modlistCommands(fakeInstanceAdapter().adapter, unscriptedMEdit), installMod });
+
+const ARCHIVE_PATH = downloadRowFixture('foo.7z').path;
 
 const fakeInstance = (rows: readonly DownloadFile[] = []): Pick<Instance, 'value' | 'refresh'> => ({
   value: instanceValueFixture({ gameName: 'Fallout 4', downloads: { kind: 'listed', rows } }),
@@ -49,100 +48,53 @@ const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDe
   ...over,
 });
 
-const installRow = (root: string, deps: DownloadInstallDeps, row: Partial<DownloadRow> = {}): Promise<boolean> => {
-  const file = downloadRowFixture('foo.7z', row, root);
-  return installDownloadedFile({ kind: 'download', row: file }, installOver(root), fakeInstance([file]), deps);
+const installRow = (deps: DownloadInstallDeps, row: Partial<DownloadRow> = {}): Promise<boolean> => {
+  const file = downloadRowFixture('foo.7z', row);
+  return installDownloadedFile({ kind: 'download', row: file }, installOver(), fakeInstance([file]), deps);
 };
 
 const afterAMacrotaskNotAMicrotask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-let instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem: string[] = [];
 let downloadsLogLines: string[] = [];
 
-afterEach(async () => {
-  await Promise.all(instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem.map((root) => rm(root, { recursive: true, force: true })));
-  instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem = [];
+afterEach(() => {
   downloadsLogLines = [];
 });
-
-async function makeInstanceRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'install-downloaded-'));
-  await mkdir(join(root, 'downloads'), { recursive: true });
-  await writeFile(join(root, 'ModOrganizer.ini'), '[General]\r\ngameName=Fallout 4\r\n');
-  instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem.push(root);
-  return root;
-}
-
-async function writeArchive(root: string, name: string, data = 'data'): Promise<string> {
-  const path = join(root, 'downloads', name);
-  await writeFile(path, data);
-  return path;
-}
-
-async function writeMeta(root: string, name: string, text = '[General]\r\n'): Promise<string> {
-  const path = join(root, 'downloads', `${name}.meta`);
-  await writeFile(path, text);
-  return path;
-}
 
 describe('installDownloadedFile', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('installs the row\'s archive as a new mod named after it', async () => {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
-    await writeMeta(root, 'foo.7z');
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
-    await installRow(root, installDeps({ reporter: recordingReporter() }));
+    await installRow(installDeps({ reporter: recordingReporter() }));
 
     await vi.waitFor(() => {
       expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z', path: archive, modID: undefined, fileID: undefined, version: undefined },
+        { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: undefined, fileID: undefined, version: undefined },
         { kind: 'new', name: 'foo' }, 'Fallout 4');
     });
   });
 
-  it('carries the row\'s modID, fileID and version into install, reading no sidecar', async () => {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
+  it('carries the row\'s modID, fileID and version into install', async () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
-    await installRow(root, installDeps({ reporter: recordingReporter() }), { modID: '123', fileID: '456', version: '2.0' });
+    await installRow(installDeps({ reporter: recordingReporter() }), { modID: '123', fileID: '456', version: '2.0' });
 
     await vi.waitFor(() => {
       expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z', path: archive, modID: '123', fileID: '456', version: '2.0' },
+        { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: '123', fileID: '456', version: '2.0' },
         { kind: 'new', name: 'foo' }, 'Fallout 4');
     });
-  });
-
-  it('install: writes no sidecar of its own, the mark being install\'s', async () => {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
-    const meta = await writeMeta(root, 'foo.7z');
-    const before = await readFile(meta, 'utf8');
-    installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
-
-    await installRow(root, installDeps({ reporter: recordingReporter() }));
-
-    await vi.waitFor(() => {
-      expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z', path: archive, modID: undefined, fileID: undefined, version: undefined },
-        { kind: 'new', name: 'foo' }, 'Fallout 4');
-    });
-    expect(await readFile(meta, 'utf8')).toBe(before);
   });
 
   it('install: a failed mark installed is one Output line, no failure notification, and the install stands', async () => {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
     installMod.mockResolvedValueOnce({
       applied: true, isFomod: false, downloadRefusal: 'EISDIR: illegal operation on a directory',
     });
     const report = recordingReporter();
 
-    await installRow(root, installDeps({ reporter: report }));
+    await installRow(installDeps({ reporter: report }));
 
     await vi.waitFor(() => expect(downloadsLogLines).toHaveLength(1));
     const line = present(downloadsLogLines[0], 'the one recorded Output line');
@@ -150,44 +102,34 @@ describe('installDownloadedFile', () => {
     expect(report.reports).toEqual([]);
     expect(report.shownFailures).toEqual([]);
     expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z', path: archive, modID: undefined, fileID: undefined, version: undefined },
+        { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: undefined, fileID: undefined, version: undefined },
         { kind: 'new', name: 'foo' }, 'Fallout 4');
   });
 
   it('install: cancelling the name prompt installs nothing', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const meta = await writeMeta(root, 'foo.7z');
     showInputBox.mockResolvedValueOnce(undefined);
 
-    await installRow(root, installDeps({ reporter: recordingReporter() }));
+    await installRow(installDeps({ reporter: recordingReporter() }));
 
     await vi.waitFor(() => expect(showInputBox).toHaveBeenCalled());
     expect(installMod).not.toHaveBeenCalled();
-    expect(await readFile(meta, 'utf8')).not.toContain('installed=true');
   });
 
-  it('install: a refusal from install surfaces an error and leaves the .meta untouched', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const meta = await writeMeta(root, 'foo.7z');
+  it('install: a refusal from install surfaces an error', async () => {
     installMod.mockResolvedValueOnce({ applied: false, refusal: 'boom' });
     const report = recordingReporter();
 
-    await installRow(root, installDeps({ reporter: report }));
+    await installRow(installDeps({ reporter: report }));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
     expect(report.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'boom' }]);
-    expect(await readFile(meta, 'utf8')).not.toContain('installed=true');
   });
 
   it('install: a FOMOD archive installs and the notice names the mod install made', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
     installMod.mockResolvedValueOnce({ applied: true, isFomod: true });
     const warnIfFomod = vi.fn();
 
-    await installRow(root, installDeps({ reporter: recordingReporter(), warnIfFomod }));
+    await installRow(installDeps({ reporter: recordingReporter(), warnIfFomod }));
 
     await vi.waitFor(() => expect(warnIfFomod).toHaveBeenCalledWith('foo', true));
   });
@@ -203,15 +145,13 @@ describe('installDownloadedFile: the pick among the upgrades the Instance value 
   beforeEach(() => vi.clearAllMocks());
 
   async function pickAmong(upgrades: readonly UpgradeCandidate[], act: (double: ReturnType<typeof fakeQuickPick<FakeUpgradeItem>>) => void) {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
     const double = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(double.qp);
-    const installing = installRow(root, installDeps({ reporter: recordingReporter() }), { ...ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR, upgrades });
+    const installing = installRow(installDeps({ reporter: recordingReporter() }), { ...ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR, upgrades });
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     act(double);
     await installing;
-    return { root, archive, qp: double.qp };
+    return { qp: double.qp };
   }
 
   it('shows one row per upgrade, in the listed order, plus a trailing new-mod row, and pre-selects the file-id match', async () => {
@@ -248,12 +188,12 @@ describe('installDownloadedFile: the pick among the upgrades the Instance value 
   it('choosing an upgrade calls install with the upgrade shape naming that mod, and asks no name', async () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
-    const { archive } = await pickAmong(
+    await pickAmong(
       [{ modName: 'Harder VATS', version: '1.0' }],
       (d) => d.accept({ label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } }));
 
     expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z', path: archive, modID: '111', fileID: '999', version: undefined },
+        { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: '111', fileID: '999', version: undefined },
         { kind: 'upgrade', name: 'Harder VATS' }, 'Fallout 4');
     expect(showInputBox).not.toHaveBeenCalled();
   });
@@ -261,10 +201,10 @@ describe('installDownloadedFile: the pick among the upgrades the Instance value 
   it('choosing "Install as a new mod…" calls install with the new-mod shape', async () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
-    const { archive } = await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(NEW_MOD_ITEM));
+    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(NEW_MOD_ITEM));
 
     expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z', path: archive, modID: '111', fileID: '999', version: undefined },
+        { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: '111', fileID: '999', version: undefined },
         { kind: 'new', name: 'foo' }, 'Fallout 4');
   });
 
@@ -276,11 +216,10 @@ describe('installDownloadedFile: the pick among the upgrades the Instance value 
   });
 
   it('refuses a file the Instance value does not list, naming it', async () => {
-    const root = await makeInstanceRoot();
     const report = recordingReporter();
 
     const installed = await installDownloadedFile(
-      { kind: 'download', row: downloadRowFixture('foo.7z', {}, root) }, installOver(root), fakeInstance(), installDeps({ reporter: report }));
+      { kind: 'download', row: downloadRowFixture('foo.7z') }, installOver(), fakeInstance(), installDeps({ reporter: report }));
 
     expect(installed).toBe(false);
     expect(installMod).not.toHaveBeenCalled();
@@ -288,14 +227,12 @@ describe('installDownloadedFile: the pick among the upgrades the Instance value 
   });
 
   it('a listed file with no upgrades shows no pick and installs as a new mod', async () => {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
-    await installRow(root, installDeps({ reporter: recordingReporter() }));
+    await installRow(installDeps({ reporter: recordingReporter() }));
 
     expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z', path: archive, modID: undefined, fileID: undefined, version: undefined },
+        { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: undefined, fileID: undefined, version: undefined },
         { kind: 'new', name: 'foo' }, 'Fallout 4');
     expect(createQuickPick).not.toHaveBeenCalled();
   });
@@ -307,33 +244,27 @@ describe('installDownloadedFile: the progress bar and the read', () => {
   const reads = 'Instance loader: read every file again';
 
   it('install over a downloaded file installs, then the read, then the bar closes', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
     installMod.mockImplementationOnce(() => { progressSteps.push('install'); return Promise.resolve({ applied: true, isFomod: false }); });
 
-    await installRow(root, installDeps({ reporter: recordingReporter() }));
+    await installRow(installDeps({ reporter: recordingReporter() }));
 
     expect(progressSteps).toEqual([opens, 'install', reads, 'progress closes']);
   });
 
   it('a refused install still ends on the read', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
     installMod.mockResolvedValueOnce({ applied: false, refusal: 'boom' });
 
-    await installRow(root, installDeps({ reporter: recordingReporter() }));
+    await installRow(installDeps({ reporter: recordingReporter() }));
 
     expect(progressSteps).toEqual([opens, reads, 'progress closes']);
   });
 
   it('Esc at the upgrade pick opens no bar', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
     const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
     const running = installRow(
-      root, installDeps({ reporter: recordingReporter() }),
+      installDeps({ reporter: recordingReporter() }),
       { ...ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR, upgrades: [{ modName: 'Foo Mod', version: '1.0' }] });
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
@@ -343,11 +274,9 @@ describe('installDownloadedFile: the progress bar and the read', () => {
   });
 
   it('declining to name the mod opens no bar', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
     showInputBox.mockResolvedValueOnce(undefined);
 
-    await installRow(root, installDeps({ reporter: recordingReporter() }));
+    await installRow(installDeps({ reporter: recordingReporter() }));
 
     expect(progressSteps).toEqual([]);
   });

@@ -4,11 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../test/mo2/fakeVscodeWatcher';
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './vscodeMock';
-import { adapterOver, pluginsCommandsOver, STEADY_WINDOW } from './mo2/adapterOver';
+import { adapterOver } from './mo2/adapterOver';
+import { pluginsCommandsWith } from './pluginsCommandsWith';
+import { STEADY_WINDOW } from './steadyWindow';
+import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture } from './fakeInstanceAdapter';
 
 vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
+import type { InstanceReading, Mod } from '../instanceAdapter/instanceAdapter';
 import { instanceSyncs } from '../syncWiring';
 import { FakeInstance } from './mo2/fakeInstance';
 import { pastSequence, watcherFor } from './mo2/instanceLoop';
@@ -22,7 +26,6 @@ import { modSyncOver, type ModSyncResult } from '../modOrderCommands/modOrderCom
 const noModSync = () => Promise.resolve<ModSyncResult>({ applied: true, added: [], dropped: [] });
 
 const PROFILE = 'Default';
-const OTHER_PROFILE = 'Secondary';
 const INI = '[General]\r\nselected_profile=@ByteArray(Default)\r\ngameName=Fallout 4\r\n';
 
 const roots: string[] = [];
@@ -45,25 +48,20 @@ function pastSequenceWithin(instance: Instance, sequence: number, ms: number): P
   ]);
 }
 
-async function wiredInstance(gameName = 'Fallout 4'): Promise<{
+async function wiredInstance(): Promise<{
   root: string;
   instance: Instance;
   syncs: Promise<PluginSyncResult>[];
-  loadedWithNoLine: (readonly string[] | undefined)[];
   plugins: () => Promise<string>;
-  pluginsOf: (profile: string) => Promise<string>;
 }> {
   const root = await mkdtemp(join(tmpdir(), 'plugins-loop-'));
   roots.push(root);
   await mkdir(join(root, 'mods', 'Provider'), { recursive: true });
   await mkdir(join(root, 'profiles', PROFILE), { recursive: true });
-  await mkdir(join(root, 'profiles', OTHER_PROFILE), { recursive: true });
   await mkdir(join(root, 'Game', 'Data'), { recursive: true });
-  await writeFile(join(root, 'ModOrganizer.ini'), INI.replace('Fallout 4', gameName));
+  await writeFile(join(root, 'ModOrganizer.ini'), INI);
   await writeFile(join(root, 'profiles', PROFILE, 'modlist.txt'), '+Provider\r\n');
   await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n');
-  await writeFile(join(root, 'profiles', OTHER_PROFILE, 'modlist.txt'), '+Provider\r\n');
-  await writeFile(join(root, 'profiles', OTHER_PROFILE, 'plugins.txt'), '*Base.esp\r\n');
   await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
 
   const instance = new Instance({
@@ -74,11 +72,9 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   instances.push(instance);
 
   const syncs: Promise<PluginSyncResult>[] = [];
-  const loadedWithNoLine: (readonly string[] | undefined)[] = [];
   instanceSyncs({
     instance, channel: { error: () => {}, info: () => {} }, syncMods: noModSync,
     syncPlugins: (args) => {
-      loadedWithNoLine.push(args.loadedWithNoLine);
       const run = pluginSyncOver(adapterOver(root))(args);
       syncs.push(run);
       return run;
@@ -87,8 +83,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   await instance.refresh();
   await syncs[syncs.length - 1];
 
-  const pluginsOf = (profile: string) => readFile(join(root, 'profiles', profile, 'plugins.txt'), 'utf8');
-  return { root, instance, syncs, loadedWithNoLine, plugins: () => pluginsOf(PROFILE), pluginsOf };
+  return { root, instance, syncs, plugins: () => readFile(join(root, 'profiles', PROFILE, 'plugins.txt'), 'utf8') };
 }
 
 async function driveToQuiescence(
@@ -123,90 +118,116 @@ describe('plugin sync and the Instance close a loop that settles', () => {
     expect(quiescent).toBe(true);
     expect(await plugins()).toBe('*Base.esp\r\nNew.esp\r\n');
   });
+});
 
-  it('a burst that leaves plugins.txt already matching disk writes nothing at all', async () => {
-    const { instance, syncs, plugins } = await wiredInstance();
+const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true });
+const GAME_ROOT = '/game';
 
-    const mods = watcherFor('mods/**');
-    for (let i = 0; i < 5; i++) mods.fireChange();
+const withProvider = (overrides: Partial<InstanceReading> = {}): Partial<InstanceReading> => ({
+  mods: [mod('Provider')],
+  modFolders: modFoldersOf('Provider'),
+  modFiles: new Map([['Provider', { origin: 'Provider', folder: '/mods/Provider', files: [fileIn('/mods/Provider', 'Base.esp')], folders: [], notes: [] }]]),
+  pluginOrder: [{ name: 'Base.esp', enabled: true }],
+  gameFolder: { kind: 'found', root: GAME_ROOT, dataFolder: `${GAME_ROOT}/Data` },
+  dataFolderPlugins: { kind: 'listed', names: new Set() },
+  ...overrides,
+});
 
-    const { writes, quiescent } = await driveToQuiescence(instance, syncs, 8);
+const pluginChanges = (fake: ReturnType<typeof fakeInstanceAdapter>) =>
+  fake.calls.flatMap((call) => (call.verb === 'changePluginOrder' ? call.changes : []));
 
-    expect(writes).toBe(0);
-    expect(quiescent).toBe(true);
-    expect(await plugins()).toBe('*Base.esp\r\n');
+async function settledFakeInstance(overrides: Partial<InstanceReading> = withProvider()) {
+  const fake = fakeInstanceAdapter(readingFixture(overrides));
+  const instance = new Instance({
+    window: STEADY_WINDOW, adapter: fake.adapter, log: { info: () => {}, warn: () => {}, error: () => {} },
+  });
+  instances.push(instance);
+  const syncs: Promise<PluginSyncResult>[] = [];
+  const loadedWithNoLine: (readonly string[] | undefined)[] = [];
+  instanceSyncs({
+    instance, channel: { error: () => {}, info: () => {} }, syncMods: noModSync,
+    syncPlugins: (args) => {
+      loadedWithNoLine.push(args.loadedWithNoLine);
+      const run = pluginSyncOver(fake.adapter)(args);
+      syncs.push(run);
+      return run;
+    },
+  });
+  await instance.refresh();
+  await syncs[syncs.length - 1];
+  fake.forgetCalls();
+  return { fake, instance, syncs, loadedWithNoLine };
+}
+
+describe('plugin sync, as the Instance value drives it', () => {
+  it('a burst that leaves plugins.txt already matching disk changes nothing at all', async () => {
+    const { fake, instance, syncs } = await settledFakeInstance();
+    const before = instance.sequence;
+
+    for (let i = 0; i < 5; i++) fake.changed();
+    await pastSequence(instance, before);
+    await syncs[syncs.length - 1];
+
+    expect(pluginChanges(fake)).toEqual([]);
   });
 
   it('prunes against the Data-folder presence the value carries, keeping what Data provides', async () => {
-    const { root, instance, syncs, plugins } = await wiredInstance();
-    await writeFile(join(root, 'Game', 'Data', 'DLCCoast.esm'), 'vanilla');
-    await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n*DLCCoast.esm\r\n*Gone.esp\r\n');
+    const { fake, instance, syncs } = await settledFakeInstance();
 
-    watcherFor('profiles/*/plugins.txt').fireChange();
-    const { quiescent } = await driveToQuiescence(instance, syncs, 8);
+    fake.read({
+      pluginOrder: [{ name: 'Base.esp', enabled: true }, { name: 'DLCCoast.esm', enabled: true }, { name: 'Gone.esp', enabled: true }],
+      dataFolderPlugins: { kind: 'listed', names: new Set(['DLCCoast.esm']) },
+    });
+    await instance.refresh();
+    await syncs[syncs.length - 1];
 
-    expect(quiescent).toBe(true);
-    expect(await plugins()).toBe('*Base.esp\r\n*DLCCoast.esm\r\n');
+    expect(pluginChanges(fake)).toEqual([{ kind: 'drop', plugin: 'Gone.esp' }]);
   });
 
-  it('hands each run the no-line plugins of the game the Instance read, not the fixture\'s usual Fallout 4', async () => {
-    const { root, instance, syncs, loadedWithNoLine } = await wiredInstance('Skyrim Special Edition');
-    await writeFile(join(root, 'Game', 'Data', 'Skyrim.esm'), 'vanilla');
-
-    watcherFor('mods/**').fireChange();
-    await driveToQuiescence(instance, syncs, 8);
+  it('hands each run the no-line plugins of the game the Instance read', async () => {
+    const { loadedWithNoLine } = await settledFakeInstance(withProvider({
+      gameRelease: 'SkyrimSE', dataFolderPlugins: { kind: 'listed', names: new Set(['Skyrim.esm']) },
+    }));
 
     expect(loadedWithNoLine.at(-1)).toEqual(['Skyrim.esm']);
   });
-});
 
-describe('plugin sync keeps another tool\'s plugins.txt write', () => {
   it('keeps the line the mod manager wrote after the value was read, in its place and state, through the next value\'s sync', async () => {
-    const { root, instance, syncs, plugins } = await wiredInstance();
+    const { fake, instance, syncs } = await settledFakeInstance();
     const readBefore = instance.value;
-    await mkdir(join(root, 'mods', 'Extra'), { recursive: true });
-    await writeFile(join(root, 'mods', 'Extra', 'Extra.esp'), 'plugin');
-    await writeFile(join(root, 'profiles', PROFILE, 'modlist.txt'), '+Extra\r\n+Provider\r\n');
-    await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Extra.esp\r\n*Base.esp\r\n');
+    fake.read({
+      mods: [mod('Extra'), mod('Provider')],
+      modFiles: new Map([
+        ['Extra', { origin: 'Extra', folder: '/mods/Extra', files: [fileIn('/mods/Provider', 'Extra.esp')], folders: [], notes: [] }],
+        ['Provider', { origin: 'Provider', folder: '/mods/Provider', files: [fileIn('/mods/Provider', 'Base.esp')], folders: [], notes: [] }],
+      ]),
+      pluginOrder: [{ name: 'Extra.esp', enabled: true }, { name: 'Base.esp', enabled: true }],
+    });
 
-    await pluginSyncOver(adapterOver(root))(readBefore.pluginSyncArguments);
-    watcherFor('profiles/*/plugins.txt').fireChange();
-    const { writes, quiescent } = await driveToQuiescence(instance, syncs, 8);
+    await pluginSyncOver(fake.adapter)(readBefore.pluginSyncArguments);
+    await instance.refresh();
+    await syncs[syncs.length - 1];
 
-    expect({ writes, quiescent }).toEqual({ writes: 0, quiescent: true });
-    expect(await plugins()).toBe('*Extra.esp\r\n*Base.esp\r\n');
+    expect(pluginChanges(fake)).toEqual([]);
   });
 });
 
 describe('the game folder not found, across the whole instance', () => {
   it('is exactly one Output line from every Instance-driven writer, however many values land', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'game-not-found-'));
-    roots.push(root);
-    await mkdir(join(root, 'mods', 'Provider'), { recursive: true });
-    await mkdir(join(root, 'profiles', PROFILE), { recursive: true });
-    await writeFile(join(root, 'ModOrganizer.ini'), INI);
-    await writeFile(join(root, 'profiles', PROFILE, 'modlist.txt'), '+Provider\r\n');
-    await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n');
-    await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
+    const fake = fakeInstanceAdapter(readingFixture(withProvider({ gameFolder: GAME_FOLDER_NOT_FOUND, dataFolderPlugins: { kind: 'unresolved' } })));
     const output: string[] = [];
     const write = (line: string): void => { output.push(line); };
     const channel = { error: write, warn: write, info: write };
-    const instance = new Instance({
-      window: STEADY_WINDOW,
-      adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }), log: channel,
-    });
+    const instance = new Instance({ window: STEADY_WINDOW, adapter: fake.adapter, log: channel });
     instances.push(instance);
     toolboxes.push(new ToolboxProvider({ instance, channel }));
     const { pluginSync, modSync } = instanceSyncs({
-      instance, channel, syncMods: modSyncOver(adapterOver(root)), syncPlugins: pluginSyncOver(adapterOver(root)),
+      instance, channel, syncMods: modSyncOver(fake.adapter), syncPlugins: pluginSyncOver(fake.adapter),
     });
 
     await instance.refresh();
-    for (const glob of ['profiles/*/plugins.txt', 'mods/**', 'profiles/*/plugins.txt']) {
-      const before = instance.sequence;
-      watcherFor(glob).fireChange();
-      expect(await pastSequenceWithin(instance, before, 5000)).not.toBe(TIMED_OUT);
-    }
+    await instance.refresh();
+    await instance.refresh();
     await pluginSync.settled();
     await modSync.settled();
 
@@ -221,19 +242,17 @@ describe('the game folder not found, across the whole instance', () => {
 
 describe('a gesture writes the profile the Instance last landed', () => {
   it('lands on the new profile after a switch, with no refresh asked for', async () => {
-    const { root, instance, pluginsOf } = await wiredInstance();
-    await instance.refresh();
+    const { fake, instance } = await settledFakeInstance();
     const before = instance.sequence;
 
-    await adapterOver(root).selectProfile(OTHER_PROFILE);
-    watcherFor('ModOrganizer.ini').fireChange();
+    fake.read({ profile: 'Secondary' });
+    fake.changed();
     expect(await pastSequenceWithin(instance, before, 5000)).not.toBe(TIMED_OUT);
 
-    const result = await pluginsCommandsOver(root).setPluginsEnabled(instance.value.activeProfile, ['Base.esp'], false);
+    const result = await pluginsCommandsWith(fake.adapter).setPluginsEnabled(instance.value.activeProfile, ['Base.esp'], false);
 
     expect(result).toEqual({ applied: true, outcome: { landed: ['Base.esp'], refused: [] } });
-    expect(await pluginsOf(OTHER_PROFILE)).toBe('Base.esp\r\n');
-    expect(await pluginsOf(PROFILE)).toBe('*Base.esp\r\n');
+    expect(fake.calls.at(-1)).toEqual({ verb: 'changePluginOrder', profile: 'Secondary', changes: [{ kind: 'enable', plugin: 'Base.esp', enabled: false }] });
   });
 });
 
