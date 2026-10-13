@@ -535,9 +535,9 @@ describe('Mod sync', () => {
 });
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
-interface RecordToOpen { formKey: string; plugin?: { name: string; origin: string }; placement?: unknown }
+interface RecordToOpen { formKey: string; plugin?: { name: string; origin: string }; pinned?: true }
 const carrying = ({ formKey, plugin }: RecordToOpen) => ({ argument: { kind: 'record', formKey, plugin } });
-const asArgument = (record: RecordToOpen) => ({ ...carrying(record), placement: record.placement });
+const asArgument = (record: RecordToOpen) => ({ ...carrying(record), pinned: record.pinned });
 const openRecord = (records: RecordToOpen | RecordToOpen[]) =>
   vscode.commands.executeCommand('modbench.record.open', Array.isArray(records) ? records.map(asArgument) : asArgument(records));
 
