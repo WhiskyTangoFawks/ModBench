@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { createMEditClient, stopMEditClient, type MEditClient } from './client';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
-import { sevenZip } from './sevenZip';
+import { sevenZip } from './instanceAdapter/sevenZip';
 import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';

@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
-import { ARCHIVE_EXTENSIONS } from './install/archiveExtensions';
-import { errnoCode } from './ports/errno';
-import { errorMessage } from './ports/errorMessage';
-import type { ArchiveReader } from './ports/archiveReader';
+import { ARCHIVE_EXTENSIONS } from '../install/archiveExtensions';
+import { errnoCode } from '../ports/errno';
+import { errorMessage } from '../ports/errorMessage';
+import type { ArchiveReader } from './archiveReader';
 
 const CANDIDATES = ['7z', '7za', '7zz'] as const;
 
@@ -38,12 +38,12 @@ function fileEntries(listing: string): string[] {
   return listing.split(/\r?\n\r?\n/).flatMap((block) => {
     const field = (name: string): string | undefined => new RegExp(`^${name} = (.*)$`, 'm').exec(block)?.[1];
     const path = field('Path');
-    return path === undefined || /^D/.test(field('Attributes') ?? '') ? [] : [path.replaceAll('\\', '/')];
+    return path === undefined || (field('Attributes') ?? '').split(' ')[0].includes('D') ? [] : [path.replaceAll('\\', '/')];
   });
 }
 
 export const sevenZip: ArchiveReader = {
-  list: async (archivePath) => fileEntries(await withSevenZip(archivePath, 'list', ['l', '-slt', '-ba', archivePath])),
+  list: async (archivePath) => fileEntries(await withSevenZip(archivePath, 'list', ['l', '-slt', '-ba', '-sccUTF-8', archivePath])),
   extract: async (archivePath, destDir) => {
     await withSevenZip(archivePath, 'extract', ['x', archivePath, `-o${destDir}`, '-y']);
   },

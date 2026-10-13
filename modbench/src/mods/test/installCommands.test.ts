@@ -38,7 +38,7 @@ import { installCommands } from '../../install/install';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
-import { fakeArchiveReader } from '../../ports/test/fakeArchiveReader';
+import { fakeArchiveReader } from '../../instanceAdapter/test/fakeArchiveReader';
 import { present } from '../../ports/present';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { progressSteps } from '../../test/recordedProgress';

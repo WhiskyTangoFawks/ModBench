@@ -30,7 +30,7 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import type { UpgradeCandidate } from '../../instanceLoader/instance';
 import { accessTo } from '../../test/mo2/adapterOver';
-import { fakeArchiveReader } from '../../ports/test/fakeArchiveReader';
+import { fakeArchiveReader } from '../../instanceAdapter/test/fakeArchiveReader';
 import { installCommands } from '../../install/install';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 

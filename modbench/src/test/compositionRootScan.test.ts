@@ -9,7 +9,7 @@ import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from '../../
 
 const ACTIVATION = 'extension.ts';
 const WIRING = ['syncWiring.ts'];
-const PORTS_THE_ROOT_IMPLEMENTS = ['dialog.ts', 'reporter.ts', 'sevenZip.ts', 'trash.ts', 'workspaceConfig.ts', 'terminalEnvironment.ts'];
+const PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API = ['dialog.ts', 'reporter.ts', 'trash.ts', 'workspaceConfig.ts', 'terminalEnvironment.ts'];
 const ACTIVATION_EXPORTS = ['activate', 'deactivate'];
 
 const parse = (path: string, text = readFileSync(path, 'utf8')): ts.SourceFile =>
@@ -67,7 +67,7 @@ function activateReturnType(source: ts.SourceFile): string | undefined {
 
 describe('the composition root builds each box, registers it with VS Code and decides nothing', () => {
   it('holds the activation file, its wiring and the ports it implements, and no other file', () => {
-    expect(rootFiles().map((path) => basename(path)).sort()).toEqual([ACTIVATION, ...WIRING, ...PORTS_THE_ROOT_IMPLEMENTS].sort());
+    expect(rootFiles().map((path) => basename(path)).sort()).toEqual([ACTIVATION, ...WIRING, ...PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API].sort());
   });
 
   it.each([ACTIVATION, ...WIRING])('the lint config applies the deciding selectors to %s', (file) => {

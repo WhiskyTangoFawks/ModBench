@@ -23,7 +23,7 @@ import { registerModInstallCommands } from '../mods/installCommands';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { installCommands } from '../install/install';
 import { accessTo } from './mo2/adapterOver';
-import { fakeArchiveReader } from '../ports/test/fakeArchiveReader';
+import { fakeArchiveReader } from '../instanceAdapter/test/fakeArchiveReader';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { fakeQuickPick } from '../drivingLib/test/quickPickDouble';
 import { recordingReporter } from './surfacingDoubles';

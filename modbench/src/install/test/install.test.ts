@@ -10,8 +10,8 @@ import { join, relative, sep } from 'node:path';
 import { installCommands, type InstallAccess } from '../install';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 import { accessTo, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
-import { fakeArchiveReader } from '../../ports/test/fakeArchiveReader';
-import type { ArchiveReader } from '../../ports/archiveReader';
+import { fakeArchiveReader } from '../../instanceAdapter/test/fakeArchiveReader';
+import type { ArchiveReader } from '../../instanceAdapter/archiveReader';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 
 const CORPUS_INI_GAME_NAME = 'Fallout 4';

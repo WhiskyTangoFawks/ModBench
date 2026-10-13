@@ -13,7 +13,7 @@ describe('sevenZip, spawning the binary itself', () => {
   beforeAll(async () => {
     bin = await mkdtemp(join(tmpdir(), 'fake-7z-'));
     await copyFile(process.execPath, join(bin, FAKE_7Z));
-    await writeFile(join(bin, 'exit-as-asked.cjs'), 'process.stdout.write(process.env.FAKE_7Z_STDOUT ?? ""); process.exit(Number(process.env.FAKE_7Z_EXIT));');
+    await writeFile(join(bin, 'exit-as-asked.cjs'), 'process.stdout.write(process.env.FAKE_7Z_ECHO_ARGS ? "Path = " + process.argv.slice(2).join(" ") : process.env.FAKE_7Z_STDOUT ?? ""); process.exit(Number(process.env.FAKE_7Z_EXIT));');
   });
   afterAll(() => rm(bin, { recursive: true, force: true }));
   beforeEach(() => {
@@ -27,6 +27,7 @@ describe('sevenZip, spawning the binary itself', () => {
     else process.env.NODE_OPTIONS = originalNodeOptions;
     delete process.env.FAKE_7Z_EXIT;
     delete process.env.FAKE_7Z_STDOUT;
+    delete process.env.FAKE_7Z_ECHO_ARGS;
   });
 
   const fakeNodeAs7zPreloadedToExit = (code: number) => {
@@ -56,11 +57,22 @@ describe('sevenZip, spawning the binary itself', () => {
     fakeNodeAs7zPreloadedToExit(0);
     process.env.FAKE_7Z_STDOUT = [
       'Path = Wrapper\nAttributes = D drwxr-xr-x',
+      'Path = Wrapper/locked\nAttributes = RD dr-xr-xr-x',
       'Path = Wrapper\\textures\\a.dds\nAttributes = A -rw-r--r--',
       'Path = Wrapper/b.esp\nAttributes = A',
     ].join('\n\n') + '\n';
 
     await expect(sevenZip.list('/tmp/mod.7z')).resolves.toEqual(['Wrapper/textures/a.dds', 'Wrapper/b.esp']);
+  });
+
+  it('reads non-ASCII entry names as UTF-8 and asks 7z to write them so', async () => {
+    fakeNodeAs7zPreloadedToExit(0);
+    process.env.FAKE_7Z_STDOUT = 'Path = café/日本.esp\nAttributes = A\n';
+    await expect(sevenZip.list('/tmp/mod.7z')).resolves.toEqual(['café/日本.esp']);
+
+    process.env.FAKE_7Z_ECHO_ARGS = '1';
+    const [asked] = await sevenZip.list('/tmp/mod.7z');
+    expect(asked?.split(' ')).toContain('-sccUTF-8');
   });
 
   it('rejects a listing with the exit code in the message when the binary exits non-zero', async () => {
