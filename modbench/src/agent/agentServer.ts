@@ -9,6 +9,7 @@ import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { MEditClient } from '../client/MEditClient';
 import { FILE_CONFLICTS } from './fileConflicts';
+import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
 import { INSTANCE_READS, Refusal } from './instanceReads';
 import { RESOLVE_NAMES } from './resolveNames';
 import { SOURCE_PROBLEMS } from './sourceProblems';
@@ -51,6 +52,8 @@ function mcpServerOf({ instance, mEdit, log }: AgentServerOptions): McpServer {
   }
   server.registerTool(FILE_CONFLICTS.name, { description: FILE_CONFLICTS.description, inputSchema: FILE_CONFLICTS.input },
     (args) => answer(log, FILE_CONFLICTS.name, () => FILE_CONFLICTS.of(currentValue(instance), args)));
+  server.registerTool(RESOLVE_INSTANCE_NAMES.name, { description: RESOLVE_INSTANCE_NAMES.description, inputSchema: RESOLVE_INSTANCE_NAMES.input },
+    (args) => answer(log, RESOLVE_INSTANCE_NAMES.name, () => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args)));
   server.registerTool(RESOLVE_NAMES.name, { description: RESOLVE_NAMES.description, inputSchema: RESOLVE_NAMES.input },
     (args) => answer(log, RESOLVE_NAMES.name, () => RESOLVE_NAMES.of(mEdit, args)));
   server.registerTool(SOURCE_PROBLEMS.name, { description: SOURCE_PROBLEMS.description }, () => answer(log, SOURCE_PROBLEMS.name, SOURCE_PROBLEMS.of));

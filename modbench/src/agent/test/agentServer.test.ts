@@ -84,7 +84,7 @@ describe('the agent server, given an instance value', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mods', 'list_plugins', 'list_profiles', 'list_source_problems', 'resolve_names']);
+    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mods', 'list_plugins', 'list_profiles', 'list_source_problems', 'resolve_instance_names', 'resolve_names']);
   });
 
   it('reads the profiles and the active one', async () => {
@@ -171,6 +171,7 @@ const asLookup = (...entries: ConflictEntry[]) => {
   entries.forEach((entry) => { files.set(entry); });
   return files;
 };
+const ownFile = (relativePath: string) => ({ relativePath, path: `/m/${relativePath}`, sourcePath: `/m/${relativePath}`, excluded: false, excludedByName: false });
 const CONFLICTED = instanceValueFixture({
   mods: [
     { kind: 'mod', name: 'A', enabled: true },
@@ -178,7 +179,13 @@ const CONFLICTED = instanceValueFixture({
     { kind: 'mod', name: 'Textures', enabled: true },
     { kind: 'mod', name: 'B', enabled: true },
     { kind: 'mod', name: 'C', enabled: true },
+    { kind: 'mod', name: 'D', enabled: false },
   ],
+  filesByMod: new Map([
+    ['B', [ownFile('Textures/Rock.DDS')]],
+    ['C', [ownFile('MESHES/x.nif'), ownFile('F.esp'), ownFile('readme.txt')]],
+    ['D', [ownFile('textures/rock.dds'), ownFile('Docs/a.txt'), ownFile('docs/A.TXT')]],
+  ]),
   files: asLookup(
     providing('textures/rock.dds', A, B),
     providing('meshes/x.nif', B, C),
@@ -192,22 +199,28 @@ describe('the agent server, reading file order conflicts', () => {
     const client = await clientOf(new FakeInstance(CONFLICTED));
 
     expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'A' }, { name: 'B' }, { name: 'C' }] })).toEqual([
-      { mod: 'A', wins: [{ file: 'textures/rock.dds', over: ['B'] }], loses: [] },
-      { mod: 'B', wins: [{ file: 'meshes/x.nif', over: ['C'] }], loses: [{ file: 'textures/rock.dds', winner: 'A' }] },
-      { mod: 'C', wins: [], loses: [{ file: 'f.esp', winner: 'Overwrite' }, { file: 'meshes/x.nif', winner: 'B' }] },
+      { mod: 'A', enabled: true, wins: [{ file: 'textures/rock.dds', over: ['B'] }], loses: [] },
+      { mod: 'B', enabled: true, wins: [{ file: 'meshes/x.nif', over: ['C'] }], loses: [{ file: 'Textures/Rock.DDS', winner: 'A' }] },
+      { mod: 'C', enabled: true, wins: [], loses: [{ file: 'F.esp', winner: 'Overwrite' }, { file: 'MESHES/x.nif', winner: 'B' }] },
     ]);
+  });
+
+  it('says a disabled mod is disabled, so its empty answer is never read as no conflicts', async () => {
+    const client = await clientOf(new FakeInstance(CONFLICTED));
+
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'D' }] })).toEqual([{ mod: 'D', enabled: false, wins: [], loses: [] }]);
   });
 
   it('reads every mod, and no separator, when it is given no mods', async () => {
     const client = await clientOf(new FakeInstance(CONFLICTED));
 
-    expect(await read(client, 'list_file_conflicts')).toMatchObject([{ mod: 'A' }, { mod: 'Textures' }, { mod: 'B' }, { mod: 'C' }]);
+    expect(await read(client, 'list_file_conflicts')).toMatchObject([{ mod: 'A' }, { mod: 'Textures' }, { mod: 'B' }, { mod: 'C' }, { mod: 'D' }]);
   });
 
   it('names a mod apart from a separator of the same name by which of the two it is', async () => {
     const client = await clientOf(new FakeInstance(CONFLICTED));
 
-    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Textures', kind: 'mod' }] })).toEqual([{ mod: 'Textures', wins: [], loses: [] }]);
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Textures', kind: 'mod' }] })).toEqual([{ mod: 'Textures', enabled: true, wins: [], loses: [] }]);
     const separator = await call(client, 'list_file_conflicts', { mods: [{ name: 'Textures', kind: 'separator' }] });
     expect(separator.isError).toBe(true);
     expect(separator.text).toContain('separator');
@@ -232,6 +245,52 @@ describe('the agent server, reading file order conflicts', () => {
     expect(refusal.isError).toBe(true);
     expect(refusal.text).toContain('Nothing is named "Nope".');
     expect(refusal.text).toContain('"Textures" means more than one thing');
+  });
+});
+
+const CONFLICTED_WITH_DOWNLOADS = { ...CONFLICTED, downloads: VALUE.downloads };
+
+describe('the agent server, resolving names against the instance', () => {
+  const resolve = async (args: Record<string, unknown>) => call(await clientOf(new FakeInstance(CONFLICTED_WITH_DOWNLOADS)), 'resolve_instance_names', args);
+
+  it('names a downloaded file by its file name', async () => {
+    expect(await resolve({ downloads: ['rocks.7z'] })).toEqual({ isError: false, text: JSON.stringify({ downloads: ['rocks.7z'], files: [] }) });
+  });
+
+  it('refuses a downloaded file nothing is named', async () => {
+    expect(await resolve({ downloads: ['rocks.7z', 'gone.7z'] })).toEqual({ isError: true, text: 'Nothing is named "gone.7z" among the downloaded files.' });
+  });
+
+  it('refuses a downloaded file when the downloads folder is unresolved, with the reason', async () => {
+    const client = await clientOf(new FakeInstance(instanceValueFixture({ downloads: { kind: 'unresolved', reason: 'no downloads folder' } })));
+
+    expect(await call(client, 'resolve_instance_names', { downloads: ['rocks.7z'] })).toEqual({ isError: true, text: 'no downloads folder' });
+  });
+
+  it('names a file in a mod by its path in the mod, answering the mod\'s own casing', async () => {
+    expect(await resolve({ files: [{ mod: { name: 'B' }, path: 'textures/rock.dds' }] })).toEqual({
+      isError: false, text: JSON.stringify({ downloads: [], files: [{ mod: 'B', file: 'Textures/Rock.DDS' }] }),
+    });
+  });
+
+  it('refuses a path the mod has no file at', async () => {
+    expect(await resolve({ files: [{ mod: { name: 'B' }, path: 'meshes/none.nif' }] })).toEqual({ isError: true, text: 'Nothing is named "meshes/none.nif" in mod B.' });
+  });
+
+  it('refuses a path that means two files of the mod, listing each as the mod has it', async () => {
+    expect(await resolve({ files: [{ mod: { name: 'D' }, path: 'DOCS/a.TXT' }] })).toEqual({
+      isError: true, text: '"DOCS/a.TXT" means more than one thing in mod D: Docs/a.txt; docs/A.TXT.',
+    });
+  });
+
+  it('prefers the file whose path is exactly the one given', async () => {
+    expect(await resolve({ files: [{ mod: { name: 'D' }, path: 'docs/A.TXT' }] })).toMatchObject({ isError: false });
+  });
+
+  it('refuses a mod that is a separator or shares its name with one, as the conflicts read does', async () => {
+    const refusal = await resolve({ files: [{ mod: { name: 'Textures' }, path: 'x' }] });
+
+    expect(refusal).toEqual({ isError: true, text: '"Textures" means more than one thing: separator Textures; mod Textures. Name it with its kind.' });
   });
 });
 

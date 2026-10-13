@@ -1,19 +1,21 @@
 import { z } from 'zod';
-import { inFileOrderConflict, originLabel, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { foldPath, inFileOrderConflict, originLabel, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { Refusal } from './instanceReads';
 import { modsNamed, type ModName } from './names';
 
 interface ModConflicts {
   mod: string;
+  enabled: boolean;
   wins: { file: string; over: string[] }[];
   loses: { file: string; winner: string }[];
 }
 
 const byFile = (a: { file: string }, b: { file: string }): number => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0);
 
-function conflictsOf({ files }: InstanceValue, wanted: readonly string[]): ModConflicts[] {
-  const rows = new Map(wanted.map((mod): [string, ModConflicts] => [mod, { mod, wins: [], loses: [] }]));
+function conflictsOf({ files, filesByMod, mods }: InstanceValue, wanted: readonly string[]): ModConflicts[] {
+  const rows = new Map(wanted.map((mod): [string, ModConflicts] => [mod, { mod, enabled: mods.some((one) => one.kind === 'mod' && one.name === mod && one.enabled), wins: [], loses: [] }]));
+  const ownPaths = new Map(wanted.map((mod) => [mod, new Map((filesByMod.get(mod) ?? []).map(({ relativePath }) => [foldPath(relativePath), relativePath]))]));
   for (const entry of files) {
     for (const provider of entry.providers) {
       const row = provider.kind === 'mod' ? rows.get(provider.name) : undefined;
@@ -21,7 +23,7 @@ function conflictsOf({ files }: InstanceValue, wanted: readonly string[]): ModCo
       if (sameOrigin(entry.winnerOrigin, provider)) {
         row.wins.push({ file: entry.relativePath, over: entry.providers.filter((other) => !sameOrigin(other, provider)).map(originLabel) });
       } else {
-        row.loses.push({ file: entry.relativePath, winner: originLabel(entry.winnerOrigin) });
+        row.loses.push({ file: ownPaths.get(provider.name)?.get(foldPath(entry.relativePath)) ?? entry.relativePath, winner: originLabel(entry.winnerOrigin) });
       }
     }
   }
