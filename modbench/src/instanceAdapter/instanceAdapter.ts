@@ -317,7 +317,7 @@ export type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { read
 
 /** A file's size and its hash as mEdit's manifest carries it, kept by the adapter while the file's stamp is the one
  *  it was hashed at (ADR-0024). */
-export interface HashedFile {
+interface HashedFile {
   readonly size: number;
   readonly hash: string;
 }
