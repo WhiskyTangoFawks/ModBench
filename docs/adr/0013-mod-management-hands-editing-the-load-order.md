@@ -5,7 +5,7 @@ Modbench's data is two layers. The file layer is the mods and their files, resol
 ## Consequences
 
 - Mod Management interprets no plugin binary and writes no record. A plugin's masters come from Editing, so two views never disagree over them.
-- Editing learns nothing about a file of the file layer by reading it. What a file is, where it came from and what it holds arrive from Mod Management as state, because a fact Editing derived for itself would be a second record of a file it does not own, and the two drift ([principles](../principles.md), Orthogonality).
+- Editing learns nothing about a downloaded file or a game file by reading it. It reads them only to write. What such a file is and what it holds arrive from Mod Management as state, because a second record of a file Editing does not own drifts from the first ([principles](../principles.md), Orthogonality).
 
 ## Alternatives rejected
 

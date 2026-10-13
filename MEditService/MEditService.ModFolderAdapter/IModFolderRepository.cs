@@ -1,7 +1,7 @@
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>The one reader of a mod folder's files and the one writer of a mod's manifest, which keeps each file's
-/// hash (ADR-0013), and of the deltas in the build folder.</summary>
+/// hash, and of the deltas in the build folder.</summary>
 public interface IModFolderRepository
 {
     /// <summary>Every file of the mod but its manifest and those left out, by forward-slash path relative to
