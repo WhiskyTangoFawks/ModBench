@@ -168,6 +168,17 @@ describe('the MO2 Instance adapter', () => {
         });
       });
 
+      it('never carries meta fields on a separator entry, even when a same-named mod folder exists', async () => {
+        const folder = join(root, 'mods', 'Unassigned (Modlist Development)');
+        await mkdir(folder, { recursive: true });
+        await writeFile(join(folder, 'meta.ini'), '[General]\r\nmodid=555\r\nversion=9.9.9\r\n');
+
+        const { mods } = await adapter.reading();
+
+        expect(mods.find((entry) => entry.name === 'Unassigned (Modlist Development)'))
+          .toEqual({ kind: 'separator', name: 'Unassigned (Modlist Development)', enabled: false });
+      });
+
       it('answers the profiles, the mod folders, the run-time output and each listed mod\'s own files', async () => {
         const reading = await adapter.reading();
 
