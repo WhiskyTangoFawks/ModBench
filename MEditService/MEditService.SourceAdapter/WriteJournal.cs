@@ -127,7 +127,6 @@ internal sealed class WriteJournal(string sourceFolder)
         else File.Move(source, destination);
     }
 
-    /// <summary>Deletes the file at <paramref name="path"/>, or the folder and everything in it.</summary>
     internal void DeleteTree(string path)
     {
         if (!Directory.Exists(path))

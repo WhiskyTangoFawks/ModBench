@@ -28,7 +28,7 @@ public sealed class EditRecordTests : IDisposable
     }
 
     [Fact]
-    public void AFieldEditOfAFileHeldUnsaved_IsRefusedNamingTheFile_AndWritesNothing()
+    public void AFieldEditOfAFileHeldUnsaved_IsRefusedAsUnsavedChanges()
     {
         var saved = File.ReadAllText(NpcFile);
         _mod.Unsaved.Apply([new DocumentChange(NpcFile, saved + " ")]);
@@ -36,7 +36,5 @@ public sealed class EditRecordTests : IDisposable
         var outcome = EditHeightMax();
 
         Assert.Equal(RecordEditRefusal.UnsavedChanges, outcome.Refusal);
-        Assert.Contains(NpcFile, outcome.Message, StringComparison.Ordinal);
-        Assert.Equal(saved, File.ReadAllText(NpcFile));
     }
 }

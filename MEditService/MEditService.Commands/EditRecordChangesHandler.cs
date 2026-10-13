@@ -36,7 +36,7 @@ public sealed class EditRecordChangesHandler
     public RecordEditChanges Changes(PluginAddress plugin, string formKey, RecordEditEnvelope envelope) =>
         Changes(plugin, formKey, envelope, new WriteSessions(_source, _unsaved.Current));
 
-    /// <summary>Made in <paramref name="sessions"/>, which hold the changes after.</summary>
+    /// <summary>The changes stay in <paramref name="sessions"/>, for a caller that writes them.</summary>
     internal RecordEditChanges Changes(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, WriteSessions sessions) =>
         WriteFailure.Refused(
             EditSource(plugin, formKey, envelope, sessions), refused => refused, $"Could not read the source of {formKey}", _logger);

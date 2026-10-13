@@ -17,13 +17,16 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
         return session;
     }
 
-    /// <summary>Writes each session's changes to the disk, until one refuses or fails.</summary>
-    internal SourceFailure? Write()
-    {
-        foreach (var session in _byFolder.Values)
+    /// <summary>Writes the one session that holds changes; a write across folders could not put back a folder it wrote.</summary>
+    internal SourceFailure? Write() =>
+        _byFolder.Values.Where(Changes).ToList() switch
         {
-            if (session.Write() is { } failure) return failure;
-        }
-        return null;
-    }
+            [] => null,
+            [var changed] => changed.Write(),
+            var changed => throw new InvalidOperationException(
+                $"Expected a written gesture to change one folder, not {changed.Count}: nothing puts back a folder already written."),
+        };
+
+    private static bool Changes(IWriteSession session) =>
+        session.Changes is { Moves.Count: > 0 } or { Deletions.Count: > 0 } or { Documents.Count: > 0 };
 }

@@ -53,6 +53,11 @@ class EditAgainstTheFixtureInstance(unittest.TestCase):
         self.assertIn(str(self.recipe_file), str(raised.exception))
         self.assertEqual(self.recipe_file.read_text(), saved)
 
+    def test_sends_no_value_when_given_no_value_so_a_set_without_one_is_refused(self):
+        with window_of(self.fixture.url), self.assertRaises(medit.MEditError) as raised:
+            medit.edit('MBDevConditions.esp', RECIPE, 'set', 'Conditions[0].ComparisonValue')
+        self.assertIn('set takes a value', str(raised.exception))
+
     def hold_unsaved(self, path, text):
         call('PUT', self.fixture.url + '/unsaved-documents', {'documents': [{'path': str(path), 'text': text}]})
         self.addCleanup(call, 'PUT', self.fixture.url + '/unsaved-documents', {'documents': []})
