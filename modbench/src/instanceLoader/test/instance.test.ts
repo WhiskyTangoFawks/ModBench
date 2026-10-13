@@ -1227,7 +1227,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
   });
 
   it('tells an unresolved game directory from a folder that resolved and could not be read, an unreadable folder not being an empty set that would prune every plugins.txt line', async () => {
-    const { instance, warnings, setResolver } = await minimalInstanceWithoutCorpusMasters();
+    const { instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
 
     await instance.refresh();
     expect(instance.value.dataFolderPlugins).toEqual({ kind: 'unresolved' });
@@ -1237,6 +1237,15 @@ describe('Instance — what a command is handed instead of probing for it', () =
 
     expect(instance.value.dataFolderPlugins).toMatchObject({ kind: 'unreadable' });
     expect(instance.sequence).toBe(2);
+  });
+
+  it('tells once while it stands that the Data folder could not be listed', async () => {
+    const { instance, warnings, setResolver } = await minimalInstanceWithoutCorpusMasters();
+    setResolver(() => Promise.resolve({ kind: 'found', root: '/nowhere', dataFolder: '/nowhere/Data' }));
+
+    await instance.refresh();
+    await instance.refresh();
+
     expect(warnings.filter((m) => m.includes('Data folder could not be listed'))).toHaveLength(1);
   });
 

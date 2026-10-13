@@ -318,17 +318,14 @@ export class Instance implements Subscription {
   }
 
   private tellReading({ skippedLinks, archiveListNotes, sourceMods, runtimeOutput, dataFolderPlugins, dataFolderArchives }: InstanceReading): void {
-    const { log } = this.options;
     const notes = [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes];
     this.tellOnce('notes', notes.map((note) => `[instance] ${note}`), 'info');
     this.tellOnce('links', [...skippedLinks].map(([name, reason]) => `[instance] mods/${name} is a link Modbench cannot follow, so it is not a mod folder: ${reason}`), 'info');
     this.tellOnce('archiveListNotes', archiveListNotes.map((note) => `[instance] ${note}`), 'warn');
     // An unreadable Data folder or its archives is an answer, never a failed read: the whole value
     // would otherwise go stale over a folder outside the instance.
-    if (dataFolderPlugins.kind === 'unreadable') log.warn(`[instance] the game's Data folder could not be listed: ${dataFolderPlugins.reason}`);
-    if (dataFolderArchives.kind === 'unreadable') {
-      log.warn(`[instance] the game's archives and strings files could not be listed: ${dataFolderArchives.reason}`);
-    }
+    this.tellOnce('dataFolder', dataFolderPlugins.kind === 'unreadable' ? [`[instance] the game's Data folder could not be listed: ${dataFolderPlugins.reason}`] : [], 'warn');
+    this.tellOnce('gameArchives', dataFolderArchives.kind === 'unreadable' ? [`[instance] the game's archives and strings files could not be listed: ${dataFolderArchives.reason}`] : [], 'warn');
   }
 
   private tellOnce(kind: string, lines: readonly string[], level: 'info' | 'warn'): void {
