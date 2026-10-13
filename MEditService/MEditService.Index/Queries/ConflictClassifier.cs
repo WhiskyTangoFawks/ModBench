@@ -141,18 +141,18 @@ internal sealed class ConflictClassifier(ILogger logger)
         var winnerColumn = carrying.Count > 0 ? carrying.MaxBy(c => c.LoadOrderIndex).Column : ctx.RecordWinnerColumn;
         var shape = shapes[winnerColumn];
 
+        var same = (object? a, object? b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault);
         var cellStates = ignoredInConflicts
             ? new Dictionary<string, ConflictThis>()
-            : ctx.StatesOf(values, (a, b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault));
+            : ctx.StatesOf(values, same);
 
         List<FieldDiff>? children = null;
         if (shape.Fields is { } members) children = StructChildren(members, values, ctx);
         else if (shape.ElementType is { } shapeElement) children = ArrayChildren(shape, shapeElement, label, values, ctx);
 
-        // Escalate is associative and commutative over {NoConflict, Override, Conflict} (Reduce
-        // never produces the terminal states), so folding children equals reducing the whole
+        // Escalate is associative and commutative over {NoConflict, Override, Conflict, ConflictBenign}
+        // (Reduce never produces the terminal states), so folding children equals reducing the whole
         // subtree at once.
-        var same = (object? a, object? b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault);
         var ownState = ctx.Agree && !ignoredInConflicts && !ConflictRules.AllSame(values.Values, same)
             ? ConflictAll.ConflictBenign
             : ConflictRules.Reduce(cellStates.Values);
