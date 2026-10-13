@@ -7,7 +7,8 @@
   "references": [
     { "path": "../client" },
     { "path": "../instanceAdapter" },
-    { "path": "../ports" }
+    { "path": "../ports" },
+    { "path": "../tables" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

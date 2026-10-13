@@ -180,6 +180,105 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void OpenFile_ReadsTheFileAtThePathUnderTheFolder()
+    {
+        Write("scripts/a.pex", "bytes");
+
+        using var content = new StreamReader(_repository.OpenFile(_root, "scripts/a.pex"));
+
+        Assert.Equal("bytes", content.ReadToEnd());
+    }
+
+    [Theory]
+    [InlineData("old archive, longer than the new one", true)]
+    [InlineData("old", true)]
+    [InlineData("new", false)]
+    public void WriteFile_OverAFile_PutsTheStreamsBytesAtThePath_SayingWhetherItReplacedOtherBytes(string there, bool replaced)
+    {
+        Write("mod.ba2", there);
+
+        Assert.Equal(replaced, _repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8)));
+
+        Assert.Equal("new", File.ReadAllText(Path.Combine(_root, "mod.ba2")));
+    }
+
+    [Fact]
+    public void WriteFile_WhereNoFileWas_PutsTheStreamsBytesThere_AndReplacedNothing()
+    {
+        Assert.False(_repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8)));
+
+        Assert.Equal("new", File.ReadAllText(Path.Combine(_root, "mod.ba2")));
+    }
+
+    [Fact]
+    public void WriteFile_OfTheBytesAlreadyThere_LeavesTheFileUntouched()
+    {
+        var stamp = Stamped("mod.ba2", "same");
+
+        _repository.WriteFile(_root, "mod.ba2", content => content.Write("same"u8));
+
+        Assert.Equal(stamp, FileStamp.Of(Path.Combine(_root, "mod.ba2")));
+        Assert.Equal(["mod.ba2"], Directory.GetFiles(_root).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public void WriteFile_IntoAFolderNotThereYet_CreatesIt()
+    {
+        var folder = Path.Combine(_root, "mods", "New");
+
+        _repository.WriteFile(folder, "a.txt", content => content.Write("new"u8));
+
+        Assert.Equal("new", File.ReadAllText(Path.Combine(folder, "a.txt")));
+    }
+
+    [Fact]
+    public void WriteFile_CreatesTheFoldersOfThePath()
+    {
+        _repository.WriteFile(_root, "archives/mod.ba2", content => content.Write("new"u8));
+
+        Assert.Equal("new", File.ReadAllText(Path.Combine(_root, "archives", "mod.ba2")));
+    }
+
+    [Fact]
+    public void WriteFile_WhenTheWriteThrows_LeavesTheFolderAsItWas()
+    {
+        Write("mod.ba2", "old");
+
+        Assert.Throws<InvalidDataException>(() => _repository.WriteFile(_root, "mod.ba2", content =>
+        {
+            content.Write("half"u8);
+            throw new InvalidDataException("cannot");
+        }));
+
+        Assert.Equal("old", File.ReadAllText(Path.Combine(_root, "mod.ba2")));
+        Assert.Equal(["mod.ba2"], Directory.GetFiles(_root).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public void WriteFile_WhileWriting_HoldsTheBytesInAHiddenFileOfNoModExtension()
+    {
+        string[] during = [];
+
+        _repository.WriteFile(_root, "mod.ba2", content =>
+        {
+            content.Write("new"u8);
+            during = [.. Directory.GetFiles(_root).Select(Path.GetFileName).OfType<string>()];
+        });
+
+        var held = Assert.Single(during);
+        Assert.StartsWith(".medit_tmp_", held);
+        Assert.EndsWith(".tmp", held);
+    }
+
+    [Fact]
+    public void WriteFile_WhenTheWriteThrows_CreatesNoFolderForThePath()
+    {
+        Assert.Throws<InvalidDataException>(() => _repository.WriteFile(_root, "archives/mod.ba2", _ => throw new InvalidDataException("cannot")));
+
+        Assert.Empty(Directory.GetFileSystemEntries(_root));
+    }
+
+    [Fact]
     public void ADelta_IsWrittenIntoTheBuildFolder_NamedForTheFileItMakesAndTheHashesOfBothEnds()
     {
         var build = Path.Combine(_root, "build");

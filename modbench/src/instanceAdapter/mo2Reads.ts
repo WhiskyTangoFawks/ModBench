@@ -15,7 +15,7 @@ import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileRead, type GameFolder, type InstanceAdapter,
 } from './instanceAdapter';
 import {
-  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadNameAt, downloadSidecarFile, isTempWrite, modlistFile,
+  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, entryDir, downloadNameAt, downloadSidecarFile, isTempWrite, modlistFile,
   modMetaFile, modSourceDir, pluginsFile, profilesDir, settingsFile,
 } from './layout';
 import { folderHolding, listedAs, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
@@ -25,7 +25,7 @@ import { isPluginFile } from './pluginFile';
 
 type Mo2Reads = Omit<InstanceAdapter,
   | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
-  | 'trashDownloadedFileMeta' | 'selectProfile' | 'markOriginFile' | 'includedPath' | 'renamePlugin' | 'checkPluginRename' | 'extractedEntries'
+  | 'trashDownloadedFileMeta' | 'selectProfile' | 'markOriginFile' | 'includedPath' | 'excludedSuffix' | 'renamePlugin' | 'checkPluginRename' | 'extractedEntries'
   | 'extractNewMod' | 'extractUpgrade' | 'subscribe' | 'names' | 'archiveList' | 'gameFolderArchives' | 'installationFiles'
   | 'managerFilesInModFolder'>;
 
@@ -143,6 +143,7 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
     },
 
     entryFolder: (entry) => folderHolding(context, entry),
+    modFolderPath: async (name) => (await folderHolding(context, { kind: 'mod', name }))?.path ?? entryDir(instanceRoot, { kind: 'mod', name }),
 
     originFiles: (origin) => originFilesIn(instanceRoot, origin),
 

@@ -43,16 +43,17 @@ public sealed class BuildModTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task BuildingAMod_CompilesEveryPluginOfItFromItsSource_AndReportsItsProgress()
+    public async Task BuildingAMod_CompilesEveryPluginOfItFromItsSource_NamesThePluginChangedOutsideModbench_AndReportsItsProgress()
     {
         await LoadedWithOneModFolderAndTracked();
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         var otherFormKey = await Client.FirstFormKey(SecondPlugin, Origin);
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
         (await Client.Edit(otherFormKey, SecondPlugin, Origin, "HeightMax", 0.5)).EnsureSuccessStatusCode();
+        File.AppendAllText(Path.Combine(_builtFolder, Plugin), "changed outside Modbench");
         using var stream = await Client.NotificationStream();
 
-        var answer = await Answer(await Client.Build([Origin]));
+        var answer = await Answer(await Client.Build([(Origin, _builtFolder)]));
 
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
         var built = Assert.Single(answer.GetProperty("applied").EnumerateArray());
@@ -61,6 +62,7 @@ public sealed class BuildModTraceTests : HostedTests
         Assert.Equal(
             [SecondPlugin, Plugin],
             built.GetProperty("compiled").EnumerateArray().Select(p => p.GetProperty("name").GetString()).Order());
+        Assert.Equal([Plugin], built.GetProperty("overwritten").EnumerateArray().Select(p => p.GetString()));
         Assert.Equal(0.75, await HeightMaxOfTheWrittenBytes(Plugin, formKey), 3);
         Assert.Equal(0.5, await HeightMaxOfTheWrittenBytes(SecondPlugin, otherFormKey), 3);
 
@@ -70,47 +72,70 @@ public sealed class BuildModTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task BuildingAModWhoseSourceIsUntracked_LandsItWithEachPluginRefusedByName()
+    public async Task BuildingAModWhoseSourceHoldsNoBuildConfiguration_RefusesItByName_AndBuildsTheRest()
     {
         await LoadedWithOneModFolderAndTracked();
+        var untrackedFolder = Path.GetDirectoryName(_instance.Plugins.Single(p => p.Name == UntrackedPlugin).Path).Require();
 
-        var answer = await Answer(await Client.Build([UntrackedOrigin, Origin]));
+        var answer = await Answer(await Client.Build([(UntrackedOrigin, untrackedFolder), (Origin, _builtFolder)]));
 
-        Assert.Equal(
-            [UntrackedOrigin, Origin],
-            answer.GetProperty("applied").EnumerateArray().Select(m => m.GetProperty("mod").GetString()));
-        var untracked = answer.GetProperty("applied")[0];
-        Assert.Empty(untracked.GetProperty("compiled").EnumerateArray());
-        var refused = Assert.Single(untracked.GetProperty("refused").EnumerateArray());
-        Assert.Equal(UntrackedPlugin, refused.GetProperty("item").GetProperty("name").GetString());
-        Assert.Equal("PluginNotTracked", refused.GetProperty("refusal").GetString());
-        Assert.Equal(2, answer.GetProperty("applied")[1].GetProperty("compiled").GetArrayLength());
+        Assert.Equal([Origin], answer.GetProperty("applied").EnumerateArray().Select(m => m.GetProperty("mod").GetString()));
+        var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
+        Assert.Equal(UntrackedOrigin, refused.GetProperty("item").GetString());
+        Assert.Equal("SourceUnreadable", refused.GetProperty("refusal").GetString());
+        Assert.EndsWith("holds no build configuration.", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BuildingAModWithAnArchiveToPack_PacksItAsTheRequestsVariantSays()
+    {
+        await LoadedWithOneModFolderAndTracked();
+        var source = Client.SourceFolderSentFor(Origin);
+        Directory.CreateDirectory(Path.Combine(source, "assets", "meshes"));
+        File.WriteAllText(Path.Combine(source, "assets", "meshes", "a.nif"), "mesh");
+        File.WriteAllText(Path.Combine(source, "build.json"), $"{{\"output\": \"{Path.GetFileName(_builtFolder)}\", \"archives\": {{\"Main.ba2\": [\"meshes/a.nif\"]}}}}");
+        var ba2 = new { ba2 = new { version = 1, compressed = true } };
+
+        var answer = await Answer(await Client.Build([(Origin, _builtFolder)], new { general = ba2, textures = ba2 }));
+
+        Assert.Empty(Assert.Single(answer.GetProperty("applied").EnumerateArray()).GetProperty("archivesRefused").EnumerateArray());
+        Assert.Equal("BTDX", System.Text.Encoding.ASCII.GetString(File.ReadAllBytes(Path.Combine(_builtFolder, "Main.ba2")), 0, 4));
+        Assert.False(File.Exists(Path.Combine(_builtFolder, "meshes", "a.nif")));
     }
 
     [Fact]
     public async Task BuildingBeforeAnyLoadOrder_RefusesTheWholeSelectionOnce_503()
     {
-        var response = await Client.Build([Origin]);
+        var response = await Client.Build([(Origin, Origin)]);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("No load order has been received.", problem.GetProperty("detail").GetString());
     }
 
-    [Fact]
-    public async Task BuildingNoMod_Is400()
+    public static TheoryData<string, string> NotARequestToBuild => new()
+    {
+        { "no mod", "{\"mods\": [], \"excludedSuffix\": \".mohidden\"}" },
+        { "no folder", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"installationFiles\": []}], \"excludedSuffix\": \".mohidden\"}" },
+        { "no suffix", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"installationFiles\": []}]}" },
+        {
+            "a variant both a BA2 and a BSA",
+            "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"installationFiles\": []}], \"excludedSuffix\": \".mohidden\", " +
+            "\"archives\": {\"general\": {\"ba2\": {\"version\": 1, \"compressed\": true}, \"bsa\": {\"version\": 105, \"archiveFlags\": 3, \"fileFlags\": 0}}, " +
+            "\"textures\": {\"ba2\": {\"version\": 1, \"compressed\": true}}}}"
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(NotARequestToBuild))]
+    public async Task ARequestThatDoesNotSayWhatToBuild_Is400(string lacking, string body)
     {
         await LoadedWithOneModFolderAndTracked();
 
-        Assert.Equal(HttpStatusCode.BadRequest, (await Client.Build([])).StatusCode);
-    }
+        using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        var response = await Client.PostAsync("/build", content);
 
-    [Fact]
-    public async Task BuildingAModWithoutAName_Is400()
-    {
-        await LoadedWithOneModFolderAndTracked();
-
-        Assert.Equal(HttpStatusCode.BadRequest, (await Client.Build([" "])).StatusCode);
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, lacking);
     }
 
     private async Task<double> HeightMaxOfTheWrittenBytes(string plugin, string formKey)

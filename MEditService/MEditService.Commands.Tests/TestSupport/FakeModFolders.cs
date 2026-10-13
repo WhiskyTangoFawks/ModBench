@@ -37,6 +37,7 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public FakeModFolders WithStream(string folder, string path, Func<Stream> open)
     {
+        _folders.Add(folder);
         _streams[(folder, path)] = open;
         return this;
     }
@@ -57,9 +58,29 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public string InstallationFileName(string path) => path[(path.LastIndexOf('/') + 1)..];
 
+    public IReadOnlyList<string> FilePaths(string modFolder) =>
+        [.. _files.Keys.Where(file => file.Folder == modFolder).Select(file => file.Path)];
+
+    public string FolderName(string modFolder) => modFolder[(modFolder.LastIndexOf('/') + 1)..];
+
+    public string PathIn(string modFolder, string file) => file[(modFolder.Length + 1)..];
+
     public Stream OpenInstallationFile(string path) => Open(string.Empty, path);
 
     public Stream OpenGameFile(string dataFolder, string path) => Open(dataFolder, path);
+
+    public Dictionary<(string Folder, string Path), byte[]> Written { get; } = [];
+
+    public bool WriteFile(string folder, string path, Action<Stream> write)
+    {
+        using var content = new MemoryStream();
+        write(content);
+        var bytes = content.ToArray();
+        Written[(folder, path)] = bytes;
+        var replaced = _files.TryGetValue((folder, path), out var there) && !there.Bytes.SequenceEqual(bytes);
+        WithBytes(folder, path, bytes);
+        return replaced;
+    }
 
     public bool WriteManifest(string modFolder, string modName, Manifest manifest)
     {

@@ -708,6 +708,12 @@ describe('the MO2 Instance adapter', () => {
       expect(await adapter.entryFolder({ kind: 'separator', name: 'Harder VATS' })).toBeUndefined();
     });
 
+    it('answers the folder a mod builds into: the one that holds it, matched as MO2 matches names, else the one its name gives it', async () => {
+      expect(await adapter.modFolderPath('harder vats')).toBe(join(root, 'mods', 'Harder VATS'));
+      expect(await adapter.modFolderPath('Cloned Mod')).toBe(join(root, 'mods', 'Cloned Mod'));
+      expect(await adapter.modFolderPath('Mods/Cloned Mod')).toBeUndefined();
+    });
+
     it('answers a mod named as a separator\'s folder with that separator\'s folder, MO2 knowing a mod by its folder\'s name and a folder named for a separator holding that separator', async () => {
       expect(await adapter.entryFolder({ kind: 'mod', name: 'unassigned (modlist development)_SEPARATOR' })).toMatchObject({
         kind: 'separator', name: 'Unassigned (Modlist Development)',
@@ -1093,10 +1099,11 @@ describe('the MO2 Instance adapter', () => {
     it.each([
       ['a mod\'s', modOrigin, join('mods', 'Harder VATS')],
       ['Overwrite\'s', overwrite, 'overwrite'],
-    ])('renames %s file with the suffix, and back', async (_, origin, folder) => {
+    ])('renames %s file with the suffix it answers for an excluded name, and back', async (_, origin, folder) => {
       await put(join(root, folder, 'Textures', 'a.dds'), 'pixels');
 
       expect(await adapter.markOriginFile(origin, 'Textures/a.dds', 'Excluded')).toEqual({ gone: false, wrote: true, relativePath: 'Textures/a.dds.mohidden' });
+      expect(adapter.excludedSuffix).toBe('.mohidden');
       expect(await isThere(join(root, folder, 'Textures', 'a.dds'))).toBe(false);
       expect(await text(root, join(folder, 'Textures', 'a.dds.mohidden'))).toBe('pixels');
 
