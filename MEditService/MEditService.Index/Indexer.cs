@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -1011,6 +1013,15 @@ internal sealed class Indexer : IDisposable
     public string? SetFilter(string sql, string source) => ApplyFilter((sql, source));
 
     public void ClearFilter() => ApplyFilter(null);
+
+    /// <summary>The rows of one SELECT over the record views, once the whole set is read.</summary>
+    public Answer<JsonElement[], string> Select(string sql)
+    {
+        var reads = RequireWholeSetReads();
+        using (_gate.Enter())
+            UnderScope((store, _) => { store.CreateRecordTypeViews(); return true; }, out _);
+        return reads.Select(sql);
+    }
 
     private string? ApplyFilter((string Sql, string Source)? filter)
     {
