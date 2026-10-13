@@ -988,8 +988,8 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    // Rows read from a binary hold its texts as its strings gave them; rows from a tree hold their own. Rows with no
-    // claim were read from a plugin that is not localized, and the binary's own hash vouches for that.
+    // A binary's rows hold its texts as its strings gave them; a tree's hold their own. Rows with no claim came from a
+    // plugin that is not localized, which the binary's hash vouches for.
     private bool StringsStillRead(OpenScope scope, RegisteredPlugin plugin) =>
         scope.Store.DerivationOf(plugin.Key) is null or DerivedFrom.SourceTree
         || scope.Store.IndexedStringsClaim(plugin.Key) is not { } claimed
