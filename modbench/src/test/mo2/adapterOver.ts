@@ -32,6 +32,11 @@ export function accessTo(root: string, answers: AdapterAnswers = {}): InstallAcc
 }
 
 /** MO2's adapter over `root`, detecting no game install, with the answers a test fixes in place. */
+/** An adapter whose reading is taken over its own reads, so a test that replaces a read changes the reading. */
+export function withReading(reads: Omit<InstanceAdapter, 'reading'>): InstanceAdapter {
+  return { ...reads, reading: () => readInstance(reads) };
+}
+
 export function adapterOver(root: string, answers: AdapterAnswers = {}): InstanceAdapter {
   const adapter = mo2InstanceAdapter({
     instanceRoot: root,
@@ -40,7 +45,7 @@ export function adapterOver(root: string, answers: AdapterAnswers = {}): Instanc
     detectors: { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(null) },
   });
   const { gameFolder, downloadedFiles } = answers;
-  const fixed: InstanceAdapter = {
+  const fixed: Omit<InstanceAdapter, 'reading'> = {
     ...adapter,
     async settings() {
       const settings = await adapter.settings();
@@ -53,7 +58,7 @@ export function adapterOver(root: string, answers: AdapterAnswers = {}): Instanc
       };
     },
   };
-  return { ...fixed, reading: () => readInstance(fixed) };
+  return withReading(fixed);
 }
 
 /** What a test reads back after a command wrote, through the adapter's own reads, so a test never

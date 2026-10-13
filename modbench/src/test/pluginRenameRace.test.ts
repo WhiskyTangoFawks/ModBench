@@ -3,7 +3,7 @@ import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, uriFrom } from './vscodeMock';
-import { adapterOver, pluginsCommandsWith, readPluginLines, STEADY_WINDOW } from './mo2/adapterOver';
+import { adapterOver, pluginsCommandsWith, readPluginLines, STEADY_WINDOW, withReading } from './mo2/adapterOver';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
 
 const { handlers, showInputBox } = vi.hoisted(() => ({
@@ -20,7 +20,6 @@ vi.mock('vscode', async () => {
   };
 });
 
-import { readInstance } from '../instanceAdapter/mo2Reads';
 import { Instance } from '../instanceLoader/instance';
 import { instanceSyncs } from '../syncWiring';
 import { pluginSyncOver } from '../pluginsCommands/plugins';
@@ -70,7 +69,7 @@ describe('a rename while a recompute is reading', () => {
     };
     instance = new Instance({
       window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} },
-      adapter: { ...holdingReader, reading: () => readInstance(holdingReader) },
+      adapter: withReading(holdingReader),
     });
     const { pluginSync } = instanceSyncs({
       instance, syncMods: modSyncOver(writer), syncPlugins: pluginSyncOver(writer), channel: { error: () => {}, info: () => {} },

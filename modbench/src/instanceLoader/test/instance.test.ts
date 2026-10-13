@@ -16,8 +16,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 import { Instance, type InstanceValue } from '../instance';
 import { factsOf } from '../instanceFacts';
-import { readInstance } from '../../instanceAdapter/mo2Reads';
-import { adapterOver, STEADY_WINDOW } from '../../test/mo2/adapterOver';
+import { adapterOver, STEADY_WINDOW, withReading } from '../../test/mo2/adapterOver';
 
 const roots: string[] = [];
 const instances: Instance[] = [];
@@ -41,8 +40,7 @@ interface Hooks {
 }
 
 function countingSettings(adapter: InstanceAdapter, reads: { count: number }): InstanceAdapter {
-  const counted = { ...adapter, settings: () => { reads.count++; return adapter.settings(); } };
-  return { ...counted, reading: () => readInstance(counted) };
+  return withReading({ ...adapter, settings: () => { reads.count++; return adapter.settings(); } });
 }
 
 async function repository(root: string, folder: string, output: string): Promise<void> {
