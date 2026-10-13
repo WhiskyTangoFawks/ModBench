@@ -334,7 +334,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     ({ name, path: `/mods/${origin}/${name}`, origin, line, enabled: true, winning: true, ...facts });
   const folderOf = (mod: string) => `/mo2/mod-folders/${mod}`;
   const modFoldersOf = (...names: string[]): ModFolders => {
-    const all = names.map((name) => ({ kind: 'mod' as const, name, path: folderOf(name) }));
+    const all = names.map((name) => ({ kind: 'mod' as const, name, folderName: name, path: folderOf(name) }));
     return { all, holding: (entry) => all.find((f) => f.kind === entry.kind && f.name === entry.name) };
   };
   const modFolders = modFoldersOf('ModA', 'ModS', 'ModF', 'ModD', 'ModO', 'ModU', 'ModM', 'ModOff');
