@@ -280,6 +280,7 @@ public enum IndexRefusal
     NoLoadOrder,
     IndexNotReady,
     FilterRejected,
+    SelectRejected,
     CopiesMissing,
     SourceStopped,
 }

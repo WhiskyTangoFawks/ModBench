@@ -23,7 +23,7 @@ import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import type { InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
-import { agentPort, attachPort, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
+import { agentPort, attachPort, gameDirectoryOverrides, inheritedPythonPath, onGameDirectoryChange, onTerminalEnvChange } from './workspaceConfig';
 import { createPlugins, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
@@ -41,6 +41,7 @@ import { warnIfFomod } from './install/fomodWarning';
 import { installCommands } from './install/install';
 import { downloadsCommands } from './downloadsCommands/downloads';
 import { instanceCommands } from './instanceCommands/instanceCommands';
+import { reachMEditFromTerminals } from './terminalEnvironment';
 import { instanceSyncs, loadOrderPutHandler, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
@@ -256,6 +257,7 @@ export function activate(context: vscode.ExtensionContext): void {
     plugins,
     editor,
     serveAgent({ port: agentPort(), instance: views.instance, reporter: reporterFor('agent'), log: outputChannel }),
+    reachMEditFromTerminals(context.environmentVariableCollection, meditClient, vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath, inheritedPythonPath, onTerminalEnvChange),
     createSourceLanguage({
       client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     }),
