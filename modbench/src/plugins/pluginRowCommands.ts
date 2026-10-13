@@ -325,7 +325,7 @@ function reportBuilt(reporter: Reporter, outcome: BuildOutcome): void {
 function reportPartlyBuilt(reporter: Reporter, outcome: BuildOutcome): void {
   const partly = outcome.landed.flatMap(({ mod, failure }) => (failure === undefined ? [] : [`"${mod}" (${failure})`]));
   if (partly.length === 0) return;
-  reporter.report('warning', `Built ${partly.length} ${partly.length === 1 ? 'mod' : 'mods'} only in part.`, partly.join(', '));
+  reporter.report('warning', `Built ${partly.length} mod${partly.length === 1 ? '' : 's'} only in part.`, partly.join(', '));
 }
 
 // mods.md, A source mod, story 4: a file the build overwrote is named, whatever else the build did.
