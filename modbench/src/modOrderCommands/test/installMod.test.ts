@@ -67,7 +67,7 @@ describe('installMod', () => {
     expect(await readDownloadedFileMeta(root, 'Freshly-1-0.7z')).toBeUndefined();
   });
 
-  it('records a downloaded file\'s name, Nexus ids and version in the mod\'s meta, and marks it installed', async () => {
+  it('records a downloaded file\'s name, Nexus ids and version in the mod\'s meta', async () => {
     await writeFile(join(root, 'downloads', 'Freshly-1-0.7z'), 'archive bytes');
 
     const outcome = await commands().installMod(
@@ -77,7 +77,6 @@ describe('installMod', () => {
     expect(await adapterOver(root).modMeta(MOD)).toEqual({
       archiveFilename: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFiles: [{ nexusId: '111', fileId: '222' }],
     });
-    expect(await readDownloadedFileMeta(root, 'Freshly-1-0.7z')).toMatchObject({ status: 'Installed' });
   });
 
   it.each([
@@ -85,7 +84,6 @@ describe('installMod', () => {
       await writeFile(path, 'archive bytes');
       await mkdir(`${path}.meta`);
     }, /EISDIR/],
-    ['it is gone', () => Promise.resolve(), /"Freshly-1-0.7z" is gone from disk/],
   ])('reports a downloaded file it could not mark, because %s, beside the landed mod', async (_, arrange, why) => {
     const file = downloadedFile('Freshly-1-0.7z');
     await arrange(file.path);
@@ -94,5 +92,13 @@ describe('installMod', () => {
 
     expect(outcome).toMatchObject({ applied: true, isFomod: false });
     expect(outcome.applied && outcome.downloadRefusal).toMatch(why);
+  });
+
+  it('reports a downloaded file gone from disk beside the landed mod, and writes no metadata for it', async () => {
+    const outcome = await commands().installMod(downloadedFile('Freshly-1-0.7z'), { kind: 'new', name: MOD }, GAME_NAME);
+
+    expect(outcome).toMatchObject({ applied: true, isFomod: false });
+    expect(outcome.applied && outcome.downloadRefusal).toMatch(/"Freshly-1-0.7z" is gone from disk/);
+    expect(await readDownloadedFileMeta(root, 'Freshly-1-0.7z')).toBeUndefined();
   });
 });

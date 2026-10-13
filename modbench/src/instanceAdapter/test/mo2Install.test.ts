@@ -69,10 +69,12 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         await mkdir(join(source, 'textures'));
         await writeFile(join(source, 'Copied.esp'), 'plugin');
         await writeFile(join(source, 'textures', 'a.dds'), 'texture');
+        const before = await snapshotTree(root);
 
         await holding([]).install({ kind: 'folder', path: source }, { kind: 'new', name: MOD }, KEYS);
 
         expect(await filesIn(folder(MOD))).toEqual(['Copied.esp', 'meta.ini', 'textures/a.dds']);
+        assertOnlyChanged(before, await snapshotTree(root), new Set(['Copied.esp', 'meta.ini', 'textures/a.dds'].map((file) => `mods/${MOD}/${file}`)));
         expect(await filesIn(source)).toEqual(['Copied.esp', 'textures/a.dds']);
       } finally {
         await rm(source, { recursive: true, force: true });
@@ -196,6 +198,13 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       expect(outcome).toEqual({ landed: true, isFomod: false });
       expect(await filesIn(folder(UPGRADED))).toEqual(['New.esp', 'meta.ini']);
       expect(await snapshotTree(repository)).toEqual(before);
+    });
+
+    it('unwraps a release nested in a wrapper folder', async () => {
+      const outcome = await holding(['Wrapper/Nested.esp']).install(ARCHIVE, { kind: 'upgrade', name: UPGRADED }, KEYS);
+
+      expect(outcome).toEqual({ landed: true, isFomod: false });
+      expect(await filesIn(folder(UPGRADED))).toEqual(['Nested.esp', 'meta.ini']);
     });
 
     it('lands a release holding .git, .gitignore and plugin-source as any content', async () => {

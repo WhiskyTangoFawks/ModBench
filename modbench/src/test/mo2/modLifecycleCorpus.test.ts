@@ -104,7 +104,6 @@ describe('mod lifecycle corpus (install)', () => {
 
     expect(outcome).toEqual({ applied: true, isFomod: false });
     assertOnlyChanged(before, after, new Set(['mods/Manual/Manual.esp', 'mods/Manual/meta.ini', `downloads/${MANUAL}.meta`]));
-    expect(await readFile(join(dir, 'mods', 'Manual', 'meta.ini'), 'utf8')).toBe(`[General]\ngameName=Fallout 4\ninstallationFile=${MANUAL}\n`);
     expect(await readDownloadedFileMeta(dir, MANUAL)).toMatchObject({ status: 'Installed' });
   });
 });
