@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process';
-import { ARCHIVE_EXTENSIONS } from '../install/archiveExtensions';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { ArchiveReader } from './archiveReader';
@@ -27,10 +26,9 @@ async function withSevenZip(archivePath: string, verb: string, args: string[]): 
       throw new Error(`Failed to ${verb} ${archivePath}: ${errorMessage(err)}`, { cause: err });
     }
   }
-  const extensions = ARCHIVE_EXTENSIONS.map((ext) => `.${ext}`).join('/');
   throw new Error(
     `No 7z binary found (tried ${CANDIDATES.join(', ')}). ` +
-      `Install p7zip-full to extract ${extensions} archives.`,
+      `Install p7zip-full to read archives.`,
   );
 }
 
@@ -38,7 +36,7 @@ function fileEntries(listing: string): string[] {
   return listing.split(/\r?\n\r?\n/).flatMap((block) => {
     const field = (name: string): string | undefined => new RegExp(`^${name} = (.*)$`, 'm').exec(block)?.[1];
     const path = field('Path');
-    return path === undefined || (field('Attributes') ?? '').split(' ')[0].includes('D') ? [] : [path.replaceAll('\\', '/')];
+    return path === undefined || (field('Attributes') ?? '').split(' ')[0]?.includes('D') ? [] : [path.replaceAll('\\', '/')];
   });
 }
 
