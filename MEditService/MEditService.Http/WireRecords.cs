@@ -12,6 +12,8 @@ internal sealed record FilterResponse(string? Sql, string? Source);
 
 internal sealed record SelectRequest(string Sql);
 internal sealed record SelectResponse(IReadOnlyList<JsonElement> Rows);
+internal sealed record ResolveNamesRequest(IReadOnlyList<NameQuery> Names);
+internal sealed record ResolveNamesResponse(IReadOnlyList<NamedObject> Named);
 
 /// <summary>Applied or refusal (ADR-0019): failures already ride LoadOrderStatus, so this names
 /// none.</summary>

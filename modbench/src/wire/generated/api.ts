@@ -520,6 +520,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/names/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ResolveNames"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/records/{formKey}": {
         parameters: {
             query?: never;
@@ -1147,6 +1163,15 @@ export interface components {
             treeName: string;
             newName: string;
         };
+        NameQuery: {
+            name: string;
+            origin?: string | null;
+        };
+        NamedObject: {
+            plugin?: components["schemas"]["PluginAddress"] | null;
+            formKey?: string | null;
+            editorId?: string | null;
+        };
         NotificationEvent: {
             kind: string;
             plugin: string;
@@ -1416,6 +1441,12 @@ export interface components {
         RenderedDocument: {
             fileName: string;
             text: string;
+        };
+        ResolveNamesRequest: {
+            names: components["schemas"]["NameQuery"][];
+        };
+        ResolveNamesResponse: {
+            named: components["schemas"]["NamedObject"][];
         };
         SelectRequest: {
             sql: string;
@@ -2922,6 +2953,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SelectResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ResolveNames: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveNamesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveNamesResponse"];
                 };
             };
             /** @description Bad Request */

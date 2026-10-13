@@ -176,7 +176,7 @@ internal static class EndpointMapping
             statusCode: refused.Refusal switch
             {
                 IndexRefusal.NoLoadOrder or IndexRefusal.IndexNotReady => StatusCodes.Status503ServiceUnavailable,
-                IndexRefusal.FilterRejected or IndexRefusal.SelectRejected => StatusCodes.Status400BadRequest,
+                IndexRefusal.FilterRejected or IndexRefusal.SelectRejected or IndexRefusal.NameRefused => StatusCodes.Status400BadRequest,
                 IndexRefusal.SourceStopped => StatusCodes.Status422UnprocessableEntity,
                 _ => throw new InvalidEnumArgumentException(nameof(refused), (int)refused.Refusal, typeof(IndexRefusal)),
             }));
