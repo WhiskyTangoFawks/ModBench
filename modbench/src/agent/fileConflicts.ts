@@ -23,7 +23,7 @@ function conflictsOf({ files, filesByMod, mods }: InstanceValue, wanted: readonl
       if (sameOrigin(entry.winnerOrigin, provider)) {
         row.wins.push({ file: entry.relativePath, over: entry.providers.filter((other) => !sameOrigin(other, provider)).map(originLabel) });
       } else {
-        row.loses.push({ file: ownPaths.get(provider.name)?.get(foldPath(entry.relativePath)) ?? entry.relativePath, winner: originLabel(entry.winnerOrigin) });
+        row.loses.push({ file: ownPaths.get(row.mod)?.get(foldPath(entry.relativePath)) ?? entry.relativePath, winner: originLabel(entry.winnerOrigin) });
       }
     }
   }
