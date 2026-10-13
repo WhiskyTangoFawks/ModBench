@@ -57,6 +57,9 @@ internal sealed class LayoutPath(string relativePath)
     internal bool UnderWorldspaceBlockLevels =>
         IsContainerDocument && _segments.Length == ShallowestContainerDocument + BlockLevels + 1;
 
+    // plugin-source / <plugin> / <group folder> / <directories> / <leaf>
+    internal int DirectoriesBelowGroupFolder => _segments.Length - GroupFolderSegment - 2;
+
     internal string BlockFolderName => _segments[^4];
 
     internal string SubBlockFolderName => _segments[^3];

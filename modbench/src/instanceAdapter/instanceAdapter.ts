@@ -255,6 +255,15 @@ export type OriginFileMarked =
   | { readonly gone: false; readonly wrote: boolean; readonly relativePath: string }
   | { readonly gone: false; readonly refusal: string };
 
+/** Every repository in the source folder, listed in the mod order or not, by the mod its build configuration
+ *  names as its output (ADR-0007). A note names each repository left out, and why. */
+export interface SourceMods {
+  readonly folders: ReadonlyMap<string, string>;
+  /** The source folder that builds `mod`, its name matched as the manager matches names. */
+  folderOf(mod: string): string | undefined;
+  readonly notes: readonly string[];
+}
+
 /** Whether the game gets a file of a mod or of Overwrite. */
 export type OriginFileMark = 'Excluded' | 'Included';
 
@@ -354,14 +363,14 @@ export interface InstanceAdapter {
   modFolders(skippedLink?: (name: string, reason: string) => void): Promise<ModFolders | undefined>;
   /** The folder that holds `entry`, matched as the manager matches names; undefined when none does. */
   entryFolder(entry: EntryRef): Promise<ModFolder | undefined>;
+  /** The folder a build of `mod` writes: the one that holds it, else the one its name gives it; undefined when its
+   *  name gives none. */
+  modFolderPath(mod: string): Promise<string | undefined>;
   /** An origin's files, none when its folder is not there. */
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
-  /** The mod's source folder, its repository's (ADR-0007); undefined when its name gives it none. */
+  /** The source folder init makes a mod's repository in (ADR-0007); undefined when its name gives it none. */
   sourceFolder(mod: string): string | undefined;
-  /** ADR-0007. */
-  modTracked(mod: string): Promise<boolean>;
-  /** Every repository in the source folder, by its folder's name, whether the mod order lists it or not. */
-  sourceMods(): Promise<string[]>;
+  sourceMods(): Promise<SourceMods>;
   /** The downloaded files the mod manager records `mod` as installed from, in its order. */
   installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
   /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
@@ -398,13 +407,17 @@ export interface InstanceAdapter {
    *  include on an unmarked name a folder excludes, and a mark replacing a file. Rejects a path
    *  outside the origin. */
   markOriginFile(origin: FileOrigin, relativePath: string, mark: OriginFileMark): Promise<OriginFileMarked>;
+  /** The path a file or folder of an origin has when nothing excludes it. */
+  includedPath(relativePath: string): string;
+  /** The suffix the manager gives an excluded file's or folder's name. */
+  readonly excludedSuffix: string;
   /** Renames plugin `from` of `origin`, its named files and its line in every profile, in one
    *  write; a failed write puts every file back. Refuses, changing nothing, a taken name or a
    *  plugin not there. */
   renamePlugin(origin: FileOrigin, from: string, to: string, gameRelease: string | undefined): Promise<void>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
-  /** Moves a mod's source folder into the trash; false when it has none. */
+  /** Moves the source folder that builds the mod into the trash; false when none does. */
   trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
   /** Makes the folder of a mod that is new. Refuses a folder already there, whatever it holds,
    *  matched as the manager matches names. */

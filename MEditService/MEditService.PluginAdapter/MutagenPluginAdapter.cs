@@ -64,7 +64,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var modPath = new ModPath(plugin.Path);
-        return Opened<IPluginRecords>(modPath, new PluginStrings(Path.GetDirectoryName(plugin.Path)), loadOrder, loaded =>
+        return Opened<IPluginRecords>(modPath, plugin.Strings, loadOrder, loaded =>
             new ModRecordLookup(loaded.Getter, new PluginRecordBytes(modPath, loadOrder), schemas, loaded));
     }
 
@@ -119,7 +119,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                     && PluginFlagPredicates.IsBlueprint(loaded.Getter, name, ModHeaderFrame.FromPath(modPath, loadOrder.GameRelease).Flags);
                 var (content, unreachable) = OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint);
                 var missing = strings is { } named
-                    ? LocalizedStrings.FindMissingStringsFiles(loaded.Getter, name, named, loadOrder, loadOrder.GameRelease)
+                    ? LocalizedStrings.FindMissingStringsFiles(loaded.Getter, modPath, named, loadOrder, loadOrder.GameRelease)
                     : [];
                 return (content with { MissingStringsFiles = missing }, unreachable);
             }
@@ -158,8 +158,8 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, loadOrder, cancel);
 
     public Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
-        RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, PluginStrings strings, CancellationToken cancel = default) =>
-        PluginTrees.ReadAsync(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), plugin.Name, loadOrder, strings, cancel);
+        RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>
+        PluginTrees.ReadAsync(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder, plugin.Strings, cancel);
 
     public Answer<string?, PluginFailure> DivergenceFrom(
         string pluginFileName, string pluginFilePath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>

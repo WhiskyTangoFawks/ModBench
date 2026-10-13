@@ -32,6 +32,8 @@ export function isMEditGone(status: BackendStatus): status is 'disconnected' | '
 export interface WriteRefused {
   readonly refused: true;
   readonly message: string;
+  /** The request never reached mEdit, so no answer of mEdit's says anything of its items. */
+  readonly unreachable?: true;
 }
 
 /** `WriteRefused`'s one structural tag — a plain check, not `instanceof`, so a scripted client's
@@ -161,10 +163,23 @@ export interface InitOutcome {
 /** A mod to init, with its installation files and the mod manager's own files in its folder (ADR-0024). */
 export type InitMod = components['schemas']['InitModRequest'];
 
+/** A mod to build: the source folder whose build configuration names it, its folder and its installation files
+ *  (ADR-0024). */
+export type BuildMod = components['schemas']['BuildModRequest'];
+
+/** The instance's facts every mod's build needs: the suffix of an excluded name, and the release's archive variants. */
+export type BuildFacts = Omit<components['schemas']['BuildRequest'], 'mods'>;
+
 interface BuiltMod {
   mod: string;
   compiled: readonly CompiledPlugin[];
   refused: readonly ItemRefusal<PluginAddress>[];
+  /** Each archive not packed, by its path in the mod folder; it stays as it was. */
+  archivesRefused: readonly ItemRefusal<string>[];
+  /** Each file the build replaced that held other bytes, by its path in the mod folder. */
+  overwritten: readonly string[];
+  /** What stopped the build after it began writing; the files it overwrote so far are named. */
+  failure?: string;
 }
 
 /** Build's answer: each mod built, with the plugins it compiled and the plugins it refused, or
@@ -192,6 +207,10 @@ export type ReferenceResult = components['schemas']['ReferenceResult'];
 /** The record filter mEdit holds: its SQL and the name of the source it came from
  *  (plugins.md, Record filter). */
 export type RecordFilter = components['schemas']['FilterRequest'];
+
+/** A change to a source mod's build configuration: the output folder's new name, and paths in the mod folder to
+ *  exclude or include. */
+export type BuildConfigurationChange = Omit<components['schemas']['BuildConfigurationRequest'], 'sourceFolder'>;
 
 /** target-architecture.d2's mEdit client (ADR-0002). */
 export interface MEditClient {
@@ -223,9 +242,11 @@ export interface MEditClient {
   // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
   // the call itself refused, with nothing written.
   decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
+  // Rename's and exclude's half in mEdit: the build configuration in `sourceFolder`, written in its working tree.
+  changeBuildConfiguration(sourceFolder: string, change: BuildConfigurationChange): Promise<{ changed: true } | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
-  build(mods: readonly string[]): Promise<BuildOutcome | WriteRefused>;
+  build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).

@@ -15,7 +15,7 @@ internal static class PluginTrees
 {
     /// <summary>A plugin's own binary read as the documents its tree would hold.</summary>
     internal static async Task<Answer<PluginSource, PluginFailure>> ReadAsync(
-        ModPath modPath, string pluginName, LoadOrderSnapshot loadOrder, PluginStrings strings,
+        ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings,
         CancellationToken cancel = default)
     {
         var gameRelease = loadOrder.GameRelease;
@@ -28,7 +28,7 @@ internal static class PluginTrees
 
             // Refuse by name before any serialize: TranslatedString.TryLookup returns false for a missing
             // file with no exception.
-            if (LocalizedStrings.FindMissingStringsFile(mod, pluginName, strings, loadOrder, gameRelease) is { } missing)
+            if (LocalizedStrings.FindMissingStringsFile(mod, modPath, strings, loadOrder, gameRelease) is { } missing)
                 return new PluginFailure.MissingStrings(missing);
             if (mod.EnumerateMajorRecords().FirstOrDefault(record => record.FormKey.IsNull || record.FormKey == new FormKey(mod.ModKey, 0)) is { } objectIdZero)
             {

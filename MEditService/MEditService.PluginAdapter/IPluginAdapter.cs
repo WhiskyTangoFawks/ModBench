@@ -72,7 +72,7 @@ public interface IPluginAdapter
 
     /// <summary>A plugin's binary read as the source tree it would commit.</summary>
     Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
-        RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, PluginStrings strings, CancellationToken cancel = default);
+        RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, CancellationToken cancel = default);
 
     /// <summary>How the plugin at <paramref name="recompiledPath"/> differs from the named one as the
     /// codec models them; null when they are model-identical. Both are reparsed, since only written

@@ -1,7 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -20,8 +19,8 @@ internal static class TrackedMods
         var pluginName = Path.GetFileName(pluginPath);
         var read = TestAdapters.Mutagen()
             .ReadSourceOfAsync(
-                new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null), EmptyLoadOrder.Of(release),
-                new PluginStrings(modFolder))
+                new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null, HandedStrings.Of(pluginPath)),
+                EmptyLoadOrder.Of(release))
             .GetAwaiter().GetResult();
         var source = read.Answered();
 
@@ -76,6 +75,18 @@ internal static class TrackedMods
     {
         var path = entry.SourceFileOf(document);
         File.WriteAllText(path, File.ReadAllText(path).Replace(from, to, StringComparison.Ordinal));
+    }
+
+    /// <summary>A hand rename of a document's EditorID that also renames its file, as the layout names it,
+    /// so the file stays where it belongs.</summary>
+    internal static void RenameByHand(this LoadOrderEntry entry, RecordDetail document, string editorId)
+    {
+        var path = entry.SourceFileOf(document);
+        var renamed = Path.Combine(
+            Path.GetDirectoryName(path).Require(),
+            Path.GetFileName(path).Replace($"{document.EditorId} - ", $"{editorId} - ", StringComparison.Ordinal));
+        File.Move(path, renamed);
+        File.WriteAllText(renamed, File.ReadAllText(renamed).Replace($"\"{document.EditorId}\"", $"\"{editorId}\"", StringComparison.Ordinal));
     }
 
     /// <summary>The working tree's copy of <paramref name="document"/> replaced by

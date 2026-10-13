@@ -20,7 +20,8 @@ internal static class TestEditService
     /// so two holders get two independent write sides.</summary>
     internal static IServiceProvider Over(
         LoadOrderHolder holder, Action<ILoggingBuilder>? logging = null, IPluginAdapter? adapter = null,
-        INotificationPublisher? notifications = null, UnsavedDocuments? unsaved = null, ISourceAdapter? source = null)
+        INotificationPublisher? notifications = null, UnsavedDocuments? unsaved = null, ISourceAdapter? source = null,
+        IModFolderRepository? modFolders = null)
     {
         var documents = unsaved ?? new UnsavedDocuments();
         return new ServiceCollection()
@@ -29,7 +30,7 @@ internal static class TestEditService
             .AddSingleton(documents)
             .AddSingleton(source ?? new GitSourceAdapter(documents))
             .AddSingleton(TimeProvider.System)
-            .AddSingleton<IModFolderRepository>(new ModFolderRepository(TimeProvider.System))
+            .AddSingleton(modFolders ?? new ModFolderRepository(TimeProvider.System))
             .AddSingleton(notifications ?? new InMemoryNotificationPublisher())
             .AddSingleton(adapter ?? TestAdapters.Mutagen())
             .AddSingleton(SharedSchemaReflector.Instance)
@@ -56,6 +57,10 @@ internal static class TestEditService
         LoadOrderHolder holder, IPluginAdapter? adapter = null, INotificationPublisher? notifications = null,
         ISourceAdapter? source = null) =>
         Over(holder, adapter: adapter, notifications: notifications, source: source).GetRequiredService<InitHandler>();
+
+    internal static BuildHandler BuildHandler(
+        LoadOrderHolder holder, INotificationPublisher? notifications = null, ISourceAdapter? source = null, IModFolderRepository? modFolders = null) =>
+        Over(holder, notifications: notifications, source: source, modFolders: modFolders).GetRequiredService<BuildHandler>();
 
     internal static DecompilePluginHandler DecompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<DecompilePluginHandler>();

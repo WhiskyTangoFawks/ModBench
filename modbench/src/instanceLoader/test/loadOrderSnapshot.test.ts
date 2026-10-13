@@ -345,10 +345,13 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
   const sourceDirOf = (mod: string) => `/mo2/source/${mod}`;
   const sourceDirs = new Map(modFolders.all.map(({ name }) => [name, sourceDirOf(name)]));
   const provider = (origin: string) => origin === 'Data/' ? { kind: 'Game' } : { kind: 'Mod', mod: origin, folder: folderOf(origin), sourceFolder: sourceDirOf(origin) };
-  const sent = ({ name, path, origin, line, winning }: LoadOrderPlugin) => ({ name, path, origin, provider: provider(origin), line, lineNamesIt: line !== null && winning });
+  const sent = ({ name, path, origin, line, winning }: LoadOrderPlugin) => ({
+    name, path, origin, provider: provider(origin), line, lineNamesIt: line !== null && winning, archives: [], stringsFiles: [],
+  });
   const address = ({ name, origin }: { name: string; origin: string }) => ({ name, origin });
   const NO_ARCHIVES: ArchiveSources = {
     gameRelease: 'Fallout4', listed: [], inData: { kind: 'listed', archives: [], stringsFiles: [] }, files: new FileConflictLookup(),
+    filesByOrigin: new Map(),
   };
   const outcomeOf = (plugins: LoadOrderPluginRow[], folders: ModFolders = modFolders) =>
     loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: folders, sourceDirs, archives: NO_ARCHIVES });
@@ -431,6 +434,36 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     });
   });
 
+  it('hands each copy, loaded or not, the strings files beside it: loose in its strings folder, and the archives named for it at its folder\'s root', () => {
+    const file = (origin: string, relativePath: string, excluded = false): OriginFile =>
+      ({ relativePath, path: `/mods/${origin}/${relativePath}`, sourcePath: `/store/${origin}/${relativePath}`, excluded, excludedByName: excluded });
+    const archives: ArchiveSources = {
+      ...NO_ARCHIVES,
+      inData: { kind: 'listed', archives: ['D - Main.ba2', 'A - Main.ba2'], stringsFiles: ['Strings/D_en.STRINGS', 'Strings/A_en.STRINGS'] },
+      filesByOrigin: new Map([
+        ['ModA', [
+          file('ModA', 'Strings/A_en.STRINGS'), file('ModA', 'strings/a_en.DLSTRINGS'), file('ModA', 'Strings/A_en.ILSTRINGS', true),
+          file('ModA', 'Strings/B_en.STRINGS'), file('ModA', 'Nested/Strings/A_en.ILSTRINGS'), file('ModA', 'A - Textures.ba2'),
+          file('ModA', 'A - Main.ba2'), file('ModA', 'B - Main.ba2'), file('ModA', 'Nested/A - Main.ba2'),
+        ]],
+        ['ModO', [file('ModO', 'Strings/A_en.STRINGS')]],
+      ]),
+    };
+
+    const handed = snapshotOf([row('A.esp', 'ModA', 0), row('A.esp', 'ModO', 0, { winning: false }), row('D.esm', 'Data/', null)], [], archives)
+      ?.plugins.map(({ origin, archives: own, stringsFiles }) => ({ origin, archives: own, stringsFiles }));
+
+    expect(handed).toEqual([
+      {
+        origin: 'ModA',
+        archives: ['/store/ModA/A - Main.ba2', '/store/ModA/A - Textures.ba2'],
+        stringsFiles: ['/store/ModA/Strings/A_en.STRINGS', '/store/ModA/strings/a_en.DLSTRINGS'],
+      },
+      { origin: 'ModO', archives: [], stringsFiles: ['/store/ModO/Strings/A_en.STRINGS'] },
+      { origin: 'Data/', archives: [join('/game/Data', 'D - Main.ba2')], stringsFiles: [join('/game/Data', 'Strings/D_en.STRINGS')] },
+    ]);
+  });
+
   it('carries the game folder\'s dataFolder, and every plugin with its origin and path', () => {
     const a = row('a.esp', 'ModA', 0);
     const stray = row('stray.esp', 'ModS', null);
@@ -481,7 +514,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(snapshot?.active).toEqual([
       { name: 'Master.esm', origin: 'Data/' }, { name: 'cc.esl', origin: 'Data/' }, address(a),
     ]);
-    expect(snapshot?.plugins).toContainEqual({ name: 'Master.esm', origin: 'Data/', path: join('/game/Data', 'Master.esm'), provider: { kind: 'Game' }, line: null, lineNamesIt: false });
+    expect(snapshot?.plugins).toContainEqual({ name: 'Master.esm', origin: 'Data/', path: join('/game/Data', 'Master.esm'), provider: { kind: 'Game' }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] });
     expect(snapshot?.loadedWithNoLine).toEqual([{ name: 'Master.esm', origin: 'Data/' }, { name: 'cc.esl', origin: 'Data/' }]);
   });
 
@@ -520,6 +553,15 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     const providers = snapshotOf([inMod, inGame, stray])?.plugins.map((p) => p.provider);
 
     expect(providers).toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA', sourceFolder: '/mo2/source/ModA' }, { kind: 'Game' }, { kind: 'None' }]);
+  });
+
+  it('names no source folder for a mod that is no source mod', () => {
+    const outcome = loadOrderSnapshotOf({
+      plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs: new Map(), archives: NO_ARCHIVES,
+    });
+
+    expect(outcome !== undefined && 'plugins' in outcome ? outcome.plugins.map((p) => p.provider) : [])
+      .toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA' }]);
   });
 
   it('is a refusal naming each plugin and its mod when no mod folder is the mod\'s, never a snapshot without them', () => {

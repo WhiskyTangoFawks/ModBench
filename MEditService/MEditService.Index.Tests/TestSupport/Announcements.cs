@@ -43,7 +43,7 @@ internal static class Announcements
     {
         var listed = index.Queries.GetRecords(["npc_"], plugin.KeyOf(), search: null, limit: 1, offset: 0).Value().Items.Single();
         var document = index.DocumentOf(listed.FormKey, plugin.KeyOf());
-        plugin.HandEdit(document, $"\"{document.EditorId}\"", $"\"Edited{Guid.NewGuid():N}\"");
+        plugin.RenameByHand(document, $"Edited{Guid.NewGuid():N}");
         return RowsChanged(listed.FormKey);
     }
 

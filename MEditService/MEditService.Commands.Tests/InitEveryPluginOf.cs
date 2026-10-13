@@ -17,7 +17,7 @@ internal static class InitEveryPluginOf
     {
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);
-        return TestEditService.InitHandler(holder, adapter, notifications, source).InitAsync(ToInit.Named(mod));
+        return TestEditService.InitHandler(holder, adapter, notifications, source).InitAsync(ToInit.In(loadOrder, mod));
     }
 
     /// <summary>Every reason something of the selection did not init, whole mods and single plugins alike.</summary>
@@ -44,5 +44,12 @@ internal sealed record PluginInit(bool Applied, InitRefusal Refusal, string Mess
 /// <summary>Mods to init as the extension hands a mod with no installation file and no file of the mod manager's.</summary>
 internal static class ToInit
 {
-    internal static IReadOnlyList<ModToInit> Named(params string[] mods) => [.. mods.Select(mod => new ModToInit(mod, [], []))];
+    /// <summary>Each mod with the source folder the load order's provider names for it, or its own name when none
+    /// does.</summary>
+    internal static IReadOnlyList<ModToInit> In(LoadOrderSnapshot? loadOrder, params string[] mods) =>
+        [.. mods.Select(mod => new ModToInit(mod, SourceFolderOf(loadOrder, mod), [], []))];
+
+    private static string SourceFolderOf(LoadOrderSnapshot? loadOrder, string mod) =>
+        loadOrder?.Plugins.Select(plugin => plugin.Provider).OfType<PluginProvider.FromMod>()
+            .FirstOrDefault(provider => string.Equals(provider.Name, mod, StringComparison.OrdinalIgnoreCase))?.SourceFolder ?? mod;
 }

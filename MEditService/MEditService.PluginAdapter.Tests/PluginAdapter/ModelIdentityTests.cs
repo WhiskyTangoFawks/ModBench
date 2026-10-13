@@ -428,7 +428,7 @@ public sealed class ModelIdentityTests
         var recompiledPath = await Write(recompiled, Path.Combine(scratch.Path, "recompiled"));
         return Adapter.DivergenceFrom(
             original.ModKey.FileName, originalPath, recompiledPath, EmptyLoadOrder.Of(GameRelease.Fallout4),
-            new PluginStrings(scratch.Path)).Answered();
+            HandedStrings.Of(originalPath)).Answered();
     }
 
     private static void SetOpaqueHeaderFields(Fallout4Mod mod)
@@ -466,7 +466,7 @@ public sealed class ModelIdentityTests
         var recompiledPath = await Write(recompiled, Path.Combine(scratch.Path, "recompiled"));
         return Adapter.DivergenceFrom(
             original.ModKey.FileName, originalPath, recompiledPath, EmptyLoadOrder.Of(GameRelease.Fallout4),
-            new PluginStrings(scratch.Path)).Answered();
+            HandedStrings.Of(originalPath)).Answered();
     }
 
     private static async Task<(string? Divergence, byte[] OriginalBytes, byte[] RewrittenBytes)> ParseRewriteAndCompare(
@@ -489,7 +489,7 @@ public sealed class ModelIdentityTests
             .WriteAsync();
 
         var divergence = Adapter.DivergenceFrom(
-            fileName, originalPath, rewrittenPath, EmptyLoadOrder.Of(GameRelease.Fallout4), new PluginStrings(scratch.Path)).Answered();
+            fileName, originalPath, rewrittenPath, EmptyLoadOrder.Of(GameRelease.Fallout4), HandedStrings.Of(originalPath)).Answered();
         return (divergence, await File.ReadAllBytesAsync(originalPath), await File.ReadAllBytesAsync(rewrittenPath));
     }
 }

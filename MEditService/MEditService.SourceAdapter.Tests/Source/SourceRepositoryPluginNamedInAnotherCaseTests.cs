@@ -4,6 +4,8 @@ using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 using Noggog;
 
 namespace MEditService.SourceAdapter.Tests.Source;
@@ -12,8 +14,10 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
 {
     private const string TreeName = "Fixture.esp";
     private const string NpcFormKey = "000800:Fixture.esp";
-    private const string NpcBody = "{\n  \"FormKey\": \"000800:Fixture.esp\",\n  \"EditorID\": \"FixtureNpc\"\n}";
-    private const string HeaderBody = "{\n  \"ModKey\": \"Fixture.esp\",\n  \"MutagenObjectType\": \"Fallout4Mod\"\n}";
+    private static readonly string NpcBody = RecordTextCodec.SerializeToText(
+        new Npc(FormKey.Factory(NpcFormKey), Fallout4Release.Fallout4) { EditorID = "FixtureNpc" }, GameRelease.Fallout4);
+    private static readonly string HeaderBody = Encoding.UTF8.GetString(
+        HeaderDocument.Write(new Fallout4Mod(ModKey.FromFileName(TreeName), Fallout4Release.Fallout4)));
 
     private static readonly PluginAddress AsTreeNamesIt = new(TreeName, TestMod.Name);
     private static readonly PluginAddress Recased = new("FIXTURE.ESP", TestMod.Name);
@@ -33,7 +37,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     private ISourceRepository Repository => TestAdapters.Source().OverFolder(TestMod.In(_modFolder), GameRelease.Fallout4);
 
     private RegisteredPlugin Registered(PluginAddress plugin) =>
-        new(plugin.Name, plugin.Origin, "", TestMod.In(_modFolder), Line: null);
+        new(plugin.Name, plugin.Origin, "", TestMod.In(_modFolder), Line: null, PluginStrings.None);
 
     [Fact]
     public void SourceReads_ATreeItsFolderSpellsInAnotherCase_IsTrue()

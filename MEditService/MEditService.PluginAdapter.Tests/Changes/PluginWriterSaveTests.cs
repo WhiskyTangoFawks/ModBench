@@ -82,8 +82,8 @@ public sealed class PluginWriterSaveTests
         var before = File.ReadAllBytes(pluginPath);
         var adapter = TestAdapters.Mutagen();
         var source = (await adapter.ReadSourceOfAsync(
-            new RegisteredPlugin("Fixture.esp", "FixtureMod", pluginPath, new PluginProvider.FromMod("FixtureMod", folder, folder), Line: null),
-            EmptyLoadOrder.Of(GameRelease.Fallout4), new PluginStrings(folder))).Answered();
+            new RegisteredPlugin("Fixture.esp", "FixtureMod", pluginPath, new PluginProvider.FromMod("FixtureMod", folder, folder), Line: null, HandedStrings.Of(pluginPath)),
+            EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
         var tree = (await adapter.ReadTreeAsync(source.Files, EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 
         var saved = await tree.SaveAsync(pluginPath, ["Other.esm", "Fixture.esp"], ["Master.esm", "Other.esm"], save =>
@@ -104,7 +104,7 @@ public sealed class PluginWriterSaveTests
         var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
         var child = LightMasterAndChild.ChildIn(loadOrder);
         var adapter = TestAdapters.Mutagen();
-        var source = (await adapter.ReadSourceOfAsync(child, loadOrder, new PluginStrings(scratch))).Answered();
+        var source = (await adapter.ReadSourceOfAsync(child, loadOrder)).Answered();
         var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();
 
         var drops = (await tree.SaveAsync(child.Path, source.Masters, source.Masters, save =>
@@ -127,7 +127,7 @@ public sealed class PluginWriterSaveTests
         var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
         var child = LightMasterAndChild.ChildIn(loadOrder);
         var adapter = TestAdapters.Mutagen();
-        var source = (await adapter.ReadSourceOfAsync(child, loadOrder, new PluginStrings(scratch))).Answered();
+        var source = (await adapter.ReadSourceOfAsync(child, loadOrder)).Answered();
         var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();
         File.WriteAllBytes(Path.Combine(scratch, LightMasterAndChild.Master.FileName), "not a plugin"u8.ToArray());
         var before = File.ReadAllBytes(child.Path);
@@ -151,7 +151,7 @@ public sealed class PluginWriterSaveTests
         var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
         var child = LightMasterAndChild.ChildIn(loadOrder);
         var adapter = TestAdapters.Mutagen();
-        var source = (await adapter.ReadSourceOfAsync(child, loadOrder, new PluginStrings(scratch))).Answered();
+        var source = (await adapter.ReadSourceOfAsync(child, loadOrder)).Answered();
         var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();
 
         var drops = (await tree.SaveAsync(child.Path, source.Masters, source.Masters, save =>
