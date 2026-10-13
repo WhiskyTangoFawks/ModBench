@@ -41,8 +41,7 @@ async function fileHolding(name: string, body: string): Promise<string> {
   return path;
 }
 
-// The next read of a file waits for release(), so a test decides what another ask meets while it is going.
-function heldRead(): { release: () => void } {
+function nextReadHeldUntilReleased(): { release: () => void } {
   let release = (): void => {};
   const held = new Promise<void>((resolve) => { release = resolve; });
   const actual = vi.mocked(digestOf).getMockImplementation();
@@ -192,7 +191,7 @@ describe('hashIndex', () => {
   it('reads a file once for two asks while its first read is still going', async () => {
     const file = await fileHolding('Game.esm', 'aaaa');
     const index = hashIndex(folder, fakeArchiveReader([]));
-    const read = heldRead();
+    const read = nextReadHeldUntilReleased();
 
     const first = index.originFileHash(file);
     await vi.waitUntil(() => vi.mocked(digestOf).mock.calls.length === 1);

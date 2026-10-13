@@ -159,8 +159,9 @@ describe('the MO2 Instance adapter', () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-stamps-'));
         try {
           const mod = join(root, 'mods', 'Tracked Patch Mod');
+          const archive = join(game, 'Data', 'Fallout4 - Interface.ba2');
           const stamped = [
-            join(game, 'Data', 'Fallout4 - Interface.ba2'), join(game, 'Data', 'Strings', 'Fallout4_en.STRINGS'),
+            archive, join(game, 'Data', 'Strings', 'Fallout4_en.STRINGS'),
             join(mod, 'Tracked Patch Mod - Main.ba2'), join(mod, 'Strings', 'Tracked Patch Mod_en.STRINGS'),
             join(root, 'overwrite', 'Strings', 'Tracked Patch Mod_en.DLSTRINGS'),
           ];
@@ -172,7 +173,7 @@ describe('the MO2 Instance adapter', () => {
           const { archiveAndStringsStamps } = await adapterAt(root, game).reading();
 
           expect([...archiveAndStringsStamps.keys()].sort()).toEqual([...stamped].sort());
-          expect(archiveAndStringsStamps.get(stamped[0])).toMatchObject({ kind: 'read', answer: { size: 5n } });
+          expect(archiveAndStringsStamps.get(archive)).toMatchObject({ kind: 'read', answer: { size: 5n } });
         } finally {
           await rm(game, { recursive: true, force: true });
         }

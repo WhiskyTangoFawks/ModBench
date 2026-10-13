@@ -40,7 +40,7 @@ internal static class LoadOrderEndpoints
 
         if (RegisteredPluginsOf(req.Plugins) is not { } registered)
         {
-            return Results.Problem("Each plugin entry must have a non-empty Name, Path, Origin and Provider, and its archives and strings files, each with its path and stamp.", statusCode: 400);
+            return Results.Problem("Each plugin entry must have a non-empty Name, Path, Origin and Provider, and its archives and strings files.", statusCode: 400);
         }
         // Never defaulted here (ADR-0013).
         if (req.Active is not { } active || req.LoadedWithNoLine is not { } loadedWithNoLine
