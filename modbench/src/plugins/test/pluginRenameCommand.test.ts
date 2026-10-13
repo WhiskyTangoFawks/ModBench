@@ -34,8 +34,8 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { AskQuestion } from '../../ports/dialog';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { pluginsCommandsWith } from '../../test/mo2/adapterOver';
-import { fakeInstanceAdapter, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
+import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { present } from '../../ports/present';
 import type { LoadOrderPlugin } from '../../instanceLoader/loadOrderSnapshot';
 
@@ -250,7 +250,7 @@ describe('modbench.plugin.rename', () => {
   it('names the plugin and says its source was renamed when the file and lines failed after it', async () => {
     showInputBox.mockResolvedValueOnce('Renamed.esp');
     const { instanceAnswers, reporter, run } = setup();
-    instanceAnswers.refusals = { renamePlugin: 'disk full' };
+    instanceAnswers.refusals = refusing('renamePlugin', 'disk full');
 
     await run(row());
 

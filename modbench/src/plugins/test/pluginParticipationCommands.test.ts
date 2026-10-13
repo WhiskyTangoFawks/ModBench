@@ -27,11 +27,11 @@ import { PluginNode, ImplicitMasterNode } from '../pluginRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
-import { pluginsCommandsWith } from '../../test/mo2/adapterOver';
-import { fakeInstanceAdapter, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
+import { fakeInstanceAdapter, refusing, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { progressSteps } from '../../test/recordedProgress';
 
-const REFUSED: InstanceAnswers = { refusals: { changePluginOrder: 'ENOENT: no plugins.txt' } };
+const REFUSED: InstanceAnswers = { refusals: refusing('changePluginOrder', 'ENOENT: no plugins.txt') };
 const fake = (answers: InstanceAnswers = {}) =>
   fakeInstanceAdapter(readingFixture({ pluginOrder: [{ name: 'Alpha.esp', enabled: false }, { name: 'Beta.esp', enabled: true }] }), answers);
 const enabling = (...pairs: [string, boolean][]) =>

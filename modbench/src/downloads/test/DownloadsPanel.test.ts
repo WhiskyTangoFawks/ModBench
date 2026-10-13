@@ -47,7 +47,7 @@ import type { MoveToTrash } from '../../ports/trash';
 import type { DownloadFile, DownloadRow, Instance, InstanceValue } from '../../instanceLoader/instance';
 import { recordingReporter, scriptedDialog, assertAskedOnce, assertSelectionOutcome } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
-import { fakeInstanceAdapter, readingFixture, type FakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, refusing, readingFixture, type FakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const node = (root: string, name: string, row: Partial<DownloadRow> = {}): DownloadNode =>
@@ -379,7 +379,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
   });
 
   it('metadata left behind after the file landed is one Output line naming the word the instance supplies, no notification', async () => {
-    const fake = fakeInstanceAdapter(readingFixture(), { refusals: { trashDownloadedFileMeta: 'EPERM: operation not permitted' } });
+    const fake = fakeInstanceAdapter(readingFixture(), { refusals: refusing('trashDownloadedFileMeta', 'EPERM: operation not permitted') });
     const reporter = recordingReporter();
 
     const instance = {

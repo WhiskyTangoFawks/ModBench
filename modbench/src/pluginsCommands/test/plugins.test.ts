@@ -4,8 +4,8 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { pluginSyncOver, type PluginsDrop } from '../plugins';
-import { pluginsCommandsWith } from '../../test/mo2/adapterOver';
-import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
+import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
+import { fakeInstanceAdapter, refusing, readingFixture } from '../../test/fakeInstanceAdapter';
 import type { PluginMetadata } from '../../client';
 import type { DataFolderPlugins, PluginOrderChange } from '../../instanceAdapter/instanceAdapter';
 
@@ -43,7 +43,7 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
   });
 
   it('a refusal by the adapter is the refusal the command returns', async () => {
-    const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: lines('Base.esp') }), { refusals: { changePluginOrder: 'ENOENT: no plugins.txt' } });
+    const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: lines('Base.esp') }), { refusals: refusing('changePluginOrder', 'ENOENT: no plugins.txt') });
 
     const result = await pluginsCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(PROFILE, moving('Base.esp'), { kind: 'losingEnd' }, []);
 
@@ -149,7 +149,7 @@ describe('plugin participation is a change for each plugin the order lists', () 
   });
 
   it('a refusal by the adapter refuses the whole selection', async () => {
-    const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: lines(...ORDER) }), { refusals: { changePluginOrder: 'ENOENT: no plugins.txt' } });
+    const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: lines(...ORDER) }), { refusals: refusing('changePluginOrder', 'ENOENT: no plugins.txt') });
 
     expect(await pluginsCommandsWith(fake.adapter).setPluginsEnabled(PROFILE, ORDER, false)).toEqual({ applied: false, refusal: 'ENOENT: no plugins.txt' });
   });

@@ -15,7 +15,8 @@ import { type PluginSyncResult } from '../pluginsCommands/plugins';
 import type { InstanceReading, Mod, ModFolder, ModFolders } from '../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, readingFixture } from './fakeInstanceAdapter';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './mo2/corpusFixture';
-import { adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
+import { adapterOver } from './mo2/adapterOver';
+import { STEADY_WINDOW } from './steadyWindow';
 
 const noPluginSync = () => Promise.resolve<PluginSyncResult>({ applied: true, wrote: false, added: [], dropped: [] });
 

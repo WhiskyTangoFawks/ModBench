@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { downloadsCommands } from '../downloads';
-import { fakeInstanceAdapter, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, refusing, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { assertSelectionOutcome } from '../../test/surfacingDoubles';
 import type { MoveToTrash } from '../../ports/trash';
 
@@ -32,7 +32,7 @@ describe('excludeDownloads / includeDownloads', () => {
   });
 
   it('refuses rather than throwing when the metadata cannot be written, with the adapter\'s reason', async () => {
-    const { commands } = commandsOver({ refusals: { markDownloadedFile: 'EISDIR: illegal operation on a directory' } });
+    const { commands } = commandsOver({ refusals: refusing('markDownloadedFile', 'EISDIR: illegal operation on a directory') });
 
     assertSelectionOutcome(await commands.excludeDownloads(['foo.7z']), {
       landed: [],
@@ -65,7 +65,7 @@ describe('deleteDownloads', () => {
   });
 
   it('a metadata failure after the file landed reports the delete as done, not a refusal', async () => {
-    const { commands } = commandsOver({ refusals: { trashDownloadedFileMeta: 'disk full' } });
+    const { commands } = commandsOver({ refusals: refusing('trashDownloadedFileMeta', 'disk full') });
 
     const outcome = await commands.deleteDownloads([FILE], recordingTrash().trash);
 

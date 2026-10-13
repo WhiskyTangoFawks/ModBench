@@ -4,8 +4,8 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { OVERWRITE_ORIGIN } from '../../instanceAdapter/instanceAdapter';
-import { pluginsCommandsWith } from '../../test/mo2/adapterOver';
-import { fakeInstanceAdapter, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
+import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import type { PluginAddress } from '../../wire/pluginAddress';
@@ -92,7 +92,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
   });
 
   it('reports the source renamed when the adapter refuses the rename of the files after it', async () => {
-    const { result } = rename('Renamed Patch.esp', PLUGIN, { refusals: { renamePlugin: 'disk full' } });
+    const { result } = rename('Renamed Patch.esp', PLUGIN, { refusals: refusing('renamePlugin', 'disk full') });
 
     expect(await result).toEqual({ applied: false, sourceRenamed: true, refusal: 'disk full' });
   });

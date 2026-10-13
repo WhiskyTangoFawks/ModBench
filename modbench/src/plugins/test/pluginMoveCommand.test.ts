@@ -33,7 +33,7 @@ import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginR
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
-import { pluginsCommandsWith } from '../../test/mo2/adapterOver';
+import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { progressSteps } from '../../test/recordedProgress';
 

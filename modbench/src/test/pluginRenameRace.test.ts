@@ -3,7 +3,9 @@ import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, uriFrom } from './vscodeMock';
-import { adapterOver, pluginsCommandsWith, readPluginLines, sourceOver, STEADY_WINDOW } from './mo2/adapterOver';
+import { adapterOver, readPluginLines, sourceOver } from './mo2/adapterOver';
+import { pluginsCommandsWith } from './pluginsCommandsWith';
+import { STEADY_WINDOW } from './steadyWindow';
 import { readInstance, type ReadingSource } from '../instanceAdapter/mo2Reads';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
 

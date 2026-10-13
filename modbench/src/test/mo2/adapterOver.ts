@@ -11,8 +11,8 @@ import { myGamesResolver } from '../../instanceAdapter/myGames';
 import { readingSource, type ReadingSource } from '../../instanceAdapter/mo2Reads';
 import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
 import { providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
-import { pluginsCommands, type PluginsCommands } from '../../pluginsCommands/plugins';
-import type { Instance } from '../../instanceLoader/instance';
+import type { PluginsCommands, pluginsCommands } from '../../pluginsCommands/plugins';
+import { pluginsCommandsWith } from '../pluginsCommandsWith';
 import { fakeArchiveReader } from '../fakeArchiveReader';
 import { NO_DETECTORS } from '../noDetectors';
 
@@ -28,12 +28,6 @@ export interface AdapterAnswers {
   gameDirectoryChanged?: (listener: () => void) => Subscription;
   detectors?: GameDetectors;
 }
-
-/** A window whose focus never changes, for a test whose subject is not the recompute's triggers. */
-export const STEADY_WINDOW: ConstructorParameters<typeof Instance>[0]['window'] = {
-  state: { focused: true },
-  onDidChangeWindowState: () => ({ dispose: () => {} }),
-};
 
 /** MO2's context over `root`, detecting no game install, with the answers a test fixes in place. */
 export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Context {
@@ -89,20 +83,6 @@ export async function providedPluginsIn(root: string, profile = 'Default'): Prom
 }
 
 type PluginsCommandsClient = Parameters<typeof pluginsCommands>[0]['client'];
-
-/** The Plugins commands bound to `adapter` and a client that answers only what a test fixes. */
-export function pluginsCommandsWith(adapter: InstanceAdapter, client: Partial<PluginsCommandsClient> = {}): PluginsCommands {
-  const unanswered = () => Promise.reject(new Error('this test fixed no answer'));
-  return pluginsCommands({
-    adapter,
-    client: {
-      getPlugins: client.getPlugins?.bind(client) ?? unanswered,
-      getRenameSourceChanges: client.getRenameSourceChanges?.bind(client) ?? unanswered,
-      moveLastWritten: client.moveLastWritten?.bind(client) ?? unanswered,
-      getPluginDependants: client.getPluginDependants?.bind(client) ?? unanswered,
-    },
-  });
-}
 
 /** `pluginsCommandsWith` over MO2's adapter on `root`. */
 export function pluginsCommandsOver(root: string, client: Partial<PluginsCommandsClient> = {}): PluginsCommands {

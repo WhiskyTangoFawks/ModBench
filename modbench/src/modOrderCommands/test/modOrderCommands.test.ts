@@ -3,7 +3,7 @@ import { modSyncOver, modlistCommands } from '../modOrderCommands';
 import type {
   EntryRef, ModFolder, ModFolders, ModlistEntry, ModOrderChange, MovePlace, OriginFileMark, SeparatorsPlace,
 } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, refusing, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const mod = (name: string, enabled = true): ModlistEntry => ({ kind: 'mod', name, enabled });
@@ -41,7 +41,7 @@ describe('the modlist commands refuse the whole selection once when the adapter 
     ['insertSeparator', (c: ReturnType<typeof over>['commands']) => c.insertSeparator('Default', 'New Section', { kind: 'mod', name: 'ENBoost' })],
     ['renameSeparator', (c: ReturnType<typeof over>['commands']) => c.renameSeparator('Default', UNASSIGNED, 'Renamed')],
   ])('%s', async (_, run) => {
-    const { fake, commands } = over(FIXTURE_ORDER, { refusals: { changeModOrder: 'ENOENT: no such file' } });
+    const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('changeModOrder', 'ENOENT: no such file') });
 
     expect(await run(commands)).toEqual({ applied: false, refusal: 'ENOENT: no such file' });
     expect(verbs(fake.calls)).toEqual(['changeModOrder']);
@@ -198,7 +198,7 @@ describe('deleteSeparators', () => {
 
   it('writes no line for a separator whose folder the trash refuses, refusing it with the reason, while the others land', async () => {
     const { fake, commands } = over(FIXTURE_ORDER, {
-      refusalOf: (call) => (call.verb === 'trashEntryFolder' && call.entry.name === UNASSIGNED ? 'trash unavailable' : undefined),
+      refusals: (call) => (call.verb === 'trashEntryFolder' && call.entry.name === UNASSIGNED ? 'trash unavailable' : undefined),
     });
 
     const outcome = await commands.deleteSeparators('Default', FIXTURE_ORDER, [UNASSIGNED, RADFALL], NO_TRASH);
@@ -211,7 +211,7 @@ describe('deleteSeparators', () => {
   });
 
   it('a separator whose line cannot go after its folder was trashed still lands, carrying the part that failed, and one with no folder to trash is refused with the write\'s reason', async () => {
-    const { commands } = over(FIXTURE_ORDER, { refusals: { changeModOrder: 'disk full' }, foldersAbsent: new Set([RADFALL]) });
+    const { commands } = over(FIXTURE_ORDER, { refusals: refusing('changeModOrder', 'disk full'), foldersAbsent: new Set([RADFALL]) });
 
     const outcome = await commands.deleteSeparators('Default', FIXTURE_ORDER, [UNASSIGNED, RADFALL], NO_TRASH);
 
@@ -255,7 +255,7 @@ describe('uninstallMods', () => {
   });
 
   it('lands the mod carrying the source\'s failure when the source folder cannot be trashed', async () => {
-    const { fake, commands } = over(FIXTURE_ORDER, { refusals: { trashSourceFolder: 'the trash refused it' } });
+    const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('trashSourceFolder', 'the trash refused it') });
 
     const outcome = await commands.uninstallMods('Default', FIXTURE_ORDER, [{ name: 'Harder VATS' }], NO_TRASH);
 
@@ -282,7 +282,7 @@ describe('uninstallMods', () => {
 
   it('writes nothing for a mod whose folder the trash refuses, refusing it with the reason, while the others land and mark, leaving the refused mod\'s download unmarked', async () => {
     const { fake, commands } = over(FIXTURE_ORDER, {
-      refusalOf: (call) => (call.verb === 'trashEntryFolder' && call.entry.name === 'Harder VATS' ? 'trash unavailable' : undefined),
+      refusals: (call) => (call.verb === 'trashEntryFolder' && call.entry.name === 'Harder VATS' ? 'trash unavailable' : undefined),
     });
 
     const outcome = await commands.uninstallMods('Default', FIXTURE_ORDER,
@@ -302,7 +302,7 @@ describe('uninstallMods', () => {
   });
 
   it('a mod whose line cannot go after its folder was trashed still lands, carrying the part that failed, and marks nothing for it', async () => {
-    const { fake, commands } = over(FIXTURE_ORDER, { refusals: { changeModOrder: 'disk full' } });
+    const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('changeModOrder', 'disk full') });
 
     const outcome = await commands.uninstallMods('Default', FIXTURE_ORDER, [{ name: 'Unofficial Patch', archiveFilename: ARCHIVE }], NO_TRASH);
 
@@ -313,7 +313,7 @@ describe('uninstallMods', () => {
   });
 
   it('carries the mark\'s refusal beside the landed mod, rather than leaving the download claiming a mod that is gone', async () => {
-    const { commands } = over(FIXTURE_ORDER, { refusals: { markDownloadedFile: 'download_directory could not be resolved' } });
+    const { commands } = over(FIXTURE_ORDER, { refusals: refusing('markDownloadedFile', 'download_directory could not be resolved') });
 
     const outcome = await commands.uninstallMods('Default', FIXTURE_ORDER, [{ name: 'Unofficial Patch', archiveFilename: ARCHIVE }], NO_TRASH);
 
@@ -352,7 +352,7 @@ describe('renameMod', () => {
 
   it('names each profile whose line could not be written, the folder staying renamed', async () => {
     const { fake, commands } = over(FIXTURE_ORDER, {
-      refusalOf: (call) => (call.verb === 'changeModOrder' && call.profile === 'Secondary' ? 'disk full' : undefined),
+      refusals: (call) => (call.verb === 'changeModOrder' && call.profile === 'Secondary' ? 'disk full' : undefined),
     });
 
     const outcome = await rename(commands);
@@ -362,7 +362,7 @@ describe('renameMod', () => {
   });
 
   it('writes no line when the folder did not move', async () => {
-    const { fake, commands } = over(FIXTURE_ORDER, { refusals: { renameModFolder: 'The folder is in the way' } });
+    const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('renameModFolder', 'The folder is in the way') });
 
     const outcome = await rename(commands);
 
@@ -401,7 +401,7 @@ describe('renameMod', () => {
       const mEdit = new InMemoryMEditClient();
       mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'it holds no build configuration' });
       const { commands } = over(FIXTURE_ORDER, {
-        refusalOf: (call) => (call.verb === 'renameModFolder' && call.from === 'Harder VATS 2' ? 'the folder is in use' : undefined),
+        refusals: (call) => (call.verb === 'renameModFolder' && call.from === 'Harder VATS 2' ? 'the folder is in use' : undefined),
       }, mEdit);
 
       const outcome = await rename(commands, SOURCE);
@@ -524,7 +524,7 @@ describe('markFiles', () => {
   });
 
   it('takes back the exclusion of a file the adapter refuses, with the adapter\'s reason', async () => {
-    const { mEdit, commands } = over(FIXTURE_ORDER, { refusals: { markOriginFile: 'permission denied' } });
+    const { mEdit, commands } = over(FIXTURE_ORDER, { refusals: refusing('markOriginFile', 'permission denied') });
     mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
     const file = fileOf('Harder VATS', 'a.dds');
 
@@ -562,7 +562,7 @@ describe('createEmptyMod', () => {
   });
 
   it('writes no line when the folder cannot be made, refusing with why', async () => {
-    const { fake, commands } = over(FIXTURE_ORDER, { refusals: { createModFolder: 'The folder is in the way' } });
+    const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('createModFolder', 'The folder is in the way') });
 
     const outcome = await commands.createEmptyMod('Default', 'Harder VATS');
 
@@ -571,7 +571,7 @@ describe('createEmptyMod', () => {
   });
 
   it('a failed line write answers a partial, not a refusal, since the folder is on disk either way', async () => {
-    const { commands } = over(FIXTURE_ORDER, { refusals: { changeModOrder: 'disk full' } });
+    const { commands } = over(FIXTURE_ORDER, { refusals: refusing('changeModOrder', 'disk full') });
 
     const outcome = await commands.createEmptyMod('Default', 'Line Write Fails');
 
@@ -654,7 +654,7 @@ describe('syncMods', () => {
   });
 
   it('refuses with the adapter\'s reason when the write is refused', async () => {
-    const run = syncing([mod('Gone Mod')], [], { refusals: { changeModOrder: 'ENOENT: no such file' } });
+    const run = syncing([mod('Gone Mod')], [], { refusals: refusing('changeModOrder', 'ENOENT: no such file') });
 
     expect(await sync(run, [])).toEqual({ applied: false, refusal: 'ENOENT: no such file' });
   });

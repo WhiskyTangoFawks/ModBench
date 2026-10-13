@@ -19,15 +19,15 @@ import { PluginNode } from '../pluginRows';
 import { recordRow } from './browserRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { recordSummaryFixture } from '../../client/test/fixtures';
-import { pluginsCommandsWith } from '../../test/mo2/adapterOver';
-import { fakeInstanceAdapter, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
+import { fakeInstanceAdapter, refusing, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { progressSteps } from '../../test/recordedProgress';
 
 beforeEach(() => {
   progressSteps.length = 0;
 });
 
-const REFUSED: InstanceAnswers = { refusals: { changePluginOrder: 'ENOENT: no plugins.txt' } };
+const REFUSED: InstanceAnswers = { refusals: refusing('changePluginOrder', 'ENOENT: no plugins.txt') };
 const fake = (answers: InstanceAnswers = {}) =>
   fakeInstanceAdapter(readingFixture({ pluginOrder: [{ name: 'A.esp', enabled: false }, { name: 'B.esp', enabled: true }] }), answers);
 const profile = () => 'Default';

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { modlistCommands, type ModSource } from '../modOrderCommands';
 import type { InstallSource, InstallTarget } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const MOD = 'Freshly Installed Mod';
@@ -27,7 +27,7 @@ describe('installMod', () => {
   });
 
   it('refuses with why the adapter failed', async () => {
-    const { result } = await install(ARCHIVE, NEW_MOD, { refusals: { install: 'archive is corrupt' } });
+    const { result } = await install(ARCHIVE, NEW_MOD, { refusals: refusing('install', 'archive is corrupt') });
 
     expect(result).toEqual({ applied: false, refusal: 'archive is corrupt' });
   });
@@ -63,7 +63,7 @@ describe('installMod', () => {
   });
 
   it.each([
-    ['its metadata cannot be written', { refusals: { markDownloadedFile: 'EISDIR: illegal operation on a directory' } }, /EISDIR/],
+    ['its metadata cannot be written', { refusals: refusing('markDownloadedFile', 'EISDIR: illegal operation on a directory') }, /EISDIR/],
     ['it is gone from disk', { goneDownloads: new Set([DOWNLOADED.name]) }, /"Freshly-1-0.7z" is gone from disk/],
   ] as const)('reports a downloaded file it could not mark, because %s, beside the landed mod', async (_, answers, why) => {
     const { result } = await install(DOWNLOADED, NEW_MOD, answers);

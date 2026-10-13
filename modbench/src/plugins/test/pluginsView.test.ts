@@ -126,7 +126,7 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { pluginsCommandsWith } from '../../test/mo2/adapterOver';
+import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { sourceCommands } from '../../sourceCommands/sourceCommands';
 import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';

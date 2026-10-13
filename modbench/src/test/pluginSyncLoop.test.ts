@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../test/mo2/fakeVscodeWatcher';
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './vscodeMock';
-import { adapterOver, pluginsCommandsWith, STEADY_WINDOW } from './mo2/adapterOver';
+import { adapterOver } from './mo2/adapterOver';
+import { pluginsCommandsWith } from './pluginsCommandsWith';
+import { STEADY_WINDOW } from './steadyWindow';
 import { fakeInstanceAdapter, readingFixture } from './fakeInstanceAdapter';
 
 vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));

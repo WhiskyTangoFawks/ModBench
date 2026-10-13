@@ -56,6 +56,10 @@ export type AdapterCall =
 
 export type WriteVerb = AdapterCall['verb'];
 
+/** Refuses every write of one verb with the message. */
+export const refusing = (verb: WriteVerb, message: string): NonNullable<InstanceAnswers['refusals']> =>
+  (call) => (call.verb === verb ? message : undefined);
+
 /** What a test fixes of the instance beside its reading. */
 export interface InstanceAnswers {
   /** An origin file's size and hash by the path it is read from; a path not there is unreadable. */
@@ -67,15 +71,11 @@ export interface InstanceAnswers {
   unreadableInstallations?: ReadonlyMap<string, string>;
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
-  /** The folder a build of each mod writes, by mod name; a mod not there has `/mods/<name>`. */
-  modFolderPaths?: ReadonlyMap<string, string>;
   installed?: InstallOutcome;
   /** Downloaded files that are gone: they get no mark. */
   goneDownloads?: ReadonlySet<string>;
-  /** A write verb that rejects with this message, after it is recorded. */
-  refusals?: Partial<Record<WriteVerb, string>>;
   /** A write that rejects with the message this returns for it, after it is recorded. */
-  refusalOf?: (call: AdapterCall) => string | undefined;
+  refusals?: (call: AdapterCall) => string | undefined;
   /** Origin files that are gone, by relative path: they get no mark. */
   goneOriginFiles?: ReadonlySet<string>;
   /** Entries with no folder to trash, by name. */
@@ -113,7 +113,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
 
   const record = <T>(call: AdapterCall, result: T): Promise<T> => {
     calls.push(call);
-    const refusal = answers.refusals?.[call.verb] ?? answers.refusalOf?.(call);
+    const refusal = answers.refusals?.(call);
     return refusal === undefined ? Promise.resolve(result) : Promise.reject(new Error(refusal));
   };
   const answer = <T>(found: T | undefined, path: string): Promise<FileRead<T>> =>
@@ -125,7 +125,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return readingFailure === undefined ? Promise.resolve(current) : Promise.reject(new Error(readingFailure));
     },
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
-    modFolderPath: (mod) => Promise.resolve(answers.modFolderPaths?.get(mod) ?? `/mods/${mod}`),
+    modFolderPath: (mod) => Promise.resolve(`/mods/${mod}`),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFiles: (mod) => {
       const reason = answers.unreadableInstallations?.get(mod);

@@ -8,7 +8,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { instanceCommands } from '../instanceCommands';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 import { adapterOver } from '../../test/mo2/adapterOver';
-import { fakeInstanceAdapter, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, refusing, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 
 const PROFILES = ['Default', 'Secondary'];
@@ -40,7 +40,7 @@ describe('switchProfile', () => {
   });
 
   it('refuses rather than throwing when the adapter cannot select', async () => {
-    const { switchProfile } = over({ refusals: { selectProfile: 'ENOENT: no ModOrganizer.ini' } });
+    const { switchProfile } = over({ refusals: refusing('selectProfile', 'ENOENT: no ModOrganizer.ini') });
 
     expect(await switchProfile('Secondary', PROFILES)).toEqual({ applied: false, refusal: expect.stringMatching(/ENOENT/) as unknown });
   });
