@@ -115,6 +115,30 @@ internal sealed class WriteJournal(string sourceFolder)
         File.Delete(path);
     }
 
+    internal void Move(string from, string to)
+    {
+        MoveEntry(from, to);
+        RecordUndo(() => MoveEntry(to, from), to);
+    }
+
+    private static void MoveEntry(string source, string destination)
+    {
+        if (Directory.Exists(source)) Directory.Move(source, destination);
+        else File.Move(source, destination);
+    }
+
+    /// <summary>Deletes the file at <paramref name="path"/>, or the folder and everything in it.</summary>
+    internal void DeleteTree(string path)
+    {
+        if (!Directory.Exists(path))
+        {
+            Delete(path);
+            return;
+        }
+        foreach (var file in Directory.GetFiles(path, "*", SearchOption.AllDirectories)) Delete(file);
+        DeleteEmptyDirectories(path);
+    }
+
     internal void DeleteIfHolds(string path, byte[] expected)
     {
         if (!SameBytes(Snapshot(path), expected)) throw new IOException($"{path} was changed by another program, so it was not removed.");

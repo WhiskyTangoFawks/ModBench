@@ -100,6 +100,18 @@ public abstract record SourceFailure
         public override bool DecompileRepairs => false;
     }
 
+    /// <summary>A write reaches files VS Code holds unsaved changes to, which writing the disk would save over
+    /// (scripts.md, Writing, story 6).</summary>
+    public sealed record Unsaved : SourceFailure
+    {
+        internal Unsaved(IEnumerable<string> paths)
+            : base($"Nothing was written: VS Code holds unsaved changes to {string.Join(", ", paths)}. Save or revert them first.")
+        {
+        }
+
+        public override bool DecompileRepairs => false;
+    }
+
     /// <summary>The file system would not give a read or write what it needs: a file or folder is gone,
     /// another program holds it, or access is denied.</summary>
     public sealed record Inaccessible : SourceFailure

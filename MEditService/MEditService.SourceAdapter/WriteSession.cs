@@ -70,6 +70,37 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
         }
     }
 
+    public SourceFailure? Write()
+    {
+        if (_writing) throw new InvalidOperationException("Write waits for Atomically to end: the changes inside it may still be put back.");
+        var (moves, deletions, documents) = Changes;
+        var held = moves.Select(move => move.From).Concat(deletions).Concat(documents.Select(document => document.Path))
+            .SelectMany(_unsaved.HeldAtOrUnder)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        return held.Count > 0 ? new SourceFailure.Unsaved(held) : SourceFailure.Answer(WriteToDisk);
+    }
+
+    private void WriteToDisk()
+    {
+        var journal = new WriteJournal(_repository.SourceFolder);
+        try
+        {
+            foreach (var (from, to) in Changes.Moves) journal.Move(from, to);
+            foreach (var path in Changes.Deletions) journal.DeleteTree(path);
+            foreach (var (path, text) in Changes.Documents) journal.Write(path, Encoding.UTF8.GetBytes(text));
+        }
+        catch (Exception cause) when (cause is not OutOfMemoryException)
+        {
+            if (journal.Report(cause, journal.UndoSince(0)) is { } report) throw report;
+            throw;
+        }
+        finally
+        {
+            _repository.Locator.Forget();
+        }
+    }
+
     private void PutBack(SourceChanges before)
     {
         Changes = before;
