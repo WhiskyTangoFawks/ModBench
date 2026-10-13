@@ -58,7 +58,6 @@ internal static class ConflictRules
         return !ctx.ValuesEqual(pluginValue, ctx.WinnerValue) ? ConflictThis.ConflictLoses : ConflictThis.Override;
     }
 
-    // Whether every column holds the same value, an absent one included.
     public static bool AllSame(IEnumerable<object?> values, Func<object?, object?, bool> valuesEqual)
     {
         var all = values.ToList();
@@ -121,7 +120,7 @@ internal static class ConflictRules
 
     // Takes the more severe of the two; OnlyOne is terminal and passes through.
     // Explicit severity table so this doesn't depend on enum declaration order.
-    public static ConflictAll Escalate(ConflictAll generic, ConflictAll contribution)
+    private static ConflictAll Escalate(ConflictAll generic, ConflictAll contribution)
     {
         return generic switch
         {
@@ -130,11 +129,15 @@ internal static class ConflictRules
         };
     }
 
+    public static ConflictAll Worst(ConflictAll seed, IEnumerable<ConflictAll> contributions) =>
+        contributions.Aggregate(seed, Escalate);
+
     private static int Severity(ConflictAll conflictAll) => conflictAll switch
     {
         ConflictAll.NoConflict => 0,
         ConflictAll.Override => 1,
-        ConflictAll.Conflict or ConflictAll.ConflictBenign => 2,
-        _ => 3, // OnlyOne: terminal, never expected as a `contribution` argument.
+        ConflictAll.Conflict => 2,
+        ConflictAll.ConflictBenign => 3,
+        _ => 4, // OnlyOne: terminal, never expected as a `contribution` argument.
     };
 }

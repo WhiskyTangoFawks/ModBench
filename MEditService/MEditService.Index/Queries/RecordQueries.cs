@@ -196,7 +196,7 @@ internal sealed class RecordQueries(
             indexed: true);
         var overrides = records.Select((r, i) => ToCompareOverride(r, state: null, columns[i], snapshot, reads)).ToList();
 
-        var conflictAll = diffs.Aggregate(ConflictAll.NoConflict, (all, diff) => ConflictRules.Escalate(all, diff.ConflictAll));
+        var conflictAll = ConflictRules.Worst(ConflictAll.NoConflict, diffs.Select(diff => diff.ConflictAll));
         return new CompareResult(overrides, diffs, conflictAll, RequireSchemas().DisplayNameFor(documents[0].RecordType));
     }
 
