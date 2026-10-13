@@ -22,16 +22,20 @@ type DetectWinePrefix = () => Promise<string | null>;
 export interface GameDetectors {
   paths: (game: GameAutodetect) => Promise<GamePaths | null>;
   winePrefix: (steamAppId: string) => Promise<string | null>;
+  /** The user's Documents folder as Windows has it, wherever it was redirected to. */
+  documents: () => Promise<string>;
 }
 
 const execAsync = promisify(exec);
 
-const STEAM: GameDetectors = {
+export const STEAM: GameDetectors = {
   paths: (game) =>
     detectGamePaths(process.platform, game, () =>
       execAsync('reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath').then((r) => r.stdout),
     ),
   winePrefix: detectWinePrefix,
+  documents: () =>
+    execAsync('powershell -NoProfile -Command "[Environment]::GetFolderPath(\'MyDocuments\')"').then((r) => r.stdout.trim()),
 };
 
 /** Wine fixes `Z:` to the filesystem root and `C:` to the prefix's own `drive_c`; any other

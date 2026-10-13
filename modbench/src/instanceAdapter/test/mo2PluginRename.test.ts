@@ -69,7 +69,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
       instanceRoot: root,
       gameDirectoryOverrides: () => ({}),
       gameDirectoryChanged: () => ({ dispose: () => {} }),
-      detectors: { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(null) },
+      detectors: { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(null), documents: () => Promise.reject(new Error('no known folder')) },
     });
     for (const [before] of NAMED_FOR_IT.slice(1)) await put(before);
     for (const path of NOT_NAMED_FOR_IT) await put(path);

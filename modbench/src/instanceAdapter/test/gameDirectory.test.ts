@@ -12,6 +12,7 @@ const noDetectPrefix = () => Promise.resolve(null);
 const NO_DETECTORS: GameDetectors = {
   paths: () => Promise.resolve(null),
   winePrefix: () => Promise.resolve(null),
+  documents: () => Promise.reject(new Error('no known folder')),
 };
 
 const iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts = (gamePath?: string): string =>
@@ -151,7 +152,7 @@ describe('the game directory resolver', () => {
     dirs.push(prefixDir);
     const gameRoot = join(prefixDir, 'drive_c', 'Games', 'Fallout4');
     await mkdir(join(gameRoot, 'Data'), { recursive: true });
-    const detectors: GameDetectors = { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(prefixDir) };
+    const detectors: GameDetectors = { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(prefixDir), documents: () => Promise.reject(new Error('no known folder')) };
 
     const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts('C:\\Games\\Fallout4'));
 
@@ -162,6 +163,7 @@ describe('the game directory resolver', () => {
     const detectors: GameDetectors = {
       paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: () => Promise.resolve(null),
+      documents: () => Promise.reject(new Error('no known folder')),
     };
 
     const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts('C:\\Games\\Fallout4'));
@@ -179,6 +181,7 @@ describe('the game directory resolver', () => {
     const detectors: GameDetectors = {
       paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: noDetectPrefix,
+      documents: () => Promise.reject(new Error('no known folder')),
     };
 
     const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts());
@@ -206,6 +209,7 @@ describe('the game directory resolver', () => {
     const detectors: GameDetectors = {
       paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: noDetectPrefix,
+      documents: () => Promise.reject(new Error('no known folder')),
     };
 
     const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(staleGameRoot));
@@ -226,6 +230,7 @@ describe('the game directory resolver', () => {
     const detectors: GameDetectors = {
       paths: () => { asked = true; return Promise.resolve(null); },
       winePrefix: noDetectPrefix,
+      documents: () => Promise.reject(new Error('no known folder')),
     };
 
     expect(await resolverWith({}, detectors)(unknownGame)).toMatchObject({
@@ -245,6 +250,7 @@ describe('the game directory resolver', () => {
     const detectors: GameDetectors = {
       paths: () => { asked += 1; return Promise.resolve(null); },
       winePrefix: noDetectPrefix,
+      documents: () => Promise.reject(new Error('no known folder')),
     };
 
     const resolved = await resolverWith({ gameDirectory: gameRoot }, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts());
@@ -259,6 +265,7 @@ describe('the game directory resolver', () => {
     const detectors: GameDetectors = {
       paths: () => { asked += 1; return Promise.resolve(null); },
       winePrefix: noDetectPrefix,
+      documents: () => Promise.reject(new Error('no known folder')),
     };
 
     const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(gameRoot));
