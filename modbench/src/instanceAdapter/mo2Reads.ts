@@ -3,30 +3,56 @@
 
 import { basename, dirname } from 'node:path';
 import { parsePlugins } from '../loadOrderFileCodec/pluginsText';
-import { errorMessage } from '../ports/errorMessage';
 import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
 import { creationClubListFile, dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
-import { factsOf, get, listDir, stampOf } from './files';
+import { factsOf, get, listDir, readOrReason, stampOf } from './files';
 import {
-  type DataFolderPlugins, type InstanceReading, type ModFolders, type ModMeta, type ModlistEntry, type DownloadedFile, type DownloadedFiles, type FileRead, type GameFolder, type InstanceAdapter,
+  type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileOrigin, type GameFolder, type InstanceAdapter, type InstanceReading,
+  type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type SourceMods,
 } from './instanceAdapter';
 import {
   DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, entryDir, downloadSidecarFile, isTempWrite, modlistFile,
   modMetaFile, modSourceDir, pluginsFile, profilesDir, settingsFile,
 } from './layout';
-import { folderHolding, listedAs, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
+import { type ArchiveReads, mo2Archives } from './mo2Archives';
+import { entryKey, folderHolding, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
 import { sourceModsIn } from './sourceMods';
 import { isPluginFile } from './pluginFile';
 
-type Mo2Reads = Omit<InstanceAdapter,
-  | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
-  | 'trashDownloadedFileMeta' | 'selectProfile' | 'markOriginFile' | 'includedPath' | 'excludedSuffix' | 'renamePlugin' | 'install'
-  | 'subscribe' | 'names' | 'archiveList' | 'gameFolderArchives' | 'installationFiles'
-  | 'managerFilesInModFolder' | 'reading' | 'originFileHash' | 'gameFileHash' | 'downloadedFileHash'>;
+interface InstanceSettings {
+  readonly profile: string;
+  /** The game as the mod manager's configuration names it. */
+  readonly gameName: string;
+  /** Mutagen's release of that game; undefined when the tables hold none for it. */
+  readonly gameRelease: string | undefined;
+  gameFolder(): Promise<GameFolder>;
+  downloadedFiles(): Promise<DownloadedFiles>;
+}
+
+/** What one reading is made of: each file read through its own codec, against the one read of the settings. */
+export interface ReadingSource extends ArchiveReads {
+  settings(): Promise<InstanceSettings>;
+  /** Every profile's name; none when the instance has no profiles. */
+  profiles(): Promise<string[]>;
+  modOrder(profile: string): Promise<ModlistEntry[]>;
+  /** Empty when the mod has no metadata. */
+  modMeta(mod: string): Promise<ModMeta>;
+  pluginOrder(profile: string): Promise<PluginEntry[]>;
+  gameFolderPlugins(gameFolder: GameFolder): Promise<DataFolderPlugins>;
+  /** The plugins the game folder's Creation Club list names, in its order; none when the release
+   *  has no Creation Club, the game folder is not found, or it holds no list. */
+  creationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]>;
+  /** Undefined when there is no folder for mods at all. A link that cannot be followed is no
+   *  folder, and is handed to `skippedLink`. */
+  modFolders(skippedLink?: (name: string, reason: string) => void): Promise<ModFolders | undefined>;
+  /** An origin's files, none when its folder is not there. */
+  originFiles(origin: FileOrigin): Promise<OriginFiles>;
+  sourceMods(): Promise<SourceMods>;
+}
 
 async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile[] | undefined> {
   const dirents = await readOrAbsent(() => listDir(downloadsDir), undefined);
@@ -49,12 +75,9 @@ async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile
 async function listGameFolderPlugins(gameFolder: GameFolder): Promise<DataFolderPlugins> {
   const dataFolder = dataFolderOf(gameFolder);
   if (dataFolder === undefined) return { kind: 'unresolved' };
-  try {
-    const dirents = await listDir(dataFolder);
-    return { kind: 'listed', names: new Set(dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => d.name)) };
-  } catch (err) {
-    return { kind: 'unreadable', reason: errorMessage(err) };
-  }
+  const dirents = await readOrReason(() => listDir(dataFolder));
+  if (dirents.kind === 'unreadable') return dirents;
+  return { kind: 'listed', names: new Set(dirents.answer.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => d.name)) };
 }
 
 // The game writes its Creation Club list in plugins.txt's own line format.
@@ -65,20 +88,13 @@ async function readCreationClubList(gameFolder: GameFolder, gameRelease: string 
   return text === undefined ? [] : parsePlugins(text).map((entry) => entry.name);
 }
 
-async function answerOrReason<T>(read: () => Promise<T>): Promise<FileRead<T>> {
-  try {
-    return { kind: 'read', answer: await read() };
-  } catch (err) {
-    return { kind: 'unreadable', reason: errorMessage(err) };
-  }
-}
-
 // The tables key each release on the game's name as `gameName=` spells it.
 const gameOf = (gameName: string) => ({ gameName, gameRelease: gameReleaseForGame(gameName) });
 
-export function mo2Reads(context: Mo2Context): Mo2Reads {
+export function readingSource(context: Mo2Context): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch } = context;
   return {
+    ...mo2Archives(context),
     async settings() {
       const iniText = await get(settingsFile(instanceRoot));
       const game = gameOf(readGameName(iniText));
@@ -115,10 +131,6 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
       return parseModlist(await get(modlistFile(instanceRoot, profile)));
     },
 
-    async orderEntry(profile, entry) {
-      return listedAs(parseModlist(await get(modlistFile(instanceRoot, profile))), entry);
-    },
-
     modMeta(mod) {
       return readOrAbsent(async () => parseMetaIni(await get(modMetaFile(instanceRoot, mod))), {});
     },
@@ -136,22 +148,21 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
 
     creationClubList: readCreationClubList,
 
-    entryFolder: (entry) => folderHolding(context, entry),
-    modFolderPath: async (name) => (await folderHolding(context, { kind: 'mod', name }))?.path ?? entryDir(instanceRoot, { kind: 'mod', name }),
-
     originFiles: (origin) => originFilesIn(instanceRoot, origin),
 
-    sourceFolder: (mod) => modSourceDir(instanceRoot, mod),
-
     sourceMods: () => sourceModsIn(instanceRoot),
-
-    fileStamp: (path) => answerOrReason(() => stampOf(path)),
   };
 }
 
-type ReadingSource = Pick<InstanceAdapter,
-  | 'settings' | 'modOrder' | 'modMeta' | 'pluginOrder' | 'gameFolderPlugins' | 'creationClubList' | 'archiveList'
-  | 'gameFolderArchives' | 'profiles' | 'modFolders' | 'originFiles' | 'sourceMods'>;
+export function mo2Reads(context: Mo2Context): Pick<InstanceAdapter, 'modFolderPath' | 'sourceFolder' | 'fileStamp' | 'entryKey'> {
+  const { instanceRoot } = context;
+  return {
+    modFolderPath: async (name) => (await folderHolding(context, { kind: 'mod', name }))?.path ?? entryDir(instanceRoot, { kind: 'mod', name }),
+    sourceFolder: (mod) => modSourceDir(instanceRoot, mod),
+    entryKey,
+    fileStamp: (path) => readOrReason(() => stampOf(path)),
+  };
+}
 
 // How long another tool's write takes to settle before an empty mod order is believed.
 const SETTLE_MS = 200;

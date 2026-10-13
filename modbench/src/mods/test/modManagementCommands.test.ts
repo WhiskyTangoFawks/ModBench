@@ -83,14 +83,14 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
   });
 
   it('the prompt\'s validateInput asks the command whether the name is free', async () => {
-    newModNameRefusal.mockResolvedValueOnce('"Harder VATS" already exists');
+    newModNameRefusal.mockReturnValueOnce('"Harder VATS" already exists');
     registerCreateEmptyModCommand(commands, instance, recordingReporter());
     await invoke('modbench.mod.createEmpty');
 
     const [options] = present(showInputBox.mock.calls[0], 'the one showInputBox call');
     const validateInput = present(options?.validateInput, 'validateInput on the input box options');
     expect(await validateInput('Harder VATS')).toBe('"Harder VATS" already exists');
-    expect(newModNameRefusal).toHaveBeenCalledWith('Harder VATS');
+    expect(newModNameRefusal).toHaveBeenCalledWith(instance.value, 'Harder VATS');
   });
 
   it('creates the folder and its line, and reports nothing when both land', async () => {
@@ -265,7 +265,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
       buttons: ['Uninstall'],
     }]);
     expect(uninstallMods).toHaveBeenCalledWith(
-      'Default', [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
+      'Default', instance.value.mods, [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
   });
 
   const facts = { holdsPlugin: true, tracked: true, fileOrderConflict: false };
@@ -321,6 +321,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     expect(ask.asked[0]?.message).toContain('Their folders will be moved to the system trash.');
     expect(uninstallMods).toHaveBeenCalledWith(
       'Default',
+      instance.value.mods,
       [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }, { name: 'Mod B', archiveFilename: undefined }],
       trash,
     );
@@ -342,7 +343,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     await invoke('modbench.mod.uninstall');
 
     expect(uninstallMods).toHaveBeenCalledWith(
-      'Default', [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
+      'Default', instance.value.mods, [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
   });
 
   it('an empty selection asks nothing and uninstalls nothing', async () => {
@@ -445,7 +446,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked on
     registerSeparatorCommands(commands, instance, reporter, scriptedDialog('Delete'), trash, () => []);
     await invoke('modbench.separator.delete', groupB, [groupA, groupB]);
 
-    expect(deleteSeparators.mock.calls).toEqual([['Default', ['Group A', 'Group B'], trash]]);
+    expect(deleteSeparators.mock.calls).toEqual([['Default', instance.value.mods, ['Group A', 'Group B'], trash]]);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -487,7 +488,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked on
     registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog('Delete'), trash, () => []);
     await invoke('modbench.separator.delete', groupA, [modA, groupA]);
 
-    expect(deleteSeparators.mock.calls).toEqual([['Default', ['Group A'], trash]]);
+    expect(deleteSeparators.mock.calls).toEqual([['Default', instance.value.mods, ['Group A'], trash]]);
   });
 
   it('calls nothing and reports nothing for a selection with no separator', async () => {
@@ -581,14 +582,14 @@ describe('rename separator takes its separator through the gesture entry', () =>
 
   it('asks the command in the prompt whether the name is free of the other separators, passing the separator\'s own name, and asks nothing of an empty name', async () => {
     showInputBox.mockResolvedValueOnce(undefined);
-    separatorNameRefusal.mockResolvedValueOnce(CLASH);
+    separatorNameRefusal.mockReturnValueOnce(CLASH);
 
     registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
     await invoke('modbench.separator.rename', groupB);
 
     const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the rename prompt\'s validateInput');
     expect(await validate('group a')).toBe(CLASH);
-    expect(separatorNameRefusal).toHaveBeenCalledWith('Default', 'group a', 'Group B');
+    expect(separatorNameRefusal).toHaveBeenCalledWith(instance.value, 'group a', 'Group B');
     expect(await validate('')).toBeUndefined();
     expect(separatorNameRefusal).toHaveBeenCalledTimes(1);
   });
@@ -662,14 +663,14 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
 
   it('asks the command in the prompt whether the name is free of the other separators, and asks nothing of an empty name', async () => {
     showInputBox.mockResolvedValueOnce(undefined);
-    separatorNameRefusal.mockResolvedValueOnce(CLASH);
+    separatorNameRefusal.mockReturnValueOnce(CLASH);
 
     registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
     await invoke('modbench.separator.add', modA);
 
     const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the add prompt\'s validateInput');
     expect(await validate('Group A')).toBe(CLASH);
-    expect(separatorNameRefusal).toHaveBeenCalledWith('Default', 'Group A', undefined);
+    expect(separatorNameRefusal).toHaveBeenCalledWith(instance.value, 'Group A', undefined);
     expect(await validate('')).toBeUndefined();
     expect(separatorNameRefusal).toHaveBeenCalledTimes(1);
   });
@@ -1452,11 +1453,11 @@ describe('rename mod refuses in its prompt', () => {
   }
 
   it('asks the command whether the name is free of the other mods, passing the mod\'s own name, and asks nothing of an empty name', async () => {
-    renameModNameRefusal.mockResolvedValueOnce(MOD_CLASH);
+    renameModNameRefusal.mockReturnValueOnce(MOD_CLASH);
     const validate = await validatorOver();
 
     expect(await validate('mod a')).toBe(MOD_CLASH);
-    expect(renameModNameRefusal).toHaveBeenCalledWith('Default', 'mod a', 'Mod B');
+    expect(renameModNameRefusal).toHaveBeenCalledWith(instance.value, 'mod a', 'Mod B');
     expect(await validate('')).toBeUndefined();
     expect(renameModNameRefusal).toHaveBeenCalledTimes(1);
   });

@@ -193,7 +193,7 @@ function registerPluginGestures(
     registerBuildCommand({
       commands: sourceCommands, instance, gameRelease: () => instance.value.gameRelease, reporter: reporterFor('mod.build'), problems: buildProblems,
       sourceFiles: (origin) => sourceFiles(instance.value, origin), saveUnsaved: saveUnsavedPluginSource,
-      modDirs: () => instance.value.paths.modDirs, sourceMods: () => instance.value.sourceMods, modsView,
+      modDirs: () => instance.value.paths.modDirs, sourceDirs: () => instance.value.paths.sourceDirs, modsView,
     }, sourceGestureRows),
     registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
     registerRecordCreateCommand({

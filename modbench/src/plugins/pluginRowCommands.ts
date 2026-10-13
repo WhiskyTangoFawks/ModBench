@@ -210,8 +210,8 @@ export interface BuildDeps {
   saveUnsaved: (mod: string) => Promise<string[] | undefined>;
   /** The instance's mod folders by mod name, which say whether an origin is a mod. */
   modDirs: () => ReadonlyMap<string, string>;
-  /** The mods that hold a repository. */
-  sourceMods: () => ReadonlySet<string>;
+  /** The source folder of each mod that holds a repository, by mod name. */
+  sourceDirs: () => ReadonlyMap<string, string>;
   /** The Mods view's id, whose bar a gesture from a Mods row or the palette runs under. */
   modsView: string;
 }
@@ -226,32 +226,32 @@ export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => re
     async (clicked?: unknown, selected?: readonly unknown[]) => {
       const entry = gestureEntry(clicked, selected, paletteSelection, isClickedRow);
       const targets = targetsOf(entry.selection, deps.modDirs());
-      const fromARow = entry.clicked !== undefined || targets.mods.some((mod) => deps.sourceMods().has(mod));
+      const fromARow = entry.clicked !== undefined || targets.mods.some((mod) => deps.sourceDirs().has(mod));
       if (fromARow) {
         const invokedFrom = entry.selection.some((row) => modArgumentOf(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
         await buildMods(deps, targets, invokedFrom);
         return;
       }
-      const mods = await pickSourceMods(deps.sourceMods());
+      const mods = await pickSourceMods(deps.sourceDirs());
       if (mods !== undefined) await buildMods(deps, { mods, refusedRows: [] }, deps.modsView);
     },
   );
 }
 
 // mods.md, Build, story 7: from the palette with no source mod selected, a pick of every source.
-async function pickSourceMods(sourceMods: ReadonlySet<string>): Promise<string[] | undefined> {
-  const items = [...sourceMods].sort().map((label) => ({ label }));
+async function pickSourceMods(sourceDirs: ReadonlyMap<string, string>): Promise<string[] | undefined> {
+  const items = [...sourceDirs.keys()].sort().map((label) => ({ label }));
   const picked = await vscode.window.showQuickPick(items, { canPickMany: true, placeHolder: 'Build which mods?' });
   return picked?.map((item) => item.label);
 }
 
 async function buildMods(deps: BuildDeps, targets: ModTargets, invokedFrom: string): Promise<void> {
   const { reporter, commands, instance } = deps;
-  const sourceMods = deps.sourceMods();
-  const mods = targets.mods.filter((mod) => sourceMods.has(mod));
+  const sourceDirs = deps.sourceDirs();
+  const mods = targets.mods.filter((mod) => sourceDirs.has(mod));
   const refusedRows = [
     ...targets.refusedRows,
-    ...targets.mods.filter((mod) => !sourceMods.has(mod)).map((mod) => ({ item: mod, reason: NOT_A_SOURCE_MOD })),
+    ...targets.mods.filter((mod) => !sourceDirs.has(mod)).map((mod) => ({ item: mod, reason: NOT_A_SOURCE_MOD })),
   ];
   if (mods.length === 0) {
     if (refusedRows.length > 0) reportBuilt(reporter, { landed: [], refused: refusedRows });
@@ -259,7 +259,7 @@ async function buildMods(deps: BuildDeps, targets: ModTargets, invokedFrom: stri
   }
   if (!(await savedFirst(deps, mods))) return;
   await runWritingGesture(invokedFrom, instance, async () => {
-    const outcome = await commands.build(mods, deps.gameRelease());
+    const outcome = await commands.build(mods, deps.gameRelease(), sourceDirs);
     if (isRefused(outcome)) { reporter.report('error', outcome.message); return; }
     for (const { compiled } of outcome.landed) {
       for (const plugin of compiled) deps.problems.publish(plugin, deps.sourceFiles(plugin.origin), plugin.diagnostics);

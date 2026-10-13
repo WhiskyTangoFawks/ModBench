@@ -37,7 +37,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
     return downloads.kind === 'listed' ? downloads.rows.find((row) => samePath(row.path, path)) : undefined;
   };
   const installNew = async (source: ModSource, defaultName: string, tag: string): Promise<InstallOutcome> => {
-    const name = await promptModName(defaultName, commands.newModNameRefusal);
+    const name = await promptModName(defaultName, (value) => commands.newModNameRefusal(instance.value, value));
     if (!name) return NOT_INSTALLED;
     let succeeded = false;
     await runModsWriting(instance, () => reportFailure(reporterFor(tag), `Failed to install "${name}".`, async () => {

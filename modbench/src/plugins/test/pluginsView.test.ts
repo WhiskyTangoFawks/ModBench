@@ -221,7 +221,7 @@ describe('the Plugins view registers its own gestures', () => {
   });
 
   it('offers modbench.mod.build from the palette every source in the source folder, the modlist listing it or not', async () => {
-    pluginsView(instanceValueFixture({ sourceMods: new Set(['Cloned And Unlisted']), trackedMods: new Set() }));
+    pluginsView(instanceValueFixture({ paths: { ...instanceValueFixture().paths, sourceDirs: new Map([['Cloned And Unlisted', '/source/Cloned And Unlisted']]) } }));
 
     await present(h.commands.get('modbench.mod.build'), 'the modbench.mod.build handler')();
 

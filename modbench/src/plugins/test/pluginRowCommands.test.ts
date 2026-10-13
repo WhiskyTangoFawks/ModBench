@@ -302,7 +302,7 @@ describe('modbench.mod.build', () => {
   const PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const MOD_DIRS = new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB'], ['ModC', '/mods/ModC']]);
-  const SOURCE_MODS = new Set(['ModA', 'ModB', 'ModS', 'ModX']);
+  const SOURCE_DIRS = new Map(['ModA', 'ModB', 'ModS', 'ModX'].map((mod) => [mod, `/source/${mod}`]));
   const FILES = valueWithSourceDirs(new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, normalize(`/instance/source/${mod}`)])));
   const built = (mod: string, plugins: PluginAddress[] = [], refused: { item: PluginAddress; reason: string }[] = []) =>
     ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [], overwritten: [] });
@@ -324,15 +324,16 @@ describe('modbench.mod.build', () => {
     const diagnostics = new FakeDiagnosticCollection();
     registerBuildCommand({
       commands: {
-        build: (mods, gameRelease) => {
+        build: (mods, gameRelease, sourceDirs) => {
           progressSteps.push('build');
           builds.push([mods, gameRelease]);
+          expect(sourceDirs).toBe(SOURCE_DIRS);
           return client.build([], { excludedSuffix: '', archives: null });
         },
       },
       instance: instanceThatReads, gameRelease: () => 'Fallout4',
       reporter, problems: new BuildProblems(diagnostics),
-      modDirs: () => MOD_DIRS, sourceMods: () => SOURCE_MODS, modsView: 'modbench.modList',
+      modDirs: () => MOD_DIRS, sourceDirs: () => SOURCE_DIRS, modsView: 'modbench.modList',
       sourceFiles: (origin) => sourceFiles(FILES, origin),
       saveUnsaved: (mod) => {
         const files = sourceFiles(FILES, mod);
