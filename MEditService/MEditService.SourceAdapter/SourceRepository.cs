@@ -42,18 +42,21 @@ public sealed class SourceRepository : ISourceRepository
     /// <summary>The repository over <paramref name="mod"/>'s source folder, or null when the folder is not
     /// tracked and so has no source tree to answer from.</summary>
     internal static SourceRepository? Open(PluginProvider.FromMod mod, GameRelease release) =>
-        IsTracked(mod.SourceFolder) ? Over(mod, release) : null;
+        IsTracked(mod) ? Over(mod, release) : null;
 
     /// <summary>The repository over a mod's source folder, which refuses the last-written record of a plugin
     /// another mod provides (ADR-0012): a repository knows only its folder.</summary>
     internal static SourceRepository Over(PluginProvider.FromMod mod, GameRelease release) =>
-        new(mod.SourceFolder, release, mod.Name, DiskFiles.Instance);
+        new(mod.SourceFolder ?? throw new InvalidOperationException($"'{mod.Name}' is not a source mod, so it has no source folder."),
+            release, mod.Name, DiskFiles.Instance);
 
     /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c>
     /// exists.</summary>
     internal static bool IsTracked(string sourceFolder) => SourceRepositoryGit.IsTracked(sourceFolder);
 
-    internal static bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.SourceFolder);
+    internal static bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod);
+
+    private static bool IsTracked(PluginProvider.FromMod mod) => mod.SourceFolder is { } sourceFolder && IsTracked(sourceFolder);
 
     /// <summary>The refusal naming the instance root when it is not there; null when it is.</summary>
     public static string? InstanceRootNotFound(string? instanceRoot) =>
@@ -62,7 +65,7 @@ public sealed class SourceRepository : ISourceRepository
     /// <summary>Whether the plugin's source reads: its mod is tracked and holds one tree for it. A tracked mod
     /// holds none for a plugin another tool put there or whose source was deleted.</summary>
     internal static bool SourceReads(RegisteredPlugin plugin) =>
-        plugin.Provider is PluginProvider.FromMod mod && HoldsTreeFor(mod.SourceFolder, plugin.Name);
+        plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && HoldsTreeFor(sourceFolder, plugin.Name);
 
     private static bool HoldsTreeFor(string sourceFolder, string pluginFileName) =>
         IsTracked(sourceFolder) && SourceRepositoryLayout.TreeNameIn(sourceFolder, pluginFileName).Holds(out _, out _);
@@ -70,8 +73,8 @@ public sealed class SourceRepository : ISourceRepository
     /// <summary>Why the plugin's source does not read though its mod is tracked: no folder, twin folders, or a plugin
     /// source that cannot be listed. Null when it reads, and when its mod is not tracked.</summary>
     internal static SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) =>
-        plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.SourceFolder)
-        && !SourceRepositoryLayout.TreeNameIn(mod.SourceFolder, plugin.Name).Holds(out _, out var why)
+        plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && IsTracked(sourceFolder)
+        && !SourceRepositoryLayout.TreeNameIn(sourceFolder, plugin.Name).Holds(out _, out var why)
             ? why
             : null;
 
@@ -186,11 +189,11 @@ public sealed class SourceRepository : ISourceRepository
     internal static bool TreeHolds(RegisteredPlugin plugin, string fullPath) => TreeFolderHolding(plugin, fullPath) is not null;
 
     private static string? TreeFolderHolding(RegisteredPlugin plugin, string fullPath) =>
-        plugin.Provider is PluginProvider.FromMod mod
-        && SourceRepositoryLayout.TreeFolderHolding(mod.SourceFolder, fullPath) is { } tree
+        plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder }
+        && SourceRepositoryLayout.TreeFolderHolding(sourceFolder, fullPath) is { } tree
         && tree.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
-        && IsTracked(mod.SourceFolder)
-        && SourceRepositoryLayout.TreeNameIn(mod.SourceFolder, plugin.Name).Holds(out var named, out _)
+        && IsTracked(sourceFolder)
+        && SourceRepositoryLayout.TreeNameIn(sourceFolder, plugin.Name).Holds(out var named, out _)
         && string.Equals(named, tree, SourceRepositoryLocator.PathComparison)
             ? tree
             : null;

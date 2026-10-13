@@ -173,7 +173,7 @@ describe('registerModContextCommands: modbench.mod.rename', () => {
     await invoke('modbench.mod.rename', modB, [modA, modB]);
 
     expect(showInputBox.mock.calls[0]?.[0]).toMatchObject({ prompt: 'Rename mod', value: 'Mod B' });
-    expect(renameMod.mock.calls).toEqual([['Default', ['Default', 'Secondary'], 'Mod B', 'Renamed']]);
+    expect(renameMod.mock.calls).toEqual([['Default', ['Default', 'Secondary'], 'Mod B', 'Renamed', undefined]]);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -193,7 +193,21 @@ describe('registerModContextCommands: modbench.mod.rename', () => {
     register(recordingReporter(), [modA]);
     await invoke('modbench.mod.rename', MODS_KEY_ARGS);
 
-    expect(renameMod).toHaveBeenCalledWith('Default', ['Default', 'Secondary'], 'Mod A', 'Renamed');
+    expect(renameMod).toHaveBeenCalledWith('Default', ['Default', 'Secondary'], 'Mod A', 'Renamed', undefined);
+  });
+
+  it('renames a source mod with the source folder that builds it, so its build configuration is written with it', async () => {
+    renameMod.mockResolvedValue({ applied: true, lineRefusals: [] });
+    showInputBox.mockResolvedValueOnce('Renamed');
+    const sourceInstance = {
+      ...instance,
+      value: { ...instance.value, trackedMods: new Set(['Mod A']), paths: { ...instance.value.paths, sourceDirs: new Map([['Mod A', '/instance/source/Old A']]) } },
+    };
+
+    registerModContextCommands({ commands, instance: sourceInstance, viewSelection: () => [], reporter: recordingReporter(), ask: scriptedDialog(), trash: vi.fn(), log: vi.fn() });
+    await invoke('modbench.mod.rename', modA);
+
+    expect(renameMod).toHaveBeenCalledWith('Default', ['Default', 'Secondary'], 'Mod A', 'Renamed', '/instance/source/Old A');
   });
 
   it('reports a refusal, the folder not having moved, as a failed rename', async () => {
@@ -1236,38 +1250,55 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
   const included = fileRow('a.dds', false);
   const excluded = fileRow('b.dds.mohidden', true);
   const refOf = (row: FileNode) => ({ origin: row.origin, relativePath: row.file.relativePath });
+  const instance = {
+    ...instanceThatReads,
+    value: instanceValueFixture({
+      trackedMods: new Set(['M']),
+      paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map(), sourceDirs: new Map([['M', '/instance/source/M']]) },
+    }),
+  };
 
   it('sends every selected file to the write, whatever the view shows each as, and nothing else', async () => {
-    markFiles.mockResolvedValue({ landed: [], refused: [] });
+    markFiles.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
     const reporter = recordingReporter();
 
-    registerFileExclusionCommands(commands, instanceThatReads, () => [], reporter);
+    registerFileExclusionCommands(commands, instance, () => [], reporter);
     await invoke('modbench.mod.excludeFile', included, [included, excluded, modRow]);
 
-    expect(markFiles).toHaveBeenCalledWith([refOf(included), refOf(excluded)], 'Excluded');
+    expect(markFiles).toHaveBeenCalledWith([refOf(included), refOf(excluded)], 'Excluded', new Map([['M', '/instance/source/M']]));
     expect(reporter.reports).toEqual([]);
   });
 
   it('includes the view\'s selection from the palette, where no row is right-clicked', async () => {
-    markFiles.mockResolvedValue({ landed: [], refused: [] });
+    markFiles.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
 
-    registerFileExclusionCommands(commands, instanceThatReads, () => [excluded], recordingReporter());
+    registerFileExclusionCommands(commands, instance, () => [excluded], recordingReporter());
     await invoke('modbench.mod.includeFile');
 
-    expect(markFiles).toHaveBeenCalledWith([refOf(excluded)], 'Included');
+    expect(markFiles).toHaveBeenCalledWith([refOf(excluded)], 'Included', new Map([['M', '/instance/source/M']]));
   });
 
   it('reports each refused file by its mod and path, once, out of the files selected, while the rest land', async () => {
     const gone = fileRow('c.dds', false);
-    markFiles.mockResolvedValue({ landed: [], refused: [{ item: refOf(gone), reason: '"c.dds" is gone from disk.' }] });
+    markFiles.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [{ item: refOf(gone), reason: '"c.dds" is gone from disk.' }] } });
     const reporter = recordingReporter();
 
-    registerFileExclusionCommands(commands, instanceThatReads, () => [], reporter);
+    registerFileExclusionCommands(commands, instance, () => [], reporter);
     await invoke('modbench.mod.excludeFile', included, [included, excluded, gone]);
 
     expect(reporter.reports).toEqual([{
       severity: 'error', message: 'Could not exclude 1 of 3 files.', detail: '"M/c.dds" ("c.dds" is gone from disk.)',
     }]);
+  });
+
+  it('reports a refusal of the whole selection once, naming its cause', async () => {
+    markFiles.mockResolvedValue({ applied: false, refusal: 'mEdit could not be reached.' });
+    const reporter = recordingReporter();
+
+    registerFileExclusionCommands(commands, instance, () => [], reporter);
+    await invoke('modbench.mod.excludeFile', included, [included, fileRow('c.dds', false)]);
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not exclude 2 files.', detail: 'mEdit could not be reached.' }]);
   });
 
   it.each([
@@ -1278,22 +1309,22 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
     const inFolder = (relativePath: string, excludedByName: boolean) => new FileNode(hidingFolder, origin,
       { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded: true, excludedByName },
       relativePath);
-    markFiles.mockResolvedValue({ landed: [], refused: [] });
+    markFiles.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
     const reporter = recordingReporter();
 
-    registerFileExclusionCommands(commands, instanceThatReads, () => [], reporter);
+    registerFileExclusionCommands(commands, instance, () => [], reporter);
     await invoke(`modbench.mod.${verb}`, clicked, [clicked, inFolder('x.mohidden/c.dds', false), inFolder('x.mohidden/d.dds.mohidden', true)]);
 
     expect(markFiles).toHaveBeenCalledWith([
       refOf(clicked), { origin, relativePath: 'x.mohidden/c.dds' }, { origin, relativePath: 'x.mohidden/d.dds.mohidden' },
-    ], mark);
+    ], mark, expect.anything());
     expect(reporter.reports).toEqual([]);
   });
 
   it('calls nothing and reports nothing over a selection with no file', async () => {
     const reporter = recordingReporter();
 
-    registerFileExclusionCommands(commands, instanceThatReads, () => [modRow], reporter);
+    registerFileExclusionCommands(commands, instance, () => [modRow], reporter);
     await invoke('modbench.mod.excludeFile');
 
     expect(markFiles).not.toHaveBeenCalled();
@@ -1440,7 +1471,7 @@ describe('open source: a source mod\'s source folder', () => {
       trackedMods: new Set(['Source Mod']),
       paths: {
         overwriteDir: undefined, downloadsDir: '', modDirs: new Map(),
-        sourceDirs: new Map([['Source Mod', '/instance/source/Source Mod'], ['Plain Mod', '/instance/source/Plain Mod']]),
+        sourceDirs: new Map([['Source Mod', '/instance/source/Source Mod']]),
       },
     }),
   };
@@ -1454,7 +1485,7 @@ describe('open source: a source mod\'s source folder', () => {
     expect(revealed()).toEqual(['/instance/source/Source Mod']);
   });
 
-  it('refuses a mod with no repository, naming it, though the value has a path where one would be', async () => {
+  it('refuses a mod with no repository, naming it', async () => {
     const reporter = recordingReporter();
 
     registerOpenSourceCommand(instance, reporter, () => []);

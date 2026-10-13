@@ -522,6 +522,15 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(providers).toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA', sourceFolder: '/mo2/source/ModA' }, { kind: 'Game' }, { kind: 'None' }]);
   });
 
+  it('names no source folder for a mod that is no source mod', () => {
+    const outcome = loadOrderSnapshotOf({
+      plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs: new Map(), archives: NO_ARCHIVES,
+    });
+
+    expect(outcome !== undefined && 'plugins' in outcome ? outcome.plugins.map((p) => p.provider) : [])
+      .toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA' }]);
+  });
+
   it('is a refusal naming each plugin and its mod when no mod folder is the mod\'s, never a snapshot without them', () => {
     expect(outcomeOf([row('a.esp', 'ModA', 0), row('b.esp', 'ModGone', 1), row('c.esp', 'ModGone', null)]))
       .toEqual({ refusal: 'b.esp and c.esp are provided by the mod ModGone, which has no mod folder' });

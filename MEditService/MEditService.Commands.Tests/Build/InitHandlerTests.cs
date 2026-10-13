@@ -25,7 +25,7 @@ public sealed class InitHandlerTests : IDisposable
         _mod = new PluginProvider.FromMod(
             Origin,
             Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName,
-            Path.Combine(_instanceRoot, "source", Origin));
+            SourceFolder);
         var gameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
 
         var pluginPath = Path.Combine(_mod.Folder, PluginName);
@@ -39,6 +39,8 @@ public sealed class InitHandlerTests : IDisposable
 
     private LoadOrderSnapshot Snapshot { get; }
 
+    private string SourceFolder => Path.Combine(_instanceRoot, "source", Origin);
+
     public void Dispose() => _instanceRoot.Dispose();
 
     [Fact]
@@ -48,7 +50,7 @@ public sealed class InitHandlerTests : IDisposable
         var handler = TestEditService.InitHandler(_holder);
         var modFolderBefore = TreeSnapshot.Of(_mod.Folder);
 
-        var result = await handler.InitAsync(ToInit.Named(Origin));
+        var result = await handler.InitAsync(ToInit.In(Snapshot, Origin));
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Landed).Outcome.Plugins);
         Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(PluginName, Origin, "", _mod, Line: null)));
@@ -61,7 +63,7 @@ public sealed class InitHandlerTests : IDisposable
         _holder.Apply(Snapshot);
         var handler = TestEditService.InitHandler(_holder);
 
-        var result = await handler.InitAsync(ToInit.Named(Origin, "NoSuchMod", Origin.ToUpperInvariant()));
+        var result = await handler.InitAsync(ToInit.In(Snapshot, Origin, "NoSuchMod", Origin.ToUpperInvariant()));
 
         Assert.Equal([Origin], result.Landed.Select(landed => landed.Item));
         var refused = Assert.Single(result.Refused);
@@ -77,11 +79,11 @@ public sealed class InitHandlerTests : IDisposable
         WriteInModFolder("meshes/added.nif", "added after install");
         var installed = InstallationFileHolding(("textures/kept.dds", "as installed"), ("textures/edited.dds", "as installed, before the edit"));
 
-        var result = await InitWith(new ModToInit(Origin, [installed], []));
+        var result = await InitWith(new ModToInit(Origin, SourceFolder, [installed], []));
 
         Assert.Single(result.Landed);
         Assert.Equal(["assets/meshes/added.nif", "assets/textures/edited.dds"], CommittedAssets());
-        Assert.Equal("edited after install", File.ReadAllText(Path.Combine(_mod.SourceFolder, "assets", "textures", "edited.dds")));
+        Assert.Equal("edited after install", File.ReadAllText(Path.Combine(SourceFolder, "assets", "textures", "edited.dds")));
     }
 
     [Fact]
@@ -90,7 +92,7 @@ public sealed class InitHandlerTests : IDisposable
         WriteInModFolder("textures/chosen.dds", "an option the installer chose");
         var installed = InstallationFileHolding(("00 Core/textures/chosen.dds", "an option the installer chose"));
 
-        var result = await InitWith(new ModToInit(Origin, [installed], []));
+        var result = await InitWith(new ModToInit(Origin, SourceFolder, [installed], []));
 
         Assert.Single(result.Landed);
         Assert.Empty(CommittedAssets());
@@ -102,7 +104,7 @@ public sealed class InitHandlerTests : IDisposable
         WriteInModFolder("meta.ini", "[General]");
         WriteInModFolder("Scripts/Quest.pex", "a script");
 
-        await InitWith(new ModToInit(Origin, [], ["meta.ini"]));
+        await InitWith(new ModToInit(Origin, SourceFolder, [], ["meta.ini"]));
 
         Assert.Equal(["assets/Scripts/Quest.pex"], CommittedAssets());
     }
@@ -115,12 +117,12 @@ public sealed class InitHandlerTests : IDisposable
         FileModes.Set(held, "000");
         try
         {
-            var result = await InitWith(new ModToInit(Origin, [], []));
+            var result = await InitWith(new ModToInit(Origin, SourceFolder, [], []));
 
             var refused = Assert.Single(result.Refused);
             Assert.Equal(InitRefusal.ModFilesUnreadable, refused.Refusal);
             Assert.Contains("held.dds", refused.Message, StringComparison.Ordinal);
-            Assert.False(Directory.Exists(_mod.SourceFolder));
+            Assert.False(Directory.Exists(SourceFolder));
         }
         finally
         {
@@ -157,7 +159,7 @@ public sealed class InitHandlerTests : IDisposable
     }
 
     private string[] CommittedAssets() =>
-        [.. GitProbe.Run(Path.Combine(_mod.SourceFolder, ".git"), _mod.SourceFolder, "ls-tree", "-r", "--name-only", "main")
+        [.. GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "ls-tree", "-r", "--name-only", "main")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Where(path => path.StartsWith("assets/", StringComparison.Ordinal))];
 }

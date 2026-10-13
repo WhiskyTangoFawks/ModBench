@@ -16,7 +16,7 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved) : ISourceAdapter
     public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => SourceRepository.WhySourceDoesNotRead(plugin);
 
     public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) =>
-        plugin.Provider is PluginProvider.FromMod mod ? SourceRepository.Over(mod, release).Over(Files()) : null;
+        plugin.Provider is PluginProvider.FromMod { SourceFolder: not null } mod ? SourceRepository.Over(mod, release).Over(Files()) : null;
 
     public ISourceRepositoryReads? TreeOf(RegisteredPlugin plugin, GameRelease release) =>
         SourceReads(plugin) ? Over(plugin, release) : null;
@@ -45,6 +45,9 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved) : ISourceAdapter
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets) =>
         SourceFailure.Answer(() => GitInit.Init(sourceFolder, output, plugins, assets));
+
+    public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) =>
+        SourceFailure.Answer(() => BuildConfiguration.Change(sourceFolder, change));
 
     public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
         SourceRepository.ReadBackOf(pluginFileName, tree, gameRelease);

@@ -38,12 +38,12 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         return this;
     }
 
-    public bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.SourceFolder);
+    public bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && IsTracked(sourceFolder);
 
     public bool IsTracked(string modFolder) => _mods.ContainsKey(modFolder);
 
     public bool SourceReads(RegisteredPlugin plugin) =>
-        plugin.Provider is PluginProvider.FromMod mod && _mods.TryGetValue(mod.SourceFolder, out var tracked) && tracked.SourceReads;
+        plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && _mods.TryGetValue(sourceFolder, out var tracked) && tracked.SourceReads;
 
     public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => throw Unreached();
 
@@ -52,7 +52,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     public IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held)
     {
         SessionsOpened++;
-        return new FakeWriteSession(new FakeRepository(_mods[provider.SourceFolder]));
+        return new FakeWriteSession(new FakeRepository(_mods[provider.SourceFolder ?? throw Unreached()]));
     }
 
     public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) => throw Unreached();
@@ -80,6 +80,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         _inits.Add((sourceFolder, plugins, assets));
         return null;
     }
+
+    public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) => throw Unreached();
 
     public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
         TestAdapters.Source().ReadBackOf(pluginFileName, tree, gameRelease);
