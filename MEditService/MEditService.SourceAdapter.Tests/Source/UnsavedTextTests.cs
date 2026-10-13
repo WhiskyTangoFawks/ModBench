@@ -21,7 +21,7 @@ public sealed class UnsavedTextTests : IDisposable
 
     public UnsavedTextTests()
     {
-        PluginBaselines.TrackWithNoRecords(_modFolder);
+        PluginBaselines.InitWithNoRecords(_modFolder);
         Repository.Put(Plugin, new SourceDocument(Npc, "npc_", "VendorNpc", NpcBody("VendorNpc"))).Wrote();
     }
 

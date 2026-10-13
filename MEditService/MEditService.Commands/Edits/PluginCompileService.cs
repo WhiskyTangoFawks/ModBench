@@ -19,7 +19,7 @@ internal sealed class PluginCompileService(
 {
     private readonly CompileLinks _links = new(adapter, logger);
 
-    // A tracked mod refuses Track, so decompile is the way back (ADR-0007).
+    // A source mod refuses init, so decompile is the way back (ADR-0007).
     private const string RegenerateTheSource = "Decompile the plugin to regenerate the source.";
 
     public async Task<CompileResult> CompileAsync(PluginAddress plugin)
@@ -202,7 +202,7 @@ internal sealed class PluginCompileService(
     // ADR-0006. The generated deserializer skips an unrecognized property or file without
     // throwing, so a successful parse proves nothing.
 
-    // No live subrecord-inventory gate here, deliberately: that loss class arises only when Track
+    // No live subrecord-inventory gate here, deliberately: that loss class arises only when init
     // parses an external binary, never from Compile.
     private static string? RefuseIfSourceDoesNotRoundTrip(IReadOnlyList<SourceDivergence> found, PluginAddress plugin)
     {

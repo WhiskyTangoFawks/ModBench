@@ -52,7 +52,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build'>;
+  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build' | 'init'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -122,10 +122,10 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const { modSync, pluginSync } = own(instanceSyncs({
     instance, syncMods: modSyncOver(adapter), syncPlugins: pluginSyncOver(adapter), channel: outputChannel,
   }));
-  const trackSelection = selectionInFocusedView(
-    own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
+  const sourceGestureRows = selectionInFocusedView(
+    own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.sourceGestureRowsIn');
   const plugins = own(pluginsBox.onInstance({
-    instance, instanceRoot, commands: pluginsCommands({ adapter, client }), sourceCommands: sourceCommands({ client }), pluginSync, trackSelection, modsView: MODS_KEY_ARGS.view,
+    instance, instanceRoot, commands: pluginsCommands({ adapter, client }), sourceCommands: sourceCommands({ client, adapter }), pluginSync, sourceGestureRows, modsView: MODS_KEY_ARGS.view,
     saveUnsavedPluginSource: (mod) => saveModPluginSource((origin) => sourceFiles(instance.value, origin), mod),
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
   }));

@@ -14,7 +14,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
     private static ScratchDirectory TrackedMod()
     {
         var modFolder = new ScratchDirectory("medit-users-git-");
-        PluginBaselines.Track(modFolder, [new TreeFile(Document, "{\"a\":1}"u8.ToArray())]);
+        PluginBaselines.Init(modFolder, [new TreeFile(Document, "{\"a\":1}"u8.ToArray())]);
         return modFolder;
     }
 

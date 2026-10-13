@@ -356,7 +356,7 @@ describe('ModListProvider', () => {
     expect(disabled.contextValue).toBe('mod disabled untracked');
   });
 
-  it('a mod row states in its contextValue whether the instance value holds a plugin of it, and whether it holds a repository, which track reads on a mod with a plugin and no repository and build reads on a mod with one', async () => {
+  it('a mod row states in its contextValue whether the instance value holds a plugin of it, and whether it holds a repository, which init reads on a mod with a plugin and no repository and build reads on a mod with one', async () => {
     const value = instanceValueFixture({
       mods: [mod('Patch'), mod('Textures'), mod('Tracked')],
       trackedMods: new Set(['Tracked']),

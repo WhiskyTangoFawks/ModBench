@@ -22,7 +22,7 @@ public static class CutDownPluginFixture
 
     public static readonly PluginAddress Plugin = new(PluginFileName, PluginOrigin.DataDirectory);
 
-    /// <summary>The plugin and the tree Track makes of it, in <paramref name="modFolder"/>.</summary>
+    /// <summary>The plugin and the tree init makes of it, in <paramref name="modFolder"/>.</summary>
     internal static void TrackedInto(string modFolder) =>
         TrackedTemplates.CopyInto(modFolder, PluginFileName, template =>
         {
@@ -37,8 +37,8 @@ public static class CutDownPluginFixture
     private static Dictionary<string, byte[]> DocumentsOf(ISourceRepository repository) =>
         TreeDocuments.Of(repository, Plugin).ToDictionary(document => document.FormKey, document => Encoding.UTF8.GetBytes(document.Body));
 
-    // The library's whole-mod writer alone, not Track's own door: identical production code on
-    // both sides would agree with itself about any file Track added.
+    // The library's whole-mod writer alone, not init's own door: identical production code on
+    // both sides would agree with itself about any file init added.
     public static Dictionary<string, byte[]> DeriveSourceTreeFromBinary(string pluginPath)
     {
         // ImportSetter, not ImportGetter: a binary overlay reports some derived fields differently from a

@@ -27,6 +27,11 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     /// <summary>Plain, not dot-prefixed: the plugin's source is first-class, not hidden metadata.</summary>
     internal const string RootFolderName = "plugin-source";
 
+    /// <summary>A folder of its own, so no asset's path can be the plugin source's or a file init writes.</summary>
+    internal const string AssetsFolderName = "assets";
+
+    internal const string BuildConfigurationFileName = "build.json";
+
     /// <summary>The whole-mod door's own name for a group or block level's metadata file, written for
     /// every minted level, empty unless the level has non-default metadata.</summary>
     internal const string GroupRecordDataFileName = "GroupRecordData.json";
@@ -86,7 +91,7 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
             : null;
     }
 
-    /// <summary>One plugin's serialized tree as the files a source folder holds — what Track and
+    /// <summary>One plugin's serialized tree as the files a source folder holds — what init and
     /// decompile write.</summary>
     internal static IReadOnlyList<TreeFile> PristineFilesOf(
         string pluginFileName, IEnumerable<TreeFile> treeFiles) =>
@@ -457,7 +462,7 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
         return PathShape.DirectoryOf(document);
     }
 
-    // Only a level the tree lacks gets one: Track writes a level's document with whatever metadata the
+    // Only a level the tree lacks gets one: Init writes a level's document with whatever metadata the
     // source mod carried, and a cell landing in the level is no reason to respell it.
     private string BlockLevelDocument(string level, int? x, int? y) =>
         RecordTextCodec.BlankDocument(

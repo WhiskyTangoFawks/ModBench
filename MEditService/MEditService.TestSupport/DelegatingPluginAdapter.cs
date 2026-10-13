@@ -27,6 +27,9 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
 
     public virtual bool Exists(string pluginPath) => inner.Exists(pluginPath);
 
+    public virtual IReadOnlyList<string> WrittenByCompile(RegisteredPlugin plugin, IReadOnlyList<string> paths, GameRelease gameRelease) =>
+        inner.WrittenByCompile(plugin, paths, gameRelease);
+
     public virtual string? HashOf(string pluginPath) => inner.HashOf(pluginPath);
 
     public virtual void KeepHashesOf(IReadOnlySet<string> pluginPaths) => inner.KeepHashesOf(pluginPaths);

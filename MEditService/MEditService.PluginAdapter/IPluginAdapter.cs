@@ -29,6 +29,10 @@ public interface IPluginAdapter
 
     bool Exists(string pluginPath);
 
+    /// <summary>Those of <paramref name="paths"/>, forward-slash and relative to the plugin's folder, that compile writes
+    /// for <paramref name="plugin"/>: the plugin itself and, when it is localized, its strings.</summary>
+    IReadOnlyList<string> WrittenByCompile(RegisteredPlugin plugin, IReadOnlyList<string> paths, GameRelease gameRelease);
+
     /// <summary>The content hash of the plugin file, kept by its stamp (ADR-0003). Null when the
     /// file cannot be read: no evidence either way, so each caller decides.</summary>
     string? HashOf(string pluginPath);

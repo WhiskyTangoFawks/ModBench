@@ -250,7 +250,7 @@ describe('Instance — the value', () => {
       .toEqual({ kind: 'separator', name: 'Unassigned (Modlist Development)', enabled: false });
   });
 
-  it('carries each mod whose source folder holds a repository as tracked, and no other, the source folder alone saying whether track is offered', async () => {
+  it('carries each mod whose source folder holds a repository as tracked, and no other, the source folder alone saying whether init is offered', async () => {
     const { root, instance } = realInstance();
     await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
 

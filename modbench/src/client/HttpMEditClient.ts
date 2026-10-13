@@ -19,7 +19,7 @@ import {
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAddress, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome,
-  type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
+  type RecordFilter, type ReferenceResult, type PluginAddress, type InitMod, type InitStatus, type InitOutcome,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
@@ -381,18 +381,18 @@ class HttpMEditClient implements MEditClient {
   }
 
   /** ADR-0007; commands.md, A selection is one gesture, and each item lands on its own. */
-  async track(
-    mods: readonly string[], options: { onProgress?: (status: TrackStatus) => void } = {},
-  ): Promise<TrackOutcome | WriteRefused> {
-    // The POST stays blocking, so progress rides the track-progress notification alongside it.
-    const unsubscribe = options.onProgress ? this.notifications.onNotification('track-progress', options.onProgress) : () => {};
+  async init(
+    mods: readonly InitMod[], options: { onProgress?: (status: InitStatus) => void } = {},
+  ): Promise<InitOutcome | WriteRefused> {
+    // The POST stays blocking, so progress rides the init-progress notification alongside it.
+    const unsubscribe = options.onProgress ? this.notifications.onNotification('init-progress', options.onProgress) : () => {};
     try {
       return await this.mutateEach({
-        verb: 'track', noun: 'mod', items: mods,
-        op: (counted) => `track(${counted})`,
-        post: () => this.apiClient.POST('/plugins/track', { body: { mods: [...mods] } }),
+        verb: 'init', noun: 'mod', items: mods.map((mod) => mod.name),
+        op: (counted) => `init(${counted})`,
+        post: () => this.apiClient.POST('/init', { body: { mods: [...mods] } }),
         outcome: (answer) => selectionOutcome({
-          applied: answer.applied.map((m) => ({ mod: m.mod, tracked: m.tracked })),
+          applied: answer.applied.map((m) => ({ mod: m.mod, plugins: m.plugins })),
           refused: answer.refused,
         }),
       });

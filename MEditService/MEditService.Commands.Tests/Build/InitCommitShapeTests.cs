@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Build;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -13,16 +14,16 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
 
-namespace MEditService.Commands.Tests.Source;
+namespace MEditService.Commands.Tests.Build;
 
-public sealed class TrackCommitShapeTests : IDisposable
+public sealed class InitCommitShapeTests : IDisposable
 {
     private const string ModName = "TwoPluginMod";
-    private readonly ScratchDirectory _root = new("medit-track-shape-");
+    private readonly ScratchDirectory _root = new("medit-init-shape-");
     private readonly string _modFolder;
     private readonly string _gameDir;
 
-    public TrackCommitShapeTests()
+    public InitCommitShapeTests()
     {
         _modFolder = Directory.CreateDirectory(Path.Combine(_root, ModName)).FullName;
         _gameDir = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
@@ -31,61 +32,61 @@ public sealed class TrackCommitShapeTests : IDisposable
     public void Dispose() => _root.Dispose();
 
     [Fact]
-    public async Task Track_ParksEachPluginsBinary_SoNoPluginReadsAsChangedOutsideModbench()
+    public async Task Init_ParksEachPluginsBinary_SoNoPluginReadsAsChangedOutsideModbench()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
-        await Track();
+        await Init();
 
         Assert.Empty(ExternalChanges.NamedBy(LoadOrder()));
     }
 
     [Fact]
-    public async Task Track_HandsTheAdapterTheHashOfTheBytesEachPluginsSourceWasReadFrom()
+    public async Task Init_HandsTheAdapterTheHashOfTheBytesEachPluginsSourceWasReadFrom()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         var source = new FakeSourceAdapter();
 
-        await Track(new ReadingAs("READ-FROM"), source);
+        await Init(new ReadingAs("READ-FROM"), source);
 
-        var (_, handedOver) = Assert.Single(source.TrackCalls);
+        var (_, handedOver, _) = Assert.Single(source.InitCalls);
         Assert.Equal([("First.esp", "READ-FROM")], handedOver.Select(handed => (handed.Plugin.Plugin, handed.Plugin.BinarySha256)));
     }
 
     [Fact]
-    public async Task Track_OfAPluginInAModThatAlreadyHasARepository_RefusesTheMod_PointingAtDecompile_AndCommitsNothing()
+    public async Task Init_OfAPluginInAModThatAlreadyHasARepository_RefusesTheMod_PointingAtDecompile_AndCommitsNothing()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
         var source = new FakeSourceAdapter().Tracking(_modFolder);
 
-        var result = await Track(TestAdapters.Mutagen(), source);
+        var result = await Init(TestAdapters.Mutagen(), source);
 
         Assert.Empty(result.Landed);
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((ModName, TrackRefusal.AlreadyTracked), (refused.Item, refused.Refusal));
+        Assert.Equal((ModName, InitRefusal.AlreadyInitialized), (refused.Item, refused.Refusal));
         Assert.Contains("decompile", refused.Message, StringComparison.Ordinal);
-        Assert.Empty(source.TrackCalls);
+        Assert.Empty(source.InitCalls);
     }
 
     [Fact]
-    public async Task Track_IntoAModWhoseRepositoryHasHistoryButNoMain_RefusesTheMod_AndChangesNothingOfTheRepository()
+    public async Task Init_IntoAModWhoseRepositoryHasHistoryButNoMain_RefusesTheMod_AndChangesNothingOfTheRepository()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         var source = new FakeSourceAdapter().HoldingAnotherRepository(_modFolder);
 
-        var result = await Track(TestAdapters.Mutagen(), source);
+        var result = await Init(TestAdapters.Mutagen(), source);
 
         Assert.Empty(result.Landed);
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((ModName, TrackRefusal.AlreadyTracked), (refused.Item, refused.Refusal));
+        Assert.Equal((ModName, InitRefusal.AlreadyInitialized), (refused.Item, refused.Refusal));
         Assert.Contains(_modFolder, refused.Message, StringComparison.Ordinal);
-        Assert.Empty(source.TrackCalls);
+        Assert.Empty(source.InitCalls);
     }
 
     [Fact]
-    public async Task Track_OfAModWhereOnePluginFailsItsRoundTripGate_RefusesTheWholeMod_WritingNothing()
+    public async Task Init_OfAModWhereOnePluginFailsItsRoundTripGate_RefusesTheWholeMod_WritingNothing()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
@@ -93,23 +94,23 @@ public sealed class TrackCommitShapeTests : IDisposable
 
         var source = new FakeSourceAdapter();
 
-        var result = await Track(new RoundTripFailsFor("Second.esp"), source);
+        var result = await Init(new RoundTripFailsFor("Second.esp"), source);
 
         Assert.Empty(result.Landed);
         var refusedMod = Assert.Single(result.Refused);
-        Assert.Equal(TrackRefusal.RoundTripFailed, refusedMod.Refusal);
+        Assert.Equal(InitRefusal.RoundTripFailed, refusedMod.Refusal);
         Assert.Contains("SecondNpc", refusedMod.Message, StringComparison.Ordinal);
-        Assert.Empty(source.TrackCalls);
+        Assert.Empty(source.InitCalls);
     }
 
     [Fact]
-    public async Task Track_OfAModWhereTwoPluginsAreRefused_NamesEachRefusedPluginAndNoOther()
+    public async Task Init_OfAModWhereTwoPluginsAreRefused_NamesEachRefusedPluginAndNoOther()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
         WritePluginReturningItsBinarySha256("Third.esp", "ThirdNpc");
 
-        var result = await Track(new RoundTripFailsForEvery("First.esp", "Third.esp"));
+        var result = await Init(new RoundTripFailsForEvery("First.esp", "Third.esp"));
 
         var refusedMod = Assert.Single(result.Refused);
         Assert.Contains("First.esp", refusedMod.Message, StringComparison.Ordinal);
@@ -118,50 +119,50 @@ public sealed class TrackCommitShapeTests : IDisposable
     }
 
     [Fact]
-    public async Task Track_OfASelectionWhereEveryPluginIsRefused_CreatesNoRepository()
+    public async Task Init_OfASelectionWhereEveryPluginIsRefused_CreatesNoRepository()
     {
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
         var source = new FakeSourceAdapter();
 
-        var result = await Track(new RoundTripFailsFor("Second.esp"), source);
+        var result = await Init(new RoundTripFailsFor("Second.esp"), source);
 
         Assert.Empty(result.Landed);
         var refusedMod = Assert.Single(result.Refused);
-        Assert.Equal(TrackRefusal.RoundTripFailed, refusedMod.Refusal);
+        Assert.Equal(InitRefusal.RoundTripFailed, refusedMod.Refusal);
         Assert.Contains("SecondNpc", refusedMod.Message, StringComparison.Ordinal);
-        Assert.Empty(source.TrackCalls);
+        Assert.Empty(source.InitCalls);
     }
 
     [Fact]
-    public async Task Track_OfAModWhoseEveryPluginIsRefusedForOneCause_KeepsThatCauseAsTheModsRefusal()
+    public async Task Init_OfAModWhoseEveryPluginIsRefusedForOneCause_KeepsThatCauseAsTheModsRefusal()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
-        var result = await Track(new RoundTripFailsForEvery("First.esp", "Second.esp"));
+        var result = await Init(new RoundTripFailsForEvery("First.esp", "Second.esp"));
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((ModName, TrackRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
+        Assert.Equal((ModName, InitRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
         Assert.Contains("FirstNpc", refused.Message, StringComparison.Ordinal);
         Assert.Contains("SecondNpc", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Track_OfAModWhoseEveryPluginIsRefusedForDifferentCauses_RefusesTheModAsPluginsRefused_NamingEachReason()
+    public async Task Init_OfAModWhoseEveryPluginIsRefusedForDifferentCauses_RefusesTheModAsPluginsRefused_NamingEachReason()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WriteLocalizedPluginWithoutItsStrings("Second.esp");
 
         var source = new FakeSourceAdapter();
 
-        var result = await Track(new RoundTripFailsFor("First.esp"), source);
+        var result = await Init(new RoundTripFailsFor("First.esp"), source);
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((ModName, TrackRefusal.PluginsRefused), (refused.Item, refused.Refusal));
+        Assert.Equal((ModName, InitRefusal.PluginsRefused), (refused.Item, refused.Refusal));
         Assert.Contains("FirstNpc", refused.Message, StringComparison.Ordinal);
         Assert.Contains("Second_en.STRINGS", refused.Message, StringComparison.Ordinal);
-        Assert.Empty(source.TrackCalls);
+        Assert.Empty(source.InitCalls);
     }
 
     private sealed class RoundTripFailsForEvery(params string[] plugins) : DelegatingPluginAdapter(TestAdapters.Mutagen())
@@ -216,10 +217,10 @@ public sealed class TrackCommitShapeTests : IDisposable
         return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
     }
 
-    private Task<SelectionResult<string, TrackRefusal, TrackedMod>> Track() => Track(TestAdapters.Mutagen());
+    private Task<SelectionResult<string, InitRefusal, InitializedMod>> Init() => Init(TestAdapters.Mutagen());
 
-    private Task<SelectionResult<string, TrackRefusal, TrackedMod>> Track(IPluginAdapter adapter, ISourceAdapter? source = null) =>
-        TrackEveryPluginOf.ModAsync(LoadOrder(), ModName, adapter, source: source);
+    private Task<SelectionResult<string, InitRefusal, InitializedMod>> Init(IPluginAdapter adapter, ISourceAdapter? source = null) =>
+        InitEveryPluginOf.ModAsync(LoadOrder(), ModName, adapter, source: source);
 
     private LoadOrderSnapshot LoadOrder()
     {

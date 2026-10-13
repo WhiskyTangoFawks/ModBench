@@ -41,6 +41,8 @@ internal sealed class WriteJournal(string sourceFolder)
 
     private sealed record FileState(string Path, byte[]? Before, byte[]? After) : IEntry;
 
+    private sealed record CopiedFile(string Path, byte[]? Before, byte[] Digest) : IEntry;
+
     private sealed record DeletedFile(string Path, byte[] Original) : IEntry;
 
     private sealed record TempFile(string Path) : IEntry;
@@ -80,6 +82,24 @@ internal sealed class WriteJournal(string sourceFolder)
             if (ReferenceEquals(after, Unreadable) || !SameBytes(before, after)) _entries.Add(new FileState(path, before, after));
             throw;
         }
+    }
+
+    /// <summary>Streams what <paramref name="open"/> reads to <paramref name="path"/>, since an asset can run to gigabytes;
+    /// the rollback knows those bytes by their digest. A file it replaces is held whole, as <see cref="Write"/> holds one.</summary>
+    internal void Copy(string path, Func<Stream> open)
+    {
+        CreateDirectory(PathShape.DirectoryOf(path));
+        var before = Snapshot(path);
+        var temp = TempPathFor(path);
+        _entries.Add(new TempFile(temp));
+        using (var source = open())
+        using (var written = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            source.CopyTo(written);
+        }
+        var digest = DigestOf(temp);
+        File.Move(temp, path, overwrite: true);
+        _entries.Add(new CopiedFile(path, before, digest));
     }
 
     internal void WriteAll(IEnumerable<TreeFile> files, string baseDirectory)
@@ -171,6 +191,9 @@ internal sealed class WriteJournal(string sourceFolder)
             case FileState file:
                 RestoreFile(file, unrestored);
                 break;
+            case CopiedFile copied:
+                RestoreCopied(copied, unrestored);
+                break;
             case DeletedFile deleted:
                 RestoreDeleted(deleted, unrestored);
                 break;
@@ -238,6 +261,44 @@ internal sealed class WriteJournal(string sourceFolder)
             if (file.Before == null) File.Delete(file.Path);
             else WriteAtomic(file.Path, file.Before);
         }, unrestored);
+    }
+
+    private void RestoreCopied(CopiedFile copied, List<Unrestored> unrestored)
+    {
+        if (ReferenceEquals(copied.Before, Unreadable))
+        {
+            unrestored.Add(Named(copied.Path, UnrestoredReason.RestoreFailed));
+            return;
+        }
+
+        byte[]? current;
+        try
+        {
+            current = File.Exists(copied.Path) ? DigestOf(copied.Path) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            unrestored.Add(Named(copied.Path, UnrestoredReason.RestoreFailed, ex.Message));
+            return;
+        }
+
+        if (current == null || !current.AsSpan().SequenceEqual(copied.Digest))
+        {
+            unrestored.Add(Named(copied.Path, current == null ? UnrestoredReason.RemovedByAnother : UnrestoredReason.ChangedByAnother));
+            return;
+        }
+
+        Attempt(copied.Path, () =>
+        {
+            if (copied.Before == null) File.Delete(copied.Path);
+            else WriteAtomic(copied.Path, copied.Before);
+        }, unrestored);
+    }
+
+    private static byte[] DigestOf(string path)
+    {
+        using var content = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return System.Security.Cryptography.SHA256.HashData(content);
     }
 
     private void RestoreDeleted(DeletedFile deleted, List<Unrestored> unrestored)

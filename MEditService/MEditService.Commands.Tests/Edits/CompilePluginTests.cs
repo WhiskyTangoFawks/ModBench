@@ -153,6 +153,6 @@ public sealed class CompilePluginTests : IDisposable
         var refused = Assert.Single(answer.Refused);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolder, stray), refused.Message, StringComparison.Ordinal);
         Assert.Contains("Decompile the plugin to regenerate the source.", refused.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("Track", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Init", refused.Message, StringComparison.Ordinal);
     }
 }

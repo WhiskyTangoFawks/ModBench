@@ -41,9 +41,10 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved) : ISourceAdapter
 
     public string? InstanceRootNotFound(string? instanceRoot) => SourceRepository.InstanceRootNotFound(instanceRoot);
 
-    public IReadOnlyList<(string Plugin, string Reason)> Track(
-        string sourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins) =>
-        SourceRepository.Track(sourceFolder, plugins);
+    public SourceFailure? Init(
+        string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+        IReadOnlyList<Asset> assets) =>
+        SourceFailure.Answer(() => GitInit.Init(sourceFolder, output, plugins, assets));
 
     public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
         SourceRepository.ReadBackOf(pluginFileName, tree, gameRelease);

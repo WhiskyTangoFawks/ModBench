@@ -268,7 +268,7 @@ public sealed class CreateRecordChangesHandlerTests
         uint.Parse(formKey[..formKey.IndexOf(':', StringComparison.Ordinal)], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
     [Fact]
-    public void CreateRecord_Refuses_WhenPluginIsUntracked_NamingTheTrackCommand()
+    public void CreateRecord_Refuses_WhenPluginIsUntracked_NamingTheInitCommand()
     {
         using var mod = SourceEditFixture.Untracked();
 
@@ -276,7 +276,7 @@ public sealed class CreateRecordChangesHandlerTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-        Assert.Contains("Track its mod", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Init its mod", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]

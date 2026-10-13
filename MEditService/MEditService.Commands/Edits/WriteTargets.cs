@@ -116,7 +116,7 @@ internal sealed class WriteTargets(
             : RecordEditResult.Refused(
                 RecordEditRefusal.PluginNotTracked,
                 $"{plugin.Name} is not tracked, so it is read-only. " +
-                "Track its mod once to start editing.");
+                "Init its mod once to start editing.");
 
     private static RecordEditResult RefuseSourceUnreadable(PluginAddress plugin) =>
         RecordEditResult.Refused(

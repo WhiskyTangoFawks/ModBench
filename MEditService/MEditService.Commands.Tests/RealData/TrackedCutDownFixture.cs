@@ -5,10 +5,10 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.RealData;
 
-/// <summary>The cut-down plugin as Track leaves it, read and never written.</summary>
+/// <summary>The cut-down plugin as init leaves it, read and never written.</summary>
 public sealed class TrackedCutDownFixture : IDisposable
 {
-    public ScratchDirectory ModFolder { get; } = new("medit-track-roundtrip-");
+    public ScratchDirectory ModFolder { get; } = new("medit-init-roundtrip-");
 
     private readonly IReadOnlyList<SourceDocument> documents;
 

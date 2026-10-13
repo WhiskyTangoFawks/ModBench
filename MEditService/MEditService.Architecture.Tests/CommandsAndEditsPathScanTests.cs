@@ -53,7 +53,7 @@ public sealed class CommandsAndEditsPathScanTests
             "var tree = Path.Combine(modFolder, root);\n");
         Directory.CreateDirectory(Path.Combine(root, "MEditService.Commands"));
         File.WriteAllText(
-            Path.Combine(root, "MEditService.Commands", "TrackHandler.cs"),
+            Path.Combine(root, "MEditService.Commands", "InitHandler.cs"),
             "var bytes = File.ReadAllBytes(plugin.Path);\n");
 
         var counts = Counts(root, ScannedRoots);
@@ -64,7 +64,7 @@ public sealed class CommandsAndEditsPathScanTests
                 "MEditService.Commands/Edits/PluginCompileService.cs: Path.Combine: 2",
                 "MEditService.Commands/Edits/PluginCompileService.cs: new FileInfo: 1",
                 "MEditService.Commands/Edits/PluginCompileService.cs: new System.IO.DirectoryInfo: 1",
-                "MEditService.Commands/TrackHandler.cs: File.ReadAllBytes: 1",
+                "MEditService.Commands/InitHandler.cs: File.ReadAllBytes: 1",
             ],
             counts);
     }

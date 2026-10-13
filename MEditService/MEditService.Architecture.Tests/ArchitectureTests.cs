@@ -17,7 +17,7 @@ public sealed class ArchitectureTests
     private static readonly Assembly[] EveryBoxAssembly =
     [
         typeof(RecordTextCodec).Assembly,
-        typeof(TrackHandler).Assembly,
+        typeof(EditRecordChangesHandler).Assembly,
         typeof(Program).Assembly,
         typeof(LoadOrderSnapshot).Assembly,
         typeof(IPluginAdapter).Assembly,

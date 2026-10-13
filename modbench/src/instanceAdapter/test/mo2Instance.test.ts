@@ -948,6 +948,17 @@ describe('the MO2 Instance adapter', () => {
       it('lists none when the instance has no source folder', async () => {
         expect(await adapter.sourceMods()).toEqual([]);
       });
+
+      it('answers no installation file for a mod whose meta records none, and its meta as the mod manager\'s own file', async () => {
+        expect(await adapter.installationFiles('DragIn Manual Extract')).toEqual({ kind: 'read', answer: [] });
+        expect(adapter.managerFilesInModFolder).toEqual(['meta.ini']);
+      });
+
+      it('answers a mod installed from a downloaded file unreadable, naming the file, while no index of downloaded files is kept', async () => {
+        const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
+
+        expect(answer.kind === 'unreadable' && answer.reason).toContain(DOWNLOAD);
+      });
     });
   });
 

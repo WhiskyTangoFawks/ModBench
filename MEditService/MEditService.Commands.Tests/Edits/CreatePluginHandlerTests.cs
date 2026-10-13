@@ -69,7 +69,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
             .. _data.Plugins,
             new LoadOrderEntry(existing, Path.Combine(folder, existing), name, Line: 1, Enabled: true, Winning: true),
         ]));
-        var tracked = await TestEditService.TrackHandler(_holder).TrackAsync([name]);
+        var tracked = await TestEditService.InitHandler(_holder).InitAsync(ToInit.Named(name));
         Assert.Single(tracked.Landed);
         return folder;
     }

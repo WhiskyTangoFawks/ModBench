@@ -16,7 +16,7 @@ public sealed class SourceRepositoryMintingTests : IDisposable
 
     private ISourceRepository Tracked()
     {
-        PluginBaselines.Track(
+        PluginBaselines.Init(
             _modFolder,
             [new TreeFile("plugin-source/Other.esp/Npcs/Other - 000001_Other.esp.json", "{}"u8.ToArray())]);
         return TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)

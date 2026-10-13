@@ -149,7 +149,7 @@ internal sealed class Projector(
     }
 
     // The whole tree, read as one mod: where a record sits is a fact about the tree, not about one
-    // document. Idempotent by construction, being the ingest Track and a re-index run.
+    // document. Idempotent by construction, being the ingest init and a re-index run.
     private SourceFailure? RederiveWholePluginFromSource(
         Store.Projection projection, RegisteredPlugin registered, IReadOnlyList<string> formKeys)
     {

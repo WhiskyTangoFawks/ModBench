@@ -90,7 +90,7 @@ public sealed class SpatialWorkingTreeStateApiTests : HostedTests
         var formKeys = new Dictionary<string, string>();
         using var fx = Build(formKeys);
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(Plugin);
 
@@ -109,7 +109,7 @@ public sealed class SpatialWorkingTreeStateApiTests : HostedTests
         var formKeys = new Dictionary<string, string>();
         using var fx = Build(formKeys);
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(Plugin);
 

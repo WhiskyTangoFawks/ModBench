@@ -11,7 +11,7 @@ public enum CompileRefusal
     /// <summary>The load order holds no plugin of the file name and origin the gesture named.</summary>
     PluginNotInLoadOrder,
 
-    /// <summary>The plugin is in no tracked mod, so it has no source; the way out is Track.</summary>
+    /// <summary>The plugin is in no source mod, so it has no source; the way out is init.</summary>
     PluginNotTracked,
 
     /// <summary>The way out is Decompile.</summary>

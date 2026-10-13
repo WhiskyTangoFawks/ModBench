@@ -14,11 +14,11 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 {
     private readonly Dictionary<string, FakeMod> _mods = new(StringComparer.Ordinal);
     private readonly HashSet<string> _foreignRepositories = new(StringComparer.Ordinal);
-    private readonly List<(string ModFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins)> _tracked = [];
+    private readonly List<(string SourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins, IReadOnlyList<Asset> Assets)> _inits = [];
 
     internal int SessionsOpened { get; private set; }
 
-    internal IReadOnlyList<(string ModFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins)> TrackCalls => _tracked;
+    internal IReadOnlyList<(string SourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins, IReadOnlyList<Asset> Assets)> InitCalls => _inits;
 
     internal FakeSourceAdapter HoldingAnotherRepository(string modFolder)
     {
@@ -73,11 +73,12 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public string? InstanceRootNotFound(string? instanceRoot) => throw Unreached();
 
-    public IReadOnlyList<(string Plugin, string Reason)> Track(
-        string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins)
+    public SourceFailure? Init(
+        string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+        IReadOnlyList<Asset> assets)
     {
-        _tracked.Add((modFolder, plugins));
-        return [];
+        _inits.Add((sourceFolder, plugins, assets));
+        return null;
     }
 
     public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>

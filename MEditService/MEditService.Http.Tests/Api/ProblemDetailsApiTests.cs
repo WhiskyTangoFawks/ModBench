@@ -99,7 +99,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [Theory]
     [InlineData("createPlugin", 503)]
     [InlineData("getFilter", 503)]
-    [InlineData("track", 503)]
+    [InlineData("init", 503)]
     [InlineData("deleteRecordChanges", 503)]
     [InlineData("setFilter", 503)]
     [InlineData("getReferences", 503)]
@@ -143,7 +143,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             "getWorldspaceBlocks" => await client.GetAsync("/plugins/New.esp/worldspaces/000800%3ANew.esp/blocks?origin=NoLoadOrderMod"),
             "getCellChildRecords" => await client.GetAsync("/plugins/New.esp/cells/000800%3ANew.esp/children?origin=NoLoadOrderMod"),
             "getInteriorCells" => await client.GetAsync("/plugins/New.esp/interior-cells?origin=NoLoadOrderMod"),
-            "track" => await client.PostAsJsonAsync("/plugins/track", new { mods = new[] { "NoLoadOrderMod" } }),
+            "init" => await client.Init("NoLoadOrderMod"),
             "deleteRecordChanges" => await client.PostAsJsonAsync("/records/delete-changes", new
             {
                 records = new[] { new { formKey = "000800:New.esp", plugin = "New.esp", origin = "NoLoadOrderMod" } }
@@ -156,7 +156,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     }
 
     [Theory]
-    [InlineData("track")]
+    [InlineData("init")]
     [InlineData("decompile")]
     [InlineData("compile")]
     [InlineData("createPlugin")]
@@ -173,7 +173,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
 
         var response = gesture switch
         {
-            "track" => await client.Track("NoLoadOrderMod"),
+            "init" => await client.Init("NoLoadOrderMod"),
             "decompile" => await client.Decompile([("New.esp", "NoLoadOrderMod")]),
             "compile" => await client.Compile([("New.esp", "NoLoadOrderMod")]),
             "createPlugin" => await client.PostAsJsonAsync(

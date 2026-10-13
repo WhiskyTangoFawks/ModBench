@@ -417,7 +417,7 @@ internal static class ModelIdentity
         Enum.Parse(method.GetParameters()[2].ParameterType, "OnlyFailures");
 
     // FailingFields runs once per record on the accept path and the search walks every type in an
-    // assembly; caching per record type is the difference between +40% on Track and minutes per
+    // assembly; caching per record type is the difference between +40% on init and minutes per
     // mega-plugin.
     private static readonly ConcurrentDictionary<Type, MethodInfo?> MethodByRecordType = new();
 
