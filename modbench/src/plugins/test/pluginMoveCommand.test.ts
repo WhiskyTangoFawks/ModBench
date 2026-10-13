@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { handlers, registerCommand, picks } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
@@ -26,9 +26,6 @@ vi.mock('vscode', async () => {
   };
 });
 
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { MEditClient, PluginMetadata } from '../../client';
 import type { PluginsDrop } from '../../pluginsCommands/plugins';
 import { registerPluginMoveCommand } from '../pluginMoveCommand';
@@ -36,7 +33,8 @@ import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginR
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
-import { pluginsCommandsOver } from '../../test/mo2/adapterOver';
+import { pluginsCommandsWith } from '../../test/mo2/adapterOver';
+import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { progressSteps } from '../../test/recordedProgress';
 
 const MOVE = 'modbench.plugin.move';
@@ -50,18 +48,14 @@ const noMasters = { getPlugins: () => Promise.reject(new Error('mEdit is indexin
 
 const invoke = (...args: unknown[]) => Promise.resolve(present(handlers.get(MOVE), 'the move command')(...args));
 
-let dir: string;
-beforeEach(async () => {
+const fakeOver = (...names: string[]) => fakeInstanceAdapter(readingFixture({ pluginOrder: names.map((name) => ({ name, enabled: true })) }));
+const moved = (plugin: string, toIndex: number) => [{ verb: 'changePluginOrder', profile: 'Default', changes: [{ kind: 'move', plugins: [plugin], toIndex }] }];
+
+beforeEach(() => {
   handlers.clear();
   progressSteps.length = 0;
   picks.label = undefined;
-  dir = await mkdtemp(join(tmpdir(), 'plugin-move-'));
-  await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
-  await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'A.esp\r\nB.esp\r\nC.esp\r\n');
 });
-afterEach(() => rm(dir, { recursive: true, force: true }));
-
-const plugins = () => readFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'utf8');
 
 const PLACES: { label: string; drop: PluginsDrop }[] = [
   { label: 'C.esp', drop: { kind: 'before', name: 'C.esp' } },
@@ -70,24 +64,25 @@ const PLACES: { label: string; drop: PluginsDrop }[] = [
 
 function registered(
   selection: PluginsTreeNode[] = [], masters: Pick<MEditClient, 'getPlugins'> = noMasters,
-  refresh = () => Promise.resolve(),
+  refresh = () => Promise.resolve(), fake = fakeOver('A.esp', 'B.esp', 'C.esp'),
+  value = instanceValueFixture({ activeProfile: 'Default' }),
 ) {
   const reporter = recordingReporter();
   const instance = {
-    value: instanceValueFixture({ activeProfile: 'Default' }),
+    value,
     refresh: () => { progressSteps.push('Instance loader: read every file again'); return refresh(); },
   };
-  registerPluginMoveCommand(pluginsCommandsOver(dir, masters), instance, { selection: () => selection, movePlaces: () => PLACES }, reporter);
-  return { reporter };
+  registerPluginMoveCommand(pluginsCommandsWith(fake.adapter, masters), instance, { selection: () => selection, movePlaces: () => PLACES }, reporter);
+  return { reporter, fake };
 }
 
 describe('modbench.plugin.move', () => {
-  it('moves the plugins to the target and ends on the read after the write, under the Plugins view\'s progress', async () => {
-    registered();
+  it('hands the adapter the move to the target and ends on the read after it, under the Plugins view\'s progress', async () => {
+    const { fake } = registered();
 
     await invoke([A], { kind: 'winningEnd' });
 
-    expect(await plugins()).toBe('B.esp\r\nC.esp\r\nA.esp\r\n');
+    expect(fake.calls).toEqual(moved('A.esp', 2));
     expect(progressSteps).toEqual([
       'progress opens on modbench.pluginListTree',
       'Instance loader: read every file again',
@@ -96,81 +91,73 @@ describe('modbench.plugin.move', () => {
   });
 
   it('takes the focused view\'s selection when no plugin is named, leaving out a row that is not a plugin line', async () => {
-    const { reporter } = registered([new PluginNode({ name: 'C.esp', enabled: true }, 'ModC'), new ImplicitMasterNode('Fallout4.esm', 'Data/')]);
+    const { reporter, fake } = registered([new PluginNode({ name: 'C.esp', enabled: true }, 'ModC'), new ImplicitMasterNode('Fallout4.esm', 'Data/')]);
 
     await invoke(undefined, LOSING_END);
 
     expect(reporter.reports).toEqual([]);
-    expect(await plugins()).toBe('C.esp\r\nA.esp\r\nB.esp\r\n');
+    expect(fake.calls).toEqual(moved('C.esp', 0));
   });
 
   it('does nothing for no plugins', async () => {
-    const { reporter } = registered();
+    const { reporter, fake } = registered();
 
     await invoke(undefined, LOSING_END);
 
+    expect(fake.calls).toEqual([]);
     expect(progressSteps).toEqual([]);
     expect(reporter.reports).toEqual([]);
   });
 
   it('with no target given, lands the block on the place picked', async () => {
-    const { reporter } = registered();
+    const { reporter, fake } = registered();
     picks.label = 'C.esp';
 
     await invoke([A]);
 
     expect(reporter.reports).toEqual([]);
-    expect(await plugins()).toBe('B.esp\r\nA.esp\r\nC.esp\r\n');
+    expect(fake.calls).toEqual(moved('A.esp', 1));
   });
 
   it('asks for the place when the target given is not one', async () => {
-    registered();
+    const { fake } = registered();
     picks.label = 'Bottom of the view';
 
     await invoke([A], { kind: 'before' });
 
-    expect(await plugins()).toBe('B.esp\r\nC.esp\r\nA.esp\r\n');
+    expect(fake.calls).toEqual(moved('A.esp', 2));
   });
 
   it('moves nothing and says nothing when the pick is dismissed', async () => {
-    const { reporter } = registered();
+    const { reporter, fake } = registered();
 
     await invoke([A]);
 
-    expect(await plugins()).toBe('A.esp\r\nB.esp\r\nC.esp\r\n');
+    expect(fake.calls).toEqual([]);
     expect(reporter.reports).toEqual([]);
     expect(progressSteps).toEqual([]);
   });
 
   it('says why a move is refused by the plugin-order rules, naming both plugins', async () => {
-        const { reporter } = registered([], { getPlugins: () => Promise.resolve([held('A.esp', []), held('B.esp', ['A.esp']), held('C.esp', [])]) });
+    const { reporter, fake } = registered([], { getPlugins: () => Promise.resolve([held('A.esp', []), held('B.esp', ['A.esp']), held('C.esp', [])]) });
 
     await invoke([A], { kind: 'winningEnd' });
 
     expect(reporter.reports).toEqual([{
       severity: 'error', message: 'Could not move plugins.', detail: '"A.esp" is a master of "B.esp", so it must load before it.',
     }]);
-  });
-
-  it('says a target row gone from plugins.txt is gone', async () => {
-    const { reporter } = registered();
-
-    await invoke([A], { kind: 'before', name: 'Gone.esp' });
-
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not move plugins.', detail: 'Plugin not found in plugins.txt: Gone.esp' }]);
+    expect(fake.calls).toEqual([]);
   });
 
   it('does not count the line of a plugin the game loads with no line', async () => {
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'DLCRobot.esm\r\nA.esp\r\nX.esp\r\n');
-    const reporter = recordingReporter();
-        const masters = { getPlugins: () => Promise.resolve([held('DLCRobot.esm', []), held('A.esp', []), held('X.esp', ['DLCRobot.esm'])]) };
+    const masters = { getPlugins: () => Promise.resolve([held('DLCRobot.esm', []), held('A.esp', []), held('X.esp', ['DLCRobot.esm'])]) };
     const value = instanceValueFixture({ activeProfile: 'Default', pluginsLoadedWithNoLine: [{ name: 'DLCRobot.esm', origin: 'Data/' }] });
-    registerPluginMoveCommand(pluginsCommandsOver(dir, masters), { value, refresh: () => Promise.resolve() }, { selection: () => [], movePlaces: () => [] }, reporter);
+    const { reporter, fake } = registered([], masters, undefined, fakeOver('DLCRobot.esm', 'A.esp', 'X.esp'), value);
 
     await invoke([{ name: 'X.esp', origin: 'ModX' }], LOSING_END);
 
     expect(reporter.reports).toEqual([]);
-    expect(await plugins()).toBe('X.esp\r\nDLCRobot.esm\r\nA.esp\r\n');
+    expect(fake.calls).toEqual(moved('X.esp', 0));
   });
 
   it('reports what throws as a failure, apart from a refusal', async () => {
