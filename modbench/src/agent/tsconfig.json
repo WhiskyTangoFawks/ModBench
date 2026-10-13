@@ -6,9 +6,11 @@
     "types": ["node", "vscode"]
   },
   "references": [
+    { "path": "../client" },
     { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },
-    { "path": "../ports" }
+    { "path": "../ports" },
+    { "path": "../wire" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]
