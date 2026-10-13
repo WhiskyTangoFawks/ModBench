@@ -167,7 +167,7 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
 }
 
 type ReadingSource = Pick<InstanceAdapter,
-  | 'names' | 'settings' | 'modOrder' | 'modMeta' | 'pluginOrder' | 'gameFolderPlugins' | 'creationClubList' | 'archiveList'
+  | 'settings' | 'modOrder' | 'modMeta' | 'pluginOrder' | 'gameFolderPlugins' | 'creationClubList' | 'archiveList'
   | 'gameFolderArchives' | 'profiles' | 'modFolders' | 'originFiles' | 'modTracked' | 'sourceMods' | 'sourceFolder'>;
 
 // How long another tool's write takes to settle before an empty mod order is believed.
@@ -228,7 +228,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
     .flatMap((name) => { const folder = source.sourceFolder(name); return folder === undefined ? [] : [[name, folder] as const]; });
   const { archiveList, dataFolderArchives, ...gameFacts } = game;
   return {
-    names: source.names, profile, gameName, gameRelease, mods, pluginOrder, downloadedFiles, ...gameFacts,
+    profile, gameName, gameRelease, mods, pluginOrder, downloadedFiles, ...gameFacts,
     archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
     profiles, modFolders, skippedLinks, runtimeOutput, modFiles, folderMeta: new Map(folderMeta),
     trackedMods, sourceMods, sourceDirs: new Map(sourceDirs),

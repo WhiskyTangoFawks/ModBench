@@ -323,7 +323,6 @@ export interface ManagerNames {
 
 /** The instance as parsed facts, every one from the same read of its settings. */
 export interface InstanceReading {
-  readonly names: ManagerNames;
   /** The profile the mod manager's configuration selects. */
   readonly profile: string;
   /** The game as the mod manager's configuration names it. */

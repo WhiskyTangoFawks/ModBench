@@ -88,7 +88,7 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('the reading', () => {
-      it('answers the instance whole: names, profile, game, mods with their meta, plugin order, downloads and the game folder with what it holds', async () => {
+      it('answers the instance whole: profile, game, mods with their meta, plugin order, downloads and the game folder with what it holds', async () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-reading-'));
         try {
           await mkdir(join(game, 'Data'));
@@ -98,7 +98,6 @@ describe('the MO2 Instance adapter', () => {
           const settings = await adapter.settings();
 
           expect(reading).toMatchObject({
-            names: adapter.names,
             profile: settings.profile,
             gameName: settings.gameName,
             gameRelease: settings.gameRelease,

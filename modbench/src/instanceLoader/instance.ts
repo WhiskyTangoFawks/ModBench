@@ -309,6 +309,18 @@ export class Instance implements Subscription {
     this.failureListeners = [];
   }
 
+  private tellReading({ skippedLinks, archiveListNotes, dataFolderPlugins, dataFolderArchives }: InstanceReading): void {
+    const { log } = this.options;
+    this.tellSkippedLinks(skippedLinks);
+    for (const note of archiveListNotes) log.info(`[instance] ${note}`);
+    // An unreadable Data folder or archive list is an answer, never a failed read: the whole value
+    // would otherwise go stale over a folder outside the instance.
+    if (dataFolderPlugins.kind === 'unreadable') log.warn(`[instance] the game's Data folder could not be listed: ${dataFolderPlugins.reason}`);
+    if (dataFolderArchives.kind === 'unreadable') {
+      log.warn(`[instance] the game's archives and strings files could not be listed: ${dataFolderArchives.reason}`);
+    }
+  }
+
   private tellSkippedLinks(skipped: ReadonlyMap<string, string>): void {
     for (const [name, reason] of skipped) {
       if (!this.linksTold.has(name)) {
@@ -377,17 +389,9 @@ export class Instance implements Subscription {
     const reading = await adapter.reading();
     const {
       profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadsOutcome, gameFolder, dataFolderPlugins,
-      creationClubList: creationClub, names, runtimeOutput, modFolders, profiles, sourceDirs,
+      creationClubList: creationClub, dataFolderArchives, runtimeOutput, modFolders, profiles, sourceDirs,
     } = reading;
-    this.tellSkippedLinks(reading.skippedLinks);
-    for (const note of reading.archiveListNotes) log.info(`[instance] ${note}`);
-    // An unreadable Data folder or archive list is an answer, never a failed read: the whole value
-    // would otherwise go stale over a folder outside the instance.
-    if (dataFolderPlugins.kind === 'unreadable') log.warn(`[instance] the game's Data folder could not be listed: ${dataFolderPlugins.reason}`);
-    const { dataFolderArchives } = reading;
-    if (dataFolderArchives.kind === 'unreadable') {
-      log.warn(`[instance] the game's archives and strings files could not be listed: ${dataFolderArchives.reason}`);
-    }
+    this.tellReading(reading);
     const index = await buildFileConflictIndex(
       entries, runtimeOutput.files, { originFiles: (origin) => Promise.resolve(modListing(reading, origin)) }, (line) => log.info(line),
     );
@@ -425,7 +429,7 @@ export class Instance implements Subscription {
           rows: downloadsOutcome.files ? buildDownloadRows(downloadsOutcome.files, installedInto, entries) : [],
         },
       activeProfile: profile,
-      managerNames: names,
+      managerNames: adapter.names,
       gameName,
       gameRelease,
       nexusSlug: nexusSlugFor(gameRelease, gameName),
