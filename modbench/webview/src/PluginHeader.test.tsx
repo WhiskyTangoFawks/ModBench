@@ -72,7 +72,7 @@ describe('PluginHeader', () => {
     ['a plugin in Overwrite', { override: { isInOverwrite: true }, isTracked: false }, '(in Overwrite)',
       'Overwrite is not a mod; move the plugin into a mod and init that mod.'],
     ['a plugin that is not tracked', { isTracked: false }, '(untracked)',
-      '“Init Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, makes it editable.'],
+      '“Decompile and Commit Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, makes it editable.'],
     ['a tracked plugin whose plugin source is unreadable', { sourceUnreadable: WHY }, '(plugin source unreadable)',
       `${WHY.reason} Its records are its plugin file’s. “Decompile Plugin”, in this header’s menu, makes it editable.`],
     ['a tracked plugin whose plugin source decompile does not repair', { sourceUnreadable: TWINS }, '(plugin source unreadable)',

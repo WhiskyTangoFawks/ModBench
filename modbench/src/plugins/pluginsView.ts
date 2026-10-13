@@ -28,7 +28,7 @@ import { registerRenamePluginCommand, type RenamePluginDeps } from './pluginRena
 import { registerRecordCreateCommand } from './createRecordCommand';
 import { createdRecordSelection } from './createdRecordSelection';
 import {
-  BuildProblems, registerBuildCommand, registerDecompileCommand, registerInitCommand, type DecompileDeps,
+  BuildProblems, registerBuildCommand, registerDecompileCommand, registerDecompileAndCommitCommand, type DecompileDeps,
 } from './pluginRowCommands';
 import { registerPluginMoveCommand } from './pluginMoveCommand';
 import { registerPluginEnableCommands } from './pluginParticipationCommands';
@@ -186,8 +186,8 @@ function registerPluginGestures(
   },
 ): vscode.Disposable[] {
   return [
-    registerInitCommand({
-      progress, instance, commands: sourceCommands, reporter: reporterFor('mod.init'), onInitialized: registerRepositories,
+    registerDecompileAndCommitCommand({
+      progress, instance, commands: sourceCommands, reporter: reporterFor('mod.decompileAndCommit'), onCommitted: registerRepositories,
       modDirs: () => instance.value.paths.modDirs, modsView,
     }, sourceGestureRows),
     registerBuildCommand({

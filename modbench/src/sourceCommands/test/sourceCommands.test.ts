@@ -64,7 +64,7 @@ describe('sourceCommands init', () => {
     client.setCommandResult('init', { landed: [{ mod: 'ModA', plugins: [] }, { mod: 'ModB', plugins: [] }], refused: [] });
     const adapter = fakeAdapter({ installations: new Map([['ModA', recording([INSTALLED])]]) });
 
-    await sourceCommands({ client, adapter }).init(['ModA', 'ModB']);
+    await sourceCommands({ client, adapter }).decompileAndCommit(['ModA', 'ModB']);
 
     expect(client.calls).toEqual([{
       method: 'init',
@@ -80,7 +80,7 @@ describe('sourceCommands init', () => {
     client.setCommandResult('init', { landed: [{ mod: 'ModB', plugins: [] }], refused: [] });
     const adapter = fakeAdapter({ installations: new Map([['ModA', unreadable('its installation file is not indexed')]]) });
 
-    const outcome = await sourceCommands({ client, adapter }).init(['ModA', 'ModB']);
+    const outcome = await sourceCommands({ client, adapter }).decompileAndCommit(['ModA', 'ModB']);
 
     expect(client.calls.map((call) => call.args[0])).toEqual([[{ name: 'ModB', sourceFolder: '/source/ModB', installationFiles: [], modManagerFiles: ['meta.ini'] }]]);
     expect(outcome).toEqual({ landed: [{ mod: 'ModB', plugins: [] }], refused: [{ item: 'ModA', reason: 'its installation file is not indexed' }] });
@@ -93,7 +93,7 @@ describe('sourceCommands init', () => {
     const adapter = fakeAdapter();
     const reading = { ...adapter, installationFiles: (mod: string) => { happened.push(`read ${mod}`); return adapter.installationFiles(mod); } };
 
-    await sourceCommands({ client, adapter: reading }).init(['ModA', 'ModB'], { onProgress: (status) => happened.push(status) });
+    await sourceCommands({ client, adapter: reading }).decompileAndCommit(['ModA', 'ModB'], { onProgress: (status) => happened.push(status) });
 
     const phase = (mod: string) => ({ mod, phase: 'ReadingInstallationFiles' });
     expect(happened).toEqual([phase('ModA'), 'read ModA', phase('ModB'), 'read ModB']);
@@ -102,7 +102,7 @@ describe('sourceCommands init', () => {
   it('refuses a mod whose name gives it no source folder, naming why', async () => {
     const client = new InMemoryMEditClient();
 
-    const outcome = await sourceCommands({ client, adapter: fakeAdapter({ unsourcedMods: new Set(['Mods/ModA']) }) }).init(['Mods/ModA']);
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter({ unsourcedMods: new Set(['Mods/ModA']) }) }).decompileAndCommit(['Mods/ModA']);
 
     expect(client.calls).toEqual([]);
     expect(outcome).toEqual({ landed: [], refused: [{ item: 'Mods/ModA', reason: 'its name gives it no source folder' }] });
@@ -112,7 +112,7 @@ describe('sourceCommands init', () => {
     const client = new InMemoryMEditClient();
     const adapter = fakeAdapter({ installations: new Map([['ModA', unreadable('not indexed')]]) });
 
-    const outcome = await sourceCommands({ client, adapter }).init(['ModA']);
+    const outcome = await sourceCommands({ client, adapter }).decompileAndCommit(['ModA']);
 
     expect(client.calls).toEqual([]);
     expect(outcome).toEqual({ landed: [], refused: [{ item: 'ModA', reason: 'not indexed' }] });

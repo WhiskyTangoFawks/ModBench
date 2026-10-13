@@ -39,7 +39,7 @@ function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: bo
   if (!isTracked) {
     return {
       label: '(untracked)',
-      reason: '“Init Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, '
+      reason: '“Decompile and Commit Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, '
         + 'makes it editable.',
     };
   }

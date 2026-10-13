@@ -85,7 +85,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   it('fails the call of a module-level helper that re-reads, made after a write', () => {
     const messages = lines(
       'function refreshAfterWrite(deps) { deps.refreshTree(); deps.refreshMatchingPlugins(); }',
-      'async function dispatchInit(deps, mods) { await deps.commands.init(mods); refreshAfterWrite(deps); }',
+      'async function dispatchDecompileAndCommit(deps, mods) { await deps.commands.decompileAndCommit(mods); refreshAfterWrite(deps); }',
     );
 
     expect(messages).toHaveLength(1);
@@ -94,7 +94,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
 
   it('fails the call of a helper declared after the function that calls it', () => {
     const messages = lines(
-      'async function dispatchInit(deps, mods) { await deps.commands.init(mods); refreshAfterWrite(deps); }',
+      'async function dispatchDecompileAndCommit(deps, mods) { await deps.commands.decompileAndCommit(mods); refreshAfterWrite(deps); }',
       'function refreshAfterWrite(deps) { deps.refreshTree(); }',
     );
 
