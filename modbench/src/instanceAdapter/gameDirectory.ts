@@ -1,12 +1,13 @@
 // Where the game is: the setting first, then the instance's own ini, then Steam and Wine detection.
 // The user's overrides arrive from the composition root as values; nothing here reads a setting itself.
 
-import { exec, execFile } from 'node:child_process';
+import { exec } from 'node:child_process';
 import { dirname, join, posix, win32 } from 'node:path';
 import { promisify } from 'node:util';
 import { readGameName, readGamePath, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { gamePathInfoForRelease, gameReleaseForGame } from '../tables/gamePaths';
 import { detectGamePaths, detectWinePrefix, type GameAutodetect, type GamePaths } from './gamePathDetector';
+import { documentsFolder } from './documentsFolder';
 import { factsOf } from './files';
 import { present } from '../ports/present';
 import { errorMessage } from '../ports/errorMessage';
@@ -27,14 +28,6 @@ export interface GameDetectors {
 }
 
 const execAsync = promisify(exec);
-const execFileAsync = promisify(execFile);
-
-const DOCUMENTS_COMMAND = "[Console]::OutputEncoding=[Text.Encoding]::UTF8;[Environment]::GetFolderPath('MyDocuments')";
-
-/** Asks PowerShell for the Documents known folder as UTF-8, whatever the console's code page. */
-export async function documentsFolderVia(run: (command: string) => Promise<Buffer>): Promise<string> {
-  return (await run(DOCUMENTS_COMMAND)).toString('utf8').replace(/^\uFEFF/, '').trim();
-}
 
 export const STEAM: GameDetectors = {
   paths: (game) =>
@@ -42,8 +35,7 @@ export const STEAM: GameDetectors = {
       execAsync('reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath').then((r) => r.stdout),
     ),
   winePrefix: detectWinePrefix,
-  documents: () =>
-    documentsFolderVia((command) => execFileAsync('powershell', ['-NoProfile', '-Command', command], { encoding: 'buffer' }).then((r) => r.stdout)),
+  documents: () => documentsFolder(),
 };
 
 /** Wine fixes `Z:` to the filesystem root and `C:` to the prefix's own `drive_c`; any other

@@ -3,8 +3,9 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import {
-  documentsFolderVia, gameDirectoryResolver, normalizeGamePath, type GameDetectors,
+  gameDirectoryResolver, normalizeGamePath, type GameDetectors,
 } from '../gameDirectory';
+import { documentsFolder } from '../documentsFolder';
 import type { GameDirectoryOverrides } from '../instanceAdapter';
 
 const noDetectPrefix = () => Promise.resolve(null);
@@ -26,11 +27,11 @@ const resolverWith = (
   overrides: GameDirectoryOverrides = {}, detectors: GameDetectors = NO_DETECTORS,
 ) => gameDirectoryResolver(() => overrides, detectors);
 
-describe('documentsFolderVia', () => {
+describe('documentsFolder', () => {
   it('reads a non-ASCII Documents path as UTF-8, having told PowerShell to write it so', async () => {
     const commands: string[] = [];
 
-    const documents = await documentsFolderVia((command) => {
+    const documents = await documentsFolder((command) => {
       commands.push(command);
       return Promise.resolve(Buffer.from('C:\\Users\\José\\Документы\r\n', 'utf8'));
     });
