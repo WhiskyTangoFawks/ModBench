@@ -4,6 +4,14 @@ shape: sequence_diagram
 driving: "Toolbox · Mods · Source Control" {class: driving}
 sourcecommands: @../target-architecture.modbench_core.sourcecommands
 sourcecommands.label: source commands
+client: @../target-architecture.modbench_repositories.client
+client.label: mEdit client
+http: @../target-architecture.medit_driving.http
+http.label: HTTP endpoints
+modfolder: @../target-architecture.medit_data.modfolder
+modfolder.label: "Mod folders\nfiles · manifests"
+modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
+modfolderadapter.label: Mod folder adapter
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
 instance: @../target-architecture.modbench_data.instance
@@ -13,7 +21,13 @@ instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
 driving -> sourcecommands: "clean: the mods, or every mod, with the instance value" {class: track}
-sourcecommands."the listing: each file no manifest names, each mod folder with no manifest"
+sourcecommands -> client: "untracked: the mods" {class: query}
+client -> http: envelope {class: query}
+http -> modfolderadapter: "untracked: the mods" {class: query}
+modfolder -> modfolderadapter: "each manifest · each mod's files" {class: query}
+modfolderadapter -> http: "each file no manifest names · each mod folder with no manifest" {class: query}
+http -> client: the listing {class: query}
+client -> sourcecommands: the listing {class: query}
 sourcecommands -> driving: "the listing" {class: track}
 driving."the confirmation"
 driving -> sourcecommands: "confirmed" {class: track}

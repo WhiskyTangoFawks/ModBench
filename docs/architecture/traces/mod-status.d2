@@ -1,0 +1,41 @@
+# Mod status, green: each mod's git letters and stale against its manifest, after each snapshot, by stat alone.
+...@../styles
+shape: sequence_diagram
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+activation: @../target-architecture.modbench_drivers.activation
+activation.label: Activation
+instancecommands: @../target-architecture.modbench_core.instancecommands
+instancecommands.label: instance commands
+client: @../target-architecture.modbench_repositories.client
+client.label: mEdit client
+http: @../target-architecture.medit_driving.http
+http.label: HTTP endpoints
+engine: @../target-architecture.medit_core.commands.engine
+engine.label: Build engine
+modfolder: @../target-architecture.medit_data.modfolder
+modfolder.label: "Mod folders\nfiles · manifests"
+modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
+modfolderadapter.label: Mod folder adapter
+port: @../target-architecture.medit_kernel.ports
+port.label: Ports
+mods: @../target-architecture.modbench_driving.mods
+mods.label: Mods
+
+instanceloader -> activation: value {class: loadorder}
+activation -> instancecommands: "put load order: the snapshot" {class: loadorder}
+instancecommands -> client: snapshot {class: loadorder}
+client -> http: snapshot {class: loadorder}
+http -> engine: "put load order: the mods" {class: loadorder}
+modfolder -> modfolderadapter: "each manifest · each mod's files: stamps" {class: track}
+modfolderadapter -> engine: "each mod's status, and which changed since the last answer" {class: track}
+engine -> port: "mod status changed: the mods" {class: push}
+port -> http: publish {class: push}
+http -> client: stream {class: push}
+client -> mods: "mod status changed" {class: push}
+mods -> client: "mod status: the mods" {class: query}
+client -> http: envelope {class: query}
+http -> modfolderadapter: "mod status: the mods" {class: query}
+modfolderadapter -> http: "per mod: modified · untracked · deleted · stale" {class: query}
+http -> client: "per mod: the letters and stale" {class: query}
+client -> mods: "the status, joined to the instance value" {class: query}
