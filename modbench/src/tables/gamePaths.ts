@@ -23,6 +23,14 @@ export interface GamePathInfo {
   readonly scriptExtenderFolder: string;
   readonly pluginCompanions: PluginCompanions;
   readonly archiveLists: ArchiveLists;
+  /** The BA2 versions the release reads its archives of textures and its other archives as; absent until what mEdit
+   *  writes is known to load in the game. */
+  readonly ba2Versions?: Ba2Versions;
+}
+
+export interface Ba2Versions {
+  readonly general: number;
+  readonly textures: number;
 }
 
 /** The INIs whose `[Archive]` keys list the archives the game loads, and those keys: xEdit's for the
@@ -71,6 +79,9 @@ const SKYRIM_COMPANIONS: PluginCompanions = {
 };
 const NO_STRINGS_COMPANIONS: PluginCompanions = { archiveExtension: '.bsa', stringsLanguages: [], pluginIni: false };
 
+// Next-gen Fallout 4 reads version 1 too, and writes versions 7 and 8 that mEdit does not.
+const FALLOUT4_BA2_VERSIONS: Ba2Versions = { general: 1, textures: 1 };
+
 const RESOURCE_ARCHIVE_KEYS = ['sResourceArchiveList', 'sResourceArchiveList2'];
 const RESOURCE_INDEX_KEYS = ['sResourceIndexFileList', 'sResourceStartUpArchiveList', ...RESOURCE_ARCHIVE_KEYS];
 const FALLOUT4_ARCHIVES: ArchiveLists = {
@@ -89,12 +100,13 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     gameName: 'Fallout 4', nexusSlug: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
     masters: FALLOUT4_MASTERS, creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS, archiveLists: FALLOUT4_ARCHIVES,
+    ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   Fallout4VR: {
     gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS,
-    archiveLists: { ...FALLOUT4_ARCHIVES, defaultIni: 'Fallout4.ini' },
+    archiveLists: { ...FALLOUT4_ARCHIVES, defaultIni: 'Fallout4.ini' }, ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   Fallout3: {
     gameName: 'Fallout 3', nexusSlug: 'fallout3', masters: ['Fallout3.esm'], scriptExtenderFolder: 'fose',
@@ -213,6 +225,11 @@ function isArchiveOf(stem: string, name: string, extension: string): boolean {
   const bare = key.slice(0, key.length - extension.length);
   const cut = bare.lastIndexOf(ARCHIVE_PART_DELIMITER);
   return bare === stem || (cut !== -1 && bare.slice(0, cut) === stem);
+}
+
+/** The BA2 versions a build packs the release's archives as; none for a release the table names none for. */
+export function ba2VersionsOf(release: string | undefined): Ba2Versions | undefined {
+  return release === undefined ? undefined : GAME_PATHS[release]?.ba2Versions;
 }
 
 /** The rule for what the release names for a plugin; none for a release the table holds no row for. */

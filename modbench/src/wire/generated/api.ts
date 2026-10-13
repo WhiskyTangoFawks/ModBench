@@ -143,6 +143,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Writes each source mod's folder from its source as its build configuration says: the base from its installation files, its assets over it, each plugin compiled, each archive packed. A file the build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and what failed when a read or write stopped it part way. Progress is the build-progress notification. */
         post: operations["BuildMod"];
         delete?: never;
         options?: never;
@@ -802,11 +803,45 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ArchivePackRefusal: {
+            item: string;
+            refusal: components["schemas"]["ArchiveRefusal"];
+            message: string;
+        };
+        /** @enum {string} */
+        ArchiveRefusal: "None" | "VariantNotWritten" | "FileNotPackable" | "NotWritten";
+        ArchiveVariantRequest: {
+            ba2?: components["schemas"]["Ba2VariantRequest"] | null;
+            bsa?: components["schemas"]["BsaVariantRequest"] | null;
+        };
+        ArchiveVariantsRequest: {
+            general: components["schemas"]["ArchiveVariantRequest"];
+            textures: components["schemas"]["ArchiveVariantRequest"];
+        };
+        Ba2VariantRequest: {
+            /** Format: int32 */
+            version: number;
+            compressed: boolean;
+        };
+        BsaVariantRequest: {
+            /** Format: int32 */
+            version: number;
+            /** Format: int32 */
+            archiveFlags: number;
+            /** Format: int32 */
+            fileFlags: number;
+        };
         BuildConfigurationRequest: {
             sourceFolder: string;
             output?: string | null;
             exclude?: string[] | null;
             include?: string[] | null;
+        };
+        BuildModRequest: {
+            name: string;
+            sourceFolder: string;
+            folder: string;
+            installationFiles: components["schemas"]["InstallationFileRequest"][];
         };
         BuildProgress: {
             mod?: string | null;
@@ -816,9 +851,11 @@ export interface components {
             modsTotal: number;
         };
         /** @enum {string} */
-        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder";
+        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "InstallationFileMissing" | "BaseNotKnown" | "ArchiveFileNotAnAsset";
         BuildRequest: {
-            mods: string[];
+            mods: components["schemas"]["BuildModRequest"][];
+            excludedSuffix: string;
+            archives?: components["schemas"]["ArchiveVariantsRequest"] | null;
         };
         BuildResponse: {
             applied: components["schemas"]["BuiltModResponse"][];
@@ -828,6 +865,9 @@ export interface components {
             mod: string;
             compiled: components["schemas"]["CompiledPlugin"][];
             refused: components["schemas"]["PluginCompileRefusal"][];
+            archivesRefused: components["schemas"]["ArchivePackRefusal"][];
+            overwritten: string[];
+            failure?: string | null;
         };
         CellChildRecords: {
             persistent: components["schemas"]["ChildRecordSummary"][];

@@ -168,6 +168,8 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
 }
 
 const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, installationFiles: [], modManagerFiles: ['meta.ini'] });
+const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, installationFiles: [] });
+const buildFacts = { excludedSuffix: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } } };
 
 describe('HttpMEditClient — what each verb sends and reads', () => {
   const myPatch = { name: 'MyPatch.esp', origin: 'ModA' };
@@ -238,16 +240,24 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: { applied: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', refusal: 'ModProvidesNoPlugin', message: 'ModC provides no plugin.' }] },
       reads: { landed: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }] },
       path: '/init', body: { mods: [modToInit('ModA'), modToInit('ModC')] } },
-    { name: 'build', verb: (c) => c.build(['ModA', 'ModC']),
+    { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModC')], buildFacts),
       answer: {
-        applied: [{ mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginSourceUnreadable', message: 'Second.esp has no readable source.' }] }],
+        applied: [{
+          mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginSourceUnreadable', message: 'Second.esp has no readable source.' }],
+          archivesRefused: [{ item: 'ModA.ba2', refusal: 'VariantNotWritten', message: 'Modbench packs no archive for this game.' }], overwritten: ['a.nif'],
+          failure: 'The build stopped before compiling.',
+        }],
         refused: [{ item: 'ModC', refusal: 'GitUnavailable', message: 'git was not found on PATH.' }],
       },
       reads: {
-        landed: [{ mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp has no readable source.' }] }],
+        landed: [{
+          mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp has no readable source.' }],
+          archivesRefused: [{ item: 'ModA.ba2', reason: 'Modbench packs no archive for this game.' }], overwritten: ['a.nif'],
+          failure: 'The build stopped before compiling.',
+        }],
         refused: [{ item: 'ModC', reason: 'git was not found on PATH.' }],
       },
-      path: '/build', body: { mods: ['ModA', 'ModC'] } },
+      path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
     { name: 'decompile', verb: (c) => c.decompile([first, second]),
       answer: { applied: [first], refused: [{ item: second, refusal: 'NotInTrackedMod', message: 'Second.esp is not in a tracked mod.' }] },
       reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a tracked mod.' }] },
@@ -372,7 +382,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'), status: 409,
         body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename the source of "Old.esp"' },
       { name: 'init', verb: (c) => c.init([modToInit('ModA'), modToInit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not init 2 mods' },
-      { name: 'build', verb: (c) => c.build(['ModA', 'ModB']), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
+      { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModB')], buildFacts), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
       { name: 'decompile', verb: (c) => c.decompile([first, second]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
       { name: 'changeBuildConfiguration', verb: (c) => c.changeBuildConfiguration('/instance/source/ModA', { exclude: ['a.dds'] }), status: 422,
         body: { detail: 'It holds no build configuration.' }, text: 'It holds no build configuration.', refusal: 'Could not change the build configuration in "/instance/source/ModA"' },

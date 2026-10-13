@@ -165,7 +165,7 @@ public sealed class InitHandler
                 sourceFolder, verified.Count, verified.Sum(v => v.Source.Files.Count), assets.Count);
         }
 
-        return _source.Init(sourceFolder, mod.Name,
+        return _source.Init(sourceFolder, _modFolders.FolderName(mod.Folder),
             [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Name, v.Source.BinarySha256)))], assets);
     }
 

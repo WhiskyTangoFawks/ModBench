@@ -14,11 +14,18 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 {
     private readonly Dictionary<string, FakeMod> _mods = new(StringComparer.Ordinal);
     private readonly HashSet<string> _foreignRepositories = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, SourceToBuild> _builds = new(StringComparer.Ordinal);
     private readonly List<(string SourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins, IReadOnlyList<Asset> Assets)> _inits = [];
 
     internal int SessionsOpened { get; private set; }
 
     internal IReadOnlyList<(string SourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins, IReadOnlyList<Asset> Assets)> InitCalls => _inits;
+
+    internal FakeSourceAdapter Building(string sourceFolder, SourceToBuild source)
+    {
+        _builds[sourceFolder] = source;
+        return this;
+    }
 
     internal FakeSourceAdapter HoldingAnotherRepository(string modFolder)
     {
@@ -80,6 +87,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         _inits.Add((sourceFolder, plugins, assets));
         return null;
     }
+
+    public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) => _builds[sourceFolder];
 
     public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) => throw Unreached();
 

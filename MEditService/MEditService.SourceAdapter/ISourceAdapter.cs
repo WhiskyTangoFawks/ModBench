@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter;
@@ -60,6 +61,9 @@ public interface ISourceAdapter
     SourceFailure? Init(
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets);
+
+    /// <summary>What the build of the source in <paramref name="sourceFolder"/> writes, as its working tree says now.</summary>
+    Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder);
 
     /// <summary>Writes <paramref name="change"/> into the build configuration in <paramref name="sourceFolder"/>, keeping all
     /// else it says, in the working tree.</summary>

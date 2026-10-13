@@ -81,8 +81,22 @@ internal static class Wire
         this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins) =>
         client.PostAsJsonAsync("/plugins/compile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }) });
 
-    internal static Task<HttpResponseMessage> Build(this HttpClient client, IEnumerable<string> mods) =>
-        client.PostAsJsonAsync("/build", new { mods });
+    /// <summary>Each mod by name and folder, with the source folder its load order sent and no installation file, under
+    /// MO2's suffix for an excluded file.</summary>
+    internal static Task<HttpResponseMessage> Build(
+        this HttpClient client, IEnumerable<(string Name, string Folder)> mods, object? archives = null) =>
+        client.PostAsJsonAsync("/build", new
+        {
+            mods = mods.Select(mod => new
+            {
+                name = mod.Name,
+                sourceFolder = client.SourceFolderSentFor(mod.Name),
+                folder = mod.Folder,
+                installationFiles = Array.Empty<object>(),
+            }),
+            excludedSuffix = ".mohidden",
+            archives,
+        });
 
     /// <summary>An edit as Modbench makes one: mEdit answers the changes the edit makes, and each move and then each
     /// document is saved. The answer is mEdit's.</summary>
