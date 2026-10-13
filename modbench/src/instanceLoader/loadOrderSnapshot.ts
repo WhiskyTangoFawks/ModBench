@@ -4,13 +4,13 @@ import {
   foldPath, isRootLevel, type FileConflictIndex, type FileWinners,
 } from './fileConflictIndex';
 import {
-  fileInFolder, isPluginFile, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type GameFolder, type ModFolders,
-  type OriginFile, type PluginEntry,
+  fileInFolder, isPluginFile, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
+  type ModFolders, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile, pluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
-import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
+import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress, type StampedFile } from '../wire/pluginAddress';
 
 export { OVERWRITE_ORIGIN };
 export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
@@ -37,8 +37,8 @@ export interface LoadOrderPlugin {
 type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string; sourceFolder?: string } | { kind: 'Game' } | { kind: 'None' };
 
 interface StringsBeside {
-  readonly archives: string[];
-  readonly stringsFiles: string[];
+  readonly archives: StampedFile[];
+  readonly stringsFiles: StampedFile[];
 }
 
 // `lineNamesIt`: the line names this copy of its filename, for Editing's judgements (ADR-0013).
@@ -70,6 +70,8 @@ export interface ArchiveSources {
   readonly files: FileWinners;
   /** Each mod's own files, a disabled mod's too, and Overwrite's, by origin. */
   readonly filesByOrigin: ReadonlyMap<string, readonly OriginFile[]>;
+  /** Each archive and strings file, by the path it is read from. */
+  readonly stamps: ReadonlyMap<string, FileRead<FileStamp>>;
 }
 
 /** A plugins.txt line with no resolvable plugin file: no mod or overwrite/ provides it, and
@@ -222,8 +224,17 @@ function archivesAndStringsOf(
   return { archives: [...new Set(loaded)], stringsFiles: [...strings.values()].map(({ path }) => path) };
 }
 
+// Equal while the file's content is (ADR-0003); a file the reading could not stamp, by why.
+function stampedIn(stamps: ArchiveSources['stamps'], path: string): StampedFile {
+  const read = stamps.get(path);
+  if (read === undefined) return { path, stamp: 'not stamped' };
+  if (read.kind === 'unreadable') return { path, stamp: read.reason };
+  const { size, modifiedNs, changedNs } = read.answer;
+  return { path, stamp: `${size}/${modifiedNs}/${changedNs}` };
+}
+
 function stringsBeside(
-  { gameRelease, inData, filesByOrigin }: ArchiveSources, dataFolder: string, { name, origin }: PluginAddress,
+  { gameRelease, inData, filesByOrigin, stamps }: ArchiveSources, dataFolder: string, { name, origin }: PluginAddress,
 ): StringsBeside {
   const rule = pluginCompanionRule(gameRelease);
   if (rule === undefined) return { archives: [], stringsFiles: [] };
@@ -232,8 +243,9 @@ function stringsBeside(
     ? inGameFolder.map((relativePath) => ({ relativePath, path: fileInFolder(dataFolder, relativePath) }))
     : (filesByOrigin.get(origin) ?? []).filter((file) => !file.excluded).map(({ relativePath, sourcePath }) => ({ relativePath, path: sourcePath }));
   return {
-    archives: files.filter(({ relativePath }) => rule.isArchive(relativePath) && rule.isArchiveOf(name, relativePath)).sort(byFoldedPath).map(({ path }) => path),
-    stringsFiles: files.filter(({ relativePath }) => rule.isStringsFileOf(name, relativePath)).map(({ path }) => path),
+    archives: files.filter(({ relativePath }) => rule.isArchive(relativePath) && rule.isArchiveOf(name, relativePath)).sort(byFoldedPath)
+      .map(({ path }) => stampedIn(stamps, path)),
+    stringsFiles: files.filter(({ relativePath }) => rule.isStringsFileOf(name, relativePath)).map(({ path }) => stampedIn(stamps, path)),
   };
 }
 

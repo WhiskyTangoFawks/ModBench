@@ -91,6 +91,9 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public bool GameFolderExists(string gameFolder) => Directory.Exists(gameFolder);
 
+    public Answer<IReadOnlyList<string>?, PluginFailure> StringsPlacesOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
+        PluginFailure.Answer(() => LocalizedStrings.PlacesOf(strings, loadOrder, modPath, loadOrder.GameRelease));
+
     public bool Exists(string pluginPath) => File.Exists(pluginPath);
 
     public IReadOnlyList<string> WrittenByCompile(RegisteredPlugin plugin, IReadOnlyList<string> paths, GameRelease gameRelease)

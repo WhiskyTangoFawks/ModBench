@@ -24,8 +24,8 @@ internal sealed record LoadOrderRequest(
     IReadOnlyList<PluginAddress> LoadedWithNoLine, IReadOnlyList<string> Archives, IReadOnlyList<string> StringsFiles,
     string GameDirectory, string InstanceRoot, string GameRelease);
 internal sealed record LoadOrderPlugin(
-    string Name, string Path, string Origin, PluginProviderRequest Provider, int? Line, bool LineNamesIt, IReadOnlyList<string> Archives,
-    IReadOnlyList<string> StringsFiles);
+    string Name, string Path, string Origin, PluginProviderRequest Provider, int? Line, bool LineNamesIt, IReadOnlyList<StampedFile> Archives,
+    IReadOnlyList<StampedFile> StringsFiles);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum PluginProviderKind { Mod, Game, None }

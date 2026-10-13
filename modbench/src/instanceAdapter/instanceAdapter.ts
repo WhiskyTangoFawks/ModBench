@@ -335,6 +335,8 @@ export interface InstanceReading {
   /** Each INI the game reads that the archive list did not. */
   readonly archiveListNotes: readonly string[];
   readonly dataFolderArchives: DataFolderArchives;
+  /** Each archive and strings file of the listed mods, Overwrite and the game folder, by the path it is read from. */
+  readonly archiveAndStringsStamps: ReadonlyMap<string, FileRead<FileStamp>>;
   readonly profiles: readonly string[];
   /** Undefined when there is no folder for mods at all. */
   readonly modFolders: ModFolders | undefined;

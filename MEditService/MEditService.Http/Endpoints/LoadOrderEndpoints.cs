@@ -15,7 +15,8 @@ internal static class LoadOrderEndpoints
             .WithTags(Tag)
             .WithDescription(
                 "Reconciles the load order against this snapshot (ADR-0013): every plugin file in " +
-                "the instance, each with its origin, path and provider, the active plugins in load order, and " +
+                "the instance, each with its origin, path and provider and the strings files and archives beside it, each with its stamp, " +
+                "the active plugins in load order, and " +
                 "the plugins loaded with no line, the archives the game loads and the loose strings files it reads, as Mod Management decided them. Plugins new to the snapshot are opened and " +
                 "registered (indexed only if never seen), plugins absent from it are unregistered, " +
                 "plugins whose load index moved are re-registered SQL-only; then one winner sweep. " +
@@ -39,7 +40,7 @@ internal static class LoadOrderEndpoints
 
         if (RegisteredPluginsOf(req.Plugins) is not { } registered)
         {
-            return Results.Problem("Each plugin entry must have a non-empty Name, Path, Origin and Provider, and its archives and strings files.", statusCode: 400);
+            return Results.Problem("Each plugin entry must have a non-empty Name, Path, Origin and Provider, and its archives and strings files, each with its path and stamp.", statusCode: 400);
         }
         // Never defaulted here (ADR-0013).
         if (req.Active is not { } active || req.LoadedWithNoLine is not { } loadedWithNoLine
@@ -61,7 +62,8 @@ internal static class LoadOrderEndpoints
         foreach (var p in plugins)
         {
             if (string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path) || string.IsNullOrEmpty(p.Origin)
-                || p.Provider?.ToProvider() is not { } provider || p.Archives is not { } archives || p.StringsFiles is not { } stringsFiles)
+                || p.Provider?.ToProvider() is not { } provider || p.Archives is not { } archives || p.StringsFiles is not { } stringsFiles
+                || archives.Concat(stringsFiles).Any(file => string.IsNullOrEmpty(file?.Path) || file.Stamp is null))
             {
                 return null;
             }

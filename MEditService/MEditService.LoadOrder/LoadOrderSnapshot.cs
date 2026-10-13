@@ -12,21 +12,33 @@ public sealed record RegisteredPlugin(string Name, string Origin, string Path, P
     public PluginAddress Key => new(Name, Origin);
 }
 
+/// <summary>A file at <paramref name="Path"/> with the stamp Mod Management read of it, which changes as its content
+/// does (ADR-0003, ADR-0013).</summary>
+public sealed record StampedFile(string Path, string Stamp)
+{
+    public bool Equals(StampedFile? other) =>
+        other is not null && string.Equals(Path, other.Path, StringComparison.OrdinalIgnoreCase) && string.Equals(Stamp, other.Stamp, StringComparison.Ordinal);
+
+    public override int GetHashCode() => HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(Path), Stamp);
+}
+
 /// <summary>The strings files beside one copy of a plugin, loose, and the archives named for it in its folder,
 /// in the order they are read. Mod Management finds them (ADR-0013).</summary>
-public sealed record PluginStrings(IReadOnlyList<string> Archives, IReadOnlyList<string> StringsFiles)
+public sealed record PluginStrings(IReadOnlyList<StampedFile> Archives, IReadOnlyList<StampedFile> StringsFiles)
 {
     public static readonly PluginStrings None = new([], []);
 
     // Copied, not aliased: a caller keeping its list would otherwise mutate this value.
-    public IReadOnlyList<string> Archives { get; } = [.. Archives];
+    public IReadOnlyList<StampedFile> Archives { get; } = [.. Archives];
 
-    public IReadOnlyList<string> StringsFiles { get; } = [.. StringsFiles];
+    public IReadOnlyList<StampedFile> StringsFiles { get; } = [.. StringsFiles];
+
+    /// <summary>The stamp handed with the file at <paramref name="path"/>, or null when none of these is at it.</summary>
+    public string? StampOf(string path) =>
+        Archives.Concat(StringsFiles).FirstOrDefault(file => string.Equals(file.Path, path, StringComparison.OrdinalIgnoreCase))?.Stamp;
 
     public bool Equals(PluginStrings? other) =>
-        other is not null
-        && Archives.SequenceEqual(other.Archives, StringComparer.OrdinalIgnoreCase)
-        && StringsFiles.SequenceEqual(other.StringsFiles, StringComparer.OrdinalIgnoreCase);
+        other is not null && Archives.SequenceEqual(other.Archives) && StringsFiles.SequenceEqual(other.StringsFiles);
 
     public override int GetHashCode() => HashCode.Combine(Archives.Count, StringsFiles.Count);
 }

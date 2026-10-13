@@ -518,7 +518,7 @@ internal sealed class Indexer : IDisposable
             .ToList();
         var respelled = resolved.Select(r => r.Key).Where(key => held.IsSpelledOtherwise(key)).ToList();
         // A plugin's text is read through its strings files, so other ones are a new read of it (ADR-0003).
-        var restrung = resolved.Where(r => open.TryGetValue(r.Key, out var h) && !h.Strings.Equals(r.Strings)).ToList();
+        var restrung = resolved.Where(r => open.TryGetValue(r.Key, out var h) && (!h.Strings.Equals(r.Strings) || !StringsStillRead(scope, r))).ToList();
         // A plugin in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
         var arriving = resolved.Where(r => !open.ContainsKey(r.Key) && !scope.Failed.StillFailing(r)).ToList();
@@ -715,7 +715,7 @@ internal sealed class Indexer : IDisposable
         // (Store.ValidateAgainstDisk), so a second hash of every binary here would pay that whole cost
         // twice for no new answer.
         var truth = scope.Projector.TruthOf(plugin.Registered);
-        if (truth != DerivedFrom.SourceTree) return scope.Store.DerivationOf(plugin.Key) == truth;
+        if (truth != DerivedFrom.SourceTree) return scope.Store.DerivationOf(plugin.Key) == truth && StringsStillRead(scope, plugin.Registered);
 
         try
         {
@@ -827,7 +827,9 @@ internal sealed class Indexer : IDisposable
     // never as a mod this side holds.
     private ReadOutcome IndexFromBinary(OpenScope scope, PluginMetadata plugin, DerivedFrom derivedFrom)
     {
-        var modPath = new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path);
+        var modPath = ModPathOf(plugin.Path);
+        // Taken before the read, as the binary's hash is: strings changed during it are then read again.
+        var stringsRead = StringsReadBy(scope, plugin.Registered);
         if (!_adapter.OpenDocuments(modPath, scope.LoadOrder, scope.Store.Schemas, plugin.Strings).Holds(out var opened, out var failure))
         {
             _logger.LogWarning(failure.Error, "Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);
@@ -835,9 +837,25 @@ internal sealed class Indexer : IDisposable
         }
 
         using var documents = opened;
-        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom) is not { } refused) return ReadOutcome.Read;
+        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom, stringsRead) is not { } refused) return ReadOutcome.Read;
         _logger.LogWarning("Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, refused.Reason);
         return ReadOutcome.Failed(refused);
+    }
+
+    private static ModPath ModPathOf(string path) => new(ModKey.FromFileName(Path.GetFileName(path)), path);
+
+    // A binary's rows hold its texts as its strings gave them; a tree's hold their own, and one that is not localized none.
+    private bool StringsStillRead(OpenScope scope, RegisteredPlugin plugin) =>
+        scope.Store.DerivationOf(plugin.Key) is null or DerivedFrom.SourceTree
+        || scope.Store.IndexedStringsRead(plugin.Key) is not { } read
+        || read == StringsReadBy(scope, plugin);
+
+    // Each place a read takes its strings from, by the stamp Mod Management handed with it (ADR-0003); a place it could
+    // not read, by why. Null for a plugin that is not localized.
+    private string? StringsReadBy(OpenScope scope, RegisteredPlugin plugin)
+    {
+        if (!_adapter.StringsPlacesOf(ModPathOf(plugin.Path), scope.LoadOrder, plugin.Strings).Holds(out var places, out var failure)) return failure.Reason;
+        return places is null ? null : string.Join('\n', places.Select(place => $"{place}|{plugin.Strings.StampOf(place)}"));
     }
 
     // ADR-0015.

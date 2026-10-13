@@ -402,7 +402,7 @@ export class Instance implements Subscription {
     };
     const archiveSources: ArchiveSources = {
       gameRelease, listed: reading.archiveList, inData: dataFolderArchives, files: index.files,
-      filesByOrigin: new Map([...index.filesByMod, [OVERWRITE_ORIGIN, runtimeOutput.files]]),
+      filesByOrigin: new Map([...index.filesByMod, [OVERWRITE_ORIGIN, runtimeOutput.files]]), stamps: reading.archiveAndStringsStamps,
     };
     this.tellArchivesNothingHolds(archiveSources);
     return {

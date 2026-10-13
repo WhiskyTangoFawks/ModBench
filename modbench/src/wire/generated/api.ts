@@ -28,7 +28,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance, each with its origin, path and provider, the active plugins in load order, and the plugins loaded with no line, the archives the game loads and the loose strings files it reads, as Mod Management decided them. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
+        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance, each with its origin, path and provider and the strings files and archives beside it, each with its stamp, the active plugins in load order, and the plugins loaded with no line, the archives the game loads and the loose strings files it reads, as Mod Management decided them. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
         put: operations["PutLoadOrder"];
         post?: never;
         delete?: never;
@@ -1151,8 +1151,8 @@ export interface components {
             /** Format: int32 */
             line?: number | null;
             lineNamesIt: boolean;
-            archives: string[];
-            stringsFiles: string[];
+            archives: components["schemas"]["StampedFile"][];
+            stringsFiles: components["schemas"]["StampedFile"][];
         };
         LoadOrderRequest: {
             plugins: components["schemas"]["LoadOrderPlugin"][];
@@ -1549,6 +1549,10 @@ export interface components {
             mod: string;
             manifestWritten: boolean;
             noProvider: string[];
+        };
+        StampedFile: {
+            path: string;
+            stamp: string;
         };
         UnreadableSource: {
             reason: string;

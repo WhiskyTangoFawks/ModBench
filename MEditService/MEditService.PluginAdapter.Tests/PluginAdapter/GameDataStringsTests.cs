@@ -60,6 +60,29 @@ public sealed class GameDataStringsTests : IDisposable
             handed ?? HandedStrings.Of(pluginPath));
 
     [Fact]
+    public void StringsPlacesOf_APluginWhoseStringsAreInOneOfTwoArchivesTheGameLoads_IsThatArchive()
+    {
+        var other = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "Other")).FullName, "Other.esm");
+        LocalizedDoorPlugin.Write(other, "The Other Door");
+        LocalizedDoorPlugin.PackStrings(other, Path.Combine(_dataFolder, "Other.bsa"));
+        LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_dataFolder, "Update.bsa"));
+        TheGameLoads("Update.bsa", "Other.bsa");
+
+        Assert.Equal([Path.Combine(_dataFolder, "Update.bsa")], StringsPlacesOf(Plugin));
+    }
+
+    [Fact]
+    public void StringsPlacesOf_APluginThatIsNotLocalized_IsNone()
+    {
+        LocalizedDoorPlugin.WriteNameInPlugin(_pluginPath, DoorName);
+
+        Assert.Null(StringsPlacesOf(Plugin));
+    }
+
+    private IReadOnlyList<string>? StringsPlacesOf(RegisteredPlugin plugin) =>
+        Adapter.StringsPlacesOf(new ModPath(ModKey.FromFileName(PluginName), plugin.Path), LoadOrder, plugin.Strings).Answered();
+
+    [Fact]
     public void OpenDocuments_TwoCopiesOfAPluginEachWithItsOwnStrings_EachReadsItsOwn()
     {
         var (overridden, loadOrder) = AnOverriddenCopy("The Overridden Door");
@@ -87,7 +110,7 @@ public sealed class GameDataStringsTests : IDisposable
         LocalizedDoorPlugin.Write(path, doorName);
         var overridden = new RegisteredPlugin(
             PluginName, "Overridden", path, new PluginProvider.FromMod("Overridden", folder, folder), new PluginLine(0, NamesIt: false), HandedStrings.Of(path));
-        return (overridden, new LoadOrderSnapshot(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, overridden], [Plugin.Key], [], [], Plugin.Strings.StringsFiles));
+        return (overridden, new LoadOrderSnapshot(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, overridden], [Plugin.Key], [], [], [.. Plugin.Strings.StringsFiles.Select(file => file.Path)]));
     }
 
     private static string DoorOf(RegisteredPlugin copy, LoadOrderSnapshot loadOrder)
@@ -120,7 +143,7 @@ public sealed class GameDataStringsTests : IDisposable
     [Fact]
     public void ReadContent_ALocalizedPluginWithOneOfItsStringsFilesHanded_NamesTheOthersMissing()
     {
-        var handed = new PluginStrings([], [Path.Combine(LocalizedDoorPlugin.LooseStrings(_pluginPath), "Update_English.STRINGS")]);
+        var handed = new PluginStrings([], [HandedStrings.Stamped(Path.Combine(LocalizedDoorPlugin.LooseStrings(_pluginPath), "Update_English.STRINGS"))]);
 
         var (content, _) = Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), _pluginPath), LoadOrder, handed).Answered();
 

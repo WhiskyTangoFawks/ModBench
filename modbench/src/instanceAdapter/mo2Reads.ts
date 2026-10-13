@@ -7,14 +7,15 @@ import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
-import { creationClubListFile, dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
+import { creationClubListFile, dataFolderOf, gameReleaseForGame, pluginCompanionRule } from '../tables/gamePaths';
 import { factsOf, get, listDir, readOrReason, stampOf } from './files';
 import {
-  type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileOrigin, type GameFolder, type InstanceAdapter, type InstanceReading,
+  type DataFolderArchives, type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileOrigin, type FileRead, type FileStamp,
+  type GameFolder, type InstanceAdapter, type InstanceReading,
   type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type SourceMods,
 } from './instanceAdapter';
 import {
-  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, entryDir, downloadSidecarFile, isTempWrite, modlistFile,
+  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, entryDir, downloadSidecarFile, fileInFolder, isTempWrite, modlistFile,
   modMetaFile, modSourceDir, pluginsFile, profilesDir, settingsFile,
 } from './layout';
 import { type ArchiveReads, mo2Archives } from './mo2Archives';
@@ -194,6 +195,24 @@ async function folderMetaOf(
   return new Map([...read, ...unlistedMetas]);
 }
 
+function archivesAndStringsFiles(
+  gameRelease: string | undefined, gameFolder: GameFolder, inData: DataFolderArchives, origins: readonly OriginFiles[],
+): string[] {
+  const rule = pluginCompanionRule(gameRelease);
+  const dataFolder = dataFolderOf(gameFolder);
+  if (rule === undefined) return [];
+  const inGameFolder = inData.kind === 'listed' && dataFolder !== undefined
+    ? [...inData.archives, ...inData.stringsFiles].map((relativePath) => fileInFolder(dataFolder, relativePath))
+    : [];
+  const inOrigins = origins.flatMap(({ files }) => files)
+    .filter(({ excluded, relativePath }) => !excluded && (rule.isArchive(relativePath) || rule.isStringsFile(relativePath)))
+    .map(({ sourcePath }) => sourcePath);
+  return [...inGameFolder, ...inOrigins];
+}
+
+const stampsOf = async (paths: readonly string[]): Promise<Map<string, FileRead<FileStamp>>> =>
+  new Map(await Promise.all(paths.map(async (path) => [path, await readOrReason(() => stampOf(path))] as const)));
+
 /** The instance whole, every fact against the one read of the settings, so a profile switch
  *  mid-read cannot mix one profile's mod order with another's plugin order. */
 export async function readInstance(source: ReadingSource): Promise<InstanceReading> {
@@ -225,9 +244,10 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
       folderMetaOf(source, entries, folders, downloads.kind === 'listed' && downloads.files !== undefined)),
   ]);
   const { archiveList, dataFolderArchives, ...gameFacts } = game;
+  const archiveAndStringsStamps = await stampsOf(archivesAndStringsFiles(gameRelease, game.gameFolder, dataFolderArchives, [runtimeOutput, ...modFiles.values()]));
   return {
     profile, gameName, gameRelease, mods, pluginOrder, downloadedFiles, ...gameFacts,
-    archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
+    archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives, archiveAndStringsStamps,
     profiles, modFolders, skippedLinks, runtimeOutput, modFiles, folderMeta,
     sourceMods,
   };

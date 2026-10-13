@@ -347,7 +347,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
   const address = ({ name, origin }: { name: string; origin: string }) => ({ name, origin });
   const NO_ARCHIVES: ArchiveSources = {
     gameRelease: 'Fallout4', listed: [], inData: { kind: 'listed', archives: [], stringsFiles: [] }, files: new FileConflictLookup(),
-    filesByOrigin: new Map(),
+    filesByOrigin: new Map(), stamps: new Map(),
   };
   const outcomeOf = (plugins: LoadOrderPluginRow[], folders: ModFolders = modFolders) =>
     loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: folders, sourceDirs, archives: NO_ARCHIVES });
@@ -447,7 +447,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     };
 
     const handed = snapshotOf([row('A.esp', 'ModA', 0), row('A.esp', 'ModO', 0, { winning: false }), row('D.esm', 'Data/', null)], [], archives)
-      ?.plugins.map(({ origin, archives: own, stringsFiles }) => ({ origin, archives: own, stringsFiles }));
+      ?.plugins.map(({ origin, archives: own, stringsFiles }) => ({ origin, archives: own.map(({ path }) => path), stringsFiles: stringsFiles.map(({ path }) => path) }));
 
     expect(handed).toEqual([
       {
@@ -457,6 +457,24 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
       },
       { origin: 'ModO', archives: [], stringsFiles: ['/store/ModO/Strings/A_en.STRINGS'] },
       { origin: 'Data/', archives: [join('/game/Data', 'D - Main.ba2')], stringsFiles: [join('/game/Data', 'Strings/D_en.STRINGS')] },
+    ]);
+  });
+
+  it('hands each strings file and archive beside a copy with its stamp, or why the reading could not stamp it', () => {
+    const archives: ArchiveSources = {
+      ...NO_ARCHIVES,
+      inData: { kind: 'listed', archives: ['D - Main.ba2'], stringsFiles: ['Strings/D_en.STRINGS'] },
+      stamps: new Map([
+        [join('/game/Data', 'D - Main.ba2'), { kind: 'read', answer: { size: 5n, modifiedNs: 6n, changedNs: 7n } }],
+        [join('/game/Data', 'Strings/D_en.STRINGS'), { kind: 'unreadable', reason: 'EACCES' }],
+      ]),
+    };
+
+    const [handed] = snapshotOf([row('D.esm', 'Data/', null)], [], archives)?.plugins ?? [];
+
+    expect([handed?.archives, handed?.stringsFiles]).toEqual([
+      [{ path: join('/game/Data', 'D - Main.ba2'), stamp: '5/6/7' }],
+      [{ path: join('/game/Data', 'Strings/D_en.STRINGS'), stamp: 'EACCES' }],
     ]);
   });
 

@@ -565,7 +565,30 @@ describe('Instance — game folder and the archives the game loads', () => {
     await instance.refresh();
 
     expect(instance.value.loadOrderSnapshot).toMatchObject({
-      plugins: expect.arrayContaining([expect.objectContaining({ origin: 'Tracked Patch Mod', stringsFiles: [stringsFile] })]) as unknown,
+      plugins: expect.arrayContaining([expect.objectContaining({ origin: 'Tracked Patch Mod', stringsFiles: [expect.objectContaining({ path: stringsFile })] })]) as unknown,
+    });
+  });
+
+  it('hands a mod\'s plugin the new stamp of a strings file rewritten beside it, at the next read', async () => {
+    const stringsFile = '/mods/Tracked Patch Mod/Strings/Tracked Patch Mod_en.STRINGS';
+    const stampedAt = (changedNs: bigint): Partial<InstanceReading> => ({
+      archiveAndStringsStamps: new Map([[stringsFile, { kind: 'read', answer: { size: 5n, modifiedNs: 1n, changedNs } }]]),
+    });
+    const { instance, fake } = loader({
+      ...GAME_FOUND,
+      mods: [mod('Tracked Patch Mod')],
+      pluginOrder: [{ name: 'Tracked Patch Mod.esp', enabled: true }],
+      modFolders: modFoldersOf('Tracked Patch Mod'),
+      modFiles: new Map([['Tracked Patch Mod', filesOfMod('Tracked Patch Mod', 'Tracked Patch Mod.esp', 'Strings/Tracked Patch Mod_en.STRINGS')]]),
+      ...stampedAt(1n),
+    });
+    await instance.refresh();
+
+    fake.read(stampedAt(2n));
+    await instance.refresh();
+
+    expect(instance.value.loadOrderSnapshot).toMatchObject({
+      plugins: expect.arrayContaining([expect.objectContaining({ stringsFiles: [{ path: stringsFile, stamp: '5/1/2' }] })]) as unknown,
     });
   });
 
