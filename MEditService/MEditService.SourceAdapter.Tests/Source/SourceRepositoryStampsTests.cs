@@ -1,7 +1,10 @@
+using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
@@ -9,7 +12,8 @@ public sealed class SourceRepositoryStampsTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
     private const string NpcFormKey = "000800:Fixture.esp";
-    private const string NpcBody = "{\n  \"FormKey\": \"000800:Fixture.esp\",\n  \"EditorID\": \"FixtureNpc\"\n}";
+    private static readonly string NpcBody = RecordTextCodec.SerializeToText(
+        new Npc(FormKey.Factory(NpcFormKey), Fallout4Release.Fallout4) { EditorID = "FixtureNpc" }, GameRelease.Fallout4);
 
     private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
 

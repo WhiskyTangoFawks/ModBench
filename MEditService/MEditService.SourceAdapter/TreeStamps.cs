@@ -121,6 +121,8 @@ internal static class TreeStamps
         }
 
         known.Retain(listed);
+        var claimedDocuments = holders.Claimed.SelectMany(claim => claim.Documents).ToHashSet(StringComparer.Ordinal);
+        misplaced.RemoveAll(file => claimedDocuments.Contains(file.HeldPath));
         if (limit is not null) unreadable.AddRange(OutsideTheLimit(limit, plugin, keysByFile));
         return new RecordStamps(stamps, unreadable, holders.Claimed, unsaved, misplaced);
     }

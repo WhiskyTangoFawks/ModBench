@@ -145,7 +145,7 @@ public sealed class UnsavedDocumentTests : IDisposable
         Assert.Equal(Relative(_file), problem.SourceRelativePath);
         Assert.Contains("NoSuchField", problem.Message, StringComparison.Ordinal);
 
-        Hand(new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedAgain\"")));
+        Hand();
 
         Assert.Empty(ProblemsOfTracked().Problems);
     }

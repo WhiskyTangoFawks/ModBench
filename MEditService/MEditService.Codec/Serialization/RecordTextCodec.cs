@@ -40,9 +40,8 @@ public static class RecordTextCodec
             ? Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(source), gameRelease)))
             : RoundTrip(source, gameRelease, recordType));
 
-    /// <summary>The same answer for a block level's document, a group's cells or a worldspace's, named by
-    /// its level in <see cref="RecordTypes.InteriorCellBlockLevels"/> or
-    /// <see cref="RecordTypes.ExteriorCellBlockLevels"/>.</summary>
+    /// <summary>The same answer for a block level's document, named by its level in
+    /// <see cref="RecordTypes.InteriorCellBlockLevels"/> or the worldspace's.</summary>
     public static string? WhyNotABlockLevel(string text, GameRelease gameRelease, string level) =>
         WhyNotProduced(text, source => BlankDocument(level, gameRelease, Document.Parse(source)));
 

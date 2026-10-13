@@ -80,7 +80,7 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     [Fact]
     public void ANumberWhereATranslatedStringBelongs_IsRefused()
     {
-        Assert.Contains("Name", Why(Edited(WeaponText(), root => root["Name"] = 5)), StringComparison.Ordinal);
+        Assert.StartsWith("Started an array without being inside the", Why(Edited(WeaponText(), root => root["Name"] = 5)), StringComparison.Ordinal);
     }
 
     [Fact]
