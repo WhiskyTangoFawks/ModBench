@@ -5,11 +5,16 @@ import { join } from 'node:path';
 import { fakeArchiveReader } from '../../test/fakeArchiveReader';
 import type { ArchiveReader } from '../archiveReader';
 import { digestOf } from '../contentDigest';
+import { stampOf } from '../files';
 import { hashIndex } from '../hashIndex';
 
 vi.mock('../contentDigest', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../contentDigest')>();
   return { digestOf: vi.fn(actual.digestOf) };
+});
+vi.mock('../files', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../files')>();
+  return { ...actual, stampOf: vi.fn(actual.stampOf) };
 });
 
 const HASH_OF_AAAA = 'Mr+EvxoNp0I=';
@@ -23,6 +28,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'modbench-hashes-'));
   folder = join(root, 'index');
   vi.mocked(digestOf).mockClear();
+  vi.mocked(stampOf).mockClear();
 });
 afterEach(async () => {
   vi.useRealTimers();
@@ -33,6 +39,18 @@ async function fileHolding(name: string, body: string): Promise<string> {
   const path = join(root, name);
   await writeFile(path, body);
   return path;
+}
+
+// The next read of a file waits for release(), so a test decides what another ask meets while it is going.
+function heldRead(): { release: () => void } {
+  let release = (): void => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  const actual = vi.mocked(digestOf).getMockImplementation();
+  vi.mocked(digestOf).mockImplementationOnce(async (path) => {
+    await held;
+    return (actual ?? digestOf)(path);
+  });
+  return { release: () => release() };
 }
 
 const indexText = (): Promise<string> => readFile(join(folder, 'hashes.jsonl'), 'utf8').catch(() => '');
@@ -174,8 +192,15 @@ describe('hashIndex', () => {
   it('reads a file once for two asks while its first read is still going', async () => {
     const file = await fileHolding('Game.esm', 'aaaa');
     const index = hashIndex(folder, fakeArchiveReader([]));
+    const read = heldRead();
 
-    await Promise.all([index.originFileHash(file), index.originFileHash(file)]);
+    const first = index.originFileHash(file);
+    await vi.waitUntil(() => vi.mocked(digestOf).mock.calls.length === 1);
+    const second = index.originFileHash(file);
+    await vi.waitUntil(() => vi.mocked(stampOf).mock.settledResults.length === 2);
+    await new Promise(setImmediate);
+    read.release();
+    await Promise.all([first, second]);
 
     expect(vi.mocked(digestOf).mock.calls).toHaveLength(1);
   });
