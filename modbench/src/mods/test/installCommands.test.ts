@@ -116,7 +116,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     }));
   });
 
-  it('archive: one of the instance\'s downloaded files installs as that downloaded file, so it is marked installed as MO2 marks it', async () => {
+  it('archive: one of the instance\'s downloaded files installs as that downloaded file, so it is marked installed', async () => {
     const row = downloadRowFixture('foo.7z', { modID: '111', fileID: '222', version: '2.0' });
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });

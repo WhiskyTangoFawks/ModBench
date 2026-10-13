@@ -32,8 +32,6 @@ interface SourceKindItem extends vscode.QuickPickItem {
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
   const { commands, instance, reporterFor, warnIfFomod, downloadInstall } = deps;
-  // An archive that is one of the instance's downloaded files installs as that file, so it is
-  // marked installed as MO2 marks it.
   const downloadedFileAt = (path: string): DownloadFile | undefined => {
     const { downloads } = instance.value;
     return downloads.kind === 'listed' ? downloads.rows.find((row) => samePath(row.path, path)) : undefined;
@@ -49,6 +47,12 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       succeeded = true;
     }));
     return { installed: succeeded };
+  };
+  // An archive that is one of the instance's downloaded files installs as that file, so the
+  // mod manager's own Downloads view sees it installed.
+  const installArchive = (archive: string): Promise<InstallOutcome> => {
+    const downloaded = downloadedFileAt(archive);
+    return installNew(downloaded ? downloadedFileSource(downloaded) : { kind: 'archive', path: archive }, defaultModName(archive), 'installFromArchive');
   };
   return [
     vscode.commands.registerCommand('modbench.mod.install', async (argument?: unknown): Promise<InstallOutcome> => {
@@ -73,9 +77,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
           openLabel: 'Install',
         });
         const archive = archivePicked?.[0]?.fsPath;
-        if (!archive) return NOT_INSTALLED;
-        const downloaded = downloadedFileAt(archive);
-        return installNew(downloaded ? downloadedFileSource(downloaded) : { kind: 'archive', path: archive }, defaultModName(archive), 'installFromArchive');
+        return archive ? installArchive(archive) : NOT_INSTALLED;
       }
       const folderPicked = await vscode.window.showOpenDialog({
         canSelectFiles: false,
