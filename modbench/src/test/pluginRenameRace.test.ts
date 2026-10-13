@@ -20,6 +20,7 @@ vi.mock('vscode', async () => {
   };
 });
 
+import { readInstance } from '../instanceAdapter/mo2Reads';
 import { Instance } from '../instanceLoader/instance';
 import { instanceSyncs } from '../syncWiring';
 import { pluginSyncOver } from '../pluginsCommands/plugins';
@@ -55,20 +56,21 @@ describe('a rename while a recompute is reading', () => {
     let holding = false;
     let filesRead!: () => void;
     const filesReadBeforeRename = new Promise<void>((resolve) => { filesRead = resolve; });
+    const holdingReader = {
+      ...reader,
+      originFiles: async (origin: Parameters<typeof reader.originFiles>[0]) => {
+        const files = await reader.originFiles(origin);
+        if (holding && origin.kind === 'mod' && origin.name === PLUGIN.origin) filesRead();
+        return files;
+      },
+      pluginOrder: async (profile: string) => {
+        if (holding) await held;
+        return reader.pluginOrder(profile);
+      },
+    };
     instance = new Instance({
       window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} },
-      adapter: {
-        ...reader,
-        originFiles: async (origin) => {
-          const files = await reader.originFiles(origin);
-          if (holding && origin.kind === 'mod' && origin.name === PLUGIN.origin) filesRead();
-          return files;
-        },
-        pluginOrder: async (profile) => {
-          if (holding) await held;
-          return reader.pluginOrder(profile);
-        },
-      },
+      adapter: { ...holdingReader, reading: () => readInstance(holdingReader) },
     });
     const { pluginSync } = instanceSyncs({
       instance, syncMods: modSyncOver(writer), syncPlugins: pluginSyncOver(writer), channel: { error: () => {}, info: () => {} },

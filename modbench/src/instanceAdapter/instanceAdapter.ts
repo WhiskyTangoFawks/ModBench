@@ -337,6 +337,28 @@ export interface InstanceReading {
   readonly gameFolder: GameFolder;
   readonly dataFolderPlugins: DataFolderPlugins;
   readonly creationClubList: readonly string[];
+  /** The archives the INIs list, in load order. */
+  readonly archiveList: readonly string[];
+  /** Each INI the game reads that the archive list did not. */
+  readonly archiveListNotes: readonly string[];
+  readonly dataFolderArchives: DataFolderArchives;
+  readonly profiles: readonly string[];
+  /** Undefined when there is no folder for mods at all. */
+  readonly modFolders: ModFolders | undefined;
+  /** Each link in mods/ that cannot be followed, by name, with why. */
+  readonly skippedLinks: ReadonlyMap<string, string>;
+  /** The files the game wrote at run time. */
+  readonly runtimeOutput: OriginFiles;
+  /** Each listed mod's own files, by mod name. */
+  readonly modFiles: ReadonlyMap<string, OriginFiles>;
+  /** Each mod folder's meta, by folder name, listed in mod order or not. */
+  readonly folderMeta: ReadonlyMap<string, ModMeta>;
+  /** The listed mods under version control (ADR-0007). */
+  readonly trackedMods: readonly string[];
+  /** Every repository in the source folder, listed or not. */
+  readonly sourceMods: readonly string[];
+  /** Each source folder, by mod name, for every mod listed or in the source folder. */
+  readonly sourceDirs: ReadonlyMap<string, string>;
 }
 
 export interface InstanceAdapter {

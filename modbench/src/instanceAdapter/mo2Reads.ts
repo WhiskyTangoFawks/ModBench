@@ -167,7 +167,8 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
 }
 
 type ReadingSource = Pick<InstanceAdapter,
-  'names' | 'settings' | 'modOrder' | 'modMeta' | 'pluginOrder' | 'gameFolderPlugins' | 'creationClubList'>;
+  | 'names' | 'settings' | 'modOrder' | 'modMeta' | 'pluginOrder' | 'gameFolderPlugins' | 'creationClubList' | 'archiveList'
+  | 'gameFolderArchives' | 'profiles' | 'modFolders' | 'originFiles' | 'modTracked' | 'sourceMods' | 'sourceFolder'>;
 
 // How long another tool's write takes to settle before an empty mod order is believed.
 const SETTLE_MS = 200;
@@ -185,20 +186,51 @@ async function settledMods(source: ReadingSource, profile: string): Promise<Modl
   return modsWithMeta(source, profile);
 }
 
+const withoutRepeats = (names: readonly string[]): string[] => [...new Set(names)];
+
 /** The instance whole, every fact against the one read of the settings, so a profile switch
  *  mid-read cannot mix one profile's mod order with another's plugin order. */
 export async function readInstance(source: ReadingSource): Promise<InstanceReading> {
   const settings = await source.settings();
   const { profile, gameName, gameRelease } = settings;
-  const [mods, pluginOrder, downloadedFiles, game] = await Promise.all([
-    settledMods(source, profile),
+  const skippedLinks = new Map<string, string>();
+  const modsRead = settledMods(source, profile);
+  const modFoldersRead = source.modFolders((name, reason) => skippedLinks.set(name, reason));
+  const sourceModsRead = source.sourceMods();
+  const [mods, pluginOrder, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceMods, ownFacts, folderMeta] = await Promise.all([
+    modsRead,
     source.pluginOrder(profile),
     settings.downloadedFiles(),
     settings.gameFolder().then(async (gameFolder) => ({
       gameFolder,
       dataFolderPlugins: await source.gameFolderPlugins(gameFolder),
       creationClubList: await source.creationClubList(gameFolder, gameRelease),
+      archiveList: await source.archiveList(profile, gameFolder, gameRelease),
+      dataFolderArchives: await source.gameFolderArchives(gameFolder, gameRelease),
     })),
+    source.profiles(),
+    modFoldersRead,
+    source.originFiles({ kind: 'runtimeOutput' }),
+    sourceModsRead,
+    modsRead.then(async (entries) => {
+      const listed = entries.filter((entry) => entry.kind === 'mod');
+      const [files, tracked] = await Promise.all([
+        Promise.all(listed.map(async ({ name }) => [name, await source.originFiles({ kind: 'mod', name })] as const)),
+        Promise.all(listed.map(async ({ name }) => ((await source.modTracked(name)) ? [name] : []))),
+      ]);
+      return { listed, modFiles: new Map(files), trackedMods: tracked.flat() };
+    }),
+    modFoldersRead.then((folders) => Promise.all((folders?.all ?? []).filter((folder) => folder.kind === 'mod')
+      .map(async ({ name }) => [name, await source.modMeta(name)] as const))),
   ]);
-  return { names: source.names, profile, gameName, gameRelease, mods, pluginOrder, downloadedFiles, ...game };
+  const { listed, modFiles, trackedMods } = ownFacts;
+  const sourceDirs = withoutRepeats([...sourceMods, ...listed.map(({ name }) => name)])
+    .flatMap((name) => { const folder = source.sourceFolder(name); return folder === undefined ? [] : [[name, folder] as const]; });
+  const { archiveList, dataFolderArchives, ...gameFacts } = game;
+  return {
+    names: source.names, profile, gameName, gameRelease, mods, pluginOrder, downloadedFiles, ...gameFacts,
+    archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
+    profiles, modFolders, skippedLinks, runtimeOutput, modFiles, folderMeta: new Map(folderMeta),
+    trackedMods, sourceMods, sourceDirs: new Map(sourceDirs),
+  };
 }

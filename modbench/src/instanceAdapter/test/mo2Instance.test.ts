@@ -115,6 +115,30 @@ describe('the MO2 Instance adapter', () => {
         }
       });
 
+      it('answers the profiles, mod folders, run-time output, each listed mod\'s files and meta, the tracked and source mods and the archives as the separate reads do', async () => {
+        const reading = await adapter.reading();
+        const settings = await adapter.settings();
+        const listed = reading.mods.filter((e) => e.kind === 'mod').map((e) => e.name);
+        const first = present(listed[0], 'a listed mod');
+
+        expect(reading.profiles).toEqual(await adapter.profiles());
+        expect(reading.modFolders?.all).toEqual((await adapter.modFolders())?.all);
+        expect(reading.runtimeOutput).toEqual(await adapter.originFiles({ kind: 'runtimeOutput' }));
+        expect([...reading.modFiles.keys()]).toEqual(listed);
+        expect(reading.modFiles.get(first)).toEqual(await adapter.originFiles({ kind: 'mod', name: first }));
+        expect(reading.folderMeta.get(first)).toEqual(await adapter.modMeta(first));
+        expect(reading.sourceMods).toEqual(await adapter.sourceMods());
+        expect(reading.sourceDirs.get(first)).toBe(adapter.sourceFolder(first));
+        expect(reading.dataFolderArchives).toEqual(await adapter.gameFolderArchives(reading.gameFolder, settings.gameRelease));
+        expect(reading.archiveList).toEqual((await adapter.archiveList('Default', reading.gameFolder, settings.gameRelease)).archives);
+      });
+
+      it('hands over a link in mods/ it cannot follow, by name', async () => {
+        await symlink(join(root, 'nowhere'), join(root, 'mods', 'Dangling'));
+
+        expect([...(await adapter.reading()).skippedLinks.keys()]).toEqual(['Dangling']);
+      });
+
       it('answers the game folder as not found, with its Data folder unresolved, when no game folder is found', async () => {
         const reading = await adapter.reading();
 
