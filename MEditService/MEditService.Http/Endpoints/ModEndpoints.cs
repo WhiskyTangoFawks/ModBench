@@ -50,7 +50,7 @@ internal static class ModEndpoints
         return app;
     }
 
-    // init-mod: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
+    // decompile-and-commit: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
     internal static async Task<IResult> Init(InitRequest req, InitHandler initHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(ModEndpoints));
