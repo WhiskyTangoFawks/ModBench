@@ -56,7 +56,7 @@ async function foldersAsAValueListsThem(root: string, names: readonly string[]):
   const listed = (await adapterOver(root).reading()).modFolders?.all ?? [];
   return names.map((name) => {
     const path = join(root, 'mods', name);
-    return listed.find((folder) => folder.path === path) ?? { kind: 'mod', name, folderName: name, path };
+    return listed.find((folder) => folder.path === path) ?? { kind: 'mod', name, path };
   });
 }
 
@@ -1242,7 +1242,6 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
 describe('the names a separator or mod may take', () => {
   const SEPARATOR_CLASH = 'A separator with this name already exists';
   const MOD_CLASH = 'A mod with this name already exists';
-  type Held = Pick<ModlistEntry, 'kind' | 'name'>;
   const bound = modlistCommands(adapterOver('/instance'), unscriptedMEdit);
 
   it('folds a separator\'s name as MO2 folds it into a folder name: trimmed, trailing dots dropped, without case', () => {
@@ -1255,8 +1254,8 @@ describe('the names a separator or mod may take', () => {
     const taken = {
       mods: [],
       modFolders: [
-        { kind: 'separator', name: 'Group A', path: '/instance/mods/Group A_separator', folderName: 'Group A_separator' },
-        { kind: 'mod', name: 'Group B_separator', path: '/instance/mods/Group B_separator', folderName: 'Group B_separator' },
+        { kind: 'separator', name: 'Group A', path: '/instance/mods/Group A_separator' },
+        { kind: 'mod', name: 'Group B_separator', path: '/instance/mods/Group B_separator' },
       ] as const,
     };
 
@@ -1264,43 +1263,10 @@ describe('the names a separator or mod may take', () => {
     expect(bound.separatorNameRefusal(taken, 'Group B', 'Group C')).toBe(SEPARATOR_CLASH);
   });
 
-  function commandsHolding(mods: readonly ModlistEntry[], folders: readonly Held[] = []) {
-    const taken = { mods, modFolders: folders.map((e) => ({ ...e, folderName: e.name, path: `/instance/mods/${e.name}` })) };
-    return {
-      separatorNameRefusal: (value: string, own: string) => bound.separatorNameRefusal(taken, value, own),
-      renameModNameRefusal: (value: string, own: string) => bound.renameModNameRefusal(taken, value, own),
-    };
-  }
+  it('refuses a mod name that holds a path separator', () => {
+    const taken = { mods: [], modFolders: [] };
 
-  it('refuses a separator a name another separator\'s folder holds, and takes its own name or a mod\'s', () => {
-    const commands = commandsHolding([], [
-      { kind: 'separator', name: 'Group A' }, { kind: 'separator', name: 'Group B' }, { kind: 'mod', name: 'Mod A' }]);
-
-    expect(commands.separatorNameRefusal('group a', 'Group B')).toBe(SEPARATOR_CLASH);
-    expect(commands.separatorNameRefusal('GROUP B', 'Group B')).toBeUndefined();
-    expect(commands.separatorNameRefusal('Mod A', 'Group B')).toBeUndefined();
-  });
-
-  it('refuses a separator a name a separator with no folder has, since a line in mod order is a separator whose folder may be gone', () => {
-    const commands = commandsHolding([
-      { kind: 'separator', name: 'Group A', enabled: true }, { kind: 'mod', name: 'Mod A', enabled: true }, { kind: 'separator', name: 'Group B', enabled: true }]);
-
-    expect(commands.separatorNameRefusal('group a', 'Group B')).toBe(SEPARATOR_CLASH);
-    expect(commands.separatorNameRefusal('GROUP B', 'Group B')).toBeUndefined();
-    expect(commands.separatorNameRefusal('Mod A', 'Group B')).toBeUndefined();
-  });
-
-  it('refuses a mod a name another mod has, listed or in a folder, and a path separator, and takes its own name', () => {
-    const commands = commandsHolding(
-      [{ kind: 'mod', name: 'Mod A', enabled: true }, { kind: 'mod', name: 'Mod B', enabled: true }, { kind: 'mod', name: 'Listed Only', enabled: true }],
-      [{ kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod B' }, { kind: 'mod', name: 'Folder Only' }]);
-
-    expect(commands.renameModNameRefusal('mod a', 'Mod B')).toBe(MOD_CLASH);
-    expect(commands.renameModNameRefusal('Folder Only', 'Mod B')).toBe(MOD_CLASH);
-    expect(commands.renameModNameRefusal('Listed Only', 'Mod B')).toBe(MOD_CLASH);
-    expect(commands.renameModNameRefusal('a/b', 'Mod B')).toBe('A mod name cannot contain / or \\');
-    expect(commands.renameModNameRefusal('a\\b', 'Mod B')).toBe('A mod name cannot contain / or \\');
-    expect(commands.renameModNameRefusal('mod b', 'Mod B')).toBeUndefined();
-    expect(commands.renameModNameRefusal('Fresh', 'Mod B')).toBeUndefined();
+    expect(bound.renameModNameRefusal(taken, 'a/b', 'Mod B')).toBe('A mod name cannot contain / or \\');
+    expect(bound.renameModNameRefusal(taken, 'a\\b', 'Mod B')).toBe('A mod name cannot contain / or \\');
   });
 });

@@ -1,10 +1,10 @@
 import type {
-  ArchiveReader, DownloadMeta, GameFolder, InstanceAdapter, InstanceReading, ModlistEntry, OriginFiles, PluginEntry,
+  ArchiveReader, DownloadMeta, GameFolder, InstanceAdapter, InstanceReading, ModlistEntry, OriginFiles, PluginEntry, Subscription,
 } from '../../instanceAdapter/instanceAdapter';
 import type { DownloadsDirectoryResolver } from '../../instanceAdapter/downloadsDirectory';
 import type { Mo2Context } from '../../instanceAdapter/mo2Context';
 import { downloadsDirectoryResolver } from '../../instanceAdapter/downloadsDirectory';
-import { gameDirectoryResolver } from '../../instanceAdapter/gameDirectory';
+import { gameDirectoryResolver, type GameDetectors } from '../../instanceAdapter/gameDirectory';
 import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
 import { mo2Watch } from '../../instanceAdapter/mo2Watch';
 import { myGamesResolver } from '../../instanceAdapter/myGames';
@@ -23,6 +23,10 @@ export interface AdapterAnswers {
   downloadsFolder?: Awaited<ReturnType<DownloadsDirectoryResolver>>;
   /** What every archive holds; none when the test fixes no reader. */
   archives?: ArchiveReader;
+  /** The setting that names the game's folder. */
+  gameDirectory?: string;
+  gameDirectoryChanged?: (listener: () => void) => Subscription;
+  detectors?: GameDetectors;
 }
 
 /** The downloads folder's answer for a test whose subject holds none: unresolved, watched never. */
@@ -36,15 +40,15 @@ export const STEADY_WINDOW: ConstructorParameters<typeof Instance>[0]['window'] 
 
 /** MO2's context over `root`, detecting no game install, with the answers a test fixes in place. */
 export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Context {
-  const { gameFolder, downloadsFolder } = answers;
+  const { gameFolder, downloadsFolder, gameDirectory, gameDirectoryChanged = () => ({ dispose: () => {} }), detectors = NO_DETECTORS } = answers;
   return {
     instanceRoot: root,
     resolveGameFolder: gameFolder !== undefined
       ? (typeof gameFolder === 'function' ? gameFolder : () => Promise.resolve(gameFolder))
-      : gameDirectoryResolver(() => ({}), NO_DETECTORS),
-    resolveDownloadsFolder: downloadsFolder !== undefined ? () => Promise.resolve(downloadsFolder) : downloadsDirectoryResolver(NO_DETECTORS),
-    resolveMyGames: myGamesResolver(root, NO_DETECTORS),
-    watch: mo2Watch(root, () => ({ dispose: () => {} })),
+      : gameDirectoryResolver(() => ({ gameDirectory }), detectors),
+    resolveDownloadsFolder: downloadsFolder !== undefined ? () => Promise.resolve(downloadsFolder) : downloadsDirectoryResolver(detectors),
+    resolveMyGames: myGamesResolver(root, detectors),
+    watch: mo2Watch(root, gameDirectoryChanged),
   };
 }
 
@@ -52,17 +56,10 @@ export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Cont
 export const sourceOver = (root: string, answers: AdapterAnswers = {}): ReadingSource => readingSource(contextOver(root, answers));
 
 export const adapterOver = (root: string, answers: AdapterAnswers = {}): InstanceAdapter =>
-  mo2InstanceAdapter({
-    instanceRoot: root,
-    gameDirectoryOverrides: () => ({}),
-    gameDirectoryChanged: () => ({ dispose: () => {} }),
-    detectors: NO_DETECTORS,
-    archives: answers.archives ?? fakeArchiveReader([]),
-    context: contextOver(root, answers),
-  });
+  mo2InstanceAdapter({ instanceRoot: root, archives: answers.archives ?? fakeArchiveReader([]), context: contextOver(root, answers) });
 
 /** What a test reads back after a command wrote, through the adapter's own reads, so a test never
- *  re-derives a file format of its own. `profile` defaults to the corpus fixture's. */
+ *  re-derives a file format of its own. */
 export const readInstanceOf = (root: string): Promise<InstanceReading> => adapterOver(root).reading();
 
 export const readModlistEntries = (root: string, profile = 'Default'): Promise<ModlistEntry[]> =>

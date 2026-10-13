@@ -29,10 +29,6 @@ import { tmpdir } from 'node:os';
 import { join, matchesGlob } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import type { Mo2Context } from '../mo2Context';
-import { downloadsDirectoryResolver } from '../downloadsDirectory';
-import { gameDirectoryResolver, type GameDetectors } from '../gameDirectory';
-import { mo2Watch } from '../mo2Watch';
-import { myGamesResolver } from '../myGames';
 import { readingSource, readInstance, type ReadingSource } from '../mo2Reads';
 import { OVERWRITE_ORIGIN, type Subscription } from '../instanceAdapter';
 import type {
@@ -40,6 +36,7 @@ import type {
 } from '../instanceAdapter';
 import { tempWritePath } from '../layout';
 import { fakeArchiveReader } from '../../test/fakeArchiveReader';
+import { contextOver } from '../../test/mo2/adapterOver';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
 } from '../../test/mo2/corpusFixture';
@@ -55,17 +52,6 @@ async function settleWaitArmed(): Promise<void> {
 const INI = 'ModOrganizer.ini';
 const DOWNLOAD = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
-const contextAt = (
-  instanceRoot: string, gameDirectory?: string, gameDirectoryChanged: (listener: () => void) => Subscription = () => ({ dispose: () => {} }),
-  detectors: GameDetectors = NO_DETECTORS,
-): Mo2Context => ({
-  instanceRoot,
-  resolveGameFolder: gameDirectoryResolver(() => ({ gameDirectory }), detectors),
-  resolveDownloadsFolder: downloadsDirectoryResolver(detectors),
-  resolveMyGames: myGamesResolver(instanceRoot, detectors),
-  watch: mo2Watch(instanceRoot, gameDirectoryChanged),
-});
-
 const adapterAt = (
   instanceRoot: string, gameDirectory?: string, gameDirectoryChanged: (listener: () => void) => Subscription = () => ({ dispose: () => {} }),
   archives: ArchiveReader = fakeArchiveReader([]),
@@ -76,7 +62,7 @@ const adapterAt = (
 const watchedOver = (context: Mo2Context): ReadingSource & Pick<InstanceAdapter, 'subscribe'> =>
   ({ ...readingSource(context), subscribe: (listener) => context.watch.subscribe(listener) });
 
-const sourceAt = (instanceRoot: string, gameDirectory?: string): ReadingSource => readingSource(contextAt(instanceRoot, gameDirectory));
+const sourceAt = (instanceRoot: string, gameDirectory?: string): ReadingSource => readingSource(contextOver(instanceRoot, { gameDirectory }));
 
 async function installHeld(root: string, target: InstallTarget): Promise<{ extraction: string; settle: () => Promise<void> }> {
   const release = fakeArchiveReader(['New.esp']);
@@ -440,12 +426,11 @@ describe('the MO2 Instance adapter', () => {
       const folders = (await source.modFolders())?.all;
 
       expect(folders).toContainEqual({
-        kind: 'mod', name: 'Unofficial Fallout 4 Patch', folderName: 'Unofficial Fallout 4 Patch', path: join(root, 'mods', 'Unofficial Fallout 4 Patch'),
+        kind: 'mod', name: 'Unofficial Fallout 4 Patch', path: join(root, 'mods', 'Unofficial Fallout 4 Patch'),
       });
       expect(folders).toContainEqual({
         kind: 'separator',
         name: 'Unassigned (Modlist Development)',
-        folderName: 'Unassigned (Modlist Development)_separator',
         path: join(root, 'mods', 'Unassigned (Modlist Development)_separator'),
       });
     });
@@ -677,12 +662,12 @@ describe('the MO2 Instance adapter', () => {
           documents = join(prefix, 'drive_c', 'users', 'steamuser', 'Documents');
           myGames = join(documents, 'My Games', 'Fallout4');
           await mkdir(myGames, { recursive: true });
-          myGamesSource = readingSource(contextAt(
-            root, undefined, undefined, { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) },
-          ));
+          myGamesSource = readingSource(contextOver(root, {
+            detectors: { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) },
+          }));
           await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\nsResourceArchiveList2=Default2.ba2\n');
           await localSettings(false);
-        });
+        } });
 
         it('takes a key the My Games INIs give over the default INI\'s, the custom INI\'s over the main one\'s, with no warning', async () => {
           await writeFile(join(myGames, 'Fallout4.ini'), '[Archive]\nsResourceArchiveList=Main.ba2\nsResourceArchiveList2=Main2.ba2\n');
@@ -877,7 +862,7 @@ describe('the MO2 Instance adapter', () => {
 
     it('follows the downloads folder the last read of the settings resolved, signalling once when it moves, not the one where the instance began, so a download landing in the folder the settings name now is heard', async () => {
       let signals = 0;
-      const watched = watchedOver(contextAt(root));
+      const watched = watchedOver(contextOver(root));
       watched.subscribe(() => { signals++; });
       await (await watched.settings()).downloadedFiles();
       expect(fire(join(root, 'downloads'), 'new.7z')).toBe(true);
@@ -897,7 +882,7 @@ describe('the MO2 Instance adapter', () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-game-'));
       try {
         await mkdir(join(game, 'Data'));
-        const watched = watchedOver(contextAt(root, game));
+        const watched = watchedOver(contextOver(root, { gameDirectory: game }));
         watched.subscribe(() => undefined);
 
         await (await watched.settings()).gameFolder();
@@ -914,7 +899,7 @@ describe('the MO2 Instance adapter', () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-ccc-'));
       try {
         await mkdir(join(game, 'Data'));
-        const watched = watchedOver(contextAt(root, game));
+        const watched = watchedOver(contextOver(root, { gameDirectory: game }));
         watched.subscribe(() => undefined);
 
         await (await watched.settings()).gameFolder();
@@ -930,7 +915,7 @@ describe('the MO2 Instance adapter', () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-archives-'));
       try {
         const found: GameFolder = { kind: 'found', root: game, dataFolder: join(game, 'Data') };
-        const watched = watchedOver(contextAt(root));
+        const watched = watchedOver(contextOver(root));
         watched.subscribe(() => undefined);
 
         await watched.archiveList('Default', found, 'Fallout4');
@@ -953,9 +938,9 @@ describe('the MO2 Instance adapter', () => {
         const myGames = join(documents, 'My Games', 'Fallout4');
         await mkdir(myGames, { recursive: true });
         const found: GameFolder = { kind: 'found', root: prefix, dataFolder: join(prefix, 'Data') };
-        const watched = watchedOver(contextAt(
-          root, undefined, undefined, { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) },
-        ));
+        const watched = watchedOver(contextOver(root, {
+          detectors: { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) },
+        }));
         watched.subscribe(() => undefined);
 
         await watched.archiveList('Default', found, 'Fallout4');
@@ -963,12 +948,12 @@ describe('the MO2 Instance adapter', () => {
         expect(fire(myGames, 'FALLOUT4CUSTOM.ini')).toBe(true);
         expect(fire(myGames, 'Fallout4Prefs.ini')).toBe(false);
       } finally {
-        await rm(prefix, { recursive: true, force: true });
+        await rm(prefix, { recursive: true, force: true } });
       }
     });
 
     it('follows no game folder when none is found', async () => {
-      const watched = watchedOver(contextAt(root));
+      const watched = watchedOver(contextOver(root));
       watched.subscribe(() => undefined);
       const before = live().length;
 
@@ -980,7 +965,7 @@ describe('the MO2 Instance adapter', () => {
 
   describe('get in mods/', () => {
     it('answers the folder that holds an entry, matched as MO2 matches names, or none', async () => {
-      const harderVats = { kind: 'mod', name: 'Harder VATS', folderName: 'Harder VATS', path: join(root, 'mods', 'Harder VATS') };
+      const harderVats = { kind: 'mod', name: 'Harder VATS', path: join(root, 'mods', 'Harder VATS') };
       const folders = present((await adapter.reading()).modFolders, 'the mod folders');
 
       expect(folders.holding({ kind: 'mod', name: 'Harder VATS' })).toEqual(harderVats);

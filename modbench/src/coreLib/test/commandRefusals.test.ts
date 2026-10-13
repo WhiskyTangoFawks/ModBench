@@ -3,14 +3,14 @@ import { entryNameRefusal, newModNameRefusal, type TakenNames } from '../command
 
 const mod = (name: string) => ({ kind: 'mod', name } as const);
 const separator = (name: string) => ({ kind: 'separator', name } as const);
-const folder = (kind: 'mod' | 'separator', name: string, folderName = name) => ({ kind, name, folderName, path: `/instance/mods/${folderName}` });
+const folder = (kind: 'mod' | 'separator', name: string) => ({ kind, name, path: `/instance/mods/${name}` });
 
 const key = (entry: { kind: string; name: string }): string =>
   (entry.kind === 'separator' ? `${entry.name.trim().replace(/\.+$/, '')}_separator` : entry.name).toLowerCase();
 
 const taken: TakenNames = {
   mods: [mod('Listed Only'), mod('Harder VATS'), separator('Group A')],
-  modFolders: [folder('mod', 'Harder VATS'), folder('mod', 'Folder Only'), folder('separator', 'Group A', 'Group A_separator')],
+  modFolders: [folder('mod', 'Harder VATS'), folder('mod', 'Folder Only'), folder('separator', 'Group A')],
 };
 
 describe('newModNameRefusal', () => {
