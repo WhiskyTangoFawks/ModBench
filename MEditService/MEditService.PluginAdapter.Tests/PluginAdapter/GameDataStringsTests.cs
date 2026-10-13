@@ -60,21 +60,6 @@ public sealed class GameDataStringsTests : IDisposable
             handed ?? HandedStrings.Of(pluginPath));
 
     [Fact]
-    public void StringsClaimOf_APluginWhoseStringsInAnArchiveTheGameLoadsAreRewritten_Changes()
-    {
-        MoveStringsIntoGameData("Update.bsa");
-        var before = StringsClaim();
-        LocalizedDoorPlugin.Write(_pluginPath, "The Other Door");
-        MoveStringsIntoGameData("Update.bsa");
-
-        Assert.NotEqual(before, StringsClaim());
-    }
-
-    private string? StringsClaim() =>
-        Adapter.StringsClaimOf(new ModPath(ModKey.FromFileName(PluginName), _pluginPath), LoadOrder, Plugin.Strings).Answered()
-            ?? throw new InvalidOperationException("Expected a localized plugin's strings to be claimed.");
-
-    [Fact]
     public void OpenDocuments_TwoCopiesOfAPluginEachWithItsOwnStrings_EachReadsItsOwn()
     {
         var (overridden, loadOrder) = AnOverriddenCopy("The Overridden Door");

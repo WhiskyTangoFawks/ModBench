@@ -45,10 +45,6 @@ public interface IPluginAdapter
 
     bool GameFolderExists(string gameFolder);
 
-    /// <summary>A hash of the strings a read of the plugin takes under <paramref name="loadOrder"/>: which of its strings
-    /// files it finds, where, and their bytes. Null for a plugin that is not localized.</summary>
-    Answer<string?, PluginFailure> StringsClaimOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings);
-
     /// <summary>What a plugin's own binary says about itself, which is what the Index holds for it.
     /// <c>Unreachable</c> stopped a full walk: the count is a readout, not a gate.</summary>
     Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(

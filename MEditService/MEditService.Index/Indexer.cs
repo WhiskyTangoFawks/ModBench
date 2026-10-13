@@ -518,7 +518,7 @@ internal sealed class Indexer : IDisposable
             .ToList();
         var respelled = resolved.Select(r => r.Key).Where(key => held.IsSpelledOtherwise(key)).ToList();
         // A plugin's text is read through its strings files, so other ones are a new read of it (ADR-0003).
-        var restrung = resolved.Where(r => open.TryGetValue(r.Key, out var h) && (!h.Strings.Equals(r.Strings) || !StringsStillRead(scope, r))).ToList();
+        var restrung = resolved.Where(r => open.TryGetValue(r.Key, out var h) && !h.Strings.Equals(r.Strings)).ToList();
         // A plugin in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
         var arriving = resolved.Where(r => !open.ContainsKey(r.Key) && !scope.Failed.StillFailing(r)).ToList();
@@ -715,7 +715,7 @@ internal sealed class Indexer : IDisposable
         // (Store.ValidateAgainstDisk), so a second hash of every binary here would pay that whole cost
         // twice for no new answer.
         var truth = scope.Projector.TruthOf(plugin.Registered);
-        if (truth != DerivedFrom.SourceTree) return scope.Store.DerivationOf(plugin.Key) == truth && StringsStillRead(scope, plugin.Registered);
+        if (truth != DerivedFrom.SourceTree) return scope.Store.DerivationOf(plugin.Key) == truth;
 
         try
         {
@@ -828,8 +828,6 @@ internal sealed class Indexer : IDisposable
     private ReadOutcome IndexFromBinary(OpenScope scope, PluginMetadata plugin, DerivedFrom derivedFrom)
     {
         var modPath = new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path);
-        // Taken before the read, as the binary's hash is: strings changed during it are then read again.
-        var stringsClaim = _adapter.StringsClaimOf(modPath, scope.LoadOrder, plugin.Strings).Holds(out var claim, out _) ? claim : null;
         if (!_adapter.OpenDocuments(modPath, scope.LoadOrder, scope.Store.Schemas, plugin.Strings).Holds(out var opened, out var failure))
         {
             _logger.LogWarning(failure.Error, "Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);
@@ -837,7 +835,7 @@ internal sealed class Indexer : IDisposable
         }
 
         using var documents = opened;
-        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom, stringsClaim) is not { } refused) return ReadOutcome.Read;
+        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom) is not { } refused) return ReadOutcome.Read;
         _logger.LogWarning("Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, refused.Reason);
         return ReadOutcome.Failed(refused);
     }
@@ -987,14 +985,6 @@ internal sealed class Indexer : IDisposable
             return ex.Message;
         }
     }
-
-    // A binary's rows hold its texts as its strings gave them; a tree's hold their own. Rows with no claim came from a
-    // plugin that is not localized, which the binary's hash vouches for.
-    private bool StringsStillRead(OpenScope scope, RegisteredPlugin plugin) =>
-        scope.Store.DerivationOf(plugin.Key) is null or DerivedFrom.SourceTree
-        || scope.Store.IndexedStringsClaim(plugin.Key) is not { } claimed
-        || (_adapter.StringsClaimOf(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), scope.LoadOrder, plugin.Strings).Holds(out var now, out _)
-            && now == claimed);
 
     // ADR-0007: the read a first index runs, so a re-read produces the same rows by construction. A
     // failed read is recorded with what it read from and rethrown, so it is not read again until that
