@@ -1,7 +1,7 @@
 import { foldPath } from '../instanceLoader/fileConflictIndex';
 import type { OriginFile } from '../instanceAdapter/instanceAdapter';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { Refusal } from './instanceReads';
+import { Refusal } from './refusal';
 
 export interface ModName {
   name: string;
@@ -27,7 +27,6 @@ function refusalFor(given: ModName, matches: readonly Entry[]): string | undefin
   return `"${given.name}" means more than one thing: ${matches.map(asNamed).join('; ')}. Name it with its kind.`;
 }
 
-/** Each name as the Mods view shows it, or one refusal for every name that is not exactly one entry. */
 export function modsNamed(entries: readonly Entry[], given: readonly ModName[]): Entry[] {
   const resolved = given.map((one) => ({ one, matches: matchesOf(entries, one) }));
   const refusals = resolved.flatMap(({ one, matches }) => refusalFor(one, matches) ?? []);

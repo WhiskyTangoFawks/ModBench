@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { foldPath, inFileOrderConflict, originLabel, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { fileOrderConflictOf, foldPath, goToModCandidates, originLabel } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { Refusal } from './instanceReads';
+import { Refusal } from './refusal';
 import { modsNamed, type ModName } from './names';
 
 interface ModConflicts {
@@ -19,9 +19,11 @@ function conflictsOf({ files, filesByMod, mods }: InstanceValue, wanted: readonl
   for (const entry of files) {
     for (const provider of entry.providers) {
       const row = provider.kind === 'mod' ? rows.get(provider.name) : undefined;
-      if (row === undefined || !inFileOrderConflict(entry, provider)) continue;
-      if (sameOrigin(entry.winnerOrigin, provider)) {
-        row.wins.push({ file: entry.relativePath, over: entry.providers.filter((other) => !sameOrigin(other, provider)).map(originLabel) });
+      if (row === undefined) continue;
+      const conflict = fileOrderConflictOf(entry, provider);
+      if (conflict === 'none') continue;
+      if (conflict === 'wins') {
+        row.wins.push({ file: entry.relativePath, over: goToModCandidates(entry, provider).map(originLabel) });
       } else {
         row.loses.push({ file: ownPaths.get(row.mod)?.get(foldPath(entry.relativePath)) ?? entry.relativePath, winner: originLabel(entry.winnerOrigin) });
       }

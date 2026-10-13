@@ -10,7 +10,8 @@ import { errorMessage } from '../ports/errorMessage';
 import type { MEditClient } from '../client/MEditClient';
 import { FILE_CONFLICTS } from './fileConflicts';
 import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
-import { INSTANCE_READS, Refusal } from './instanceReads';
+import { INSTANCE_READS } from './instanceReads';
+import { Refusal } from './refusal';
 import { RESOLVE_NAMES } from './resolveNames';
 import { SOURCE_PROBLEMS } from './sourceProblems';
 

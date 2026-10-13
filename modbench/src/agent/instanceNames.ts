@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { Refusal } from './instanceReads';
+import { Refusal } from './refusal';
 import { downloadsNamed, filesNamed, type FileName } from './names';
 
 function refusing<T>(refusals: string[], otherwise: T, work: () => T): T {
