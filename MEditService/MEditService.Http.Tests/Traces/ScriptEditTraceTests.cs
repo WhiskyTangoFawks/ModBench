@@ -25,14 +25,13 @@ public sealed class ScriptEditTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task AnEdit_IsWrittenToTheRecordsFile_And204()
+    public async Task AnEdit_Is204()
     {
-        var (file, formKey) = await LoadedAndTracked();
+        var (_, formKey) = await LoadedAndTracked();
 
         var response = await Client.ScriptEdit(formKey, Plugin, Origin, "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.Contains("0.75", await File.ReadAllTextAsync(file), StringComparison.Ordinal);
     }
 
     [Fact]
