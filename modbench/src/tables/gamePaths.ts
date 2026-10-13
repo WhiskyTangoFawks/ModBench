@@ -192,9 +192,9 @@ export interface PluginCompanionRule {
   isArchiveOf(plugin: string, name: string): boolean;
   inStringsFolder(plugin: string, name: string): boolean;
   /** An archive the release loads, of any plugin or of none, at a folder's root. */
-  isArchive(relativePath: string): boolean;
+  readonly isArchive: (relativePath: string) => boolean;
   /** A strings file of any plugin, in any language, in the strings folder at a folder's root. */
-  isStringsFile(relativePath: string): boolean;
+  readonly isStringsFile: (relativePath: string) => boolean;
 }
 
 const STRINGS_FOLDER = 'strings';
