@@ -19,7 +19,7 @@ const pluginFilesFrom = (files: Record<string, string>) => ({ name, origin }: Pl
   files[`${origin}/${name}`];
 
 describe('publishPluginProblems', () => {
-  it('targets the plugin binary itself (before init), carries the refusal wording verbatim, at the severity it is given', () => {
+  it('targets the plugin binary itself (before decompile and commit), carries the refusal wording verbatim, at the severity it is given', () => {
     const collection = new FakeDiagnosticCollection();
 
     publishPluginProblems(collection, pluginFilesFrom({ 'TS Mod/InventedWeather.esp': '/instance/mods/TS Mod/InventedWeather.esp' }), [

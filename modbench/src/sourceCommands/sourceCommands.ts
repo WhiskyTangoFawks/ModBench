@@ -5,8 +5,8 @@ import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/insta
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf, type Ba2Versions } from '../tables/gamePaths';
 
-/** mEdit's phases of init, and before them the Instance adapter's reading of each mod's installation files. */
-export type InitProgress = InitStatus | { readonly mod: string; readonly phase: 'ReadingInstallationFiles' };
+/** mEdit's phases of decompile and commit, and before them the Instance adapter's reading of each mod's installation files. */
+export type DecompileAndCommitProgress = InitStatus | { readonly mod: string; readonly phase: 'ReadingInstallationFiles' };
 
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'init'>;
@@ -39,9 +39,9 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
     },
 
     /** A mod whose source folder or installation files the Instance adapter cannot answer is refused here, naming why,
-     *  and mEdit inits the rest. */
-    init: async (
-      mods: readonly string[], options: { onProgress?: (status: InitProgress) => void } = {},
+     *  and mEdit decompiles and commits the rest. */
+    decompileAndCommit: async (
+      mods: readonly string[], options: { onProgress?: (status: DecompileAndCommitProgress) => void } = {},
     ): Promise<InitOutcome | WriteRefused> => {
       const sent: InitMod[] = [];
       const refused: ItemRefusal<string>[] = [];

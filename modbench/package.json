@@ -538,8 +538,8 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.mod.init",
-        "title": "Init Mod",
+        "command": "modbench.mod.decompileAndCommit",
+        "title": "Decompile and Commit Mod",
         "category": "Modbench"
       },
       {
@@ -703,7 +703,7 @@
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.holdsEnabledPlugin"
         },
         {
-          "command": "modbench.mod.init",
+          "command": "modbench.mod.decompileAndCommit",
           "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsUntrackedModWithPlugin && modbench.mod.sourceGestureRowsIn == modbench.modList || focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allInUntrackedMod && modbench.mod.sourceGestureRowsIn == modbench.pluginListTree"
         },
         {
@@ -1069,7 +1069,7 @@
           "group": "6_destroy@1"
         },
         {
-          "command": "modbench.mod.init",
+          "command": "modbench.mod.decompileAndCommit",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bholdsPlugin\\b/ && viewItem =~ /\\buntracked\\b/",
           "group": "4_sourceControl@1"
         },
@@ -1209,7 +1209,7 @@
           "group": "3_create@1"
         },
         {
-          "command": "modbench.mod.init",
+          "command": "modbench.mod.decompileAndCommit",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\binUntrackedMod\\b/",
           "group": "4_sourceControl@1"
         },
@@ -1321,7 +1321,7 @@
           "group": "2_change@4"
         },
         {
-          "command": "modbench.mod.init",
+          "command": "modbench.mod.decompileAndCommit",
           "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && inMod == untracked",
           "group": "4_sourceControl@1"
         },

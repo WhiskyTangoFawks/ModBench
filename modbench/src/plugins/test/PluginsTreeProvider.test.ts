@@ -1229,7 +1229,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
     return { group: present(group, 'the Weapon group'), record: present(record, 'the record row') };
   }
 
-  it('flips a record row on the reconcile after its mod is initialized, from the rows already read', async () => {
+  it('flips a record row on the reconcile after its mod is decompiled and committed, from the rows already read', async () => {
     const client = weaponOf(recordSummary());
     const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
     await reconcile(h, [held('A.esp')]);
@@ -2113,7 +2113,7 @@ describe('PluginsTreeProvider — changed outside Modbench', () => {
 });
 
 describe('PluginsTreeProvider — a healthy plugin row after a reconcile', () => {
-  it('states only its kind and where init applies, with no description and the base tooltip', async () => {
+  it('states only its kind and where decompile and commit applies, with no description and the base tooltip', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('A.esp'), held('B.esp')]);
 

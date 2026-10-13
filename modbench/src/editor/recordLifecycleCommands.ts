@@ -129,7 +129,7 @@ async function pickCopyDestinations(
     return undefined;
   }
   if (items.length === 0) {
-    reporter.landed('No plugin can take the copy: Init a mod to edit its plugins.');
+    reporter.landed('No plugin can take the copy: Decompile and commit a mod to edit its plugins.');
     return undefined;
   }
   const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Copy into', canPickMany: true });
