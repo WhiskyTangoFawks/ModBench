@@ -133,10 +133,16 @@ public sealed class WriteSessionTests : IDisposable
         Assert.True(File.Exists(FullPath(QuestPath)));
     }
 
-    private IReadOnlyList<string> TreeTheSessionAnswers(Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
+    private IWriteSession SessionAfter(Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
     {
         var session = Session();
         foreach (var write in writes) Assert.Null(Write(session, write));
+        return session;
+    }
+
+    private IReadOnlyList<string> TreeTheSessionAnswers(Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
+    {
+        var session = SessionAfter(writes);
         Repository.SaveChanges(SourceAnswer.Of(session.Changes)).Wrote();
         return TreeSnapshot.Of(_modFolder);
     }
@@ -491,27 +497,26 @@ public sealed class WriteSessionTests : IDisposable
             repository => repository.ChangesToPut(Plugin, created),
         ];
         var oneAfterAnother = TreeTheWritesLeaveOneAfterAnother(writes);
-        var session = Session();
-        foreach (var write in writes) Assert.Null(Write(session, write));
 
-        session.Write().Wrote();
+        SessionAfter(writes).Write().Wrote();
 
         Assert.Equal(oneAfterAnother, TreeSnapshot.Of(_modFolder));
     }
 
-    [Theory]
-    [InlineData("rewritten")]
-    [InlineData("moved")]
-    [InlineData("in a deleted folder")]
-    public void AWriteReachingAFileHeldUnsaved_IsRefusedNamingTheFile_AndWritesNothing(string reached)
+    [Fact]
+    public void AWriteRewritingAFileHeldUnsaved_IsRefusedNamingTheFile_AndWritesNothing() =>
+        AssertRefusedNamingTheHeldFile(QuestPath, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info")));
+
+    [Fact]
+    public void AWriteMovingAFileHeldUnsaved_IsRefusedNamingTheFile_AndWritesNothing() =>
+        AssertRefusedNamingTheHeldFile(QuestPath, repository => repository.ChangesToPut(Plugin, Renamed(_quest, "qust", QuestPath, "Renamed")));
+
+    [Fact]
+    public void AWriteDeletingAFolderHoldingAFileHeldUnsaved_IsRefusedNamingTheFile_AndWritesNothing() =>
+        AssertRefusedNamingTheHeldFile(ExteriorCellPath, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell")));
+
+    private void AssertRefusedNamingTheHeldFile(string held, Func<ISourceRepository, Answer<SourceChanges, SourceFailure>> write)
     {
-        var (held, write) = reached switch
-        {
-            "rewritten" => (QuestPath, (Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>)(repository =>
-                repository.ChangesToRemove(Plugin, Identity(_response, "info")))),
-            "moved" => (QuestPath, repository => repository.ChangesToPut(Plugin, Renamed(_quest, "qust", QuestPath, "Renamed"))),
-            _ => (ExteriorCellPath, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))),
-        };
         var session = Session(new DocumentChange(FullPath(held), File.ReadAllText(FullPath(held)) + " "));
         Assert.Null(Write(session, write));
         var before = TreeSnapshot.Of(_modFolder);
