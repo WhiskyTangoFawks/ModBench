@@ -11,7 +11,7 @@ import {
   baseCell, labelCell, getCellStyle, focusedRowStyle, conflictStateName, rowBackground,
 } from './gridStyles';
 import { defaultOf, type Column } from './recordUtils';
-import type { ColumnKey, ConflictThis, FieldDiff, FieldMetadata, FormKeyResolution, PathHop } from './types';
+import type { ColumnKey, ConflictThis, FieldMetadata, FormKeyResolution, PathHop } from './types';
 import type { FieldRow } from './recordRows';
 import type { FocusedCell } from './gridNavigation';
 import { LABEL_COLUMN } from './labelColumn';
@@ -103,17 +103,6 @@ function masterOrOnlyOne(
   return columns.length === 1 ? 'OnlyOne' : 'Master';
 }
 
-// xEdit's Compare Selected: a cell against the focused column's cell on the same row, not against
-// the other copies.
-function comparedState(
-  diff: FieldDiff, key: ColumnKey, focusedColumn: ColumnKey | undefined,
-): ConflictThis | undefined {
-  const { agreement } = diff;
-  if (!agreement || diff.values[key] == null || focusedColumn === undefined) return undefined;
-  if (key === focusedColumn) return 'Master';
-  return agreement[key] === agreement[focusedColumn] ? 'Override' : 'ConflictLoses';
-}
-
 function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: ColumnKey | null): boolean {
   return focusedCell?.rowKey === rowKey && focusedCell.plugin === plugin;
 }
@@ -177,9 +166,7 @@ export function DiffRow({
         // and `draggable` consumes the mousedown that would start a selection.
 
         // mEdit sends no state for the master's own cell, nor for any cell of a lone copy.
-        const cellState = diff.agreement
-          ? comparedState(diff, key, focusedCell?.plugin ?? columns[0]?.key)
-          : diff.cellStates[key] ?? masterOrOnlyOne(diff.values[key], key, columns);
+        const cellState = diff.cellStates[key] ?? masterOrOnlyOne(diff.values[key], key, columns);
         const cellStyle = {
           ...baseCell, ...getCellStyle(cellState), ...columnStyle(key),
         };

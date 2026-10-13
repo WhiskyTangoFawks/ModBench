@@ -115,15 +115,12 @@ public sealed class CompareRecordsTests : IDisposable
     }
 
     [Fact]
-    public void CopiesThatDiffer_CarryNoCellStateAndNoCopyState_ButAgreementOnEveryRow()
+    public void CopiesThatDiffer_TakeNoCellState_AndNoCopyState()
     {
         var compare = Compare(Copy(_chest, BasePlugin), Copy(_otherChest, ModPlugin));
 
         Assert.All(compare.Overrides, o => Assert.Null(o.ConflictThis));
         Assert.All(Flatten(compare.Diffs), d => Assert.Empty(d.CellStates));
-        var items = compare.Diffs.Single(d => d.FieldName == "Items");
-        var agreement = items.Agreement.Require();
-        Assert.NotEqual(agreement[Column(compare, 0)], agreement[Column(compare, 1)]);
     }
 
     [Fact]
@@ -135,9 +132,6 @@ public sealed class CompareRecordsTests : IDisposable
         Assert.Equal(ConflictAll.NoConflict, rows["FormVersion"].ConflictAll);
         Assert.Equal(ConflictAll.ConflictBenign, rows["EditorID"].ConflictAll);
         Assert.Equal(ConflictAll.ConflictBenign, compare.ConflictAll);
-        var editorId = rows["EditorID"].Agreement.Require();
-        Assert.Equal(editorId[Column(compare, 0)], editorId[Column(compare, 1)]);
-        Assert.NotEqual(editorId[Column(compare, 0)], editorId[Column(compare, 2)]);
     }
 
     [Fact]

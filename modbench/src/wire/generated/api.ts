@@ -1034,9 +1034,6 @@ export interface components {
             indexes?: {
                 [key: string]: number;
             } | null;
-            agreement?: {
-                [key: string]: number;
-            } | null;
         };
         FieldMetadata: {
             name: string;

@@ -153,16 +153,14 @@ internal sealed class ConflictClassifier(ILogger logger)
         // never produces the terminal states), so folding children equals reducing the whole
         // subtree at once.
         var same = (object? a, object? b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault);
-        var agreement = ctx.Agree && !ignoredInConflicts ? ConflictRules.Agreement(values, same) : null;
-        var ownState = agreement is { } groups && groups.Values.Distinct().Count() > 1
+        var ownState = ctx.Agree && !ignoredInConflicts && !ConflictRules.AllSame(values.Values, same)
             ? ConflictAll.ConflictBenign
             : ConflictRules.Reduce(cellStates.Values);
         var conflictAll = (children ?? []).Aggregate(ownState, (all, child) => ConflictRules.Escalate(all, child.ConflictAll));
 
         var links = LinkFacts(shapes, values, ctx);
         return new FieldDiff(
-            label, values, winnerColumn, cellStates, conflictAll, children, links.Resolutions, links.CheckErrors,
-            Agreement: agreement);
+            label, values, winnerColumn, cellStates, conflictAll, children, links.Resolutions, links.CheckErrors);
     }
 
     // A table of several record classes carries the document's discriminator as a column, and a

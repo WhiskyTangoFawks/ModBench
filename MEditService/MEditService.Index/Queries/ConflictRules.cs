@@ -58,23 +58,11 @@ internal static class ConflictRules
         return !ctx.ValuesEqual(pluginValue, ctx.WinnerValue) ? ConflictThis.ConflictLoses : ConflictThis.Override;
     }
 
-    // Numbers the columns so that those whose values are the same share one.
-    public static Dictionary<string, int> Agreement(
-        IReadOnlyDictionary<string, object?> valuesByColumn, Func<object?, object?, bool> valuesEqual)
+    // Whether every column holds the same value, an absent one included.
+    public static bool AllSame(IEnumerable<object?> values, Func<object?, object?, bool> valuesEqual)
     {
-        var representatives = new List<object?>();
-        var groups = new Dictionary<string, int>();
-        foreach (var (column, value) in valuesByColumn)
-        {
-            var group = representatives.FindIndex(representative => valuesEqual(representative, value));
-            if (group < 0)
-            {
-                group = representatives.Count;
-                representatives.Add(value);
-            }
-            groups[column] = group;
-        }
-        return groups;
+        var all = values.ToList();
+        return all.TrueForAll(value => valuesEqual(all[0], value));
     }
 
     // One column's own state across every row: the most severe cell it holds, Master for the

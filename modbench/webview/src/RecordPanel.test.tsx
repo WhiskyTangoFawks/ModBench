@@ -2708,44 +2708,28 @@ describe('RecordPanel — several records side by side', () => {
 });
 
 describe('RecordPanel — several records coloured as xEdit\'s Compare Selected does', () => {
-  const [GUN, AMMO, KNIFE] = ['000801:A.esp', '000802:A.esp', '000803:A.esp'];
-  const columns = ['0#A.esp', '1#A.esp', '2#A.esp'];
+  const [GUN, AMMO] = ['000801:A.esp', '000802:A.esp'];
   const compare: CompareResult = compareResultFixture({
-    overrides: [['Gun', GUN], ['Ammo', AMMO], ['Knife', KNIFE]].map(([editorId, formKey], i) => compareOverride({
-      formKey: formKey ?? '', plugin: 'A.esp', isWinner: true, editorId, fields: [{ metadata: strMeta, value: 'x' }], conflictThis: null, column: columns[i],
+    overrides: [['Gun', GUN, '0#A.esp'], ['Ammo', AMMO, '1#A.esp']].map(([editorId, formKey, column]) => compareOverride({
+      formKey: formKey ?? '', plugin: 'A.esp', isWinner: true, editorId, fields: [{ metadata: strMeta, value: 'x' }], conflictThis: null, column,
     })),
     diffs: [diffNode({
       fieldName: 'Name',
-      values: { '0#A.esp': 'Gun Name', '1#A.esp': 'Ammo Name', '2#A.esp': 'Gun Name' },
-      agreement: { '0#A.esp': 0, '1#A.esp': 1, '2#A.esp': 0 },
-      winnerColumn: '2#A.esp',
+      values: { '0#A.esp': 'Gun Name', '1#A.esp': 'Ammo Name' },
+      winnerColumn: '1#A.esp',
       conflictAll: 'ConflictBenign',
     })],
   });
-  const backgrounds = () => Array.from(required(screen.getByText('Ammo Name').closest('tr'), 'the Name row').querySelectorAll('td'))
-    .slice(1).map(cell => cell.style.backgroundColor);
 
   beforeEach(() => { vi.stubGlobal('mEditFormKey', GUN); });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('paints a row where the records disagree as a Conflict row', async () => {
+  it('paints a row where the records disagree as a Conflict row, and no cell in it', async () => {
     renderPanel(compare, { plugins: [{ name: 'A.esp', isTracked: true }] });
 
-    await screen.findByText('Ammo Name');
-    expect(required(screen.getByText('Ammo Name').closest('tr'), 'the Name row').style.backgroundColor)
-      .toBe('var(--vscode-modbench-conflictRowConflict)');
-  });
-
-  it('compares each cell with the focused column, the first until a cell is focused, and recolours as the focus moves', async () => {
-    renderPanel(compare, { plugins: [{ name: 'A.esp', isTracked: true }] });
-    await screen.findByText('Ammo Name');
-    const [override, loses] = ['conflictOverride', 'conflictLoses'].map(name => `var(--vscode-modbench-${name})`);
-
-    expect(backgrounds()).toEqual(['', loses, override]);
-
-    fireEvent.click(screen.getByText('Ammo Name'));
-
-    expect(backgrounds()).toEqual([loses, '', loses]);
+    const row = required((await screen.findByText('Ammo Name')).closest('tr'), 'the Name row');
+    expect(row.style.backgroundColor).toBe('var(--vscode-modbench-conflictRowConflict)');
+    expect(Array.from(row.querySelectorAll('td')).slice(1).map(cell => cell.style.backgroundColor)).toEqual(['', '']);
   });
 });
 
