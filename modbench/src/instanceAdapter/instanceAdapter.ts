@@ -315,8 +315,6 @@ export interface FileStamp {
 /** A read of one file that answers why it could not be read, rather than failing whatever asked. */
 export type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
 
-/** A file's size and its hash as mEdit's manifest carries it, kept by the adapter while the file's stamp is the one
- *  it was hashed at (ADR-0024). */
 interface HashedFile {
   readonly size: number;
   readonly hash: string;
