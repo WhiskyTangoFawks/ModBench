@@ -2707,6 +2707,68 @@ describe('RecordPanel — several records side by side', () => {
   });
 });
 
+describe('RecordPanel — several records coloured as xEdit\'s Compare Selected does', () => {
+  const [GUN, AMMO, KNIFE] = ['000801:A.esp', '000802:A.esp', '000803:A.esp'];
+  const [c0, c1, c2] = ['0#A.esp', '1#A.esp', '2#A.esp'];
+  const compare: CompareResult = compareResultFixture({
+    overrides: [['Gun', GUN, c0], ['Ammo', AMMO, c1], ['Knife', KNIFE, c2]].map(([editorId, formKey, column]) => compareOverride({
+      formKey: formKey ?? '', plugin: 'A.esp', isWinner: true, editorId, fields: [{ metadata: strMeta, value: 'x' }], conflictThis: null, column,
+    })),
+    diffs: [diffNode({
+      fieldName: 'Name',
+      values: { [c0]: 'Gun Name', [c1]: 'Ammo Name', [c2]: 'Gun Name' },
+      winnerColumn: c2,
+      conflictAll: 'ConflictBenign',
+      cellStatesByFocus: {
+        [c0]: { [c0]: 'Master', [c1]: 'ConflictLoses', [c2]: 'Override' },
+        [c1]: { [c0]: 'ConflictLoses', [c1]: 'Master', [c2]: 'ConflictLoses' },
+        [c2]: { [c0]: 'Override', [c1]: 'ConflictLoses', [c2]: 'Master' },
+      },
+    })],
+  });
+  const [override, loses] = ['conflictOverride', 'conflictLoses'].map(name => `var(--vscode-modbench-${name})`);
+  const row = () => required(screen.getByText('Ammo Name').closest('tr'), 'the Name row');
+  const backgrounds = () => Array.from(row().querySelectorAll('td')).slice(1).map(cell => cell.style.backgroundColor);
+
+  beforeEach(() => { vi.stubGlobal('mEditFormKey', GUN); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('paints a row where the records disagree as a Conflict row', async () => {
+    renderPanel(compare, { plugins: [{ name: 'A.esp', isTracked: true }] });
+
+    await screen.findByText('Ammo Name');
+    expect(row().style.backgroundColor).toBe('var(--vscode-modbench-conflictRowConflict)');
+  });
+
+  it('gives no cell a state until a column is focused', async () => {
+    renderPanel(compare, { plugins: [{ name: 'A.esp', isTracked: true }] });
+    await screen.findByText('Ammo Name');
+
+    expect(backgrounds()).toEqual(['', '', '']);
+  });
+
+  it('takes each cell\'s state from mEdit for the focused column, and recolours as the focus moves', async () => {
+    renderPanel(compare, { plugins: [{ name: 'A.esp', isTracked: true }] });
+    await screen.findByText('Ammo Name');
+
+    fireEvent.click(required(screen.getAllByText('Gun Name')[0], 'the first Gun Name cell'));
+    expect(backgrounds()).toEqual(['', loses, override]);
+
+    fireEvent.click(screen.getByText('Ammo Name'));
+    expect(backgrounds()).toEqual([loses, '', loses]);
+  });
+
+  it('gives no cell a state when the label column is focused', async () => {
+    renderPanel(compare, { plugins: [{ name: 'A.esp', isTracked: true }] });
+    await screen.findByText('Ammo Name');
+    fireEvent.click(screen.getByText('Ammo Name'));
+
+    fireEvent.click(screen.getByText('Name'));
+
+    expect(backgrounds()).toEqual(['', '', '']);
+  });
+});
+
 describe('RecordPanel — a string field\'s own tab, opened from one record\'s column', () => {
   beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); });
   afterEach(() => vi.unstubAllGlobals());

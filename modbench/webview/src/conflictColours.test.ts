@@ -19,7 +19,7 @@ function contributedColours(): { id: string; defaults: Record<string, unknown> }
   });
 }
 
-const CONFLICT_ALL: ConflictAll[] = ['OnlyOne', 'NoConflict', 'Override', 'Conflict'];
+const CONFLICT_ALL: ConflictAll[] = ['OnlyOne', 'NoConflict', 'Override', 'Conflict', 'ConflictBenign'];
 const CONFLICT_THIS: ConflictThis[] = ['OnlyOne', 'Master', 'IdenticalToMaster', 'Override', 'ConflictWins', 'ConflictLoses'];
 
 describe('conflict theme colours', () => {
