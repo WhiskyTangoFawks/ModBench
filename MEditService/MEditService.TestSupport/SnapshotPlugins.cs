@@ -9,10 +9,7 @@ public static class SnapshotPlugins
 {
     public static IReadOnlyList<RegisteredPlugin> Of(IEnumerable<LoadOrderEntry> entries) =>
         [.. entries.Select(entry => new RegisteredPlugin(
-            entry.Name, entry.Origin, entry.Path, entry.Provider, entry.Line is { } line ? new PluginLine(line, entry.Winning) : null)
-        {
-            Strings = entry.Strings,
-        })];
+            entry.Name, entry.Origin, entry.Path, entry.Provider, entry.Line is { } line ? new PluginLine(line, entry.Winning) : null, entry.Strings))];
 
     public static IReadOnlyList<PluginAddress> Active(IEnumerable<LoadOrderEntry> entries) =>
         [.. entries.Where(entry => entry.Enabled && entry.Winning && entry.Line is not null)

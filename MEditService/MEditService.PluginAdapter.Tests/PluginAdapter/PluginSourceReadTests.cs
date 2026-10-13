@@ -22,8 +22,8 @@ public sealed class PluginSourceReadTests
         var folder = Path.GetDirectoryName(pluginPath) ?? throw new ArgumentException("No folder.", nameof(pluginPath));
         var name = Path.GetFileName(pluginPath);
         return Adapter.ReadSourceOfAsync(
-            new RegisteredPlugin(name, "FixtureMod", pluginPath, new PluginProvider.FromMod("FixtureMod", folder, folder), Line: null),
-            EmptyLoadOrder.Of(release), HandedStrings.Beside(folder));
+            new RegisteredPlugin(name, "FixtureMod", pluginPath, new PluginProvider.FromMod("FixtureMod", folder, folder), Line: null, HandedStrings.Of(pluginPath)),
+            EmptyLoadOrder.Of(release));
     }
 
     [Fact]

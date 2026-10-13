@@ -19,8 +19,8 @@ internal static class TrackedMods
         var pluginName = Path.GetFileName(pluginPath);
         var read = TestAdapters.Mutagen()
             .ReadSourceOfAsync(
-                new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null), EmptyLoadOrder.Of(release),
-                HandedStrings.Beside(modFolder))
+                new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null, HandedStrings.Of(pluginPath)),
+                EmptyLoadOrder.Of(release))
             .GetAwaiter().GetResult();
         var source = read.Answered();
 

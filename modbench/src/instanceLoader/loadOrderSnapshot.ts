@@ -36,8 +36,6 @@ export interface LoadOrderPlugin {
 
 type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string; sourceFolder?: string } | { kind: 'Game' } | { kind: 'None' };
 
-// The strings files beside one copy of a plugin, loose in its strings folder, and the archives named for
-// it at its folder's root, in the order they are read.
 interface StringsBeside {
   readonly archives: string[];
   readonly stringsFiles: string[];
@@ -228,9 +226,10 @@ function stringsBeside(
   { gameRelease, inData, filesByOrigin }: ArchiveSources, dataFolder: string, { name, origin }: PluginAddress,
 ): StringsBeside {
   const rule = pluginCompanionRule(gameRelease);
-  if (rule === undefined || inData.kind !== 'listed') return { archives: [], stringsFiles: [] };
+  if (rule === undefined) return { archives: [], stringsFiles: [] };
+  const inGameFolder = inData.kind === 'listed' ? [...inData.archives, ...inData.stringsFiles] : [];
   const files = origin === DATA_DIRECTORY_ORIGIN
-    ? [...inData.archives, ...inData.stringsFiles].map((relativePath) => ({ relativePath, path: fileInFolder(dataFolder, relativePath) }))
+    ? inGameFolder.map((relativePath) => ({ relativePath, path: fileInFolder(dataFolder, relativePath) }))
     : (filesByOrigin.get(origin) ?? []).filter((file) => !file.excluded).map(({ relativePath, sourcePath }) => ({ relativePath, path: sourcePath }));
   return {
     archives: files.filter(({ relativePath }) => rule.isArchive(relativePath) && rule.isArchiveOf(name, relativePath)).sort(byFoldedPath).map(({ path }) => path),

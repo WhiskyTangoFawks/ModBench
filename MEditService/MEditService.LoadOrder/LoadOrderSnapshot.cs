@@ -7,11 +7,9 @@ namespace MEditService.LoadOrder;
 
 /// <summary>One plugin file in the instance (ADR-0013). <paramref name="Line"/>: the <c>plugins.txt</c> line
 /// naming its filename, null when no line names it.</summary>
-public sealed record RegisteredPlugin(string Name, string Origin, string Path, PluginProvider Provider, PluginLine? Line)
+public sealed record RegisteredPlugin(string Name, string Origin, string Path, PluginProvider Provider, PluginLine? Line, PluginStrings Strings)
 {
     public PluginAddress Key => new(Name, Origin);
-
-    public PluginStrings Strings { get; init; } = PluginStrings.None;
 }
 
 /// <summary>The strings files beside one copy of a plugin, loose, and the archives named for it in its folder,
@@ -25,7 +23,6 @@ public sealed record PluginStrings(IReadOnlyList<string> Archives, IReadOnlyList
 
     public IReadOnlyList<string> StringsFiles { get; } = [.. StringsFiles];
 
-    // Structural, not a record's default, as LoadOrderSnapshot's is.
     public bool Equals(PluginStrings? other) =>
         other is not null
         && Archives.SequenceEqual(other.Archives, StringComparer.OrdinalIgnoreCase)
@@ -161,6 +158,12 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     public IEnumerable<RegisteredPlugin> InJudgedOrder() =>
         Plugins.Where(plugin => _places.ContainsKey(plugin.Key)).OrderBy(plugin => _places[plugin.Key])
             .Concat(Plugins.Where(plugin => !_places.ContainsKey(plugin.Key)));
+
+    /// <summary>Whether the copy at <paramref name="path"/> is the one the game resolves its filename to, whose strings the
+    /// game's lists hold: the copy its line names, or one loaded with no line.</summary>
+    public bool ReadsTheGamesStrings(string path) =>
+        Plugins.FirstOrDefault(p => string.Equals(p.Path, path, StringComparison.Ordinal)) is { } copy
+        && (copy.Line is { NamesIt: true } || LoadedWithNoLine.Contains(copy));
 
     /// <summary>What provides the plugin, or null for a plugin none registered here names.</summary>
     public PluginProvider? ProviderOf(PluginAddress plugin) => Plugin(plugin)?.Provider;

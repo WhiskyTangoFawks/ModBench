@@ -65,10 +65,8 @@ internal static class LoadOrderEndpoints
             {
                 return null;
             }
-            registered.Add(new RegisteredPlugin(p.Name, p.Origin, p.Path, provider, p.Line is { } line ? new PluginLine(line, p.LineNamesIt) : null)
-            {
-                Strings = new PluginStrings(archives, stringsFiles),
-            });
+            registered.Add(new RegisteredPlugin(
+                p.Name, p.Origin, p.Path, provider, p.Line is { } line ? new PluginLine(line, p.LineNamesIt) : null, new PluginStrings(archives, stringsFiles)));
         }
         return registered;
     }

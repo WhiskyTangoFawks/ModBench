@@ -21,10 +21,9 @@ public record LoadOrderEntry(
             : throw new InvalidOperationException($"'{Path}' has no folder."),
     };
 
-    /// <summary>The fixture's one strings rule: every strings file and archive beside the plugin as the snapshot is
-    /// taken, unless <see cref="NamedStrings"/> says otherwise.</summary>
-    public PluginStrings Strings => NamedStrings ?? HandedStrings.Beside(
-        System.IO.Path.GetDirectoryName(Path) ?? throw new InvalidOperationException($"'{Path}' has no folder."));
+    /// <summary>The fixture's one strings rule: the strings files beside the plugin as the snapshot is taken, unless
+    /// <see cref="NamedStrings"/> says otherwise.</summary>
+    public PluginStrings Strings => NamedStrings ?? HandedStrings.Of(Path);
 
     private bool Is(string reserved) => string.Equals(Origin, reserved, StringComparison.OrdinalIgnoreCase);
 

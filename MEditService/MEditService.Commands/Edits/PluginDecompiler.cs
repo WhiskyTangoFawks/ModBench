@@ -20,7 +20,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, string modFolder, Action onParsed, CancellationToken cancel)
     {
         // A fresh deep parse, not the load order's own overlay, whose lifetime this gate does not control.
-        if (!(await adapter.ReadSourceOfAsync(plugin, loadOrder, plugin.Strings, cancel)).Holds(out var source, out var failure))
+        if (!(await adapter.ReadSourceOfAsync(plugin, loadOrder, cancel)).Holds(out var source, out var failure))
         {
             logger.LogWarning(failure.Error, "Refused to decompile {Plugin}: {Reason}", plugin.Name, failure.Reason);
             return failure switch

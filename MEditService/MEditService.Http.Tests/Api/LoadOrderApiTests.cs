@@ -200,8 +200,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             ["provider"] = new { Kind = "Game" },
             ["archives"] = p.Strings.Archives,
             ["stringsFiles"] = p.Strings.StringsFiles,
-        }).ToList();
-        foreach (var plugin in plugins) plugin.Remove(omitted);
+        }.Where(field => field.Key != omitted).ToDictionary());
 
         var response = await _client.PutAsJsonAsync("/load-order", new
         {

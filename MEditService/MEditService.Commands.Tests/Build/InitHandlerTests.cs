@@ -53,7 +53,7 @@ public sealed class InitHandlerTests : IDisposable
         var result = await handler.InitAsync(ToInit.In(Snapshot, Origin));
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Landed).Outcome.Plugins);
-        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(PluginName, Origin, "", _mod, Line: null)));
+        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(PluginName, Origin, "", _mod, Line: null, PluginStrings.None)));
         Assert.Equal(modFolderBefore, TreeSnapshot.Of(_mod.Folder));
     }
 

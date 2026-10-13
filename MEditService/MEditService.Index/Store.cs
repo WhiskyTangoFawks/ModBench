@@ -367,6 +367,10 @@ internal sealed class Store : IDisposable
         tx.Commit();
     }
 
+    /// <summary>The strings claim <paramref name="key"/>'s rows were read with, or null when none.</summary>
+    public string? IndexedStringsClaim(PluginAddress key) =>
+        DuckDbSql.ScalarString(Connection, $"SELECT strings_claim FROM {FilesRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin);
+
     /// <summary>The hash of the file <paramref name="key"/>'s rows were built from, or null when none.</summary>
     public string? IndexedContentHash(PluginAddress key)
     {
@@ -379,7 +383,7 @@ internal sealed class Store : IDisposable
     // The plugin half of an Index() call, inside its transaction. A caller
     // naming no file (an in-memory mod) writes no file row, so nothing vouches for those rows and
     // the next load re-indexes.
-    public void StampPluginFacts(string plugin, string origin, string? filePath, DerivedFrom derivedFrom)
+    public void StampPluginFacts(string plugin, string origin, string? filePath, DerivedFrom derivedFrom, string? stringsClaim)
     {
         DeletePluginFacts(plugin, origin);
         DuckDbSql.Execute(Connection, $"""
@@ -393,9 +397,9 @@ internal sealed class Store : IDisposable
         }
 
         DuckDbSql.Execute(Connection, $"""
-            INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash)
-            VALUES ($1, $2, $3, $4)
-            """, plugin, origin, Path.GetFullPath(filePath), claim.Hash);
+            INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash, strings_claim)
+            VALUES ($1, $2, $3, $4, $5)
+            """, plugin, origin, Path.GetFullPath(filePath), claim.Hash, stringsClaim);
         StampDiagnoses(plugin, origin, claim);
     }
 
@@ -603,16 +607,17 @@ internal sealed class Store : IDisposable
     /// is the plugin's truth however many records its binary holds, and it refuses a FormKey two
     /// documents claim before any is indexed.</summary>
     public void IndexTree(IPluginDocuments documents, PluginMetadata registered, string? filePath) =>
-        Index(documents, registered, filePath, DerivedFrom.SourceTree);
+        Index(documents, registered, filePath, DerivedFrom.SourceTree, stringsClaim: null);
 
     /// <summary>A binary whose documents miss a record it holds, or that holds one FormKey in two
     /// groups, is not indexed, and the failure says which. xEdit refuses a duplicate FormID to load.</summary>
-    public LoadFailure? IndexBinary(IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom) =>
-        Index(documents, registered, filePath, derivedFrom);
+    public LoadFailure? IndexBinary(
+        IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom, string? stringsClaim) =>
+        Index(documents, registered, filePath, derivedFrom, stringsClaim);
 
     // Replaces whatever the key held, and stamps the file's hash and diagnosis (ADR-0003); a null
     // path claims no file backs the rows (ADR-0012).
-    private LoadFailure? Index(IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom)
+    private LoadFailure? Index(IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom, string? stringsClaim)
     {
         var (plugin, origin) = (registered.Name, registered.Origin);
         var schemas = Schemas;
@@ -626,7 +631,7 @@ internal sealed class Store : IDisposable
         UpsertRegistration(registered);
         // And the facts about these rows — the disk claim, the derivation, the diagnosis — replaced
         // with them rather than beside them.
-        StampPluginFacts(plugin, origin, filePath, derivedFrom);
+        StampPluginFacts(plugin, origin, filePath, derivedFrom, stringsClaim);
 
         var ingested = Ingest.IndexPlugin(documents, plugin, origin, schemas);
         if (derivedFrom != DerivedFrom.SourceTree && BinaryRefused(registered, ingested.Records) is { } refused) return refused;

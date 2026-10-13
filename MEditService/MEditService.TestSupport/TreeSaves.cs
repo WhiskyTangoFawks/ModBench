@@ -22,8 +22,8 @@ public static class TreeSaves
         var adapter = TestAdapters.Mutagen();
         var name = Path.GetFileName(pluginPath);
         var source = (await adapter.ReadSourceOfAsync(
-            new RegisteredPlugin(name, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null), EmptyLoadOrder.Of(GameRelease.Fallout4),
-            HandedStrings.Beside(Path.GetDirectoryName(pluginPath) ?? throw new ArgumentException("No folder.", nameof(pluginPath))))).Answered();
+            new RegisteredPlugin(name, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null, HandedStrings.Of(pluginPath)),
+            EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 
         var edited = source.Files.Select(file => new TreeFile(
             file.RelativePath,

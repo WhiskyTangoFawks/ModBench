@@ -26,10 +26,10 @@ public sealed class PluginReadabilityTests : IDisposable
 
     public void Dispose() => _data.Dispose();
 
-    private Task<Answer<PluginSource, PluginFailure>> ReadSourceAt(string path) =>
+    private static Task<Answer<PluginSource, PluginFailure>> ReadSourceAt(string path) =>
         Adapter.ReadSourceOfAsync(
-            new RegisteredPlugin(Path.GetFileName(path), PluginOrigin.DataDirectory, path, PluginProvider.Game, Line: null),
-            EmptyLoadOrder.Of(GameRelease.Fallout4), HandedStrings.Beside(_data.DataFolder));
+            new RegisteredPlugin(Path.GetFileName(path), PluginOrigin.DataDirectory, path, PluginProvider.Game, Line: null, HandedStrings.Of(path)),
+            EmptyLoadOrder.Of(GameRelease.Fallout4));
 
     [Fact]
     public async Task APluginThatIsNotThere_IsInaccessible() =>
@@ -107,7 +107,7 @@ public sealed class PluginReadabilityTests : IDisposable
     public void ARecordReadStoppedByRunningOutOfMemory_ThrowsThatCause_HoweverItIsWrapped()
     {
         using var records = Adapter.OpenRecordLookup(
-            new RegisteredPlugin(PluginName, PluginOrigin.DataDirectory, PluginPath, PluginProvider.Game, Line: null),
+            new RegisteredPlugin(PluginName, PluginOrigin.DataDirectory, PluginPath, PluginProvider.Game, Line: null, PluginStrings.None),
             EmptyLoadOrder.Of(GameRelease.Fallout4), new SchemasWhoseReadRunsOutOfMemory()).Answered();
 
         Assert.Throws<OutOfMemoryException>(() => records.TextOf($"000800:{PluginName}"));

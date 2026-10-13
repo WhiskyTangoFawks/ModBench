@@ -45,6 +45,10 @@ public interface IPluginAdapter
 
     bool GameFolderExists(string gameFolder);
 
+    /// <summary>A hash of the strings a read of the plugin takes under <paramref name="loadOrder"/>: which of its strings
+    /// files it finds, where, and their bytes. Null for a plugin that is not localized.</summary>
+    Answer<string?, PluginFailure> StringsClaimOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings);
+
     /// <summary>What a plugin's own binary says about itself, which is what the Index holds for it.
     /// <c>Unreachable</c> stopped a full walk: the count is a readout, not a gate.</summary>
     Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
@@ -72,7 +76,7 @@ public interface IPluginAdapter
 
     /// <summary>A plugin's binary read as the source tree it would commit.</summary>
     Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
-        RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, PluginStrings strings, CancellationToken cancel = default);
+        RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, CancellationToken cancel = default);
 
     /// <summary>How the plugin at <paramref name="recompiledPath"/> differs from the named one as the
     /// codec models them; null when they are model-identical. Both are reparsed, since only written

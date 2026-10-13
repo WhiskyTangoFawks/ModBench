@@ -876,9 +876,9 @@ describe('Instance — downloads, profile and game directory', () => {
 
     await instance.refresh();
 
-    const snapshot = instance.value.loadOrderSnapshot;
-    const plugins = snapshot !== undefined && 'plugins' in snapshot ? snapshot.plugins : [];
-    expect(plugins.find((p) => p.origin === 'Tracked Patch Mod')?.stringsFiles).toEqual([stringsFile]);
+    expect(instance.value.loadOrderSnapshot).toMatchObject({
+      plugins: expect.arrayContaining([expect.objectContaining({ origin: 'Tracked Patch Mod', stringsFiles: [stringsFile] })]) as unknown,
+    });
   });
 
   it('tells once, until it changes, each archive the INIs list that nothing holds', async () => {

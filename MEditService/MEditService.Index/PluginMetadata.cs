@@ -25,8 +25,11 @@ internal sealed record PluginMetadata(
 {
     public PluginAddress Key => new(Name, Origin);
 
-    // What the Index reads of a held plugin is its path and provider, never its line.
-    public RegisteredPlugin Registered => new(Name, Origin, Path, Provider, Line: null);
+    /// <summary>The strings files it was read with.</summary>
+    public required PluginStrings Strings { get; init; }
+
+    // What the Index reads of a held plugin is its path, provider and strings, never its line.
+    public RegisteredPlugin Registered => new(Name, Origin, Path, Provider, Line: null, Strings);
 
     public Registration Registration => new(LoadOrderIndex);
 

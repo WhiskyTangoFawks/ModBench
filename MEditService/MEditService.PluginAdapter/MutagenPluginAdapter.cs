@@ -91,6 +91,9 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public bool GameFolderExists(string gameFolder) => Directory.Exists(gameFolder);
 
+    public Answer<string?, PluginFailure> StringsClaimOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
+        PluginFailure.Answer(() => LocalizedStrings.ClaimOf(strings, loadOrder, modPath, loadOrder.GameRelease));
+
     public bool Exists(string pluginPath) => File.Exists(pluginPath);
 
     public IReadOnlyList<string> WrittenByCompile(RegisteredPlugin plugin, IReadOnlyList<string> paths, GameRelease gameRelease)
@@ -119,7 +122,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                     && PluginFlagPredicates.IsBlueprint(loaded.Getter, name, ModHeaderFrame.FromPath(modPath, loadOrder.GameRelease).Flags);
                 var (content, unreachable) = OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint);
                 var missing = strings is { } named
-                    ? LocalizedStrings.FindMissingStringsFiles(loaded.Getter, name, named, loadOrder, loadOrder.GameRelease)
+                    ? LocalizedStrings.FindMissingStringsFiles(loaded.Getter, modPath, named, loadOrder, loadOrder.GameRelease)
                     : [];
                 return (content with { MissingStringsFiles = missing }, unreachable);
             }
@@ -158,8 +161,8 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, loadOrder, cancel);
 
     public Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
-        RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, PluginStrings strings, CancellationToken cancel = default) =>
-        PluginTrees.ReadAsync(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), plugin.Name, loadOrder, strings, cancel);
+        RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>
+        PluginTrees.ReadAsync(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder, plugin.Strings, cancel);
 
     public Answer<string?, PluginFailure> DivergenceFrom(
         string pluginFileName, string pluginFilePath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
