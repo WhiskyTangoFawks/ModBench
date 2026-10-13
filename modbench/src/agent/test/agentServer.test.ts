@@ -84,7 +84,7 @@ describe('the agent server, given an instance value', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mods', 'list_plugins', 'list_profiles', 'list_source_problems', 'resolve_instance_names', 'resolve_names']);
+    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mods', 'list_plugins', 'list_profiles', 'list_source_problems', 'resolve_instance_names', 'resolve_names', 'select_rows']);
   });
 
   it('reads the profiles and the active one', async () => {
@@ -291,7 +291,17 @@ describe('the agent server, resolving names against the instance', () => {
   });
 
   it('prefers the file whose path is exactly the one given', async () => {
-    expect(await resolve({ files: [{ mod: { name: 'D' }, path: 'docs/A.TXT' }] })).toMatchObject({ isError: false });
+    expect(await resolve({ files: [{ mod: { name: 'D' }, path: 'docs/A.TXT' }] })).toEqual({
+      isError: false, text: JSON.stringify({ downloads: [], files: [{ mod: 'D', file: 'docs/A.TXT' }] }),
+    });
+  });
+
+  it('refuses a separator together with every other unresolved name in one answer', async () => {
+    const refusal = await resolve({ files: [{ mod: { name: 'Textures', kind: 'separator' }, path: 'x' }, { mod: { name: 'B' }, path: 'meshes/none.nif' }] });
+
+    expect(refusal).toEqual({
+      isError: true, text: '"Textures" is a separator; it has no files. Nothing is named "meshes/none.nif" in mod B.',
+    });
   });
 
   it('refuses a mod that is a separator or shares its name with one, as the conflicts read does', async () => {
@@ -322,6 +332,28 @@ describe('the agent server, resolving names through mEdit', () => {
     const client = await clientOf(new FakeInstance(VALUE), mEdit);
 
     expect(await call(client, 'resolve_names', { names: [{ name: 'Shared.esp' }] })).toEqual({ isError: true, text: listing });
+  });
+});
+
+describe('the agent server, selecting records through mEdit', () => {
+  it('hands mEdit the statement as given and answers the rows it selects', async () => {
+    const mEdit = new InMemoryMEditClient();
+    const rows = [{ editorId: 'SharedNpc' }];
+    mEdit.setQueryAnswer('selectRows', rows);
+    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    const answered = await read(client, 'select_rows', { sql: 'SELECT editorId FROM records' });
+
+    expect(mEdit.calls).toContainEqual({ method: 'selectRows', args: ['SELECT editorId FROM records'] });
+    expect(answered).toEqual(rows);
+  });
+
+  it('refuses with the database\'s reason', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('selectRows', { failed: 'refused', refusal: 'Only a SELECT runs.' });
+    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    expect(await call(client, 'select_rows', { sql: 'DROP TABLE records' })).toEqual({ isError: true, text: 'Only a SELECT runs.' });
   });
 });
 

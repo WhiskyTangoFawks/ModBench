@@ -12,7 +12,7 @@ export type { NotificationEvent };
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
   | 'getRecords' | 'searchRecords'
-  | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrTrackedPlugins'
+  | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrTrackedPlugins'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
@@ -362,6 +362,9 @@ export class InMemoryMEditClient implements MEditClient {
   }
   resolveNames(...args: Parameters<MEditClient['resolveNames']>): ReturnType<MEditClient['resolveNames']> {
     return this.query('resolveNames', args);
+  }
+  selectRows(...args: Parameters<MEditClient['selectRows']>): ReturnType<MEditClient['selectRows']> {
+    return this.query('selectRows', args);
   }
   getRecordHolders(...args: Parameters<MEditClient['getRecordHolders']>): ReturnType<MEditClient['getRecordHolders']> {
     return this.query('getRecordHolders', args);

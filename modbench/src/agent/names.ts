@@ -48,21 +48,20 @@ function pathMatches(own: readonly OriginFile[], path: string): string[] {
   return folded.includes(path) ? [path] : folded;
 }
 
-function pathRefusal(given: FileName, matches: readonly string[]): string | undefined {
-  if (matches.length === 1) return undefined;
-  if (matches.length === 0) return `Nothing is named "${given.path}" in mod ${given.mod.name}.`;
-  return `"${given.path}" means more than one thing in mod ${given.mod.name}: ${matches.join('; ')}.`;
+function fileIn(mod: Entry | undefined, given: FileName, own: readonly OriginFile[]): { mod: string; file: string } | string {
+  const name = mod?.name ?? given.mod.name;
+  if (mod?.kind !== 'mod') return `"${name}" is a separator; it has no files.`;
+  const matches = pathMatches(own, given.path);
+  if (matches.length === 0) return `Nothing is named "${given.path}" in mod ${name}.`;
+  if (matches.length > 1) return `"${given.path}" means more than one thing in mod ${name}: ${matches.join('; ')}.`;
+  return { mod: name, file: matches.join() };
 }
 
 /** Each file by its path in its mod, answered in the mod's own casing. */
 export function filesNamed(value: InstanceValue, given: readonly FileName[]): { mod: string; file: string }[] {
   const mods = modsNamed(value.mods, given.map(({ mod }) => mod));
-  const resolved = given.map((one, at) => {
-    const mod = mods[at];
-    if (mod?.kind !== 'mod') throw new Refusal(`"${mod?.name ?? one.mod.name}" is a separator; it has no files.`);
-    return { one, mod: mod.name, matches: pathMatches(value.filesByMod.get(mod.name) ?? [], one.path) };
-  });
-  const refusals = resolved.flatMap(({ one, matches }) => pathRefusal(one, matches) ?? []);
+  const resolved = given.map((one, at) => fileIn(mods[at], one, value.filesByMod.get(mods[at]?.name ?? '') ?? []));
+  const refusals = resolved.filter((one) => typeof one === 'string');
   if (refusals.length > 0) throw new Refusal(refusals.join(' '));
-  return resolved.map(({ mod, matches }) => ({ mod, file: matches[0] ?? '' }));
+  return resolved.filter((one) => typeof one !== 'string');
 }

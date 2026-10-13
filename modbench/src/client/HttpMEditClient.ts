@@ -622,6 +622,11 @@ class HttpMEditClient implements MEditClient {
       (data) => (data ? data.named : NO_ANSWER));
   }
 
+  selectRows(sql: string): Promise<unknown[] | ReadFailed> {
+    return this.read('selectRows', (signal) => this.apiClient.POST('/records/select', { body: { sql }, signal }),
+      (data) => (data ? data.rows : NO_ANSWER));
+  }
+
   getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null | ReadFailed> {
     const params = { params: { path: { formKey } } };
     return this.read(`getComparison(${formKey})`, (signal) => (text
