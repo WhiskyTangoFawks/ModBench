@@ -2,6 +2,7 @@ import type {
   DownloadedFiles, DownloadMeta, GameFolder, InstanceAdapter, ModlistEntry, PluginEntry,
 } from '../../instanceAdapter/instanceAdapter';
 import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
+import { readInstance } from '../../instanceAdapter/mo2Reads';
 import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
 import { providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
 import { pluginsCommands, type PluginsCommands } from '../../pluginsCommands/plugins';
@@ -37,7 +38,7 @@ export function adapterOver(root: string, answers: AdapterAnswers = {}): Instanc
     detectors: { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(null) },
   });
   const { gameFolder, downloadedFiles } = answers;
-  return {
+  const fixed: InstanceAdapter = {
     ...adapter,
     async settings() {
       const settings = await adapter.settings();
@@ -50,6 +51,7 @@ export function adapterOver(root: string, answers: AdapterAnswers = {}): Instanc
       };
     },
   };
+  return { ...fixed, reading: () => readInstance(fixed) };
 }
 
 /** What a test reads back after a command wrote, through the adapter's own reads, so a test never

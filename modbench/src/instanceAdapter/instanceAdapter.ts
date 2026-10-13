@@ -321,7 +321,29 @@ export interface ManagerNames {
   readonly downloadMetadataFile: string;
 }
 
+/** The instance as parsed facts, every one from the same read of its settings. */
+export interface InstanceReading {
+  readonly names: ManagerNames;
+  /** The profile the mod manager's configuration selects. */
+  readonly profile: string;
+  /** The game as the mod manager's configuration names it. */
+  readonly gameName: string;
+  /** Mutagen's release of that game; undefined when the tables hold none for it. */
+  readonly gameRelease: string | undefined;
+  /** Mod order, a mod's meta folded into its entry. */
+  readonly mods: readonly ModlistEntry[];
+  readonly pluginOrder: readonly PluginEntry[];
+  readonly downloadedFiles: DownloadedFiles;
+  readonly gameFolder: GameFolder;
+  readonly dataFolderPlugins: DataFolderPlugins;
+  readonly creationClubList: readonly string[];
+}
+
 export interface InstanceAdapter {
+  /** The whole instance in one generation. A mod order that parses to no entries is read again
+   *  after a settle before it is believed: another tool may be half-way through writing it. */
+  reading(): Promise<InstanceReading>;
+
   // Parsed reads.
   readonly names: ManagerNames;
   settings(): Promise<InstanceSettings>;

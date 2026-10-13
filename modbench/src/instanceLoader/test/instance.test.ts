@@ -16,6 +16,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 import { Instance, type InstanceValue } from '../instance';
 import { factsOf } from '../instanceFacts';
+import { readInstance } from '../../instanceAdapter/mo2Reads';
 import { adapterOver, STEADY_WINDOW } from '../../test/mo2/adapterOver';
 
 const roots: string[] = [];
@@ -40,7 +41,8 @@ interface Hooks {
 }
 
 function countingSettings(adapter: InstanceAdapter, reads: { count: number }): InstanceAdapter {
-  return { ...adapter, settings: () => { reads.count++; return adapter.settings(); } };
+  const counted = { ...adapter, settings: () => { reads.count++; return adapter.settings(); } };
+  return { ...counted, reading: () => readInstance(counted) };
 }
 
 function realInstance(hooks: Hooks = {}): {
@@ -743,8 +745,8 @@ describe('Instance — a value that survives a bad read', () => {
     expect(instance.readFailure).toBe(failures[0]);
   });
 
-  it('keeps the mods when modlist.txt reads as empty mid-write, waiting to re-read before believing it, and logs', async () => {
-    const { root, instance, logs } = realInstance();
+  it('keeps the mods when modlist.txt reads as empty mid-write, waiting to re-read before believing it', async () => {
+    const { root, instance } = realInstance();
     await readUntilNoArmedReadIsLeft(instance);
     const before = instance.value.mods;
     const path = join(root, DEFAULT_MODLIST);
@@ -763,7 +765,6 @@ describe('Instance — a value that survives a bad read', () => {
     }
 
     expect(instance.value.mods).toEqual(before);
-    expect(logs.filter((m) => m.includes('mid-write'))).toHaveLength(1);
   });
 
   it('publishes an empty mod list once the re-read agrees, since zero mods is legal', async () => {

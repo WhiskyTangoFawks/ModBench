@@ -87,6 +87,76 @@ describe('the MO2 Instance adapter', () => {
       expect(settings.gameRelease).toBe('Fallout4');
     });
 
+    describe('the reading', () => {
+      it('answers the instance whole: names, profile, game, mods with their meta, plugin order, downloads and the game folder with what it holds', async () => {
+        const game = await mkdtemp(join(tmpdir(), 'mo2-instance-reading-'));
+        try {
+          await mkdir(join(game, 'Data'));
+          await writeFile(join(game, 'Data', 'Fallout4.esm'), '');
+          await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\r\n');
+          const reading = await adapterAt(root, game).reading();
+          const settings = await adapter.settings();
+
+          expect(reading).toMatchObject({
+            names: adapter.names,
+            profile: settings.profile,
+            gameName: settings.gameName,
+            gameRelease: settings.gameRelease,
+            mods: await Promise.all((await adapter.modOrder('Default')).map(async (e) =>
+              (e.kind === 'mod' ? { ...e, ...(await adapter.modMeta(e.name)) } : e))),
+            pluginOrder: await adapter.pluginOrder('Default'),
+            downloadedFiles: await settings.downloadedFiles(),
+            gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') },
+            dataFolderPlugins: { kind: 'listed', names: new Set(['Fallout4.esm']) },
+            creationClubList: ['ccBGSFO4044-HellfirePowerArmor.esl'],
+          });
+        } finally {
+          await rm(game, { recursive: true, force: true });
+        }
+      });
+
+      it('answers the game folder as not found, with its Data folder unresolved, when no game folder is found', async () => {
+        const reading = await adapter.reading();
+
+        expect(reading.gameFolder.kind).toBe('notFound');
+        expect(reading.dataFolderPlugins).toEqual({ kind: 'unresolved' });
+        expect(reading.creationClubList).toEqual([]);
+      });
+
+      it('reads a mod order that parses to no entries again after a settle, believing the second read', async () => {
+        const path = join(root, DEFAULT_MODLIST);
+        const complete = await text(root, DEFAULT_MODLIST);
+        await writeFile(path, '');
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        try {
+          const reading = adapter.reading();
+          while (vi.getTimerCount() === 0) await new Promise((resolve) => setImmediate(resolve));
+          await writeFile(path, complete);
+          await vi.advanceTimersByTimeAsync(1000);
+
+          const mods = (await reading).mods;
+          expect(mods.length).toBeGreaterThan(0);
+          expect(mods.map((e) => e.name)).toEqual((await adapter.modOrder('Default')).map((e) => e.name));
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it('believes a mod order that is still empty after the settle', async () => {
+        await writeFile(join(root, DEFAULT_MODLIST), '');
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        try {
+          const reading = adapter.reading();
+          while (vi.getTimerCount() === 0) await new Promise((resolve) => setImmediate(resolve));
+          await vi.advanceTimersByTimeAsync(1000);
+
+          expect((await reading).mods).toEqual([]);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+    });
+
     it('names MO2 and the file it keeps mod order in', () => {
       expect(adapter.names).toEqual({ manager: 'MO2', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' });
     });

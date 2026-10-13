@@ -15,7 +15,7 @@ import { mo2Landing } from './mo2Landing';
 import { mo2PluginRename } from './mo2PluginRename';
 import { mo2Archives } from './mo2Archives';
 import { mo2Installation } from './mo2Installation';
-import { mo2Reads } from './mo2Reads';
+import { mo2Reads, readInstance } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
 import { modsDir, profilesDir, settingsFile } from './layout';
 
@@ -44,9 +44,12 @@ export function mo2InstanceAdapter({
     resolveDownloadsFolder: downloadsDirectoryResolver(detectors),
     watch: mo2Watch(instanceRoot, gameDirectoryChanged),
   };
+  const names = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX };
+  const reads = mo2Reads(context);
   return {
-    names: { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX },
-    ...mo2Reads(context), ...mo2Archives(context), ...mo2Installation(context), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context),
+    names,
+    reading: () => readInstance({ ...reads, names }),
+    ...reads, ...mo2Archives(context), ...mo2Installation(context), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context),
     subscribe: (listener) => context.watch.subscribe(listener),
   };
 }

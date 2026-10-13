@@ -12,7 +12,7 @@ import { creationClubListFile, dataFolderOf, gameReleaseForGame } from '../table
 import { digestOf } from './contentDigest';
 import { factsOf, get, isTracked, listDir, listFolders, stampOf } from './files';
 import {
-  type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileRead, type GameFolder, type InstanceAdapter,
+  type DataFolderPlugins, type InstanceReading, type ModlistEntry, type DownloadedFile, type DownloadedFiles, type FileRead, type GameFolder, type InstanceAdapter,
 } from './instanceAdapter';
 import {
   DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadNameAt, downloadSidecarFile, isTempWrite, modlistFile,
@@ -26,7 +26,7 @@ type Mo2Reads = Omit<InstanceAdapter,
   | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
   | 'trashDownloadedFileMeta' | 'selectProfile' | 'markOriginFile' | 'renamePlugin' | 'checkPluginRename' | 'extractedEntries'
   | 'extractNewMod' | 'extractUpgrade' | 'subscribe' | 'names' | 'archiveList' | 'gameFolderArchives' | 'installationFiles'
-  | 'managerFilesInModFolder'>;
+  | 'managerFilesInModFolder' | 'reading'>;
 
 async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile[] | undefined> {
   const dirents = await readOrAbsent(() => listDir(downloadsDir), undefined);
@@ -164,4 +164,41 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
 
     contentDigest: (path) => answerOrReason(() => digestOf(path)),
   };
+}
+
+type ReadingSource = Pick<InstanceAdapter,
+  'names' | 'settings' | 'modOrder' | 'modMeta' | 'pluginOrder' | 'gameFolderPlugins' | 'creationClubList'>;
+
+// How long another tool's write takes to settle before an empty mod order is believed.
+const SETTLE_MS = 200;
+
+const modsWithMeta = async (source: ReadingSource, profile: string): Promise<ModlistEntry[]> =>
+  Promise.all((await source.modOrder(profile)).map(async (entry) =>
+    (entry.kind === 'mod' ? { ...entry, ...(await source.modMeta(entry.name)) } : entry)));
+
+// A mod order read mid-write can parse to no entries, and zero mods is legal, so an empty one is
+// read again after a settle before it is believed.
+async function settledMods(source: ReadingSource, profile: string): Promise<ModlistEntry[]> {
+  const mods = await modsWithMeta(source, profile);
+  if (mods.length > 0) return mods;
+  await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+  return modsWithMeta(source, profile);
+}
+
+/** The instance whole, every fact against the one read of the settings, so a profile switch
+ *  mid-read cannot mix one profile's mod order with another's plugin order. */
+export async function readInstance(source: ReadingSource): Promise<InstanceReading> {
+  const settings = await source.settings();
+  const { profile, gameName, gameRelease } = settings;
+  const [mods, pluginOrder, downloadedFiles, game] = await Promise.all([
+    settledMods(source, profile),
+    source.pluginOrder(profile),
+    settings.downloadedFiles(),
+    settings.gameFolder().then(async (gameFolder) => ({
+      gameFolder,
+      dataFolderPlugins: await source.gameFolderPlugins(gameFolder),
+      creationClubList: await source.creationClubList(gameFolder, gameRelease),
+    })),
+  ]);
+  return { names: source.names, profile, gameName, gameRelease, mods, pluginOrder, downloadedFiles, ...game };
 }
