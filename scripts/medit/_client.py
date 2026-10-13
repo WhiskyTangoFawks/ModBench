@@ -37,8 +37,8 @@ _NO_VALUE = object()
 
 
 def edit(plugin, form_key, op, path, value=_NO_VALUE):
-    """Writes one edit of the plugin's copy of a record to its plugin source: set, add, remove or move at a field path
-    spelled as references spells it, such as Conditions[0].ComparisonValue. None sets null, which clears a member."""
+    """Writes set, add, remove or move to the plugin's copy of a record in its plugin source, at a field path spelled
+    as references spells one, such as Conditions[0].ComparisonValue. A value of None clears a member."""
     name, origin = _plugin(plugin)
     body = {'plugin': name, 'origin': origin, 'op': op, 'path': _hops(path)}
     if value is not _NO_VALUE:
