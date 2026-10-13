@@ -149,16 +149,6 @@ const fakeSettleClockLeavingSetImmediateReal = (): void => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 };
 
-const SETTLE_WAIT_DEADLINE_MS = 5_000;
-
-async function settleWaitArmed(): Promise<void> {
-  const deadline = Date.now() + SETTLE_WAIT_DEADLINE_MS;
-  while (vi.getTimerCount() === 0) {
-    if (Date.now() >= deadline) throw new Error('no settle wait was armed on the fake clock');
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-}
-
 const TIMED_OUT = Symbol('timed out waiting for a recompute');
 
 function pastSequenceWithin(instance: Instance, sequence: number, ms: number): Promise<InstanceValue | typeof TIMED_OUT> {
@@ -755,28 +745,6 @@ describe('Instance — a value that survives a bad read', () => {
     expect(instance.readFailure).toBe(failures[0]);
   });
 
-  it('keeps the mods when modlist.txt reads as empty mid-write, waiting to re-read before believing it', async () => {
-    const { root, instance } = realInstance();
-    await readUntilNoArmedReadIsLeft(instance);
-    const before = instance.value.mods;
-    const path = join(root, DEFAULT_MODLIST);
-    const complete = await readFile(path, 'utf8');
-
-    fakeSettleClockLeavingSetImmediateReal();
-    try {
-      await writeFile(path, '');
-      const recompute = instance.refresh();
-      await settleWaitArmed();
-      await writeFile(path, complete);
-      await vi.advanceTimersByTimeAsync(1000);
-      await recompute;
-    } finally {
-      vi.useRealTimers();
-    }
-
-    expect(instance.value.mods).toEqual(before);
-  });
-
   it('publishes an empty mod list once the re-read agrees, since zero mods is legal', async () => {
     const { root, instance } = realInstance();
     await readUntilNoArmedReadIsLeft(instance);
@@ -1047,33 +1015,6 @@ describe('Instance — downloads, profile and game directory', () => {
 
     expect(instance.sequence).toBe(before + 1);
     expect(instance.value.gameFolder).toEqual({ kind: 'found', root: explicitDir, dataFolder: join(explicitDir, 'Data') });
-  });
-
-  it('reads the settings once per recompute, landing one value built from one read rather than from two', async () => {
-    const { instance, settingsReads } = realInstance();
-
-    await instance.refresh();
-
-    expect(settingsReads.count).toBe(1);
-  });
-
-  it('builds one value from one generation of the ini, even when it is rewritten mid-recompute', async () => {
-    const { root, instance, setResolver } = realInstance();
-    await instance.refresh();
-    const beforeName = instance.value.gameName;
-    const ini = join(root, 'ModOrganizer.ini');
-    setResolver(async () => {
-      const text = await readFile(ini, 'utf8');
-      await writeFile(ini, text.replace(/gameName=.*/, 'gameName=Rewritten Mid Recompute'));
-      return GAME_FOLDER_NOT_FOUND;
-    });
-
-    await instance.refresh();
-
-    expect(instance.value.gameName).toBe(beforeName);
-    setResolver(resolvesNotFound);
-    await instance.refresh();
-    expect(instance.value.gameName).toBe('Rewritten Mid Recompute');
   });
 
   it('carries a source folder for each source mod alone, one with no mod folder too, and hands it to the facts', async () => {

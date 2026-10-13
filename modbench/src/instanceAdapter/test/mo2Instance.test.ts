@@ -38,6 +38,14 @@ import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
 } from '../../test/mo2/corpusFixture';
 
+async function settleWaitArmed(): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (vi.getTimerCount() === 0) {
+    if (Date.now() >= deadline) throw new Error('no settle wait was armed on the fake clock');
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
 const NO_DETECTORS: GameDetectors = {
   paths: () => Promise.resolve(null),
   winePrefix: () => Promise.resolve(null),
@@ -89,47 +97,98 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('the reading', () => {
-      it('answers the instance whole: profile, game, mods with their meta, plugin order, downloads and the game folder with what it holds', async () => {
+      it('answers the profile, game, plugin order, downloads and the game folder with what it holds', async () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-reading-'));
         try {
           await mkdir(join(game, 'Data'));
           await writeFile(join(game, 'Data', 'Fallout4.esm'), '');
           await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\r\n');
+
           const reading = await adapterAt(root, game).reading();
-          const settings = await adapter.settings();
 
           expect(reading).toMatchObject({
-            profile: settings.profile,
-            gameName: settings.gameName,
-            gameRelease: settings.gameRelease,
-            mods: await Promise.all((await adapter.modOrder('Default')).map(async (e) =>
-              (e.kind === 'mod' ? { ...e, ...(await adapter.modMeta(e.name)) } : e))),
-            pluginOrder: await adapter.pluginOrder('Default'),
-            downloadedFiles: await settings.downloadedFiles(),
+            profile: 'Default',
+            gameName: 'Fallout 4',
+            gameRelease: 'Fallout4',
+            downloadedFiles: { kind: 'listed', downloadsDir: join(root, 'downloads') },
             gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') },
             dataFolderPlugins: { kind: 'listed', names: new Set(['Fallout4.esm']) },
             creationClubList: ['ccBGSFO4044-HellfirePowerArmor.esl'],
           });
+          expect(reading.pluginOrder).toEqual([
+            { name: 'NonAsciiRetexture.esp', enabled: true }, { name: 'Tracked Patch Mod.esp', enabled: true },
+            { name: 'Unofficial Fallout 4 Patch.esp', enabled: true }, { name: 'ccSBJFO4003-Grenade.esl', enabled: true },
+          ]);
         } finally {
           await rm(game, { recursive: true, force: true });
         }
       });
 
-      it('answers the profiles, mod folders, run-time output, each listed mod\'s files and meta, the tracked and source mods and the archives as the separate reads do', async () => {
-        const reading = await adapter.reading();
-        const settings = await adapter.settings();
-        const listed = reading.mods.filter((e) => e.kind === 'mod').map((e) => e.name);
-        const first = present(listed[0], 'a listed mod');
+      it('answers the mod order with each mod\'s meta folded into its entry', async () => {
+        const { mods } = await adapter.reading();
 
-        expect(reading.profiles).toEqual(await adapter.profiles());
-        expect(reading.modFolders?.all).toEqual((await adapter.modFolders())?.all);
-        expect(reading.runtimeOutput).toEqual(await adapter.originFiles({ kind: 'runtimeOutput' }));
-        expect([...reading.modFiles.keys()]).toEqual(listed);
-        expect(reading.modFiles.get(first)).toEqual(await adapter.originFiles({ kind: 'mod', name: first }));
-        expect(reading.folderMeta.get(first)).toEqual(await adapter.modMeta(first));
-        expect([...reading.sourceMods.folders]).toEqual([...(await adapter.sourceMods()).folders]);
-        expect(reading.dataFolderArchives).toEqual(await adapter.gameFolderArchives(reading.gameFolder, settings.gameRelease));
-        expect(reading.archiveList).toEqual((await adapter.archiveList('Default', reading.gameFolder, settings.gameRelease)).archives);
+        expect(mods).toHaveLength(10);
+        expect(mods.map((entry) => `${entry.kind}:${entry.name}`).slice(0, 4)).toEqual([
+          'mod:Ñoño\'s Retexture', 'mod:Tracked Patch Mod', 'mod:SKK Fast Start new game (Fallout 4)', 'separator:Unassigned (Modlist Development)',
+        ]);
+        expect(mods[0]).toMatchObject({ version: '1.0.0', nexusId: '99001' });
+        expect(mods[2]).toMatchObject({
+          version: '21.0.0.0', nexusId: '29227', archiveFilename: 'SKKFastStartNewGame_021-29227-021-1745492845.zip',
+        });
+      });
+
+      it('answers the profiles, the mod folders, the run-time output and each listed mod\'s own files', async () => {
+        const reading = await adapter.reading();
+
+        expect(reading.profiles).toEqual(['Default', 'Secondary']);
+        expect(reading.modFolders?.all.map((folder) => folder.name)).toHaveLength(9);
+        expect(reading.runtimeOutput.files.map((file) => file.relativePath)).toEqual(['F4SE/Plugins/SomePlugin.log']);
+        expect([...reading.modFiles.keys()]).toEqual(reading.mods.filter((entry) => entry.kind === 'mod').map((entry) => entry.name));
+        expect(reading.modFiles.get('Ñoño\'s Retexture')?.files).toHaveLength(2);
+        expect(reading.modFiles.get('Tracked Patch Mod')?.files).toHaveLength(1);
+        expect(reading.modFiles.get('Harder VATS')?.files).toEqual([]);
+      });
+
+      it('answers the meta of a mod folder the mod order does not list, beside the listed ones', async () => {
+        const { folderMeta } = await adapter.reading();
+
+        expect([...folderMeta.keys()]).toContain('DragIn Manual Extract');
+        expect(folderMeta.get('Unofficial Fallout 4 Patch')).toEqual({
+          version: '2.1.5.0', nexusId: '4598', archiveFilename: 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z',
+        });
+      });
+
+      it('answers the source mods and the archives the game folder holds', async () => {
+        const reading = await adapter.reading();
+
+        expect([...reading.sourceMods.folders]).toEqual([]);
+        expect(reading.archiveList).toEqual([]);
+        expect(reading.dataFolderArchives).toEqual({ kind: 'unresolved' });
+      });
+
+      it('reads the settings once, so one reading holds one generation of the ini', async () => {
+        let reads = 0;
+        const counting = { ...adapter, settings: () => { reads++; return adapter.settings(); } };
+
+        await readInstance(counting);
+
+        expect(reads).toBe(1);
+      });
+
+      it('answers every fact against the ini as it read it, even when the ini is rewritten mid-reading', async () => {
+        const rewriting = {
+          ...adapter,
+          settings: async () => {
+            const settings = await adapter.settings();
+            await writeFile(join(root, INI), (await text(root, INI)).replace('gameName=Fallout 4', 'gameName=Rewritten'));
+            return settings;
+          },
+        };
+
+        const reading = await readInstance(rewriting);
+
+        expect(reading.gameName).toBe('Fallout 4');
+        expect((await adapter.reading()).gameName).toBe('Rewritten');
       });
 
       it('hands over a link in mods/ it cannot follow, by name', async () => {
@@ -177,7 +236,7 @@ describe('the MO2 Instance adapter', () => {
         vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
         try {
           const reading = adapter.reading();
-          while (vi.getTimerCount() === 0) await new Promise((resolve) => setImmediate(resolve));
+          await settleWaitArmed();
           await writeFile(path, complete);
           await vi.advanceTimersByTimeAsync(1000);
 
@@ -194,7 +253,7 @@ describe('the MO2 Instance adapter', () => {
         vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
         try {
           const reading = adapter.reading();
-          while (vi.getTimerCount() === 0) await new Promise((resolve) => setImmediate(resolve));
+          await settleWaitArmed();
           await vi.advanceTimersByTimeAsync(1000);
 
           expect((await reading).mods).toEqual([]);
