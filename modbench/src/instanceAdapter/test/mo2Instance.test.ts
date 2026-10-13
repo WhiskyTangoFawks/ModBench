@@ -168,6 +168,17 @@ describe('the MO2 Instance adapter', () => {
         });
       });
 
+      it('never carries meta fields on a separator entry, even when a same-named mod folder exists', async () => {
+        const folder = join(root, 'mods', 'Unassigned (Modlist Development)');
+        await mkdir(folder, { recursive: true });
+        await writeFile(join(folder, 'meta.ini'), '[General]\r\nmodid=555\r\nversion=9.9.9\r\n');
+
+        const { mods } = await adapter.reading();
+
+        expect(mods.find((entry) => entry.name === 'Unassigned (Modlist Development)'))
+          .toEqual({ kind: 'separator', name: 'Unassigned (Modlist Development)', enabled: false });
+      });
+
       it('answers the profiles, the mod folders, the run-time output and each listed mod\'s own files', async () => {
         const reading = await adapter.reading();
 
@@ -305,6 +316,12 @@ describe('the MO2 Instance adapter', () => {
 
       expect(settings.gameName).toBe('Morrowind');
       expect(settings.gameRelease).toBeUndefined();
+    });
+
+    it('rejects when the settings name no game', async () => {
+      await writeFile(join(root, INI), '[General]\r\nselected_profile=@ByteArray(Default)\r\n');
+
+      await expect(source.settings()).rejects.toThrow(/gameName/);
     });
 
     it('rejects when the settings name no selected profile', async () => {
@@ -525,6 +542,13 @@ describe('the MO2 Instance adapter', () => {
       await rm(join(root, 'mods'), { recursive: true });
 
       expect(await source.modFolders()).toBeUndefined();
+    });
+
+    it('rejects when mods/ is there but cannot be listed, only its absence meaning there is no folder for mods', async () => {
+      await rm(join(root, 'mods'), { recursive: true });
+      await writeFile(join(root, 'mods'), 'not a directory');
+
+      await expect(source.modFolders()).rejects.toThrow();
     });
 
     it('answers the plugins in plugin order, with their enabled state', async () => {
@@ -1112,6 +1136,17 @@ describe('the MO2 Instance adapter', () => {
         expect(files.notes.join('\n')).toMatch(/cycle.*loop/);
       });
 
+      it('rejects when a folder below an origin cannot be read, rather than listing fewer files', async () => {
+        const nested = join(root, 'overwrite', 'SKSE');
+        await mkdir(nested, { recursive: true });
+        vi.mocked(readdir).mockImplementation(async (path, options) => {
+          if (String(path) === nested) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+          return actualReaddir(path, options);
+        });
+
+        await expect(source.originFiles({ kind: 'runtimeOutput' })).rejects.toThrow(/permission denied/);
+      });
+
       it('rejects when a link\'s target cannot be checked for a reason other than its absence, simulated through a mocked stat as chmod denies nothing when the runner is root', async () => {
         const folder = join(root, 'mods', 'Harder VATS');
         await symlink(join(root, 'whatever.dds'), join(folder, 'restricted.dds'));
@@ -1385,6 +1420,18 @@ describe('the MO2 Instance adapter', () => {
         join(root, 'mods', 'Harder VATS'), join(root, 'mods', 'Unassigned (Modlist Development)_separator'),
       ]);
     });
+
+    it.each(['mod', 'separator'] as const)('trashes no folder outside mods/ for a %s line another tool wrote with a / in its name', async (kind) => {
+      await mkdir(join(root, 'Escaped'));
+      const trashed: string[] = [];
+
+      expect(await adapter.trashEntryFolder({ kind, name: '../Escaped' }, (path) => {
+        trashed.push(path);
+        return Promise.resolve();
+      })).toBe(false);
+
+      expect(trashed).toEqual([]);
+    });
   });
 
   it('moves to the trash the repository whose build configuration names the mod, and answers false when none does', async () => {
@@ -1554,6 +1601,18 @@ describe('the MO2 Instance adapter', () => {
       expect(holding?.path).toBe(join(root, 'mods', 'Harder VATS'));
     });
 
+    it('rejects without deciding or writing when mods/ is there but cannot be listed', async () => {
+      await rm(join(root, 'mods'), { recursive: true });
+      await writeFile(join(root, 'mods'), 'not a directory');
+      const before = await snapshotTree(root);
+      const decide = vi.fn(() => []);
+
+      await expect(adapter.changeModOrder('Default', decide)).rejects.toThrow(/ENOTDIR/);
+
+      expect(decide).not.toHaveBeenCalled();
+      expect(await snapshotTree(root)).toEqual(before);
+    });
+
     it('lands every change in one write of mod order alone', async () => {
       const before = await snapshotTree(root);
 
@@ -1647,6 +1706,15 @@ describe('the MO2 Instance adapter', () => {
       ['enable', { kind: 'enable', mod: 'No Such Mod', enabled: true }],
       ['moveMods', { kind: 'moveMods', mods: ['No Such Mod'], place: { kind: 'modOrder' }, end: 'winning' }],
       ['moveSeparators', { kind: 'moveSeparators', separators: ['No Such Sep'], place: { kind: 'modOrder' }, end: 'winning' }],
+      ['moveMods to a separator that is not there', {
+        kind: 'moveMods', mods: ['Harder VATS'], place: { kind: 'separator', name: 'Gone Separator' }, end: 'losing',
+      }],
+      ['moveMods beside a mod that is not there', {
+        kind: 'moveMods', mods: ['Harder VATS'], place: { kind: 'mod', name: 'Gone Mod' }, end: 'losing',
+      }],
+      ['moveSeparators to a separator that is not there', {
+        kind: 'moveSeparators', separators: ['Unassigned (Modlist Development)'], place: { kind: 'separator', name: 'Gone Separator' }, end: 'losing',
+      }],
       ['renameSeparator', { kind: 'renameSeparator', from: 'No Such Sep', to: 'Anything' }],
       ['addSeparator a listed separator', { kind: 'addSeparator', separator: 'Unassigned (Modlist Development)', afterIndex: 0 }],
       ['renameSeparator onto a listed separator', {
@@ -1848,6 +1916,42 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
         await expect(change([{ kind: 'addSeparator', separator: 'CON', afterIndex: -1 }])).rejects.toThrow(/Not a valid separator name/);
       });
+
+      it('drops path separators from a separator\'s name, so its folder stays inside mods/, on adding and on renaming', async () => {
+        await change([{ kind: 'addSeparator', separator: '../Escape', afterIndex: -1 }]);
+        await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'A/B' }]);
+
+        const names = modNames(await source.modOrder('Default'));
+        expect(names).toContain('separator:..Escape:true');
+        expect(names).toContain('separator:AB:false');
+        expect(await isThere(separatorFolder('..Escape'))).toBe(true);
+        expect(await isThere(separatorFolder('AB'))).toBe(true);
+        expect(await isThere(join(root, 'Escape_separator'))).toBe(false);
+      });
+
+      it('takes a separator\'s name a mod has, on adding and on renaming: a mod is no clash', async () => {
+        await change([{ kind: 'addSeparator', separator: 'Harder VATS', afterIndex: -1 }]);
+        await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'ENBoost - 12k' }]);
+
+        const names = modNames(await source.modOrder('Default'));
+        expect(names).toContain('separator:Harder VATS:true');
+        expect(names).toContain('separator:ENBoost - 12k:false');
+      });
+
+      it('writes nothing for a rename of a separator to its own name as MO2 names its folder', async () => {
+        const before = await text(root, DEFAULT_MODLIST);
+
+        expect(await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: ' Unassigned (Modlist Development). ' }]))
+          .toEqual({ wrote: false });
+
+        expect(await text(root, DEFAULT_MODLIST)).toBe(before);
+      });
+
+      it('keys an entry as MO2 keys it: a separator by the name of its folder, trimmed and without trailing dots, and without case', () => {
+        expect(adapter.entryKey({ kind: 'separator', name: ' Unassigned (Modlist Development). ' }))
+          .toBe(adapter.entryKey({ kind: 'separator', name: 'unassigned (modlist development)' }));
+        expect(adapter.entryKey({ kind: 'mod', name: 'Group A_separator' })).toBe(adapter.entryKey({ kind: 'separator', name: 'GROUP A' }));
+      });
     });
   });
 
@@ -1955,6 +2059,21 @@ describe('the MO2 Instance adapter', () => {
       expect(await metaOf(DOWNLOAD)).toMatch(/removed=false/);
     });
 
+    it('rewrites nothing for a mark already set, whether excluded or included over a removed=false key', async () => {
+      await adapter.markDownloadedFile(DOWNLOAD, 'Excluded');
+      expect(await adapter.markDownloadedFile(DOWNLOAD, 'Excluded')).toEqual({ gone: false, wrote: false });
+
+      await adapter.markDownloadedFile(DOWNLOAD, 'Included');
+      expect(await adapter.markDownloadedFile(DOWNLOAD, 'Included')).toEqual({ gone: false, wrote: false });
+    });
+
+    it('keeps both marks of two writes racing, rather than the second writer dropping the first key', async () => {
+      await Promise.all([adapter.markDownloadedFile('manual.zip', 'Excluded'), adapter.markDownloadedFile('manual.zip', 'Installed')]);
+
+      expect(await metaOf('manual.zip')).toMatch(/removed=true/);
+      expect(await metaOf('manual.zip')).toMatch(/installed=true/);
+    });
+
     it('writes no metadata for a file already included, so a file at rest does not gain metadata', async () => {
       expect(await adapter.markDownloadedFile('manual.zip', 'Included')).toEqual({ gone: false, wrote: false });
 
@@ -1998,6 +2117,19 @@ describe('the MO2 Instance adapter', () => {
 
       assertOnlyChanged(before, await snapshotTree(root), new Set([INI]));
       expect((await source.settings()).profile).toBe('Secondary');
+    });
+
+    it('serializes concurrent selections, so the last one issued is the selected one', async () => {
+      const [first, second] = await Promise.all([adapter.selectProfile('Secondary'), adapter.selectProfile('Default')]);
+
+      expect([first, second]).toEqual([{ wrote: true }, { wrote: true }]);
+      expect((await source.settings()).profile).toBe('Default');
+    });
+
+    it('rejects when the settings cannot be read', async () => {
+      await rm(join(root, INI));
+
+      await expect(adapter.selectProfile('Secondary')).rejects.toThrow(/ENOENT/);
     });
 
     it('writes nothing when the profile is already selected, not rewriting an unwrapped value', async () => {
