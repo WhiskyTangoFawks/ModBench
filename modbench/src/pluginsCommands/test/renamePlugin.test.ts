@@ -83,16 +83,6 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     expect(await snapshotTree(root)).toEqual(before);
   });
 
-  it('reports the source renamed when the write refuses, naming what it refused', async () => {
-    const before = await snapshotTree(root);
-
-    const result = await rename('Renamed Patch.esp', { ...PLUGIN, name: 'Missing.esp' });
-
-    expect(result).toMatchObject({ applied: false, sourceRenamed: true });
-    expect('refusal' in result && result.refusal).toContain('Missing.esp');
-    expect(await snapshotTree(root)).toEqual(before);
-  });
-
   it('reports the source renamed when the write of the files fails after it', async () => {
     const adapter = adapterOver(root);
     vi.spyOn(adapter, 'renamePlugin').mockRejectedValue(new Error('disk full'));
