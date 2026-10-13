@@ -16,7 +16,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 import { Instance, type InstanceValue } from '../instance';
 import { factsOf } from '../instanceFacts';
-import { adapterOver, STEADY_WINDOW, withReading } from '../../test/mo2/adapterOver';
+import { adapterOver, STEADY_WINDOW } from '../../test/mo2/adapterOver';
 
 const roots: string[] = [];
 const instances: Instance[] = [];
@@ -39,8 +39,8 @@ interface Hooks {
   resolveGameFolder?: ResolveGameFolder;
 }
 
-function countingSettings(adapter: InstanceAdapter, reads: { count: number }): InstanceAdapter {
-  return withReading({ ...adapter, settings: () => { reads.count++; return adapter.settings(); } });
+function countingReadings(adapter: InstanceAdapter, reads: { count: number }): InstanceAdapter {
+  return { ...adapter, reading: () => { reads.count++; return adapter.reading(); } };
 }
 
 async function repository(root: string, folder: string, output: string): Promise<void> {
@@ -54,7 +54,7 @@ function realInstance(hooks: Hooks = {}): {
   logs: string[];
   warnings: string[];
   errorLines: string[];
-  settingsReads: { count: number };
+  readings: { count: number };
   setResolver: (resolve: ResolveGameFolder) => void;
 } {
   const root = cloneCorpusFixture();
@@ -62,16 +62,16 @@ function realInstance(hooks: Hooks = {}): {
   const logs: string[] = [];
   const errorLines: string[] = [];
   const warnings: string[] = [];
-  const settingsReads = { count: 0 };
+  const readings = { count: 0 };
   let resolve = hooks.resolveGameFolder ?? resolvesDataFolder;
   const instance = new Instance({
     window: STEADY_WINDOW,
-    adapter: countingSettings(adapterOver(root, { gameFolder: () => resolve() }), settingsReads),
+    adapter: countingReadings(adapterOver(root, { gameFolder: () => resolve() }), readings),
     log: { info: (msg) => logs.push(msg), warn: (msg) => warnings.push(msg), error: (line) => errorLines.push(line) },
   });
   instances.push(instance);
   return {
-    root, instance, logs, warnings, errorLines, settingsReads,
+    root, instance, logs, warnings, errorLines, readings,
     setResolver: (next) => { resolve = next; },
   };
 }
@@ -179,16 +179,16 @@ const listedDownloadsOf = (value: InstanceValue) => (value.downloads.kind === 'l
 
 describe('Instance — the value', () => {
   it('hands the first value once read, and the held one without another read once it has landed', async () => {
-    const { instance, settingsReads } = realInstance();
+    const { instance, readings } = realInstance();
 
     const first = await instance.landed();
-    const readsAfterFirst = settingsReads.count;
+    const readsAfterFirst = readings.count;
     const again = await instance.landed();
 
     expect(instance.sequence).toBeGreaterThan(0);
     expect(first.mods.length).toBeGreaterThan(0);
     expect(again).toBe(first);
-    expect(settingsReads.count).toBe(readsAfterFirst);
+    expect(readings.count).toBe(readsAfterFirst);
   });
 
   it('starts empty at sequence 0, before anything has been read', () => {

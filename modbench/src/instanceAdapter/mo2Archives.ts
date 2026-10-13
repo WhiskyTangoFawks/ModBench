@@ -1,12 +1,11 @@
 // MO2's reads of what the game loads beside its plugins: the archives its INIs list, a profile keeping
 // its own game INIs when its settings say so, and the archives and strings files of the Data folder.
 
-import { errorMessage } from '../ports/errorMessage';
 import { keepsOwnGameInis } from './codecs/profileSettings';
 import { archiveListsOf, dataFolderOf, pluginCompanionRule } from '../tables/gamePaths';
-import { get, listDir } from './files';
+import { get, listDir, readOrReason } from './files';
 import { archivesListedIn } from './gameIni';
-import type { DataFolderArchives, GameFolder, InstanceAdapter } from './instanceAdapter';
+import type { DataFolderArchives, GameFolder } from './instanceAdapter';
 import { anyCase, dataFolderArchivesGlob, fileInFolder, profileDir, profileSettingsFile } from './layout';
 import { readOrAbsent, type Mo2Context } from './mo2Context';
 
@@ -22,19 +21,18 @@ const textOf = async (file: string | undefined): Promise<string[]> =>
 
 async function listGameFolderArchives(dataFolder: string, gameRelease: string | undefined): Promise<DataFolderArchives> {
   const rule = pluginCompanionRule(gameRelease);
-  try {
+  const listing = await readOrReason(async () => {
     const dirents = await listDir(dataFolder);
-    if (rule === undefined) return { kind: 'listed', archives: [], stringsFiles: [] };
+    if (rule === undefined) return { archives: [], stringsFiles: [] };
     const archives = dirents.filter((d) => d.isFile() && rule.isArchive(d.name)).map((d) => d.name);
     const stringsFolders = dirents.filter((d) => d.isDirectory() && d.name.toLowerCase() === rule.stringsFolder).map((d) => d.name);
     const stringsFiles = await Promise.all(stringsFolders.map(async (folder) => (await listDir(fileInFolder(dataFolder, folder)))
       .map((d) => ({ d, relativePath: `${folder}/${d.name}` }))
       .filter(({ d, relativePath }) => d.isFile() && rule.isStringsFile(relativePath))
       .map(({ relativePath }) => relativePath)));
-    return { kind: 'listed', archives, stringsFiles: stringsFiles.flat() };
-  } catch (err) {
-    return { kind: 'unreadable', reason: errorMessage(err) };
-  }
+    return { archives, stringsFiles: stringsFiles.flat() };
+  });
+  return listing.kind === 'read' ? { kind: 'listed', ...listing.answer } : listing;
 }
 
 async function gameInisFolder(
@@ -57,10 +55,19 @@ async function gameInisFolder(
   };
 }
 
-export function mo2Archives(context: Mo2Context): Pick<InstanceAdapter, 'archiveList' | 'gameFolderArchives'> {
+export interface ArchiveReads {
+  /** The archives the INIs list, in load order: the default INI, then the profile's own INIs or else My Games',
+   *  a key's last value winning. `notes` says what was not read, and where it looked. */
+  archiveList(
+    profile: string, gameFolder: GameFolder, gameRelease: string | undefined,
+  ): Promise<{ readonly archives: readonly string[]; readonly notes: readonly string[] }>;
+  gameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined): Promise<DataFolderArchives>;
+}
+
+export function mo2Archives(context: Mo2Context): ArchiveReads {
   const { watch } = context;
   return {
-    async archiveList(profile, gameFolder: GameFolder, gameRelease) {
+    async archiveList(profile, gameFolder, gameRelease) {
       const lists = archiveListsOf(gameRelease);
       if (gameFolder.kind !== 'found' || lists === undefined) {
         watch.follow('defaultIni', undefined, '');

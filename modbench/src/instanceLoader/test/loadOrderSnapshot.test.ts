@@ -47,15 +47,11 @@ const modFile = (mod: string, relativePath: string): OriginFile => {
   return { relativePath, path, sourcePath: path, excluded: false, excludedByName: false };
 };
 
-const builtIndex = (filesByMod: Record<string, OriginFile[]>, overwrite: readonly OriginFile[]): Promise<FileConflictIndex> =>
+const builtIndex = (filesByMod: Record<string, OriginFile[]>, overwrite: readonly OriginFile[]): FileConflictIndex =>
   buildFileConflictIndex(
     Object.keys(filesByMod).map((name) => ({ kind: 'mod', name, enabled: true })),
     overwrite,
-    {
-      originFiles: (origin) => Promise.resolve({
-        origin: origin.kind === 'mod' ? origin.name : '', folder: undefined, files: origin.kind === 'mod' ? filesByMod[origin.name] ?? [] : [], folders: [], notes: [],
-      }),
-    },
+    new Map(Object.entries(filesByMod).map(([name, files]) => [name, { origin: name, folder: undefined, files, folders: [], notes: [] }])),
     () => undefined,
   );
 
@@ -126,10 +122,10 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
     ]);
   });
 
-  it('a plugin resolved from overwrite/ wins path and origin over a mod-provided plugin, which is then sent as overridden', async () => {
+  it('a plugin resolved from overwrite/ wins path and origin over a mod-provided plugin, which is then sent as overridden', () => {
     const overwrite = [runtimeOutput('Foo.esp')];
 
-    const result = buildLoadOrderRows(lines(['Foo.esp']), await builtIndex({ A: [modFile('A', 'Foo.esp')] }, overwrite), overwrite, GAME_FOLDER, NO_DATA_PLUGINS);
+    const result = buildLoadOrderRows(lines(['Foo.esp']), builtIndex({ A: [modFile('A', 'Foo.esp')] }, overwrite), overwrite, GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([
       { name: 'Foo.esp', path: join(OVERWRITE, 'Foo.esp'), origin: 'overwrite/', line: 0, enabled: true, winning: true },
@@ -148,10 +144,10 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
     expect(unlisted).toEqual([]);
   });
 
-  it('an unlisted plugin sitting in overwrite/ is sent with no line, winning-most', async () => {
+  it('an unlisted plugin sitting in overwrite/ is sent with no line, winning-most', () => {
     const overwrite = [runtimeOutput('New.esp'), runtimeOutput('notes.txt')];
 
-    const result = buildLoadOrderRows(lines([]), await builtIndex({}, overwrite), overwrite, GAME_FOLDER, NO_DATA_PLUGINS);
+    const result = buildLoadOrderRows(lines([]), builtIndex({}, overwrite), overwrite, GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([
       { name: 'New.esp', path: join(OVERWRITE, 'New.esp'), origin: 'overwrite/', line: null, enabled: false, winning: true },
@@ -221,10 +217,10 @@ describe('buildLoadOrderRows, plugins whose names or origins differ only in case
     ]);
   });
 
-  it('sends both of overwrite/\'s files, the one the Mod override order resolves the name to winning', async () => {
+  it('sends both of overwrite/\'s files, the one the Mod override order resolves the name to winning', () => {
     const files = [runtimeOutput('New.esp'), runtimeOutput('new.esp')];
 
-    const result = buildLoadOrderRows(lines([]), await builtIndex({}, files), files, GAME_FOLDER, NO_DATA_PLUGINS);
+    const result = buildLoadOrderRows(lines([]), builtIndex({}, files), files, GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([
       { name: 'New.esp', path: join(OVERWRITE, 'New.esp'), origin: 'overwrite/', line: null, enabled: false, winning: true },
@@ -311,12 +307,12 @@ describe('providedPluginsOf, what plugin sync is handed instead of walking mods/
     expect(providedPluginsOf(files)).toEqual(new Map([['zeta.esp', 'Zeta.esp']]));
   });
 
-  it('answers a name Overwrite provides at Overwrite\u2019s casing, over the mod\u2019s', async () => {
+  it('answers a name Overwrite provides at Overwrite\u2019s casing, over the mod\u2019s', () => {
     const overwrite = runtimeOutput('A.esp');
     const modCopy = { ...runtimeOutput('a.esp'), path: join('/instance', 'mods', 'TS Mod', 'a.esp') };
-    const adapter = { originFiles: () => Promise.resolve({ origin: 'TS Mod', folder: undefined, files: [modCopy], folders: [], notes: [] }) };
+    const modFiles = new Map([['TS Mod', { origin: 'TS Mod', folder: undefined, files: [modCopy], folders: [], notes: [] }]]);
 
-    const { files } = await buildFileConflictIndex([{ kind: 'mod', name: 'TS Mod', enabled: true }], [overwrite], adapter, () => undefined);
+    const { files } = buildFileConflictIndex([{ kind: 'mod', name: 'TS Mod', enabled: true }], [overwrite], modFiles, () => undefined);
 
     expect(providedPluginsOf(files)).toEqual(new Map([['a.esp', 'A.esp']]));
   });

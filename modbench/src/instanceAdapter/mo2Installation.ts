@@ -1,9 +1,9 @@
 // What MO2 records of a mod's installation: the downloaded file meta.ini names, and meta.ini itself.
 
 import { basename, isAbsolute } from 'node:path';
-import { errorMessage } from '../ports/errorMessage';
 import { MOD_META_FILE_NAME, parseMetaIni } from './codecs/metaIni';
-import { exists, get } from './files';
+import { exists, get, readOrReason } from './files';
+import type { HashIndex } from './hashIndex';
 import type { FileRead, InstallationFile, InstanceAdapter } from './instanceAdapter';
 import { downloadFile, modMetaFile } from './layout';
 import { currentDownloadsDir, readOrAbsent, type Mo2Context } from './mo2Context';
@@ -15,7 +15,7 @@ async function reinstallPath(context: Mo2Context, recorded: string): Promise<str
 }
 
 export function mo2Installation(
-  context: Mo2Context, { downloadedFileHash }: Pick<InstanceAdapter, 'downloadedFileHash'>,
+  context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>,
 ): Pick<InstanceAdapter, 'installationFiles' | 'managerFilesInModFolder'> {
   return {
     async installationFiles(mod) {
@@ -23,12 +23,9 @@ export function mo2Installation(
       if (archiveFilename === undefined) return { kind: 'read', answer: [] };
       const refused = (why: string): FileRead<readonly InstallationFile[]> =>
         ({ kind: 'unreadable', reason: `Modbench cannot tell what ${archiveFilename} installs: ${why}` });
-      let path: string;
-      try {
-        path = await reinstallPath(context, archiveFilename);
-      } catch (err) {
-        return refused(errorMessage(err));
-      }
+      const located = await readOrReason(() => reinstallPath(context, archiveFilename));
+      if (located.kind === 'unreadable') return refused(located.reason);
+      const path = located.answer;
       const hashed = await downloadedFileHash(path);
       return hashed.kind === 'read' ? { kind: 'read', answer: [{ path, ...hashed.answer }] } : refused(hashed.reason);
     },
