@@ -309,6 +309,11 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
             : null;
     }
 
+    /// <summary>The record type of a document: its path's, else the one its text names.</summary>
+    internal static string? RecordTypeOf(string relativePath, string text, GameRelease gameRelease) =>
+        RecordTypeOf(relativePath, gameRelease)
+        ?? RecordTypes.For(gameRelease).RecordTypeNamed(DocumentTokens.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator));
+
     /// <summary>Null on anything not shaped like a flat record's path or the header's root document,
     /// so a tree walk never misreads a container path as a flat record.</summary>
     internal static SourceRecordIdentity? ParseDocumentPath(string relativePath, GameRelease gameRelease)

@@ -133,11 +133,16 @@ internal sealed class FailedReads(Store index, ISourceAdapter source, ILogger lo
     private static Failure FailureOf(PluginAddress key, ReadState? state, bool stands, SourceFailure? treeStopped, UnreadableSource? why) =>
         new(state, stands, FilesOf(key, state, treeStopped), why);
 
-    private static IReadOnlyList<SourceFileFailure> FilesOf(PluginAddress key, ReadState? state, SourceFailure? treeStopped) =>
-    [
-        .. (state?.FileFailuresOf(key) ?? []).Concat(SourceFileFailure.Of(key, treeStopped))
-            .DistinctBy(file => (file.SourceRelativePath, file.FormKey)),
-    ];
+    // The tree read's own word for a file names its cause, so it stands over the state's.
+    private static IReadOnlyList<SourceFileFailure> FilesOf(PluginAddress key, ReadState? state, SourceFailure? treeStopped)
+    {
+        var stopped = SourceFileFailure.Of(key, treeStopped).ToList();
+        return
+        [
+            .. stopped.Concat((state?.FileFailuresOf(key) ?? []).Where(file => stopped.All(s => s.SourceRelativePath != file.SourceRelativePath)))
+                .DistinctBy(file => (file.SourceRelativePath, file.FormKey)),
+        ];
+    }
 
     private ReadState ReadStateOf(RegisteredPlugin plugin)
     {

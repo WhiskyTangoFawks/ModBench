@@ -309,7 +309,7 @@ public sealed class SourceRepository : ISourceRepository
 
     /// <summary>One listing of the plugin's tree. A file whose file-system stamp is unchanged and
     /// settled is not read again, unless an unsaved text stands in for it.</summary>
-    public RecordStamps StampsOf(PluginAddress plugin) => TreeStamps.StampsOf(_sourceFolder, Spelled(plugin), Files);
+    public RecordStamps StampsOf(PluginAddress plugin) => TreeStamps.StampsOf(_sourceFolder, Spelled(plugin), _release, Files);
 
     /// <summary>Every record the tree holds whose text differs from the last commit's, an embedded
     /// child among them; a tree with no repository is all added. A failed read answers why, never

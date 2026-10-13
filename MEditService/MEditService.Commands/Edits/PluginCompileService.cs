@@ -83,17 +83,9 @@ internal sealed class PluginCompileService(
         // compile to a binary the game mis-addresses, so refuse it (compile-plugin, Refusals).
         if (tree.FormIdLimit(plugin.Name) is { } limited)
         {
-            var outOfRange = limited.Outside(tree.ModKey, tree.FormKeys).Select(key => key.ToString()).ToList();
+            var outOfRange = limited.Outside(tree.ModKey, tree.FormKeys);
             if (outOfRange.Count > 0)
-            {
-                var renameOffEsl = limited.ByExtension ? " rename the plugin off .esl," : "";
-                return CompileResult.Refused(
-                    CompileRefusal.FormIdOutsideFlagLimit,
-                    $"{plugin.Name} is a {limited.Flag} plugin but holds native FormID(s) outside the {limited.Flag} range " +
-                    $"(0x{limited.Min:X}-0x{limited.Max:X}): {string.Join(", ", outOfRange.Take(4))}" +
-                    (outOfRange.Count > 4 ? $" and {outOfRange.Count - 4} more" : "") +
-                    $". Clear the {limited.Flag} flag,{renameOffEsl} or change the records' FormIDs.");
-            }
+                return CompileResult.Refused(CompileRefusal.FormIdOutsideFlagLimit, limited.Refusal(plugin.Name, outOfRange));
         }
 
         // Two source units claiming one FormKey can only become one binary record, so refuse rather

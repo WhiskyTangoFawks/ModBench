@@ -1,5 +1,4 @@
 using System.Text;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -60,14 +59,11 @@ internal static class PluginSourceChecks
 
     internal static IReadOnlyList<RecordFile> RecordFilesOf(PluginSourceFiles source, GameRelease gameRelease)
     {
-        var types = RecordTypes.For(gameRelease);
         var records = new List<RecordFile>();
         foreach (var file in source.Files.Where(file => !SourceRepositoryLayout.CarriesNoRecord(file.RelativePath)))
         {
             var text = Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(file.Content));
-            var recordType = SourceRepositoryLayout.RecordTypeOf(file.RelativePath, gameRelease)
-                ?? types.RecordTypeNamed(DocumentTokens.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator));
-            records.Add(new RecordFile(file.RelativePath, text, recordType));
+            records.Add(new RecordFile(file.RelativePath, text, SourceRepositoryLayout.RecordTypeOf(file.RelativePath, text, gameRelease)));
         }
         return records;
     }

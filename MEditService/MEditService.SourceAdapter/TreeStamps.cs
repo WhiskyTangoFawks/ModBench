@@ -1,9 +1,12 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
@@ -52,6 +55,10 @@ public sealed record RecordStamps(
         && Unreadable.All(file => Unsaved.Contains(file.SourceRelativePath))
         && Claimed.All(claim => claim.Documents.Count(document => !Unsaved.Contains(document)) <= 1);
 
+    /// <summary>What stops a read of this tree at its first file that does not read, when one does not.</summary>
+    public SourceFailure? FirstUnreadable =>
+        Unreadable.Count > 0 ? SourceStopException.Unreadable(Unreadable[0]).Failure : null;
+
     public override int GetHashCode() => ByFormKey.Count;
 }
 
@@ -62,11 +69,12 @@ internal static class TreeStamps
     private static readonly ConcurrentDictionary<string, StampGatedMemo<KnownDocument>> Known =
         new(StringComparer.Ordinal);
 
-    private sealed record KnownDocument(string FormKey, string Content);
+    private sealed record KnownDocument(
+        string FormKey, string Content, IReadOnlyList<string> FormKeys, string? Refusal, FormIdLimit? Limit);
 
     internal static string ContentStamp(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
-    internal static RecordStamps StampsOf(string sourceFolder, PluginAddress plugin, ISourceFiles files)
+    internal static RecordStamps StampsOf(string sourceFolder, PluginAddress plugin, GameRelease release, ISourceFiles files)
     {
         var unreadable = new List<UnreadableFile>();
         var holders = new OneDocumentPerFormKey(sourceFolder);
@@ -77,6 +85,8 @@ internal static class TreeStamps
         foreach (var gone in Known.Keys.Where(tree => !Directory.Exists(tree))) Known.TryRemove(gone, out _);
         var known = Known.GetOrAdd(root, _ => new StampGatedMemo<KnownDocument>(TimeProvider.System));
         var listed = new HashSet<string>(StringComparer.Ordinal);
+        var keysByFile = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        FormIdLimit? limit = null;
         if (Directory.Exists(root))
         {
             // Keyed by the FormKey the document declares, never by its path: a file name carries an
@@ -91,20 +101,36 @@ internal static class TreeStamps
                 var readUnsaved = files.HoldsUnsavedText(file);
                 if (readUnsaved) unsaved.Add(relativePath);
                 var document = readUnsaved
-                    ? Read(files, file, relativePath, plugin.Name, unreadable)
-                    : known.Of(file, () => Read(files, file, relativePath, plugin.Name, unreadable));
+                    ? Read(files, file, relativePath, plugin.Name, release, unreadable)
+                    : known.Of(file, () => Read(files, file, relativePath, plugin.Name, release, unreadable));
                 if (document is null) continue;
                 holders.Hold(document.FormKey, file);
                 stamps[document.FormKey] = document.Content;
+                keysByFile[relativePath] = document.FormKeys;
+                limit ??= document.Limit;
+                if (document.Refusal is { } refusal) unreadable.Add(new UnreadableFile(relativePath, refusal, document.FormKey));
             }
         }
 
         known.Retain(listed);
+        if (limit is not null) unreadable.AddRange(OutsideTheLimit(limit, plugin, keysByFile));
         return new RecordStamps(stamps, unreadable, holders.Claimed, unsaved);
     }
 
+    private static IEnumerable<UnreadableFile> OutsideTheLimit(
+        FormIdLimit limit, PluginAddress plugin, Dictionary<string, IReadOnlyList<string>> keysByFile)
+    {
+        var modKey = ModKey.FromFileName(plugin.Name);
+        foreach (var (relativePath, keys) in keysByFile)
+        {
+            var outside = limit.Outside(modKey, keys.Select(key => FormKey.TryFactory(key, out var parsed) ? parsed : (FormKey?)null).OfType<FormKey>());
+            if (outside.Count > 0) yield return new UnreadableFile(relativePath, limit.Refusal(plugin.Name, outside), outside[0].ToString());
+        }
+    }
+
     private static KnownDocument? Read(
-        ISourceFiles files, string file, string relativePath, string pluginName, List<UnreadableFile> unreadable)
+        ISourceFiles files, string file, string relativePath, string pluginName, GameRelease release,
+        List<UnreadableFile> unreadable)
     {
         byte[] bytes;
         try
@@ -130,6 +156,12 @@ internal static class TreeStamps
             return null;
         }
 
-        return new KnownDocument(formKey, ContentStamp(text));
+        var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, text, release);
+        var refusal = recordType is null ? null : RecordTextCodec.WhyNotARecord(text, release, recordType);
+        var limit = refusal is null && recordType == PluginHeader.RecordType
+            ? PluginFlags.LimitOf(HeaderDocument.Read(bytes, release), pluginName)
+            : null;
+        return new KnownDocument(
+            formKey, ContentStamp(text), [.. DocumentTokens.FormKeysIn(bytes, release).Select(key => key.FormKey)], refusal, limit);
     }
 }
