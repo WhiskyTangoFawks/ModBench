@@ -1651,6 +1651,7 @@
     "openapi-fetch": "^0.17.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
-    "undici": "^7.29.0"
+    "undici": "^7.29.0",
+    "xxhash-wasm": "^1.1.0"
   }
 }
