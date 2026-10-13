@@ -190,15 +190,22 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Theory]
-    [InlineData(null, false)]
     [InlineData("old archive, longer than the new one", true)]
     [InlineData("old", true)]
     [InlineData("new", false)]
-    public void WriteFile_PutsTheStreamsBytesAtThePath_SayingWhetherItReplacedOtherBytes(string? there, bool replaced)
+    public void WriteFile_OverAFile_PutsTheStreamsBytesAtThePath_SayingWhetherItReplacedOtherBytes(string there, bool replaced)
     {
-        if (there is not null) Write("mod.ba2", there);
+        Write("mod.ba2", there);
 
         Assert.Equal(replaced, _repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8)));
+
+        Assert.Equal("new", File.ReadAllText(Path.Combine(_root, "mod.ba2")));
+    }
+
+    [Fact]
+    public void WriteFile_WhereNoFileWas_PutsTheStreamsBytesThere_AndReplacedNothing()
+    {
+        Assert.False(_repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8)));
 
         Assert.Equal("new", File.ReadAllText(Path.Combine(_root, "mod.ba2")));
     }

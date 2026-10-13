@@ -15,7 +15,7 @@ internal static class GitInit
 {
     internal static void Init(
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets, IReadOnlyList<BaseFile> baseFiles)
+        IReadOnlyList<Asset> assets)
     {
         if (SourceRepositoryGit.IsTracked(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
@@ -31,7 +31,7 @@ internal static class GitInit
                 journal.RecordUndo(() => { if (git.Exists) git.Delete(); }, path: git.GitDirectory);
             CreateRepository(git);
             journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent));
-            journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildConfigurationFileName), BuildConfiguration.Of(output, baseFiles));
+            journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildConfigurationFileName), BuildConfiguration.Of(output));
             git.Run("add", "-A");
             git.Run("commit", "-q", "-m", $"Init {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
             foreach (var (_, plugin) in plugins)

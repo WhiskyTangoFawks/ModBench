@@ -1,9 +1,9 @@
 import {
-  isRefused, type BuildMod, type BuildOutcome, type InitMod, type InitOutcome, type InitStatus, type MEditClient, type WriteRefused,
+  isRefused, type BuildFacts, type BuildMod, type BuildOutcome, type InitMod, type InitOutcome, type InitStatus, type MEditClient, type WriteRefused,
 } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
-import { archiveVariantsOf } from '../tables/gamePaths';
+import { ba2VersionsOf, type Ba2Versions } from '../tables/gamePaths';
 
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'init'>;
@@ -30,7 +30,7 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
         else sent.push({ name: mod, sourceFolder, folder, installationFiles: installed.answer.map(onTheWire) });
       }
       if (sent.length === 0) return { landed: [], refused };
-      const outcome = await client.build(sent, { excludedSuffix: adapter.excludedSuffix, archives: archiveVariantsOf(gameRelease) ?? null });
+      const outcome = await client.build(sent, { excludedSuffix: adapter.excludedSuffix, archives: archiveVariants(ba2VersionsOf(gameRelease)) });
       return isRefused(outcome) ? outcome : { landed: outcome.landed, refused: [...outcome.refused, ...refused] };
     },
 
@@ -63,6 +63,13 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
 }
 
 export type SourceCommands = ReturnType<typeof sourceCommands>;
+
+// Modbench packs a BA2 compressed, as the game's own are.
+function archiveVariants(versions: Ba2Versions | undefined): BuildFacts['archives'] {
+  return versions === undefined
+    ? null
+    : { general: { ba2: { version: versions.general, compressed: true } }, textures: { ba2: { version: versions.textures, compressed: true } } };
+}
 
 function onTheWire(file: InstallationFile): InitMod['installationFiles'][number] {
   return { ...file, entries: [...file.entries] };

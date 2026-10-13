@@ -14,19 +14,15 @@ public sealed class SourceToBuildTests : IDisposable
     public void Dispose() => _root.Dispose();
 
     [Fact]
-    public void AnInitializedSource_BuildsItsOutputFromTheBaseInitRecorded_ItsAssetsAndItsPlugins()
+    public void AnInitializedSource_BuildsItsOutputFromItsAssetsAndItsPlugins()
     {
         Assert.Null(TestAdapters.Source().Init(
             _sourceFolder, "The Output", [DoorTreeOf("B.esp"), DoorTreeOf("A.esp")],
-            [new Asset("textures/Sub Folder/a.dds", () => new MemoryStream("texture"u8.ToArray()))],
-            [new BaseFile("meshes/b.nif", "Mod-1.7z", "00 Core/meshes/b.nif"), new BaseFile("Mod.ba2", "Mod-1.7z", "Mod.ba2")]));
+            [new Asset("textures/Sub Folder/a.dds", () => new MemoryStream("texture"u8.ToArray()))]));
 
         var source = Built();
 
         Assert.Equal("The Output", source.Output);
-        Assert.Equal(
-            [new BaseFile("meshes/b.nif", "Mod-1.7z", "00 Core/meshes/b.nif"), new BaseFile("Mod.ba2", "Mod-1.7z", "Mod.ba2")],
-            source.Base);
         Assert.Equal(["A.esp", "B.esp"], source.Plugins);
         var asset = Assert.Single(source.Assets);
         Assert.Equal("textures/Sub Folder/a.dds", asset.Path);
@@ -70,8 +66,6 @@ public sealed class SourceToBuildTests : IDisposable
     [InlineData("{\"output\": 1}", "it names no output")]
     [InlineData("{\"output\": \"../Other\"}", "its output '../Other' is not a folder name")]
     [InlineData("{\"output\": \"Mod\", \"exclude\": [\"../outside\"]}", "its 'exclude' names '../outside', which is not a path in the mod folder")]
-    [InlineData("{\"output\": \"Mod\", \"base\": {\"Mod.7z\": {\"/etc/a\": \"a\"}}}", "its 'base' names '/etc/a', which is not a path in the mod folder")]
-    [InlineData("{\"output\": \"Mod\", \"base\": {\"Mod.7z\": [\"a\"]}}", "its 'base' is not each installation file's paths with their entries")]
     [InlineData("{\"output\": \"Mod\", \"archives\": {\"a\\\\b.ba2\": []}}", "its 'archives' names 'a\\b.ba2', which is not a path in the mod folder")]
     [InlineData("{\"output\": \"Mod\", \"archives\": [\"Mod.ba2\"]}", "its 'archives' is not each archive's paths")]
     public void AConfigurationThatDoesNotSayWhatToBuild_IsUnreadable_SayingWhy(string configuration, string why)

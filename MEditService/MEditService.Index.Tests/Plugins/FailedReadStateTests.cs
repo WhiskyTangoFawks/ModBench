@@ -579,8 +579,8 @@ public sealed class FailedReadStateTests : IDisposable
 
         public SourceFailure? Init(
             string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-            IReadOnlyList<Asset> assets, IReadOnlyList<BaseFile> baseFiles) =>
-            _inner.Init(sourceFolder, output, plugins, assets, baseFiles);
+            IReadOnlyList<Asset> assets) =>
+            _inner.Init(sourceFolder, output, plugins, assets);
 
         public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) => _inner.SourceToBuild(sourceFolder);
 

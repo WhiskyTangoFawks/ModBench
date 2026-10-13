@@ -578,6 +578,21 @@ describe('modbench.mod.build', () => {
     ]);
   });
 
+  it('names the part of a mod\'s build that failed after it began writing, beside the files it overwrote', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('build', {
+      landed: [{ ...built('ModA'), overwritten: ['a.txt'], failure: 'The build stopped before compiling: z.txt is held.' }], refused: [],
+    });
+    const { handler, reporter } = registered(client);
+
+    await handler(new ModsRowStandIn('ModA'));
+
+    expect(reporter.reports).toEqual([
+      { severity: 'warning', message: 'Built 1 mod only in part.', detail: '"ModA" (The build stopped before compiling: z.txt is held.)' },
+      { severity: 'warning', message: 'Build overwrote 1 file that differed.', detail: '"a.txt (ModA)"' },
+    ]);
+  });
+
   it('names each file the build overwrote that differed, beside the landing', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', {

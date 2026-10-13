@@ -58,7 +58,7 @@ public sealed class ArchivePackerTests : IDisposable
     private async Task<(byte[]? Archive, ItemRefused<string, ArchiveRefusal>? Refusal)> PackAsync(IArchiveVariant variant, params string[] files)
     {
         var source = new FakeSourceAdapter().Building(SourceFolder, new SourceToBuild(
-            "Mod", [], [], [new ArchiveToPack(Archive, files)], [], [.. files.Select(file => new Asset(file, () => _folders.OpenFile(Assets, file)))]));
+            "Mod", [], [new ArchiveToPack(Archive, files)], [], [.. files.Select(file => new Asset(file, () => _folders.OpenFile(Assets, file)))]));
         var holder = new LoadOrderHolder();
         holder.Apply(SnapshotPlugins.Snapshot(_scratch, null, GameRelease.Fallout4, []));
 

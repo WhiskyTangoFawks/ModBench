@@ -24,6 +24,11 @@ public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepositor
 
     public string InstallationFileName(string path) => Path.GetFileName(path);
 
+    public IReadOnlyList<string> FilePaths(string modFolder) =>
+        Directory.Exists(modFolder)
+            ? [.. Directory.EnumerateFiles(modFolder, "*", SearchOption.AllDirectories).Select(file => PathIn(modFolder, file))]
+            : [];
+
     public string FolderName(string modFolder) => Path.GetFileName(Path.TrimEndingDirectorySeparator(modFolder));
 
     public string PathIn(string modFolder, string file) => Path.GetRelativePath(modFolder, file).Replace('\\', '/');

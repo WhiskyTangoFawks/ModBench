@@ -65,21 +65,24 @@ public sealed class BuildHandler
         }
 
         var plugins = source.Plugins.Select(plugin => new PluginAddress(plugin, mod.Name)).ToList();
-        var compiled = CompiledPaths(loadOrder, plugins, [.. source.Base.Select(file => file.Path), .. source.Assets.Select(asset => asset.Path)]);
+        var installed = mod.InstallationFiles.SelectMany(file => file.Entries.Select(entry => (File: file, Entry: entry.Path))).ToList();
+        var compiled = CompiledPaths(loadOrder, plugins, [.. installed.Select(entry => entry.Entry), .. source.Assets.Select(asset => asset.Path)]);
         var assets = source.Assets.Where(asset => !compiled.Contains(asset.Path)).ToDictionary(asset => asset.Path, StringComparer.OrdinalIgnoreCase);
         var notAnAsset = source.Archives.SelectMany(archive => archive.Files.Select(file => (Archive: archive.Path, File: file)))
             .FirstOrDefault(packed => !assets.ContainsKey(packed.File));
         if (notAnAsset.File is not null)
             return Refused(mod, BuildRefusal.ArchiveFileNotAnAsset, $"'{notAnAsset.Archive}' takes '{notAnAsset.File}', which is not an asset of its source.");
 
-        var packed = source.Archives.SelectMany(archive => archive.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var looseBase = source.Base.Where(file => !compiled.Contains(file.Path) && !assets.ContainsKey(file.Path)).ToList();
-        if (WhyTheBaseIsNotThere(mod, looseBase) is { } notThere) return notThere;
-
         var written = new FolderWrite(_modFolders, mod.Folder, source.Exclude, instance.ExcludedSuffix);
+        if (WhyTheBaseIsNotKnown(mod, installed, written) is { } unknown) return unknown;
+
+        var packed = source.Archives.SelectMany(archive => archive.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var looseBase = installed.Where(entry => !compiled.Contains(entry.Entry) && !assets.ContainsKey(entry.Entry))
+            .GroupBy(entry => entry.Entry, StringComparer.OrdinalIgnoreCase).Select(paths => paths.Last())
+            .GroupBy(entry => entry.File, entry => entry.Entry);
         try
         {
-            WriteBase(mod, looseBase, written);
+            foreach (var fromOne in looseBase) WriteBase(fromOne.Key, fromOne.ToHashSet(StringComparer.OrdinalIgnoreCase), written);
             foreach (var asset in assets.Values.Where(asset => !packed.Contains(asset.Path)))
             {
                 written.Write(asset.Path, output =>
@@ -91,12 +94,15 @@ public sealed class BuildHandler
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or SharpCompressException)
         {
-            return Refused(mod, BuildRefusal.NotWritten, $"a file could not be read or written: {e.Message}");
+            return ItemAnswer<BuildRefusal, BuiltMod>.Landed(new BuiltMod(
+                [], [], [], [.. written.Overwritten.Order(StringComparer.Ordinal)],
+                $"The build stopped before compiling, as a file could not be read or written: {e.Message}"));
         }
 
         var (landed, refused) = await CompileAsync(loadOrder, mod, plugins, written);
         var archivesRefused = Pack(mod, source.Archives, assets, instance.Archives, written);
-        return ItemAnswer<BuildRefusal, BuiltMod>.Landed(new BuiltMod(landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)]));
+        return ItemAnswer<BuildRefusal, BuiltMod>.Landed(new BuiltMod(
+            landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)], Failure: null));
     }
 
     private HashSet<string> CompiledPaths(LoadOrderSnapshot loadOrder, IReadOnlyList<PluginAddress> plugins, IReadOnlyList<string> paths) =>
@@ -104,73 +110,68 @@ public sealed class BuildHandler
             .SelectMany(plugin => _plugins.WrittenByCompile(plugin, paths, loadOrder.GameRelease))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-    private ItemAnswer<BuildRefusal, BuiltMod>? WhyTheBaseIsNotThere(ModToBuild mod, IReadOnlyList<BaseFile> baseFiles)
+    // The base is each installation file's entries at their own paths (mods.md, Build, story 1). A folder that holds
+    // them elsewhere, or not at all, says nothing of where its files come from, so no base is guessed.
+    private ItemAnswer<BuildRefusal, BuiltMod>? WhyTheBaseIsNotKnown(
+        ModToBuild mod, IReadOnlyList<(InstallationFile File, string Entry)> installed, FolderWrite written)
     {
-        var installed = InstallationFilesByName(mod);
-        foreach (var fromOne in baseFiles.GroupBy(file => file.InstallationFile, StringComparer.OrdinalIgnoreCase))
+        if (mod.InstallationFiles.FirstOrDefault(file => !_modFolders.InstallationFileExists(file.Path)) is { } missing)
         {
-            if (!installed.TryGetValue(fromOne.Key, out var file) || !_modFolders.InstallationFileExists(file.Path))
-            {
-                return Refused(mod, BuildRefusal.InstallationFileMissing,
-                    $"its base comes from '{fromOne.Key}', which is not among its installation files in the downloads folder.");
-            }
+            return Refused(mod, BuildRefusal.InstallationFileMissing,
+                $"its installation file '{_modFolders.InstallationFileName(missing.Path)}' is not in the downloads folder.");
+        }
 
-            var entries = file.Entries.Select(entry => entry.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            if (fromOne.FirstOrDefault(baseFile => !entries.Contains(baseFile.Entry)) is { } absent)
-                return Refused(mod, BuildRefusal.EntryMissing, $"'{fromOne.Key}' holds no '{absent.Entry}', which its base takes for '{absent.Path}'.");
+        var inFolder = _modFolders.FilePaths(mod.Folder).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (installed.FirstOrDefault(entry => !inFolder.Contains(written.PathOf(entry.Entry))) is { File: { } file, Entry: { } entry })
+        {
+            return Refused(mod, BuildRefusal.BaseNotKnown,
+                $"'{_modFolders.InstallationFileName(file.Path)}' installs '{entry}', which its folder does not hold at that path, " +
+                "so build cannot yet tell where its files come from.");
         }
 
         return null;
     }
 
-    private Dictionary<string, InstallationFile> InstallationFilesByName(ModToBuild mod) =>
-        mod.InstallationFiles.DistinctBy(file => _modFolders.InstallationFileName(file.Path), StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(file => _modFolders.InstallationFileName(file.Path), StringComparer.OrdinalIgnoreCase);
-
-    // An entry the base takes at several paths is read once, and copied from the first.
-    private void WriteBase(ModToBuild mod, IReadOnlyList<BaseFile> baseFiles, FolderWrite written)
+    private void WriteBase(InstallationFile installed, HashSet<string> entries, FolderWrite written)
     {
-        var installed = InstallationFilesByName(mod);
-        foreach (var fromOne in baseFiles.GroupBy(file => file.InstallationFile, StringComparer.OrdinalIgnoreCase))
+        using var archive = _modFolders.OpenInstallationFile(installed.Path);
+        ArchiveExtractor.Extract(archive, (entry, content) =>
         {
-            var wanted = fromOne.ToLookup(file => file.Entry, StringComparer.OrdinalIgnoreCase);
-            using var archive = _modFolders.OpenInstallationFile(installed[fromOne.Key].Path);
-            ArchiveExtractor.Extract(archive, (entry, content) =>
-            {
-                string? first = null;
-                foreach (var path in wanted[entry].Select(file => file.Path))
-                {
-                    if (first is not { } copied) written.Write(path, content.CopyTo);
-                    else written.Write(path, output => written.CopyOf(copied, output));
-                    first ??= path;
-                }
-            });
-        }
+            if (entries.Contains(entry)) written.Write(entry, content.CopyTo);
+        });
     }
 
-    // A plugin's own record says what Modbench last wrote, so only one changed outside Modbench is named, not each one
-    // its source changed.
     private async Task<(IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Landed, IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused)> CompileAsync(
         LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<PluginAddress> plugins, FolderWrite written)
     {
         var changedOutside = plugins.Select(loadOrder.Plugin).OfType<RegisteredPlugin>()
             .Where(plugin => ChangedOutside(plugin, loadOrder.GameRelease))
-            .ToDictionary(plugin => plugin.Key, plugin => plugin.Path, PluginAddress.Comparer);
+            .ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
+        var before = changedOutside.Count == 0 ? [] : HashesIn(mod);
         var compiled = await _compile.CompileAsync(plugins);
-        foreach (var landed in compiled.Landed)
+        var landedChangedOutside = compiled.Landed.Select(landed => changedOutside.GetValueOrDefault(landed.Item)).OfType<RegisteredPlugin>().ToList();
+        if (landedChangedOutside.Count > 0)
         {
-            if (changedOutside.TryGetValue(landed.Item, out var path))
-                written.Overwritten.Add(_modFolders.PathIn(mod.Folder, path));
+            var after = HashesIn(mod);
+            foreach (var plugin in landedChangedOutside)
+            {
+                written.Overwritten.Add(_modFolders.PathIn(mod.Folder, plugin.Path));
+                written.Overwritten.AddRange(_plugins.WrittenByCompile(plugin, [.. before.Keys], loadOrder.GameRelease)
+                    .Where(path => path != _modFolders.PathIn(mod.Folder, plugin.Path) && before[path] != after.GetValueOrDefault(path)));
+            }
         }
 
         return (compiled.Landed, compiled.Refused);
     }
 
+    private Dictionary<string, string> HashesIn(ModToBuild mod) =>
+        _modFolders.Files(mod.Folder, mod.Name, new HashSet<string>()).ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
+
     private bool ChangedOutside(RegisteredPlugin plugin, GameRelease release) =>
-        _plugins.HashOf(plugin.Path) is { } there
+        _plugins.Exists(plugin.Path)
         && plugin.Provider is PluginProvider.FromMod provider
-        && _source.Open(provider, release)?.LastWrittenBinarySha256s(plugin.Key).Holds(out var written, out _) == true
-        && !written.Contains(there, StringComparer.OrdinalIgnoreCase);
+        && (_source.Open(provider, release) is not { } repository
+            || !ExternalChangeCheck.MatchesLastWrite(repository, plugin.Key, _plugins.HashOf(plugin.Path)));
 
     private List<ItemRefused<string, ArchiveRefusal>> Pack(
         ModToBuild mod, IReadOnlyList<ArchiveToPack> archives, Dictionary<string, Asset> assets, ArchiveVariants? variants, FolderWrite written)

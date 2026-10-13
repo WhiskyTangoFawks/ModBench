@@ -245,6 +245,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         applied: [{
           mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginSourceUnreadable', message: 'Second.esp has no readable source.' }],
           archivesRefused: [{ item: 'ModA.ba2', refusal: 'VariantNotWritten', message: 'Modbench packs no archive for this game.' }], overwritten: ['a.nif'],
+          failure: 'The build stopped before compiling.',
         }],
         refused: [{ item: 'ModC', refusal: 'GitUnavailable', message: 'git was not found on PATH.' }],
       },
@@ -252,6 +253,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         landed: [{
           mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp has no readable source.' }],
           archivesRefused: [{ item: 'ModA.ba2', reason: 'Modbench packs no archive for this game.' }], overwritten: ['a.nif'],
+          failure: 'The build stopped before compiling.',
         }],
         refused: [{ item: 'ModC', reason: 'git was not found on PATH.' }],
       },

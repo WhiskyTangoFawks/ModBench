@@ -44,8 +44,8 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved) : ISourceAdapter
 
     public SourceFailure? Init(
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets, IReadOnlyList<BaseFile> baseFiles) =>
-        SourceFailure.Answer(() => GitInit.Init(sourceFolder, output, plugins, assets, baseFiles));
+        IReadOnlyList<Asset> assets) =>
+        SourceFailure.Answer(() => GitInit.Init(sourceFolder, output, plugins, assets));
 
     public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) =>
         SourceFailure.Answer(() => BuildConfiguration.ToBuild(sourceFolder));

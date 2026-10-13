@@ -468,6 +468,7 @@ class HttpMEditClient implements MEditClient {
       outcome: (answer) => selectionOutcome({
         applied: answer.applied.map((m) => ({
           mod: m.mod, compiled: m.compiled, refused: itemRefusals(m.refused), archivesRefused: itemRefusals(m.archivesRefused), overwritten: m.overwritten,
+          ...(m.failure ? { failure: m.failure } : {}),
         })),
         refused: answer.refused,
       }),

@@ -143,7 +143,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each source mod's folder from its source as its build configuration says: the base from its installation files, its assets over it, each plugin compiled, each archive packed. A file the build did not make stays. A mod lands, naming each file it replaced that held other bytes, or is refused before it writes. Progress is the build-progress notification. */
+        /** @description Writes each source mod's folder from its source as its build configuration says: the base from its installation files, its assets over it, each plugin compiled, each archive packed. A file the build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and what failed when a read or write stopped it part way. Progress is the build-progress notification. */
         post: operations["BuildMod"];
         delete?: never;
         options?: never;
@@ -851,7 +851,7 @@ export interface components {
             modsTotal: number;
         };
         /** @enum {string} */
-        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "InstallationFileMissing" | "EntryMissing" | "ArchiveFileNotAnAsset" | "NotWritten";
+        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "InstallationFileMissing" | "BaseNotKnown" | "ArchiveFileNotAnAsset";
         BuildRequest: {
             mods: components["schemas"]["BuildModRequest"][];
             excludedSuffix: string;
@@ -867,6 +867,7 @@ export interface components {
             refused: components["schemas"]["PluginCompileRefusal"][];
             archivesRefused: components["schemas"]["ArchivePackRefusal"][];
             overwritten: string[];
+            failure?: string | null;
         };
         CellChildRecords: {
             persistent: components["schemas"]["ChildRecordSummary"][];

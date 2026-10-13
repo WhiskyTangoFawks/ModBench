@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  archiveListsOf, archiveVariantsOf, creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
+  archiveListsOf, ba2VersionsOf, creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
 describe('gameReleaseForGame', () => {
@@ -31,15 +31,15 @@ describe('gameReleaseForGame', () => {
   });
 });
 
-describe('archiveVariantsOf', () => {
+describe('ba2VersionsOf', () => {
   it.each([
-    ['Fallout4', { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } }],
-    ['Fallout4VR', { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } }],
+    ['Fallout4', { general: 1, textures: 1 }],
+    ['Fallout4VR', { general: 1, textures: 1 }],
     ['Starfield', undefined],
     ['SkyrimSE', undefined],
     [undefined, undefined],
-  ])('answers the variants %s\'s archives pack as, and none for a release whose archives mEdit is not known to write so the game loads them', (release, variants) => {
-    expect(archiveVariantsOf(release)).toEqual(variants);
+  ])('answers the BA2 versions %s\'s archives pack as, and none for a release whose archives mEdit is not known to write so the game loads them', (release, variants) => {
+    expect(ba2VersionsOf(release)).toEqual(variants);
   });
 });
 

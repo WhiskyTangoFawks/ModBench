@@ -58,6 +58,9 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public string InstallationFileName(string path) => path[(path.LastIndexOf('/') + 1)..];
 
+    public IReadOnlyList<string> FilePaths(string modFolder) =>
+        [.. _files.Keys.Where(file => file.Folder == modFolder).Select(file => file.Path)];
+
     public string FolderName(string modFolder) => modFolder[(modFolder.LastIndexOf('/') + 1)..];
 
     public string PathIn(string modFolder, string file) => file[(modFolder.Length + 1)..];

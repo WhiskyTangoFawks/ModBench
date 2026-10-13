@@ -178,6 +178,8 @@ interface BuiltMod {
   archivesRefused: readonly ItemRefusal<string>[];
   /** Each file the build replaced that held other bytes, by its path in the mod folder. */
   overwritten: readonly string[];
+  /** What stopped the build after it began writing; the files it overwrote so far are named. */
+  failure?: string;
 }
 
 /** Build's answer: each mod built, with the plugins it compiled and the plugins it refused, or

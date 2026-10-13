@@ -15,6 +15,9 @@ public interface IModFolderRepository
     /// <summary>The name of the installation file at <paramref name="path"/>, without its folder.</summary>
     string InstallationFileName(string path);
 
+    /// <summary>Every file's forward-slash path in <paramref name="modFolder"/>; none when it is not there.</summary>
+    IReadOnlyList<string> FilePaths(string modFolder);
+
     /// <summary>The name of the mod folder at <paramref name="modFolder"/>, without the folder it is in.</summary>
     string FolderName(string modFolder);
 

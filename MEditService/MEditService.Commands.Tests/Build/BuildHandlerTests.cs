@@ -10,6 +10,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Tests.Build;
 
@@ -33,19 +34,51 @@ public sealed class BuildHandlerTests : IDisposable
     private string Downloaded => Path.Combine(_root, "downloads", Installed);
 
     [Fact]
-    public async Task Build_WritesTheBaseFromItsEntriesInTheInstallationFile_AndTheAssetsOverIt()
+    public async Task Build_WritesTheBaseFromTheInstallationFilesPathForPath_AndTheAssetsOverIt()
     {
-        var installed = Download(("00 Core/textures/a.dds", "installed a"), ("00 Core/textures/b.dds", "installed b"), ("fomod/ModuleConfig.xml", "steps"));
-        WriteSource("""
-            {"output": "Mod", "base": {"Mod-1.zip": {"textures/a.dds": "00 Core/textures/a.dds", "textures/b.dds": "00 Core/textures/b.dds"}}}
-            """, ("textures/b.dds", "edited b"), ("meshes/c.nif", "added c"));
+        var installed = Download(("textures/a.dds", "installed a"), ("textures/b.dds", "installed b"));
+        WriteSource("{\"output\": \"Mod\"}", ("textures/b.dds", "edited b"), ("meshes/c.nif", "added c"));
+        WriteInFolder("textures/a.dds", "changed in the folder");
+        WriteInFolder("textures/b.dds", "edited b");
 
         var built = await Landed(installed);
 
         Assert.Equal(
             [("meshes/c.nif", "added c"), ("textures/a.dds", "installed a"), ("textures/b.dds", "edited b")],
             FilesIn(ModFolder));
-        Assert.Empty(built.Overwritten);
+        Assert.Equal(["textures/a.dds"], built.Overwritten);
+    }
+
+    [Theory]
+    [InlineData("a FOMOD's choice", "00 Core/textures/a.dds", "textures/a.dds")]
+    [InlineData("a file deleted after install", "textures/gone.dds", "textures/a.dds")]
+    public async Task AFolderThatDoesNotHoldItsInstallationFilesAtTheirPaths_IsRefused_GuessingNoBase(string layout, string entry, string inFolder)
+    {
+        var installed = Download((entry, "installed"), ("textures/a.dds", "installed a"));
+        WriteSource("{\"output\": \"Mod\"}");
+        WriteInFolder(inFolder, "installed a");
+
+        var refused = Assert.Single((await Build(NoArchives, installed)).Refused);
+
+        Assert.True(refused.Refusal == BuildRefusal.BaseNotKnown, layout);
+        Assert.Equal(
+            $"'{ModName}' was not built: '{Installed}' installs '{entry}', which its folder does not hold at that path, so build cannot yet tell where its files come from.",
+            refused.Message);
+        Assert.Equal([(inFolder, "installed a")], FilesIn(ModFolder));
+    }
+
+    [Fact]
+    public async Task AnInstallationFileNotInTheDownloadsFolder_RefusesTheMod_WritingNothing()
+    {
+        var installed = Download(("a.txt", "a"));
+        File.Delete(Downloaded);
+        WriteSource("{\"output\": \"Mod\"}", ("meshes/c.nif", "c"));
+
+        var refused = Assert.Single((await Build(NoArchives, installed)).Refused);
+
+        Assert.Equal(BuildRefusal.InstallationFileMissing, refused.Refusal);
+        Assert.Equal($"'{ModName}' was not built: its installation file '{Installed}' is not in the downloads folder.", refused.Message);
+        Assert.False(Directory.Exists(ModFolder));
     }
 
     [Fact]
@@ -73,22 +106,28 @@ public sealed class BuildHandlerTests : IDisposable
         Assert.Equal([("meshes.mohidden/deep/c.nif", "c"), ("textures/a.dds.mohidden", "a"), ("textures/b.dds", "b")], FilesIn(ModFolder));
     }
 
+    [Fact]
+    public async Task AModWhoseSourceFolderHoldsNoBuildConfiguration_IsRefused_WritingNothing()
+    {
+        Directory.CreateDirectory(SourceFolder);
+
+        var refused = Assert.Single((await Build(NoArchives)).Refused);
+
+        Assert.Equal(BuildRefusal.SourceUnreadable, refused.Refusal);
+        Assert.Equal($"'{ModName}' was not built: '{SourceFolder}' holds no build configuration.", refused.Message);
+        Assert.False(Directory.Exists(ModFolder));
+    }
+
     [Theory]
-    [InlineData(null, BuildRefusal.SourceUnreadable, "holds no build configuration.")]
     [InlineData("{\"output\": \"Other\"}", BuildRefusal.OutputNotThisMod,
         "its build configuration names the output folder 'Other', not its folder 'Mod'.")]
-    [InlineData("{\"output\": \"Mod\", \"base\": {\"Mod-2.zip\": {\"a.txt\": \"a.txt\"}}}", BuildRefusal.InstallationFileMissing,
-        "its base comes from 'Mod-2.zip', which is not among its installation files in the downloads folder.")]
-    [InlineData("{\"output\": \"Mod\", \"base\": {\"Mod-1.zip\": {\"a.txt\": \"00 Core/a.txt\"}}}", BuildRefusal.EntryMissing,
-        "'Mod-1.zip' holds no '00 Core/a.txt', which its base takes for 'a.txt'.")]
     [InlineData("{\"output\": \"Mod\", \"archives\": {\"Mod - Main.ba2\": [\"meshes/c.nif\", \"a.txt\"]}}", BuildRefusal.ArchiveFileNotAnAsset,
         "'Mod - Main.ba2' takes 'a.txt', which is not an asset of its source.")]
     public async Task ABuildThatCannotMakeTheFolderTheConfigurationSays_RefusesTheMod_WritingNothing(
-        string? configuration, BuildRefusal refusal, string why)
+        string configuration, BuildRefusal refusal, string why)
     {
         var installed = Download(("a.txt", "a"));
-        if (configuration is null) Directory.CreateDirectory(SourceFolder);
-        else WriteSource(configuration, ("meshes/c.nif", "c"));
+        WriteSource(configuration, ("meshes/c.nif", "c"));
 
         var result = await Build(NoArchives, installed);
 
@@ -97,6 +136,28 @@ public sealed class BuildHandlerTests : IDisposable
         Assert.StartsWith($"'{ModName}' was not built: ", refused.Message, StringComparison.Ordinal);
         Assert.EndsWith(why, refused.Message, StringComparison.Ordinal);
         Assert.False(Directory.Exists(ModFolder));
+    }
+
+    [PosixFact]
+    public async Task AFileThatCannotBeReadAfterTheFirstWrite_LandsTheBuildWithThatFailure_NamingWhatItOverwroteSoFar()
+    {
+        WriteSource("{\"output\": \"Mod\"}", ("a.txt", "a"), ("z.txt", "z"));
+        WriteInFolder("a.txt", "changed in the folder");
+        var held = Path.Combine(SourceFolder, "assets", "z.txt");
+        FileModes.Set(held, "000");
+        BuiltMod built;
+        try
+        {
+            built = await Landed();
+        }
+        finally
+        {
+            FileModes.Set(held, "600");
+        }
+
+        Assert.Equal(["a.txt"], built.Overwritten);
+        Assert.StartsWith("The build stopped before compiling, as a file could not be read or written: ", built.Failure, StringComparison.Ordinal);
+        Assert.Contains("z.txt", built.Failure, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -129,26 +190,30 @@ public sealed class BuildHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task AModInitTookFromAnotherPathInItsInstallationFile_BuildsThatFileBackFromIt()
+    public async Task APluginChangedOutsideModbench_IsNamedOverwritten_WithEachOfItsStringsFilesThatDiffered()
+    {
+        await InitializedWithALocalizedPlugin();
+        var stringsFiles = Directory.GetFiles(Path.Combine(ModFolder, "Strings")).Order(StringComparer.Ordinal).ToList();
+        File.AppendAllText(Path.Combine(ModFolder, "Fixture.esp"), "changed outside Modbench");
+        File.WriteAllText(stringsFiles[0], "changed outside Modbench");
+
+        var built = Assert.Single((await TestEditService.BuildHandler(_holder)
+            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [])], NoArchives)).Landed).Outcome;
+
+        Assert.Equal(["Fixture.esp", $"Strings/{Path.GetFileName(stringsFiles[0])}"], built.Overwritten);
+    }
+
+    private async Task InitializedWithALocalizedPlugin()
     {
         var plugin = Path.Combine(Directory.CreateDirectory(ModFolder).FullName, "Fixture.esp");
         var written = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        written.Npcs.AddNew("FixtureNpc");
+        written.Doors.AddNew("FixtureDoor").Name = new TranslatedString(Language.English, "The Big Door");
+        written.UsingLocalization = true;
         written.WriteToBinary(plugin);
         var provider = new PluginProvider.FromMod(ModName, ModFolder, SourceFolder);
         _holder.Apply(SnapshotPlugins.Snapshot(Directory.CreateDirectory(Path.Combine(_root, "game")).FullName, _root, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: provider)]));
-        WriteInFolder("textures/chosen.dds", "an option the installer chose");
-        var installed = Download(("00 Core/textures/chosen.dds", "an option the installer chose"), ("01 Other/textures/chosen.dds", "not chosen"));
-        Assert.Single((await TestEditService.InitHandler(_holder).InitAsync([new ModToInit(ModName, SourceFolder, [installed], [])])).Landed);
-        WriteInFolder("textures/chosen.dds", "changed in the folder");
-
-        var built = Assert.Single((await TestEditService.BuildHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [installed])], NoArchives)).Landed).Outcome;
-
-        Assert.Equal("an option the installer chose", File.ReadAllText(Path.Combine(ModFolder, "textures", "chosen.dds")));
-        Assert.Equal(["textures/chosen.dds"], built.Overwritten);
-        Assert.Equal([new PluginAddress("Fixture.esp", ModName)], built.Compiled.Select(compiled => compiled.Item));
+        Assert.Single((await TestEditService.InitHandler(_holder).InitAsync([new ModToInit(ModName, SourceFolder, [], [])])).Landed);
     }
 
     private async Task<BuiltMod> Landed(params InstallationFile[] installed) => await Landed(NoArchives, installed);

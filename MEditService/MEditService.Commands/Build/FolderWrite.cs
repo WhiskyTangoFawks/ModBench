@@ -29,10 +29,4 @@ internal sealed class FolderWrite(IModFolderRepository repository, string folder
         var at = PathOf(path);
         if (repository.WriteFile(folder, at, write)) Overwritten.Add(at);
     }
-
-    public void CopyOf(string path, Stream output)
-    {
-        using var written = repository.OpenFile(folder, PathOf(path));
-        written.CopyTo(output);
-    }
 }

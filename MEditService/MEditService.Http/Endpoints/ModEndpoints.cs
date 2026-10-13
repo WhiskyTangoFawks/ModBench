@@ -16,7 +16,8 @@ internal static class ModEndpoints
             .WithDescription(
                 "Writes each source mod's folder from its source as its build configuration says: the base from its " +
                 "installation files, its assets over it, each plugin compiled, each archive packed. A file the build did not " +
-                "make stays. A mod lands, naming each file it replaced that held other bytes, or is refused before it writes. " +
+                "make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and " +
+                "what failed when a read or write stopped it part way. " +
                 "Progress is the build-progress notification.")
             .Produces<BuildResponse>()
             .ProducesProblem(400)
@@ -135,7 +136,7 @@ internal static class ModEndpoints
                 [.. landed.Outcome.Compiled.Select(c => new CompiledPlugin(c.Item.Name, c.Item.Origin, c.Outcome))],
                 [.. landed.Outcome.Refused.Select(r => new PluginCompileRefusal(r.Item, r.Refusal, r.Message))],
                 [.. landed.Outcome.ArchivesRefused.Select(r => new ArchivePackRefusal(r.Item, r.Refusal, r.Message))],
-                landed.Outcome.Overwritten),
+                landed.Outcome.Overwritten, landed.Outcome.Failure),
             refused => new ModBuildRefusal(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new BuildResponse(applied, refused));
     }
@@ -192,10 +193,10 @@ internal sealed record ModInitRefusal(string Item, InitRefusal Refusal, string M
 internal sealed record InitResponse(IReadOnlyList<InitializedModResponse> Applied, IReadOnlyList<ModInitRefusal> Refused);
 
 /// <summary>A mod of the selection that built: the plugins that compiled, the plugins and archives refused, which
-/// stay as they were, and each file it replaced that held other bytes.</summary>
+/// stay as they were, each file it replaced that held other bytes, and what stopped it part way, if anything did.</summary>
 internal sealed record BuiltModResponse(
     string Mod, IReadOnlyList<CompiledPlugin> Compiled, IReadOnlyList<PluginCompileRefusal> Refused,
-    IReadOnlyList<ArchivePackRefusal> ArchivesRefused, IReadOnlyList<string> Overwritten);
+    IReadOnlyList<ArchivePackRefusal> ArchivesRefused, IReadOnlyList<string> Overwritten, string? Failure);
 
 /// <summary>An archive of a built mod that was not packed, by its path in the mod folder.</summary>
 internal sealed record ArchivePackRefusal(string Item, ArchiveRefusal Refusal, string Message);

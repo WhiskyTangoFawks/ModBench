@@ -265,6 +265,7 @@ async function buildMods(deps: BuildDeps, targets: ModTargets, invokedFrom: stri
       for (const plugin of compiled) deps.problems.publish(plugin, deps.sourceFiles(plugin.origin), plugin.diagnostics);
     }
     reportBuilt(reporter, { landed: outcome.landed, refused: [...outcome.refused, ...refusedRows] });
+    reportPartlyBuilt(reporter, outcome);
     reportOverwritten(reporter, outcome);
   });
 }
@@ -318,6 +319,13 @@ function reportBuilt(reporter: Reporter, outcome: BuildOutcome): void {
   if (only === undefined) return;
   const what = more.length === 0 ? `"${only.mod}"` : `${outcome.landed.length} mods`;
   reporter.landed(diagnostics > 0 ? `Built ${what} with ${diagnosticsWords(diagnostics)}` : `Built ${what}.`);
+}
+
+// common.md, Reporting: a mod whose build stopped after it began writing landed, and the part that failed is named.
+function reportPartlyBuilt(reporter: Reporter, outcome: BuildOutcome): void {
+  const partly = outcome.landed.flatMap(({ mod, failure }) => (failure === undefined ? [] : [`"${mod}" (${failure})`]));
+  if (partly.length === 0) return;
+  reporter.report('warning', `Built ${partly.length} ${partly.length === 1 ? 'mod' : 'mods'} only in part.`, partly.join(', '));
 }
 
 // mods.md, A source mod, story 4: a file the build overwrote is named, whatever else the build did.

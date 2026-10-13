@@ -15,9 +15,11 @@ public sealed record InstanceToBuild(string ExcludedSuffix, ArchiveVariants? Arc
 public sealed record ArchiveVariants(IArchiveVariant General, IArchiveVariant Textures);
 
 /// <summary>A mod of the selection that built; a refused plugin or archive stays as it was. Overwritten names each file
-/// replaced that held other bytes, a plugin only when changed outside Modbench (A source mod, story 4).</summary>
+/// replaced that held other bytes, a plugin only when changed outside Modbench (A source mod, story 4). Failure is
+/// what stopped the build after it began writing.</summary>
 public sealed record BuiltMod(
     IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Compiled,
     IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused,
     IReadOnlyList<ItemRefused<string, ArchiveRefusal>> ArchivesRefused,
-    IReadOnlyList<string> Overwritten);
+    IReadOnlyList<string> Overwritten,
+    string? Failure);

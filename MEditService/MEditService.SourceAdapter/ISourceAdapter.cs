@@ -56,11 +56,11 @@ public interface ISourceAdapter
     /// <summary>The refusal naming the instance root when it is not there; null when it is.</summary>
     string? InstanceRootNotFound(string? instanceRoot);
 
-    /// <summary>A repository for a mod that has none: one commit on <c>main</c> holding each plugin's door tree, the
-    /// assets, and a build configuration naming <paramref name="output"/> and the base.</summary>
+    /// <summary>A repository for a mod that has none: one commit, <c>Init &lt;mod&gt;</c>, on <c>main</c>, of each
+    /// plugin's door tree, the assets and a build configuration naming <paramref name="output"/>.</summary>
     SourceFailure? Init(
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets, IReadOnlyList<BaseFile> baseFiles);
+        IReadOnlyList<Asset> assets);
 
     /// <summary>What the build of the source in <paramref name="sourceFolder"/> writes, as its working tree says now.</summary>
     Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder);

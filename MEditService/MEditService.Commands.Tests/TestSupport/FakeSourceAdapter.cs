@@ -82,7 +82,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public SourceFailure? Init(
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets, IReadOnlyList<BaseFile> baseFiles)
+        IReadOnlyList<Asset> assets)
     {
         _inits.Add((sourceFolder, plugins, assets));
         return null;
