@@ -63,8 +63,8 @@ public sealed class UntrackedReadOnlyTests
 
         Assert.NotEqual(trackable.Refusal, notTrackable.Refusal);
         Assert.DoesNotContain("patch", trackable.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Init", notTrackable.Message, StringComparison.Ordinal);
-        Assert.Contains("Init its mod", trackable.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Decompile and commit", notTrackable.Message, StringComparison.Ordinal);
+        Assert.Contains("Decompile and commit its mod", trackable.Message, StringComparison.Ordinal);
     }
 
     [Fact]

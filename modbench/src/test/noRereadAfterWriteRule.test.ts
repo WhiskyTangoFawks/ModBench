@@ -26,7 +26,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
     expect(messages[0]?.message).toBe(MESSAGE);
   });
 
-  it.each(['init', 'build'])('fails a view refresh after a source command, %s, writes', (write) => {
+  it.each(['decompileAndCommit', 'build'])('fails a view refresh after a source command, %s, writes', (write) => {
     const messages = lint(`async function f(commands, tree) { await commands.${write}(mods); tree.refresh(); }\n`);
 
     expect(messages).toHaveLength(1);
@@ -45,8 +45,8 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   });
 
   it('passes a write run through runWritingGesture, and fails an instance refresh beside the write inside it', () => {
-    const through = lint('async function f(commands, instance) { await commands.init(x); await runWritingGesture(view, instance, noop); }\n');
-    const beside = lint('function f(commands, instance) { return runWritingGesture(view, instance, async () => { await commands.init(x); instance.refresh(); }); }\n');
+    const through = lint('async function f(commands, instance) { await commands.decompileAndCommit(x); await runWritingGesture(view, instance, noop); }\n');
+    const beside = lint('function f(commands, instance) { return runWritingGesture(view, instance, async () => { await commands.decompileAndCommit(x); instance.refresh(); }); }\n');
 
     expect(through).toEqual([]);
     expect(beside).toHaveLength(1);
