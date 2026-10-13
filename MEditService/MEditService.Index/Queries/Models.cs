@@ -63,7 +63,10 @@ public record RecordDetail(
     // Non-null when ingest could not produce this record's document, so Fields are the stub's.
     // The record editor renders the column read-only with this as the reason; every write is
     // refused.
-    string? ParseDiagnosis = null);
+    string? ParseDiagnosis = null,
+    // The strings file this copy's plugin looked for and did not find; reads into each translated
+    // text's check error, never onto the wire as a field of its own.
+    [property: JsonIgnore] string? MissingStringsFile = null);
 
 public record CompareOverride(
     string FormKey,
@@ -85,10 +88,11 @@ public record CompareOverride(
     bool IsInOverwrite = false,
     // The key this copy's cells carry in each FieldDiff map when it is not the plugin's own
     // ColumnKey: several records compared may hold two copies from one plugin.
-    string? Column = null)
+    string? Column = null,
+    string? MissingStringsFile = null)
     : RecordDetail(
         FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, RecordType, IsPartialForm,
-        ParseDiagnosis);
+        ParseDiagnosis, MissingStringsFile);
 
 public record FieldDiff(
     string FieldName,

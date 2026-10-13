@@ -243,5 +243,6 @@ internal sealed class HeldPlugins
             Masters: content.Masters,
             RecordCount: content.RecordCount,
             Origin: plugin.Origin,
-            Provider: plugin.Provider);
+            Provider: plugin.Provider,
+            MissingStringsFiles: content.MissingStringsFiles);
 }
