@@ -72,7 +72,7 @@ public sealed class InitModTests
     }
 
     [Fact]
-    public async Task InitMod_RealLoadOrder_TracksTheModFolder_HoldingEachRecordWithoutCarriageReturns()
+    public async Task InitMod_RealLoadOrder_InitsTheMod_HoldingEachRecordWithoutCarriageReturns()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-");
         using var gameDir = new ScratchDirectory("medit-initservice-game-");
@@ -126,7 +126,7 @@ public sealed class InitModTests
     }
 
     [Fact]
-    public async Task InitMod_OfAMod_TracksOnlyThePluginsItProvides_NotAnotherModsPluginOfTheSameFileName()
+    public async Task InitMod_OfAMod_TakesOnlyThePluginsItProvides_NotAnotherModsPluginOfTheSameFileName()
     {
         using var modA = new ScratchDirectory("medit-initservice-twomods-a-");
         using var modB = new ScratchDirectory("medit-initservice-twomods-b-");
@@ -254,7 +254,7 @@ public sealed class InitModTests
     }
 
     [Fact]
-    public async Task InitMod_WithOpaqueTes4HeaderSubrecordsSet_TracksSuccessfully()
+    public async Task InitMod_WithOpaqueTes4HeaderSubrecordsSet_Lands()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-opaqueheader-");
         using var gameDir = new ScratchDirectory("medit-initservice-opaqueheader-game-");

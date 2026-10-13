@@ -66,6 +66,40 @@ public sealed class InitModTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task InitOfAModWithAnInstallationFileThatHasNoHash_Is400()
+    {
+        await Loaded();
+
+        var response = await Client.PostAsJsonAsync("/init", new
+        {
+            mods = new[]
+            {
+                new
+                {
+                    name = Origin,
+                    installationFiles = new[] { new { path = "/downloads/Mod.7z", size = 1, entries = Array.Empty<object>() } },
+                    modManagerFiles = new[] { "meta.ini" },
+                },
+            },
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task InitOfAModNamingABlankFileOfTheModManagers_Is400()
+    {
+        await Loaded();
+
+        var response = await Client.PostAsJsonAsync("/init", new
+        {
+            mods = new[] { new { name = Origin, installationFiles = Array.Empty<object>(), modManagerFiles = new[] { " " } } },
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task InitOfAModThatProvidesNoPlugin_RefusesThatMod_AndLandsTheOthers()
     {
         await Loaded();

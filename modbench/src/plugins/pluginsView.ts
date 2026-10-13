@@ -54,7 +54,7 @@ export interface PluginsViewDeps {
   client: PluginFactsClient & RenamePluginDeps['client'] & DecompileDeps['client']
     & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onLoadOrderStatus' | 'onReconnected' | 'onStatusChanged' | 'setFilter' | 'clearFilter' | 'createPlugin'>;
   statusBar: StatusBar;
-  /** Registers the tracked mods' repositories: a reconcile reached Ready, or a track landed. */
+  /** Registers the tracked mods' repositories: a reconcile reached Ready, or an init landed. */
   registerRepositories: () => Promise<void>;
   ask: AskQuestion;
   recordWrite: RecordWrite;

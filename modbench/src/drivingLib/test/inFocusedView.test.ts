@@ -59,7 +59,7 @@ describe('view on Nexus from the palette: the row it opens and the view the pale
 });
 
 describe('a palette gesture two views offer: the selection of the focused view', () => {
-  const KEY = 'modbench.mod.trackRowsIn';
+  const KEY = 'modbench.mod.sourceGestureRowsIn';
   const VIEWS = ['modbench.modList', 'modbench.pluginListTree'];
 
   it('takes the selection of the view last selected in, and names that view in its key', () => {

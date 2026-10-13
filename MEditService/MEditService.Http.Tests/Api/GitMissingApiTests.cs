@@ -92,7 +92,7 @@ public sealed class GitMissingApiTests : HostedTests
     [Fact]
     public async Task InitOfASelection_WithGitMissing_RefusesTheWholeSelectionOnce_AndWritesNothing()
     {
-        using var fx = new PluginFixtureBuilder("trace-track-without-git")
+        using var fx = new PluginFixtureBuilder("trace-init-without-git")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
             .WithPlugin("Second.esp", mod => mod.Npcs.AddNew("SecondNpc"), origin: "SecondMod")
             .BuildScattered();

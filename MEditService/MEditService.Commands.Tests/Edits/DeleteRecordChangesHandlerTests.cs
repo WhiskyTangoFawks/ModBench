@@ -163,7 +163,7 @@ public sealed class DeleteRecordChangesHandlerTests
     }
 
     [Fact]
-    public void DeleteRecords_Refuses_WhenPluginIsUntracked_NamingTheTrackCommand()
+    public void DeleteRecords_Refuses_WhenPluginIsUntracked_NamingTheInitCommand()
     {
         using var mod = SourceEditFixture.Untracked();
 

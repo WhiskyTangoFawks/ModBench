@@ -5,6 +5,7 @@ using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Build;
 
@@ -17,14 +18,15 @@ public sealed class InitHandler
     private readonly INotificationPublisher _notifications;
     private readonly ISourceAdapter _source;
     private readonly IModFolderRepository _modFolders;
+    private readonly IPluginAdapter _plugins;
     private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal InitHandler(
         LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, IModFolderRepository modFolders,
         INotificationPublisher notifications, ILogger<InitHandler> logger) =>
-        (_loadOrder, _source, _modFolders, _notifications, _logger, _decompiler) =
-            (loadOrder, source, modFolders, notifications, logger, new PluginDecompiler(logger, adapter, source));
+        (_loadOrder, _source, _modFolders, _plugins, _notifications, _logger, _decompiler) =
+            (loadOrder, source, modFolders, adapter, notifications, logger, new PluginDecompiler(logger, adapter, source));
 
     /// <summary>Each mod's plugins and folder are the held load order's. Refuses with
     /// <see cref="InitRefusal.NoLoadOrder"/>, writing nothing, when none is held; git missing refuses
@@ -118,7 +120,7 @@ public sealed class InitHandler
         List<Asset> assets;
         try
         {
-            assets = AssetsOf(mod, toInit, plugins);
+            assets = AssetsOf(mod, toInit, plugins, loadOrder.GameRelease);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -136,13 +138,14 @@ public sealed class InitHandler
         return ItemAnswer<InitRefusal, InitializedMod>.Landed(new InitializedMod([.. plugins.Select(p => p.Key)]));
     }
 
-    // The assets are the files no installation file yields (plugins.md, Init, story 2). The mod's plugins and their
-    // strings are build outputs, and the mod manager's files are its own.
-    private List<Asset> AssetsOf(PluginProvider.FromMod mod, ModToInit toInit, List<RegisteredPlugin> plugins)
+    // The assets are the files no installation file yields (plugins.md, Init, story 2). What compile writes for the
+    // mod's plugins is a build output, and the mod manager's files are its own.
+    private List<Asset> AssetsOf(PluginProvider.FromMod mod, ModToInit toInit, List<RegisteredPlugin> plugins, GameRelease release)
     {
-        var files = _modFolders.Files(mod.Folder, mod.Name, toInit.ModManagerFiles.ToHashSet(StringComparer.Ordinal))
-            .Where(file => !BuildOutputs.Holds(plugins.Select(plugin => plugin.Name), file.Path))
-            .ToList();
+        var all = _modFolders.Files(mod.Folder, mod.Name, toInit.ModManagerFiles.ToHashSet(StringComparer.Ordinal));
+        var paths = all.Select(file => file.Path).ToList();
+        var compiled = plugins.SelectMany(plugin => _plugins.WrittenByCompile(plugin, paths, release)).ToHashSet(StringComparer.Ordinal);
+        var files = all.Where(file => !compiled.Contains(file.Path)).ToList();
         var matched = new ManifestBuilder(
                 toInit.InstallationFiles.Select(file => (_modFolders.InstallationFileName(file.Path), file)), [])
             .Build(files);

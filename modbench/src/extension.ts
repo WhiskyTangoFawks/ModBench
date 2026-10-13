@@ -123,7 +123,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     instance, syncMods: modSyncOver(adapter), syncPlugins: pluginSyncOver(adapter), channel: outputChannel,
   }));
   const sourceGestureRows = selectionInFocusedView(
-    own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
+    own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.sourceGestureRowsIn');
   const plugins = own(pluginsBox.onInstance({
     instance, instanceRoot, commands: pluginsCommands({ adapter, client }), sourceCommands: sourceCommands({ client, adapter }), pluginSync, sourceGestureRows, modsView: MODS_KEY_ARGS.view,
     saveUnsavedPluginSource: (mod) => saveModPluginSource((origin) => sourceFiles(instance.value, origin), mod),

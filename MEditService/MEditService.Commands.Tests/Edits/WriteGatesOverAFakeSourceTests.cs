@@ -40,7 +40,7 @@ public sealed class WriteGatesOverAFakeSourceTests
             .Changes(Plugin, formKey, SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax")));
 
     [Fact]
-    public void EditingAPluginOfAnUntrackedMod_IsRefused_NamingTheTrackCommand()
+    public void EditingAPluginOfAnUntrackedMod_IsRefused_NamingTheInitCommand()
     {
         var services = OverADiskThatTracksWhatTheFakeDoesNot(new FakeSourceAdapter(), out var disk);
         using var _ = disk;

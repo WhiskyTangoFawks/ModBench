@@ -62,7 +62,7 @@ export interface TrackedRepositoriesDeps {
 
 export interface TrackedRepositories {
   /** Registers each tracked mod's repository with `vscode.git`, once per notice: a reconcile
-   *  settled, or a landed track. */
+   *  settled, or a landed init. */
   registerRepositories: () => Promise<void>;
   /** `Repository.status()`, the same effect the SCM panel's Refresh button has, fired from the
    *  edit rather than waiting on the native watcher. A plugin with no handle is a silent no-op; a

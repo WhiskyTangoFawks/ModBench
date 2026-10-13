@@ -99,7 +99,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     }
 
     [Fact]
-    public void ThePluginsOfOneTrack_AnswerOnlyTheirOwnBinaries()
+    public void ThePluginsOfOneInit_AnswerOnlyTheirOwnBinaries()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
         var repository = TrackedOver(modFolder);

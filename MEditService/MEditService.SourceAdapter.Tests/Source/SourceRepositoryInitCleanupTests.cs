@@ -29,19 +29,6 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     }
 
     [Fact]
-    public void Init_WhenEveryPluginIsRefused_LeavesNoRepositoryAndNoGitignore()
-    {
-        var failure = TestAdapters.Source().Init(
-            _modFolder, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
-
-        Assert.StartsWith("Bad.esp's source could not be written: ", failure.Require().Reason, StringComparison.Ordinal);
-        Assert.False(TestAdapters.Source().IsTracked(_modFolder));
-        Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
-        Assert.False(File.Exists(Path.Combine(_modFolder, ".gitignore")));
-        Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
-    }
-
-    [Fact]
     public void Init_AnAssetThatCannotBeRead_IsRefusedNamingIt_LeavingNoRepositoryNoAssetsAndNoSource()
     {
         var failure = TestAdapters.Source().Init(_modFolder, ModName, [Baseline("A.esp")],
@@ -72,7 +59,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     }
 
     [PosixFact]
-    public void Init_WhenEveryPluginIsRefused_LeavesTheHalfMadeRepositoryAsItWas()
+    public void Init_APluginWhoseFilesCannotBeWritten_LeavesTheHalfMadeRepositoryAsItWas()
     {
         CrashAnInitAfterItMadeTheRepository();
         var before = GitDirContents();

@@ -42,7 +42,7 @@ public sealed class InitHandlerTests : IDisposable
     public void Dispose() => _instanceRoot.Dispose();
 
     [Fact]
-    public async Task Init_OverTheHeldLoadOrder_TracksThePluginIntoItsSourceFolder_AndWritesNothingInItsModFolder()
+    public async Task Init_OverTheHeldLoadOrder_PutsThePluginsSourceInItsSourceFolder_AndWritesNothingInItsModFolder()
     {
         _holder.Apply(Snapshot);
         var handler = TestEditService.InitHandler(_holder);
@@ -56,7 +56,7 @@ public sealed class InitHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Init_OverAModTwiceUnderDifferentCasing_TracksItOnce_AndRefusesTheModThatProvidesNothingOnItsOwn()
+    public async Task Init_OverAModTwiceUnderDifferentCasing_InitsItOnce_AndRefusesTheModThatProvidesNothingOnItsOwn()
     {
         _holder.Apply(Snapshot);
         var handler = TestEditService.InitHandler(_holder);
@@ -97,16 +97,14 @@ public sealed class InitHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Init_OfAModWithNoInstallationFile_TakesEveryFileAsAnAsset_ButThePluginItsStringsAndTheModManagersFiles()
+    public async Task Init_OfAModWithNoInstallationFile_TakesEveryFileAsAnAsset_ButWhatCompileWritesAndTheModManagersFiles()
     {
         WriteInModFolder("meta.ini", "[General]");
-        WriteInModFolder("Strings/Fixture_English.STRINGS", "strings compile writes");
-        WriteInModFolder("Strings/Other_English.STRINGS", "strings of no plugin of the mod");
         WriteInModFolder("Scripts/Quest.pex", "a script");
 
         await InitWith(new ModToInit(Origin, [], ["meta.ini"]));
 
-        Assert.Equal(["assets/Scripts/Quest.pex", "assets/Strings/Other_English.STRINGS"], CommittedAssets());
+        Assert.Equal(["assets/Scripts/Quest.pex"], CommittedAssets());
     }
 
     [PosixFact]

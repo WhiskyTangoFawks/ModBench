@@ -226,7 +226,7 @@ public sealed class FormIdEditTests
     }
 
     [Fact]
-    public void EditingTheFormId_Refuses_WhenPluginIsUntracked_NamingTheTrackCommand()
+    public void EditingTheFormId_Refuses_WhenPluginIsUntracked_NamingTheInitCommand()
     {
         using var mod = SourceEditFixture.Untracked();
 

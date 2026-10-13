@@ -15,7 +15,7 @@ public sealed class RegisteredPluginSpellingTests
     private const GameRelease Release = GameRelease.Fallout4;
 
     [Fact]
-    public async Task Track_OfAPluginWithAMixedCaseExtension_CommitsItsSourceRootAsRegistered()
+    public async Task Init_OfAPluginWithAMixedCaseExtension_CommitsItsSourceRootAsRegistered()
     {
         using var scratch = new ModFolderUnderAnInstanceRootScratch();
 

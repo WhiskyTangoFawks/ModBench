@@ -84,8 +84,8 @@ internal sealed class WriteJournal(string sourceFolder)
         }
     }
 
-    /// <summary>Writes what <paramref name="open"/> reads to <paramref name="path"/> without holding it whole: an asset
-    /// can run to gigabytes. The rollback knows the bytes it wrote by their digest.</summary>
+    /// <summary>Streams what <paramref name="open"/> reads to <paramref name="path"/>, since an asset can run to gigabytes;
+    /// the rollback knows those bytes by their digest. A file it replaces is held whole, as <see cref="Write"/> holds one.</summary>
     internal void Copy(string path, Func<Stream> open)
     {
         CreateDirectory(PathShape.DirectoryOf(path));

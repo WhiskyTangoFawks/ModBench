@@ -24,7 +24,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
-    private void Track(params TreeFile[] files) =>
+    private void Init(params TreeFile[] files) =>
         PluginBaselines.Init(
             _modFolder, files);
 
@@ -418,7 +418,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     [Fact]
     public void Get_OfTheHeader_IsTheRootRecordDocument()
     {
-        Track(
+        Init(
             new TreeFile(
                 PluginSourceRoot.HeaderDocument(PluginName),
                 System.Text.Encoding.UTF8.GetBytes("{\"MasterReferences\": []}")));

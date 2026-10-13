@@ -62,7 +62,7 @@ public sealed class SourceRepositoryLayoutTests
     [Fact]
     public void Init_PutsTheDoorsTree_UnderTheRootTheNameSpellsVerbatim_NotAModKeysLowercaseExtension()
     {
-        using var modFolder = new ScratchDirectory("medit-layout-track-");
+        using var modFolder = new ScratchDirectory("medit-layout-init-");
 
         TrackMixed(modFolder,
             new TreeFile("RecordData.json", [1]),
@@ -78,7 +78,7 @@ public sealed class SourceRepositoryLayoutTests
     [Fact]
     public void Init_NamesAContainersDocument_ForTheContainersOwnLeaf()
     {
-        using var modFolder = new ScratchDirectory("medit-layout-track-");
+        using var modFolder = new ScratchDirectory("medit-layout-init-");
         var directory = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP");
 
         TrackMixed(modFolder,

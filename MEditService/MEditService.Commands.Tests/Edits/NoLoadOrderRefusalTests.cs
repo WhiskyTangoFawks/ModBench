@@ -39,7 +39,7 @@ public sealed class NoLoadOrderRefusalTests
     }
 
     [Fact]
-    public async Task Track_WithNoLoadOrderHeld_RefusesTheSelection()
+    public async Task Init_WithNoLoadOrderHeld_RefusesTheSelection()
     {
         var answer = await Handler<InitHandler>().InitAsync(ToInit.Named("FixtureMod"));
 

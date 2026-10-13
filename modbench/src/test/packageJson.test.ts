@@ -832,8 +832,8 @@ describe('package.json record grid keys, as editor.md\'s Menus and keys and its 
 });
 
 describe('package.json init\'s palette entry', () => {
-  const MODS = { focusedView: 'modbench.modList', ...inInstance, 'modbench.mod.holdsUntrackedModWithPlugin': true, 'modbench.mod.trackRowsIn': 'modbench.modList' };
-  const PLUGINS = { focusedView: 'modbench.pluginListTree', ...inInstance, 'modbench.plugin.allInUntrackedMod': true, 'modbench.mod.trackRowsIn': 'modbench.pluginListTree' };
+  const MODS = { focusedView: 'modbench.modList', ...inInstance, 'modbench.mod.holdsUntrackedModWithPlugin': true, 'modbench.mod.sourceGestureRowsIn': 'modbench.modList' };
+  const PLUGINS = { focusedView: 'modbench.pluginListTree', ...inInstance, 'modbench.plugin.allInUntrackedMod': true, 'modbench.mod.sourceGestureRowsIn': 'modbench.pluginListTree' };
 
   it('is in the palette while Mods or Plugins has focus, was last selected in, and holds what init acts on', () => {
     expect(paletteOffers('modbench.mod.init', MODS)).toBe(true);
@@ -841,8 +841,8 @@ describe('package.json init\'s palette entry', () => {
   });
 
   it('is not in the palette when the last selection was made in the other view', () => {
-    expect(paletteOffers('modbench.mod.init', { ...MODS, 'modbench.mod.trackRowsIn': 'modbench.pluginListTree' })).toBe(false);
-    expect(paletteOffers('modbench.mod.init', { ...PLUGINS, 'modbench.mod.trackRowsIn': 'modbench.modList' })).toBe(false);
+    expect(paletteOffers('modbench.mod.init', { ...MODS, 'modbench.mod.sourceGestureRowsIn': 'modbench.pluginListTree' })).toBe(false);
+    expect(paletteOffers('modbench.mod.init', { ...PLUGINS, 'modbench.mod.sourceGestureRowsIn': 'modbench.modList' })).toBe(false);
   });
 
   it('is not in the palette when the focused view holds nothing to init', () => {

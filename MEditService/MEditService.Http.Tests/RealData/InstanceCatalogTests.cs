@@ -50,11 +50,11 @@ public sealed class InstanceCatalogTests
 
         foreach (var mod in entries.Where(e => e.Provider is PluginProvider.FromMod).GroupBy(e => e.Origin))
         {
-            var track = await client.Init(mod.Key);
-            var answer = await track.Content.ReadFromJsonAsync<JsonElement>();
-            var messages = track.IsSuccessStatusCode
+            var init = await client.Init(mod.Key);
+            var answer = await init.Content.ReadFromJsonAsync<JsonElement>();
+            var messages = init.IsSuccessStatusCode
                 ? answer.GetProperty("refused").EnumerateArray().SelectMany(r => Text(r, "message").Split('\n'))
-                : [$"Track answered {(int)track.StatusCode}: {answer}"];
+                : [$"Init answered {(int)init.StatusCode}: {answer}"];
             foreach (var message in messages)
             {
                 var plugin = mod.FirstOrDefault(e => message.StartsWith(e.Name, StringComparison.Ordinal))?.Name ?? "";

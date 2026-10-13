@@ -514,7 +514,7 @@ internal sealed class Indexer : IDisposable
         // pay the failed parse again on every snapshot that merely mentions it.
         var arriving = resolved.Where(r => !open.ContainsKey(r.Key) && !scope.Failed.StillFailing(r)).ToList();
         // ADR-0007: which truth a plugin reads is its folder's answer, and the stamp
-        // records the one its rows came from. Tracking and untracking move the first alone, and no
+        // records the one its rows came from. A repository made or removed moves the first alone, and no
         // load-order difference above names them.
         var derivations = store.Reads.GetDerivations();
         var reDerived = resolved.Where(r => open.ContainsKey(r.Key) && TruthMoved(scope, r, derivations)).ToList();

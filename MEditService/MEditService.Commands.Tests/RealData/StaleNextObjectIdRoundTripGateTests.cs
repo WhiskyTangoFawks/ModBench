@@ -46,7 +46,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
 
     [Theory]
     [MemberData(nameof(TrackAndCompileGeneratedPlugins))]
-    public async Task Track_OfAGeneratedPluginWithAStaleHeader_Succeeds(string fileName)
+    public async Task Init_OfAGeneratedPluginWithAStaleHeader_Succeeds(string fileName)
     {
         using var scratch = new TrackedScratch(fileName);
 
@@ -87,7 +87,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     [Fact]
-    public async Task Track_WithAnExtraRecordInTheRecompiledPlugin_NamesThatRecord()
+    public async Task Init_WithAnExtraRecordInTheRecompiledPlugin_NamesThatRecord()
     {
         using var scratch = new TrackedScratch(StaleHeaderPlugins.SettingsFileName);
         FormKey? extra = null;

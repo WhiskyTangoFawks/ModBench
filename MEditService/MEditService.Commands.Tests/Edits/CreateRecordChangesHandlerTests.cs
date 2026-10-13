@@ -268,7 +268,7 @@ public sealed class CreateRecordChangesHandlerTests
         uint.Parse(formKey[..formKey.IndexOf(':', StringComparison.Ordinal)], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
     [Fact]
-    public void CreateRecord_Refuses_WhenPluginIsUntracked_NamingTheTrackCommand()
+    public void CreateRecord_Refuses_WhenPluginIsUntracked_NamingTheInitCommand()
     {
         using var mod = SourceEditFixture.Untracked();
 

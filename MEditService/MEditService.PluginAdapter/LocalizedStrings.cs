@@ -37,7 +37,7 @@ internal static class LocalizedStrings
 {
     private static readonly StringsSource[] Sources = [StringsSource.Normal, StringsSource.IL, StringsSource.DL];
 
-    // Mutagen's default target, and the one language Track checks for until the strings language setting chooses another.
+    // Mutagen's default target, and the one language init checks for until the strings language setting chooses another.
     private const Language Target = Language.English;
 
     // Each archive's strings files by its stamp: a listed archive is opened once, not on every read, and a
@@ -95,6 +95,18 @@ internal static class LocalizedStrings
             .Where(source => !found.ContainsKey((source, Target)))
             .Select(source => StringsUtility.GetFileName(languageFormat, plugin, Target, source))
             .FirstOrDefault();
+    }
+
+    /// <summary>Whether a path, forward-slash and relative to the plugin's folder, is one of the strings files compile
+    /// writes for <paramref name="plugin"/>: none unless it is localized.</summary>
+    internal static Func<string, bool> StringsFilesOf(ModPath plugin, GameRelease gameRelease)
+    {
+        const string folder = "Strings/";
+        if (!IsLocalized(plugin, gameRelease)) return _ => false;
+        var languageFormat = LanguageFormat(gameRelease);
+        return path => path.StartsWith(folder, StringComparison.OrdinalIgnoreCase)
+            && path.IndexOf('/', folder.Length) < 0
+            && StringsFile.Named(path[folder.Length..], plugin.ModKey, languageFormat, folder: null, () => []) is not null;
     }
 
     private static bool IsLocalized(ModPath plugin, GameRelease gameRelease) =>

@@ -704,7 +704,7 @@
         },
         {
           "command": "modbench.mod.init",
-          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsUntrackedModWithPlugin && modbench.mod.trackRowsIn == modbench.modList || focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allInUntrackedMod && modbench.mod.trackRowsIn == modbench.pluginListTree"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsUntrackedModWithPlugin && modbench.mod.sourceGestureRowsIn == modbench.modList || focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allInUntrackedMod && modbench.mod.sourceGestureRowsIn == modbench.pluginListTree"
         },
         {
           "command": "modbench.plugin.decompile",
