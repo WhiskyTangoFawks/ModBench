@@ -54,16 +54,16 @@ export interface PluginsViewDeps {
   client: PluginFactsClient & RenamePluginDeps['client'] & DecompileDeps['client']
     & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onLoadOrderStatus' | 'onReconnected' | 'onStatusChanged' | 'setFilter' | 'clearFilter' | 'createPlugin'>;
   statusBar: StatusBar;
-  /** Registers the tracked mods' repositories: a reconcile reached Ready, or an init landed. */
+  /** Registers the tracked mods' repositories: a reconcile reached Ready, or a decompile and commit landed. */
   registerRepositories: () => Promise<void>;
   ask: AskQuestion;
   recordWrite: RecordWrite;
   sourceEditing: SourceEditing;
   /** Saves a mod's unsaved plugin source; answers the paths VS Code left unsaved, or undefined when the mod has no source folder. */
   saveUnsavedPluginSource: (mod: string) => Promise<string[] | undefined>;
-  /** The rows of the focused Mods or Plugins view, which the palette's init and build act on. */
+  /** The rows of the focused Mods or Plugins view, which the palette's decompile and commit and build act on. */
   sourceGestureRows: () => readonly unknown[];
-  /** The Mods view's id, whose bar an init or a build from a Mods row runs under. */
+  /** The Mods view's id, whose bar a decompile and commit or a build from a Mods row runs under. */
   modsView: string;
   /** Plugin sync, whose failure the view's message line says. */
   pluginSync: Sync<PluginSyncArguments>;

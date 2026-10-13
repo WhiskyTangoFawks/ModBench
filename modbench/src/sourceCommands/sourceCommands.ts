@@ -5,7 +5,7 @@ import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/insta
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf, type Ba2Versions } from '../tables/gamePaths';
 
-/** mEdit's phases of init, and before them the Instance adapter's reading of each mod's installation files. */
+/** mEdit's phases of decompile and commit, and before them the Instance adapter's reading of each mod's installation files. */
 export type DecompileAndCommitProgress = InitStatus | { readonly mod: string; readonly phase: 'ReadingInstallationFiles' };
 
 interface SourceCommandsDeps {

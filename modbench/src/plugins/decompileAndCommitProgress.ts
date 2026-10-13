@@ -1,7 +1,7 @@
 import type { DecompileAndCommitProgress } from '../sourceCommands/sourceCommands';
 
 /** Pure, so it is testable without a VS Code harness. The counts are plugins, not records —
- *  init serializes a whole plugin in one call, with no per-record progress to report — and this
+ *  decompile and commit serializes a whole plugin in one call, with no per-record progress to report — and this
  *  text must not mislabel them. */
 export function decompileAndCommitProgressMessage(mod: string, status: DecompileAndCommitProgress): string {
   switch (status.phase) {
