@@ -2,7 +2,6 @@
 // plugin order's lock, and put back if a write fails.
 
 import { parse } from 'node:path';
-import { refuse } from '../ports/refuse';
 import { parsePlugins, pluginKey, renamePluginInText } from '../loadOrderFileCodec/pluginsText';
 import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
 import { get, listDir, rename, undoAll, type Undo, withLock, write } from './files';
@@ -10,7 +9,7 @@ import type { FileOrigin, InstanceAdapter } from './instanceAdapter';
 import { fileInFolder, originDir, pluginsFile, profilesDir } from './layout';
 import { readOrAbsent, type Mo2Context } from './mo2Context';
 
-type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin' | 'checkPluginRename'>;
+type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin'>;
 
 interface Move {
   readonly from: string;
@@ -97,8 +96,7 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
     return profiles.map((d) => pluginsFile(instanceRoot, d.name)).sort();
   }
 
-  // Everything the rename refuses, read before any write, so a refusal can come before the plugin
-  // source moves.
+  // Everything the rename refuses, read before any write.
   async function plan(orders: readonly string[], origin: FileOrigin, from: string, to: string, gameRelease: string | undefined) {
     const rule = pluginCompanionRule(gameRelease);
     if (rule === undefined) throw new Error(`No table of the files named for a plugin for the release ${gameRelease ?? 'of this game'}`);
@@ -109,14 +107,6 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
   }
 
   return {
-    async checkPluginRename(origin, from, to, gameRelease) {
-      try {
-        await plan(await orderFiles(), origin, from, to, gameRelease);
-        return { applied: true };
-      } catch (err) {
-        return refuse(err);
-      }
-    },
     async renamePlugin(origin, from, to, gameRelease) {
       const orders = await orderFiles();
       await withLocks(orders, async () => {

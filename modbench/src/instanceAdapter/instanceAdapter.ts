@@ -446,10 +446,6 @@ export interface InstanceAdapter {
    *  write; a failed write puts every file back. Refuses, changing nothing, a taken name or a
    *  plugin not there. */
   renamePlugin(origin: FileOrigin, from: string, to: string, gameRelease: string | undefined): Promise<void>;
-  /** The refusal `renamePlugin` would make before it writes, or applied; it writes nothing itself. */
-  checkPluginRename(
-    origin: FileOrigin, from: string, to: string, gameRelease: string | undefined,
-  ): Promise<{ applied: true } | { applied: false; refusal: string }>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
   /** Moves a mod's source folder into the trash; false when it has none. */
