@@ -15,7 +15,7 @@ import {
 } from '../modOrderCommands';
 import { adapterOver, readModlistEntries } from '../../test/mo2/adapterOver';
 import { assertOnlyChanged, snapshotTree } from '../../test/mo2/corpusFixture';
-import type { InstanceAdapter, ModFolder, ModlistEntry } from '../../instanceAdapter/instanceAdapter';
+import type { InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const unscriptedMEdit = new InMemoryMEditClient();
