@@ -22,7 +22,7 @@ if systemd-run --user --scope --quiet true 2>/dev/null; then
   # it would otherwise idle on holding a GB or more.
   export SharedCompilationId=$unit
 fi
-in_slot build "${MEDIT_BUILD_SLOTS:-2}" "${scope[@]}" "$@"
+in_slot build 1 "${scope[@]}" "$@"
 status=$?
 [[ ${#scope[@]} -gt 0 ]] && systemctl --user stop "$unit.scope" 2>/dev/null
 exit "$status"
