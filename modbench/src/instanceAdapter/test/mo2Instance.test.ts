@@ -34,6 +34,8 @@ import type {
   GameFolder, InstanceAdapter, UpgradeExtraction, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
 } from '../instanceAdapter';
 import { tempWritePath } from '../layout';
+import type { ArchiveReader } from '../archiveReader';
+import { fakeArchiveReader } from '../../test/fakeArchiveReader';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
 } from '../../test/mo2/corpusFixture';
@@ -1244,10 +1246,67 @@ describe('the MO2 Instance adapter', () => {
         expect(adapter.managerFilesInModFolder).toEqual(['meta.ini']);
       });
 
-      it('answers a mod installed from a downloaded file unreadable, naming the file, while no index of downloaded files is kept', async () => {
-        const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
+    });
 
-        expect(answer.kind === 'unreadable' && answer.reason).toContain(DOWNLOAD);
+    describe('a mod\'s installation files', () => {
+      const ENTRY = 'textures/a.dds';
+      const installingFrom = (archives: ArchiveReader): InstanceAdapter => mo2InstanceAdapter({
+        instanceRoot: root, gameDirectoryOverrides: () => ({}), gameDirectoryChanged: () => ({ dispose: () => {} }), detectors: NO_DETECTORS, archives,
+      });
+
+      it('answers the downloaded file its meta names, in the downloads folder, with its size and hash and each entry\'s', async () => {
+        const answer = await installingFrom(fakeArchiveReader([ENTRY])).installationFiles('Unofficial Fallout 4 Patch');
+
+        expect(answer).toEqual({
+          kind: 'read',
+          answer: [{ path: join(root, 'downloads', DOWNLOAD), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: ENTRY, hash: 'q7ZLRnu1+Os=' }] }],
+        });
+      });
+
+      describe('installed from a file outside the downloads folder, which MO2 records by its whole path', () => {
+        const recordingInstalledFrom = (path: string): Promise<void> =>
+          writeFile(join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\ninstallationFile=${path}\r\n`);
+
+        it('answers that file while it is there', async () => {
+          const elsewhere = join(root, 'elsewhere', 'Patch.7z');
+          await mkdir(join(root, 'elsewhere'));
+          await writeFile(elsewhere, 'hello');
+          await recordingInstalledFrom(elsewhere);
+
+          const answer = await installingFrom(fakeArchiveReader([])).installationFiles('Unofficial Fallout 4 Patch');
+
+          expect(answer).toEqual({ kind: 'read', answer: [{ path: elsewhere, size: 5, hash: 'o22fiH2CxyY=', entries: [] }] });
+        });
+
+        it('answers the file of its name in the downloads folder once it is gone, as MO2 reinstalls it', async () => {
+          await recordingInstalledFrom(join(root, 'elsewhere', DOWNLOAD));
+
+          const answer = await installingFrom(fakeArchiveReader([])).installationFiles('Unofficial Fallout 4 Patch');
+
+          expect(answer).toEqual({ kind: 'read', answer: [{ path: join(root, 'downloads', DOWNLOAD), size: 28, hash: 'yMPjZVarjmw=', entries: [] }] });
+        });
+      });
+
+      it('answers unreadable, naming the downloaded file and why, when its entries differ only by case', async () => {
+        const answer = await installingFrom(fakeArchiveReader(['a.dds', 'A.dds'])).installationFiles('Unofficial Fallout 4 Patch');
+
+        expect(answer).toEqual({ kind: 'unreadable', reason: expect.stringMatching(new RegExp(`${DOWNLOAD}.*differ only by case`)) });
+      });
+
+      it('answers unreadable, naming the downloaded file and why, when it is gone', async () => {
+        await rm(join(root, 'downloads', DOWNLOAD));
+
+        const answer = await installingFrom(fakeArchiveReader([ENTRY])).installationFiles('Unofficial Fallout 4 Patch');
+
+        expect(answer).toEqual({ kind: 'unreadable', reason: expect.stringMatching(new RegExp(`${DOWNLOAD}.*ENOENT`)) });
+      });
+
+      it('answers unreadable, naming the downloaded file and why, when the downloads folder cannot be resolved', async () => {
+        await rm(join(root, INI));
+
+        const answer = await installingFrom(fakeArchiveReader([ENTRY])).installationFiles('Unofficial Fallout 4 Patch');
+
+        expect(answer).toEqual({ kind: 'unreadable', reason: expect.stringMatching(new RegExp(`${DOWNLOAD}.*${INI}`)) });
       });
     });
   });

@@ -2,6 +2,7 @@
 // over one instance root.
 
 import { existsSync } from 'node:fs';
+import type { ArchiveReader } from './archiveReader';
 import { MODLIST_FILE_NAME } from './codecs/modlistText';
 import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
@@ -29,6 +30,8 @@ interface Mo2InstanceOptions {
   gameDirectoryChanged: (listener: () => void) => Subscription;
   /** Steam and Wine detection; the real ones when omitted. */
   detectors?: GameDetectors;
+  /** The real one when omitted. */
+  archives?: ArchiveReader;
 }
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
@@ -39,7 +42,7 @@ export function isMo2Instance(root: string): boolean {
 }
 
 export function mo2InstanceAdapter({
-  instanceRoot, gameDirectoryOverrides, gameDirectoryChanged, detectors,
+  instanceRoot, gameDirectoryOverrides, gameDirectoryChanged, detectors, archives = sevenZip,
 }: Mo2InstanceOptions): InstanceAdapter {
   const context: Mo2Context = {
     instanceRoot,
@@ -48,11 +51,12 @@ export function mo2InstanceAdapter({
     resolveMyGames: myGamesResolver(instanceRoot, detectors ?? STEAM),
     watch: mo2Watch(instanceRoot, gameDirectoryChanged),
   };
+  const hashes = hashIndex(hashIndexDir(instanceRoot), archives);
   const names: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX };
   const adapter: Omit<InstanceAdapter, 'reading'> = {
     names,
-    ...mo2Reads(context), ...mo2Archives(context), ...mo2Installation(context), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context),
-    ...hashIndex(hashIndexDir(instanceRoot), sevenZip),
+    ...mo2Reads(context), ...mo2Archives(context), ...mo2Installation(context, hashes), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context),
+    ...hashes,
     subscribe: (listener) => context.watch.subscribe(listener),
   };
   return { ...adapter, reading: () => readInstance(adapter) };
