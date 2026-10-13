@@ -126,7 +126,8 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { adapterOver, pluginsCommandsOver } from '../../test/mo2/adapterOver';
+import { pluginsCommandsWith } from '../../test/mo2/adapterOver';
+import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { sourceCommands } from '../../sourceCommands/sourceCommands';
 import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -179,7 +180,7 @@ function pluginsView(
   const recordBrowser = new RecordBrowser(client);
   const reporters = new Map<string, RecordingReporter>();
   const plugins = createPluginsView({
-    instance, commands: pluginsCommandsOver('/instance'), sourceCommands: sourceCommands({ client, adapter: adapterOver('/instance') }), recordBrowser, client,
+    instance, commands: pluginsCommandsWith(fakeInstanceAdapter().adapter), sourceCommands: sourceCommands({ client, adapter: fakeInstanceAdapter().adapter }), recordBrowser, client,
     pluginSync,
     channel: silentChannel,
     dataFolderFile: () => undefined, log: () => undefined,
@@ -289,8 +290,8 @@ describe('the Plugins view says what it knows of a plugin\'s tracking and editab
         sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
       });
       const onInstance = () => plugins.onInstance({
-        instance: new FakeInstance(value), instanceRoot: '/instance', commands: pluginsCommandsOver('/instance'),
-        sourceCommands: sourceCommands({ client: new InMemoryMEditClient(), adapter: adapterOver('/instance') }),
+        instance: new FakeInstance(value), instanceRoot: '/instance', commands: pluginsCommandsWith(fakeInstanceAdapter().adapter),
+        sourceCommands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter }),
         pluginSync: syncRefusing().pluginSync, saveUnsavedPluginSource: () => Promise.resolve([]), sourceGestureRows: () => [],
         modsView: 'modbench.modList', dataFolderFile: () => undefined,
       });
