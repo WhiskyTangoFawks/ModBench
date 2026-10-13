@@ -77,6 +77,18 @@ internal static class TrackedMods
         File.WriteAllText(path, File.ReadAllText(path).Replace(from, to, StringComparison.Ordinal));
     }
 
+    /// <summary>A hand rename of a document's EditorID that also renames its file, as the layout names it,
+    /// so the file stays where it belongs.</summary>
+    internal static void RenameByHand(this LoadOrderEntry entry, RecordDetail document, string editorId)
+    {
+        var path = entry.SourceFileOf(document);
+        var renamed = Path.Combine(
+            Path.GetDirectoryName(path).Require(),
+            Path.GetFileName(path).Replace($"{document.EditorId} - ", $"{editorId} - ", StringComparison.Ordinal));
+        File.Move(path, renamed);
+        File.WriteAllText(renamed, File.ReadAllText(renamed).Replace($"\"{document.EditorId}\"", $"\"{editorId}\"", StringComparison.Ordinal));
+    }
+
     /// <summary>The working tree's copy of <paramref name="document"/> replaced by
     /// <paramref name="body"/>, then the next snapshot.</summary>
     internal static void Edit(this OpenedIndex index, LoadOrderEntry entry, RecordDetail document, string body)

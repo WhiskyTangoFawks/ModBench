@@ -61,11 +61,7 @@ internal sealed class PluginCompileService(
                 $"{plugin.Name}'s source folder holds no files, so there is nothing to compile. {RegenerateTheSource}");
         }
 
-        if (!repository.RecordFilesOf(plugin).Holds(out var recordFiles, out unread)) return SourceDoesNotParse(plugin, unread);
-        var refusedFiles = recordFiles
-            .Select(file => (file.Path, Reason: RecordTextCodec.WhyNotARecord(file.Text, loadOrder.GameRelease, file.RecordType)))
-            .Where(file => file.Reason is not null)
-            .ToList();
+        if (!repository.RefusedFilesOf(plugin).Holds(out var refusedFiles, out unread)) return SourceDoesNotParse(plugin, unread);
         if (refusedFiles.Count > 0)
         {
             return CompileResult.Refused(
@@ -83,17 +79,9 @@ internal sealed class PluginCompileService(
         // compile to a binary the game mis-addresses, so refuse it (compile-plugin, Refusals).
         if (tree.FormIdLimit(plugin.Name) is { } limited)
         {
-            var outOfRange = limited.Outside(tree.ModKey, tree.FormKeys).Select(key => key.ToString()).ToList();
+            var outOfRange = limited.Outside(tree.ModKey, tree.FormKeys);
             if (outOfRange.Count > 0)
-            {
-                var renameOffEsl = limited.ByExtension ? " rename the plugin off .esl," : "";
-                return CompileResult.Refused(
-                    CompileRefusal.FormIdOutsideFlagLimit,
-                    $"{plugin.Name} is a {limited.Flag} plugin but holds native FormID(s) outside the {limited.Flag} range " +
-                    $"(0x{limited.Min:X}-0x{limited.Max:X}): {string.Join(", ", outOfRange.Take(4))}" +
-                    (outOfRange.Count > 4 ? $" and {outOfRange.Count - 4} more" : "") +
-                    $". Clear the {limited.Flag} flag,{renameOffEsl} or change the records' FormIDs.");
-            }
+                return CompileResult.Refused(CompileRefusal.FormIdOutsideFlagLimit, limited.Refusal(plugin.Name, outOfRange));
         }
 
         // Two source units claiming one FormKey can only become one binary record, so refuse rather
@@ -113,7 +101,7 @@ internal sealed class PluginCompileService(
             return SourceDoesNotParse(plugin, unread);
         var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(comparison.Divergences, plugin);
         if (roundTripRefusal != null)
-            return CompileResult.Refused(CompileRefusal.SourceDoesNotRoundTrip, roundTripRefusal);
+            return CompileResult.Refused(CompileRefusal.SourceDoesNotParse, roundTripRefusal);
 
         var content = ContentFacts(tree, plugin, loadOrder);
 
@@ -206,10 +194,9 @@ internal sealed class PluginCompileService(
         if ((await adapter.ReadTreeAsync(files, loadOrder)).Holds(out var tree, out var failure)) return (tree, null);
 
         logger.LogWarning("{Plugin} could not be read from its source: {Reason}", plugin.Name, failure.Reason);
-        var why = failure is PluginFailure.Unparsed unparsed && repository.InSourceNames(plugin, unparsed.Diagnosis).Holds(out var named, out _)
-            ? named.Describe()
-            : failure.Reason;
-        return (null, $"{plugin.Name} could not be read from its source: {why} {RegenerateTheSource}");
+        if (failure is PluginFailure.Unparsed unparsed && repository.InSourceNames(plugin, unparsed.Diagnosis).Holds(out var named, out _))
+            return (null, $"{plugin.Name} could not be read from its source: {named.Describe()}");
+        return (null, $"{plugin.Name} could not be read from its source: {failure.Reason} {RegenerateTheSource}");
     }
 
     // ADR-0006. The generated deserializer skips an unrecognized property or file without
@@ -239,6 +226,5 @@ internal sealed class PluginCompileService(
     }
 
     private static CompileDiagnostic MisplacedDiagnostic(MisplacedFile file) =>
-        new(file.FormKey, file.HeldPath,
-            $"{file.HeldPath} belongs at {file.BelongsAt}. Modbench moves it there the next time it writes this record.");
+        new(file.FormKey, file.HeldPath, file.Message);
 }
