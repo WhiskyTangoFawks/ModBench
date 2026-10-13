@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { appendFile, mkdtemp, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fakeArchiveReader } from '../../test/fakeArchiveReader';
@@ -155,5 +155,39 @@ describe('hashIndex', () => {
 
     expect(await hashIndex(build, fakeArchiveReader([])).fileHash(file)).toEqual({ kind: 'read', answer: { size: 4, hash: HASH_OF_AAAA } });
     expect(vi.mocked(digestOf).mock.calls).toHaveLength(1);
+  });
+
+  it('removes the extractions a crash left in the build folder when it opens, before it extracts anything', async () => {
+    const leftover = join(build, 'entries-crashed');
+    await mkdir(leftover, { recursive: true });
+    await writeFile(join(leftover, 'texture.dds'), 'aaaa');
+    const archives = fakeArchiveReader(ENTRIES);
+    const extractingInto: string[][] = [];
+    const watching: ArchiveReader = { ...archives, extract: async (path, dest) => { extractingInto.push(await readdir(build)); return archives.extract(path, dest); } };
+
+    await hashIndex(build, watching).downloadedFileHash(await fileHolding('Mod.7z', 'archive'));
+
+    expect(extractingInto.flat()).not.toContain('entries-crashed');
+    expect(await readdir(build)).not.toContain('entries-crashed');
+  });
+
+  it('extracts one downloaded file at a time, however many are asked at once', async () => {
+    const archives = fakeArchiveReader(ENTRIES);
+    let extracting = 0;
+    let mostAtOnce = 0;
+    const overlapping: ArchiveReader = {
+      ...archives,
+      extract: async (path, dest) => {
+        mostAtOnce = Math.max(mostAtOnce, ++extracting);
+        await new Promise((resolve) => setImmediate(resolve));
+        await archives.extract(path, dest);
+        extracting--;
+      },
+    };
+    const index = hashIndex(build, overlapping);
+
+    await Promise.all(['A.7z', 'B.7z', 'C.7z'].map(async (name) => index.downloadedFileHash(await fileHolding(name, 'archive'))));
+
+    expect(mostAtOnce).toBe(1);
   });
 });

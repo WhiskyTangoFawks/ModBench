@@ -5,10 +5,11 @@ import { join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import type { ArchiveReader } from './archiveReader';
 import { digestOf } from './contentDigest';
-import { append, ensureDir, get, makeTempDir, remove, stampOf } from './files';
+import { append, ensureDir, get, listDir, makeTempDir, remove, stampOf, withLock } from './files';
 import type { FileRead, FileStamp, HashedDownload, InstanceAdapter } from './instanceAdapter';
 
 const INDEX_FILE = 'hashes.jsonl';
+const EXTRACTION_PREFIX = 'entries-';
 
 // A file system stamps a change with a clock coarser than a hash is quick, and a network share's
 // clock is not this machine's: a stamp this recent may not change for a write that follows it.
@@ -60,6 +61,12 @@ async function readOrReason<T>(read: () => Promise<T>): Promise<FileRead<T>> {
   }
 }
 
+// An extraction is a whole archive, so one a crash left behind would hold its space for good.
+async function removeLeftoverExtractions(folder: string): Promise<void> {
+  const names = await listDir(folder).catch(() => []);
+  await Promise.all(names.filter((name) => name.name.startsWith(EXTRACTION_PREFIX)).map((name) => remove(join(folder, name.name))));
+}
+
 /** The adapter's hashes, kept in `folder`; a downloaded file's entries are hashed from its extraction there. */
 export function hashIndex(folder: string, archives: ArchiveReader): Pick<InstanceAdapter, 'fileHash' | 'downloadedFileHash'> {
   const indexFile = join(folder, INDEX_FILE);
@@ -67,7 +74,7 @@ export function hashIndex(folder: string, archives: ArchiveReader): Pick<Instanc
   let loaded: Promise<void> | undefined;
 
   // The index only spares a read: one that cannot be read or written costs a read again, never a wrong hash.
-  const load = (): Promise<void> => (loaded ??= get(indexFile, '').then((text) => {
+  const load = (): Promise<void> => (loaded ??= removeLeftoverExtractions(folder).then(() => get(indexFile, '')).then((text) => {
     for (const line of text.split('\n')) {
       const known = keptAt(line);
       if (known !== undefined) kept[known.kind].set(known.path, { stamp: known.stamp, hashed: Promise.resolve({ kind: 'read', answer: known.hashed }) });
@@ -77,10 +84,11 @@ export function hashIndex(folder: string, archives: ArchiveReader): Pick<Instanc
   const hashedAlone = async (path: string, stamp: FileStamp): Promise<HashedDownload> =>
     ({ size: Number(stamp.size), hash: await digestOf(path), entries: [] });
 
-  async function hashedWithEntries(path: string, stamp: FileStamp): Promise<HashedDownload> {
+  // One extraction at a time: each is a whole archive on disk.
+  const hashedWithEntries = (path: string, stamp: FileStamp): Promise<HashedDownload> => withLock(join(folder, EXTRACTION_PREFIX), async () => {
     const listed = await archives.list(path);
     await ensureDir(folder);
-    const extraction = await makeTempDir(join(folder, 'entries-'));
+    const extraction = await makeTempDir(join(folder, EXTRACTION_PREFIX));
     try {
       await archives.extract(path, extraction);
       const entries = [];
@@ -89,7 +97,7 @@ export function hashIndex(folder: string, archives: ArchiveReader): Pick<Instanc
     } finally {
       await remove(extraction);
     }
-  }
+  });
 
   async function keep(kind: Kind, path: string, entry: Kept, read: FileRead<HashedDownload>, readFromMs: number): Promise<void> {
     if (kept[kind].get(path) !== entry) return;
