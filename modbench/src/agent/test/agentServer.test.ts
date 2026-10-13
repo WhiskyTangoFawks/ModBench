@@ -199,9 +199,7 @@ describe('the agent server, reading file order conflicts', () => {
   it('reads every mod, and no separator, when it is given no mods', async () => {
     const client = await clientOf(new FakeInstance(CONFLICTED));
 
-    const rows = await read(client, 'list_file_conflicts') as { mod: string }[];
-
-    expect(rows.map((row) => row.mod)).toEqual(['A', 'Textures', 'B', 'C']);
+    expect(await read(client, 'list_file_conflicts')).toMatchObject([{ mod: 'A' }, { mod: 'Textures' }, { mod: 'B' }, { mod: 'C' }]);
   });
 
   it('names a mod apart from a separator of the same name by which of the two it is', async () => {

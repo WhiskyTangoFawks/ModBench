@@ -13,7 +13,7 @@ interface ModConflicts {
 const byFile = (a: { file: string }, b: { file: string }): number => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0);
 
 function conflictsOf({ files }: InstanceValue, wanted: readonly string[]): ModConflicts[] {
-  const rows = new Map(wanted.map((mod) => [mod, { mod, wins: [], loses: [] } as ModConflicts]));
+  const rows = new Map(wanted.map((mod): [string, ModConflicts] => [mod, { mod, wins: [], loses: [] }]));
   for (const entry of files) {
     for (const provider of entry.providers) {
       const row = provider.kind === 'mod' ? rows.get(provider.name) : undefined;
