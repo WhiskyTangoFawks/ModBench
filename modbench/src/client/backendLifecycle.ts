@@ -64,6 +64,7 @@ export class BackendLifecycle {
 
   private _status: BackendStatus = 'starting';
   private readonly listeners = new Set<(status: BackendStatus) => void>();
+  private readonly portListeners = new Set<(port: number) => void>();
   private child?: BackendProcess;
   // True between start() and stop() or an exit; an exit while true is a crash.
   private expectedAlive = false;
@@ -93,6 +94,13 @@ export class BackendLifecycle {
    *  claimed it. */
   get port(): number | undefined { return this.attachPort ?? this.spawnPort; }
 
+  /** Hears the port as soon as it is known: at once when attached, else when start() claims it. */
+  onPort(listener: (port: number) => void): () => void {
+    this.portListeners.add(listener);
+    if (this.port !== undefined) listener(this.port);
+    return () => { this.portListeners.delete(listener); };
+  }
+
   onStatusChanged(listener: (status: BackendStatus) => void): () => void {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };
@@ -111,6 +119,7 @@ export class BackendLifecycle {
     if (this.attachPort === undefined && !this.child) {
       this.spawnPort = await this.freePort();
       if (gen !== this.generation) return;
+      for (const listener of this.portListeners) listener(this.spawnPort);
     }
 
     if (this.attachPort === undefined && this.spawnFn && this.executablePath && !this.child) {

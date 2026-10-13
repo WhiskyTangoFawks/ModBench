@@ -136,6 +136,7 @@ class HttpMEditClient implements MEditClient {
 
   // ── lifecycle ────────────────────────────────────────────────────────────
 
+  onPort(listener: (port: number) => void): () => void { return this.lifecycle.onPort(listener); }
   get status(): BackendStatus { return this.lifecycle.status; }
   onStatusChanged(listener: (status: BackendStatus) => void): () => void {
     return this.lifecycle.onStatusChanged(listener);

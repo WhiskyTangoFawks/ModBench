@@ -504,6 +504,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/records/select": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SelectRecords"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/records/{formKey}": {
         parameters: {
             query?: never;
@@ -1399,6 +1415,12 @@ export interface components {
         RenderedDocument: {
             fileName: string;
             text: string;
+        };
+        SelectRequest: {
+            sql: string;
+        };
+        SelectResponse: {
+            rows: unknown[];
         };
         SequenceAwaitResponse: {
             reached: boolean;
@@ -2857,6 +2879,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecordSummaryPagedResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    SelectRecords: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelectResponse"];
                 };
             };
             /** @description Bad Request */

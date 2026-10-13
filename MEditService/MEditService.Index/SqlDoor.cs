@@ -3,10 +3,12 @@ using DuckDB.NET.Data;
 
 namespace MEditService.Index;
 
-/// <summary>A filter is one SELECT over the public relations of <c>main</c>, which see only the
+/// <summary>A filter or a read is one SELECT over the public relations of <c>main</c>, which see only the
 /// active plugins (ADR-0012). DuckDB's own parse says what else it would read.</summary>
 internal static class SqlDoor
 {
+    private static readonly char[] FileNameCharacters = ['/', '\\', '.', ':'];
+
     // Table functions that read no relation and run no string.
     private static readonly HashSet<string> RowSources = new(StringComparer.OrdinalIgnoreCase) { "unnest", "range", "generate_series" };
 
@@ -20,7 +22,7 @@ internal static class SqlDoor
         if (root.GetProperty("error").GetBoolean())
             return root.GetProperty("error_message").GetString();
         if (root.GetProperty("statements").GetArrayLength() != 1)
-            return "A filter is one SELECT statement.";
+            return "Only one SELECT statement is read.";
         return RefusalIn(root);
     }
 
@@ -43,12 +45,14 @@ internal static class SqlDoor
                 var catalog = node.GetProperty("catalog_name").GetString();
                 var schema = node.GetProperty("schema_name").GetString();
                 var table = node.GetProperty("table_name").GetString();
+                if (table is not null && table.IndexOfAny(FileNameCharacters) >= 0)
+                    return $"Only the record views are read, and {table} is a file.";
                 if (string.IsNullOrEmpty(catalog) && schema is "" or "main") return null;
                 var name = string.Join('.', new[] { catalog, schema, table }.Where(part => !string.IsNullOrEmpty(part)));
-                return $"A filter reads the record views, and {name} is not one.";
+                return $"Only the record views are read, and {name} is not one.";
             case "TABLE_FUNCTION":
                 var function = node.GetProperty("function").GetProperty("function_name").GetString() ?? "";
-                return RowSources.Contains(function) ? null : $"A filter reads the record views, and the table function {function} is not one.";
+                return RowSources.Contains(function) ? null : $"Only the record views are read, and the table function {function} is not one.";
             default:
                 return null;
         }

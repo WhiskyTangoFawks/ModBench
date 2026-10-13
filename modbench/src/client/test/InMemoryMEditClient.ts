@@ -71,6 +71,7 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly commandHandlers: { [K in CommandMethod]?: Handlers[K] } = {};
   private readonly notifications = new SseNotificationSubscriber({ openStream: () => Promise.reject(new Error('never started')) });
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
+  private readonly portListeners = new Set<(port: number) => void>();
   private readonly reconnectListeners = new Set<() => void>();
   private readonly handOverListeners = new Set<(failure: ReadFailed | undefined) => void>();
   private _status: BackendStatus = 'starting';
@@ -196,6 +197,16 @@ export class InMemoryMEditClient implements MEditClient {
   onStatusChanged(listener: (status: BackendStatus) => void): () => void {
     this.statusListeners.add(listener);
     return () => { this.statusListeners.delete(listener); };
+  }
+
+  onPort(listener: (port: number) => void): () => void {
+    this.portListeners.add(listener);
+    return () => { this.portListeners.delete(listener); };
+  }
+
+  /** mEdit claims the port it listens on. */
+  claimedPort(port: number): void {
+    for (const listener of [...this.portListeners]) listener(port);
   }
 
   onReconnected(listener: () => void): () => void {

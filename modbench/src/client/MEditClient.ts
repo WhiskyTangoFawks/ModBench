@@ -319,6 +319,8 @@ export interface MEditClient {
   // status-changed event.
   readonly status: BackendStatus;
   onStatusChanged(listener: (status: BackendStatus) => void): () => void;
+  /** The port this window's mEdit answers on, heard as soon as it is known and again if it changes. */
+  onPort(listener: (port: number) => void): () => void;
   /** The notification stream opened again while `running`. The process behind the stream may
    *  be a restarted one, holding nothing sent before. */
   onReconnected(listener: () => void): () => void;

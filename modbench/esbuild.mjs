@@ -1,4 +1,8 @@
+import { cpSync, rmSync } from 'node:fs';
 import * as esbuild from 'esbuild';
+
+rmSync('scripts', { recursive: true, force: true });
+cpSync('../scripts/medit', 'scripts/medit', { recursive: true, filter: (source) => !source.includes('__pycache__') });
 
 await esbuild.build({
   entryPoints: ['src/extension.ts'],
