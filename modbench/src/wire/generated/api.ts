@@ -143,6 +143,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Writes each source mod's folder from its source as its build configuration says: the base from its installation files, its assets over it, each plugin compiled, each archive packed. A file the build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and what failed when a read or write stopped it part way. Progress is the build-progress notification. */
         post: operations["BuildMod"];
         delete?: never;
         options?: never;
@@ -161,6 +162,23 @@ export interface paths {
         put?: never;
         /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the files no installation file yields as its assets, and a build configuration naming its folder as the output, in one commit. A mod lands or is refused whole. Progress is the init-progress notification. */
         post: operations["InitMod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/build-configuration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Writes a source mod's build configuration in its working tree, keeping all else it says: the output folder's new name, and the paths in the mod folder its build excludes. Modbench writes the mod folder in the same gesture. */
+        post: operations["ChangeBuildConfiguration"];
         delete?: never;
         options?: never;
         head?: never;
@@ -503,6 +521,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/names/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ResolveNames"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/records/{formKey}": {
         parameters: {
             query?: never;
@@ -769,6 +803,46 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ArchivePackRefusal: {
+            item: string;
+            refusal: components["schemas"]["ArchiveRefusal"];
+            message: string;
+        };
+        /** @enum {string} */
+        ArchiveRefusal: "None" | "VariantNotWritten" | "FileNotPackable" | "NotWritten";
+        ArchiveVariantRequest: {
+            ba2?: components["schemas"]["Ba2VariantRequest"] | null;
+            bsa?: components["schemas"]["BsaVariantRequest"] | null;
+        };
+        ArchiveVariantsRequest: {
+            general: components["schemas"]["ArchiveVariantRequest"];
+            textures: components["schemas"]["ArchiveVariantRequest"];
+        };
+        Ba2VariantRequest: {
+            /** Format: int32 */
+            version: number;
+            compressed: boolean;
+        };
+        BsaVariantRequest: {
+            /** Format: int32 */
+            version: number;
+            /** Format: int32 */
+            archiveFlags: number;
+            /** Format: int32 */
+            fileFlags: number;
+        };
+        BuildConfigurationRequest: {
+            sourceFolder: string;
+            output?: string | null;
+            exclude?: string[] | null;
+            include?: string[] | null;
+        };
+        BuildModRequest: {
+            name: string;
+            sourceFolder: string;
+            folder: string;
+            installationFiles: components["schemas"]["InstallationFileRequest"][];
+        };
         BuildProgress: {
             mod?: string | null;
             /** Format: int32 */
@@ -777,9 +851,11 @@ export interface components {
             modsTotal: number;
         };
         /** @enum {string} */
-        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder";
+        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "InstallationFileMissing" | "BaseNotKnown" | "ArchiveFileNotAnAsset";
         BuildRequest: {
-            mods: string[];
+            mods: components["schemas"]["BuildModRequest"][];
+            excludedSuffix: string;
+            archives?: components["schemas"]["ArchiveVariantsRequest"] | null;
         };
         BuildResponse: {
             applied: components["schemas"]["BuiltModResponse"][];
@@ -789,6 +865,9 @@ export interface components {
             mod: string;
             compiled: components["schemas"]["CompiledPlugin"][];
             refused: components["schemas"]["PluginCompileRefusal"][];
+            archivesRefused: components["schemas"]["ArchivePackRefusal"][];
+            overwritten: string[];
+            failure?: string | null;
         };
         CellChildRecords: {
             persistent: components["schemas"]["ChildRecordSummary"][];
@@ -857,7 +936,7 @@ export interface components {
             message: string;
         };
         /** @enum {string} */
-        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotTracked" | "PluginSourceUnreadable" | "NoSource" | "SourceFileHeld" | "SourceDoesNotParse" | "SourceDoesNotRoundTrip" | "SourceValueDropped" | "FormKeyCollision" | "FormIdOutsideFlagLimit" | "FormIdUnmappable" | "MasterNotInLoadOrder" | "MasterUnreadable" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
+        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotTracked" | "PluginSourceUnreadable" | "NoSource" | "SourceFileHeld" | "SourceDoesNotParse" | "SourceValueDropped" | "FormKeyCollision" | "FormIdOutsideFlagLimit" | "FormIdUnmappable" | "MasterNotInLoadOrder" | "MasterUnreadable" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
         CompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
         };
@@ -1013,6 +1092,7 @@ export interface components {
         };
         InitModRequest: {
             name: string;
+            sourceFolder: string;
             installationFiles: components["schemas"]["InstallationFileRequest"][];
             modManagerFiles: string[];
         };
@@ -1071,6 +1151,8 @@ export interface components {
             /** Format: int32 */
             line?: number | null;
             lineNamesIt: boolean;
+            archives: string[];
+            stringsFiles: string[];
         };
         LoadOrderRequest: {
             plugins: components["schemas"]["LoadOrderPlugin"][];
@@ -1122,6 +1204,15 @@ export interface components {
             name: string;
             treeName: string;
             newName: string;
+        };
+        NameQuery: {
+            name: string;
+            origin?: string | null;
+        };
+        NamedObject: {
+            plugin?: components["schemas"]["PluginAddress"] | null;
+            formKey?: string | null;
+            editorId?: string | null;
         };
         NotificationEvent: {
             kind: string;
@@ -1392,6 +1483,12 @@ export interface components {
         RenderedDocument: {
             fileName: string;
             text: string;
+        };
+        ResolveNamesRequest: {
+            names: components["schemas"]["NameQuery"][];
+        };
+        ResolveNamesResponse: {
+            named: components["schemas"]["NamedObject"][];
         };
         SelectRequest: {
             sql: string;
@@ -1923,6 +2020,55 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ChangeBuildConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuildConfigurationRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2849,6 +2995,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SelectResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ResolveNames: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveNamesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveNamesResponse"];
                 };
             };
             /** @description Bad Request */

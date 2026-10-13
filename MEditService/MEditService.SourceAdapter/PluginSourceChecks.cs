@@ -24,15 +24,17 @@ public sealed record SourceDivergence(SourceDivergenceKind Kind, string Path, st
 
 /// <summary>A record's file held at HeldPath, where the layout puts it at BelongsAt, both as the mod
 /// folder spells them.</summary>
-public sealed record MisplacedFile(string FormKey, string HeldPath, string BelongsAt);
+public sealed record MisplacedFile(string FormKey, string HeldPath, string BelongsAt)
+{
+    public string Message => $"{HeldPath} belongs at {BelongsAt}. Modbench moves it there the next time it writes this record.";
+}
 
 /// <summary>Every file where a plugin's source and what the door writes part ways, changes before files the
 /// door writes nowhere, and the files that differ only in where they sit, which compile.</summary>
 public sealed record SourceComparison(IReadOnlyList<SourceDivergence> Divergences, IReadOnlyList<MisplacedFile> Misplaced);
 
-/// <summary>A source file that carries a record, as the source folder spells it, with its text and the record type
-/// its path or its text names, null when neither does.</summary>
-public sealed record RecordFile(string Path, string Text, string? RecordType);
+/// <summary>A source file the Codec refuses, as the source folder spells it, and why.</summary>
+public sealed record RefusedFile(string Path, string Reason);
 
 /// <summary>The questions asked of a plugin's source as files rather than as documents.</summary>
 internal static class PluginSourceChecks
@@ -58,18 +60,27 @@ internal static class PluginSourceChecks
         return colliding;
     }
 
-    internal static IReadOnlyList<RecordFile> RecordFilesOf(PluginSourceFiles source, GameRelease gameRelease)
+    internal static IReadOnlyList<RefusedFile> RefusedFilesOf(PluginSourceFiles source, GameRelease gameRelease)
     {
-        var types = RecordTypes.For(gameRelease);
-        var records = new List<RecordFile>();
-        foreach (var file in source.Files.Where(file => !SourceRepositoryLayout.CarriesNoRecord(file.RelativePath)))
+        var refused = new List<RefusedFile>();
+        foreach (var file in source.Files.Where(file => file.RelativePath.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase)))
         {
             var text = Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(file.Content));
-            var recordType = SourceRepositoryLayout.RecordTypeOf(file.RelativePath, gameRelease)
-                ?? types.RecordTypeNamed(DocumentTokens.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator));
-            records.Add(new RecordFile(file.RelativePath, text, recordType));
+            var recordType = SourceRepositoryLayout.RecordTypeOf(file.RelativePath, text, gameRelease);
+            if (WhyRefused(file.RelativePath, text, recordType, gameRelease) is { } reason) refused.Add(new RefusedFile(file.RelativePath, reason));
         }
-        return records;
+        return refused;
+    }
+
+    /// <summary>The Codec's reason for refusing the document at <paramref name="relativePath"/>, null when it
+    /// takes it or when nothing names its type, which the tree's read says.</summary>
+    internal static string? WhyRefused(string relativePath, string text, string? recordType, GameRelease gameRelease)
+    {
+        if (!SourceRepositoryLayout.IsGroupDocument(relativePath))
+            return recordType is null ? null : RecordTextCodec.WhyNotARecord(text, gameRelease, recordType);
+        return SourceRepositoryLayout.BlockLevelOf(relativePath, gameRelease) is { } level
+            ? RecordTextCodec.WhyNotABlockLevel(text, gameRelease, level)
+            : null;
     }
 
     internal static SourceComparison Compare(
@@ -101,6 +112,18 @@ internal static class PluginSourceChecks
             .Order(StringComparer.Ordinal)
             .Select(relativePath => new SourceDivergence(SourceDivergenceKind.Unproduced, relativePath)));
         return new SourceComparison(divergences, misplaced);
+    }
+
+    // A flat record's file is named by its FormKey and EditorID alone, so one document says where it belongs.
+    // Compare places the containers' files too, by regenerating the whole tree.
+    internal static string? LayoutPathOf(
+        string relativePath, string text, string pluginName, string formKey, string recordType, GameRelease release)
+    {
+        if (recordType == PluginHeader.RecordType || GroupFolders.For(release).FlatFolderOf(recordType) is null) return null;
+        if (DocumentTokens.EditorIdIn(text) is not { WhyUnreadable: null } editorId) return null;
+
+        var belongsAt = SourceRepositoryLayout.FlatPathFor(pluginName, recordType, formKey, editorId.EditorId, release);
+        return belongsAt.Equals(relativePath, StringComparison.Ordinal) ? null : belongsAt;
     }
 
     // A held file the codec writes nowhere and a file it writes where nothing is held, with the same

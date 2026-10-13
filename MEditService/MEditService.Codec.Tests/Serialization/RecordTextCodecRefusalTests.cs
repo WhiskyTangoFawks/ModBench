@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
@@ -80,7 +81,7 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     [Fact]
     public void ANumberWhereATranslatedStringBelongs_IsRefused()
     {
-        Assert.NotNull(Why(Edited(WeaponText(), root => root["Name"] = 5)));
+        Assert.Equal("Name holds a value of the wrong type.", Why(Edited(WeaponText(), root => root["Name"] = 5)));
     }
 
     [Fact]
@@ -150,6 +151,43 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public void ACellWhoseChildSlotHoldsNoChild_IsTheCellWithTheSlotLeftOut()
+    {
+        var cell = RecordTextCodec.SerializeToText(
+            new Cell(new FormKey(ModKey.FromFileName("Refusal.esp"), 0x801), Fallout4Release.Fallout4) { EditorID = "Room" },
+            Release);
+
+        Assert.Null(RecordTextCodec.WhyNotARecord(Edited(cell, root => root["Persistent"] = new JsonArray()), Release, "cell"));
+    }
+
+    [Fact]
+    public void ABlockLevelDocumentTheCodecWrote_IsTheLevel()
+    {
+        var level = RecordTypes.For(Release).InteriorCellBlockLevels[0];
+        var document = RecordTextCodec.BlankDocument(level, Release, Document.Empty.With(3, RecordTypes.BlockNumberMember));
+
+        Assert.Null(RecordTextCodec.WhyNotABlockLevel(document, Release, level));
+    }
+
+    [Fact]
+    public void ABlockLevelDocumentWithAValueOfTheWrongType_IsRefused_NamingTheField()
+    {
+        var level = RecordTypes.For(Release).InteriorCellBlockLevels[0];
+        var document = RecordTextCodec.BlankDocument(level, Release, Document.Empty.With(3, RecordTypes.BlockNumberMember));
+
+        Assert.StartsWith("BlockNumber", RecordTextCodec.WhyNotABlockLevel(Edited(document, root => root["BlockNumber"] = "text"), Release, level), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ABlockLevelDocumentWithAnUnknownField_IsRefused_NamingIt()
+    {
+        var level = RecordTypes.For(Release).InteriorCellBlockLevels[0];
+        var document = RecordTextCodec.BlankDocument(level, Release, Document.Empty.With(3, RecordTypes.BlockNumberMember));
+
+        Assert.Contains("Bogus", RecordTextCodec.WhyNotABlockLevel(Edited(document, root => root["Bogus"] = 1), Release, level), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AnEnumValueThatDoesNotExist_IsRefused_NamingTheField()
     {
         var cell = RecordTextCodec.SerializeToText(
@@ -173,6 +211,14 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     public void AFloatSpelledWithMoreDigitsThanItsPrecision_IsTheSameRecord()
     {
         Assert.Null(Why(Edited(WeaponText(), root => root["Weight"] = JsonNode.Parse("2.5000000000001"))));
+    }
+
+    [Fact]
+    public void AHeaderWithAValueOfTheWrongType_IsRefused()
+    {
+        var header = Encoding.UTF8.GetString(HeaderDocument.Write(new Fallout4Mod(ModKey.FromFileName("Fresh.esp"), Fallout4Release.Fallout4)));
+
+        Assert.NotNull(RecordTextCodec.WhyNotARecord(Edited(header, root => root["ModHeader"].Require()["Stats"].Require()["Version"] = "x"), Release, PluginHeader.RecordType));
     }
 
     [Theory]

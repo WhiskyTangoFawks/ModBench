@@ -1,7 +1,10 @@
+using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
@@ -9,7 +12,8 @@ public sealed class SourceRepositoryStampsTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
     private const string NpcFormKey = "000800:Fixture.esp";
-    private const string NpcBody = "{\n  \"FormKey\": \"000800:Fixture.esp\",\n  \"EditorID\": \"FixtureNpc\"\n}";
+    private static readonly string NpcBody = RecordTextCodec.SerializeToText(
+        new Npc(FormKey.Factory(NpcFormKey), Fallout4Release.Fallout4) { EditorID = "FixtureNpc" }, GameRelease.Fallout4);
 
     private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
 
@@ -101,6 +105,71 @@ public sealed class SourceRepositoryStampsTests : IDisposable
         File.WriteAllBytes(file, bytes);
 
         Assert.Equal(StampOf(File.ReadAllText(file)), _repository.StampsOf(Plugin).ByFormKey[NpcFormKey]);
+    }
+
+    [Fact]
+    public void StampsOf_AFileWithAnUnknownField_IsAProblemOnThatFile_AndStillAStampedDocument()
+    {
+        File.WriteAllText(NpcFile, NpcBody.Replace("\"FormKey\"", "\"NoSuchField\": 1,\n  \"FormKey\"", StringComparison.Ordinal));
+
+        var stamps = _repository.StampsOf(Plugin);
+
+        var problem = Assert.Single(stamps.Problems);
+        Assert.Equal((Path.GetRelativePath(_modFolder, NpcFile), NpcFormKey), (problem.SourceRelativePath, problem.FormKey));
+        Assert.Contains("NoSuchField", problem.Message, StringComparison.Ordinal);
+        Assert.Contains(NpcFormKey, stamps.ByFormKey.Keys);
+        Assert.Empty(stamps.Unreadable);
+    }
+
+    [Fact]
+    public void StampsOf_AFlatRecordUnderAnotherLeafName_IsAProblemNamingWhereItBelongs()
+    {
+        var original = NpcFile;
+        var misplaced = Path.Combine(Path.GetDirectoryName(original).Require(), "Renamed.json");
+        File.Move(original, misplaced);
+
+        var problem = Assert.Single(_repository.StampsOf(Plugin).Problems);
+
+        Assert.Equal(Path.GetRelativePath(_modFolder, misplaced), problem.SourceRelativePath);
+        Assert.Contains($"belongs at {Path.GetRelativePath(_modFolder, original)}", problem.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StampsOf_ARecordOutsideTheLightRangeOfALightHeader_IsAProblemOnItsFile()
+    {
+        var light = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4) { IsSmallMaster = true };
+        File.WriteAllBytes(Path.Combine(_modFolder, PluginSourceRoot.HeaderDocument(PluginName)), HeaderDocument.Write(light));
+        var outside = SourceDocumentPath.Of(_modFolder, PluginName, "npc_", "001000:Fixture.esp", "Far", GameRelease.Fallout4);
+        Directory.CreateDirectory(Path.GetDirectoryName(outside).Require());
+        File.WriteAllText(outside, RecordTextCodec.SerializeToText(
+            new Npc(FormKey.Factory("001000:Fixture.esp"), Fallout4Release.Fallout4) { EditorID = "Far" }, GameRelease.Fallout4));
+
+        var problem = Assert.Single(_repository.StampsOf(Plugin).Problems);
+
+        Assert.Equal(Path.GetRelativePath(_modFolder, outside), problem.SourceRelativePath);
+        Assert.Contains("light range", problem.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StampsOf_ABlockLevelDocumentWithAValueOfTheWrongType_IsAProblemOnThatFile()
+    {
+        var level = Path.Combine(_modFolder, PluginSourceRoot.For(PluginName), "Cells", "0", "GroupRecordData.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(level).Require());
+        File.WriteAllText(level, "{\"BlockNumber\": \"text\"}");
+
+        var problem = Assert.Single(_repository.StampsOf(Plugin).Problems);
+
+        Assert.Equal(Path.GetRelativePath(_modFolder, level), problem.SourceRelativePath);
+        Assert.Contains("BlockNumber", problem.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StampsOf_ATreeWhoseOnlyChangeIsAFileMovedOutOfPlace_IsNotTheSameStamps()
+    {
+        var placed = _repository.StampsOf(Plugin);
+        File.Move(NpcFile, Path.Combine(Path.GetDirectoryName(NpcFile).Require(), "Renamed.json"));
+
+        Assert.NotEqual(placed, _repository.StampsOf(Plugin));
     }
 
     [Fact]

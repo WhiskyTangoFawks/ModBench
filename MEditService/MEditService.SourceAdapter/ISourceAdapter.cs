@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter;
@@ -20,7 +21,7 @@ public interface ISourceAdapter
     SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin);
 
     /// <summary>The reads over the source folder of the mod providing <paramref name="plugin"/>, tree or not; null
-    /// when no mod provides it. One serves a batch, so what it learns of the tree is learned once.</summary>
+    /// when no source mod provides it. One serves a batch, so what it learns of the tree is learned once.</summary>
     ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release);
 
     /// <summary>The reads over <paramref name="plugin"/>'s source tree; null when it has none that reads.</summary>
@@ -60,6 +61,13 @@ public interface ISourceAdapter
     SourceFailure? Init(
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets);
+
+    /// <summary>What the build of the source in <paramref name="sourceFolder"/> writes, as its working tree says now.</summary>
+    Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder);
+
+    /// <summary>Writes <paramref name="change"/> into the build configuration in <paramref name="sourceFolder"/>, keeping all
+    /// else it says, in the working tree.</summary>
+    SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change);
 
     /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="ISourceRepository.TreeOf"/> answers it once
     /// written: what a round-trip gate compiles, so that it compiles what is written.</summary>

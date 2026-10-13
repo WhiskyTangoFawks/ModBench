@@ -11,7 +11,7 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
 
     private readonly ScratchDirectory _sourceFolder = new("medit-istracked-source-");
 
-    private RegisteredPlugin Registered => new(PluginAt.Name, PluginAt.Origin, "", new PluginProvider.FromMod("Mod", _modFolder, _sourceFolder), Line: null);
+    private RegisteredPlugin Registered => new(PluginAt.Name, PluginAt.Origin, "", new PluginProvider.FromMod("Mod", _modFolder, _sourceFolder), Line: null, PluginStrings.None);
 
     public void Dispose()
     {

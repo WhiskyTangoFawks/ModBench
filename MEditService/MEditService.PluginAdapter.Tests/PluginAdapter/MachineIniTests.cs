@@ -44,7 +44,7 @@ public sealed class MachineIniTests : IDisposable
 
         using var documents = TestAdapters.Mutagen().OpenDocuments(
             new ModPath(ModKey.FromFileName(PluginName), _pluginPath), loadOrder,
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE), new PluginStrings(_modFolder)).Answered();
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE), PluginStrings.None).Answered();
 
         Assert.DoesNotContain(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
     }

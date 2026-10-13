@@ -82,9 +82,10 @@ public sealed class PluginTreeReadTests
     private static async Task<IReadOnlyList<TreeFile>> ReadTreeFiles(PluginFixtureData data, string pluginName)
     {
         var read = await Adapter.ReadSourceOfAsync(
-            new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, Path.Combine(data.DataFolder, pluginName), PluginProvider.Game, Line: null),
-            EmptyLoadOrder.Of(GameRelease.Fallout4),
-            new PluginStrings(data.DataFolder));
+            new RegisteredPlugin(
+                pluginName, PluginOrigin.DataDirectory, Path.Combine(data.DataFolder, pluginName), PluginProvider.Game, Line: null,
+                HandedStrings.Of(Path.Combine(data.DataFolder, pluginName))),
+            EmptyLoadOrder.Of(GameRelease.Fallout4));
         return read.Answered().Files;
     }
 
@@ -217,7 +218,7 @@ public sealed class PluginTreeReadTests
     {
         using var scratch = new ScratchDirectory("writetree-light-master");
         var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
-        var source = (await Adapter.ReadSourceOfAsync(LightMasterAndChild.ChildIn(loadOrder), loadOrder, new PluginStrings(scratch))).Answered();
+        var source = (await Adapter.ReadSourceOfAsync(LightMasterAndChild.ChildIn(loadOrder), loadOrder)).Answered();
         var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(scratch, "recompiled")).FullName, LightMasterAndChild.Child.FileName);
 
         (await Adapter.WriteFromTreeAsync(source.Files, recompiledPath, source.Masters, loadOrder)).Answered();
@@ -232,7 +233,7 @@ public sealed class PluginTreeReadTests
     {
         using var scratch = new ScratchDirectory("writetree-unreadable-master");
         var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
-        var source = (await Adapter.ReadSourceOfAsync(LightMasterAndChild.ChildIn(loadOrder), loadOrder, new PluginStrings(scratch))).Answered();
+        var source = (await Adapter.ReadSourceOfAsync(LightMasterAndChild.ChildIn(loadOrder), loadOrder)).Answered();
         File.WriteAllBytes(Path.Combine(scratch, LightMasterAndChild.Master.FileName), "not a plugin"u8.ToArray());
         var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(scratch, "recompiled")).FullName, LightMasterAndChild.Child.FileName);
 

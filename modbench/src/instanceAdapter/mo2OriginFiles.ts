@@ -2,10 +2,10 @@
 
 import { exists, rename, withLock } from './files';
 import type { InstanceAdapter, OriginFileMark, OriginFileMarked } from './instanceAdapter';
-import { excludedName, fileInFolder, includedName, isExcludedName, originDir } from './layout';
+import { EXCLUDED_SUFFIX, excludedName, fileInFolder, includedName, isExcludedName, originDir } from './layout';
 import type { Mo2Context } from './mo2Context';
 
-type Mo2OriginFiles = Pick<InstanceAdapter, 'markOriginFile'>;
+type Mo2OriginFiles = Pick<InstanceAdapter, 'markOriginFile' | 'includedPath' | 'excludedSuffix'>;
 
 function fileUnder(folder: string | undefined, relativePath: string): string | undefined {
   const reachesOut = relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
@@ -31,5 +31,10 @@ export function mo2OriginFiles({ instanceRoot }: Mo2Context): Mo2OriginFiles {
         return { gone: false, wrote: true, relativePath: renamed(relativePath) };
       });
     },
+
+    excludedSuffix: EXCLUDED_SUFFIX,
+
+    includedPath: (relativePath) =>
+      relativePath.split('/').map((segment) => (isExcludedName(segment) ? includedName(segment) : segment)).join('/'),
   };
 }

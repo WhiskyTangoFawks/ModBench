@@ -52,8 +52,8 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         inner.WriteFromTreeAsync(files, destinationPath, masterOrder, loadOrder, cancel);
 
     public virtual Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
-        RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, PluginStrings strings, CancellationToken cancel = default) =>
-        inner.ReadSourceOfAsync(plugin, loadOrder, strings, cancel);
+        RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>
+        inner.ReadSourceOfAsync(plugin, loadOrder, cancel);
 
     public virtual Answer<string?, PluginFailure> DivergenceFrom(
         string pluginFileName, string pluginFilePath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>

@@ -51,8 +51,8 @@ public interface ISourceRepository : ISourceRepositoryReads
     /// compiled mod: Mutagen's FormKey-keyed RecordCache collapses two documents in one group folder to the last read.</summary>
     Answer<IReadOnlyList<string>, SourceFailure> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys);
 
-    /// <summary>Every file of the plugin's tree that carries a record, with its text and record type.</summary>
-    Answer<IReadOnlyList<RecordFile>, SourceFailure> RecordFilesOf(PluginAddress plugin);
+    /// <summary>Every file of the plugin's tree the Codec refuses, with its reason.</summary>
+    Answer<IReadOnlyList<RefusedFile>, SourceFailure> RefusedFilesOf(PluginAddress plugin);
 
     /// <summary>Where the source and <paramref name="serialized"/>, the whole-mod door's tree, first part ways,
     /// and the files held at another leaf name than the layout's. An unreadable file outranks the rest.</summary>

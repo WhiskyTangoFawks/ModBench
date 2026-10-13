@@ -13,7 +13,7 @@ import { createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
-  type BackendStatus, type CellChildRecords, type BuildOutcome,
+  type BackendStatus, type BuildConfigurationChange, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -199,7 +199,7 @@ class HttpMEditClient implements MEditClient {
       return data ?? spec.noContent ?? { refused: true, message: `${spec.failMsg} — no answer` };
     } catch (e) {
       this.log.error(`[HttpMEditClient] ${spec.op} threw: ${errorMessage(e)}`);
-      return { refused: true, message: `${spec.failMsg} — ${failureReason(UNREACHABLE)}` };
+      return { refused: true, message: `${spec.failMsg} — ${failureReason(UNREACHABLE)}`, unreachable: true };
     }
   }
 
@@ -449,15 +449,27 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
+  async changeBuildConfiguration(sourceFolder: string, change: BuildConfigurationChange): Promise<{ changed: true } | WriteRefused> {
+    return this.mutate({
+      op: `changeBuildConfiguration(${sourceFolder})`,
+      failMsg: `Could not change the build configuration in "${sourceFolder}"`,
+      post: () => this.apiClient.POST('/build-configuration', { body: { sourceFolder, ...change } }),
+      noContent: { changed: true },
+    });
+  }
+
   /** Each mod builds or is refused on its own, and each plugin of a built mod compiles or is
    *  refused on its own. Never refreshes the tree: a build changes only bytes on disk. */
-  async build(mods: readonly string[]): Promise<BuildOutcome | WriteRefused> {
+  async build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused> {
     return this.mutateEach({
       verb: 'build', noun: 'mod', items: mods,
       op: (counted) => `build(${counted})`,
-      post: () => this.apiClient.POST('/build', { body: { mods: [...mods] } }),
+      post: () => this.apiClient.POST('/build', { body: { mods: [...mods], ...facts } }),
       outcome: (answer) => selectionOutcome({
-        applied: answer.applied.map((m) => ({ mod: m.mod, compiled: m.compiled, refused: itemRefusals(m.refused) })),
+        applied: answer.applied.map((m) => ({
+          mod: m.mod, compiled: m.compiled, refused: itemRefusals(m.refused), archivesRefused: itemRefusals(m.archivesRefused), overwritten: m.overwritten,
+          ...(m.failure ? { failure: m.failure } : {}),
+        })),
         refused: answer.refused,
       }),
     });

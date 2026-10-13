@@ -51,6 +51,26 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     internal static string RootIn(string sourceFolder, string pluginFileName) =>
         Path.Combine(sourceFolder, RootFor(pluginFileName));
 
+    /// <summary>The plugins whose source the folder holds, by the name of each one's tree.</summary>
+    internal static IReadOnlyList<string> PluginsIn(string sourceFolder)
+    {
+        var sources = Path.Combine(sourceFolder, RootFolderName);
+        return Directory.Exists(sources)
+            ? [.. Directory.EnumerateDirectories(sources).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal)]
+            : [];
+    }
+
+    /// <summary>Every file under the assets folder, by its forward-slash path in the mod folder.</summary>
+    internal static IReadOnlyList<Asset> AssetsIn(string sourceFolder)
+    {
+        var assets = Path.Combine(sourceFolder, AssetsFolderName);
+        return Directory.Exists(assets)
+            ? [.. Directory.EnumerateFiles(assets, "*", SearchOption.AllDirectories)
+                .Order(StringComparer.Ordinal)
+                .Select(file => new Asset(Path.GetRelativePath(assets, file).Replace('\\', '/'), () => File.OpenRead(file)))]
+            : [];
+    }
+
     /// <summary>The folder of the mod's plugin source holding <paramref name="pluginFileName"/>'s tree: the one spelled
     /// so, else the only one spelled so without case, as a ModKey compares a name. Else why there is none.</summary>
     internal static Answer<string, SourceFailure> TreeNameIn(string sourceFolder, string pluginFileName) =>
@@ -314,6 +334,23 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
             : null;
     }
 
+    /// <summary>The record type of a document: its path's, else the one its text names.</summary>
+    internal static string? RecordTypeOf(string relativePath, string text, GameRelease gameRelease) =>
+        RecordTypeOf(relativePath, gameRelease)
+        ?? RecordTypes.For(gameRelease).RecordTypeNamed(DocumentTokens.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator));
+
+    /// <summary>The block level a group's metadata document at <paramref name="relativePath"/> is, as the
+    /// codec names it; null for a group's own, which has no level of its own.</summary>
+    internal static string? BlockLevelOf(string relativePath, GameRelease gameRelease)
+    {
+        var path = new LayoutPath(relativePath);
+        var types = RecordTypes.For(gameRelease);
+        var interior = path.GroupFolderName == GroupFolders.For(gameRelease).FolderOf(types.Cell);
+        var levels = interior ? types.InteriorCellBlockLevels : types.ExteriorCellBlockLevels;
+        var depth = path.DirectoriesBelowGroupFolder - (interior ? 0 : 1);
+        return depth >= 1 && depth <= levels.Count ? levels[depth - 1] : null;
+    }
+
     /// <summary>Null on anything not shaped like a flat record's path or the header's root document,
     /// so a tree walk never misreads a container path as a flat record.</summary>
     internal static SourceRecordIdentity? ParseDocumentPath(string relativePath, GameRelease gameRelease)
@@ -333,8 +370,10 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     /// <summary>True for a file under the source root that holds no record — group and block metadata,
     /// and anything that is not a document at all. No row is derived from one.</summary>
     internal static bool CarriesNoRecord(string filePath) =>
-        !filePath.EndsWith(JsonSuffix, StringComparison.OrdinalIgnoreCase)
-        || Path.GetFileName(filePath).Equals(GroupRecordDataFileName, StringComparison.Ordinal);
+        !filePath.EndsWith(JsonSuffix, StringComparison.OrdinalIgnoreCase) || IsGroupDocument(filePath);
+
+    internal static bool IsGroupDocument(string filePath) =>
+        Path.GetFileName(filePath).Equals(GroupRecordDataFileName, StringComparison.Ordinal);
 
     /// <summary>Whether <paramref name="path"/> names the header's own document. A suffix, not an
     /// equality: the caller may spell it absolute, relative to the source folder, or as git does.</summary>

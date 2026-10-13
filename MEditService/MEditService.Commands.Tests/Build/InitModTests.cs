@@ -65,10 +65,10 @@ public sealed class InitModTests
     private sealed class LockedPluginAdapter(string lockedName) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
-            RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, PluginStrings strings, CancellationToken cancel = default) =>
+            RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>
             plugin.Name.Equals(lockedName, StringComparison.OrdinalIgnoreCase)
                 ? Task.FromResult<Answer<PluginSource, PluginFailure>>(PluginFailures.Inaccessible())
-                : base.ReadSourceOfAsync(plugin, loadOrder, strings, cancel);
+                : base.ReadSourceOfAsync(plugin, loadOrder, cancel);
     }
 
     [Fact]
@@ -398,8 +398,10 @@ public sealed class InitModTests
         Assert.Equal(InitRefusal.MissingLocalizationStrings, result.Refusal);
 
         const string stringsFileNamedByIsoLanguageCodeNotByLanguageName = "Fixture_en.STRINGS";
-        Assert.Contains(stringsFileNamedByIsoLanguageCodeNotByLanguageName, result.Message);
-        Assert.Contains(modFolder.Path, result.Message);
+        Assert.Equal(
+            $"Fixture.esp is a localized plugin but its strings file '{stringsFileNamedByIsoLanguageCodeNotByLanguageName}' was not found " +
+            $"loose or in an archive, among the files the game loads or in {modFolder.Path}. Restore the file, then try again.",
+            result.Message);
         Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }
 
