@@ -22,8 +22,8 @@ def files_of(folder):
 class FixtureMEdit(unittest.TestCase):
     def test_medit_holds_the_fixture_instances_load_order_from_a_copy_of_it_and_stops_with_the_harness(self):
         checked_in = files_of(CHECKED_IN_INSTANCE)
-        with fixture_medit() as url:
-            plugins = call('GET', url + '/plugins')
+        with fixture_medit() as fixture:
+            plugins = call('GET', fixture.url + '/plugins')
         self.assertEqual([(plugin['name'], plugin['origin']) for plugin in plugins], [
             ('MBDevConflictB.esp', 'MB-DEV Conflict B'),
             ('MBDevConflictA.esp', 'MB-DEV Conflict A'),
@@ -33,7 +33,7 @@ class FixtureMEdit(unittest.TestCase):
         ])
         self.assertEqual(files_of(CHECKED_IN_INSTANCE), checked_in)
         with self.assertRaises(urllib.error.URLError):
-            call('GET', url + '/health')
+            call('GET', fixture.url + '/health')
 
 
 class Stop(unittest.TestCase):
