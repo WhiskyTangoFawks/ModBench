@@ -30,10 +30,11 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import type { UpgradeCandidate } from '../../instanceLoader/instance';
 import { accessTo } from '../../test/mo2/adapterOver';
+import { fakeArchiveReader } from '../../ports/test/fakeArchiveReader';
 import { installCommands } from '../../install/install';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
-const installOver = (root: string) => ({ ...installCommands(accessTo(root)), installFromArchive });
+const installOver = (root: string) => ({ ...installCommands({ ...accessTo(root), archives: fakeArchiveReader([]) }), installFromArchive });
 
 const fakeInstance = (rows: readonly DownloadFile[] = []): Pick<Instance, 'value' | 'refresh'> => ({
   value: instanceValueFixture({ gameName: 'Fallout 4', downloads: { kind: 'listed', rows } }),

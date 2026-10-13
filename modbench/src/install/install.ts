@@ -3,7 +3,6 @@
 
 import { basename } from 'node:path';
 import { detectRoot } from './detectRoot';
-import { extractArchive, type Runner } from './extractArchive';
 import { markDownloadInstalled } from './installedMark';
 import type { TailOf } from '../coreLib/boundCommand';
 import { errorMessage } from '../ports/errorMessage';
@@ -11,12 +10,14 @@ import { refuse } from '../ports/refuse';
 import {
   type InstalledFileId, type InstanceAdapter, type ModExtraction, type NewModExtraction, type UpgradeExtraction,
 } from '../instanceAdapter/instanceAdapter';
+import type { ArchiveReader } from '../ports/archiveReader';
 import { modNameTakenRefusal, newModNameRefusal } from '../coreLib/commandRefusals';
 
 /** What install reaches the instance through. */
 export interface InstallAccess {
   readonly instanceRoot: string;
   readonly adapter: InstanceAdapter;
+  readonly archives: ArchiveReader;
 }
 
 interface InstallMeta {
@@ -43,8 +44,6 @@ type InstallCommandResult =
 interface InstallOptions {
   /** The instance's game name, handed in from the value, so nothing here re-reads the instance. */
   gameName: string;
-  /** Extraction runner; defaults to spawning a system 7-Zip. */
-  run?: Runner;
   /** The download's Nexus identity, when installing from one — meta.ini's `installedFiles`
    *  entry, so the next upgrade over this folder can pre-select with certainty. */
   modID?: string;
@@ -137,7 +136,7 @@ async function installFromArchive(
 ): Promise<InstallCommandResult> {
   try {
     const meta = metaFor({ archiveFilename: basename(archivePath) }, opts);
-    const outcome = await extractAndLand(access, target, (extraction) => extractArchive(archivePath, extraction.path, opts.run), meta, opts.gameName);
+    const outcome = await extractAndLand(access, target, (extraction) => access.archives.extract(archivePath, extraction.path), meta, opts.gameName);
     if (!outcome.applied) return outcome;
     const downloaded = await access.adapter.downloadedFileAt(archivePath);
     if (downloaded === undefined) return outcome;

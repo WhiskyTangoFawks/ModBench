@@ -1,0 +1,83 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { copyFile, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { sevenZip } from '../sevenZip';
+
+describe('sevenZip, spawning the binary itself', () => {
+  const FAKE_7Z = process.platform === 'win32' ? '7z.exe' : '7z';
+  let bin: string;
+  let originalPath: string | undefined;
+  let originalNodeOptions: string | undefined;
+
+  beforeAll(async () => {
+    bin = await mkdtemp(join(tmpdir(), 'fake-7z-'));
+    await copyFile(process.execPath, join(bin, FAKE_7Z));
+    await writeFile(join(bin, 'exit-as-asked.cjs'), 'process.stdout.write(process.env.FAKE_7Z_STDOUT ?? ""); process.exit(Number(process.env.FAKE_7Z_EXIT));');
+  });
+  afterAll(() => rm(bin, { recursive: true, force: true }));
+  beforeEach(() => {
+    originalPath = process.env.PATH;
+    originalNodeOptions = process.env.NODE_OPTIONS;
+    process.env.PATH = bin;
+  });
+  afterEach(() => {
+    process.env.PATH = originalPath;
+    if (originalNodeOptions === undefined) delete process.env.NODE_OPTIONS;
+    else process.env.NODE_OPTIONS = originalNodeOptions;
+    delete process.env.FAKE_7Z_EXIT;
+    delete process.env.FAKE_7Z_STDOUT;
+  });
+
+  const fakeNodeAs7zPreloadedToExit = (code: number) => {
+    process.env.FAKE_7Z_EXIT = String(code);
+    process.env.NODE_OPTIONS = `--require=${JSON.stringify(join(bin, 'exit-as-asked.cjs'))}`;
+  };
+
+  it('resolves when the binary exits 0', async () => {
+    fakeNodeAs7zPreloadedToExit(0);
+
+    await expect(sevenZip.extract('/tmp/mod.7z', '/tmp/stage')).resolves.toBeUndefined();
+  });
+
+  it('rejects with the exit code in the message when the binary exits non-zero', async () => {
+    fakeNodeAs7zPreloadedToExit(3);
+
+    await expect(sevenZip.extract('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(/exited with code 3/);
+  });
+
+  it('names every candidate when no binary is on the path', async () => {
+    process.env.PATH = '';
+
+    await expect(sevenZip.extract('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(/No 7z binary found/);
+  });
+
+  it('lists the file entries, leaving out directories', async () => {
+    fakeNodeAs7zPreloadedToExit(0);
+    process.env.FAKE_7Z_STDOUT = [
+      'Path = Wrapper\nAttributes = D drwxr-xr-x',
+      'Path = Wrapper\\textures\\a.dds\nAttributes = A -rw-r--r--',
+      'Path = Wrapper/b.esp\nAttributes = A',
+    ].join('\n\n') + '\n';
+
+    await expect(sevenZip.list('/tmp/mod.7z')).resolves.toEqual(['Wrapper/textures/a.dds', 'Wrapper/b.esp']);
+  });
+
+  it('rejects a listing with the exit code in the message when the binary exits non-zero', async () => {
+    fakeNodeAs7zPreloadedToExit(2);
+
+    await expect(sevenZip.list('/tmp/bad.7z')).rejects.toThrow(/Failed to list \/tmp\/bad\.7z.*exited with code 2/);
+  });
+
+  it('falls through to the next binary name when one is absent', async () => {
+    const only7za = join(bin, process.platform === 'win32' ? '7za.exe' : '7za');
+    await rename(join(bin, FAKE_7Z), only7za);
+    fakeNodeAs7zPreloadedToExit(0);
+
+    try {
+      await expect(sevenZip.extract('/tmp/mod.7z', '/tmp/stage')).resolves.toBeUndefined();
+    } finally {
+      await rename(only7za, join(bin, FAKE_7Z));
+    }
+  });
+});

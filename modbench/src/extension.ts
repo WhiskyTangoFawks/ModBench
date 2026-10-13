@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { createMEditClient, stopMEditClient, type MEditClient } from './client';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
+import { sevenZip } from './sevenZip';
 import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
@@ -117,7 +118,7 @@ function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened 
 
 function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: OpenedInstance, deps: ViewsDeps): InstanceSide {
   const { outputChannel, client, plugins: pluginsBox, reporterFor, ask, trash, extensionId } = deps;
-  const install = installCommands({ instanceRoot, adapter });
+  const install = installCommands({ instanceRoot, adapter, archives: sevenZip });
   own(markFirstReadLanded(instance));
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const { modSync, pluginSync } = own(instanceSyncs({

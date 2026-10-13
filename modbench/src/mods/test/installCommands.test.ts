@@ -38,6 +38,7 @@ import { installCommands } from '../../install/install';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
+import { fakeArchiveReader } from '../../ports/test/fakeArchiveReader';
 import { present } from '../../ports/present';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { progressSteps } from '../../test/recordedProgress';
@@ -49,7 +50,7 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 }
 
 const GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE ='Skyrim Special Edition';
-const INSTALL = { ...installCommands(accessTo('/instance')), installFromArchive, installFromFolder };
+const INSTALL = { ...installCommands({ ...accessTo('/instance'), archives: fakeArchiveReader([]) }), installFromArchive, installFromFolder };
 
 type ModInstallDeps = Parameters<typeof registerModInstallCommands>[0];
 
