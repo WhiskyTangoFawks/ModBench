@@ -74,14 +74,21 @@ internal sealed class RelationReads(
     }
 
     /// <summary>The records a name can mean: the one whose FormKey it is, and every one whose EditorID it
-    /// is, whatever the case. A FormKey held with different EditorIDs by different plugins is one record.</summary>
+    /// is, whatever the case. A record is named by its winning copy's EditorID, the one the views show; a
+    /// record no active plugin holds is named by the last copy in load order.</summary>
     public IReadOnlyList<(string FormKey, string? EditorId)> RecordsNamed(string name)
     {
         using var connection = store.OpenReadConnection();
         var formKey = Mutagen.Bethesda.Plugins.FormKey.TryFactory(name, out var parsed) ? parsed.ToString() : null;
         return DuckDbSql.Rows(
             connection,
-            $"SELECT form_key, any_value(editor_id) FROM {TableDdlBuilder.PluginRecordsView} WHERE lower(editor_id) = lower($1) OR form_key = $2 GROUP BY form_key ORDER BY form_key",
+            $"""
+            SELECT form_key, editor_id FROM (
+                SELECT form_key, editor_id FROM {TableDdlBuilder.PluginRecordsView}
+                QUALIFY row_number() OVER (PARTITION BY form_key ORDER BY is_winner DESC, plugin, origin) = 1)
+            WHERE lower(editor_id) = lower($1) OR form_key = $2
+            ORDER BY form_key
+            """,
             reader => (reader.GetString(0), reader.GetStringOrNull(1)),
             name, formKey);
     }

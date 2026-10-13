@@ -37,6 +37,16 @@ public class ResolveNamesTests(TestPluginFixture fixture)
     }
 
     [Fact]
+    public void APluginsFileName_ResolvesWhateverItsCase()
+    {
+        using var index = LoadedIndex();
+
+        var named = Assert.Single(index.Queries.ResolveNames([Name(TestPluginFixture.PluginName.ToUpperInvariant())]).Value());
+
+        Assert.Equal(new PluginAddress(TestPluginFixture.PluginName, fixture.Plugins.Single().Origin), named.Plugin);
+    }
+
+    [Fact]
     public void AFormKey_ResolvesToItsRecord()
     {
         using var index = LoadedIndex();
@@ -140,6 +150,59 @@ public class ResolveNamesTests(TestPluginFixture fixture)
 
         Assert.Equal(IndexRefusal.NameRefused, refused.Refusal);
         Assert.Equal(2, refused.Message.Split(":Twins.esp").Length - 1);
+    }
+
+    [Fact]
+    public void ARecordAnOverrideRenames_IsNamedByTheWinningCopysEditorId()
+    {
+        var holder = new LoadOrderHolder();
+        using var shared = SharedFilename("names-renamed");
+        using var index = Indexes.Open(holder).WithWinner(holder, shared.GameDirectory, shared.Plugins, "ModA");
+
+        var named = Assert.Single(index.Queries.ResolveNames([Name("FromModA")]).Value());
+
+        Assert.Equal("FromModA", named.EditorId);
+        Assert.Equal(IndexRefusal.NameRefused, index.Queries.ResolveNames([Name("FromModB")]).Refused().Refusal);
+        Assert.Equal("FromModA", Assert.Single(index.Queries.ResolveNames([Name(Assert.IsType<string>(named.FormKey))]).Value()).EditorId);
+    }
+
+    [Fact]
+    public void ARecordAnOverrideRenames_FollowsTheWinnerWhenTheWinnerChanges()
+    {
+        var holder = new LoadOrderHolder();
+        using var shared = SharedFilename("names-winner-changes");
+        using var index = Indexes.Open(holder).WithWinner(holder, shared.GameDirectory, shared.Plugins, "ModB");
+
+        var named = Assert.Single(index.Queries.ResolveNames([Name("FromModB")]).Value());
+
+        Assert.Equal("FromModB", named.EditorId);
+        Assert.Equal(IndexRefusal.NameRefused, index.Queries.ResolveNames([Name("FromModA")]).Refused().Refusal);
+    }
+
+    [Fact]
+    public void ARecordOnlyInactivePluginsHold_IsNamedByTheFirstCopyInFilenameAndOriginOrder()
+    {
+        var holder = new LoadOrderHolder();
+        using var shared = SharedFilename("names-inactive");
+        using var index = Indexes.Open(holder);
+        index.Reconcile(holder, shared.GameDirectory, [.. shared.Plugins.Select(p => p with { Enabled = false })], GameRelease.Fallout4);
+
+        Assert.Equal("FromModA", Assert.Single(index.Queries.ResolveNames([Name("FromModA")]).Value()).EditorId);
+        Assert.Equal(IndexRefusal.NameRefused, index.Queries.ResolveNames([Name("FromModB")]).Refused().Refusal);
+    }
+
+    [Fact]
+    public void ARecordAnActivePluginHolds_IsNamedByItsCopyNotAnInactiveOnes()
+    {
+        var holder = new LoadOrderHolder();
+        using var shared = SharedFilename("names-active-over-inactive");
+        using var index = Indexes.Open(holder);
+        index.Reconcile(
+            holder, shared.GameDirectory,
+            [.. shared.Plugins.Select(p => p with { Enabled = p.Origin == "ModB", Winning = p.Origin == "ModB" })], GameRelease.Fallout4);
+
+        Assert.Equal("FromModB", Assert.Single(index.Queries.ResolveNames([Name("FromModB")]).Value()).EditorId);
+        Assert.Equal(IndexRefusal.NameRefused, index.Queries.ResolveNames([Name("FromModA")]).Refused().Refusal);
     }
 
     private static ScatteredFixtureData SharedFilename(string prefix) =>
