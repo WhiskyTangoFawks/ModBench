@@ -176,10 +176,7 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
 
     const excluded = await modlistCommands(adapterOver(dir), unscriptedMEdit).markFiles([inMod, inOverwrite], 'Excluded', new Map());
 
-    expect(excluded).toEqual({
-      landed: [inMod, inOverwrite],
-      refused: [],
-    });
+    expect(excluded).toEqual({ applied: true, outcome: { landed: [inMod, inOverwrite], refused: [] } });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([
       'mods/DragIn Manual Extract/textures/dummy.dds', 'mods/DragIn Manual Extract/textures/dummy.dds.mohidden',
@@ -206,10 +203,10 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
 
     const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).markFiles([gone, byFolder, own], 'Included', new Map());
 
-    expect(outcome.landed).toEqual([own]);
-    expect(outcome.refused.map(({ item }) => item)).toEqual([gone, byFolder]);
-    expect(outcome.refused[0]?.reason).toBe('"Missing.esp" is gone from disk.');
-    expect(outcome.refused[1]?.reason).toBe('"meshes.mohidden/a.nif" has no suffix of its own to remove, and its folder excludes it.');
+    expect(outcome).toEqual({ applied: true, outcome: { landed: [own], refused: [
+      { item: gone, reason: '"Missing.esp" is gone from disk.' },
+      { item: byFolder, reason: '"meshes.mohidden/a.nif" has no suffix of its own to remove, and its folder excludes it.' },
+    ] } });
     assertOnlyChanged(before, await snapshotTree(dir), new Set([
       'mods/DragIn Manual Extract/textures/dummy.dds', 'mods/DragIn Manual Extract/textures/dummy.dds.mohidden',
     ]));

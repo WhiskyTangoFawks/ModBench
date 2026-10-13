@@ -59,8 +59,12 @@ export function registerFileExclusionCommands(
     const { verb } = FILE_MARKS[mark];
     const refs = rows.map((row) => row.ref);
     return runModsWriting(instance, async () => {
-      const outcome = await commands.markFiles(refs, mark, instance.value.paths.sourceDirs);
-      reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${refs.length} files.`, outcome, fileLabel);
+      const result = await commands.markFiles(refs, mark, instance.value.paths.sourceDirs);
+      if (!result.applied) {
+        reporter.report('error', `Could not ${verb} ${refs.length} files.`, result.refusal);
+        return;
+      }
+      reporter.selectionOutcome(`Could not ${verb} ${result.outcome.refused.length} of ${refs.length} files.`, result.outcome, fileLabel);
     });
   };
   return [

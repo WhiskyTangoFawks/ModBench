@@ -32,6 +32,8 @@ export function isMEditGone(status: BackendStatus): status is 'disconnected' | '
 export interface WriteRefused {
   readonly refused: true;
   readonly message: string;
+  /** The request never reached mEdit, so no answer of mEdit's says anything of its items. */
+  readonly unreachable?: true;
 }
 
 /** `WriteRefused`'s one structural tag — a plain check, not `instanceof`, so a scripted client's

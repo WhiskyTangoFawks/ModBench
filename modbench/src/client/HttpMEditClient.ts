@@ -199,7 +199,7 @@ class HttpMEditClient implements MEditClient {
       return data ?? spec.noContent ?? { refused: true, message: `${spec.failMsg} — no answer` };
     } catch (e) {
       this.log.error(`[HttpMEditClient] ${spec.op} threw: ${errorMessage(e)}`);
-      return { refused: true, message: `${spec.failMsg} — ${failureReason(UNREACHABLE)}` };
+      return { refused: true, message: `${spec.failMsg} — ${failureReason(UNREACHABLE)}`, unreachable: true };
     }
   }
 

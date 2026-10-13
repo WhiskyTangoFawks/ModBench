@@ -1259,7 +1259,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
   };
 
   it('sends every selected file to the write, whatever the view shows each as, and nothing else', async () => {
-    markFiles.mockResolvedValue({ landed: [], refused: [] });
+    markFiles.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
     const reporter = recordingReporter();
 
     registerFileExclusionCommands(commands, instance, () => [], reporter);
@@ -1270,7 +1270,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
   });
 
   it('includes the view\'s selection from the palette, where no row is right-clicked', async () => {
-    markFiles.mockResolvedValue({ landed: [], refused: [] });
+    markFiles.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
 
     registerFileExclusionCommands(commands, instance, () => [excluded], recordingReporter());
     await invoke('modbench.mod.includeFile');
@@ -1280,7 +1280,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
 
   it('reports each refused file by its mod and path, once, out of the files selected, while the rest land', async () => {
     const gone = fileRow('c.dds', false);
-    markFiles.mockResolvedValue({ landed: [], refused: [{ item: refOf(gone), reason: '"c.dds" is gone from disk.' }] });
+    markFiles.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [{ item: refOf(gone), reason: '"c.dds" is gone from disk.' }] } });
     const reporter = recordingReporter();
 
     registerFileExclusionCommands(commands, instance, () => [], reporter);
@@ -1291,6 +1291,16 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
     }]);
   });
 
+  it('reports a refusal of the whole selection once, naming its cause', async () => {
+    markFiles.mockResolvedValue({ applied: false, refusal: 'mEdit could not be reached.' });
+    const reporter = recordingReporter();
+
+    registerFileExclusionCommands(commands, instance, () => [], reporter);
+    await invoke('modbench.mod.excludeFile', included, [included, fileRow('c.dds', false)]);
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not exclude 2 files.', detail: 'mEdit could not be reached.' }]);
+  });
+
   it.each([
     ['excludeFile', 'Excluded', included], ['includeFile', 'Included', excluded],
   ] as const)('%s takes a file its folder excludes by its own name, with the selection\'s others', async (verb, mark, clicked) => {
@@ -1299,7 +1309,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
     const inFolder = (relativePath: string, excludedByName: boolean) => new FileNode(hidingFolder, origin,
       { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded: true, excludedByName },
       relativePath);
-    markFiles.mockResolvedValue({ landed: [], refused: [] });
+    markFiles.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
     const reporter = recordingReporter();
 
     registerFileExclusionCommands(commands, instance, () => [], reporter);
