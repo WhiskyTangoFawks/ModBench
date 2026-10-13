@@ -37,8 +37,7 @@ import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { pluginsCommands, pluginSyncOver } from './pluginsCommands/plugins';
 import { sourceCommands } from './sourceCommands/sourceCommands';
 import { modSyncOver, modlistCommands } from './modOrderCommands/modOrderCommands';
-import { warnIfFomod } from './install/fomodWarning';
-import { installCommands } from './install/install';
+import { warnIfFomod } from './mods/fomodWarning';
 import { downloadsCommands } from './downloadsCommands/downloads';
 import { instanceCommands } from './instanceCommands/instanceCommands';
 import { reachMEditFromTerminals } from './terminalEnvironment';
@@ -105,7 +104,9 @@ interface Opened {
 function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened {
   return whenOpened<Opened>(openedFolder(isMo2Instance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
-      const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides, gameDirectoryChanged: onGameDirectoryChange });
+      const adapter = mo2InstanceAdapter({
+        instanceRoot, gameDirectoryOverrides, gameDirectoryChanged: onGameDirectoryChange, archives: sevenZip,
+      });
       const instance = own(new Instance({
         adapter, window: vscode.window, log: outputChannel,
       }));
@@ -117,7 +118,6 @@ function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened 
 
 function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: OpenedInstance, deps: ViewsDeps): InstanceSide {
   const { outputChannel, client, plugins: pluginsBox, reporterFor, ask, trash, extensionId } = deps;
-  const install = installCommands({ instanceRoot, adapter, archives: sevenZip });
   own(markFirstReadLanded(instance));
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const { modSync, pluginSync } = own(instanceSyncs({
@@ -137,7 +137,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
   const mods = own(createModsView({
-    instance, install, commands: modlistCommands(adapter, client), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
+    instance, commands: modlistCommands(adapter, client), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
     downloadInstall: {
       reporter: reporterFor('downloadList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),

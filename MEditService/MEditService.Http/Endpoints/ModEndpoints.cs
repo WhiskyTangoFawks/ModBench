@@ -147,7 +147,7 @@ internal static class ModEndpoints
 internal sealed record BuildConfigurationRequest(
     string SourceFolder, string? Output, IReadOnlyList<string>? Exclude, IReadOnlyList<string>? Include);
 
-/// <summary>The mods to build with the instance's facts (ADR-0024): the suffix the mod manager gives an excluded
+/// <summary>The mods to build with the instance's facts (ADR-0013): the suffix the mod manager gives an excluded
 /// file's name, and the game's archive variants from the per-release table, none when it names none.</summary>
 internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExcludedSuffix, ArchiveVariantsRequest? Archives);
 
@@ -174,7 +174,7 @@ internal sealed record Ba2VariantRequest(uint Version, bool Compressed);
 
 internal sealed record BsaVariantRequest(uint Version, uint ArchiveFlags, uint FileFlags);
 
-/// <summary>The mods to init (ADR-0024).</summary>
+/// <summary>The mods to init (ADR-0013).</summary>
 internal sealed record InitRequest(IReadOnlyList<InitModRequest> Mods);
 
 /// <summary>A mod by name, the folder its repository goes in, its installation files in the mod manager's order, and the

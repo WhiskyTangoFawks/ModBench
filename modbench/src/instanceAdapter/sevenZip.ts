@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { errnoCode } from '../ports/errno';
+import { ARCHIVE_EXTENSIONS } from './archiveNames';
 import { errorMessage } from '../ports/errorMessage';
 import type { ArchiveReader } from './archiveReader';
 
@@ -26,9 +27,10 @@ async function stdoutOfSevenZip(archivePath: string, verb: string, args: string[
       throw new Error(`Failed to ${verb} ${archivePath}: ${errorMessage(err)}`);
     }
   }
+  const extensions = ARCHIVE_EXTENSIONS.map((ext) => `.${ext}`).join('/');
   throw new Error(
     `No 7z binary found (tried ${CANDIDATES.join(', ')}). ` +
-      `Install p7zip-full to read archives.`,
+      `Install p7zip-full to extract ${extensions} archives.`,
   );
 }
 

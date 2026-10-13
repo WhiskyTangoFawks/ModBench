@@ -1,5 +1,8 @@
 import { basename } from 'node:path';
-import { ARCHIVE_EXTENSIONS } from './archiveExtensions';
+
+/** The archive extensions install can extract. Every picker and the Downloads view read this
+ *  list, compared case-insensitively. */
+export const ARCHIVE_EXTENSIONS = ['zip', '7z', 'rar'] as const;
 
 const archiveExtensionPattern = new RegExp(String.raw`\.(${ARCHIVE_EXTENSIONS.join('|')})$`, 'i');
 

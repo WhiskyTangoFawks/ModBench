@@ -1,10 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, MarkdownString } from './vscodeMock';
 
-const { registerCommand, createQuickPick, installFromArchive } = vi.hoisted(() => ({
+const { registerCommand, createQuickPick } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, _handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn() })),
   createQuickPick: vi.fn(),
-  installFromArchive: vi.fn(),
 }));
 
 vi.mock('vscode', () => ({
@@ -14,15 +13,11 @@ vi.mock('vscode', () => ({
   Uri: { file: (p: string) => ({ fsPath: p }) },
 }));
 
-vi.mock('../install/install', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../install/install')>()),
-  installFromArchive,
-}));
-
 import { registerModInstallCommands } from '../mods/installCommands';
 import { DownloadNode } from '../downloads/DownloadsProvider';
-import { installCommands } from '../install/install';
-import { accessTo } from './mo2/adapterOver';
+import { modlistCommands } from '../modOrderCommands/modOrderCommands';
+import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
+import { adapterOver } from './mo2/adapterOver';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { fakeQuickPick } from '../drivingLib/test/quickPickDouble';
 import { recordingReporter } from './surfacingDoubles';
@@ -35,7 +30,7 @@ describe('the Downloads-Mods seam: modbench.mod.install given a Downloads row', 
     const { qp, escape } = fakeQuickPick<{ label: string }>();
     createQuickPick.mockReturnValue(qp);
     registerModInstallCommands({
-      install: installCommands(accessTo('/instance')), instance,
+      commands: modlistCommands(adapterOver('/instance'), new InMemoryMEditClient()), instance,
       reporterFor: () => recordingReporter(), warnIfFomod: vi.fn(),
       downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     });

@@ -6,7 +6,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { newModNameRefusal } from '../commandRefusals';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
-import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
+import { adapterOver } from '../../test/mo2/adapterOver';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 
 describe('newModNameRefusal', () => {
@@ -15,7 +15,7 @@ describe('newModNameRefusal', () => {
 
   beforeEach(() => {
     root = cloneCorpusFixture();
-    adapter = mo2InstanceAdapter({ instanceRoot: root, gameDirectoryOverrides: () => ({}), gameDirectoryChanged: () => ({ dispose: () => {} }) });
+    adapter = adapterOver(root);
   });
   afterEach(() => rm(root, { recursive: true, force: true }));
 

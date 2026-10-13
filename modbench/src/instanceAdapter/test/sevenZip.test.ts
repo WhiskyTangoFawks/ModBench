@@ -54,10 +54,11 @@ describe('sevenZip, spawning the binary itself', () => {
     await expect(sevenZip.extract('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(/exited with code 3/);
   });
 
-  it('names every candidate when no binary is on the path', async () => {
+  it('names every candidate, and the archives install extracts, when no binary is on the path', async () => {
     process.env.PATH = '';
 
-    await expect(sevenZip.extract('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(/No 7z binary found/);
+    await expect(sevenZip.extract('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(
+      'No 7z binary found (tried 7z, 7za, 7zz). Install p7zip-full to extract .zip/.7z/.rar archives.');
   });
 
   it('lists the file entries, leaving out directories', async () => {

@@ -1,5 +1,5 @@
 import type {
-  DownloadedFiles, DownloadMeta, GameFolder, InstanceAdapter, ModlistEntry, PluginEntry,
+  ArchiveReader, DownloadedFiles, DownloadMeta, GameFolder, InstanceAdapter, ModlistEntry, PluginEntry,
 } from '../../instanceAdapter/instanceAdapter';
 import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
 import { readInstance } from '../../instanceAdapter/mo2Reads';
@@ -9,13 +9,14 @@ import { pluginsCommands, type PluginsCommands } from '../../pluginsCommands/plu
 import type { Instance } from '../../instanceLoader/instance';
 import { fakeArchiveReader } from '../fakeArchiveReader';
 import { NO_DETECTORS } from '../noDetectors';
-import type { InstallAccess } from '../../install/install';
 
 /** The adapter's answers a test fixes in place of asking the machine it runs on. */
 export interface AdapterAnswers {
   /** Where the game is, for each read of the settings. */
   gameFolder?: GameFolder | (() => Promise<GameFolder>);
   downloadedFiles?: DownloadedFiles | (() => Promise<DownloadedFiles>);
+  /** What every archive holds; none when the test fixes no reader. */
+  archives?: ArchiveReader;
 }
 
 /** The downloaded files' answer for a test whose subject holds none: listed nowhere, watched never. */
@@ -26,11 +27,6 @@ export const STEADY_WINDOW: ConstructorParameters<typeof Instance>[0]['window'] 
   state: { focused: true },
   onDidChangeWindowState: () => ({ dispose: () => {} }),
 };
-
-/** What install reaches the instance through, over `root`, with an archive reader holding nothing. */
-export function accessTo(root: string, answers: AdapterAnswers = {}): InstallAccess {
-  return { instanceRoot: root, adapter: adapterOver(root, answers), archives: fakeArchiveReader([]) };
-}
 
 /** MO2's adapter over `root`, detecting no game install, with the answers a test fixes in place. */
 /** An adapter whose reading is taken over its own reads, so a test that replaces a read changes the reading. */
@@ -44,6 +40,7 @@ export function adapterOver(root: string, answers: AdapterAnswers = {}): Instanc
     gameDirectoryOverrides: () => ({}),
     gameDirectoryChanged: () => ({ dispose: () => {} }),
     detectors: NO_DETECTORS,
+    archives: answers.archives ?? fakeArchiveReader([]),
   });
   const { gameFolder, downloadedFiles } = answers;
   const fixed: Omit<InstanceAdapter, 'reading'> = {

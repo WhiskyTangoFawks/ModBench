@@ -57,7 +57,7 @@ internal static class ModlistEndpoints
     }
 }
 
-/// <summary>The mods to stage with the instance's facts (ADR-0024). DeltaShare is the share of its file a delta may
+/// <summary>The mods to stage with the instance's facts (ADR-0013). DeltaShare is the share of its file a delta may
 /// reach before the file has no provider.</summary>
 internal sealed record StageRequest(
     IReadOnlyList<StageModRequest> Mods, IReadOnlyList<StageGameFileRequest> GameFiles, string DataFolder, string BuildFolder, double? DeltaShare);

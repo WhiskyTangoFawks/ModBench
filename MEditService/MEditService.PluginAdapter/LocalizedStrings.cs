@@ -113,7 +113,7 @@ internal static class LocalizedStrings
         GameConstants.Get(gameRelease).StringsLanguageFormat
         ?? throw new ArgumentException($"Tried to check localization strings for an unsupported game: {gameRelease}", nameof(gameRelease));
 
-    // Each file from the first handed place holding it (ADR-0024), as the game reads it, none past the one completing
+    // Each file from the first handed place holding it (ADR-0013), as the game reads it, none past the one completing
     // its language. The game's lists are the resolved copy's alone: another copy's IDs may differ.
     private static Dictionary<(StringsSource Source, Language Language), StringsFile> Find(
         PluginStrings strings, LoadOrderSnapshot? loadOrder, ModPath plugin, GameRelease gameRelease)

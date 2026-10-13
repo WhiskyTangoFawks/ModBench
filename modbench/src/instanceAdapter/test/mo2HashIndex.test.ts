@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../test/noDetectors';
+import { fakeArchiveReader } from '../../test/fakeArchiveReader';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -25,6 +26,7 @@ describe('the MO2 adapter\'s hashes', () => {
     await writeFile(join(root, 'Game.esm'), 'aaaa');
     const adapter = mo2InstanceAdapter({
       instanceRoot: root, gameDirectoryOverrides: () => ({}), gameDirectoryChanged: () => ({ dispose: () => {} }), detectors: NO_DETECTORS,
+      archives: fakeArchiveReader([]),
     });
 
     await adapter.gameFileHash(join(root, 'Game.esm'));

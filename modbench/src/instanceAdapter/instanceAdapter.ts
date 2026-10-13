@@ -12,6 +12,8 @@ export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
 export { OVERWRITE_ORIGIN } from './codecs/modlistText';
 export type { ArchiveReader } from './archiveReader';
+export { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, isArchiveName } from './archiveNames';
+export { samePath } from './samePath';
 export { sevenZip } from './sevenZip';
 
 /** The setting that names the game folder outright, and so the one that fixes a folder not found. */
@@ -160,34 +162,19 @@ export type DataFolderArchives =
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
-/** An entry directly in an extracted folder. */
-export interface ExtractedEntry {
+/** Where a mod's files come from: an archive, extracted, or a folder, copied and left as it was. */
+export type InstallSource = { readonly kind: 'archive'; readonly path: string } | { readonly kind: 'folder'; readonly path: string };
+
+/** Which mod an install fills, settled by the caller: the folder on disk is checked against the
+ *  claim, never consulted to decide it. */
+export interface InstallTarget {
+  readonly kind: 'new' | 'upgrade';
   readonly name: string;
-  readonly kind: 'folder' | 'file' | 'other';
 }
 
-/** A release on its way into a mod's own folder, in a fresh folder of its own inside it. Only the
- *  adapter makes one, and it removes only what it made. */
-export interface ModExtraction {
-  /** Where the release is extracted. */
-  readonly path: string;
-  /** Puts a copy of `folder`'s tree in `path`; `folder` is left as it was. */
-  copyIn(folder: string): Promise<void>;
-  /** Undoes the extraction: a new mod's folder goes whole; an upgrade's folder keeps everything
-   *  but the extraction. */
-  abandon(): Promise<void>;
-}
-
-export interface NewModExtraction extends ModExtraction {
-  /** Makes the tree at `root` the mod's contents, its meta holding `keys` alone. */
-  land(root: string, keys: OwnedMetaKeys): Promise<void>;
-}
-
-export interface UpgradeExtraction extends ModExtraction {
-  /** Replaces the mod's contents with the tree at `root`, setting `keys` over the meta and keeping
-   *  each value `keys` leaves undefined. */
-  land(root: string, keys: OwnedMetaKeys): Promise<void>;
-}
+/** An install that landed, and whether its source is a scripted installer, whose files land as
+ *  they are; or none, because the target's folder is there for a new mod or absent for an upgrade. */
+export type InstallOutcome = { readonly landed: true; readonly isFomod: boolean } | { readonly landed: false };
 
 interface InstanceSettings {
   readonly profile: string;
@@ -400,9 +387,6 @@ export interface InstanceAdapter {
     profile: string, gameFolder: GameFolder, gameRelease: string | undefined,
   ): Promise<{ readonly archives: readonly string[]; readonly notes: readonly string[] }>;
   gameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined): Promise<DataFolderArchives>;
-  /** The name of the downloaded file at `path`, the paths matched as the platform matches them;
-   *  undefined when `path` is not in the downloads folder, or that folder cannot be resolved. */
-  downloadedFileAt(path: string): Promise<string | undefined>;
 
   // Get in mods/.
   /** Undefined when there is no folder for mods at all. A link that cannot be followed is no
@@ -425,9 +409,9 @@ export interface InstanceAdapter {
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** An origin file's size and hash at the path it is read from, remembered for this session alone: its lasting hash
-   *  is its manifest line, mEdit's (ADR-0024). Two files with one hash hold the same bytes. */
+   *  is its manifest line, mEdit's (ADR-0013). Two files with one hash hold the same bytes. */
   originFileHash(path: string): Promise<FileRead<HashedFile>>;
-  /** A game file's size and hash, the hash as mEdit's manifest carries it, kept in the adapter's index (ADR-0024). */
+  /** A game file's size and hash, the hash as mEdit's manifest carries it, kept in the adapter's index (ADR-0013). */
   gameFileHash(path: string): Promise<FileRead<HashedFile>>;
   /** The size and hash of the downloaded file at `path`, and of each of its entries, kept in the adapter's index. */
   downloadedFileHash(path: string): Promise<FileRead<HashedDownload>>;
@@ -470,12 +454,9 @@ export interface InstanceAdapter {
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
   /** Moves the source folder that builds the mod into the trash; false when none does. */
   trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
-  /** Makes the folder of a mod that is new. Refuses a folder already there, whatever it holds,
-   *  matched as the manager matches names. */
-  extractNewMod(mod: string): Promise<NewModExtraction>;
-  /** Opens the extraction inside the folder of a mod that is there; rejects when none holds it. */
-  extractUpgrade(mod: string): Promise<UpgradeExtraction>;
-  extractedEntries(folder: string): Promise<ExtractedEntry[]>;
+  /** Puts the source's files in a new folder, or in place of the mod's own. Rejects with why; a
+   *  new mod's folder goes, and an upgrade that failed part way is not rolled back. */
+  install(source: InstallSource, target: InstallTarget, keys: OwnedMetaKeys): Promise<InstallOutcome>;
 
   // Subscribe: the instance changed.
   /** Hears that the instance changed: any of its files, the downloads folder and the game folder's

@@ -19,7 +19,6 @@
     { "path": "./instanceCommands" },
     { "path": "./sourceCommands" },
     { "path": "./downloadsCommands" },
-    { "path": "./install" },
     { "path": "./client" },
     { "path": "./drivingLib" },
     { "path": "./toolbox" },
