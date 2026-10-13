@@ -19,7 +19,7 @@ public sealed class RegisteredPluginSpellingTests
     {
         using var scratch = new ModFolderUnderAnInstanceRootScratch();
 
-        var result = await TrackEveryPluginOf.ModAsync(scratch.LoadOrder, Origin);
+        var result = await InitEveryPluginOf.ModAsync(scratch.LoadOrder, Origin);
 
         Assert.Empty(result.Refused);
         var repository = TestAdapters.Source().Open(TestMod.Of(scratch.Plugin, scratch.ModFolder), Release).Require();
@@ -31,7 +31,7 @@ public sealed class RegisteredPluginSpellingTests
     public async Task Compile_OfAPluginWithAMixedCaseExtension_ReadsTheSourceRootAsRegistered()
     {
         using var scratch = new ModFolderUnderAnInstanceRootScratch();
-        Assert.Empty((await TrackEveryPluginOf.ModAsync(scratch.LoadOrder, Origin)).RefusalMessages());
+        Assert.Empty((await InitEveryPluginOf.ModAsync(scratch.LoadOrder, Origin)).RefusalMessages());
 
         await CompileServices.Over(scratch.LoadOrder).CompileLandedAsync(scratch.Plugin);
     }

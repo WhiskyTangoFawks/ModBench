@@ -28,8 +28,7 @@ import { registerRenamePluginCommand, type RenamePluginDeps } from './pluginRena
 import { registerRecordCreateCommand } from './createRecordCommand';
 import { createdRecordSelection } from './createdRecordSelection';
 import {
-  BuildProblems, registerBuildCommand, registerDecompileCommand, registerTrackCommand, type DecompileDeps,
-  type TrackDeps,
+  BuildProblems, registerBuildCommand, registerDecompileCommand, registerInitCommand, type DecompileDeps,
 } from './pluginRowCommands';
 import { registerPluginMoveCommand } from './pluginMoveCommand';
 import { registerPluginEnableCommands } from './pluginParticipationCommands';
@@ -52,7 +51,7 @@ export interface PluginsViewDeps {
   recordBrowser: RecordBrowser;
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the index
    *  status. */
-  client: PluginFactsClient & RenamePluginDeps['client'] & TrackDeps['client'] & DecompileDeps['client']
+  client: PluginFactsClient & RenamePluginDeps['client'] & DecompileDeps['client']
     & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onLoadOrderStatus' | 'onReconnected' | 'onStatusChanged' | 'setFilter' | 'clearFilter' | 'createPlugin'>;
   statusBar: StatusBar;
   /** Registers the tracked mods' repositories: a reconcile reached Ready, or a track landed. */
@@ -62,9 +61,9 @@ export interface PluginsViewDeps {
   sourceEditing: SourceEditing;
   /** Saves a mod's unsaved plugin source; answers the paths VS Code left unsaved, or undefined when the mod has no source folder. */
   saveUnsavedPluginSource: (mod: string) => Promise<string[] | undefined>;
-  /** The rows of the focused Mods or Plugins view, which the palette's track and build act on. */
-  trackSelection: () => readonly unknown[];
-  /** The Mods view's id, whose bar a track from a Mods row runs under. */
+  /** The rows of the focused Mods or Plugins view, which the palette's init and build act on. */
+  sourceGestureRows: () => readonly unknown[];
+  /** The Mods view's id, whose bar an init or a build from a Mods row runs under. */
   modsView: string;
   /** Plugin sync, whose failure the view's message line says. */
   pluginSync: Sync<PluginSyncArguments>;
@@ -180,22 +179,22 @@ function publishKeyContext(selection: readonly PluginsTreeNode[], tree: PluginsT
 }
 
 function registerPluginGestures(
-  { instance, commands, sourceCommands, client, ask, registerRepositories, pluginSync, reporterFor, recordWrite, sourceEditing, saveUnsavedPluginSource, trackSelection, modsView }: PluginsViewDeps,
+  { instance, commands, sourceCommands, client, ask, registerRepositories, pluginSync, reporterFor, recordWrite, sourceEditing, saveUnsavedPluginSource, sourceGestureRows, modsView }: PluginsViewDeps,
   { tree, view, progress, selection, buildProblems }: {
     tree: PluginsTreeProvider; view: vscode.TreeView<PluginsTreeNode>; progress: PluginsViewProgress;
     selection: () => readonly PluginsTreeNode[]; buildProblems: BuildProblems;
   },
 ): vscode.Disposable[] {
   return [
-    registerTrackCommand({
-      progress, instance, client, reporter: reporterFor('mod.track'), onTracked: registerRepositories,
+    registerInitCommand({
+      progress, instance, commands: sourceCommands, reporter: reporterFor('mod.init'), onInitialized: registerRepositories,
       modDirs: () => instance.value.paths.modDirs, modsView,
-    }, trackSelection),
+    }, sourceGestureRows),
     registerBuildCommand({
       commands: sourceCommands, instance, reporter: reporterFor('mod.build'), problems: buildProblems,
       sourceFiles: (origin) => sourceFiles(instance.value, origin), saveUnsaved: saveUnsavedPluginSource,
       modDirs: () => instance.value.paths.modDirs, sourceMods: () => instance.value.sourceMods, modsView,
-    }, trackSelection),
+    }, sourceGestureRows),
     registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
     registerRecordCreateCommand({
       client, reporter: reporterFor('record.create'), write: recordWrite, source: sourceEditing,

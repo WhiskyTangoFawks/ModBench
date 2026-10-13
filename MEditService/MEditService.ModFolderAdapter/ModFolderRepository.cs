@@ -22,6 +22,9 @@ public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepositor
 
     public string InstallationFileName(string path) => Path.GetFileName(path);
 
+    public Stream OpenFile(string folder, string path) =>
+        new FileStream(Path.Combine(folder, path), FileMode.Open, FileAccess.Read, FileShare.Read);
+
     public bool WriteManifest(string modFolder, string modName, Manifest manifest)
     {
         var path = Path.Combine(modFolder, ManifestName(modName));

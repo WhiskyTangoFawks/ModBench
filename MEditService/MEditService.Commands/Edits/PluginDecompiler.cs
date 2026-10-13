@@ -12,7 +12,7 @@ internal sealed record Decompiled(PluginSource? Source, DecompileRefusal Refusal
     internal static Decompiled Refused(DecompileRefusal refusal, string message) => new(null, refusal, message);
 }
 
-/// <summary>Track and decompile both read a plugin into its plugin source through this one gate.
+/// <summary>Init and decompile both read a plugin into its plugin source through this one gate.
 /// </summary>
 internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, ISourceAdapter sourceAdapter)
 {

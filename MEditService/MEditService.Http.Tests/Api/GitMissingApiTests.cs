@@ -21,7 +21,7 @@ public sealed class GitMissingApiTests : HostedTests
             .WithPlugin(Plugin, mod => { mod.Npcs.AddNew("FirstNpc"); mod.Npcs.AddNew("SecondNpc"); }, origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Init(Origin)).EnsureSuccessStatusCode();
         var npcs = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_"))
             .GetProperty("items").EnumerateArray().Select(r => r.GetProperty("formKey").GetString().Require()).ToArray();
         Assert.Equal(2, npcs.Length);
@@ -59,8 +59,8 @@ public sealed class GitMissingApiTests : HostedTests
             .WithPlugin("Second.esp", mod => mod.Npcs.AddNew("SecondNpc"), origin: "SecondMod")
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
-        (await Client.Track("SecondMod")).EnsureSuccessStatusCode();
+        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.Init("SecondMod")).EnsureSuccessStatusCode();
         var npc = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_"))
             .GetProperty("items").EnumerateArray().Single().GetProperty("formKey").GetString().Require();
         var modFolders = fx.Plugins.Select(p => Path.GetDirectoryName(p.Path).Require()).ToList();
@@ -90,7 +90,7 @@ public sealed class GitMissingApiTests : HostedTests
     }
 
     [Fact]
-    public async Task TrackingASelection_WithGitMissing_RefusesTheWholeSelectionOnce_AndWritesNothing()
+    public async Task InitOfASelection_WithGitMissing_RefusesTheWholeSelectionOnce_AndWritesNothing()
     {
         using var fx = new PluginFixtureBuilder("trace-track-without-git")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
@@ -105,7 +105,7 @@ public sealed class GitMissingApiTests : HostedTests
         Environment.SetEnvironmentVariable("PATH", string.Empty);
         try
         {
-            response = await Client.Track([Origin, "SecondMod"]);
+            response = await Client.Init([Origin, "SecondMod"]);
         }
         finally
         {
@@ -118,7 +118,7 @@ public sealed class GitMissingApiTests : HostedTests
         Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
         Assert.All(modFolders, modFolder => Assert.False(Directory.Exists(Path.Combine(modFolder, ".git"))));
         Assert.Equal(before, modFolders.Select(FilesOutsideGit));
-        Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Track", StringComparison.Ordinal));
+        Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Init", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public sealed class GitMissingApiTests : HostedTests
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Init(Origin)).EnsureSuccessStatusCode();
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
         var before = FilesOutsideGit(modFolder);
 
@@ -160,7 +160,7 @@ public sealed class GitMissingApiTests : HostedTests
             .WithPlugin("Second.esp", mod => mod.Npcs.AddNew("SecondNpc"), origin: "SecondMod")
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track([Origin, "SecondMod"])).EnsureSuccessStatusCode();
+        (await Client.Init([Origin, "SecondMod"])).EnsureSuccessStatusCode();
         var modFolders = fx.Plugins.Select(p => Path.GetDirectoryName(p.Path).Require()).ToList();
         var before = modFolders.Select(FilesOutsideGit).ToList();
 
@@ -227,7 +227,7 @@ public sealed class GitMissingApiTests : HostedTests
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(Plugin);
         return fx;

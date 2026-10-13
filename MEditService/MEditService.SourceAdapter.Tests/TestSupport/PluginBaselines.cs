@@ -4,20 +4,20 @@ using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.TestSupport;
 
-/// <summary>A fixture's placed files as the plugins Track commits: one per plugin whose source
-/// root holds them, handed in under that root as the whole-mod door's tree, carrying no fact
-/// beyond the plugin's name.</summary>
+/// <summary>A fixture's placed files as the plugins init commits: one per plugin whose source
+/// root holds them, handed in under that root as the whole-mod door's tree, in a mod with no
+/// assets.</summary>
 internal static class PluginBaselines
 {
-    internal static void Track(string modFolder, IEnumerable<TreeFile> files)
+    internal static void Init(string sourceFolder, IEnumerable<TreeFile> files)
     {
-        if (TestAdapters.Source().Track(modFolder, Of(files)) is [var (plugin, reason), ..])
-            throw new InvalidOperationException($"Expected the fixture to track, and {plugin} was refused: {reason}");
+        if (TestAdapters.Source().Init(sourceFolder, Of(files)) is { } failure)
+            throw new InvalidOperationException($"Expected the fixture to init, and it was refused: {failure.Reason}");
     }
 
     /// <summary>A repository holding one plugin with no record, for a test that brings its own.</summary>
-    internal static void TrackWithNoRecords(string modFolder) =>
-        Track(modFolder, [new TreeFile("plugin-source/Seed.esp/seed.txt", [])]);
+    internal static void InitWithNoRecords(string sourceFolder) =>
+        Init(sourceFolder, [new TreeFile("plugin-source/Seed.esp/seed.txt", [])]);
 
     internal static IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Of(IEnumerable<TreeFile> files) =>
     [

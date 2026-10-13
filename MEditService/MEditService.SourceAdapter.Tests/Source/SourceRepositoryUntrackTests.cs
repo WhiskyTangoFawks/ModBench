@@ -12,7 +12,7 @@ public sealed class SourceRepositoryUntrackTests
         using var modFolder = new ScratchDirectory("medit-untrack-");
         var relativePath = Path.Combine("plugin-source", "Test.esp", "npc_", "Test.esp", "000001.json");
         var content = "{\"formKey\":\"000001:Test.esp\"}"u8.ToArray();
-        PluginBaselines.Track(
+        PluginBaselines.Init(
             modFolder,
             [new TreeFile(relativePath, content)]);
 

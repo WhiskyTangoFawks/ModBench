@@ -44,7 +44,7 @@ public sealed class WriteSessionTests : IDisposable
         _exteriorCell = new Cell(_mod) { EditorID = "Exterior" };
         _header = HeaderDocument.Write(_mod);
 
-        PluginBaselines.Track(_modFolder, TheTree());
+        PluginBaselines.Init(_modFolder, TheTree());
     }
 
     private TreeFile[] TheTree() =>
@@ -144,7 +144,7 @@ public sealed class WriteSessionTests : IDisposable
     private IReadOnlyList<string> TreeTheWritesLeaveOneAfterAnother(Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
     {
         using var oneAfterAnother = new ScratchDirectory("medit-session-sequence-");
-        PluginBaselines.Track(oneAfterAnother, TheTree());
+        PluginBaselines.Init(oneAfterAnother, TheTree());
         foreach (var write in writes)
         {
             var repository = TestAdapters.Source().OverFolder(TestMod.In(oneAfterAnother), Release);

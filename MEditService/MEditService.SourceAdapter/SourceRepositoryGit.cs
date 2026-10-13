@@ -13,7 +13,7 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     private readonly string _gitDir = Path.Combine(sourceFolder, ".git");
 
     /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c>
-    /// exists. A <c>.git</c> with no <c>main</c> is Track's own, half made, or
+    /// exists. A <c>.git</c> with no <c>main</c> is init's own, half made, or
     /// <see cref="HoldsAnotherRepository"/>.</summary>
     internal static bool IsTracked(string sourceFolder)
     {
@@ -21,21 +21,21 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
         return Directory.Exists(gitDir) && HasMainBranch(gitDir);
     }
 
-    internal const string TrackMarkSection = "medit";
-    internal const string TrackMarkKey = "track";
+    internal const string InitMarkSection = "medit";
+    internal const string InitMarkKey = "init";
 
-    /// <summary>A <c>.git</c> with no <c>main</c> and no Track mark: someone else's, which Track never
+    /// <summary>A <c>.git</c> with no <c>main</c> and no init mark: someone else's, which init never
     /// writes to (ADR-0003). The mark is a config key set right after <c>git init</c>.</summary>
     internal static bool HoldsAnotherRepository(string sourceFolder)
     {
         var gitDir = Path.Combine(sourceFolder, ".git");
-        return Directory.Exists(gitDir) && !HasMainBranch(gitDir) && !IsMarkedAsTracks(gitDir);
+        return Directory.Exists(gitDir) && !HasMainBranch(gitDir) && !IsMarkedByInit(gitDir);
     }
 
-    private static bool IsMarkedAsTracks(string gitDir)
+    private static bool IsMarkedByInit(string gitDir)
     {
         var config = Path.Combine(gitDir, "config");
-        return File.Exists(config) && File.ReadLines(config).Any(line => line.Trim() == $"[{TrackMarkSection}]");
+        return File.Exists(config) && File.ReadLines(config).Any(line => line.Trim() == $"[{InitMarkSection}]");
     }
 
     // Read off the ref store's files, not by running git: every read of a tracked plugin asks this.

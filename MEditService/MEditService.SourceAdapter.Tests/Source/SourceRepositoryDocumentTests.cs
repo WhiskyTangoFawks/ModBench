@@ -25,7 +25,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private void Track(params TreeFile[] files) =>
-        PluginBaselines.Track(
+        PluginBaselines.Init(
             _modFolder, files);
 
     private string NpcGroupFolder
@@ -40,7 +40,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
     private ISourceRepository Opened()
     {
-        PluginBaselines.TrackWithNoRecords(_modFolder);
+        PluginBaselines.InitWithNoRecords(_modFolder);
         var repository = RequireOpened();
         repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody)).Wrote();
         return repository;
@@ -99,7 +99,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     [Fact]
     public void Open_OnATrackedFolder_IsARepository()
     {
-        PluginBaselines.TrackWithNoRecords(_modFolder);
+        PluginBaselines.InitWithNoRecords(_modFolder);
 
         Assert.NotNull(TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4));
     }
@@ -250,7 +250,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     public void Put_WithANewEditorIdOnACell_MovesItsDirectoryAndKeepsItsBlockFolders()
     {
         const string cellKey = "000A00:Fixture.esp";
-        PluginBaselines.TrackWithNoRecords(_modFolder);
+        PluginBaselines.InitWithNoRecords(_modFolder);
         var repository = RequireOpened();
         static string CellBody(string editorId) => $"{{\n  \"FormKey\": \"{cellKey}\",\n  \"EditorID\": \"{editorId}\"\n}}";
         repository.Put(Plugin, new SourceDocument(cellKey, "cell", "OldCell", CellBody("OldCell"))).Wrote();
@@ -273,7 +273,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     public void Put_OfACellDirectorySomethingElseRenamed_MovesItToTheNameTheLayoutComputes()
     {
         const string cellKey = "000A00:Fixture.esp";
-        PluginBaselines.TrackWithNoRecords(_modFolder);
+        PluginBaselines.InitWithNoRecords(_modFolder);
         var repository = RequireOpened();
         var body = $"{{\n  \"FormKey\": \"{cellKey}\",\n  \"EditorID\": \"Cell\"\n}}";
         repository.Put(Plugin, new SourceDocument(cellKey, "cell", "Cell", body)).Wrote();
@@ -294,7 +294,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     public void Put_OfACellWhoseDocumentIsNamedOtherwiseInItsOwnDirectory_MovesTheDocumentToTheLeafName(string heldAs)
     {
         const string cellKey = "000A00:Fixture.esp";
-        PluginBaselines.TrackWithNoRecords(_modFolder);
+        PluginBaselines.InitWithNoRecords(_modFolder);
         var repository = RequireOpened();
         var body = $"{{\n  \"FormKey\": \"{cellKey}\",\n  \"EditorID\": \"Cell\"\n}}";
         repository.Put(Plugin, new SourceDocument(cellKey, "cell", "Cell", body)).Wrote();
@@ -310,7 +310,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     public void Put_OfACellWhoseDirectoryHoldsTwoDocumentsAndNoneNamedForIt_RefusesAsAmbiguous()
     {
         const string cellKey = "000A00:Fixture.esp";
-        PluginBaselines.TrackWithNoRecords(_modFolder);
+        PluginBaselines.InitWithNoRecords(_modFolder);
         var repository = RequireOpened();
         var body = $"{{\n  \"FormKey\": \"{cellKey}\",\n  \"EditorID\": \"Cell\"\n}}";
         repository.Put(Plugin, new SourceDocument(cellKey, "cell", "Cell", body)).Wrote();

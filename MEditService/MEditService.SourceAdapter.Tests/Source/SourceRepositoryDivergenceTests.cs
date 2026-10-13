@@ -21,7 +21,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
 
     public SourceRepositoryDivergenceTests()
     {
-        PluginBaselines.Track(
+        PluginBaselines.Init(
             _modFolder,
             [new TreeFile(PluginSourceRoot.HeaderDocument(PluginName), "{\"MasterReferences\": []}"u8.ToArray())]);
         Repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "FixtureNpc", NpcBody)).Wrote();

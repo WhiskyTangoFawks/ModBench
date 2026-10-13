@@ -11,13 +11,13 @@ public enum RecordEditRefusal
 {
     None,
 
-    /// <summary>The way out is Track, once per mod (ADR-0007).</summary>
+    /// <summary>The way out is init, once per mod (ADR-0007).</summary>
     PluginNotTracked,
 
     /// <summary>The way out is decompile.</summary>
     PluginSourceUnreadable,
 
-    /// <summary>A vanilla/DLC master straight from Data, where Track cannot apply; the way out is a patch plugin.</summary>
+    /// <summary>A vanilla/DLC master straight from Data, where init cannot apply; the way out is a patch plugin.</summary>
     PluginHasNoModFolder,
 
     /// <summary>The load order names no such plugin.</summary>

@@ -13,6 +13,8 @@ public interface IModFolderRepository
     /// <summary>The name of the installation file at <paramref name="path"/>, without its folder.</summary>
     string InstallationFileName(string path);
 
+    Stream OpenFile(string folder, string path);
+
     /// <summary>Writes the mod's manifest into its folder, and only when its text differs from the one there.
     /// True when it wrote.</summary>
     bool WriteManifest(string modFolder, string modName, Manifest manifest);

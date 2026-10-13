@@ -11,7 +11,6 @@ public sealed class WriteRouteSeamTests
         ("POST /records/delete-changes", "DeleteRecordChanges"),
         ("POST /records/copy-changes", "CopyRecordChanges"),
         ("POST /plugins/create", "CreatePlugin"),
-        ("POST /plugins/track", "Track"),
         ("POST /plugins/decompile", "Decompile"),
         ("POST /plugins/compile", "Compile"),
         ("POST /plugins/rename-source-changes", "RenameSourceChanges"),

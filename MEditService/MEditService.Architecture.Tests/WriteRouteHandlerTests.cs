@@ -15,7 +15,6 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/records/delete-changes", typeof(DeleteRecordChangesHandler)),
         ("POST", "/records/copy-changes", typeof(CopyRecordChangesHandler)),
         ("POST", "/plugins/create", typeof(CreatePluginHandler)),
-        ("POST", "/plugins/track", typeof(TrackHandler)),
         ("POST", "/plugins/decompile", typeof(DecompilePluginHandler)),
         ("POST", "/plugins/compile", typeof(CompilePluginHandler)),
         ("POST", "/plugins/rename-source-changes", typeof(RenameSourceChangesHandler)),

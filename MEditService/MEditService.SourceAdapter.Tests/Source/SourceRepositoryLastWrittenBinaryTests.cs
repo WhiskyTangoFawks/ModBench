@@ -15,7 +15,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
 
     private static ISourceRepository TrackedOver(ScratchDirectory modFolder)
     {
-        TestAdapters.Source().Track(
+        TestAdapters.Source().Init(
             modFolder,
             [
                 ([new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())],
@@ -179,7 +179,7 @@ public sealed class SourceRepositoryLastWrittenBinaryWithoutGitTests : IDisposab
     private readonly ScratchDirectory _modFolder = new("medit-last-written-nogit-");
 
     public SourceRepositoryLastWrittenBinaryWithoutGitTests() =>
-        PluginBaselines.Track(_modFolder, [new TreeFile("plugin-source/A.esp/npc_/A.esp/000001.json", "{}"u8.ToArray())]);
+        PluginBaselines.Init(_modFolder, [new TreeFile("plugin-source/A.esp/npc_/A.esp/000001.json", "{}"u8.ToArray())]);
 
     public void Dispose() => _modFolder.Dispose();
 

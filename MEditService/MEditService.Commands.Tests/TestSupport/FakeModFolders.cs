@@ -42,6 +42,9 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public string InstallationFileName(string path) => path[(path.LastIndexOf('/') + 1)..];
 
+    public Stream OpenFile(string folder, string path) =>
+        Unreadable.Contains((folder, path)) ? throw new IOException($"{path} is held by another process") : new MemoryStream(_files[(folder, path)].Bytes);
+
     public bool WriteManifest(string modFolder, string modName, Manifest manifest)
     {
         if (UnwritableManifests.Contains(modFolder)) throw new UnauthorizedAccessException($"{modFolder} is read-only");

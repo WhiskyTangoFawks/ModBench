@@ -59,7 +59,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         _quest = new Quest(_mod) { EditorID = "Quest" };
         _quest.DialogTopics.Add(_topic);
 
-        PluginBaselines.Track(
+        PluginBaselines.Init(
             _modFolder, TheFourDocumentsTheWholeModDoorWritesForThisGraph());
     }
 

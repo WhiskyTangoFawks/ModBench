@@ -153,6 +153,16 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Contains("café", System.Text.Encoding.UTF8.GetString(bytes));
     }
 
+    [Fact]
+    public void OpenFile_ReadsTheFileAtThePathUnderTheFolder()
+    {
+        Write("scripts/a.pex", "bytes");
+
+        using var content = new StreamReader(_repository.OpenFile(_root, "scripts/a.pex"));
+
+        Assert.Equal("bytes", content.ReadToEnd());
+    }
+
     private static Manifest Manifest(params ManifestFile[] files) => new([], [], files);
 
     private HashedFile OnlyFile() => Assert.Single(_repository.Files(_root, "mod", new HashSet<string>()));

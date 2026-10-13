@@ -6,12 +6,12 @@ namespace MEditService.Commands.Build;
 /// bytes, and a file nothing holds has no provider.</summary>
 internal sealed class ManifestBuilder
 {
-    private readonly List<(string Name, InstallationFileToStage File)> _installationFiles;
+    private readonly List<(string Name, InstallationFile File)> _installationFiles;
     private readonly Dictionary<string, GameFileToStage> _gameFiles = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<(string Name, ILookup<string, HashedEntry> ByHash, Dictionary<string, HashedEntry> ByPath)> _indexes;
     private readonly Dictionary<string, ManifestSource> _gameFilesUsed = new(StringComparer.Ordinal);
 
-    public ManifestBuilder(IEnumerable<(string Name, InstallationFileToStage File)> installationFiles, IEnumerable<GameFileToStage> gameFiles)
+    public ManifestBuilder(IEnumerable<(string Name, InstallationFile File)> installationFiles, IEnumerable<GameFileToStage> gameFiles)
     {
         _installationFiles = [.. installationFiles];
         foreach (var gameFile in gameFiles) _gameFiles.TryAdd(gameFile.Path, gameFile);

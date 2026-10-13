@@ -276,7 +276,7 @@ public sealed class CreateRecordChangesHandlerTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-        Assert.Contains("Track its mod", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Init its mod", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]

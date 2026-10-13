@@ -156,7 +156,7 @@ public sealed class CompareRecordsApiTests : HostedTests
             }, origin: WithNpcMod)
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(WithNpcMod)).EnsureSuccessStatusCode();
+        (await Client.Init(WithNpcMod)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(WithNpc);
         var cellFile = Directory.EnumerateFiles(Path.GetDirectoryName(fx.Plugins.Single().Path).Require(), "*.json", SearchOption.AllDirectories)

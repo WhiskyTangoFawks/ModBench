@@ -1,3 +1,4 @@
+using MEditService.Commands.Build;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -40,9 +41,9 @@ public sealed class NoLoadOrderRefusalTests
     [Fact]
     public async Task Track_WithNoLoadOrderHeld_RefusesTheSelection()
     {
-        var answer = await Handler<TrackHandler>().TrackAsync(["FixtureMod"]);
+        var answer = await Handler<InitHandler>().InitAsync(ToInit.Named("FixtureMod"));
 
-        Assert.Equal(TrackRefusal.NoLoadOrder, answer.SelectionRefusal?.Refusal);
+        Assert.Equal(InitRefusal.NoLoadOrder, answer.SelectionRefusal?.Refusal);
         Assert.Equal(NoLoadOrderException.DefaultMessage, answer.SelectionRefusal?.Message);
     }
 

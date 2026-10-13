@@ -45,7 +45,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
         var refused = Assert.Single(answer.Refused);
         Assert.Equal(CompileRefusal.SourceDoesNotParse, refused.Refusal);
         Assert.Contains("Decompile the plugin to regenerate the source.", refused.Message);
-        Assert.DoesNotContain("Track", refused.Message);
+        Assert.DoesNotContain("Init", refused.Message);
         Assert.Empty(answer.Landed);
     }
 
@@ -60,7 +60,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
 
         var refused = Assert.Single(answer.Refused);
         Assert.Contains("Decompile the plugin to regenerate the source.", refused.Message);
-        Assert.DoesNotContain("Track", refused.Message);
+        Assert.DoesNotContain("Init", refused.Message);
         Assert.Contains(CompileFixture.NpcEditorId, refused.Message);
         Assert.Empty(answer.Landed);
     }

@@ -58,9 +58,9 @@ internal static class TrackedTemplates
         using var gameDirectory = new ScratchDirectory("medit-tracked-template-game-");
         var loadOrder = SnapshotPlugins.Snapshot(gameDirectory, instanceRoot: null, release,
             [new LoadOrderEntry(pluginName, Path.Combine(modFolder, pluginName), origin, Line: 0, Enabled: true, Winning: true)]);
-        var result = TrackEveryPluginOf.ModAsync(loadOrder, origin)
+        var result = InitEveryPluginOf.ModAsync(loadOrder, origin)
             .GetAwaiter().GetResult();
-        if (result.Landed.Sum(l => l.Outcome.Tracked.Count) != 1)
+        if (result.Landed.Sum(l => l.Outcome.Plugins.Count) != 1)
             throw new InvalidOperationException($"Expected {pluginName} to track: {string.Join("; ", result.RefusalMessages())}");
     }
 

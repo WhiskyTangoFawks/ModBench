@@ -171,7 +171,7 @@ public sealed class DeleteRecordChangesHandlerTests
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, refused.Refusal);
-        Assert.Contains("Track its mod", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("Init its mod", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -49,7 +50,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     {
         using var scratch = new TrackedScratch(fileName);
 
-        await scratch.TrackAsync();
+        await scratch.InitAsync();
 
         Assert.True(TestAdapters.Source().IsTracked(scratch.ModFolder));
     }
@@ -62,7 +63,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         using var before = new ScratchDirectory("medit-stale-header-before-");
         var original = Path.Combine(before, fileName);
         File.Copy(scratch.PluginPath, original);
-        await scratch.TrackAsync();
+        await scratch.InitAsync();
 
         await scratch.CompileService().CompileLandedAsync(scratch.Plugin);
 
@@ -78,7 +79,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     {
         using var scratch = new TrackedScratch(fileName);
         var originalHeader = RawPlugin.FirstMiscZlibHeader(await File.ReadAllBytesAsync(scratch.PluginPath));
-        await scratch.TrackAsync();
+        await scratch.InitAsync();
 
         await scratch.CompileService().CompileLandedAsync(scratch.Plugin);
 
@@ -98,10 +99,10 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             return deserialized;
         }
 
-        var result = await scratch.TrackAsync(DeserializeThenAddAnNpc);
+        var result = await scratch.InitAsync(DeserializeThenAddAnNpc);
 
         Assert.False(result.Applied);
-        Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
 
         var extraFormKey = extra
             ?? throw new InvalidOperationException("Expected DeserializeThenAddAnNpc to run and set extra.");
@@ -137,8 +138,8 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             Holder.Apply(_loadOrder);
         }
 
-        public async Task<PluginTrack> TrackAsync(Func<string, CancellationToken, Task<IMod>>? deserialize = null) =>
-            (await TrackEveryPluginOf.ModAsync(
+        public async Task<PluginInit> InitAsync(Func<string, CancellationToken, Task<IMod>>? deserialize = null) =>
+            (await InitEveryPluginOf.ModAsync(
                 _loadOrder, Plugin.Origin,
                 deserialize is { } forged ? new ForgedTreeWriteAdapter(forged) : null)).Only();
 

@@ -150,6 +150,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/init": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the files no installation file yields as its assets, and a build configuration naming its folder as the output, in one commit. A mod lands or is refused whole. Progress is the init-progress notification. */
+        post: operations["InitMod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications/stream": {
         parameters: {
             query?: never;
@@ -324,7 +341,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The plugin's copy of a record as its own document and the name of its file in plugin source. An untracked plugin's is the text Track writes for it, under the name Track gives its file. A copy mEdit could not parse is what could be stored. Two documents claiming the copy refuse, naming them. */
+        /** @description The plugin's copy of a record as its own document and the name of its file in plugin source. An untracked plugin's is the text init writes for it, under the name init gives its file. A copy mEdit could not parse is what could be stored. Two documents claiming the copy refuse, naming them. */
         get: operations["GetRenderedDocument"];
         put?: never;
         post?: never;
@@ -377,24 +394,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes an empty plugin (a header whose flags its extension sets, no records and no masters) into the given folder, in the release of the held load order. Changes nothing else: no Track, no load order change and no plugins.txt line. */
+        /** @description Writes an empty plugin (a header whose flags its extension sets, no records and no masters) into the given folder, in the release of the held load order. Changes nothing else: no init, no load order change and no plugins.txt line. */
         post: operations["CreatePlugin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/track": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["Track"];
         delete?: never;
         options?: never;
         head?: never;
@@ -994,6 +995,46 @@ export interface components {
             /** Format: int32 */
             y?: number | null;
         };
+        InitModRequest: {
+            name: string;
+            installationFiles: components["schemas"]["InstallationFileRequest"][];
+            modManagerFiles: string[];
+        };
+        /** @enum {string} */
+        InitPhase: "Idle" | "Parsing" | "Serializing" | "ReadingFiles" | "Committing";
+        InitProgress: {
+            mod?: string | null;
+            phase: components["schemas"]["InitPhase"];
+            /** Format: int32 */
+            pluginsDone: number;
+            /** Format: int32 */
+            pluginsTotal: number;
+        };
+        /** @enum {string} */
+        InitRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "ModFilesUnreadable" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
+        InitRequest: {
+            mods: components["schemas"]["InitModRequest"][];
+        };
+        InitResponse: {
+            applied: components["schemas"]["InitializedModResponse"][];
+            refused: components["schemas"]["ModInitRefusal"][];
+        };
+        InitializedModResponse: {
+            mod: string;
+            plugins: components["schemas"]["PluginAddress"][];
+        };
+        InstallationFileEntryRequest: {
+            path: string;
+            hash: string;
+        };
+        InstallationFileRequest: {
+            path: string;
+            source?: string | null;
+            /** Format: int64 */
+            size?: number | null;
+            hash: string;
+            entries: components["schemas"]["InstallationFileEntryRequest"][];
+        };
         InteriorCellBlock: {
             /** Format: int32 */
             number: number;
@@ -1048,14 +1089,14 @@ export interface components {
             refusal: components["schemas"]["BuildRefusal"];
             message: string;
         };
+        ModInitRefusal: {
+            item: string;
+            refusal: components["schemas"]["InitRefusal"];
+            message: string;
+        };
         ModStageRefusal: {
             item: string;
             refusal: components["schemas"]["StageRefusal"];
-            message: string;
-        };
-        ModTrackRefusal: {
-            item: string;
-            refusal: components["schemas"]["TrackRefusal"];
             message: string;
         };
         MoveLastWrittenRequest: {
@@ -1072,7 +1113,7 @@ export interface components {
             /** Format: int64 */
             sequence: number;
             loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
-            trackProgress?: components["schemas"]["TrackProgress"] | null;
+            initProgress?: components["schemas"]["InitProgress"] | null;
             buildProgress?: components["schemas"]["BuildProgress"] | null;
             changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
             pluginWithUnreadableSources?: components["schemas"]["PluginWithUnreadableSource"][] | null;
@@ -1356,22 +1397,10 @@ export interface components {
             size?: number | null;
             hash: string;
         };
-        StageInstallationFileEntryRequest: {
-            path: string;
-            hash: string;
-        };
-        StageInstallationFileRequest: {
-            path: string;
-            source?: string | null;
-            /** Format: int64 */
-            size?: number | null;
-            hash: string;
-            entries: components["schemas"]["StageInstallationFileEntryRequest"][];
-        };
         StageModRequest: {
             name: string;
             folder: string;
-            installationFiles: components["schemas"]["StageInstallationFileRequest"][];
+            installationFiles: components["schemas"]["InstallationFileRequest"][];
             committedFiles: string[];
         };
         StageProgress: {
@@ -1395,29 +1424,6 @@ export interface components {
             mod: string;
             manifestWritten: boolean;
             noProvider: string[];
-        };
-        /** @enum {string} */
-        TrackPhase: "Idle" | "Parsing" | "Serializing" | "Committing";
-        TrackProgress: {
-            mod?: string | null;
-            phase: components["schemas"]["TrackPhase"];
-            /** Format: int32 */
-            pluginsDone: number;
-            /** Format: int32 */
-            pluginsTotal: number;
-        };
-        /** @enum {string} */
-        TrackRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyTracked" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
-        TrackRequest: {
-            mods: string[];
-        };
-        TrackResponse: {
-            applied: components["schemas"]["TrackedModResponse"][];
-            refused: components["schemas"]["ModTrackRefusal"][];
-        };
-        TrackedModResponse: {
-            mod: string;
-            tracked: components["schemas"]["PluginAddress"][];
         };
         UnreadableSource: {
             reason: string;
@@ -1816,6 +1822,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BuildResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    InitMod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InitResponse"];
                 };
             };
             /** @description Bad Request */
@@ -2441,57 +2498,6 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    Track: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TrackRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TrackResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -167,6 +167,8 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
   return { result, log, fetch, request };
 }
 
+const modToInit = (name: string) => ({ name, installationFiles: [], modManagerFiles: ['meta.ini'] });
+
 describe('HttpMEditClient — what each verb sends and reads', () => {
   const myPatch = { name: 'MyPatch.esp', origin: 'ModA' };
   const shared = { name: 'Shared.esp', origin: 'ModA' };
@@ -232,10 +234,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/records/000801%3AMyPatch.esp/compare', body: documentText },
     { name: 'getRecordsComparison', verb: (c) => c.getRecordsComparison(copies), ...same({ compare: comparison, missing: [] }),
       path: '/records/compare', body: { copies } },
-    { name: 'track', verb: (c) => c.track(['ModA', 'ModC']),
-      answer: { applied: [{ mod: 'ModA', tracked: [first] }], refused: [{ item: 'ModC', refusal: 'ModProvidesNoPlugin', message: 'ModC provides no plugin.' }] },
-      reads: { landed: [{ mod: 'ModA', tracked: [first] }], refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }] },
-      path: '/plugins/track', body: { mods: ['ModA', 'ModC'] } },
+    { name: 'init', verb: (c) => c.init([modToInit('ModA'), modToInit('ModC')]),
+      answer: { applied: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', refusal: 'ModProvidesNoPlugin', message: 'ModC provides no plugin.' }] },
+      reads: { landed: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }] },
+      path: '/init', body: { mods: [modToInit('ModA'), modToInit('ModC')] } },
     { name: 'build', verb: (c) => c.build(['ModA', 'ModC']),
       answer: {
         applied: [{ mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginSourceUnreadable', message: 'Second.esp has no readable source.' }] }],
@@ -367,7 +369,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         text: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'Could not create "New.esp"' },
       { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'), status: 409,
         body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename the source of "Old.esp"' },
-      { name: 'track', verb: (c) => c.track(['ModA', 'ModB']), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not track 2 mods' },
+      { name: 'init', verb: (c) => c.init([modToInit('ModA'), modToInit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not init 2 mods' },
       { name: 'build', verb: (c) => c.build(['ModA', 'ModB']), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
       { name: 'decompile', verb: (c) => c.decompile([first, second]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
     ];

@@ -45,7 +45,7 @@ public interface ISourceAdapter
     /// <summary>The name of the file of a record's own document where no tree has renamed it.</summary>
     string FileNameOf(RecordIdentity identity);
 
-    /// <summary>A <c>.git</c> with no <c>main</c> that Track did not mark as its own: someone else's, which Track never
+    /// <summary>A <c>.git</c> with no <c>main</c> that init did not mark as its own: someone else's, which init never
     /// writes to (ADR-0003).</summary>
     bool HoldsAnotherRepository(string sourceFolder);
 
@@ -55,10 +55,11 @@ public interface ISourceAdapter
     /// <summary>The refusal naming the instance root when it is not there; null when it is.</summary>
     string? InstanceRootNotFound(string? instanceRoot);
 
-    /// <summary>A repository for a mod that has none: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>, of
-    /// each plugin's door tree. Answers each plugin refused, every one when no repository was made.</summary>
-    IReadOnlyList<(string Plugin, string Reason)> Track(
-        string sourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins);
+    /// <summary>A repository for a mod that has none: one commit, <c>Init &lt;mod&gt;</c>, on <c>main</c>, of each
+    /// plugin's door tree, the assets and a build configuration naming <paramref name="output"/>.</summary>
+    SourceFailure? Init(
+        string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+        IReadOnlyList<Asset> assets);
 
     /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="ISourceRepository.TreeOf"/> answers it once
     /// written: what a round-trip gate compiles, so that it compiles what is written.</summary>

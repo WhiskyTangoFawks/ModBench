@@ -5,14 +5,7 @@ namespace MEditService.Commands.Build;
 /// <summary>A mod to stage, with its installation files in the mod manager's order and the paths of its files
 /// the repository commits itself, which the manifest does not name.</summary>
 public sealed record ModToStage(
-    string Name, string Folder, IReadOnlyList<InstallationFileToStage> InstallationFiles, IReadOnlyList<string> CommittedFiles);
-
-/// <summary>An installation file by its path in the downloads folder, where the mod manager says it comes from,
-/// and its size, hash and entries as the Instance adapter knows them (ADR-0024).</summary>
-public sealed record InstallationFileToStage(string Path, string? Source, long Size, string Hash, IReadOnlyList<HashedEntry> Entries);
-
-/// <summary>An entry of an installation file by its forward-slash path inside it.</summary>
-public sealed record HashedEntry(string Path, string Hash);
+    string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> CommittedFiles);
 
 /// <summary>A game file a mod file overrides, by its forward-slash path under the game's data folder, as the
 /// Instance adapter knows it (ADR-0024).</summary>

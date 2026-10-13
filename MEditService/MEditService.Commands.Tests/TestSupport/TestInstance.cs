@@ -120,7 +120,7 @@ public abstract class TestInstance : IDisposable
 
     private void Track(string origin)
     {
-        var result = TrackEveryPluginOf.ModAsync(Snapshot(), origin).GetAwaiter().GetResult();
+        var result = InitEveryPluginOf.ModAsync(Snapshot(), origin).GetAwaiter().GetResult();
         if (result.RefusalMessages() is { Count: > 0 } messages)
             throw new InvalidOperationException($"Expected '{origin}' to track: {string.Join("; ", messages)}");
     }

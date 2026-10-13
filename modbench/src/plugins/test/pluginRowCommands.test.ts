@@ -43,12 +43,12 @@ const instanceThatReads = {
 };
 
 import {
-  registerTrackCommand, registerBuildCommand, registerDecompileCommand, BuildProblems,
+  registerInitCommand, registerBuildCommand, registerDecompileCommand, BuildProblems,
 } from '../pluginRowCommands';
 import { sourceFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { type PluginAddress } from '../../client';
+import { type InitOutcome, type InitStatus, type PluginAddress, type WriteRefused } from '../../client';
 import { PluginNode } from '../pluginRows';
 import { assertAskedOnce, recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeDiagnosticCollection } from '../../test/vscodeMock';
@@ -61,13 +61,13 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('modbench.mod.track', () => {
+describe('modbench.mod.init', () => {
   const FIRST = { name: 'First.esp', origin: 'ModA' };
   const SECOND = { name: 'Second.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const MOD_DIRS = new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB'], ['ModC', '/mods/ModC']]);
-  const modA = (tracked: PluginAddress[]) => ({ mod: 'ModA', tracked });
-  const modB = (tracked: PluginAddress[]) => ({ mod: 'ModB', tracked });
+  const modA = (plugins: PluginAddress[]) => ({ mod: 'ModA', plugins });
+  const modB = (plugins: PluginAddress[]) => ({ mod: 'ModB', plugins });
 
   class ModsRowStandIn extends TreeItem {
     readonly kind = 'mod';
@@ -79,43 +79,51 @@ describe('modbench.mod.track', () => {
     return new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);
   }
 
-  function invokeTrack(
-    client: InMemoryMEditClient, onTracked = vi.fn().mockResolvedValue(undefined),
+  function initCommands() {
+    let answer: InitOutcome | WriteRefused = { landed: [], refused: [] };
+    const init = vi.fn((_mods: readonly string[], _options?: { onProgress?: (status: InitStatus) => void }) => Promise.resolve(answer));
+    return {
+      init,
+      answers: (next: InitOutcome | WriteRefused) => { answer = next; },
+      sent: () => init.mock.calls.map(([mods]) => mods),
+    };
+  }
+
+  function invokeInit(
+    commands: ReturnType<typeof initCommands>, onInitialized = vi.fn().mockResolvedValue(undefined),
     paletteSelection: () => readonly unknown[] = () => [],
   ) {
     const said: (string | undefined)[] = [];
     const progress = { say: (message: string | undefined) => said.push(message) };
     const reporter = recordingReporter();
-    registerTrackCommand({
-      progress, instance: instanceThatReads, client, reporter, onTracked, modsView: 'modbench.modList', modDirs: () => MOD_DIRS,
+    registerInitCommand({
+      progress, instance: instanceThatReads, commands, reporter, onInitialized, modsView: 'modbench.modList', modDirs: () => MOD_DIRS,
     }, paletteSelection);
     return {
-      handler: present(handlers.get('modbench.mod.track'), 'the track command registerTrackCommand registers'),
-      onTracked, reporter, said,
+      handler: present(handlers.get('modbench.mod.init'), 'the init command registerInitCommand registers'),
+      onInitialized, reporter, said,
     };
   }
 
-  const trackCalls = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'track');
-
-  it('on a plugin row, tracks the plugin\'s mod, asking nothing', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler, onTracked, reporter } = invokeTrack(client);
+  it('on a plugin row, inits the plugin\'s mod, asking nothing', async () => {
+    const commands = initCommands();
+    commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
+    const { handler, onInitialized, reporter } = invokeInit(commands);
 
     await handler(row(FIRST));
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModA'], expect.anything()] }]);
+    expect(commands.sent()).toEqual([['ModA']]);
     expect(createQuickPick).not.toHaveBeenCalled();
     expect(showQuickPick).not.toHaveBeenCalled();
-    expect(reporter.landings).toEqual(['Tracked "ModA".']);
+    expect(reporter.landings).toEqual(['Initialized "ModA".']);
     expect(reporter.reports).toEqual([]);
-    expect(onTracked).toHaveBeenCalledOnce();
+    expect(onInitialized).toHaveBeenCalledOnce();
   });
 
-  it('ends the gesture on a read the Instance loader makes after the track, and clears its message line', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler, said } = invokeTrack(client);
+  it('ends the gesture on a read the Instance loader makes after the init, and clears its message line', async () => {
+    const commands = initCommands();
+    commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
+    const { handler, said } = invokeInit(commands);
 
     await handler(row(FIRST));
 
@@ -126,66 +134,66 @@ describe('modbench.mod.track', () => {
   });
 
   it('shows the Mods view\'s bar when a Mods row was clicked', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler } = invokeTrack(client);
+    const commands = initCommands();
+    commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
+    const { handler } = invokeInit(commands);
 
     await handler(new ModsRowStandIn('ModA'));
 
     expect(progressSteps[0]).toBe('progress opens on modbench.modList');
   });
 
-  it('on selected plugin rows of one mod, tracks that mod once', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler } = invokeTrack(client);
+  it('on selected plugin rows of one mod, inits that mod once', async () => {
+    const commands = initCommands();
+    commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
+    const { handler } = invokeInit(commands);
 
     await handler(row(SECOND), [row(FIRST), row(SECOND)]);
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModA'], expect.anything()] }]);
+    expect(commands.sent()).toEqual([['ModA']]);
   });
 
-  it('on selected Mods rows, tracks every mod in one call', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
-    const { handler, reporter } = invokeTrack(client);
+  it('on selected Mods rows, inits every mod in one call', async () => {
+    const commands = initCommands();
+    commands.answers({ landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
+    const { handler, reporter } = invokeInit(commands);
     const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
 
     await handler(mods[1], mods);
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModA', 'ModB'], expect.anything()] }]);
-    expect(reporter.landings).toEqual(['Tracked 2 mods.']);
+    expect(commands.sent()).toEqual([['ModA', 'ModB']]);
+    expect(reporter.landings).toEqual(['Initialized 2 mods.']);
   });
 
-  it('names a row that carries neither a mod nor a plugin, and tracks the rest', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler, reporter } = invokeTrack(client);
+  it('names a row that carries neither a mod nor a plugin, and inits the rest', async () => {
+    const commands = initCommands();
+    commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
+    const { handler, reporter } = invokeInit(commands);
     const withoutArgument = { label: 'Odd', kind: 'plugin', plugin: { name: FIRST.name }, origin: FIRST.origin };
 
     await handler(row(FIRST), [row(FIRST), withoutArgument]);
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModA'], expect.anything()] }]);
+    expect(commands.sent()).toEqual([['ModA']]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not track 1 of 3 plugins.', detail: '"Odd" (it carries no mod or plugin)',
+      severity: 'error', message: 'Could not init 1 of 3 plugins.', detail: '"Odd" (it carries no mod or plugin)',
     }]);
   });
 
-  it('from the palette, tracks the mod of a Plugins selection', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [modB([OTHER])], refused: [] });
-    const { handler, reporter } = invokeTrack(client, undefined, () => [row(OTHER)]);
+  it('from the palette, inits the mod of a Plugins selection', async () => {
+    const commands = initCommands();
+    commands.answers({ landed: [modB([OTHER])], refused: [] });
+    const { handler, reporter } = invokeInit(commands, undefined, () => [row(OTHER)]);
 
     await handler();
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModB'], expect.anything()] }]);
-    expect(reporter.landings).toEqual(['Tracked "ModB".']);
+    expect(commands.sent()).toEqual([['ModB']]);
+    expect(reporter.landings).toEqual(['Initialized "ModB".']);
   });
 
-  it('on an Editor column header, tracks the column plugin\'s mod', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler } = invokeTrack(client);
+  it('on an Editor column header, inits the column plugin\'s mod', async () => {
+    const commands = initCommands();
+    commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
+    const { handler } = invokeInit(commands);
     const header = {
       webviewSection: 'recordHeader', argument: { kind: 'record', formKey: '000801:Other.esp', plugin: { name: 'Second.esp', origin: 'ModA' } },
       editable: false, preventDefaultContextMenuItems: true,
@@ -193,96 +201,95 @@ describe('modbench.mod.track', () => {
 
     await handler(header);
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModA'], expect.anything()] }]);
+    expect(commands.sent()).toEqual([['ModA']]);
   });
 
   it('names a mod mEdit refused while the rest land', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', {
+    const commands = initCommands();
+    commands.answers({
       landed: [modA([FIRST])],
       refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }],
     });
-    const { handler, onTracked, reporter } = invokeTrack(client);
+    const { handler, onInitialized, reporter } = invokeInit(commands);
     const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModC')];
 
     await handler(mods[0], mods);
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModA', 'ModC'], expect.anything()] }]);
+    expect(commands.sent()).toEqual([['ModA', 'ModC']]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not track 1 of 2 mods.', detail: '"ModC" (ModC provides no plugin.)',
+      severity: 'error', message: 'Could not init 1 of 2 mods.', detail: '"ModC" (ModC provides no plugin.)',
     }]);
     expect(reporter.landings).toEqual([]);
-    expect(onTracked).toHaveBeenCalledOnce();
+    expect(onInitialized).toHaveBeenCalledOnce();
   });
 
-  it('never sends an origin that is not a mod as a mod name: refuses that plugin as not in a mod and tracks the rest', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [modB([OTHER])], refused: [] });
-    const { handler, onTracked, reporter } = invokeTrack(client);
+  it('never sends an origin that is not a mod as a mod name: refuses that plugin as not in a mod and inits the rest', async () => {
+    const commands = initCommands();
+    commands.answers({ landed: [modB([OTHER])], refused: [] });
+    const { handler, onInitialized, reporter } = invokeInit(commands);
     const loose = { name: 'Loose.esp', origin: 'Overwrite' };
 
     await handler(row(OTHER), [row(OTHER), row(loose)]);
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModB'], expect.anything()] }]);
+    expect(commands.sent()).toEqual([['ModB']]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not track 1 of 2 plugins.', detail: '"Loose.esp (Overwrite)" (it is not in a mod)',
+      severity: 'error', message: 'Could not init 1 of 2 plugins.', detail: '"Loose.esp (Overwrite)" (it is not in a mod)',
     }]);
-    expect(onTracked).toHaveBeenCalledOnce();
+    expect(onInitialized).toHaveBeenCalledOnce();
   });
 
   it('calls mEdit with nothing when every plugin selected is in no mod, and names each', async () => {
-    const client = new InMemoryMEditClient();
-    const { handler, onTracked, reporter } = invokeTrack(client);
+    const commands = initCommands();
+    const { handler, onInitialized, reporter } = invokeInit(commands);
 
     await handler(row({ name: 'Loose.esp', origin: 'Overwrite' }));
 
-    expect(trackCalls(client)).toEqual([]);
+    expect(commands.sent()).toEqual([]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not track 1 of 1 plugins.', detail: '"Loose.esp (Overwrite)" (it is not in a mod)',
+      severity: 'error', message: 'Could not init 1 of 1 plugins.', detail: '"Loose.esp (Overwrite)" (it is not in a mod)',
     }]);
-    expect(onTracked).not.toHaveBeenCalled();
+    expect(onInitialized).not.toHaveBeenCalled();
   });
 
   it('sends the mod as the instance spells it when the plugin\'s origin differs in case', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [modA([FIRST])], refused: [] });
-    const { handler } = invokeTrack(client);
+    const commands = initCommands();
+    commands.answers({ landed: [modA([FIRST])], refused: [] });
+    const { handler } = invokeInit(commands);
 
     await handler(row({ name: 'First.esp', origin: 'moda' }));
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModA'], expect.anything()] }]);
+    expect(commands.sent()).toEqual([['ModA']]);
   });
 
   it('reports the ready-to-show message at error and lands nothing when the backend refuses the whole selection', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { refused: true, message: 'Could not track 1 mod — git was not found on PATH.' });
-    const { handler, onTracked, reporter } = invokeTrack(client);
+    const commands = initCommands();
+    commands.answers({ refused: true, message: 'Could not init 1 mod — git was not found on PATH.' });
+    const { handler, onInitialized, reporter } = invokeInit(commands);
 
     await handler(row(OTHER));
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not track 1 mod — git was not found on PATH.', detail: undefined },
+      { severity: 'error', message: 'Could not init 1 mod — git was not found on PATH.', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
-    expect(onTracked).not.toHaveBeenCalled();
+    expect(onInitialized).not.toHaveBeenCalled();
   });
 
-  it('names the mod it is about to track before mEdit answers, then the mod mEdit reports progress on, phase included', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
-    const trackSpy = vi.spyOn(client, 'track');
-    const { handler, said } = invokeTrack(client);
+  it('names the mod it is about to init before mEdit answers, then the mod mEdit reports progress on, phase included', async () => {
+    const commands = initCommands();
+    commands.answers({ landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
+    const { handler, said } = invokeInit(commands);
     const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
 
     await handler(mods[0], mods);
 
-    expect(said).toContain('Tracking "ModA"…');
+    expect(said).toContain('Initializing "ModA"…');
 
-    const [, options] = present(trackSpy.mock.calls[0], 'the track call');
+    const [, options] = present(commands.init.mock.calls[0], 'the init call');
     said.length = 0;
-    present(options, 'the track options').onProgress?.({ mod: 'ModB', phase: 'Committing', pluginsDone: 2, pluginsTotal: 2 });
+    present(options, 'the init options').onProgress?.({ mod: 'ModB', phase: 'Committing', pluginsDone: 2, pluginsTotal: 2 });
 
-    expect(said).toEqual(['Tracking "ModB" — committing to git…']);
+    expect(said).toEqual(['Initializing "ModB" — committing to git…']);
   });
 });
 

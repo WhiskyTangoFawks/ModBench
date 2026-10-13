@@ -25,7 +25,7 @@ internal static class TrackedMods
             .GetAwaiter().GetResult();
         var source = read.Answered();
 
-        TestAdapters.Source().Track(modFolder, [(source.Files, new DecompiledPlugin(pluginName, source.BinarySha256))]);
+        TestAdapters.Source().Init(modFolder, [(source.Files, new DecompiledPlugin(pluginName, source.BinarySha256))]);
     }
 
     internal static void Track(LoadOrderEntry entry, string dataFolder, GameRelease release = GameRelease.Fallout4) =>

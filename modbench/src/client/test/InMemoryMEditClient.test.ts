@@ -157,14 +157,14 @@ describe('InMemoryMEditClient — emit', () => {
 });
 
 describe('InMemoryMEditClient — onNotification', () => {
-  it('skips a track-progress emit missing its payload, and unsubscribe stops delivery', () => {
+  it('skips a init-progress emit missing its payload, and unsubscribe stops delivery', () => {
     const client = new InMemoryMEditClient();
     const listener = vi.fn();
-    const off = client.onNotification('track-progress', listener);
-    client.emit(notificationEventFixture({ kind: 'track-progress' }));
+    const off = client.onNotification('init-progress', listener);
+    client.emit(notificationEventFixture({ kind: 'init-progress' }));
     off();
     client.emit(notificationEventFixture({
-      kind: 'track-progress', trackProgress: { mod: 'M', phase: 'Parsing', pluginsDone: 0, pluginsTotal: 1 },
+      kind: 'init-progress', initProgress: { mod: 'M', phase: 'Parsing', pluginsDone: 0, pluginsTotal: 1 },
     }));
     expect(listener).not.toHaveBeenCalled();
   });

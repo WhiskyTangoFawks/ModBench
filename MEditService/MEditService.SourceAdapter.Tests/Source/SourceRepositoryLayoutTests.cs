@@ -37,14 +37,14 @@ public sealed class SourceRepositoryLayoutTests
         string pluginFileName, string recordType, string formKeyString, string? editorId)
     {
         using var modFolder = new ScratchDirectory("medit-layout-roundtrip-");
-        PluginBaselines.TrackWithNoRecords(modFolder);
+        PluginBaselines.InitWithNoRecords(modFolder);
         var repository = TestAdapters.Source().Open(TestMod.In(modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
         var plugin = new PluginAddress(pluginFileName, TestMod.Name);
         repository.Put(plugin, new SourceDocument(formKeyString, recordType, editorId, "{}")).Wrote();
 
         var path = Path.GetRelativePath(
-            modFolder, Directory.EnumerateFiles(modFolder, "*.json", SearchOption.AllDirectories).Single());
+            modFolder, Directory.EnumerateFiles(Path.Combine(modFolder, "plugin-source"), "*.json", SearchOption.AllDirectories).Single());
 
         var segmentsUnderTheOneRootTrackAndPutBothWriteTo = path.Split(Path.DirectorySeparatorChar);
         Assert.Equal("plugin-source", segmentsUnderTheOneRootTrackAndPutBothWriteTo[0]);
@@ -60,7 +60,7 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     [Fact]
-    public void Track_PutsTheDoorsTree_UnderTheRootTheNameSpellsVerbatim_NotAModKeysLowercaseExtension()
+    public void Init_PutsTheDoorsTree_UnderTheRootTheNameSpellsVerbatim_NotAModKeysLowercaseExtension()
     {
         using var modFolder = new ScratchDirectory("medit-layout-track-");
 
@@ -76,7 +76,7 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     [Fact]
-    public void Track_NamesAContainersDocument_ForTheContainersOwnLeaf()
+    public void Init_NamesAContainersDocument_ForTheContainersOwnLeaf()
     {
         using var modFolder = new ScratchDirectory("medit-layout-track-");
         var directory = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP");
@@ -92,7 +92,7 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     private static void TrackMixed(string modFolder, params TreeFile[] tree) =>
-        TestAdapters.Source().Track(modFolder, [(tree, new DecompiledPlugin("Mixed.ESP", null))]);
+        TestAdapters.Source().Init(modFolder, [(tree, new DecompiledPlugin("Mixed.ESP", null))]);
 
     private static List<string> SourceFilesIn(string modFolder) =>
         [.. Directory.EnumerateFiles(Path.Combine(modFolder, "plugin-source"), "*", SearchOption.AllDirectories)

@@ -57,8 +57,8 @@ public sealed class CompilePluginLinkTests : IDisposable
                 new LoadOrderEntry(TargetName, targetPath, TargetOrigin, Line: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(HostName, hostPath, HostOrigin, Line: 1, Enabled: true, Winning: true),
             ]);
-        TrackEveryPluginOf.ModAsync(_loadOrder, TargetOrigin).GetAwaiter().GetResult();
-        TrackEveryPluginOf.ModAsync(_loadOrder, HostOrigin).GetAwaiter().GetResult();
+        InitEveryPluginOf.ModAsync(_loadOrder, TargetOrigin).GetAwaiter().GetResult();
+        InitEveryPluginOf.ModAsync(_loadOrder, HostOrigin).GetAwaiter().GetResult();
     }
 
     public void Dispose()

@@ -577,9 +577,10 @@ public sealed class FailedReadStateTests : IDisposable
 
         public string? InstanceRootNotFound(string? instanceRoot) => _inner.InstanceRootNotFound(instanceRoot);
 
-        public IReadOnlyList<(string Plugin, string Reason)> Track(
-            string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins) =>
-            _inner.Track(modFolder, plugins);
+        public SourceFailure? Init(
+            string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+            IReadOnlyList<Asset> assets) =>
+            _inner.Init(sourceFolder, output, plugins, assets);
 
         public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
             _inner.ReadBackOf(pluginFileName, tree, gameRelease);

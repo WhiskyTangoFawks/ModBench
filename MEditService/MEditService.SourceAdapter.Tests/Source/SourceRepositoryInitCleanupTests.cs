@@ -5,23 +5,23 @@ using MEditService.TestSupport;
 namespace MEditService.SourceAdapter.Tests.Source;
 
 [Collection(ProcessEnvironmentCollection.Name)]
-public sealed class SourceRepositoryTrackCleanupTests : IDisposable
+public sealed class SourceRepositoryInitCleanupTests : IDisposable
 {
     private const string ModName = "SomeMod";
-    private readonly ScratchDirectory _root = new("medit-track-cleanup-");
+    private readonly ScratchDirectory _root = new("medit-init-cleanup-");
     private readonly string _modFolder;
 
-    public SourceRepositoryTrackCleanupTests() => _modFolder = Directory.CreateDirectory(Path.Combine(_root, ModName)).FullName;
+    public SourceRepositoryInitCleanupTests() => _modFolder = Directory.CreateDirectory(Path.Combine(_root, ModName)).FullName;
 
     public void Dispose() => _root.Dispose();
 
     [Fact]
-    public void Track_APluginWhoseFilesCannotAllBeWritten_IsRefused_LeavingNoRepositoryAndNoSourceOfThePluginsAroundIt()
+    public void Init_APluginWhoseFilesCannotAllBeWritten_IsRefused_LeavingNoRepositoryAndNoSourceOfThePluginsAroundIt()
     {
-        var refused = TestAdapters.Source().Track(
+        var failure = TestAdapters.Source().Init(
             _modFolder, [Baseline("A.esp"), BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp"), Baseline("C.esp")]);
 
-        Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
+        Assert.StartsWith("Bad.esp's source could not be written: ", failure.Require().Reason, StringComparison.Ordinal);
         Assert.False(TestAdapters.Source().IsTracked(_modFolder));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
         Assert.False(File.Exists(Path.Combine(_modFolder, ".gitignore")));
@@ -29,40 +29,70 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     }
 
     [Fact]
-    public void Track_WhenEveryPluginIsRefused_LeavesNoRepositoryAndNoGitignore()
+    public void Init_WhenEveryPluginIsRefused_LeavesNoRepositoryAndNoGitignore()
     {
-        var refused = TestAdapters.Source().Track(
+        var failure = TestAdapters.Source().Init(
             _modFolder, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
 
-        Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
+        Assert.StartsWith("Bad.esp's source could not be written: ", failure.Require().Reason, StringComparison.Ordinal);
         Assert.False(TestAdapters.Source().IsTracked(_modFolder));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
         Assert.False(File.Exists(Path.Combine(_modFolder, ".gitignore")));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
     }
 
-    [PosixFact]
-    public void Track_WhenEveryPluginIsRefused_LeavesTheHalfMadeRepositoryAsItWas()
+    [Fact]
+    public void Init_AnAssetThatCannotBeRead_IsRefusedNamingIt_LeavingNoRepositoryNoAssetsAndNoSource()
     {
-        CrashATrackAfterItMadeTheRepository();
+        var failure = TestAdapters.Source().Init(_modFolder, ModName, [Baseline("A.esp")],
+        [
+            new Asset("textures/a.dds", () => new MemoryStream("a"u8.ToArray())),
+            new Asset("textures/held.dds", () => throw new IOException("textures/held.dds is held by another process")),
+        ]);
+
+        Assert.Contains("textures/held.dds is held by another process", failure.Require().Reason, StringComparison.Ordinal);
+        Assert.False(TestAdapters.Source().IsTracked(_modFolder));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(_modFolder));
+    }
+
+    [Fact]
+    public void Init_TakesBackAnAssetItReplaced_WhenALaterAssetFails()
+    {
+        var existing = Path.Combine(_modFolder, "assets", "a.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(existing).Require());
+        File.WriteAllText(existing, "theirs");
+
+        TestAdapters.Source().Init(_modFolder, ModName, [Baseline("A.esp")],
+        [
+            new Asset("a.txt", () => new MemoryStream("ours"u8.ToArray())),
+            new Asset("b.txt", () => throw new IOException("b.txt is held by another process")),
+        ]);
+
+        Assert.Equal("theirs", File.ReadAllText(existing));
+    }
+
+    [PosixFact]
+    public void Init_WhenEveryPluginIsRefused_LeavesTheHalfMadeRepositoryAsItWas()
+    {
+        CrashAnInitAfterItMadeTheRepository();
         var before = GitDirContents();
 
-        TestAdapters.Source().Track(
+        TestAdapters.Source().Init(
             _modFolder, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
 
         Assert.Equal(before, GitDirContents());
     }
 
     [PosixFact]
-    public void Track_WhenTheCommitFails_LeavesTheHalfMadeRepositoryAsItWas()
+    public void Init_WhenTheCommitFails_LeavesTheHalfMadeRepositoryAsItWas()
     {
-        CrashATrackAfterItMadeTheRepository();
+        CrashAnInitAfterItMadeTheRepository();
         var before = GitDirContents();
         var asset = UnreadableFileTheCommitCannotAdd();
         FileModes.Set(asset, "000");
         try
         {
-            TrackRefused("A.esp");
+            InitRefused("A.esp");
         }
         finally
         {
@@ -73,7 +103,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     }
 
     [PosixFact]
-    public void Track_WhenTheCommitFails_RestoresTheSourceFileItReplaced()
+    public void Init_WhenTheCommitFails_RestoresTheSourceFileItReplaced()
     {
         var existing = Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json");
         Directory.CreateDirectory(Path.GetDirectoryName(existing).Require());
@@ -82,7 +112,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         FileModes.Set(asset, "000");
         try
         {
-            TrackRefused("A.esp");
+            InitRefused("A.esp");
         }
         finally
         {
@@ -93,23 +123,23 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     }
 
     [Fact]
-    public void Track_WhenAPluginsWriteThrowsAnythingElse_TakesBackEveryPluginsFiles_AndThrows()
+    public void Init_WhenAPluginsWriteThrowsAnythingElse_TakesBackEveryPluginsFiles_AndThrows()
     {
         var nulInPath = new TreeFile("npc_/\0.json", "{}"u8.ToArray());
 
         Assert.ThrowsAny<ArgumentException>(
-            () => TestAdapters.Source().Track(_modFolder, [Baseline("A.esp"), ([nulInPath], new DecompiledPlugin("Bad.esp", null))]));
+            () => TestAdapters.Source().Init(_modFolder, [Baseline("A.esp"), ([nulInPath], new DecompiledPlugin("Bad.esp", null))]));
 
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
     }
 
     [PosixFact]
-    public void Track_WhenTheCommitFails_LeavesAFileAnotherProgramPutInADirectoryItMade_AndNamesTheDirectory()
+    public void Init_WhenTheCommitFails_LeavesAFileAnotherProgramPutInADirectoryItMade_AndNamesTheDirectory()
     {
         var theirs = Path.Combine(_modFolder, "plugin-source", "A.esp", "theirs.txt");
 
-        var failure = TrackWhoseCommitHookRuns($"echo theirs > '{theirs}'");
+        var failure = InitWhoseCommitHookRuns($"echo theirs > '{theirs}'");
 
         Assert.Equal("theirs", File.ReadAllText(theirs).Trim());
         Assert.Contains("plugin-source/A.esp — holds something this change did not write", failure.Replace('\\', '/'));
@@ -117,49 +147,44 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     }
 
     [PosixFact]
-    public void Track_WhenTheCommitFails_LeavesAFileAnotherProgramChanged_AndNamesIt()
+    public void Init_WhenTheCommitFails_LeavesAFileAnotherProgramChanged_AndNamesIt()
     {
         var changed = Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json");
 
-        var failure = TrackWhoseCommitHookRuns($"echo theirs > '{changed}'");
+        var failure = InitWhoseCommitHookRuns($"echo theirs > '{changed}'");
 
         Assert.Equal("theirs", File.ReadAllText(changed).Trim());
         Assert.Contains("000001.json — changed by something else", failure, StringComparison.Ordinal);
     }
 
     [PosixFact]
-    public void Track_WhenTheCommitFails_LeavesAGitignoreAnotherProgramChanged_AndNamesIt()
+    public void Init_WhenTheCommitFails_LeavesAGitignoreAnotherProgramChanged_AndNamesIt()
     {
         var gitignore = Path.Combine(_modFolder, ".gitignore");
 
-        var failure = TrackWhoseCommitHookRuns($"echo theirs > '{gitignore}'");
+        var failure = InitWhoseCommitHookRuns($"echo theirs > '{gitignore}'");
 
         Assert.Equal("theirs", File.ReadAllText(gitignore).Trim());
         Assert.Contains(".gitignore — changed by something else", failure, StringComparison.Ordinal);
     }
 
-    private string TrackWhoseCommitHookRuns(string script)
+    private string InitWhoseCommitHookRuns(string script)
     {
-        CrashATrackAfterItMadeTheRepository();
+        CrashAnInitAfterItMadeTheRepository();
         GitHooks.Write(_modFolder, "pre-commit", $"{script}\nexit 1");
-        return TrackRefused("A.esp");
+        return InitRefused("A.esp");
     }
 
-    private string TrackRefused(string plugin)
-    {
-        var (refused, reason) = Assert.Single(TestAdapters.Source().Track(_modFolder, [Baseline(plugin)]));
-        Assert.Equal(plugin, refused);
-        return reason;
-    }
+    private string InitRefused(string plugin) => TestAdapters.Source().Init(_modFolder, [Baseline(plugin)]).Require().Reason;
 
     [PosixFact]
-    public void Track_WhenTheCommitFails_TakesBackWhatItMade_AndTrackingAgainCreatesTheRepository()
+    public void Init_WhenTheCommitFails_TakesBackWhatItMade_AndAnInitAgainCreatesTheRepository()
     {
         var asset = UnreadableFileTheCommitCannotAdd();
         FileModes.Set(asset, "000");
         try
         {
-            TrackRefused("A.esp");
+            InitRefused("A.esp");
         }
         finally
         {
@@ -170,16 +195,15 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.Equal([asset], Directory.GetFiles(Path.Combine(_modFolder, "plugin-source"), "*", SearchOption.AllDirectories));
         File.Delete(asset);
 
-        var refused = TestAdapters.Source().Track(_modFolder, [Baseline("A.esp")]);
+        Assert.Null(TestAdapters.Source().Init(_modFolder, [Baseline("A.esp")]));
 
-        Assert.Empty(refused);
-        Assert.Equal(["Track SomeMod"], SubjectsOnMain());
+        Assert.Equal(["Init SomeMod"], SubjectsOnMain());
         Assert.True(TestAdapters.Source().IsTracked(_modFolder));
         Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
     }
 
     [Fact]
-    public void Track_IntoARepositoryWithHistoryButNoMain_ThrowsAndChangesNothingOfIt()
+    public void Init_IntoARepositoryWithHistoryButNoMain_ThrowsAndChangesNothingOfIt()
     {
         Git("init", "-q", "-b", "master");
         File.WriteAllText(Path.Combine(_modFolder, ".gitignore"), "theirs\n");
@@ -190,7 +214,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
 
         Assert.True(TestAdapters.Source().HoldsAnotherRepository(_modFolder));
         Assert.Throws<InvalidOperationException>(
-            () => TestAdapters.Source().Track(_modFolder, [Baseline("A.esp")]));
+            () => TestAdapters.Source().Init(_modFolder, [Baseline("A.esp")]));
 
         Assert.Equal(logBefore, Git("log", "--all", "--format=%H %s"));
         Assert.Equal("theirs\n", File.ReadAllText(Path.Combine(_modFolder, ".gitignore")));
@@ -199,21 +223,21 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     }
 
     [Fact]
-    public void Track_IntoABranchlessRepositoryTheUserMade_ThrowsAndChangesNothingOfIt()
+    public void Init_IntoABranchlessRepositoryTheUserMade_ThrowsAndChangesNothingOfIt()
     {
         Git("init", "-q", "-b", "main");
         var before = GitDirContents();
 
         Assert.True(TestAdapters.Source().HoldsAnotherRepository(_modFolder));
         Assert.Throws<InvalidOperationException>(
-            () => TestAdapters.Source().Track(_modFolder, [Baseline("A.esp")]));
+            () => TestAdapters.Source().Init(_modFolder, [Baseline("A.esp")]));
 
         Assert.Equal(before, GitDirContents());
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
     }
 
     [Fact]
-    public void Track_WhenADefectStopsAPluginsWrite_NamesWhatAnotherProgramPutInADirectoryItMade_AndIsNotARefusal()
+    public void Init_WhenADefectStopsAPluginsWrite_NamesWhatAnotherProgramPutInADirectoryItMade_AndIsNotARefusal()
     {
         var theirs = Path.Combine(_modFolder, "plugin-source", "A.esp", "theirs.txt");
         var files = new FilesThatFailMidway(
@@ -221,7 +245,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
             () => File.WriteAllText(theirs, "theirs"));
 
         var failure = Assert.Throws<AggregateException>(
-            () => TestAdapters.Source().Track(_modFolder, [(files, new DecompiledPlugin("A.esp", null))]));
+            () => TestAdapters.Source().Init(_modFolder, [(files, new DecompiledPlugin("A.esp", null))]));
 
         Assert.IsType<InvalidCastException>(failure.InnerException);
         Assert.Contains("plugin-source/A.esp \u2014 holds something this change did not write", failure.Message.Replace('\\', '/'));
@@ -245,27 +269,26 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     }
 
     [PosixFact]
-    public void Track_IntoTheHalfMadeRepositoryOfACrashedTrack_Recovers()
+    public void Init_IntoTheHalfMadeRepositoryOfACrashedInit_Recovers()
     {
-        CrashATrackAfterItMadeTheRepository();
+        CrashAnInitAfterItMadeTheRepository();
 
         Assert.False(TestAdapters.Source().HoldsAnotherRepository(_modFolder));
-        var refused = TestAdapters.Source().Track(_modFolder, [Baseline("A.esp")]);
+        Assert.Null(TestAdapters.Source().Init(_modFolder, [Baseline("A.esp")]));
 
-        Assert.Empty(refused);
-        Assert.Equal(["Track SomeMod"], SubjectsOnMain());
+        Assert.Equal(["Init SomeMod"], SubjectsOnMain());
     }
 
-    private void CrashATrackAfterItMadeTheRepository()
+    private void CrashAnInitAfterItMadeTheRepository()
     {
-        using var template = new ScratchDirectory("medit-track-template-");
+        using var template = new ScratchDirectory("medit-init-template-");
         GitHooks.Write(template, "pre-commit", "chmod 555 \"$(dirname \"$0\")/..\"\nexit 1");
         var previous = Environment.GetEnvironmentVariable("GIT_TEMPLATE_DIR");
         Environment.SetEnvironmentVariable("GIT_TEMPLATE_DIR", Path.Combine(template, ".git"));
         var gitDir = Path.Combine(_modFolder, ".git");
         try
         {
-            Assert.Contains(".git \u2014 could not be restored: ", TrackRefused("Crashed.esp"), StringComparison.Ordinal);
+            Assert.Contains(".git \u2014 could not be restored: ", InitRefused("Crashed.esp"), StringComparison.Ordinal);
             Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
         }
         finally

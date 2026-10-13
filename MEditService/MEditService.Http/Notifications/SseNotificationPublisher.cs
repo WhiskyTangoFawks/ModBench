@@ -63,7 +63,7 @@ internal sealed class SseNotificationPublisher : INotificationPublisher
 internal sealed record NotificationEvent(
     string Kind, string Plugin, string Origin, IReadOnlyList<string> Keys, long Sequence,
     LoadOrderStatus? LoadOrderStatus = null,
-    TrackProgress? TrackProgress = null,
+    InitProgress? InitProgress = null,
     BuildProgress? BuildProgress = null,
     IReadOnlyList<ChangedPlugin>? ChangedPlugins = null,
     IReadOnlyList<PluginWithUnreadableSource>? PluginWithUnreadableSources = null,
@@ -75,7 +75,7 @@ internal sealed record NotificationEvent(
         RowsChangedNotification n => new("rows-changed", n.Plugin.Name, n.Plugin.Origin, n.Keys, n.Sequence),
         PluginChangedNotification n => new("plugin-changed", n.Plugin.Name, n.Plugin.Origin, [], n.Sequence),
         LoadOrderStatusNotification n => new("load-order-status", "", "", [], 0, LoadOrderStatus: n.Status),
-        TrackProgressNotification n => new("track-progress", "", n.Progress.Mod ?? "", [], 0, TrackProgress: n.Progress),
+        InitProgressNotification n => new("init-progress", "", n.Progress.Mod ?? "", [], 0, InitProgress: n.Progress),
         StageProgressNotification n => new("stage-progress", "", n.Progress.Mod ?? "", [], 0, StageProgress: n.Progress),
         BuildProgressNotification n => new("build-progress", "", n.Progress.Mod ?? "", [], 0, BuildProgress: n.Progress),
         ExternalChangeNotification n => new("external-change", "", n.Origin, [], 0, ChangedPlugins: n.Plugins),

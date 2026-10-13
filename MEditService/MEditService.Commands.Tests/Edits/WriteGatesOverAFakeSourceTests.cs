@@ -49,7 +49,7 @@ public sealed class WriteGatesOverAFakeSourceTests
             .Changes(disk.Plugin, disk.Npc.ToString(), SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).Outcome;
 
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-        Assert.Contains("Track its mod", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Init its mod", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]

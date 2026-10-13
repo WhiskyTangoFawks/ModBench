@@ -27,7 +27,7 @@ public sealed class WarmedTestFramework(IMessageSink diagnostics) : SchemaWarmed
         using var client = host.CreateClient();
 
         (await client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await client.Track(Origin)).EnsureSuccessStatusCode();
+        (await client.Init(Origin)).EnsureSuccessStatusCode();
         await client.NextSnapshot(fx);
         await client.PluginReportsTracked(Plugin);
         var formKey = await client.FirstFormKey(Plugin, Origin);

@@ -297,6 +297,21 @@ export interface FileStamp {
 /** A read of one file that answers why it could not be read, rather than failing whatever asked. */
 export type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
 
+/** An entry of a downloaded file, by its forward-slash path inside it, and its hash. */
+export interface HashedEntry {
+  readonly path: string;
+  readonly hash: string;
+}
+
+/** A downloaded file the mod manager records a mod as installed from, with its size, its hash and each entry's, as
+ *  the downloaded files' index keeps them (ADR-0024). */
+export interface InstallationFile {
+  readonly path: string;
+  readonly size: number;
+  readonly hash: string;
+  readonly entries: readonly HashedEntry[];
+}
+
 /** How a message names the mod manager, the file it keeps mod order in, and the file it keeps beside a downloaded file. */
 export interface ManagerNames {
   readonly manager: string;
@@ -339,6 +354,10 @@ export interface InstanceAdapter {
   modTracked(mod: string): Promise<boolean>;
   /** Every repository in the source folder, by its folder's name, whether the mod order lists it or not. */
   sourceMods(): Promise<string[]>;
+  /** The downloaded files the mod manager records `mod` as installed from, in its order. */
+  installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
+  /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
+  readonly managerFilesInModFolder: readonly string[];
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** The content digest of an origin file, at the path it is read from: two files with one digest

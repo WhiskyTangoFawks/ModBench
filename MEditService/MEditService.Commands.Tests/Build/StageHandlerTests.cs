@@ -15,13 +15,13 @@ public sealed class StageHandlerTests
 
     private StageHandler Handler => new(_folders, _notifications);
 
-    private static ModToStage ModFrom(string name, params InstallationFileToStage[] installationFiles) =>
+    private static ModToStage ModFrom(string name, params InstallationFile[] installationFiles) =>
         new(name, $"mods/{name}", installationFiles, []);
 
-    private InstallationFileToStage Downloaded(string path, params (string Path, string Hash)[] entries)
+    private InstallationFile Downloaded(string path, params (string Path, string Hash)[] entries)
     {
         _folders.WithFile(string.Empty, path, "archive");
-        return new InstallationFileToStage(path, Source: null, Size: 7, Hash: $"#{path}", [.. entries.Select(e => new HashedEntry(e.Path, e.Hash))]);
+        return new InstallationFile(path, Source: null, Size: 7, Hash: $"#{path}", [.. entries.Select(e => new HashedEntry(e.Path, e.Hash))]);
     }
 
     private IEnumerable<StageProgress> Progress =>
@@ -114,7 +114,7 @@ public sealed class StageHandlerTests
     public void AModWithAnInstallationFileMissing_IsRefusedNamingTheModAndFile_AndTheOthersLand()
     {
         _folders.WithFile("mods/Lost", "a.txt", "hello").WithFile("mods/Found", "a.txt", "hello");
-        var lost = new InstallationFileToStage("dl/Lost.zip", null, 7, "#lost", [new HashedEntry("a.txt", "hello")]);
+        var lost = new InstallationFile("dl/Lost.zip", null, 7, "#lost", [new HashedEntry("a.txt", "hello")]);
 
         var result = Handler.Stage([ModFrom("Lost", lost), ModFrom("Found", Downloaded("dl/Found.zip", ("a.txt", "hello")))], []);
 

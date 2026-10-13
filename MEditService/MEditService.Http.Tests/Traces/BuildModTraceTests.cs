@@ -33,7 +33,7 @@ public sealed class BuildModTraceTests : HostedTests
         File.Move(second.Path, movedTo, overwrite: true);
         (await Client.PutLoadOrder(_instance, _instance.Plugins.Select(p => p == second ? p with { Path = movedTo } : p)))
             .EnsureSuccessStatusCode();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Init(Origin)).EnsureSuccessStatusCode();
     }
 
     private static async Task<JsonElement> Answer(HttpResponseMessage response)

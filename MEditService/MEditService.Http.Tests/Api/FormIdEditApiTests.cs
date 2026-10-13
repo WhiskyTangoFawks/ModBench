@@ -32,7 +32,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
             gameRelease = "Fallout4",
         });
         load.EnsureSuccessStatusCode();
-        (await _client.Track(Origin)).EnsureSuccessStatusCode();
+        (await _client.Init(Origin)).EnsureSuccessStatusCode();
         await _client.NextSnapshot(fx, Origin);
         await _client.PluginReportsTracked(Plugin);
     }
