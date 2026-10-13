@@ -46,4 +46,15 @@ public sealed record FormIdLimit(string Flag, uint Min, uint Max, bool ByFlag, b
     /// <summary>The keys native to <paramref name="plugin"/> whose local FormID lies outside the range.</summary>
     public IReadOnlyList<FormKey> Outside(ModKey plugin, IEnumerable<FormKey> keys) =>
         [.. keys.Where(key => key.ModKey == plugin && (key.ID < Min || key.ID > Max))];
+
+    /// <summary>Compile's reason for refusing <paramref name="plugin"/> for holding <paramref name="outOfRange"/>.</summary>
+    public string Refusal(string plugin, IReadOnlyList<FormKey> outOfRange)
+    {
+        var renameOffEsl = ByExtension ? " rename the plugin off .esl," : "";
+        var named = outOfRange.Select(key => key.ToString()).ToList();
+        return $"{plugin} is a {Flag} plugin but holds native FormID(s) outside the {Flag} range " +
+               $"(0x{Min:X}-0x{Max:X}): {string.Join(", ", named.Take(4))}" +
+               (named.Count > 4 ? $" and {named.Count - 4} more" : "") +
+               $". Clear the {Flag} flag,{renameOffEsl} or change the records' FormIDs.";
+    }
 }

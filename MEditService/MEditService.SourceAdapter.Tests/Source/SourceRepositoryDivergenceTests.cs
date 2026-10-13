@@ -23,7 +23,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
     {
         PluginBaselines.Init(
             _modFolder,
-            [new TreeFile(PluginSourceRoot.HeaderDocument(PluginName), "{\"MasterReferences\": []}"u8.ToArray())]);
+            [new TreeFile(PluginSourceRoot.HeaderDocument(PluginName), "{\"Author\": \"held\"}"u8.ToArray())]);
         Repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "FixtureNpc", NpcBody)).Wrote();
     }
 
