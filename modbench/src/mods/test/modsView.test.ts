@@ -98,7 +98,7 @@ import { present } from '../../ports/present';
 import { modlistCommands } from '../../modOrderCommands/modOrderCommands';
 import { installCommands } from '../../install/install';
 import { accessTo, adapterOver } from '../../test/mo2/adapterOver';
-import { fakeArchiveReader } from '../../instanceAdapter/test/fakeArchiveReader';
+import { fakeArchiveReader } from '../../test/fakeArchiveReader';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
