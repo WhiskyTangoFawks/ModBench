@@ -19,7 +19,7 @@ The record tab is VS Code's editor for the record's file ([ADR-0001](../../adr/0
 As a user, I want:
 
 1. A click on a record in Plugins or Referenced By to open it as a preview editor, which my next click replaces. Source: catalog `open`; VS Code's preview editors
-2. Open to the side to open the record beside the tab I am in, pinned, so later clicks leave it alone. Source: catalog `open`, placement
+2. Open, from a row's menu, to open the record pinned in the group I am in, so later clicks leave it alone. Source: catalog `open`; VS Code's Explorer pins on a double click, which an extension's tree does not receive
 3. A file already open in a tab to be shown, not opened twice. Source: VS Code
 4. Several records opened at once to open one grid: the first record's file, with the others as its columns. Source: catalog `open`; xEdit Compare Selected
 5. The tab titled with the file's name, as any file is. The file is named by the record's EditorID, so the title carries it. A child record has no file of its own, so its tab, tracked or not, is titled with its EditorID, or its FormKey when it has none. Source: ADR-0001; ADR-0020; plugin-source.md, The tree, story 1; ruling
