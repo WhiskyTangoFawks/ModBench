@@ -68,7 +68,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         bool indexed) =>
         RecordChildren(copies, ContextOf(
             copies, columns, 0, release, resolveFormKey, loadOrderFormIds, indexed,
-            shadowed: new HashSet<string>(), cellStates: (_, _) => new Dictionary<string, ConflictThis>()));
+            shadowed: new HashSet<string>(), cellStates: (_, _) => new Dictionary<string, ConflictThis>(), agree: true));
 
     private static IReadOnlyList<(string Column, int LoadOrderIndex)> OrderOf(
         IReadOnlyList<RecordDetail> records, IReadOnlyList<string> columns) =>
@@ -77,7 +77,7 @@ internal sealed class ConflictClassifier(ILogger logger)
     private DiffContext ContextOf(
         IReadOnlyList<RecordDetail> records, IReadOnlyList<string> columns, int winner, GameRelease release,
         Func<string, RecordLookupEntry?> resolveFormKey, Func<string, uint?> loadOrderFormIds, bool indexed,
-        IReadOnlySet<string> shadowed, CellStatesOf cellStates, int? comparedCount = null) =>
+        IReadOnlySet<string> shadowed, CellStatesOf cellStates, int? comparedCount = null, bool agree = false) =>
         new(
             MasterColumn: columns[0],
             RecordWinnerColumn: columns[winner],
@@ -90,6 +90,7 @@ internal sealed class ConflictClassifier(ILogger logger)
                 .ToDictionary(t => t.Column, t => t.File ?? "", StringComparer.Ordinal),
             ShadowedColumns: shadowed,
             StatesOf: cellStates,
+            Agree: agree,
             FormKey: records[0].FormKey,
             Logger: logger,
             ResolveFormKey: resolveFormKey,
@@ -113,6 +114,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         IReadOnlyDictionary<string, string> MissingStringsFiles,
         IReadOnlySet<string> ShadowedColumns,
         CellStatesOf StatesOf,
+        bool Agree,
         string FormKey,
         ILogger Logger,
         Func<string, RecordLookupEntry?> ResolveFormKey,
@@ -150,12 +152,17 @@ internal sealed class ConflictClassifier(ILogger logger)
         // Escalate is associative and commutative over {NoConflict, Override, Conflict} (Reduce
         // never produces the terminal states), so folding children equals reducing the whole
         // subtree at once.
-        var conflictAll = (children ?? []).Aggregate(
-            ConflictRules.Reduce(cellStates.Values), (all, child) => ConflictRules.Escalate(all, child.ConflictAll));
+        var same = (object? a, object? b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault);
+        var agreement = ctx.Agree && !ignoredInConflicts ? ConflictRules.Agreement(values, same) : null;
+        var ownState = agreement is { } groups && groups.Values.Distinct().Count() > 1
+            ? ConflictAll.ConflictBenign
+            : ConflictRules.Reduce(cellStates.Values);
+        var conflictAll = (children ?? []).Aggregate(ownState, (all, child) => ConflictRules.Escalate(all, child.ConflictAll));
 
         var links = LinkFacts(shapes, values, ctx);
         return new FieldDiff(
-            label, values, winnerColumn, cellStates, conflictAll, children, links.Resolutions, links.CheckErrors);
+            label, values, winnerColumn, cellStates, conflictAll, children, links.Resolutions, links.CheckErrors,
+            Agreement: agreement);
     }
 
     // A table of several record classes carries the document's discriminator as a column, and a

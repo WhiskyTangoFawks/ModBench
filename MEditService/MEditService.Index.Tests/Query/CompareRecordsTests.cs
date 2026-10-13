@@ -115,18 +115,39 @@ public sealed class CompareRecordsTests : IDisposable
     }
 
     [Fact]
-    public void CopiesThatDiffer_CarryNoConflictState()
+    public void CopiesThatDiffer_CarryNoCellStateAndNoCopyState_ButAgreementOnEveryRow()
     {
         var compare = Compare(Copy(_chest, BasePlugin), Copy(_otherChest, ModPlugin));
 
-        Assert.Contains(compare.Diffs, d => d.FieldName == "Items" && d.Values[Column(compare, 0)] is not null && d.Values[Column(compare, 1)] is not null);
         Assert.All(compare.Overrides, o => Assert.Null(o.ConflictThis));
-        Assert.All(Flatten(compare.Diffs), d =>
-        {
-            Assert.Empty(d.CellStates);
-            Assert.Equal(ConflictAll.NoConflict, d.ConflictAll);
-        });
-        Assert.Equal(ConflictAll.NoConflict, compare.ConflictAll);
+        Assert.All(Flatten(compare.Diffs), d => Assert.Empty(d.CellStates));
+        var items = compare.Diffs.Single(d => d.FieldName == "Items");
+        var agreement = items.Agreement.Require();
+        Assert.NotEqual(agreement[Column(compare, 0)], agreement[Column(compare, 1)]);
+    }
+
+    [Fact]
+    public void ARowWhereTheCopiesAgree_IsNoConflict_AndWhereTheyDiffer_IsConflictBenign()
+    {
+        var compare = Compare(Copy(_chest, BasePlugin), Copy(_chest, BasePlugin), Copy(_otherChest, ModPlugin));
+
+        var rows = compare.Diffs.ToDictionary(d => d.FieldName);
+        Assert.Equal(ConflictAll.NoConflict, rows["FormVersion"].ConflictAll);
+        Assert.Equal(ConflictAll.ConflictBenign, rows["EditorID"].ConflictAll);
+        Assert.Equal(ConflictAll.ConflictBenign, compare.ConflictAll);
+        var editorId = rows["EditorID"].Agreement.Require();
+        Assert.Equal(editorId[Column(compare, 0)], editorId[Column(compare, 1)]);
+        Assert.NotEqual(editorId[Column(compare, 0)], editorId[Column(compare, 2)]);
+    }
+
+    [Fact]
+    public void AStructRowOverDifferingChildren_IsConflictBenign()
+    {
+        var compare = Compare(Copy(_chest, BasePlugin), Copy(_otherChest, ModPlugin));
+
+        var differing = Flatten(compare.Diffs).Where(d => d.Children is not null && d.ConflictAll == ConflictAll.ConflictBenign);
+        Assert.All(differing, d => Assert.Contains(d.Children.Require(), c => c.ConflictAll == ConflictAll.ConflictBenign));
+        Assert.Contains(compare.Diffs, d => d.FieldName == "Items" && d.ConflictAll == ConflictAll.ConflictBenign);
     }
 
     [Fact]

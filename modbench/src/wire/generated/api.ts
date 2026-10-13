@@ -950,7 +950,7 @@ export interface components {
             diagnostics: components["schemas"]["CompileDiagnostic"][];
         };
         /** @enum {string} */
-        ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict";
+        ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictBenign";
         /** @enum {string} */
         ConflictThis: "OnlyOne" | "Master" | "IdenticalToMaster" | "Override" | "ConflictWins" | "ConflictLoses";
         ContainerChildSummary: {
@@ -1032,6 +1032,9 @@ export interface components {
                 [key: string]: string;
             } | null;
             indexes?: {
+                [key: string]: number;
+            } | null;
+            agreement?: {
                 [key: string]: number;
             } | null;
         };

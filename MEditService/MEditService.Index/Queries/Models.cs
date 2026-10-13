@@ -110,7 +110,11 @@ public record FieldDiff(
     // rather than the whole record's, which FieldValue.CheckError on the root field states.
     IReadOnlyDictionary<string, string>? CheckErrors = null,
     // An array element's own index in each column's array that holds it; null on any other node.
-    IReadOnlyDictionary<string, int>? Indexes = null);
+    IReadOnlyDictionary<string, int>? Indexes = null,
+    // Only in a comparison of several records: columns holding the same value share a number, and
+    // an absent value is a number of its own. The panel colours each cell from it against the
+    // focused column.
+    IReadOnlyDictionary<string, int>? Agreement = null);
 
 internal sealed record ClassifyResult(
     ConflictAll ConflictAll,
@@ -201,6 +205,7 @@ public enum ConflictAll
     NoConflict,
     Override,
     Conflict,
+    ConflictBenign,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
