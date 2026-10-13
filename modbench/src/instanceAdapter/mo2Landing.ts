@@ -3,7 +3,7 @@
 
 import { parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
 import type { ArchiveReader } from './archiveReader';
-import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, write } from './files';
+import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, withLock, write } from './files';
 import type { InstallSource, InstanceAdapter, ModMeta, OwnedMetaKeys } from './instanceAdapter';
 import { fileInFolder, modMetaFileIn, modsDir, newModExtractionPrefix, upgradeExtractionPrefix } from './layout';
 import { errnoCode } from '../ports/errno';
@@ -11,7 +11,6 @@ import { errorMessage } from '../ports/errorMessage';
 import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 import { releaseRoot } from './releaseRoot';
 
-// A release on its way into a mod's folder, in a fresh folder of its own inside it.
 interface Extraction {
   readonly path: string;
   land(root: string, keys: OwnedMetaKeys): Promise<void>;
@@ -78,17 +77,6 @@ async function extractUpgrade(mod: string, folder: string): Promise<Extraction> 
   };
 }
 
-// Serialized per instance root: the folder check and the folder's making must not interleave
-// with another install, or two of the same name both pass the check.
-const installQueues = new Map<string, Promise<unknown>>();
-
-function withInstallLock<T>(instanceRoot: string, task: () => Promise<T>): Promise<T> {
-  const prior = installQueues.get(instanceRoot) ?? Promise.resolve();
-  const next = prior.then(task, task);
-  installQueues.set(instanceRoot, next.catch(() => undefined));
-  return next;
-}
-
 async function abandonAfter(extraction: Extraction, failure: unknown): Promise<never> {
   try {
     await extraction.abandon();
@@ -103,7 +91,7 @@ export function mo2Landing(context: Mo2Context, archives: ArchiveReader): Pick<I
     (source.kind === 'archive' ? archives.extract(source.path, path) : copyTree(source.path, path));
 
   return {
-    install: (source, target, keys) => withInstallLock(context.instanceRoot, async () => {
+    install: (source, target, keys) => withLock(context.instanceRoot, async () => {
       const holding = await folderHolding(context, { kind: 'mod', name: target.name });
       if ((target.kind === 'new') !== (holding === undefined)) return { landed: false };
       const extraction = holding === undefined ? await extractNewMod(context, target.name) : await extractUpgrade(target.name, holding.path);
