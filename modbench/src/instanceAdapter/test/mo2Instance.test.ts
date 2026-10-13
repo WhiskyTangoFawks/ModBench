@@ -667,7 +667,7 @@ describe('the MO2 Instance adapter', () => {
           }));
           await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\nsResourceArchiveList2=Default2.ba2\n');
           await localSettings(false);
-        } });
+        });
 
         it('takes a key the My Games INIs give over the default INI\'s, the custom INI\'s over the main one\'s, with no warning', async () => {
           await writeFile(join(myGames, 'Fallout4.ini'), '[Archive]\nsResourceArchiveList=Main.ba2\nsResourceArchiveList2=Main2.ba2\n');
@@ -948,7 +948,7 @@ describe('the MO2 Instance adapter', () => {
         expect(fire(myGames, 'FALLOUT4CUSTOM.ini')).toBe(true);
         expect(fire(myGames, 'Fallout4Prefs.ini')).toBe(false);
       } finally {
-        await rm(prefix, { recursive: true, force: true } });
+        await rm(prefix, { recursive: true, force: true });
       }
     });
 
