@@ -8,6 +8,7 @@ import { providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
 import { pluginsCommands, type PluginsCommands } from '../../pluginsCommands/plugins';
 import type { Instance } from '../../instanceLoader/instance';
 import { fakeArchiveReader } from '../fakeArchiveReader';
+import { NO_DETECTORS } from '../noDetectors';
 import type { InstallAccess } from '../../install/install';
 
 /** The adapter's answers a test fixes in place of asking the machine it runs on. */
@@ -42,7 +43,7 @@ export function adapterOver(root: string, answers: AdapterAnswers = {}): Instanc
     instanceRoot: root,
     gameDirectoryOverrides: () => ({}),
     gameDirectoryChanged: () => ({ dispose: () => {} }),
-    detectors: { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(null) },
+    detectors: NO_DETECTORS,
   });
   const { gameFolder, downloadedFiles } = answers;
   const fixed: Omit<InstanceAdapter, 'reading'> = {

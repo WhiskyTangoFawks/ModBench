@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import type { Subscription } from './instanceAdapter';
 import { MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, SETTINGS_WATCH_GLOB, SOURCE_GLOB } from './layout';
 
-type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins' | 'creationClubList' | 'defaultIni' | 'gameFolderArchives';
+type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives';
 
 // A repository's change is its working tree and its refs, never git's own bookkeeping.
 function isRepositoryChange(path: string): boolean {

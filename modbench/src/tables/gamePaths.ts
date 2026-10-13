@@ -40,6 +40,8 @@ export interface ArchiveLists {
   readonly defaultIni: string;
   /** The user's INIs, in the order the game reads them. Where they are is the mod manager's. */
   readonly userInis: readonly string[];
+  /** Under `Documents/My Games`, where the game keeps its own copies of them. */
+  readonly myGamesFolder: string;
   /** In the order the game loads the archives they list. */
   readonly keys: readonly string[];
   /** The archives the game loads after those, whatever its INIs list. */
@@ -85,13 +87,13 @@ const FALLOUT4_BA2_VERSIONS: Ba2Versions = { general: 1, textures: 1 };
 const RESOURCE_ARCHIVE_KEYS = ['sResourceArchiveList', 'sResourceArchiveList2'];
 const RESOURCE_INDEX_KEYS = ['sResourceIndexFileList', 'sResourceStartUpArchiveList', ...RESOURCE_ARCHIVE_KEYS];
 const FALLOUT4_ARCHIVES: ArchiveLists = {
-  defaultIni: 'Fallout4_Default.ini', userInis: ['Fallout4.ini', 'Fallout4Custom.ini'], keys: RESOURCE_INDEX_KEYS, alwaysLoaded: [],
+  myGamesFolder: 'Fallout4', defaultIni: 'Fallout4_Default.ini', userInis: ['Fallout4.ini', 'Fallout4Custom.ini'], keys: RESOURCE_INDEX_KEYS, alwaysLoaded: [],
 };
 const SKYRIM_ARCHIVES: ArchiveLists = {
-  defaultIni: 'Skyrim_Default.ini', userInis: ['Skyrim.ini', 'SkyrimCustom.ini'], keys: RESOURCE_ARCHIVE_KEYS, alwaysLoaded: [],
+  myGamesFolder: 'Skyrim Special Edition', defaultIni: 'Skyrim_Default.ini', userInis: ['Skyrim.ini', 'SkyrimCustom.ini'], keys: RESOURCE_ARCHIVE_KEYS, alwaysLoaded: [],
 };
 const FALLOUT3_ARCHIVES: ArchiveLists = {
-  defaultIni: 'Fallout_default.ini', userInis: ['Fallout.ini', 'FalloutCustom.ini'], keys: ['sArchiveList'], alwaysLoaded: [],
+  myGamesFolder: 'Fallout3', defaultIni: 'Fallout_default.ini', userInis: ['Fallout.ini', 'FalloutCustom.ini'], keys: ['sArchiveList'], alwaysLoaded: [],
 };
 
 // Only Fallout 4 carries Steam autodetection facts today — a fixture choice, not a platform lock.
@@ -106,7 +108,7 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS,
-    archiveLists: { ...FALLOUT4_ARCHIVES, defaultIni: 'Fallout4.ini' }, ba2Versions: FALLOUT4_BA2_VERSIONS,
+    archiveLists: { ...FALLOUT4_ARCHIVES, myGamesFolder: 'Fallout4VR', defaultIni: 'Fallout4.ini' }, ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   Fallout3: {
     gameName: 'Fallout 3', nexusSlug: 'fallout3', masters: ['Fallout3.esm'], scriptExtenderFolder: 'fose',
@@ -114,11 +116,11 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
   },
   FalloutNV: {
     gameName: 'Fallout New Vegas', nexusSlug: 'newvegas', masters: ['FalloutNV.esm'], scriptExtenderFolder: 'nvse',
-    pluginCompanions: NO_STRINGS_COMPANIONS, archiveLists: { ...FALLOUT3_ARCHIVES, alwaysLoaded: ['Update.bsa'] },
+    pluginCompanions: NO_STRINGS_COMPANIONS, archiveLists: { ...FALLOUT3_ARCHIVES, myGamesFolder: 'FalloutNV', alwaysLoaded: ['Update.bsa'] },
   },
   SkyrimLE: {
     gameName: 'Skyrim', nexusSlug: 'skyrim', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse',
-    pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES,
+    pluginCompanions: SKYRIM_COMPANIONS, archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim' },
   },
   SkyrimSE: {
     gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', masters: SKYRIM_MASTERS,
@@ -129,21 +131,21 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS,
-    archiveLists: { ...SKYRIM_ARCHIVES, defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
+    archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim VR', defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
   },
   EnderalLE: {
     gameName: 'Enderal', nexusSlug: 'enderal', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse',
-    pluginCompanions: SKYRIM_COMPANIONS, archiveLists: { ...SKYRIM_ARCHIVES, userInis: ['Enderal.ini', 'EnderalCustom.ini'] },
+    pluginCompanions: SKYRIM_COMPANIONS, archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Enderal', userInis: ['Enderal.ini', 'EnderalCustom.ini'] },
   },
   Starfield: {
     gameName: 'Starfield', nexusSlug: 'starfield', masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc',
     scriptExtenderFolder: 'sfse', pluginCompanions: FALLOUT4_COMPANIONS,
-    archiveLists: { defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS, alwaysLoaded: [] },
+    archiveLists: { myGamesFolder: 'Starfield', defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS, alwaysLoaded: [] },
   },
   Oblivion: {
     gameName: 'Oblivion', nexusSlug: 'oblivion', masters: ['Oblivion.esm'], scriptExtenderFolder: 'obse',
     pluginCompanions: NO_STRINGS_COMPANIONS,
-    archiveLists: { defaultIni: 'Oblivion_default.ini', userInis: ['Oblivion.ini'], keys: ['sArchiveList'], alwaysLoaded: [] },
+    archiveLists: { myGamesFolder: 'Oblivion', defaultIni: 'Oblivion_default.ini', userInis: ['Oblivion.ini'], keys: ['sArchiveList'], alwaysLoaded: [] },
   },
 };
 

@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { readGameName, readGamePath, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { gamePathInfoForRelease, gameReleaseForGame } from '../tables/gamePaths';
 import { detectGamePaths, detectWinePrefix, type GameAutodetect, type GamePaths } from './gamePathDetector';
+import { documentsFolder } from './documentsFolder';
 import { factsOf } from './files';
 import { present } from '../ports/present';
 import { errorMessage } from '../ports/errorMessage';
@@ -22,16 +23,19 @@ type DetectWinePrefix = () => Promise<string | null>;
 export interface GameDetectors {
   paths: (game: GameAutodetect) => Promise<GamePaths | null>;
   winePrefix: (steamAppId: string) => Promise<string | null>;
+  /** The user's Documents folder as Windows has it, wherever it was redirected to. */
+  documents: () => Promise<string>;
 }
 
 const execAsync = promisify(exec);
 
-const STEAM: GameDetectors = {
+export const STEAM: GameDetectors = {
   paths: (game) =>
     detectGamePaths(process.platform, game, () =>
       execAsync('reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath').then((r) => r.stdout),
     ),
   winePrefix: detectWinePrefix,
+  documents: () => documentsFolder(),
 };
 
 /** Wine fixes `Z:` to the filesystem root and `C:` to the prefix's own `drive_c`; any other
