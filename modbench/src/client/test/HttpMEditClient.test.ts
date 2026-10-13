@@ -337,6 +337,15 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     expect(result).toEqual([{ plugin: shared }, { formKey: sharedKey, editorId: 'SharedNpc' }]);
   });
 
+  it('selectRows posts the statement and reads the rows it selects', async () => {
+    const { result, request } = await exchange((c) => c.selectRows('SELECT 1'), answers(200, { rows: [{ n: 1 }] }));
+
+    expect(request.method).toBe('POST');
+    expect(new URL(request.url).pathname).toBe('/records/select');
+    expect(await request.json()).toEqual({ sql: 'SELECT 1' });
+    expect(result).toEqual([{ n: 1 }]);
+  });
+
   it.each(gets)('$name gets $path and reads the answer untransformed', async ({ verb, answer, path, query }) => {
     const { result, request } = await exchange(verb, answers(200, answer));
 
@@ -429,6 +438,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       { what: 'getComparison(000801:Broken.esp)', verb: (c) => c.getComparison('000801:Broken.esp'), status: 500, detail: 'boom' },
       { what: 'getRecordsComparison', verb: (c) => c.getRecordsComparison([]), status: 400, detail: 'No records.' },
       { what: 'resolveNames', verb: (c) => c.resolveNames([{ name: 'Gone' }]), status: 400, detail: 'Nothing is named "Gone".' },
+      { what: 'selectRows', verb: (c) => c.selectRows('DROP TABLE x'), status: 400, detail: 'Only a SELECT runs.' },
       { what: 'getCreatableRecordTypes', verb: (c) => c.getCreatableRecordTypes(), status: 503, detail: cannotAnswer },
       { what: 'getChildRecordTypes(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getChildRecordTypes(shared, sharedKey), status: 503, detail: cannotAnswer },
       { what: 'getRenderedDocument(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getRenderedDocument(shared, sharedKey), status: 503, detail: cannotAnswer },
