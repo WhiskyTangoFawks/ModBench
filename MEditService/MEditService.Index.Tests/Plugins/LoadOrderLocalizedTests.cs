@@ -197,7 +197,6 @@ public sealed class LoadOrderLocalizedTests
         new(data.DataFolder, null, GameRelease.Fallout4, SnapshotPlugins.Of(plugins), SnapshotPlugins.Active(plugins),
             SnapshotPlugins.LoadedWithNoLine(plugins), [], gameReads);
 
-    // Whether the door's name names its strings files missing, and whether it reads the door's text.
     private static (bool NamesMissing, bool ReadsTheDoor) NameAfter(
         OpenedIndex index, LoadOrderHolder holder, PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads,
         FormKey doorFormKey)
