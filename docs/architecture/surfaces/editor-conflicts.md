@@ -54,7 +54,7 @@ As a user, I want:
 3. A field's winner to be the last copy that has a value for it, so a Partial Form copy that leaves a field out never wins it. Source: xEdit
 4. Arrays compared as they align ([editor-fields.md](editor-fields.md), Arrays). Source: xEdit
 5. A container's conflict to be its own fields'. Its child records compare as records of their own, never as a list in the container: the game loads every plugin's children, not the winner's list. Source: ruling; xEdit
-6. A panel opened on several records to compare the records with each other. A row is NoConflict where they agree on the field, and ConflictBenign where they do not. No cell takes a state. Source: xEdit Compare Selected
+6. A panel opened on several records to compare the records with each other. A row is NoConflict where they agree on the field, and ConflictBenign where they do not. A cell is compared with its row's cell in the focused column: it is Master in the focused column, Override where it is the same, and ConflictLoses where it differs. This is an exception to The two axes: a cell compares with the focused column, not with the other copies. Source: xEdit Compare Selected
 
 ## The colours
 
