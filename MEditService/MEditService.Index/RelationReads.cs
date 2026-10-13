@@ -73,9 +73,8 @@ internal sealed class RelationReads(
             connection, $"SELECT EXISTS (SELECT 1 FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1)", formKey);
     }
 
-    /// <summary>The records a name can mean: the one whose FormKey it is, and every one whose EditorID it
-    /// is, whatever the case. A record is named by its winning copy's EditorID, the one the views show; a
-    /// record no active plugin holds is named by the last copy in load order.</summary>
+    /// <summary>The records a name can mean: the one whose FormKey it is, and every one whose winning copy's
+    /// EditorID it is, whatever the case. A record no active plugin holds is read from its first copy.</summary>
     public IReadOnlyList<(string FormKey, string? EditorId)> RecordsNamed(string name)
     {
         using var connection = store.OpenReadConnection();
