@@ -361,7 +361,7 @@ export interface InstanceReading {
   readonly runtimeOutput: OriginFiles;
   /** Each listed mod's own files, by mod name. */
   readonly modFiles: ReadonlyMap<string, OriginFiles>;
-  /** Each mod folder's meta, by folder name, listed in mod order or not. */
+  /** Each listed mod's meta by name, and an unlisted mod folder's when downloaded files are there to match against it. */
   readonly folderMeta: ReadonlyMap<string, ModMeta>;
   /** Every repository in the source folder. */
   readonly sourceMods: SourceMods;
