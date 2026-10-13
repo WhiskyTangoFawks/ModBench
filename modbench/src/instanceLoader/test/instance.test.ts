@@ -261,6 +261,23 @@ describe('Instance — the value', () => {
     expect(logs).toContainEqual(expect.stringContaining(join(root, 'source', 'No Configuration')));
   });
 
+  it('tells once, until it changes or clears, that a repository builds no mod', async () => {
+    const { root, instance, logs } = realInstance();
+    const repositoryFolder = join(root, 'source', 'No Configuration');
+    const told = (): number => logs.filter((line) => line.includes(repositoryFolder)).length;
+    await mkdir(join(repositoryFolder, '.git'), { recursive: true });
+
+    await instance.refresh();
+    await instance.refresh();
+    expect(told()).toBe(1);
+
+    await rm(repositoryFolder, { recursive: true });
+    await instance.refresh();
+    await mkdir(join(repositoryFolder, '.git'), { recursive: true });
+    await instance.refresh();
+    expect(told()).toBe(2);
+  });
+
   it('carries no source folder for a mod named as a renamed repository\'s folder still is, that repository being the source of the mod its build configuration names', async () => {
     const { root, instance } = realInstance();
     await repository(root, 'Harder VATS', 'Harder VATS Renamed');

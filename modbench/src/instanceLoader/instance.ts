@@ -221,14 +221,8 @@ export class Instance implements Subscription {
 
   private readonly focus: Subscription;
 
-  // The mod folder links already told as skipped, so each is one Output line until it changes.
-  private linksTold: ReadonlySet<string> = new Set();
-
-  // The listed archives nothing holds already told, so each is one Output line until it changes.
-  private archivesTold: ReadonlySet<string> = new Set();
-
-  // The archive list notes already warned, so each is one Output line until it changes or clears.
-  private archiveNotesTold: ReadonlySet<string> = new Set();
+  // Each kind of note as the last reading told it, so a note is one Output line until its text changes or it clears.
+  private readonly told = new Map<string, ReadonlySet<string>>();
 
   private readonly copies: SameCopies;
 
@@ -325,10 +319,10 @@ export class Instance implements Subscription {
 
   private tellReading({ skippedLinks, archiveListNotes, sourceMods, runtimeOutput, dataFolderPlugins, dataFolderArchives }: InstanceReading): void {
     const { log } = this.options;
-    for (const note of [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes]) log.info(`[instance] ${note}`);
-    this.tellSkippedLinks(skippedLinks);
-    for (const note of archiveListNotes.filter((n) => !this.archiveNotesTold.has(n))) log.warn(`[instance] ${note}`);
-    this.archiveNotesTold = new Set(archiveListNotes);
+    const notes = [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes];
+    this.tellOnce('notes', notes.map((note) => `[instance] ${note}`), 'info');
+    this.tellOnce('links', [...skippedLinks].map(([name, reason]) => `[instance] mods/${name} is a link Modbench cannot follow, so it is not a mod folder: ${reason}`), 'info');
+    this.tellOnce('archiveListNotes', archiveListNotes.map((note) => `[instance] ${note}`), 'warn');
     // An unreadable Data folder or its archives is an answer, never a failed read: the whole value
     // would otherwise go stale over a folder outside the instance.
     if (dataFolderPlugins.kind === 'unreadable') log.warn(`[instance] the game's Data folder could not be listed: ${dataFolderPlugins.reason}`);
@@ -337,22 +331,16 @@ export class Instance implements Subscription {
     }
   }
 
-  private tellSkippedLinks(skipped: ReadonlyMap<string, string>): void {
-    for (const [name, reason] of skipped) {
-      if (!this.linksTold.has(name)) {
-        this.options.log.info(`[instance] mods/${name} is a link Modbench cannot follow, so it is not a mod folder: ${reason}`);
-      }
-    }
-    this.linksTold = new Set(skipped.keys());
+  private tellOnce(kind: string, lines: readonly string[], level: 'info' | 'warn'): void {
+    const before = this.told.get(kind);
+    for (const line of lines) if (!before?.has(line)) this.options.log[level](line);
+    this.told.set(kind, new Set(lines));
   }
 
   // xEdit reports a listed archive it cannot find; the game loads none, so the views stay true.
   private tellArchivesNothingHolds(sources: ArchiveSources): void {
     const missing = listedArchivesNothingHolds(sources);
-    for (const name of missing.filter((archive) => !this.archivesTold.has(archive))) {
-      this.options.log.info(`[instance] The game's INIs list the archive ${name}, which no mod, Overwrite or game folder holds.`);
-    }
-    this.archivesTold = new Set(missing);
+    this.tellOnce('archives', missing.map((name) => `[instance] The game's INIs list the archive ${name}, which no mod, Overwrite or game folder holds.`), 'info');
   }
 
   private schedule(): void {
