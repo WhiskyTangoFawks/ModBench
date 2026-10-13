@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.IO.Abstractions;
 using System.Reflection;
 using System.Text;
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization;
@@ -30,6 +31,40 @@ public static class RecordTextCodec
     /// spelling the codec gives what it kept.</summary>
     public static string RoundTrip(string text, GameRelease gameRelease, string? recordType) =>
         SerializeToText(Deserialize(text, gameRelease, recordType), gameRelease);
+
+    /// <summary>Null when the text is a record's document, else compile's reason for refusing it: read and
+    /// written back, it must mean what it says (ADR-0006). The header's type is
+    /// <see cref="PluginHeader.RecordType"/>.</summary>
+    public static string? WhyNotARecord(string text, GameRelease gameRelease, string? recordType)
+    {
+        if (!Document.TryRead(text, out var written, out var whyNot)) return whyNot;
+        string Produce(string source) => recordType == PluginHeader.RecordType
+            ? Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(source), gameRelease)))
+            : RoundTrip(source, gameRelease, recordType);
+        try
+        {
+            return DocumentMeaning.FirstDifference(written.Element, Document.Parse(Produce(text)).Element) is { } at
+                ? $"{at} does not match what the current codec would produce from it."
+                : null;
+        }
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
+        {
+            return ReadFault.Describe(ex, text, source => ThrownBy(Produce, source));
+        }
+    }
+
+    private static Exception? ThrownBy(Func<string, string> produce, string source)
+    {
+        try
+        {
+            _ = produce(source);
+            return null;
+        }
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
+        {
+            return ex;
+        }
+    }
 
     /// <summary>A document's own graph, read back by the type its text names — a path-ambiguous
     /// group's document names its own class, which is the codec's spelling, not the schema's
