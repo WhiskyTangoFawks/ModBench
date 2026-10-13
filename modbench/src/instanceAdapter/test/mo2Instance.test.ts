@@ -1276,7 +1276,6 @@ describe('the MO2 Instance adapter', () => {
         expect(await adapter.installationFiles('DragIn Manual Extract')).toEqual({ kind: 'read', answer: [] });
         expect(adapter.managerFilesInModFolder).toEqual(['meta.ini']);
       });
-
     });
 
     describe('a mod\'s installation files', () => {
