@@ -24,7 +24,7 @@ import { isPluginFile } from './pluginFile';
 
 type Mo2Reads = Omit<InstanceAdapter,
   | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
-  | 'trashDownloadedFileMeta' | 'selectProfile' | 'markOriginFile' | 'renamePlugin' | 'checkPluginRename' | 'extractedEntries'
+  | 'trashDownloadedFileMeta' | 'selectProfile' | 'markOriginFile' | 'renamePlugin' | 'extractedEntries'
   | 'extractNewMod' | 'extractUpgrade' | 'subscribe' | 'names' | 'archiveList' | 'gameFolderArchives' | 'installationFiles'
   | 'managerFilesInModFolder' | 'reading'>;
 
