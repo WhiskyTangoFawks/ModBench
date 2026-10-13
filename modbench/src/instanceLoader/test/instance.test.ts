@@ -261,6 +261,23 @@ describe('Instance — the value', () => {
     expect(logs).toContainEqual(expect.stringContaining(join(root, 'source', 'No Configuration')));
   });
 
+  it('tells once, until it changes or clears, that a repository builds no mod', async () => {
+    const { root, instance, logs } = realInstance();
+    const repositoryFolder = join(root, 'source', 'No Configuration');
+    const told = (): number => logs.filter((line) => line.includes(repositoryFolder)).length;
+    await mkdir(join(repositoryFolder, '.git'), { recursive: true });
+
+    await instance.refresh();
+    await instance.refresh();
+    expect(told()).toBe(1);
+
+    await rm(repositoryFolder, { recursive: true });
+    await instance.refresh();
+    await mkdir(join(repositoryFolder, '.git'), { recursive: true });
+    await instance.refresh();
+    expect(told()).toBe(2);
+  });
+
   it('carries no source folder for a mod named as a renamed repository\'s folder still is, that repository being the source of the mod its build configuration names', async () => {
     const { root, instance } = realInstance();
     await repository(root, 'Harder VATS', 'Harder VATS Renamed');
@@ -825,12 +842,24 @@ describe('Instance — downloads, profile and game directory', () => {
 
   it('hands the snapshot the archives the game\u2019s default INI lists, from the game folder, and tells that the profile keeps no INIs of its own', async () => {
     const { gameFolder, dataFolder } = await gameListing('Fallout4 - Interface.ba2');
-    const { instance, logs } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
+    const { instance, warnings } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
 
     await instance.refresh();
 
     expect(instance.value.loadOrderSnapshot).toMatchObject({ archives: [join(dataFolder, 'Fallout4 - Interface.ba2')] });
-    expect(logs).toContainEqual(expect.stringMatching(/^\[instance\] The profile Default keeps no game INIs of its own/));
+    expect(warnings).toContainEqual(expect.stringMatching(/^\[instance\] The profile Default keeps no game INIs of its own/));
+  });
+
+  it('warns once, until it changes, that the game\u2019s own INIs were not found', async () => {
+    const { gameFolder } = await gameListing('Fallout4 - Interface.ba2');
+    const { instance, logs, warnings } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
+
+    await instance.refresh();
+    await instance.refresh();
+
+    const mine = (lines: string[]): string[] => lines.filter((line) => line.includes('keeps no game INIs of its own'));
+    expect(mine(warnings)).toHaveLength(1);
+    expect(mine(logs)).toEqual([]);
   });
 
   it('hands a mod\u2019s plugin a strings file added beside it, at the next read', async () => {
@@ -1198,7 +1227,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
   });
 
   it('tells an unresolved game directory from a folder that resolved and could not be read, an unreadable folder not being an empty set that would prune every plugins.txt line', async () => {
-    const { instance, warnings, setResolver } = await minimalInstanceWithoutCorpusMasters();
+    const { instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
 
     await instance.refresh();
     expect(instance.value.dataFolderPlugins).toEqual({ kind: 'unresolved' });
@@ -1208,6 +1237,15 @@ describe('Instance — what a command is handed instead of probing for it', () =
 
     expect(instance.value.dataFolderPlugins).toMatchObject({ kind: 'unreadable' });
     expect(instance.sequence).toBe(2);
+  });
+
+  it('tells once while it stands that the Data folder could not be listed', async () => {
+    const { instance, warnings, setResolver } = await minimalInstanceWithoutCorpusMasters();
+    setResolver(() => Promise.resolve({ kind: 'found', root: '/nowhere', dataFolder: '/nowhere/Data' }));
+
+    await instance.refresh();
+    await instance.refresh();
+
     expect(warnings.filter((m) => m.includes('Data folder could not be listed'))).toHaveLength(1);
   });
 

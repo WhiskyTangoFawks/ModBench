@@ -221,6 +221,12 @@ describe('archiveListsOf', () => {
       .toEqual(['sResourceIndexFileList', 'sResourceStartUpArchiveList', 'sResourceArchiveList', 'sResourceArchiveList2']);
   });
 
+  it.each([
+    ['Fallout4', 'Fallout4'], ['SkyrimSE', 'Skyrim Special Edition'], ['SkyrimLE', 'Skyrim'], ['SkyrimVR', 'Skyrim VR'], ['FalloutNV', 'FalloutNV'],
+  ])('keeps %s\'s INIs in the My Games folder %s', (release, folder) => {
+    expect(archiveListsOf(release)?.myGamesFolder).toBe(folder);
+  });
+
   it('answers none for no release, or a release the table holds no row for', () => {
     expect(archiveListsOf(undefined)).toBeUndefined();
     expect(archiveListsOf('SomeRelease')).toBeUndefined();

@@ -8,12 +8,14 @@ import { exists, get, listDir, listFolders } from './files';
 import type { GameDirectoryResolver } from './gameDirectory';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from './instanceAdapter';
 import { entryDir, isNewModExtraction, mo2FolderName, modDir, modsDir, settingsFile } from './layout';
+import type { MyGamesResolver } from './myGames';
 import type { Mo2Watch } from './mo2Watch';
 
 export interface Mo2Context {
   readonly instanceRoot: string;
   readonly resolveGameFolder: GameDirectoryResolver;
   readonly resolveDownloadsFolder: DownloadsDirectoryResolver;
+  readonly resolveMyGames: MyGamesResolver;
   readonly watch: Mo2Watch;
 }
 

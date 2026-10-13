@@ -4,6 +4,7 @@ import {
 } from 'node:fs/promises';
 import type { PathLike } from 'node:fs';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
+import { NO_DETECTORS } from '../../test/noDetectors';
 import { present } from '../../ports/present';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -29,7 +30,6 @@ import { join, matchesGlob } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import { readInstance } from '../mo2Reads';
 import { OVERWRITE_ORIGIN, type Subscription } from '../instanceAdapter';
-import type { GameDetectors } from '../gameDirectory';
 import type {
   GameFolder, InstanceAdapter, UpgradeExtraction, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
 } from '../instanceAdapter';
@@ -45,11 +45,6 @@ async function settleWaitArmed(): Promise<void> {
     await new Promise((resolve) => setImmediate(resolve));
   }
 }
-
-const NO_DETECTORS: GameDetectors = {
-  paths: () => Promise.resolve(null),
-  winePrefix: () => Promise.resolve(null),
-};
 
 const INI = 'ModOrganizer.ini';
 const DOWNLOAD = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
@@ -609,9 +604,51 @@ describe('the MO2 Instance adapter', () => {
           '; sResourceArchiveList2=Commented.ba2', 'sResourceStartUpArchiveList=Fallout4 - Startup.ba2,Fallout4 - Interface.ba2,',
         ].join('\r\n'));
 
-        expect(await adapter.archiveList('Default', found(), 'Fallout4')).toEqual({
-          archives: ['Fallout4 - Startup.ba2', 'Fallout4 - Interface.ba2', 'Fallout4 - Voices.ba2', 'Fallout4 - Meshes.ba2'],
-          notes: ['The profile Default keeps no game INIs of its own: the archives listed are its default INI\'s, and none the game\'s own INIs add.'],
+        expect((await adapter.archiveList('Default', found(), 'Fallout4')).archives)
+          .toEqual(['Fallout4 - Startup.ba2', 'Fallout4 - Interface.ba2', 'Fallout4 - Voices.ba2', 'Fallout4 - Meshes.ba2']);
+      });
+
+      it('lists the default INI\'s archives and notes the profile by name, when it keeps no game INIs and the My Games folder is nowhere', async () => {
+        await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
+        await localSettings(false);
+
+        const { archives, notes } = await adapter.archiveList('Default', found(), 'Fallout4');
+
+        expect(archives).toEqual(['Default.ba2']);
+        expect(notes).toEqual([expect.stringMatching(/^The profile Default keeps no game INIs of its own/)]);
+      });
+
+      describe('while the profile keeps no game INIs of its own', () => {
+        let documents: string;
+        let myGames: string;
+        let myGamesAdapter: InstanceAdapter;
+
+        beforeEach(async () => {
+          const prefix = join(game, 'pfx');
+          documents = join(prefix, 'drive_c', 'users', 'steamuser', 'Documents');
+          myGames = join(documents, 'My Games', 'Fallout4');
+          await mkdir(myGames, { recursive: true });
+          myGamesAdapter = mo2InstanceAdapter({
+            instanceRoot: root,
+            gameDirectoryOverrides: () => ({}),
+            gameDirectoryChanged: () => ({ dispose: () => {} }),
+            detectors: { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) },
+          });
+          await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\nsResourceArchiveList2=Default2.ba2\n');
+          await localSettings(false);
+        });
+
+        it('takes a key the My Games INIs give over the default INI\'s, the custom INI\'s over the main one\'s, with no warning', async () => {
+          await writeFile(join(myGames, 'Fallout4.ini'), '[Archive]\nsResourceArchiveList=Main.ba2\nsResourceArchiveList2=Main2.ba2\n');
+          await writeFile(join(myGames, 'Fallout4Custom.ini'), '[Archive]\nsResourceArchiveList2=Custom2.ba2\n');
+
+          expect(await myGamesAdapter.archiveList('Default', found(), 'Fallout4')).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
+        });
+
+        it('reads none of the profile\'s INIs', async () => {
+          await writeFile(profileFile('Fallout4.ini'), '[Archive]\nsResourceArchiveList=Left Behind.ba2\n');
+
+          expect((await myGamesAdapter.archiveList('Default', found(), 'Fallout4')).archives).toEqual(['Default.ba2', 'Default2.ba2']);
         });
       });
 
@@ -860,6 +897,30 @@ describe('the MO2 Instance adapter', () => {
         expect(fire(join(game, 'Data'), 'Skyrim - Interface.bsa')).toBe(false);
       } finally {
         await rm(game, { recursive: true, force: true });
+      }
+    });
+
+    it('follows the game\'s INIs in the My Games folder, in any case, while the profile keeps none of its own', async () => {
+      const prefix = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-my-games-'));
+      try {
+        const documents = join(prefix, 'drive_c', 'users', 'steamuser', 'Documents');
+        const myGames = join(documents, 'My Games', 'Fallout4');
+        await mkdir(myGames, { recursive: true });
+        const found: GameFolder = { kind: 'found', root: prefix, dataFolder: join(prefix, 'Data') };
+        const watched = mo2InstanceAdapter({
+          instanceRoot: root,
+          gameDirectoryOverrides: () => ({}),
+          gameDirectoryChanged: () => ({ dispose: () => {} }),
+          detectors: { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) },
+        });
+        watched.subscribe(() => undefined);
+
+        await watched.archiveList('Default', found, 'Fallout4');
+
+        expect(fire(myGames, 'FALLOUT4CUSTOM.ini')).toBe(true);
+        expect(fire(myGames, 'Fallout4Prefs.ini')).toBe(false);
+      } finally {
+        await rm(prefix, { recursive: true, force: true });
       }
     });
 
