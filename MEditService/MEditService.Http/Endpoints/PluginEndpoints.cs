@@ -21,7 +21,7 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         // Every mutable plugin in the load order, diagnosed off its original bytes — the
-        // session-load complement of Track's refusal. With no load order applied the refusal is a
+        // session-load complement of init's refusal. With no load order applied the refusal is a
         // 503, never an unmapped 500.
         app.MapGet("/plugins/diagnoses", (IQueries svc) =>
             EndpointMapping.Ok(svc.GetLoadOrderDiagnoses()))
@@ -103,7 +103,7 @@ internal static class PluginEndpoints
             .WithTags(Tag)
             .WithDescription(
                 "The plugin's copy of a record as its own document and the name of its file in plugin source. An untracked " +
-                "plugin's is the text Track writes for it, under the name Track gives its file. A copy mEdit could not parse " +
+                "plugin's is the text init writes for it, under the name init gives its file. A copy mEdit could not parse " +
                 "is what could be stored. Two documents claiming the copy refuse, naming them.")
             .Produces<RenderedDocument>()
             .ProducesProblem(400)
@@ -142,21 +142,12 @@ internal static class PluginEndpoints
             .WithDescription(
                 "Writes an empty plugin (a header whose flags its extension sets, no records and no " +
                 "masters) into the given folder, in the release of the held load order. Changes " +
-                "nothing else: no Track, no load order change and no plugins.txt line.")
+                "nothing else: no init, no load order change and no plugins.txt line.")
             .Produces<PluginCreatedResponse>()
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(409)
             .ProducesProblem(422)
-            .ProducesProblem(503);
-
-        app.MapPost("/plugins/track", Track)
-            .WithName("Track")
-            .WithTags(Tag)
-            .Produces<TrackResponse>()
-            .ProducesProblem(400)
-            // git missing refuses the whole selection; every other refusal is an item of the answer.
-            .ProducesProblem(500)
             .ProducesProblem(503);
 
         app.MapPost("/plugins/decompile", Decompile)
@@ -288,27 +279,6 @@ internal static class PluginEndpoints
         return EndpointMapping.Refusal(refusal, message);
     }
 
-    // Track (ADR-0007) over a selection of mods (commands.md, A selection is one gesture); the
-    // load order says each mod's plugins and folder.
-    internal static async Task<IResult> Track(
-        TrackRequest req, TrackHandler trackHandler, ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        var mods = req.Mods ?? [];
-        if (mods.Count == 0)
-            return Results.Problem("At least one mod is required.", statusCode: 400);
-        if (mods.Any(string.IsNullOrWhiteSpace))
-            return Results.Problem("Every mod needs a name.", statusCode: 400);
-
-        return await EndpointMapping.Answered(
-            "Track", logger,
-            trackHandler.TrackAsync(mods),
-            EndpointMapping.Refusal,
-            landed => new TrackedModResponse(landed.Item, landed.Outcome.Tracked),
-            refused => new ModTrackRefusal(refused.Item, refused.Refusal, refused.Message),
-            (applied, refused) => new TrackResponse(applied, refused));
-    }
-
     // decompile-plugin: the selection (commands.md, A selection is one gesture).
     internal static Task<IResult> Decompile(
         DecompileRequest req, DecompilePluginHandler decompileHandler, ILoggerFactory loggerFactory)
@@ -397,19 +367,6 @@ internal sealed record RenameSourceChangesRequest(string Origin, string Name, st
 
 /// <summary>The plugin, the name its tree was filed under before the rename, and the file name its source took.</summary>
 internal sealed record MoveLastWrittenRequest(string Origin, string Name, string TreeName, string NewName);
-
-/// <summary>The mods by name; the load order says each one's plugins and folder.</summary>
-internal sealed record TrackRequest(IReadOnlyList<string> Mods);
-
-/// <summary>A mod of the selection that tracked: the plugins whose source landed.</summary>
-internal sealed record TrackedModResponse(string Mod, IReadOnlyList<PluginAddress> Tracked);
-
-/// <summary>A mod of the selection that wrote nothing: the typed refusal, and the message naming the
-/// way out.</summary>
-internal sealed record ModTrackRefusal(string Item, TrackRefusal Refusal, string Message);
-
-/// <summary>Applied or refusal, per mod (ADR-0019), never the status of the call.</summary>
-internal sealed record TrackResponse(IReadOnlyList<TrackedModResponse> Applied, IReadOnlyList<ModTrackRefusal> Refused);
 
 internal sealed record DecompileRequest(IReadOnlyList<PluginAddress> Plugins);
 

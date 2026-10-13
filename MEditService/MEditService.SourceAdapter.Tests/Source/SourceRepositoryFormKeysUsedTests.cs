@@ -26,8 +26,8 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
 
     private ISourceRepository Tracked(params TreeFile[] files)
     {
-        if (files.Length == 0) PluginBaselines.TrackWithNoRecords(_modFolder);
-        else PluginBaselines.Track(_modFolder, files);
+        if (files.Length == 0) PluginBaselines.InitWithNoRecords(_modFolder);
+        else PluginBaselines.Init(_modFolder, files);
         return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }

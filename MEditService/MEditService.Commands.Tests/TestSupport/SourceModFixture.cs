@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>A mod folder holding whatever record shape a suite needs, and the write service over
-/// it: the caller fills the plugin, this writes, registers and tracks it. No index and no store
+/// it: the caller fills the plugin, this writes, registers and inits it. No index and no store
 /// (ADR-0015).</summary>
 internal sealed class SourceModFixture : TestInstance
 {

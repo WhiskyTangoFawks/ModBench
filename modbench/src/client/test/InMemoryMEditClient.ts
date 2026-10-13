@@ -19,7 +19,7 @@ type QueryMethod =
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
-  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'track' | 'build' | 'getCreateChanges' | 'getDeleteChanges'
+  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'init' | 'build' | 'getCreateChanges' | 'getDeleteChanges'
   | 'getCopyChanges' | 'decompile';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
@@ -71,6 +71,7 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly commandHandlers: { [K in CommandMethod]?: Handlers[K] } = {};
   private readonly notifications = new SseNotificationSubscriber({ openStream: () => Promise.reject(new Error('never started')) });
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
+  private readonly portListeners = new Set<(port: number) => void>();
   private readonly reconnectListeners = new Set<() => void>();
   private readonly handOverListeners = new Set<(failure: ReadFailed | undefined) => void>();
   private _status: BackendStatus = 'starting';
@@ -198,6 +199,16 @@ export class InMemoryMEditClient implements MEditClient {
     return () => { this.statusListeners.delete(listener); };
   }
 
+  onPort(listener: (port: number) => void): () => void {
+    this.portListeners.add(listener);
+    return () => { this.portListeners.delete(listener); };
+  }
+
+  /** mEdit claims the port it listens on. */
+  claimedPort(port: number): void {
+    for (const listener of [...this.portListeners]) listener(port);
+  }
+
   onReconnected(listener: () => void): () => void {
     this.reconnectListeners.add(listener);
     return () => { this.reconnectListeners.delete(listener); };
@@ -294,8 +305,8 @@ export class InMemoryMEditClient implements MEditClient {
   rebuildIndex(...args: Parameters<MEditClient['rebuildIndex']>): ReturnType<MEditClient['rebuildIndex']> {
     return this.command('rebuildIndex', args);
   }
-  track(...args: Parameters<MEditClient['track']>): ReturnType<MEditClient['track']> {
-    return this.command('track', args);
+  init(...args: Parameters<MEditClient['init']>): ReturnType<MEditClient['init']> {
+    return this.command('init', args);
   }
   getCreateChanges(...args: Parameters<MEditClient['getCreateChanges']>): ReturnType<MEditClient['getCreateChanges']> {
     return this.command('getCreateChanges', args);

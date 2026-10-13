@@ -22,14 +22,14 @@ export interface PluginsDeps {
   facts: Pick<Instance, 'refresh'>;
   channel: Pick<vscode.LogOutputChannel, 'error' | 'info' | 'warn' | 'show'>;
   reporterFor: (tag: string) => Reporter;
-  /** Registers the tracked mods' repositories: a reconcile reached Ready, or a track landed. */
+  /** Registers the tracked mods' repositories: a reconcile reached Ready, or an init landed. */
   registerRepositories: () => Promise<void>;
   ask: AskQuestion;
   sourceEditing: PluginsViewDeps['sourceEditing'];
 }
 
 type PluginsInstanceDeps = Pick<PluginsViewDeps,
-  'instance' | 'commands' | 'sourceCommands' | 'pluginSync' | 'saveUnsavedPluginSource' | 'trackSelection' | 'modsView' | 'dataFolderFile'
+  'instance' | 'commands' | 'sourceCommands' | 'pluginSync' | 'saveUnsavedPluginSource' | 'sourceGestureRows' | 'modsView' | 'dataFolderFile'
 > & { instanceRoot: string };
 
 interface PluginsOnInstance extends vscode.Disposable {

@@ -10,14 +10,17 @@ namespace MEditService.Http;
 internal sealed record FilterRequest(string Sql, string Source);
 internal sealed record FilterResponse(string? Sql, string? Source);
 
+internal sealed record SelectRequest(string Sql);
+internal sealed record SelectResponse(IReadOnlyList<JsonElement> Rows);
+
 /// <summary>Applied or refusal (ADR-0019): failures already ride LoadOrderStatus, so this names
 /// none.</summary>
 internal sealed record LoadOrderResponse(bool Applied, long Version = 0);
 // Mod Management's snapshot (ADR-0013). InstanceRoot: one index file per instance, inside the instance root (ADR-0010).
 internal sealed record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
-    IReadOnlyList<PluginAddress> LoadedWithNoLine, string GameDirectory, string InstanceRoot,
-    string GameRelease);
+    IReadOnlyList<PluginAddress> LoadedWithNoLine, IReadOnlyList<string> Archives, IReadOnlyList<string> StringsFiles,
+    string GameDirectory, string InstanceRoot, string GameRelease);
 internal sealed record LoadOrderPlugin(string Name, string Path, string Origin, PluginProviderRequest Provider, int? Line, bool LineNamesIt);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

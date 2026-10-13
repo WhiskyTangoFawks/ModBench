@@ -151,6 +151,13 @@ export type DataFolderPlugins =
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
+/** The release's archives at the Data folder's root, and the strings files in its strings folder by
+ *  their paths in it, as the folder spells them; or why there is no answer, as for its plugins. */
+export type DataFolderArchives =
+  | { readonly kind: 'listed'; readonly archives: readonly string[]; readonly stringsFiles: readonly string[] }
+  | { readonly kind: 'unresolved' }
+  | { readonly kind: 'unreadable'; readonly reason: string };
+
 /** An entry directly in an extracted folder. */
 export interface ExtractedEntry {
   readonly name: string;
@@ -297,6 +304,16 @@ export interface FileStamp {
 /** A read of one file that answers why it could not be read, rather than failing whatever asked. */
 export type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
 
+/** A downloaded file the mod manager records a mod as installed from, with its size, its hash and each entry's, as
+ *  the downloaded files' index keeps them (ADR-0024). */
+export interface InstallationFile {
+  readonly path: string;
+  readonly size: number;
+  readonly hash: string;
+  /** Each entry by its forward-slash path inside the file. */
+  readonly entries: readonly { readonly path: string; readonly hash: string }[];
+}
+
 /** How a message names the mod manager, the file it keeps mod order in, and the file it keeps beside a downloaded file. */
 export interface ManagerNames {
   readonly manager: string;
@@ -321,6 +338,12 @@ export interface InstanceAdapter {
   /** The plugins the game folder's Creation Club list names, in its order; none when the release
    *  has no Creation Club, the game folder is not found, or it holds no list. */
   creationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]>;
+  /** The archives the INIs list, in load order: the game folder's default INI, then the user's where the
+   *  manager keeps them, a key's last value winning. `notes` names each INI the game reads that this did not. */
+  archiveList(
+    profile: string, gameFolder: GameFolder, gameRelease: string | undefined,
+  ): Promise<{ readonly archives: readonly string[]; readonly notes: readonly string[] }>;
+  gameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined): Promise<DataFolderArchives>;
   /** The name of the downloaded file at `path`, the paths matched as the platform matches them;
    *  undefined when `path` is not in the downloads folder, or that folder cannot be resolved. */
   downloadedFileAt(path: string): Promise<string | undefined>;
@@ -339,6 +362,10 @@ export interface InstanceAdapter {
   modTracked(mod: string): Promise<boolean>;
   /** Every repository in the source folder, by its folder's name, whether the mod order lists it or not. */
   sourceMods(): Promise<string[]>;
+  /** The downloaded files the mod manager records `mod` as installed from, in its order. */
+  installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
+  /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
+  readonly managerFilesInModFolder: readonly string[];
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** The content digest of an origin file, at the path it is read from: two files with one digest

@@ -31,7 +31,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
 
     private ISourceRepository Tracked()
     {
-        PluginBaselines.Track(
+        PluginBaselines.Init(
             _modFolder,
             [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
         return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
@@ -50,7 +50,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
 
     private ISourceRepository TrackedWithHeader()
     {
-        PluginBaselines.Track(
+        PluginBaselines.Init(
             _modFolder,
             [new TreeFile(HeaderRelativePath, Encoding.UTF8.GetBytes(HeaderBody)),
              new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);

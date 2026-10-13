@@ -38,7 +38,7 @@ public sealed class UnsavedDocumentTests : IDisposable
             .BuildScattered();
         _tracked = _fixture.Plugins.Single(p => p.Name == Tracked);
         (_npc, _race) = (npc.ToString(), race.ToString());
-        TrackedMods.Track(_tracked, _fixture.GameDirectory);
+        TrackedMods.Track(_tracked);
         _index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, notifications: _notifications);
         _file = _tracked.SourceFileOf(_index.DocumentOf(_npc, _tracked.KeyOf()));
     }

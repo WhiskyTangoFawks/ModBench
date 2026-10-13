@@ -73,7 +73,7 @@ internal static class TreeTampering
         return copy;
     }
 
-    /// <summary>A group document in the record's folder: the shape of a file Track never writes
+    /// <summary>A group document in the record's folder: the shape of a file init never writes
     /// there.</summary>
     internal static string StrayGroupDocument(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
         Stray(modFolder, plugin, identity, "GroupRecordData.json", "{}");

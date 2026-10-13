@@ -26,7 +26,7 @@ public sealed class RenameSourceApiTests : HostedTests
     private async Task Tracked()
     {
         (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Init(Origin)).EnsureSuccessStatusCode();
     }
 
     private Task<HttpResponseMessage> RenameSource(string name, string origin, string newName) =>
@@ -151,7 +151,7 @@ public sealed class RenameSourceWithoutGitApiTests : HostedTests
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("TrackedNpc"), origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Init(Origin)).EnsureSuccessStatusCode();
 
         HttpResponseMessage response;
         var path = Environment.GetEnvironmentVariable("PATH");

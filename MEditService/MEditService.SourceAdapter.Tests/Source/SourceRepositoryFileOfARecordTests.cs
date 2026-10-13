@@ -33,7 +33,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     public void Dispose() => _modFolder.Dispose();
 
     private static void TrackFiledIn(string modFolder) =>
-        PluginBaselines.Track(modFolder, [
+        PluginBaselines.Init(modFolder, [
             new TreeFile(PluginSourceRoot.HeaderDocument(PluginName), "{\"MasterReferences\": []}"u8.ToArray()),
             new TreeFile(NpcDocument, "{\"FormKey\": \"000800:Filed.esp\", \"EditorID\": \"FiledNpc\"}"u8.ToArray()),
             new TreeFile(GroupMetadata, "{}"u8.ToArray()),

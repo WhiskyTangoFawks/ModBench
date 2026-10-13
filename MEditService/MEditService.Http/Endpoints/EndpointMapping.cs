@@ -64,16 +64,14 @@ internal static class EndpointMapping
     internal static IResult Refusal(SelectionRefusal<RecordEditRefusal> refusal) =>
         RecordEditProblem(refusal.Refusal, refusal.Message, path: null);
 
-    /// <summary>Track's own refusal-to-status map, the same posture the record edits' has: the status
-    /// says what kind of problem, the refusal extension says exactly which (ADR-0019).</summary>
-    internal static IResult Refusal(SelectionRefusal<TrackRefusal> refusal) => Problem(
-        refusal.Refusal, TrackRefusal.NoLoadOrder, refusal.Message,
+    /// <summary>Init's refusal of a whole selection, mapped as Build's is (ADR-0019); every other refusal is a mod's,
+    /// in the answer.</summary>
+    internal static IResult Refusal(SelectionRefusal<InitRefusal> refusal) => Problem(
+        refusal.Refusal, InitRefusal.NoLoadOrder, refusal.Message,
         r => r switch
         {
-            TrackRefusal.AlreadyTracked => 409,
-            // The request is sound; the machine lacks git, or git or the disk refused the write.
-            TrackRefusal.GitUnavailable or TrackRefusal.CommitFailed => 500,
-            // A data problem in the plugin itself, the status the record edits' own refusals use.
+            // The request is sound; the machine lacks git.
+            InitRefusal.GitUnavailable => 500,
             _ => 422,
         });
 
@@ -167,7 +165,7 @@ internal static class EndpointMapping
             statusCode: refused.Refusal switch
             {
                 IndexRefusal.NoLoadOrder or IndexRefusal.IndexNotReady => StatusCodes.Status503ServiceUnavailable,
-                IndexRefusal.FilterRejected => StatusCodes.Status400BadRequest,
+                IndexRefusal.FilterRejected or IndexRefusal.SelectRejected => StatusCodes.Status400BadRequest,
                 IndexRefusal.SourceStopped => StatusCodes.Status422UnprocessableEntity,
                 _ => throw new InvalidEnumArgumentException(nameof(refused), (int)refused.Refusal, typeof(IndexRefusal)),
             }));

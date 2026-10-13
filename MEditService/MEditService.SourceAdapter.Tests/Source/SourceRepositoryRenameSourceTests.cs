@@ -57,7 +57,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     ];
 
     public SourceRepositoryRenameSourceTests() =>
-        TestAdapters.Source().Track(
+        TestAdapters.Source().Init(
             _modFolder,
             [
                 (Files(OldTree), new DecompiledPlugin(Old.Name, LastWritten)),

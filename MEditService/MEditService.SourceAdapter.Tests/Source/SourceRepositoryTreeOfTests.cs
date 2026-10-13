@@ -20,7 +20,7 @@ public sealed class SourceRepositoryTreeOfTests : IDisposable
 
     public SourceRepositoryTreeOfTests()
     {
-        PluginBaselines.Track(
+        PluginBaselines.Init(
             _modFolder,
             [new TreeFile(PluginSourceRoot.HeaderDocument(PluginName), "{\"MasterReferences\": []}"u8.ToArray())]);
         Repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody)).Wrote();

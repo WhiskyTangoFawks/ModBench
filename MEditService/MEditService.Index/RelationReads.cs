@@ -1,9 +1,11 @@
+using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 
@@ -151,6 +153,25 @@ internal sealed class RelationReads(
             conditions.Add($"h.origin = ${paramValues.Count}");
         }
         return conditions.Count == 0 ? "" : "WHERE " + string.Join(" AND ", conditions);
+    }
+
+    /// <summary>The rows of one SELECT over the record views, each a JSON object of its columns; or why the
+    /// SQL cannot be one. The filter in force does not narrow it.</summary>
+    public Answer<JsonElement[], string> Select(string statement)
+    {
+        var sql = statement.TrimEnd().TrimEnd(';');
+        using var connection = store.OpenReadConnection();
+        if (SqlDoor.RefusalOf(connection, sql) is { } refusal) return refusal;
+        try
+        {
+            // The newline keeps a trailing line comment in the SQL from swallowing the wrapper.
+            return DuckDbSql.Rows(connection, $"SELECT to_json(__row) FROM ({sql}\n) __row",
+                reader => JsonDocument.Parse(reader.GetString(0)).RootElement.Clone()).ToArray();
+        }
+        catch (DuckDBException ex)
+        {
+            return ex.Message;
+        }
     }
 
     /// <summary>Row count per record type for one plugin, narrowed by the filter as Search is
@@ -664,13 +685,17 @@ internal sealed class RelationReads(
     {
         var root = Document.Parse(body);
         var address = new PluginAddress(plugin, origin);
-        var fields = schema.FieldsOf(root, RecordLookupEntry.Resolver(resolveFormKey), store.Release, indexed());
+        var missingStrings = OpenedPlugins.GetValueOrDefault(address)?.MissingStringsFiles is { Count: > 0 } files
+            ? string.Join(", ", files)
+            : null;
+        var fields = schema.FieldsOf(root, RecordLookupEntry.Resolver(resolveFormKey), store.Release, indexed(), missingStrings);
 
         return new RecordDocument(
             formKey, address, loadOrderIndex, isWinner, editorId, schema.TableName,
             body, schema.IsHeader ? RequiredMasters.InHeader(fields, connection, address) : fields,
             IsPartialForm: schema.IsPartialForm(root),
-            ParseDiagnosis: parseDiagnosis);
+            ParseDiagnosis: parseDiagnosis,
+            MissingStringsFile: missingStrings);
     }
 
     // Callers say both "NPC_" and "npc_", and as a column value the comparison is case-sensitive.

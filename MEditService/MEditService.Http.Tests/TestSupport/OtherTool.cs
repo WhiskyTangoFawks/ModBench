@@ -47,7 +47,7 @@ internal static class OtherTool
 
     /// <summary>Process-shelled because File.SetUnixFileMode is flagged platform-unsafe (CA1416)
     /// even on a Linux-only runtime, and recursive because a handler writes into subdirectories
-    /// Track left writable.</summary>
+    /// init left writable.</summary>
     internal static void SetsThePermissions(string path, string mode)
     {
         using var chmod = System.Diagnostics.Process.Start(

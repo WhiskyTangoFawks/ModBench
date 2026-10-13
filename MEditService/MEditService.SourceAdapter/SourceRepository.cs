@@ -75,7 +75,7 @@ public sealed class SourceRepository : ISourceRepository
             ? why
             : null;
 
-    /// <summary>A <c>.git</c> with no <c>main</c> that Track did not mark as its own: someone else's, which Track never
+    /// <summary>A <c>.git</c> with no <c>main</c> that init did not mark as its own: someone else's, which init never
     /// writes to (ADR-0003).</summary>
     internal static bool HoldsAnotherRepository(string sourceFolder) => SourceRepositoryGit.HoldsAnotherRepository(sourceFolder);
 
@@ -90,14 +90,6 @@ public sealed class SourceRepository : ISourceRepository
 
     /// <summary>Why git cannot be run here, so no repository can be made or written; null when it can.</summary>
     internal static SourceFailure? WhyGitCannotRun() => SourceFailure.Answer(GitCli.EnsureOnPath);
-
-    /// <summary>A repository for a mod that has none: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>, of
-    /// each plugin's door tree. Answers each plugin refused, every one when no repository was made.</summary>
-    internal static IReadOnlyList<(string Plugin, string Reason)> Track(
-        string sourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins) =>
-        SourceFailure.Answer(() => GitTracking.Track(sourceFolder, plugins)).Holds(out var refused, out var failure)
-            ? refused
-            : [.. plugins.Select(plugin => (plugin.Plugin.Plugin, failure.Reason))];
 
     /// <summary>The stamp of one document's text, as the UTF-8 the index stores it in: every side hashes
     /// through here, so a file that is not valid UTF-8 stamps alike on disk and in the index.</summary>
@@ -296,6 +288,9 @@ public sealed class SourceRepository : ISourceRepository
             var spelled = Spelled(plugin);
             return PluginSourceChecks.CollidingFormKeys(spelled.Name, Locator.FilesOf(spelled), formKeys, _release);
         });
+
+    public Answer<IReadOnlyList<RecordFile>, SourceFailure> RecordFilesOf(PluginAddress plugin) =>
+        SourceFailure.Answer(() => PluginSourceChecks.RecordFilesOf(Locator.FilesOf(Spelled(plugin)), _release));
 
     public Answer<SourceComparison, SourceFailure> Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>
         SourceFailure.Answer(() =>

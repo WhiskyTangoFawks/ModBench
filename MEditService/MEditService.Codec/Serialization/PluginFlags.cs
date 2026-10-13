@@ -1,3 +1,4 @@
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Analysis;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
@@ -40,4 +41,9 @@ public static class PluginFlags
 
 /// <summary>The local FormID range a plugin's header flag limits it to (plugins.md, Compile story 4), the
 /// flag's name, and what sets it: the flag, the <c>.esl</c> extension, or both.</summary>
-public sealed record FormIdLimit(string Flag, uint Min, uint Max, bool ByFlag, bool ByExtension);
+public sealed record FormIdLimit(string Flag, uint Min, uint Max, bool ByFlag, bool ByExtension)
+{
+    /// <summary>The keys native to <paramref name="plugin"/> whose local FormID lies outside the range.</summary>
+    public IReadOnlyList<FormKey> Outside(ModKey plugin, IEnumerable<FormKey> keys) =>
+        [.. keys.Where(key => key.ModKey == plugin && (key.ID < Min || key.ID > Max))];
+}

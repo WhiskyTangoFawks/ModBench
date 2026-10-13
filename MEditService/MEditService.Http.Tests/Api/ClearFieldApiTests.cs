@@ -28,9 +28,11 @@ public sealed class ClearFieldApiTests(LoadedApiFixture<TestPluginFixture> loade
             plugins = plugins.Select(p => p.Wire),
             active = SnapshotPlugins.Active(plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(plugins),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
             gameRelease = "Fallout4",
         })).EnsureSuccessStatusCode();
-        (await _client.Track(Origin)).EnsureSuccessStatusCode();
+        (await _client.Init(Origin)).EnsureSuccessStatusCode();
         await _client.NextSnapshot(fx, Origin);
         await _client.PluginReportsTracked(Plugin);
         var created = await _client.CreateRecord(Plugin, Origin, "npc_");

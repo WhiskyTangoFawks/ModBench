@@ -69,11 +69,11 @@ internal sealed class HeldPlugins
         }
 
         // The binary path (ADR-0007) needs the same explicit strings parameters
-        // Track does, or a Localized untracked plugin fails instead of opening.
+        // init does, or a Localized untracked plugin fails instead of opening.
         var readTimer = Stopwatch.StartNew();
         if (!_adapter.ReadContent(
                 new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder,
-                new PluginStrings(Path.GetDirectoryName(plugin.Path), DataFolderPath))
+                new PluginStrings(Path.GetDirectoryName(plugin.Path)))
             .Holds(out var read, out var failure))
         {
             _logger.LogWarning(failure.Error, "Failed to open plugin {FileName} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);
@@ -243,5 +243,6 @@ internal sealed class HeldPlugins
             Masters: content.Masters,
             RecordCount: content.RecordCount,
             Origin: plugin.Origin,
-            Provider: plugin.Provider);
+            Provider: plugin.Provider,
+            MissingStringsFiles: content.MissingStringsFiles);
 }

@@ -23,7 +23,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     private readonly ScratchDirectory _modFolder = new("medit-another-case-");
 
     public SourceRepositoryPluginNamedInAnotherCaseTests() =>
-        PluginBaselines.Track(_modFolder, [
+        PluginBaselines.Init(_modFolder, [
             new TreeFile(PluginSourceRoot.HeaderDocument(TreeName), Encoding.UTF8.GetBytes(HeaderBody)),
             new TreeFile(NpcDocument, Encoding.UTF8.GetBytes(NpcBody)),
         ]);

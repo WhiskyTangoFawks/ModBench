@@ -96,12 +96,12 @@ public abstract class TestInstance : IDisposable
 
         if (!tracked) Write(mod, path);
         else if (entry.Provider is not PluginProvider.FromMod)
-            throw new InvalidOperationException($"'{origin}' is not a mod, so its plugin has no folder to track.");
+            throw new InvalidOperationException($"'{origin}' is not a mod, so its plugin has no folder to init.");
         else if (mod.MasterReferences.Count == 0) TrackedTemplates.WriteTracked(folder, mod);
         else
         {
             Write(mod, path);
-            Track(origin);
+            Init(origin);
         }
         _added.Set(mod);
 
@@ -118,11 +118,11 @@ public abstract class TestInstance : IDisposable
     public ISourceRepository? RepositoryOf(PluginAddress plugin) =>
         LoadOrder.ProviderOf(plugin) is PluginProvider.FromMod mod ? TestAdapters.Source().Open(mod, _release) : null;
 
-    private void Track(string origin)
+    private void Init(string origin)
     {
-        var result = TrackEveryPluginOf.ModAsync(Snapshot(), origin).GetAwaiter().GetResult();
+        var result = InitEveryPluginOf.ModAsync(Snapshot(), origin).GetAwaiter().GetResult();
         if (result.RefusalMessages() is { Count: > 0 } messages)
-            throw new InvalidOperationException($"Expected '{origin}' to track: {string.Join("; ", messages)}");
+            throw new InvalidOperationException($"Expected '{origin}' to init: {string.Join("; ", messages)}");
     }
 
     private LoadOrderSnapshot Snapshot() => SnapshotPlugins.Snapshot(GameDirectory, _root, _release, _entries);

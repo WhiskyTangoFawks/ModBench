@@ -6,7 +6,6 @@ using MEditService.PluginAdapter;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
@@ -20,7 +19,7 @@ internal sealed class PluginCompileService(
 {
     private readonly CompileLinks _links = new(adapter, logger);
 
-    // A tracked mod refuses Track, so decompile is the way back (ADR-0007).
+    // A source mod refuses init, so decompile is the way back (ADR-0007).
     private const string RegenerateTheSource = "Decompile the plugin to regenerate the source.";
 
     public async Task<CompileResult> CompileAsync(PluginAddress plugin)
@@ -62,6 +61,18 @@ internal sealed class PluginCompileService(
                 $"{plugin.Name}'s source folder holds no files, so there is nothing to compile. {RegenerateTheSource}");
         }
 
+        if (!repository.RecordFilesOf(plugin).Holds(out var recordFiles, out unread)) return SourceDoesNotParse(plugin, unread);
+        var refusedFiles = recordFiles
+            .Select(file => (file.Path, Reason: RecordTextCodec.WhyNotARecord(file.Text, loadOrder.GameRelease, file.RecordType)))
+            .Where(file => file.Reason is not null)
+            .ToList();
+        if (refusedFiles.Count > 0)
+        {
+            return CompileResult.Refused(
+                CompileRefusal.SourceDoesNotParse,
+                $"{plugin.Name} cannot be compiled: {string.Join("; ", refusedFiles.Select(file => $"{file.Path}: {file.Reason}"))}");
+        }
+
         var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin, repository, loadOrder);
         if (deserializeRefusal != null)
             return CompileResult.Refused(CompileRefusal.SourceDoesNotParse, deserializeRefusal);
@@ -72,11 +83,7 @@ internal sealed class PluginCompileService(
         // compile to a binary the game mis-addresses, so refuse it (compile-plugin, Refusals).
         if (tree.FormIdLimit(plugin.Name) is { } limited)
         {
-            var outOfRange = tree.FormKeys
-                .Where(key => key.ModKey == tree.ModKey
-                    && (key.ID < limited.Min || key.ID > limited.Max))
-                .Select(key => key.ToString())
-                .ToList();
+            var outOfRange = limited.Outside(tree.ModKey, tree.FormKeys).Select(key => key.ToString()).ToList();
             if (outOfRange.Count > 0)
             {
                 var renameOffEsl = limited.ByExtension ? " rename the plugin off .esl," : "";
@@ -104,7 +111,7 @@ internal sealed class PluginCompileService(
 
         if (!repository.Compare(plugin, await tree.SerializeTreeAsync()).Holds(out var comparison, out unread))
             return SourceDoesNotParse(plugin, unread);
-        var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(comparison.Divergence, plugin);
+        var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(comparison.Divergences, plugin);
         if (roundTripRefusal != null)
             return CompileResult.Refused(CompileRefusal.SourceDoesNotRoundTrip, roundTripRefusal);
 
@@ -208,22 +215,27 @@ internal sealed class PluginCompileService(
     // ADR-0006. The generated deserializer skips an unrecognized property or file without
     // throwing, so a successful parse proves nothing.
 
-    // No live subrecord-inventory gate here, deliberately: that loss class arises only when Track
+    // No live subrecord-inventory gate here, deliberately: that loss class arises only when init
     // parses an external binary, never from Compile.
-    private static string? RefuseIfSourceDoesNotRoundTrip(SourceDivergence? found, PluginAddress plugin)
+    private static string? RefuseIfSourceDoesNotRoundTrip(IReadOnlyList<SourceDivergence> found, PluginAddress plugin)
     {
-        if (found is not { } divergence) return null;
+        if (found.Count == 0) return null;
 
-        if (divergence.Kind != SourceDivergenceKind.Unproduced)
+        var remedy = found.Any(divergence => divergence.Kind == SourceDivergenceKind.Unproduced) ? $" {RegenerateTheSource}" : "";
+        return $"{plugin.Name} does not round-trip through its own source: {string.Join("; ", found.Select(Describe))}.{remedy}";
+    }
+
+    private static string Describe(SourceDivergence divergence)
+    {
+        if (divergence.Kind == SourceDivergenceKind.Unproduced)
         {
-            var offender = divergence.Kind == SourceDivergenceKind.HeaderChanged ? "the plugin header" : divergence.Path;
-            return $"{plugin.Name} does not round-trip through its own source: {offender} does not match " +
-                $"what the current codec would produce from it. {RegenerateTheSource}";
+            return $"{divergence.Path} is in the source, but the current codec produces no such file from it, so nothing it " +
+                "holds reaches the plugin (a document left over from an earlier source layout, or a stray file)";
         }
 
-        return $"{plugin.Name} does not round-trip through its own source: {divergence.Path} is in the source, " +
-            "but the current codec produces no such file from it, so nothing it holds reaches the plugin " +
-            $"(a document left over from an earlier source layout, or a stray file). {RegenerateTheSource}";
+        var offender = divergence.Kind == SourceDivergenceKind.HeaderChanged ? "the plugin header" : divergence.Path;
+        var field = divergence.Field is null ? "" : $": {divergence.Field}";
+        return $"{offender}{field} does not match what the current codec would produce from it";
     }
 
     private static CompileDiagnostic MisplacedDiagnostic(MisplacedFile file) =>

@@ -3,6 +3,7 @@ using MEditService.Commands.Build;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
+using MEditService.ModFolderAdapter;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
@@ -75,12 +76,13 @@ public static class CommandHandlers
             sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<ILogger<CopyRecordChangesHandler>>()));
 
-        services.AddSingleton(sp => new TrackHandler(
+        services.AddSingleton(sp => new InitHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<ISourceAdapter>(),
+            sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<INotificationPublisher>(),
-            sp.GetRequiredService<ILogger<TrackHandler>>()));
+            sp.GetRequiredService<ILogger<InitHandler>>()));
 
         services.AddSingleton(sp => new DecompilePluginHandler(
             sp.GetRequiredService<LoadOrderHolder>(),

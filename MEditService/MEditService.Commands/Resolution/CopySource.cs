@@ -61,7 +61,7 @@ internal sealed class CopySource(
     }
 
     /// <summary>The record's own text: the working tree's own bytes when tracked, otherwise the loaded
-    /// plugin's record through the codec — byte for byte what Track would have written.</summary>
+    /// plugin's record through the codec — byte for byte what init would have written.</summary>
     internal CopyRead<string> Body(RecordIdentity identity)
     {
         if (_tree is not { } tree)

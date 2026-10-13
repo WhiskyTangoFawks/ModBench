@@ -1,3 +1,4 @@
+using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -7,14 +8,14 @@ namespace MEditService.Commands.Tests.RealData;
 public sealed class SubrecordInventoryRoundTripGateTests
 {
     [Fact]
-    public async Task TrackAsync_OfAShortRdatRegionPlugin_RefusesNamingTheRegionItsDroppedSignaturesAndTheDiagnosisOfTheMalformedSubrecord()
+    public async Task InitAsync_OfAShortRdatRegionPlugin_RefusesNamingTheRegionItsDroppedSignaturesAndTheDiagnosisOfTheMalformedSubrecord()
     {
         using var scratch = new ShortRdatScratch();
 
-        var result = await scratch.TrackAsync();
+        var result = await scratch.InitAsync();
 
         Assert.False(result.Applied);
-        Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains("REGN", result.Message);
         Assert.Contains("01000800", result.Message);
@@ -44,8 +45,8 @@ public sealed class SubrecordInventoryRoundTripGateTests
             _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, "ShortRdatMod", _gameDirectory);
         }
 
-        public async Task<PluginTrack> TrackAsync() =>
-            (await TrackEveryPluginOf.ModAsync(_loadOrder, "ShortRdatMod")).Only();
+        public async Task<PluginInit> InitAsync() =>
+            (await InitEveryPluginOf.ModAsync(_loadOrder, "ShortRdatMod")).Only();
 
         public void Dispose()
         {

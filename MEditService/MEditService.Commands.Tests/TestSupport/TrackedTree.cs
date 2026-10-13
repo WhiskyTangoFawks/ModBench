@@ -124,7 +124,7 @@ internal static class TrackedTree
         TestAdapters.Source().Open(TestMod.Of(plugin, modFolder), GameRelease.Fallout4).Require();
 }
 
-/// <summary>A fixture whose mod folder tracks one plugin: the tree reads below answer for it.</summary>
+/// <summary>A fixture whose mod folder holds the source of one plugin: the tree reads below answer for it.</summary>
 public interface ITrackedPlugin
 {
     string ModFolder { get; }

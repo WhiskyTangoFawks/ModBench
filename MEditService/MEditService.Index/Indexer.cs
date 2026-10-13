@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -514,7 +516,7 @@ internal sealed class Indexer : IDisposable
         // pay the failed parse again on every snapshot that merely mentions it.
         var arriving = resolved.Where(r => !open.ContainsKey(r.Key) && !scope.Failed.StillFailing(r)).ToList();
         // ADR-0007: which truth a plugin reads is its folder's answer, and the stamp
-        // records the one its rows came from. Tracking and untracking move the first alone, and no
+        // records the one its rows came from. A repository made or removed moves the first alone, and no
         // load-order difference above names them.
         var derivations = store.Reads.GetDerivations();
         var reDerived = resolved.Where(r => open.ContainsKey(r.Key) && TruthMoved(scope, r, derivations)).ToList();
@@ -813,7 +815,7 @@ internal sealed class Indexer : IDisposable
                 new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path),
                 scope.LoadOrder,
                 scope.Store.Schemas,
-                new PluginStrings(Path.GetDirectoryName(plugin.Path), scope.Held.DataFolderPath))
+                new PluginStrings(Path.GetDirectoryName(plugin.Path)))
             .Holds(out var opened, out var failure))
         {
             _logger.LogWarning(failure.Error, "Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);
@@ -1011,6 +1013,15 @@ internal sealed class Indexer : IDisposable
     public string? SetFilter(string sql, string source) => ApplyFilter((sql, source));
 
     public void ClearFilter() => ApplyFilter(null);
+
+    /// <summary>The rows of one SELECT over the record views, once the whole set is read.</summary>
+    public Answer<JsonElement[], string> Select(string sql)
+    {
+        var reads = RequireWholeSetReads();
+        using (_gate.Enter())
+            UnderScope((store, _) => { store.CreateRecordTypeViews(); return true; }, out _);
+        return reads.Select(sql);
+    }
 
     private string? ApplyFilter((string Sql, string Source)? filter)
     {
