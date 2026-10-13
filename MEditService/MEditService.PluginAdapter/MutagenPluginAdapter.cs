@@ -110,7 +110,11 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                 // only a game with blueprint plugins reads its header a second time.
                 var isBlueprint = PluginFlagPredicates.HasBlueprintPlugins(loadOrder.GameRelease)
                     && PluginFlagPredicates.IsBlueprint(loaded.Getter, name, ModHeaderFrame.FromPath(modPath, loadOrder.GameRelease).Flags);
-                return OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint);
+                var (content, unreachable) = OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint);
+                var missing = strings is { } named
+                    ? LocalizedStrings.FindMissingStringsFiles(loaded.Getter, name, named, loadOrder, loadOrder.GameRelease)
+                    : [];
+                return (content with { MissingStringsFiles = missing }, unreachable);
             }
         });
 

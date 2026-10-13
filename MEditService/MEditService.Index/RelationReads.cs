@@ -664,13 +664,17 @@ internal sealed class RelationReads(
     {
         var root = Document.Parse(body);
         var address = new PluginAddress(plugin, origin);
-        var fields = schema.FieldsOf(root, RecordLookupEntry.Resolver(resolveFormKey), store.Release, indexed());
+        var missingStrings = OpenedPlugins.GetValueOrDefault(address)?.MissingStringsFiles is { Count: > 0 } files
+            ? string.Join(", ", files)
+            : null;
+        var fields = schema.FieldsOf(root, RecordLookupEntry.Resolver(resolveFormKey), store.Release, indexed(), missingStrings);
 
         return new RecordDocument(
             formKey, address, loadOrderIndex, isWinner, editorId, schema.TableName,
             body, schema.IsHeader ? RequiredMasters.InHeader(fields, connection, address) : fields,
             IsPartialForm: schema.IsPartialForm(root),
-            ParseDiagnosis: parseDiagnosis);
+            ParseDiagnosis: parseDiagnosis,
+            MissingStringsFile: missingStrings);
     }
 
     // Callers say both "NPC_" and "npc_", and as a column value the comparison is case-sensitive.
