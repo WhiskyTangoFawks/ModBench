@@ -4,6 +4,7 @@ import {
 } from 'node:fs/promises';
 import type { PathLike } from 'node:fs';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
+import { NO_DETECTORS } from '../../test/noDetectors';
 import { present } from '../../ports/present';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -29,7 +30,6 @@ import { join, matchesGlob } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import { readInstance } from '../mo2Reads';
 import { OVERWRITE_ORIGIN, type Subscription } from '../instanceAdapter';
-import type { GameDetectors } from '../gameDirectory';
 import type {
   GameFolder, InstanceAdapter, UpgradeExtraction, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
 } from '../instanceAdapter';
@@ -46,13 +46,7 @@ async function settleWaitArmed(): Promise<void> {
   }
 }
 
-const NO_DETECTORS: GameDetectors = {
-  paths: () => Promise.resolve(null),
-  winePrefix: () => Promise.resolve(null),
-  documents: () => Promise.reject(new Error('no known folder')),
-};
-
-const INI ='ModOrganizer.ini';
+const INI = 'ModOrganizer.ini';
 const DOWNLOAD = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
 const adapterAt = (
@@ -614,15 +608,14 @@ describe('the MO2 Instance adapter', () => {
           .toEqual(['Fallout4 - Startup.ba2', 'Fallout4 - Interface.ba2', 'Fallout4 - Voices.ba2', 'Fallout4 - Meshes.ba2']);
       });
 
-      it('warns once, naming the places it looked, when the profile keeps no game INIs and the My Games folder is nowhere', async () => {
+      it('lists the default INI\'s archives and notes the profile by name, when it keeps no game INIs and the My Games folder is nowhere', async () => {
         await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
         await localSettings(false);
 
         const { archives, notes } = await adapter.archiveList('Default', found(), 'Fallout4');
 
         expect(archives).toEqual(['Default.ba2']);
-        expect(notes).toHaveLength(1);
-        expect(notes[0]).toMatch(/^The profile Default keeps no game INIs of its own, and the game's were not found: .* Looked at .*(Steam prefix|Documents folder)/s);
+        expect(notes).toEqual([expect.stringMatching(/^The profile Default keeps no game INIs of its own/)]);
       });
 
       describe('while the profile keeps no game INIs of its own', () => {

@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { GameDetectors } from '../gameDirectory';
+import { NO_DETECTORS } from '../../test/noDetectors';
 import { myGamesResolver } from '../myGames';
 
 describe('the My Games folder of a release', () => {
@@ -13,9 +14,7 @@ describe('the My Games folder of a release', () => {
   afterEach(() => rm(base, { recursive: true, force: true }));
 
   const detectors = (over: Partial<GameDetectors> = {}): GameDetectors => ({
-    paths: () => Promise.resolve(null),
-    winePrefix: () => Promise.resolve(null),
-    documents: () => Promise.reject(new Error('no known folder')),
+    ...NO_DETECTORS,
     ...over,
   });
   const myGamesIn = async (documents: string, name = 'Fallout4'): Promise<string> => {

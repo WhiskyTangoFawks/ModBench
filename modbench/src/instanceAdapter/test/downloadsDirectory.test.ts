@@ -1,13 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import { downloadsDirectoryResolver } from '../downloadsDirectory';
+import { NO_DETECTORS } from '../../test/noDetectors';
 import type { GameDetectors } from '../gameDirectory';
-
-const NO_DETECTORS: GameDetectors = {
-  paths: () => Promise.resolve(null),
-  winePrefix: () => Promise.resolve(null),
-  documents: () => Promise.reject(new Error('no known folder')),
-};
 
 const iniOf = (downloadDirectory?: string): string =>
   `[General]\r\ngameName=Fallout 4\r\n[Settings]\r\n${
@@ -50,7 +45,7 @@ describe('the downloads directory resolver', () => {
 
   it.skipIf(process.platform === 'win32')("(Wine translates a drive letter only on Linux) normalizes a C:-drive absolute path into the Proton prefix's drive_c, sharing gamePath's own Wine translation", async () => {
     const prefix = join('/home', 'user', '.steam', 'compatdata', '377160', 'pfx');
-    const detectors: GameDetectors = { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(prefix), documents: () => Promise.reject(new Error('no known folder')) };
+    const detectors: GameDetectors = { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix) };
 
     const resolved = await resolvedDir(INSTANCE_ROOT, iniOf('C:\\Games\\MO2\\downloads'), detectors);
 
@@ -72,7 +67,7 @@ describe('the downloads directory resolver', () => {
     });
 
     it('answers unresolved, naming the prefix, for a C: path with no determinable Proton prefix', async () => {
-      const detectors: GameDetectors = { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(null), documents: () => Promise.reject(new Error('no known folder')) };
+      const detectors: GameDetectors = NO_DETECTORS;
 
       const resolution = await downloadsDirectoryResolver(detectors)(INSTANCE_ROOT, iniOf('C:\\Games\\downloads'));
 
