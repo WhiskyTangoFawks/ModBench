@@ -34,7 +34,7 @@ import { registerModInstallCommands } from '../installCommands';
 import { modlistCommands } from '../../modOrderCommands/modOrderCommands';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { adapterOver } from '../../test/mo2/adapterOver';
+import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { present } from '../../ports/present';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { progressSteps } from '../../test/recordedProgress';
@@ -47,7 +47,7 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 
 const GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE ='Skyrim Special Edition';
 const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
-const COMMANDS = { ...modlistCommands(adapterOver('/instance'), unscriptedMEdit), installMod };
+const COMMANDS = { ...modlistCommands(fakeInstanceAdapter().adapter, unscriptedMEdit), installMod };
 
 type ModInstallDeps = Parameters<typeof registerModInstallCommands>[0];
 

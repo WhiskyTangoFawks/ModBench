@@ -63,6 +63,12 @@ export interface InstanceAnswers {
   goneDownloads?: ReadonlySet<string>;
   /** A write verb that rejects with this message, after it is recorded. */
   refusals?: Partial<Record<WriteVerb, string>>;
+  /** A write that rejects with the message this returns for it, after it is recorded. */
+  refusalOf?: (call: AdapterCall) => string | undefined;
+  /** Origin files that are gone, by relative path: they get no mark. */
+  goneOriginFiles?: ReadonlySet<string>;
+  /** Entries with no folder to trash, by name. */
+  foldersAbsent?: ReadonlySet<string>;
 }
 
 export interface FakeInstanceAdapter {
@@ -90,7 +96,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
 
   const record = <T>(call: AdapterCall, result: T): Promise<T> => {
     calls.push(call);
-    const refusal = answers.refusals?.[call.verb];
+    const refusal = answers.refusals?.[call.verb] ?? answers.refusalOf?.(call);
     return refusal === undefined ? Promise.resolve(result) : Promise.reject(new Error(refusal));
   };
   const answer = <T>(found: T | undefined, path: string): Promise<FileRead<T>> =>
@@ -123,12 +129,13 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     createModFolder: (mod) => record({ verb: 'createModFolder', mod }, undefined),
     renameModFolder: (from, to) => record({ verb: 'renameModFolder', from, to }, undefined),
     markOriginFile: (origin, relativePath, mark) =>
-      record<OriginFileMarked>({ verb: 'markOriginFile', origin, relativePath, mark }, { gone: false, wrote: true, relativePath }),
+      record<OriginFileMarked>({ verb: 'markOriginFile', origin, relativePath, mark },
+        answers.goneOriginFiles?.has(relativePath) ? { gone: true } : { gone: false, wrote: true, relativePath }),
     entryKey: (entry) => (entry.kind === 'separator' ? `${entry.name}_separator` : entry.name).toLowerCase(),
     includedPath: (relativePath) => relativePath.split('/').map((segment) => segment.replace(EXCLUDED_SUFFIX, '')).join('/'),
     excludedSuffix: EXCLUDED_SUFFIX,
     renamePlugin: (origin, from, to, gameRelease) => record({ verb: 'renamePlugin', origin, from, to, gameRelease }, undefined),
-    trashEntryFolder: (entry) => record({ verb: 'trashEntryFolder', entry }, true),
+    trashEntryFolder: (entry) => record({ verb: 'trashEntryFolder', entry }, !answers.foldersAbsent?.has(entry.name)),
     trashSourceFolder: (mod) => record({ verb: 'trashSourceFolder', mod }, true),
     install: (source, target, keys) =>
       record<InstallOutcome>({ verb: 'install', source, target, keys }, answers.installed ?? { landed: true, isFomod: false }),

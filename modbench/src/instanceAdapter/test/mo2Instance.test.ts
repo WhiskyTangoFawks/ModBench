@@ -1385,6 +1385,18 @@ describe('the MO2 Instance adapter', () => {
         join(root, 'mods', 'Harder VATS'), join(root, 'mods', 'Unassigned (Modlist Development)_separator'),
       ]);
     });
+
+    it.each(['mod', 'separator'] as const)('trashes no folder outside mods/ for a %s line another tool wrote with a / in its name', async (kind) => {
+      await mkdir(join(root, 'Escaped'));
+      const trashed: string[] = [];
+
+      expect(await adapter.trashEntryFolder({ kind, name: '../Escaped' }, (path) => {
+        trashed.push(path);
+        return Promise.resolve();
+      })).toBe(false);
+
+      expect(trashed).toEqual([]);
+    });
   });
 
   it('moves to the trash the repository whose build configuration names the mod, and answers false when none does', async () => {
@@ -1647,6 +1659,15 @@ describe('the MO2 Instance adapter', () => {
       ['enable', { kind: 'enable', mod: 'No Such Mod', enabled: true }],
       ['moveMods', { kind: 'moveMods', mods: ['No Such Mod'], place: { kind: 'modOrder' }, end: 'winning' }],
       ['moveSeparators', { kind: 'moveSeparators', separators: ['No Such Sep'], place: { kind: 'modOrder' }, end: 'winning' }],
+      ['moveMods to a separator that is not there', {
+        kind: 'moveMods', mods: ['Harder VATS'], place: { kind: 'separator', name: 'Gone Separator' }, end: 'losing',
+      }],
+      ['moveMods beside a mod that is not there', {
+        kind: 'moveMods', mods: ['Harder VATS'], place: { kind: 'mod', name: 'Gone Mod' }, end: 'losing',
+      }],
+      ['moveSeparators to a separator that is not there', {
+        kind: 'moveSeparators', separators: ['Unassigned (Modlist Development)'], place: { kind: 'separator', name: 'Gone Separator' }, end: 'losing',
+      }],
       ['renameSeparator', { kind: 'renameSeparator', from: 'No Such Sep', to: 'Anything' }],
       ['addSeparator a listed separator', { kind: 'addSeparator', separator: 'Unassigned (Modlist Development)', afterIndex: 0 }],
       ['renameSeparator onto a listed separator', {
@@ -1847,6 +1868,42 @@ describe('the MO2 Instance adapter', () => {
         expect(modNames(await source.modOrder('Default'))[0]).toBe('separator:Core Mods:true');
         expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
         await expect(change([{ kind: 'addSeparator', separator: 'CON', afterIndex: -1 }])).rejects.toThrow(/Not a valid separator name/);
+      });
+
+      it('drops path separators from a separator\'s name, so its folder stays inside mods/, on adding and on renaming', async () => {
+        await change([{ kind: 'addSeparator', separator: '../Escape', afterIndex: -1 }]);
+        await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'A/B' }]);
+
+        const names = modNames(await source.modOrder('Default'));
+        expect(names).toContain('separator:..Escape:true');
+        expect(names).toContain('separator:AB:false');
+        expect(await isThere(separatorFolder('..Escape'))).toBe(true);
+        expect(await isThere(separatorFolder('AB'))).toBe(true);
+        expect(await isThere(join(root, 'Escape_separator'))).toBe(false);
+      });
+
+      it('takes a separator\'s name a mod has, on adding and on renaming: a mod is no clash', async () => {
+        await change([{ kind: 'addSeparator', separator: 'Harder VATS', afterIndex: -1 }]);
+        await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'ENBoost - 12k' }]);
+
+        const names = modNames(await source.modOrder('Default'));
+        expect(names).toContain('separator:Harder VATS:true');
+        expect(names).toContain('separator:ENBoost - 12k:false');
+      });
+
+      it('writes nothing for a rename of a separator to its own name as MO2 names its folder', async () => {
+        const before = await text(root, DEFAULT_MODLIST);
+
+        expect(await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: ' Unassigned (Modlist Development). ' }]))
+          .toEqual({ wrote: false });
+
+        expect(await text(root, DEFAULT_MODLIST)).toBe(before);
+      });
+
+      it('keys an entry as MO2 keys it: a separator by the name of its folder, trimmed and without trailing dots, and without case', () => {
+        expect(adapter.entryKey({ kind: 'separator', name: ' Unassigned (Modlist Development). ' }))
+          .toBe(adapter.entryKey({ kind: 'separator', name: 'unassigned (modlist development)' }));
+        expect(adapter.entryKey({ kind: 'mod', name: 'Group A_separator' })).toBe(adapter.entryKey({ kind: 'separator', name: 'GROUP A' }));
       });
     });
   });
