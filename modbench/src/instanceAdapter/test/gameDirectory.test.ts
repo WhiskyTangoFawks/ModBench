@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import {
-  gameDirectoryResolver, normalizeGamePath, type GameDetectors,
+  documentsFolderVia, gameDirectoryResolver, normalizeGamePath, type GameDetectors,
 } from '../gameDirectory';
 import type { GameDirectoryOverrides } from '../instanceAdapter';
 
@@ -25,6 +25,20 @@ const STEAM_PLACE = 'the Steam install';
 const resolverWith = (
   overrides: GameDirectoryOverrides = {}, detectors: GameDetectors = NO_DETECTORS,
 ) => gameDirectoryResolver(() => overrides, detectors);
+
+describe('documentsFolderVia', () => {
+  it('reads a non-ASCII Documents path as UTF-8, having told PowerShell to write it so', async () => {
+    const commands: string[] = [];
+
+    const documents = await documentsFolderVia((command) => {
+      commands.push(command);
+      return Promise.resolve(Buffer.from('C:\\Users\\José\\Документы\r\n', 'utf8'));
+    });
+
+    expect(documents).toBe('C:\\Users\\José\\Документы');
+    expect(commands[0]).toMatch(/^\[Console\]::OutputEncoding=\[Text\.Encoding\]::UTF8;/);
+  });
+});
 
 describe('normalizeGamePath', () => {
   it('leaves a native Windows path untouched', async () => {

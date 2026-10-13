@@ -53,6 +53,17 @@ describe('the My Games folder of a release', () => {
       expect(asked).toBe(1);
     });
 
+    it('asks again after a failure, so a transient one does not stick', async () => {
+      await mkdir(join(base, 'My Games', 'Fallout4'), { recursive: true });
+      let asked = 0;
+      const resolve = myGamesResolver(base, detectors({
+        documents: () => (++asked === 1 ? Promise.reject(new Error('spawn failed')) : Promise.resolve(base)),
+      }), 'win32');
+
+      expect(await resolve('Fallout4')).toMatchObject({ kind: 'notFound' });
+      expect(await resolve('Fallout4')).toMatchObject({ kind: 'found' });
+    });
+
     it('says why the known folder could not be asked', async () => {
       const resolved = await myGamesResolver(base, detectors(), 'win32')('Fallout4');
 

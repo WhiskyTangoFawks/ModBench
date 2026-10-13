@@ -81,8 +81,8 @@ async function linuxResolution(instanceRoot: string, detectors: GameDetectors, r
 }
 
 export function myGamesResolver(instanceRoot: string, detectors: GameDetectors, platform: NodeJS.Platform = process.platform): MyGamesResolver {
-  let documentsFolder: Promise<string> | undefined;
-  const askDocumentsOnce = (): Promise<string> => (documentsFolder ??= detectors.documents());
+  let documentsFolder: string | undefined;
+  const askDocumentsOnce = async (): Promise<string> => (documentsFolder ??= await detectors.documents());
   return async (release) => {
     const folderName = archiveListsOf(release)?.myGamesFolder;
     if (release === undefined || folderName === undefined) return { kind: 'notFound', looked: [] };
