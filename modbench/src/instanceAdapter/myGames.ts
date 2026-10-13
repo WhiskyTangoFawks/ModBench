@@ -1,7 +1,3 @@
-// Where the game keeps its own copies of its INIs: the release's folder under `Documents/My Games`.
-// Windows asks the Documents known folder; Linux looks in the game's Steam prefix, then in the Wine
-// prefix holding the instance.
-
 import { userInfo } from 'node:os';
 import { join, posix } from 'node:path';
 import { archiveListsOf, gamePathInfoForRelease } from '../tables/gamePaths';
@@ -34,7 +30,6 @@ async function firstFolder(candidates: readonly string[]): Promise<string | unde
 const inPrefix = (prefix: string, folderName: string): Promise<string | undefined> =>
   firstFolder([PROTON_USER, userInfo().username].map((user) => posix.join(prefix, WINE_DRIVE, 'users', user, 'Documents', MY_GAMES, folderName)));
 
-// The prefix is what lies above the `drive_c` the instance sits under.
 function prefixHolding(instanceRoot: string): string | undefined {
   const segments = instanceRoot.split('/');
   const drive = segments.indexOf(WINE_DRIVE);

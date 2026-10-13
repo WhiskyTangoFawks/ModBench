@@ -37,7 +37,6 @@ async function listGameFolderArchives(dataFolder: string, gameRelease: string | 
   }
 }
 
-// The folder holding the game's own INIs for a profile: the profile's, when it keeps them, else the game's My Games folder.
 async function gameInisFolder(
   { instanceRoot, resolveMyGames, watch }: Mo2Context, profile: string, release: string | undefined, userInis: readonly string[],
 ): Promise<{ folder: string | undefined; notes: string[] }> {

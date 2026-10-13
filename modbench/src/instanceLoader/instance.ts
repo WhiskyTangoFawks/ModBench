@@ -30,6 +30,8 @@ export type { GameFolder } from '../instanceAdapter/instanceAdapter';
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.
 const SETTLE_MS = 200;
 
+type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'dataFolder' | 'gameArchives' | 'archives';
+
 type DownloadsResult =
   | { readonly kind: 'listed'; readonly rows: readonly DownloadFile[] }
   | { readonly kind: 'unresolved'; readonly reason: string };
@@ -221,8 +223,8 @@ export class Instance implements Subscription {
 
   private readonly focus: Subscription;
 
-  // Each kind of note as the last reading told it, so a note is one Output line until its text changes or it clears.
-  private readonly told = new Map<string, ReadonlySet<string>>();
+  // A note is one Output line until its text changes or it clears.
+  private readonly told = new Map<NoteKind, ReadonlySet<string>>();
 
   private readonly copies: SameCopies;
 
@@ -328,7 +330,7 @@ export class Instance implements Subscription {
     this.tellOnce('gameArchives', dataFolderArchives.kind === 'unreadable' ? [`[instance] the game's archives and strings files could not be listed: ${dataFolderArchives.reason}`] : [], 'warn');
   }
 
-  private tellOnce(kind: string, lines: readonly string[], level: 'info' | 'warn'): void {
+  private tellOnce(kind: NoteKind, lines: readonly string[], level: 'info' | 'warn'): void {
     const before = this.told.get(kind);
     for (const line of lines) if (!before?.has(line)) this.options.log[level](line);
     this.told.set(kind, new Set(lines));
