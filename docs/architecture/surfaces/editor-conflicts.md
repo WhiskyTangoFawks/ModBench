@@ -53,6 +53,7 @@ As a user, I want:
 3. A field's winner to be the last copy that has a value for it, so a Partial Form copy that leaves a field out never wins it. Source: xEdit
 4. Arrays compared as they align ([editor-fields.md](editor-fields.md), Arrays). Source: xEdit
 5. A container's conflict to be its own fields'. Its child records compare as records of their own, never as a list in the container: the game loads every plugin's children, not the winner's list. Source: ruling; xEdit
+6. A panel opened on several records to compare their columns as copies of one record: the first column as the master, the last as the winner. Source: ruling; xedit.md, divergence 35
 
 ## The colours
 

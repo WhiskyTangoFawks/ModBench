@@ -52,7 +52,7 @@ As a user, I want:
 4. A cell in a column that cannot be edited, or that is not the file's, to open no editor, as in xEdit. Nothing marks its cells ahead of time. Its header says why, or opens its file. Source: xEdit; ADR-0018
 5. Each column sized to fit, and its edge to drag to resize it.
 6. The grid to scroll sideways from a scrollbar that stays at the bottom of the panel at every vertical position.
-7. Opened on several records, one column for each, in the order I selected them, the first as the file. Their cells carry no conflict colour: the conflict model compares copies of one record. Source: xEdit Compare Selected; editor-conflicts.md
+7. Opened on several records, one column for each, in the order I selected them, the first as the file. Source: xEdit Compare Selected; editor-conflicts.md, What takes part, story 6
 8. A click on a column's header to open that column's file, or its rendered document when the plugin is untracked or its plugin source is unreadable, with the same columns, as a click opens a file in VS Code's Explorer: in the preview tab. Source: xEdit edits any column in one window; VS Code's preview editors
 
 ### A column's header

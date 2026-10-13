@@ -56,6 +56,7 @@ Gestures Modbench does differently.
 | 32 | Referenced By | A gesture on a record, answered as a snapshot in VS Code's References view | A tab beside the record view that follows the selected record | Ruling: Existing tools. |
 | 33 | GetVATSValue's VATS function | A function per VATS value, as Mutagen types it: GetVATSValueWeapon to GetVATSValueUnknown | One function, GetVATSValue, with the VATS function as Parameter 1 | Mutagen decides the data: it reads each VATS function as a condition type of its own. |
 | 34 | Field labels | A field's label is Mutagen's member name, such as ObjectBounds | An element's label is its signature and name, such as OBND - Object Bounds | Mutagen decides the data: a label is data, and Mutagen's model names every field. Permanent. |
+| 35 | Compare Selected colours | The records' columns coloured as copies of one record: the first column is the master, the last the winner | Each cell OnlyOne, each row at most ConflictBenign | Ruling: a comparison is the record panel, with one set of colouring rules. |
 
 ## Omissions by object
 
