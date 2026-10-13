@@ -440,11 +440,12 @@ describe('the MO2 Instance adapter', () => {
       const folders = (await source.modFolders())?.all;
 
       expect(folders).toContainEqual({
-        kind: 'mod', name: 'Unofficial Fallout 4 Patch', path: join(root, 'mods', 'Unofficial Fallout 4 Patch'),
+        kind: 'mod', name: 'Unofficial Fallout 4 Patch', folderName: 'Unofficial Fallout 4 Patch', path: join(root, 'mods', 'Unofficial Fallout 4 Patch'),
       });
       expect(folders).toContainEqual({
         kind: 'separator',
         name: 'Unassigned (Modlist Development)',
+        folderName: 'Unassigned (Modlist Development)_separator',
         path: join(root, 'mods', 'Unassigned (Modlist Development)_separator'),
       });
     });
@@ -979,7 +980,7 @@ describe('the MO2 Instance adapter', () => {
 
   describe('get in mods/', () => {
     it('answers the folder that holds an entry, matched as MO2 matches names, or none', async () => {
-      const harderVats = { kind: 'mod', name: 'Harder VATS', path: join(root, 'mods', 'Harder VATS') };
+      const harderVats = { kind: 'mod', name: 'Harder VATS', folderName: 'Harder VATS', path: join(root, 'mods', 'Harder VATS') };
       const folders = present((await adapter.reading()).modFolders, 'the mod folders');
 
       expect(folders.holding({ kind: 'mod', name: 'Harder VATS' })).toEqual(harderVats);
