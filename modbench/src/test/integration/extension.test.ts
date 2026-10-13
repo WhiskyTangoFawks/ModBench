@@ -929,6 +929,7 @@ describe('a child record of a tracked plugin', () => {
     const openBoth = async () => {
       await openRecord({ formKey: CELL_FORM_KEY, plugin, pinned: true });
       await openRecord({ ...childCopy, pinned: true });
+      await vscode.commands.executeCommand('workbench.action.moveEditorToRightGroup');
       return { child: await childDocument(), container: await containerDocument() };
     };
 
