@@ -37,7 +37,7 @@ function listing(heading: string, plugins: readonly PluginAddress[]): string[] {
   return plugins.length === 0 ? [] : [heading, ...plugins.map(named)];
 }
 
-// One question when plugins list the plugin as a master or may. Writes nothing.
+// One question when plugins list the plugin as a master or may.
 async function confirmRename(access: PluginRenameAccess, ask: AskQuestion, plugin: PluginAddress, newName: string): Promise<RenameConfirmed> {
   let dependants;
   try {
@@ -58,7 +58,6 @@ async function confirmRename(access: PluginRenameAccess, ask: AskQuestion, plugi
 async function renamePlugin(
   access: PluginRenameAccess, source: { apply(changes: SourceChanges): Promise<boolean> }, plugin: PluginAddress, newName: string, gameRelease: string | undefined,
 ): Promise<PluginRenameResult> {
-  const origin = fileOriginOf(plugin.origin);
   const changes = await access.client.getRenameSourceChanges(plugin, newName);
   if (isRefused(changes)) return { applied: false, sourceRenamed: false, refusal: changes.message };
   if (!await source.apply(changes)) return { applied: false, reported: true };
@@ -66,7 +65,7 @@ async function renamePlugin(
   const moved = await access.client.moveLastWritten(plugin, changes.treeName, newName);
   if (isRefused(moved)) return { applied: false, sourceRenamed: true, refusal: moved.message };
   try {
-    await access.adapter.renamePlugin(origin, plugin.name, newName, gameRelease);
+    await access.adapter.renamePlugin(fileOriginOf(plugin.origin), plugin.name, newName, gameRelease);
     return { applied: true };
   } catch (err) {
     return { applied: false, sourceRenamed: true, refusal: errorMessage(err) };
