@@ -162,9 +162,22 @@ describe('pluginCompanionRule', () => {
     expect(rule('Fallout4').isArchiveOf('Foo.esp', 'Foo - Main.bsa')).toBe(false);
   });
 
-  it('takes a strings file of any plugin, in any language, by its extension', () => {
-    expect(rule('Fallout4').isStringsFile('Bar_xx.ILSTRINGS')).toBe(true);
-    expect(rule('Fallout4').isStringsFile('Bar_en.txt')).toBe(false);
+  it.each([
+    ['STRINGS/Bar_xx.ILSTRINGS', true],
+    ['strings/Bar_en.txt', false],
+    ['Bar_en.STRINGS', false],
+    ['Nested/strings/Bar_en.STRINGS', false],
+    ['strings/Nested/Bar_en.STRINGS', false],
+  ])('takes %s for a strings file of any plugin, in any language, only in the strings folder at the root: %s', (relativePath, taken) => {
+    expect(rule('Fallout4').isStringsFile(relativePath)).toBe(taken);
+  });
+
+  it.each([
+    ['Unnamed - Main.BA2', true],
+    ['Unnamed - Main.bsa', false],
+    ['Nested/Unnamed - Main.ba2', false],
+  ])('takes %s for an archive the release loads, of any plugin or of none, only at the root: %s', (relativePath, taken) => {
+    expect(rule('Fallout4').isArchive(relativePath)).toBe(taken);
   });
 
   it('takes the ini of the plugin\'s name for a release that ties one to its plugins', () => {

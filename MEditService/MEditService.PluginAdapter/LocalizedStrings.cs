@@ -12,8 +12,8 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>The folder that holds the plugin, where its own strings sit, loose or in an archive named for it.
-/// Every other place the game finds strings, the load order names (ADR-0013).</summary>
+/// <summary>The folder that holds the plugin, where its own strings sit, loose or in an archive named for it:
+/// read only when the load order names none of its strings files (ADR-0013).</summary>
 public readonly record struct PluginStrings(string? PluginFolder);
 
 /// <summary>The parameters a read takes its strings by, and the scratch folder they name until disposed.</summary>
@@ -103,8 +103,17 @@ internal static class LocalizedStrings
     private static Dictionary<(StringsSource Source, Language Language), StringsFile> Find(
         PluginStrings strings, LoadOrderSnapshot? loadOrder, ModKey plugin, GameRelease gameRelease)
     {
+        var languageFormat = LanguageFormat(gameRelease);
+        var found = FirstHolding(TheGamesPlaces(loadOrder, plugin, gameRelease, languageFormat));
+        return found.Count > 0 || strings.PluginFolder is not { } own
+            ? found
+            : FirstHolding(OwnPlaces(own, plugin, gameRelease, languageFormat));
+    }
+
+    private static Dictionary<(StringsSource Source, Language Language), StringsFile> FirstHolding(IEnumerable<IReadOnlyList<StringsFile>> places)
+    {
         var found = new Dictionary<(StringsSource, Language), StringsFile>();
-        foreach (var place in Places(strings, loadOrder, plugin, gameRelease))
+        foreach (var place in places)
         {
             foreach (var file in place) found.TryAdd((file.Source, file.Language), file);
             if (Sources.All(source => found.ContainsKey((source, Target)))) break;
@@ -112,28 +121,29 @@ internal static class LocalizedStrings
         return found;
     }
 
-    // A copy's own files first, so one the game does not load reads as its mod gives it. Loose files beat
-    // every archive, and a later archive's file replaces an earlier one's.
-    private static IEnumerable<IReadOnlyList<StringsFile>> Places(
-        PluginStrings strings, LoadOrderSnapshot? loadOrder, ModKey plugin, GameRelease gameRelease)
+    // Loose files beat every archive, and a later archive's file replaces an earlier one's.
+    private static IEnumerable<IReadOnlyList<StringsFile>> TheGamesPlaces(
+        LoadOrderSnapshot? loadOrder, ModKey plugin, GameRelease gameRelease, StringsLanguageFormat languageFormat)
     {
-        var languageFormat = LanguageFormat(gameRelease);
-        if (strings.PluginFolder is { } own) yield return [.. Loose(own, plugin, languageFormat)];
         yield return
         [
             .. (loadOrder?.StringsFiles ?? [])
                 .Select(path => StringsFile.Named(Path.GetFileName(path), plugin, languageFormat, () => File.ReadAllBytes(path)))
                 .OfType<StringsFile>(),
         ];
-        if (strings.PluginFolder is { } folder && Directory.Exists(folder))
-        {
-            var named = Directory.EnumerateFiles(folder, $"*{Archive.GetExtension(gameRelease)}")
-                .Where(archive => Archive.IsApplicable(gameRelease, plugin, Path.GetFileName(archive)))
-                .Order(StringComparer.OrdinalIgnoreCase);
-            foreach (var archive in named) yield return [.. InArchive(archive, plugin, gameRelease, languageFormat)];
-        }
-
         foreach (var archive in (loadOrder?.Archives ?? []).Reverse()) yield return [.. InArchive(archive, plugin, gameRelease, languageFormat)];
+    }
+
+    // Where a copy the game does not load keeps its strings: never mixed with the game's, whose string IDs may differ.
+    private static IEnumerable<IReadOnlyList<StringsFile>> OwnPlaces(
+        string folder, ModKey plugin, GameRelease gameRelease, StringsLanguageFormat languageFormat)
+    {
+        yield return [.. Loose(folder, plugin, languageFormat)];
+        if (!Directory.Exists(folder)) yield break;
+        var named = Directory.EnumerateFiles(folder, $"*{Archive.GetExtension(gameRelease)}")
+            .Where(archive => Archive.IsApplicable(gameRelease, plugin, Path.GetFileName(archive)))
+            .Order(StringComparer.OrdinalIgnoreCase);
+        foreach (var archive in named) yield return [.. InArchive(archive, plugin, gameRelease, languageFormat)];
     }
 
     // The pattern Mutagen's own lookup enumerates a strings folder with.

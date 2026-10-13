@@ -14,7 +14,6 @@ internal sealed record FilterResponse(string? Sql, string? Source);
 /// none.</summary>
 internal sealed record LoadOrderResponse(bool Applied, long Version = 0);
 // Mod Management's snapshot (ADR-0013). InstanceRoot: one index file per instance, inside the instance root (ADR-0010).
-// Archives: in the order the game loads them; StringsFiles: the loose ones the game reads. Each at the path that wins.
 internal sealed record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
     IReadOnlyList<PluginAddress> LoadedWithNoLine, IReadOnlyList<string> Archives, IReadOnlyList<string> StringsFiles,

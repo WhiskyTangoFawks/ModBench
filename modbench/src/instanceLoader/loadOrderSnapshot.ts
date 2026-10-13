@@ -204,17 +204,22 @@ function archivesAndStringsOf(
 ): Pick<LoadOrderSnapshotValue, 'archives' | 'stringsFiles'> {
   const rule = pluginCompanionRule(gameRelease);
   if (rule === undefined || inData.kind !== 'listed') return { archives: [], stringsFiles: [] };
-  const archives = winningFiles(dataFolder, inData.archives, files,
-    (relativePath) => isRootLevel(relativePath) && foldPath(relativePath).endsWith(rule.archiveExtension));
+  const archives = winningFiles(dataFolder, inData.archives, files, rule.isArchive);
   const pluginArchives = active.flatMap(({ name }) =>
     [...archives.values()].filter((archive) => rule.isArchiveOf(name, archive.relativePath))
       .sort((a, b) => (foldPath(a.relativePath) < foldPath(b.relativePath) ? -1 : 1)));
   const loaded = [...listed.flatMap((name) => archives.get(foldPath(name)) ?? []), ...pluginArchives].map(({ path }) => path);
-  const strings = winningFiles(dataFolder, inData.stringsFiles, files, (relativePath) => {
-    const [folder, name, ...below] = relativePath.split('/');
-    return below.length === 0 && name !== undefined && foldPath(folder ?? '') === rule.stringsFolder && rule.isStringsFile(name);
-  });
+  const strings = winningFiles(dataFolder, inData.stringsFiles, files, rule.isStringsFile);
   return { archives: [...new Set(loaded)], stringsFiles: [...strings.values()].map(({ path }) => path) };
+}
+
+/** The archives the INIs list that no mod, no Overwrite and no game folder holds: the game loads none
+ *  of them either. */
+export function listedArchivesNothingHolds({ gameRelease, listed, inData, files }: ArchiveSources): string[] {
+  const rule = pluginCompanionRule(gameRelease);
+  if (rule === undefined || inData.kind !== 'listed') return [];
+  const held = new Set([...inData.archives, ...[...files].map(({ relativePath }) => relativePath).filter(rule.isArchive)].map(foldPath));
+  return listed.filter((name) => !held.has(foldPath(name)));
 }
 
 /** ADR-0013's snapshot: none without a listable game folder, a refusal while a mod's plugin has no mod

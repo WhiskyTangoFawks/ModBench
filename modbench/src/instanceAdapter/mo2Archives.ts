@@ -7,7 +7,7 @@ import { archiveListsOf, dataFolderOf, pluginCompanionRule } from '../tables/gam
 import { get, listDir } from './files';
 import { archivesListedIn } from './gameIni';
 import type { DataFolderArchives, GameFolder, InstanceAdapter } from './instanceAdapter';
-import { dataFolderArchivesGlob, fileInFolder, fileNamedGlob, profileDir, profileSettingsFile } from './layout';
+import { anyCase, dataFolderArchivesGlob, fileInFolder, profileDir, profileSettingsFile } from './layout';
 import { readOrAbsent, type Mo2Context } from './mo2Context';
 
 // The one spelled as `name` first, then one Windows takes for it.
@@ -25,11 +25,12 @@ async function listGameFolderArchives(dataFolder: string, gameRelease: string | 
   try {
     const dirents = await listDir(dataFolder);
     if (rule === undefined) return { kind: 'listed', archives: [], stringsFiles: [] };
-    const archives = dirents.filter((d) => d.isFile() && d.name.toLowerCase().endsWith(rule.archiveExtension)).map((d) => d.name);
+    const archives = dirents.filter((d) => d.isFile() && rule.isArchive(d.name)).map((d) => d.name);
     const stringsFolders = dirents.filter((d) => d.isDirectory() && d.name.toLowerCase() === rule.stringsFolder).map((d) => d.name);
     const stringsFiles = await Promise.all(stringsFolders.map(async (folder) => (await listDir(fileInFolder(dataFolder, folder)))
-      .filter((d) => d.isFile() && rule.isStringsFile(d.name))
-      .map((d) => `${folder}/${d.name}`)));
+      .map((d) => ({ d, relativePath: `${folder}/${d.name}` }))
+      .filter(({ d, relativePath }) => d.isFile() && rule.isStringsFile(relativePath))
+      .map(({ relativePath }) => relativePath)));
     return { kind: 'listed', archives, stringsFiles: stringsFiles.flat() };
   } catch (err) {
     return { kind: 'unreadable', reason: errorMessage(err) };
@@ -44,12 +45,12 @@ export function mo2Archives({ instanceRoot, watch }: Mo2Context): Pick<InstanceA
         watch.follow('defaultIni', undefined, '');
         return { archives: [], notes: [] };
       }
-      watch.follow('defaultIni', gameFolder.root, fileNamedGlob(lists.defaultIni));
+      watch.follow('defaultIni', gameFolder.root, anyCase(lists.defaultIni));
       const keepsOwn = keepsOwnGameInis(await readOrAbsent(() => get(profileSettingsFile(instanceRoot, profile)), ''));
       const own = keepsOwn ? lists.userInis.map((name) => fileNamedIn(profileDir(instanceRoot, profile), name)) : [];
       const files = await Promise.all([fileNamedIn(gameFolder.root, lists.defaultIni), ...own]);
       return {
-        archives: archivesListedIn((await Promise.all(files.map(textOf))).flat(), lists.keys),
+        archives: archivesListedIn((await Promise.all(files.map(textOf))).flat(), lists),
         notes: keepsOwn ? [] : [`The profile ${profile} keeps no game INIs of its own: the archives listed are its default INI's, and none the game's own INIs add.`],
       };
     },

@@ -4,7 +4,7 @@ import type { DataFolderPlugins, GameFolder, ModFolders, OriginFile, PluginEntry
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { buildFileConflictIndex, FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
 import {
-  buildLoadOrderRows, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, providedPluginsOf, sourceFiles, type ArchiveSources,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, providedPluginsOf, sourceFiles, type ArchiveSources,
   type LoadOrderPlugin, type LoadOrderPluginLine,
 } from '../loadOrderSnapshot';
 import type { PluginAddress } from '../../wire/pluginAddress';
@@ -406,6 +406,18 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
       const archives: ArchiveSources = { ...NO_ARCHIVES, listed: ['A - Main.ba2', 'Gone.ba2'], files: winners({ 'A - Main.ba2': 'ModA' }) };
 
       expect(snapshotOf([a], [], archives)?.archives).toEqual(['/mods/ModA/A - Main.ba2']);
+    });
+
+    it.each([
+      ['the game folder holds', 'fallout4 - startup.ba2', []],
+      ['a mod holds', 'A - Main.ba2', []],
+      ['nothing holds', 'Gone.ba2', ['Gone.ba2']],
+    ])('names a listed archive %s as nothing holding it only when nothing does', (_holder, listed, nothingHolds) => {
+      const archives: ArchiveSources = {
+        ...NO_ARCHIVES, listed: [listed], inData: inData(['Fallout4 - Startup.ba2']), files: winners({ 'A - Main.ba2': 'ModA', 'Nested/Gone.ba2': 'ModA' }),
+      };
+
+      expect(listedArchivesNothingHolds(archives)).toEqual(nothingHolds);
     });
 
     it('reads every loose strings file at the path the Mod override order resolves it to, a mod\'s over the game folder\'s', () => {

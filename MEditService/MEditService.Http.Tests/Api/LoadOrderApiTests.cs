@@ -63,9 +63,11 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     }
 
     [Theory]
+    [InlineData("active")]
+    [InlineData("loadedWithNoLine")]
     [InlineData("archives")]
     [InlineData("stringsFiles")]
-    public async Task PutLoadOrder_WithNoArchivesOrNoStringsFilesField_Returns400(string omitted)
+    public async Task PutLoadOrder_WithAListItNeverDefaultsLeftOut_Returns400(string omitted)
     {
         var body = new Dictionary<string, object>
         {
@@ -121,35 +123,6 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
-            gameRelease = "Fallout4",
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PutLoadOrder_WithNoActiveField_Returns400()
-    {
-        var response = await _client.PutAsJsonAsync("/load-order", new
-        {
-            gameDirectory = _fixture.DataFolder,
-            instanceRoot = _fixture.InstanceRoot,
-            plugins = _fixture.Plugins.Select(p => p.Wire),
-            gameRelease = "Fallout4",
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PutLoadOrder_WithNoLoadedWithNoLineField_Returns400()
-    {
-        var response = await _client.PutAsJsonAsync("/load-order", new
-        {
-            gameDirectory = _fixture.DataFolder,
-            instanceRoot = _fixture.InstanceRoot,
-            plugins = _fixture.Plugins.Select(p => p.Wire),
-            active = SnapshotPlugins.Active(_fixture.Plugins),
             gameRelease = "Fallout4",
         });
 

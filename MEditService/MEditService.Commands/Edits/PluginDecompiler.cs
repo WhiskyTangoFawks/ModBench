@@ -30,7 +30,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
             {
                 PluginFailure.MissingStrings missing => Decompiled.Refused(DecompileRefusal.MissingLocalizationStrings,
                     $"{plugin.Name} is a localized plugin but its strings file '{missing.File}' was not found " +
-                    $"loose or in an archive, in {modFolder} or among the files the game loads. Restore the file, then try again."),
+                    $"loose or in an archive, among the files the game loads or in {modFolder}. Restore the file, then try again."),
                 PluginFailure.HeaderFormKeyHeld or PluginFailure.NullFormIdHeld => Decompiled.Refused(DecompileRefusal.RoundTripFailed,
                     $"{plugin.Name} cannot become source: {failure.Reason}."),
                 PluginFailure.Inaccessible => Decompiled.Refused(DecompileRefusal.RoundTripFailed,

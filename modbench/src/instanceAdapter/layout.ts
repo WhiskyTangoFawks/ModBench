@@ -166,8 +166,9 @@ export const SETTINGS_WATCH_GLOB = SETTINGS_FILE_NAME;
 /** Downloads' own base is the resolved folder itself, so this glob is everything under it. */
 export const DOWNLOADS_WATCH_GLOB = '**';
 
-// A glob matches case, and a plugin's extension and its source folders are any case, so each letter is a class.
-const anyCase = (text: string): string => text.replace(/./g, (c) => `[${c.toLowerCase()}${c.toUpperCase()}]`);
+/** A glob that matches `text` as Windows matches a name. A glob matches case, and another tool spells a
+ *  plugin's extension or a game's file in any case, so each letter is a class. */
+export const anyCase = (text: string): string => text.replace(/./g, (c) => `[${c.toLowerCase()}${c.toUpperCase()}]`);
 
 /** Every file inside a mod's plugin source, as `isPluginSourcePath` takes it. */
 export const PLUGIN_SOURCE_GLOB = `**/${anyCase(SOURCE)}/*/${anyCase(PLUGIN_SOURCE_FOLDER)}/**`;
@@ -181,10 +182,6 @@ export const PROFILE_INIS_GLOB = `${PROFILES}/*/*.${anyCase('ini')}`;
 /** The archives at the root of the Data folder and the files of its strings folder, the Data folder its base. */
 export const dataFolderArchivesGlob = (archiveExtension: string, stringsFolder: string): string =>
   `{*${anyCase(archiveExtension)},${anyCase(stringsFolder)}/*}`;
-
-/** One file of a folder, its base, matched as Windows matches a name. */
-export const fileNamedGlob = (name: string): string => anyCase(name);
-
 // The one spelling of files.ts's own temp suffix, so a sibling target's temp — whose name only
 // starts the same way — can never pass a check built for one exact target.
 const TEMP_WRITE_SUFFIX = String.raw`[0-9a-f]{12}\.tmp`;

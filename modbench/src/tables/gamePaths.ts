@@ -34,6 +34,8 @@ export interface ArchiveLists {
   readonly userInis: readonly string[];
   /** In the order the game loads the archives they list. */
   readonly keys: readonly string[];
+  /** The archives the game loads after those, whatever its INIs list. */
+  readonly alwaysLoaded: readonly string[];
 }
 
 interface PluginCompanions {
@@ -72,12 +74,14 @@ const NO_STRINGS_COMPANIONS: PluginCompanions = { archiveExtension: '.bsa', stri
 const RESOURCE_ARCHIVE_KEYS = ['sResourceArchiveList', 'sResourceArchiveList2'];
 const RESOURCE_INDEX_KEYS = ['sResourceIndexFileList', 'sResourceStartUpArchiveList', ...RESOURCE_ARCHIVE_KEYS];
 const FALLOUT4_ARCHIVES: ArchiveLists = {
-  defaultIni: 'Fallout4_Default.ini', userInis: ['Fallout4.ini', 'Fallout4Custom.ini'], keys: RESOURCE_INDEX_KEYS,
+  defaultIni: 'Fallout4_Default.ini', userInis: ['Fallout4.ini', 'Fallout4Custom.ini'], keys: RESOURCE_INDEX_KEYS, alwaysLoaded: [],
 };
 const SKYRIM_ARCHIVES: ArchiveLists = {
-  defaultIni: 'Skyrim_Default.ini', userInis: ['Skyrim.ini', 'SkyrimCustom.ini'], keys: RESOURCE_ARCHIVE_KEYS,
+  defaultIni: 'Skyrim_Default.ini', userInis: ['Skyrim.ini', 'SkyrimCustom.ini'], keys: RESOURCE_ARCHIVE_KEYS, alwaysLoaded: [],
 };
-const FALLOUT3_ARCHIVES: ArchiveLists = { defaultIni: 'Fallout_default.ini', userInis: ['Fallout.ini'], keys: ['sArchiveList'] };
+const FALLOUT3_ARCHIVES: ArchiveLists = {
+  defaultIni: 'Fallout_default.ini', userInis: ['Fallout.ini', 'FalloutCustom.ini'], keys: ['sArchiveList'], alwaysLoaded: [],
+};
 
 // Only Fallout 4 carries Steam autodetection facts today — a fixture choice, not a platform lock.
 const GAME_PATHS: Record<string, GamePathInfo> = {
@@ -89,7 +93,8 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
   Fallout4VR: {
     gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
-    scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS, archiveLists: FALLOUT4_ARCHIVES,
+    scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS,
+    archiveLists: { ...FALLOUT4_ARCHIVES, defaultIni: 'Fallout4.ini' },
   },
   Fallout3: {
     gameName: 'Fallout 3', nexusSlug: 'fallout3', masters: ['Fallout3.esm'], scriptExtenderFolder: 'fose',
@@ -97,7 +102,7 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
   },
   FalloutNV: {
     gameName: 'Fallout New Vegas', nexusSlug: 'newvegas', masters: ['FalloutNV.esm'], scriptExtenderFolder: 'nvse',
-    pluginCompanions: NO_STRINGS_COMPANIONS, archiveLists: FALLOUT3_ARCHIVES,
+    pluginCompanions: NO_STRINGS_COMPANIONS, archiveLists: { ...FALLOUT3_ARCHIVES, alwaysLoaded: ['Update.bsa'] },
   },
   SkyrimLE: {
     gameName: 'Skyrim', nexusSlug: 'skyrim', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse',
@@ -112,7 +117,7 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS,
-    archiveLists: { ...SKYRIM_ARCHIVES, userInis: ['SkyrimVR.ini', 'SkyrimCustom.ini'] },
+    archiveLists: { ...SKYRIM_ARCHIVES, defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
   },
   EnderalLE: {
     gameName: 'Enderal', nexusSlug: 'enderal', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse',
@@ -121,12 +126,12 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
   Starfield: {
     gameName: 'Starfield', nexusSlug: 'starfield', masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc',
     scriptExtenderFolder: 'sfse', pluginCompanions: FALLOUT4_COMPANIONS,
-    archiveLists: { defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS },
+    archiveLists: { defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS, alwaysLoaded: [] },
   },
   Oblivion: {
     gameName: 'Oblivion', nexusSlug: 'oblivion', masters: ['Oblivion.esm'], scriptExtenderFolder: 'obse',
     pluginCompanions: NO_STRINGS_COMPANIONS,
-    archiveLists: { defaultIni: 'Oblivion_default.ini', userInis: ['Oblivion.ini'], keys: ['sArchiveList'] },
+    archiveLists: { defaultIni: 'Oblivion_default.ini', userInis: ['Oblivion.ini'], keys: ['sArchiveList'], alwaysLoaded: [] },
   },
 };
 
@@ -186,10 +191,13 @@ export interface PluginCompanionRule {
   /** The archives in the root the game loads with the plugin. */
   isArchiveOf(plugin: string, name: string): boolean;
   inStringsFolder(plugin: string, name: string): boolean;
-  /** A strings file of any plugin, in any language. */
-  isStringsFile(name: string): boolean;
+  /** An archive the release loads, of any plugin or of none, at a folder's root. */
+  isArchive(relativePath: string): boolean;
+  /** A strings file of any plugin, in any language, in the strings folder at a folder's root. */
+  isStringsFile(relativePath: string): boolean;
 }
 
+const STRINGS_FOLDER = 'strings';
 const STRINGS_EXTENSIONS = ['.strings', '.dlstrings', '.ilstrings'];
 const ARCHIVE_PART_DELIMITER = ' - ';
 
@@ -211,10 +219,14 @@ export function pluginCompanionRule(release: string | undefined): PluginCompanio
   if (companions === undefined) return undefined;
   const languages = companions.stringsLanguages.map((language) => language.toLowerCase());
   return {
-    stringsFolder: 'strings',
+    stringsFolder: STRINGS_FOLDER,
     archiveExtension: companions.archiveExtension,
     isArchiveOf: (plugin, name) => isArchiveOf(stemOf(plugin), name, companions.archiveExtension),
-    isStringsFile: (name) => STRINGS_EXTENSIONS.some((extension) => name.toLowerCase().endsWith(extension)),
+    isArchive: (relativePath) => !relativePath.includes('/') && relativePath.toLowerCase().endsWith(companions.archiveExtension),
+    isStringsFile: (relativePath) => {
+      const [folder, name, ...below] = relativePath.toLowerCase().split('/');
+      return folder === STRINGS_FOLDER && below.length === 0 && STRINGS_EXTENSIONS.some((extension) => name?.endsWith(extension));
+    },
     inRoot: (plugin, name) => {
       const stem = stemOf(plugin);
       return isArchiveOf(stem, name, companions.archiveExtension) || (companions.pluginIni && name.toLowerCase() === `${stem}.ini`);

@@ -3,8 +3,9 @@
 import type { Log } from '../ports/log';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
-  buildLoadOrderRows, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, type DataFolderPlugins, type LoadOrderPlugin,
-  type LoadOrderPluginLine, type LoadOrderSnapshotRefusal, type LoadOrderSnapshotValue,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, type ArchiveSources,
+  type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
+  type LoadOrderSnapshotValue,
 } from './loadOrderSnapshot';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './downloadRows';
@@ -207,6 +208,9 @@ export class Instance implements Subscription {
   // The mod folder links already told as skipped, so each is one Output line until it changes.
   private linksTold: ReadonlySet<string> = new Set();
 
+  // The listed archives nothing holds already told, so each is one Output line until it changes.
+  private archivesTold: ReadonlySet<string> = new Set();
+
   private readonly copies: SameCopies;
 
   constructor(private readonly options: InstanceOptions) {
@@ -318,6 +322,15 @@ export class Instance implements Subscription {
     const plugins = await this.options.adapter.gameFolderPlugins(gameFolder);
     if (plugins.kind === 'unreadable') this.options.log.warn(`[instance] the game's Data folder could not be listed: ${plugins.reason}`);
     return plugins;
+  }
+
+  // xEdit reports a listed archive it cannot find; the game loads none, so the views stay true.
+  private tellArchivesNothingHolds(sources: ArchiveSources): void {
+    const missing = listedArchivesNothingHolds(sources);
+    for (const name of missing.filter((archive) => !this.archivesTold.has(archive))) {
+      this.options.log.info(`[instance] The game's INIs list the archive ${name}, which no mod, Overwrite or game folder holds.`);
+    }
+    this.archivesTold = new Set(missing);
   }
 
   private async readArchiveList(profile: string, gameFolder: GameFolder, gameRelease: string | undefined): Promise<readonly string[]> {
@@ -455,6 +468,8 @@ export class Instance implements Subscription {
       activeProfile: profile, modFolders: modFolderList, files: index.files, dataFolderPlugins, pluginsLoadedWithNoLine,
       pluginOrder,
     };
+    const archiveSources: ArchiveSources = { gameRelease, listed: archiveList, inData: dataFolderArchives, files: index.files };
+    this.tellArchivesNothingHolds(archiveSources);
     return {
       mods: entries,
       modFolders: modFolderList,
@@ -481,7 +496,7 @@ export class Instance implements Subscription {
       pluginsLoadedWithNoLine,
       loadOrderSnapshot: loadOrderSnapshotOf({
         plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs,
-        archives: { gameRelease, listed: archiveList, inData: dataFolderArchives, files: index.files },
+        archives: archiveSources,
       }),
       overwriteFiles: runtimeOutput.files,
       overwriteFolders: runtimeOutput.folders,

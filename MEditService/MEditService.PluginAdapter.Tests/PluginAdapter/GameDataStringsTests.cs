@@ -75,14 +75,27 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     [Fact]
-    public void OpenDocuments_APluginWhoseStringsAreBesideItAndInAnArchiveTheGameLoads_ReadsTheOnesBesideIt()
+    public void OpenDocuments_APluginWhoseStringsAreBesideItAndInAnArchiveTheGameLoads_ReadsTheOnesTheGameLoads()
     {
         MoveStringsIntoGameData("Update.bsa");
         LocalizedDoorPlugin.Write(_pluginPath, "The Mod's Door");
 
         using var documents = OpenDocuments(_pluginPath).Answered();
 
-        Assert.Contains("The Mod's Door", documents.Records.Single().Text, StringComparison.Ordinal);
+        Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OpenDocuments_APluginWhoseStringsAreLooseBesideItAndLooseInATranslationTheGameReads_ReadsTheTranslation()
+    {
+        var copyInTranslation = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "mods", "Translation")).FullName, PluginName);
+        LocalizedDoorPlugin.Write(copyInTranslation, "La Grande Porte");
+        File.Delete(copyInTranslation);
+        _stringsFilesTheGameReads = [.. Directory.EnumerateFiles(LocalizedDoorPlugin.LooseStrings(copyInTranslation))];
+
+        using var documents = OpenDocuments(_pluginPath).Answered();
+
+        Assert.Contains("La Grande Porte", documents.Records.Single().Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -189,16 +202,16 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     [Fact]
-    public void OpenDocuments_AModFolderHoldingOnlyOneOfAPluginsStringsFiles_ReadsThatOneFromItAndTheRestFromTheGame()
+    public async Task ReadSourceOf_AGameThatReadsOnlyOneOfAPluginsStringsFiles_TakesNoneOfTheRestFromBesideThePlugin()
     {
-        MoveStringsIntoGameData("Update.bsa");
-        LocalizedDoorPlugin.Write(_pluginPath, "The Mod's Door");
-        File.Delete(Path.Combine(LocalizedDoorPlugin.LooseStrings(_pluginPath), "Update_English.ILSTRINGS"));
-        File.Delete(Path.Combine(LocalizedDoorPlugin.LooseStrings(_pluginPath), "Update_English.DLSTRINGS"));
+        var copyInTranslation = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "mods", "Translation")).FullName, PluginName);
+        LocalizedDoorPlugin.Write(copyInTranslation, "La Grande Porte");
+        File.Delete(copyInTranslation);
+        _stringsFilesTheGameReads = [Path.Combine(LocalizedDoorPlugin.LooseStrings(copyInTranslation), "Update_English.STRINGS")];
 
-        using var documents = OpenDocuments(_pluginPath).Answered();
+        var source = await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, new PluginStrings(_modFolder));
 
-        Assert.Contains("The Mod's Door", documents.Records.Single().Text, StringComparison.Ordinal);
+        Assert.IsType<PluginFailure.MissingStrings>(source.Failure());
     }
 
     [Fact]

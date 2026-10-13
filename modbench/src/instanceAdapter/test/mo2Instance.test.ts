@@ -456,12 +456,20 @@ describe('the MO2 Instance adapter', () => {
         expect((await adapter.archiveList('Default', found(), 'Fallout4')).archives).toEqual(['Default.ba2']);
       });
 
-      it('lists none when the game folder was not found, or the release has no row', async () => {
+      it.each([
+        ['the game folder was not found', (): GameFolder => ({ kind: 'notFound', looked: [], setting: 'setting' }), 'Fallout4'],
+        ['the release has no row', found, undefined],
+      ])('lists none when %s', async (_why, gameFolder, release) => {
         await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
-        const notFound: GameFolder = { kind: 'notFound', looked: [], setting: 'setting' };
 
-        expect((await adapter.archiveList('Default', notFound, 'Fallout4')).archives).toEqual([]);
-        expect((await adapter.archiveList('Default', found(), undefined)).archives).toEqual([]);
+        expect((await adapter.archiveList('Default', gameFolder(), release)).archives).toEqual([]);
+      });
+
+      it('lists after the INIs\' archives the ones the release loads whatever they list', async () => {
+        await writeFile(join(game, 'Fallout_default.ini'), '[Archive]\nSArchiveList=Fallout - Textures.bsa, Fallout - Meshes.bsa\n');
+
+        expect((await adapter.archiveList('Default', found(), 'FalloutNV')).archives)
+          .toEqual(['Fallout - Textures.bsa', 'Fallout - Meshes.bsa', 'Update.bsa']);
       });
     });
 
@@ -489,13 +497,13 @@ describe('the MO2 Instance adapter', () => {
         });
       });
 
-      it('answers unresolved when the game folder was not found, and unreadable, with why, when its Data folder cannot be listed', async () => {
-        const notFound: GameFolder = { kind: 'notFound', looked: [], setting: 'setting' };
+      it('answers unresolved when the game folder was not found', async () => {
+        expect(await adapter.gameFolderArchives({ kind: 'notFound', looked: [], setting: 'setting' }, 'Fallout4')).toEqual({ kind: 'unresolved' });
+      });
 
-        expect(await adapter.gameFolderArchives(notFound, 'Fallout4')).toEqual({ kind: 'unresolved' });
-        const archives = await adapter.gameFolderArchives(found(), 'Fallout4');
-        if (archives.kind !== 'unreadable') throw new Error(`expected unreadable, got ${archives.kind}`);
-        expect(archives.reason).toMatch(/ENOENT/);
+      it('answers unreadable, with why, when its Data folder cannot be listed', async () => {
+        expect(await adapter.gameFolderArchives(found(), 'Fallout4'))
+          .toEqual({ kind: 'unreadable', reason: expect.stringMatching(/ENOENT/) as unknown });
       });
     });
   });

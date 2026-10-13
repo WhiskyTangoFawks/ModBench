@@ -172,20 +172,14 @@ public sealed class LoadOrderTests
         Assert.NotEqual(Order([a], a), OrderLoadingWithNoLine([a], [a], a));
     }
 
-    [Fact]
-    public void SamePlugins_ReadingADifferentStringsFile_AreDifferentValues()
+    [Theory]
+    [InlineData(new[] { @"C:\Games\Fallout4\Data\A - Main.ba2" }, new string[0])]
+    [InlineData(new string[0], new[] { @"C:\MO2\Fallout4\mods\ModA\Strings\A_en.STRINGS" })]
+    public void SamePlugins_LoadingADifferentArchiveOrReadingADifferentStringsFile_AreDifferentValues(string[] archives, string[] stringsFiles)
     {
         var a = Registered("A.esp", "ModA");
 
-        Assert.NotEqual(Order([a], a), new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, [a], [a.Key], [], [], [@"C:\MO2\Fallout4\mods\ModA\Strings\A_en.STRINGS"]));
-    }
-
-    [Fact]
-    public void SamePlugins_LoadingADifferentArchive_AreDifferentValues()
-    {
-        var a = Registered("A.esp", "ModA");
-
-        Assert.NotEqual(Order([a], a), new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, [a], [a.Key], [], [@"C:\Games\Fallout4\Data\A - Main.ba2"], []));
+        Assert.NotEqual(Order([a], a), new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, [a], [a.Key], [], archives, stringsFiles));
     }
 
     [Fact]

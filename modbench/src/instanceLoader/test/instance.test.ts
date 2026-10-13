@@ -834,19 +834,36 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.gameFolder).toEqual({ kind: 'found', root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
   });
 
-  it('hands the snapshot the archives the game\u2019s default INI lists, from the game folder, and tells that the profile keeps no INIs of its own', async () => {
+  const gameListing = async (listed: string): Promise<{ gameFolder: GameFolder; dataFolder: string }> => {
     const game = await mkdtemp(join(tmpdir(), 'medit-instance-archives-'));
     roots.push(game);
-    await mkdir(join(game, 'Data'));
-    await writeFile(join(game, 'Data', 'Fallout4 - Interface.ba2'), '');
-    await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceStartUpArchiveList=Fallout4 - Interface.ba2\n');
-    const { instance, logs } = realInstance({ resolveGameFolder: () => Promise.resolve({ kind: 'found', root: game, dataFolder: join(game, 'Data') }) });
+    const dataFolder = join(game, 'Data');
+    await mkdir(dataFolder);
+    await writeFile(join(dataFolder, 'Fallout4 - Interface.ba2'), '');
+    await writeFile(join(game, 'Fallout4_Default.ini'), `[Archive]\nsResourceStartUpArchiveList=${listed}\n`);
+    return { gameFolder: { kind: 'found', root: game, dataFolder }, dataFolder };
+  };
+
+  it('hands the snapshot the archives the game\u2019s default INI lists, from the game folder, and tells that the profile keeps no INIs of its own', async () => {
+    const { gameFolder, dataFolder } = await gameListing('Fallout4 - Interface.ba2');
+    const { instance, logs } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
 
     await instance.refresh();
 
-    const snapshot = instance.value.loadOrderSnapshot;
-    expect(snapshot !== undefined && 'archives' in snapshot ? snapshot.archives : snapshot).toEqual([join(game, 'Data', 'Fallout4 - Interface.ba2')]);
+    expect(instance.value.loadOrderSnapshot).toMatchObject({ archives: [join(dataFolder, 'Fallout4 - Interface.ba2')] });
     expect(logs).toContainEqual(expect.stringMatching(/^\[instance\] The profile Default keeps no game INIs of its own/));
+  });
+
+  it('tells once, until it changes, each archive the INIs list that nothing holds', async () => {
+    const { gameFolder } = await gameListing('Fallout4 - Interface.ba2, Gone.ba2');
+    const { instance, logs } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
+
+    await instance.refresh();
+    await instance.refresh();
+
+    expect(logs.filter((line) => line.includes('Gone.ba2'))).toEqual([
+      '[instance] The game\'s INIs list the archive Gone.ba2, which no mod, Overwrite or game folder holds.',
+    ]);
   });
 
   it('drops a download\u2019s Installed row once the mod that named it is gone, sidecar claim and all', async () => {
