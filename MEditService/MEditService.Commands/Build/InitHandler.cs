@@ -145,14 +145,12 @@ public sealed class InitHandler
         var all = _modFolders.Files(mod.Folder, mod.Name, toInit.ModManagerFiles.ToHashSet(StringComparer.Ordinal));
         var paths = all.Select(file => file.Path).ToList();
         var compiled = plugins.SelectMany(plugin => _plugins.WrittenByCompile(plugin, paths, release)).ToHashSet(StringComparer.Ordinal);
-        var files = all.Where(file => !compiled.Contains(file.Path)).ToList();
-        var matched = new ManifestBuilder(
-                toInit.InstallationFiles.Select(file => (_modFolders.InstallationFileName(file.Path), file)), [])
-            .Build(files);
+        var matching = new ManifestBuilder(toInit.InstallationFiles.Select(file => (_modFolders.InstallationFileName(file.Path), file)), []);
         return
         [
-            .. matched.Files
-                .Where(file => file.Provider is not (FileProvider.FirstInstallationFile or FileProvider.InstallationFileEntry))
+            .. all
+                .Where(file => !compiled.Contains(file.Path)
+                    && matching.ProviderOf(file) is not (FileProvider.FirstInstallationFile or FileProvider.InstallationFileEntry))
                 .Select(file => new Asset(file.Path, () => _modFolders.OpenFile(mod.Folder, file.Path))),
         ];
     }

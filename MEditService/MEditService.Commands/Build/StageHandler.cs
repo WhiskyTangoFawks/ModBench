@@ -9,7 +9,7 @@ namespace MEditService.Commands.Build;
 public sealed class StageHandler(IModFolderRepository repository, INotificationPublisher notifications)
 {
     public SelectionResult<string, StageRefusal, StagedMod> Stage(
-        IReadOnlyList<ModToStage> mods, IReadOnlyList<GameFileToStage> gameFiles, CancellationToken cancel = default)
+        IReadOnlyList<ModToStage> mods, InstanceToStage instance, CancellationToken cancel = default)
     {
         var distinct = mods.DistinctBy(mod => mod.Name, StringComparer.OrdinalIgnoreCase).ToList();
         List<ItemLanded<string, StagedMod>> landed = [];
@@ -20,7 +20,7 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
             {
                 cancel.ThrowIfCancellationRequested();
                 notifications.Publish(new StageProgressNotification(new StageProgress(mod.Name, done, distinct.Count)));
-                switch (StageMod(mod, gameFiles))
+                switch (StageMod(mod, instance))
                 {
                     case ItemAnswer<StageRefusal, StagedMod>.Wrote wrote:
                         landed.Add(new ItemLanded<string, StagedMod>(mod.Name, wrote.Outcome));
@@ -38,7 +38,7 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
         return SelectionResult<string, StageRefusal, StagedMod>.PerItem(landed, refused);
     }
 
-    private ItemAnswer<StageRefusal, StagedMod> StageMod(ModToStage mod, IReadOnlyList<GameFileToStage> gameFiles)
+    private ItemAnswer<StageRefusal, StagedMod> StageMod(ModToStage mod, InstanceToStage instance)
     {
         var missing = mod.InstallationFiles.Where(file => !repository.InstallationFileExists(file.Path))
             .Select(file => $"'{repository.InstallationFileName(file.Path)}'").ToList();
@@ -49,12 +49,21 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
                 $"'{mod.Name}' was not staged: {string.Join(", ", missing)} not in the downloads folder.");
         }
 
+        List<(string Name, InstallationFile File)> installationFiles =
+            [.. mod.InstallationFiles.Select(file => (repository.InstallationFileName(file.Path), file))];
+        var deltas = new DeltaMaker(repository, instance, mod.Folder, installationFiles);
         Manifest manifest;
         try
         {
             var files = repository.Files(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal));
-            manifest = new ManifestBuilder(mod.InstallationFiles.Select(file => (repository.InstallationFileName(file.Path), file)), gameFiles)
-                .Build(files);
+            var builder = new ManifestBuilder(installationFiles, instance.GameFiles);
+            var providers = deltas.Keep([.. files.Select(file => (file, builder.ProviderOf(file)))]);
+            manifest = builder.Manifest([.. files.Zip(providers, (file, provider) => new ManifestFile(file.Path, file.Hash, file.Stamp, provider))]);
+        }
+        catch (Exception e) when (deltas.NotWritten && e is IOException or UnauthorizedAccessException)
+        {
+            return ItemAnswer<StageRefusal, StagedMod>.Refused(
+                StageRefusal.NotWritten, $"'{mod.Name}' was not staged: a delta could not be written: {e.Message}");
         }
         catch (DirectoryNotFoundException)
         {
@@ -74,7 +83,7 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return ItemAnswer<StageRefusal, StagedMod>.Refused(
-                StageRefusal.ManifestNotWritten, $"'{mod.Name}' was not staged: its manifest could not be written: {e.Message}");
+                StageRefusal.NotWritten, $"'{mod.Name}' was not staged: its manifest could not be written: {e.Message}");
         }
 
         return ItemAnswer<StageRefusal, StagedMod>.Landed(new StagedMod(

@@ -1,4 +1,5 @@
 using MEditService.Commands.Build;
+using MEditService.ModFolderAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -10,7 +11,8 @@ internal static class ModlistEndpoints
             .WithName("StageModlist")
             .WithTags("Modlist")
             .WithDescription(
-                "Writes each mod's manifest from the mod as it is (ADR-0022). A mod lands or is refused on its own, " +
+                "Writes each mod's manifest from the mod as it is (ADR-0022), and into the build folder each delta a changed " +
+                "file needs. A mod lands or is refused on its own, " +
                 "and a landed mod names each file nothing provides. Progress is the stage-progress notification.")
             .Produces<StageResponse>()
             .ProducesProblem(400);
@@ -31,13 +33,20 @@ internal static class ModlistEndpoints
         }
         if (req.GameFiles is not { } gameFiles || gameFiles.Any(file => string.IsNullOrWhiteSpace(file.Path) || file.Size is null || string.IsNullOrWhiteSpace(file.Hash)))
             return Results.Problem("The game files the mods override are required, each with a path, a size and a hash.", statusCode: 400);
+        if (mods.SelectMany(mod => mod.InstallationFiles ?? []).Any(file => !FileHash.IsHash(file.Hash) || file.Entries.Any(entry => !FileHash.IsHash(entry.Hash)))
+            || gameFiles.Any(file => !FileHash.IsHash(file.Hash)))
+            return Results.Problem("Every hash is xxHash64 as Wabbajack writes it: eight bytes in base64.", statusCode: 400);
+        if (string.IsNullOrWhiteSpace(req.DataFolder) || string.IsNullOrWhiteSpace(req.BuildFolder) || req.DeltaShare is not (>= 0 and <= 1))
+            return Results.Problem("The game's data folder, the build folder and a delta share from 0 to 1 are required.", statusCode: 400);
 
         var result = handler.Stage(
             [.. mods.Select(mod => new ModToStage(
                 mod.Name, mod.Folder,
                 [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())],
                 mod.CommittedFiles ?? []))],
-            [.. gameFiles.Select(file => new GameFileToStage(file.Path, file.Size.GetValueOrDefault(), file.Hash))],
+            new InstanceToStage(
+                [.. gameFiles.Select(file => new GameFileToStage(file.Path, file.Size.GetValueOrDefault(), file.Hash))],
+                req.DataFolder, req.BuildFolder, req.DeltaShare.GetValueOrDefault()),
             cancel);
 
         var logger = loggerFactory.CreateLogger(nameof(ModlistEndpoints));
@@ -48,8 +57,10 @@ internal static class ModlistEndpoints
     }
 }
 
-/// <summary>The mods to stage, and each game file a mod file overrides (ADR-0024).</summary>
-internal sealed record StageRequest(IReadOnlyList<StageModRequest> Mods, IReadOnlyList<StageGameFileRequest> GameFiles);
+/// <summary>The mods to stage with the instance's facts (ADR-0024). DeltaShare is the share of its file a delta may
+/// reach before the file has no provider.</summary>
+internal sealed record StageRequest(
+    IReadOnlyList<StageModRequest> Mods, IReadOnlyList<StageGameFileRequest> GameFiles, string DataFolder, string BuildFolder, double? DeltaShare);
 
 internal sealed record StageModRequest(
     string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles);
