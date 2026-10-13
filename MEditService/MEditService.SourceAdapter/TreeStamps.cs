@@ -37,8 +37,8 @@ public sealed record ClaimedFormKey(string FormKey, IReadOnlyList<string> Docume
 }
 
 /// <summary>Every document of a plugin's tree by the FormKey it declares, with its content stamp; each
-/// file that is no document; each FormKey declared twice; each file read as unsaved text; each problem the
-/// documents read still carry.</summary>
+/// file that is no document; each FormKey declared twice; each file read unsaved; each problem of a file
+/// read.</summary>
 public sealed record RecordStamps(
     IReadOnlyDictionary<string, string> ByFormKey, IReadOnlyList<UnreadableFile> Unreadable,
     IReadOnlyList<ClaimedFormKey> Claimed, IReadOnlySet<string> Unsaved, IReadOnlyList<FileProblem> Problems)
