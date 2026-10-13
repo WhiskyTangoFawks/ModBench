@@ -46,7 +46,7 @@ const PATH_IMPORT = {
 };
 const PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$)',
-    message: 'Only the mEdit client and the Source language import a package.',
+    message: 'Only the mEdit client, the Source language and the content digest (xxhash-wasm) import a package.',
 };
 const DIGEST_PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$|xxhash-wasm$)',

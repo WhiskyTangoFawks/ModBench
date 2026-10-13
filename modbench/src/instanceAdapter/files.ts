@@ -167,7 +167,6 @@ export function write(path: string, text: string): Promise<void> {
   return writeAtomic(path, text);
 }
 
-/** Adds `text` at the end of `path`, making the file when it is not there. */
 export function append(path: string, text: string): Promise<void> {
   return appendFile(path, text);
 }
