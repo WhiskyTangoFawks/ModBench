@@ -37,7 +37,7 @@ public sealed class CompareRecordsTests : IDisposable
             })
             .WithPlugin(ModPlugin.Name, mod =>
             {
-                otherChest = new Container(mod) { EditorID = "Other", Name = "Other", Items = [Entry(new FormKey(ModKey.FromFileName(BasePlugin.Name), 0x901))] };
+                otherChest = new Container(mod) { EditorID = "Other", Name = "Other", FormVersion = 121, Items = [Entry(new FormKey(ModKey.FromFileName(BasePlugin.Name), 0x901))] };
                 sword = new Weapon(mod) { EditorID = "Sword", Name = "Sword" };
                 mod.Containers.Add(otherChest);
                 mod.Weapons.Add(sword);
@@ -133,6 +133,7 @@ public sealed class CompareRecordsTests : IDisposable
         var rows = compare.Diffs.ToDictionary(d => d.FieldName);
         Assert.Equal(ConflictAll.NoConflict, rows["FormVersion"].ConflictAll);
         Assert.Equal(ConflictAll.ConflictBenign, rows["EditorID"].ConflictAll);
+        Assert.Equal(ConflictAll.ConflictBenign, rows["Items"].ConflictAll);
         Assert.Equal(ConflictAll.ConflictBenign, compare.ConflictAll);
     }
 
@@ -175,13 +176,11 @@ public sealed class CompareRecordsTests : IDisposable
     }
 
     [Fact]
-    public void AStructRowOverDifferingChildren_IsConflictBenign()
+    public void AFieldTheGameIgnores_IsNoConflict_ThoughTheCopiesDiffer()
     {
         var compare = Compare(Copy(_chest, BasePlugin), Copy(_otherChest, ModPlugin));
 
-        var differing = Flatten(compare.Diffs).Where(d => d.Children is not null && d.ConflictAll == ConflictAll.ConflictBenign);
-        Assert.All(differing, d => Assert.Contains(d.Children.Require(), c => c.ConflictAll == ConflictAll.ConflictBenign));
-        Assert.Contains(compare.Diffs, d => d.FieldName == "Items" && d.ConflictAll == ConflictAll.ConflictBenign);
+        Assert.Equal(ConflictAll.NoConflict, Row(compare, "FormVersion").ConflictAll);
     }
 
     [Fact]
