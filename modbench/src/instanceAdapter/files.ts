@@ -12,7 +12,7 @@ import {
 } from './layout';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
-import type { FileStamp } from './instanceAdapter';
+import type { FileRead, FileStamp } from './instanceAdapter';
 
 /** ADR-0007, answered without the backend. */
 export function isTracked(sourceFolder: string): Promise<boolean> {
@@ -254,4 +254,13 @@ export async function undoAll(undos: readonly Undo[], err: unknown): Promise<unk
   }
   if (failures.length === 0) return err;
   return new Error(`${errorMessage(err)}; not put back: ${failures.join('; ')}`);
+}
+
+/** What `read` answers, or why it could not, rather than failing whatever asked. */
+export async function readOrReason<T>(read: () => Promise<T>): Promise<FileRead<T>> {
+  try {
+    return { kind: 'read', answer: await read() };
+  } catch (err) {
+    return { kind: 'unreadable', reason: errorMessage(err) };
+  }
 }

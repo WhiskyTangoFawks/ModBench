@@ -98,7 +98,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
   it('deleteSeparators of a separator with no folder removes its line alone, and trashes nothing', async () => {
     const trashed: string[] = [];
     const before = await snapshotTree(dir);
-    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).deleteSeparators(PROFILE, ['Radfall - All-In-One Survival Overhaul'], (path) => {
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).deleteSeparators(PROFILE, await readModlistEntries(dir), ['Radfall - All-In-One Survival Overhaul'], (path) => {
       trashed.push(path);
       return Promise.resolve();
     });
@@ -117,7 +117,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     const trashed: string[] = [];
     const modsBefore = (await readModlistEntries(dir)).filter((e) => e.kind === 'mod');
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir), unscriptedMEdit).deleteSeparators(PROFILE, ['Unassigned (Modlist Development)'], async (path) => {
+    await modlistCommands(adapterOver(dir), unscriptedMEdit).deleteSeparators(PROFILE, await readModlistEntries(dir), ['Unassigned (Modlist Development)'], async (path) => {
       trashed.push(path);
       await rm(path, { recursive: true });
     });
@@ -148,7 +148,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('syncMods adds and drops lines against the folders it is handed, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    const outcome = await modSyncOver(adapterOver(dir))({ profile: PROFILE, modFolders: (await adapterOver(dir).modFolders())?.all ?? [] });
+    const outcome = await modSyncOver(adapterOver(dir))({ profile: PROFILE, modFolders: (await adapterOver(dir).reading()).modFolders?.all ?? [] });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 

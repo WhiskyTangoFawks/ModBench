@@ -2,10 +2,9 @@
 // each trusted while its file's stamp is the one it was hashed at.
 
 import { join } from 'node:path';
-import { errorMessage } from '../ports/errorMessage';
 import type { ArchiveReader } from './archiveReader';
 import { digestOf } from './contentDigest';
-import { append, ensureDir, get, listDir, makeTempDir, remove, stampOf, withLock } from './files';
+import { append, ensureDir, get, listDir, makeTempDir, readOrReason, remove, stampOf, withLock } from './files';
 import type { FileRead, FileStamp, HashedDownload, InstanceAdapter } from './instanceAdapter';
 
 const INDEX_FILE = 'hashes.jsonl';
@@ -51,14 +50,6 @@ function keptAt(line: string): { kind: IndexedKind; path: string; stamp: FileSta
     return { kind, path, stamp, hashed: { size: Number(stamp.size), hash, entries: pairs } };
   } catch {
     return undefined;
-  }
-}
-
-async function readOrReason<T>(read: () => Promise<T>): Promise<FileRead<T>> {
-  try {
-    return { kind: 'read', answer: await read() };
-  } catch (err) {
-    return { kind: 'unreadable', reason: errorMessage(err) };
   }
 }
 
@@ -124,12 +115,9 @@ export function hashIndex(folder: string, archives: ArchiveReader): Pick<Instanc
 
   async function hashOf(kind: Kind, path: string): Promise<FileRead<HashedDownload>> {
     await load();
-    let stamp: FileStamp;
-    try {
-      stamp = await stampOf(path);
-    } catch (err) {
-      return { kind: 'unreadable', reason: errorMessage(err) };
-    }
+    const stamped = await readOrReason(() => stampOf(path));
+    if (stamped.kind === 'unreadable') return stamped;
+    const stamp = stamped.answer;
     const known = kept[kind].get(path);
     if (known !== undefined && sameStamp(known.stamp, stamp)) return known.hashed;
     const readFromMs = Date.now();

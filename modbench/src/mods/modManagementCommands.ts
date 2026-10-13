@@ -177,7 +177,7 @@ export function registerModContextCommands(
         const sourceMods = rows.filter((n) => n.facts?.tracked === true).map((n) => n.mod.name);
         if (!(await confirmUninstall(mods.map((m) => m.name), sourceMods, ask))) return;
         await runModsWriting(instance, async () => {
-          const result = await commands.uninstallMods(instance.value.activeProfile, mods, trash);
+          const result = await commands.uninstallMods(instance.value.activeProfile, instance.value.mods, mods, trash);
           if (!result.applied) {
             reporter.report('error', 'Failed to uninstall mods.', result.refusal);
             return;
@@ -201,14 +201,14 @@ export function registerModContextCommands(
 }
 function separatorNamePrompt(
   commands: ModlistCommands, instance: Pick<Instance, 'value'>, own?: string,
-): (value: string) => Promise<string | undefined> {
-  return async (value) => (value === '' ? undefined : commands.separatorNameRefusal(instance.value.activeProfile, value, own));
+): (value: string) => string | undefined {
+  return (value) => (value === '' ? undefined : commands.separatorNameRefusal(instance.value, value, own));
 }
 
 function modNamePrompt(
   commands: ModlistCommands, instance: Pick<Instance, 'value'>, own: string,
-): (value: string) => Promise<string | undefined> {
-  return async (value) => (value === '' ? undefined : commands.renameModNameRefusal(instance.value.activeProfile, value, own));
+): (value: string) => string | undefined {
+  return (value) => (value === '' ? undefined : commands.renameModNameRefusal(instance.value, value, own));
 }
 
 async function confirmSeparatorDelete(names: readonly string[], ask: AskQuestion): Promise<boolean> {
@@ -262,7 +262,7 @@ export function registerSeparatorCommands(
         if (names.length === 0) return;
         if (!(await confirmSeparatorDelete(names, ask))) return;
         await runModsWriting(instance, async () => {
-          const result = await commands.deleteSeparators(instance.value.activeProfile, names, trash);
+          const result = await commands.deleteSeparators(instance.value.activeProfile, instance.value.mods, names, trash);
           if (!result.applied) {
             reporter.report('error', 'Failed to delete separators.', result.refusal);
             return;
@@ -286,7 +286,7 @@ export function registerCreateEmptyModCommand(
   return vscode.commands.registerCommand('modbench.mod.createEmpty', async () => {
     const name = await vscode.window.showInputBox({
       prompt: 'New mod name', placeHolder: 'My New Mod',
-      validateInput: (value) => commands.newModNameRefusal(value),
+      validateInput: (value) => commands.newModNameRefusal(instance.value, value),
     });
     if (!name) return;
     await runModsWriting(instance, async () => {

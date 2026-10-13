@@ -32,7 +32,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
   it('uninstallMods trashes the folder, removes the modlist line, and marks its download uninstalled — nothing else', async () => {
     const downloadMeta = `downloads/${ARCHIVE}.meta`;
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir), unscriptedMEdit).uninstallMods(PROFILE, [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
+    await modlistCommands(adapterOver(dir), unscriptedMEdit).uninstallMods(PROFILE, await readModlistEntries(dir), [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST, downloadMeta]));
@@ -46,7 +46,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
   it('uninstallMods marks no download when none is handed in, though the mod\'s meta.ini names one', async () => {
     const downloadMeta = `downloads/${ARCHIVE}.meta`;
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir), unscriptedMEdit).uninstallMods(PROFILE, [{ name: 'Unofficial Fallout 4 Patch' }], trash);
+    await modlistCommands(adapterOver(dir), unscriptedMEdit).uninstallMods(PROFILE, await readModlistEntries(dir), [{ name: 'Unofficial Fallout 4 Patch' }], trash);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST]));
@@ -55,7 +55,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
 
   it('uninstallMods on a mod with no linked download touches only its own folder and modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir), unscriptedMEdit).uninstallMods(PROFILE, [{ name: 'Harder VATS' }], trash);
+    await modlistCommands(adapterOver(dir), unscriptedMEdit).uninstallMods(PROFILE, await readModlistEntries(dir), [{ name: 'Harder VATS' }], trash);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Harder VATS/meta.ini', MODLIST]));

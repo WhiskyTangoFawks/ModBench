@@ -1,6 +1,6 @@
 // The effective merged mod view — the merge a VFS performs over the Mod override order.
 
-import type { FileOrigin, InstanceAdapter, ModlistEntry, OriginFile, OriginFolder } from '../instanceAdapter/instanceAdapter';
+import type { FileOrigin, ModlistEntry, OriginFile, OriginFiles, OriginFolder } from '../instanceAdapter/instanceAdapter';
 
 export const modOrigin = (name: string): FileOrigin => ({ kind: 'mod', name });
 
@@ -100,14 +100,15 @@ export function isRootLevel(relativePath: string): boolean {
   return !relativePath.includes('/');
 }
 
-// A mod's own files and folders as the adapter lists them; each entry the listing skipped is one
+// A mod's own files and folders as the reading lists them; each entry the listing skipped is one
 // Output line.
-async function modListing(
-  adapter: Pick<InstanceAdapter, 'originFiles'>, modName: string, log: (msg: string) => void,
-): Promise<{ files: readonly OriginFile[]; folders: readonly OriginFolder[] }> {
-  const { files, folders, notes } = await adapter.originFiles(modOrigin(modName));
-  for (const note of notes) log(`[fileConflictIndex] ${modName}: ${note}`);
-  return { files, folders };
+function modListing(
+  modFiles: ReadonlyMap<string, OriginFiles>, modName: string, log: (msg: string) => void,
+): OriginFiles {
+  const listing = modFiles.get(modName);
+  if (listing === undefined) throw new Error(`The reading holds no files for ${modName}`);
+  for (const note of listing.notes) log(`[fileConflictIndex] ${modName}: ${note}`);
+  return listing;
 }
 
 // A later provider loses to the earlier, winning one. A case variant of a path its mod already
@@ -121,23 +122,19 @@ function provideAsMod(files: FileConflictLookup, file: OriginFile, origin: FileO
   }
 }
 
-export async function buildFileConflictIndex(
+export function buildFileConflictIndex(
   entries: readonly ModlistEntry[],
   overwriteFiles: readonly OriginFile[],
-  adapter: Pick<InstanceAdapter, 'originFiles'>,
+  modFiles: ReadonlyMap<string, OriginFiles>,
   log: (msg: string) => void,
-): Promise<FileConflictIndex> {
+): FileConflictIndex {
   const files = new FileConflictLookup();
   const filesByMod = new Map<string, readonly OriginFile[]>();
   const foldersByMod = new Map<string, readonly OriginFolder[]>();
 
   const mods = entries.filter((e): e is Extract<ModlistEntry, { kind: 'mod' }> => e.kind === 'mod');
 
-  // Every mod's listing is independent, so run them concurrently; only the merge below needs the
-  // override order, and only among enabled mods.
-  const listed = await Promise.all(
-    mods.map(async (mod) => ({ mod, ...await modListing(adapter, mod.name, log) })),
-  );
+  const listed = mods.map((mod) => ({ mod, ...modListing(modFiles, mod.name, log) }));
 
   // Mod order is winning-first, so the FIRST enabled provider wins and later ones only
   // register as contenders (CONTEXT.md, "Override order").

@@ -14,9 +14,8 @@ import { mo2OriginFiles } from './mo2OriginFiles';
 import type { Mo2Context } from './mo2Context';
 import { mo2Landing } from './mo2Landing';
 import { mo2PluginRename } from './mo2PluginRename';
-import { mo2Archives } from './mo2Archives';
 import { mo2Installation } from './mo2Installation';
-import { mo2Reads, readInstance } from './mo2Reads';
+import { mo2Reads, readingSource, readInstance } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
 import { hashIndex } from './hashIndex';
 import { hashIndexDir, modsDir, profilesDir, settingsFile } from './layout';
@@ -29,6 +28,8 @@ interface Mo2InstanceOptions {
   /** Steam and Wine detection; the real ones when omitted. */
   detectors?: GameDetectors;
   archives: ArchiveReader;
+  /** Parts of the context a test fixes in place of the machine's. */
+  context?: Partial<Mo2Context>;
 }
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
@@ -39,7 +40,7 @@ export function isMo2Instance(root: string): boolean {
 }
 
 export function mo2InstanceAdapter({
-  instanceRoot, gameDirectoryOverrides, gameDirectoryChanged, detectors, archives,
+  instanceRoot, gameDirectoryOverrides, gameDirectoryChanged, detectors, archives, context: replaced,
 }: Mo2InstanceOptions): InstanceAdapter {
   const context: Mo2Context = {
     instanceRoot,
@@ -47,13 +48,15 @@ export function mo2InstanceAdapter({
     resolveDownloadsFolder: downloadsDirectoryResolver(detectors),
     resolveMyGames: myGamesResolver(instanceRoot, detectors ?? STEAM),
     watch: mo2Watch(instanceRoot, gameDirectoryChanged),
+    ...replaced,
   };
   const names: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX };
-  const adapter: Omit<InstanceAdapter, 'reading'> = {
+  const source = readingSource(context);
+  return {
     names,
-    ...mo2Reads(context), ...mo2Archives(context), ...mo2Installation(context), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives),
+    reading: () => readInstance(source),
+    ...mo2Reads(context), ...mo2Installation(context), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives),
     ...hashIndex(hashIndexDir(instanceRoot), archives),
     subscribe: (listener) => context.watch.subscribe(listener),
   };
-  return { ...adapter, reading: () => readInstance(adapter) };
 }

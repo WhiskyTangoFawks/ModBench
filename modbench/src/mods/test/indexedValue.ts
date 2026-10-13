@@ -14,21 +14,19 @@ export const folder = (origin: string, relativePath: string, excluded = false): 
 
 /** An instance value over these mods, each listing these files, indexed as the Instance loader
  *  indexes them. */
-export async function indexedValueOf(
+export function indexedValueOf(
   mods: ModlistEntry[],
   listings: Record<string, { files: OriginFile[]; folders?: OriginFolder[] }>,
   overwrite: { files: OriginFile[]; folders?: OriginFolder[] } = { files: [] },
 ): Promise<InstanceValue> {
-  const adapter: Parameters<typeof buildFileConflictIndex>[2] = {
-    originFiles: (origin) => {
-      const name = origin.kind === 'mod' ? origin.name : 'overwrite';
-      const listing = listings[name] ?? { files: [] };
-      return Promise.resolve({ origin: name, folder: `/instance/${name}`, files: listing.files, folders: listing.folders ?? [], notes: [] });
-    },
-  };
-  const index = await buildFileConflictIndex(mods, overwrite.files, adapter, () => undefined);
-  return instanceValueFixture({
+  const modFiles = new Map(mods.flatMap((entry) => {
+    if (entry.kind !== 'mod') return [];
+    const listing = listings[entry.name] ?? { files: [] };
+    return [[entry.name, { origin: entry.name, folder: `/instance/${entry.name}`, files: listing.files, folders: listing.folders ?? [], notes: [] }] as const];
+  }));
+  const index = buildFileConflictIndex(mods, overwrite.files, modFiles, () => undefined);
+  return Promise.resolve(instanceValueFixture({
     mods, files: index.files, filesByMod: index.filesByMod, foldersByMod: index.foldersByMod,
     overwriteFiles: overwrite.files, overwriteFolders: overwrite.folders ?? [],
-  });
+  }));
 }

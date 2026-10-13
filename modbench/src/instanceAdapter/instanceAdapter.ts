@@ -176,16 +176,6 @@ export interface InstallTarget {
  *  they are; or none, because the target's folder is there for a new mod or absent for an upgrade. */
 export type InstallOutcome = { readonly landed: true; readonly isFomod: boolean } | { readonly landed: false };
 
-interface InstanceSettings {
-  readonly profile: string;
-  /** The game as the mod manager's configuration names it. */
-  readonly gameName: string;
-  /** Mutagen's release of that game; undefined when the tables hold none for it. */
-  readonly gameRelease: string | undefined;
-  gameFolder(): Promise<GameFolder>;
-  downloadedFiles(): Promise<DownloadedFiles>;
-}
-
 /** Names match as the manager matches them. An entry added at the winning end is disabled. A
  *  separator takes its folder's name; one added is enabled, gets its folder, and lands after the
  *  entry at `afterIndex`, first at -1. */
@@ -364,41 +354,12 @@ export interface InstanceAdapter {
   /** The whole instance in one generation. A mod order that parses to no entries is read again
    *  after a settle before it is believed: another tool may be half-way through writing it. */
   reading(): Promise<InstanceReading>;
-
-  // Parsed reads.
   readonly names: ManagerNames;
-  settings(): Promise<InstanceSettings>;
-  /** Every profile's name; none when the instance has no profiles. */
-  profiles(): Promise<string[]>;
-  modOrder(profile: string): Promise<ModlistEntry[]>;
-  /** The entry of `entry`'s kind mod order lists, matched as the manager matches names; undefined
-   *  when it lists none. */
-  orderEntry(profile: string, entry: EntryRef): Promise<ModlistEntry | undefined>;
-  /** Empty when the mod has no metadata. */
-  modMeta(mod: string): Promise<ModMeta>;
-  pluginOrder(profile: string): Promise<PluginEntry[]>;
-  gameFolderPlugins(gameFolder: GameFolder): Promise<DataFolderPlugins>;
-  /** The plugins the game folder's Creation Club list names, in its order; none when the release
-   *  has no Creation Club, the game folder is not found, or it holds no list. */
-  creationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]>;
-  /** The archives the INIs list, in load order: the default INI, then the profile's own INIs or else My Games',
-   *  a key's last value winning. `notes` says what was not read, and where it looked. */
-  archiveList(
-    profile: string, gameFolder: GameFolder, gameRelease: string | undefined,
-  ): Promise<{ readonly archives: readonly string[]; readonly notes: readonly string[] }>;
-  gameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined): Promise<DataFolderArchives>;
 
-  // Get in mods/.
-  /** Undefined when there is no folder for mods at all. A link that cannot be followed is no
-   *  folder, and is handed to `skippedLink`. */
-  modFolders(skippedLink?: (name: string, reason: string) => void): Promise<ModFolders | undefined>;
-  /** The folder that holds `entry`, matched as the manager matches names; undefined when none does. */
-  entryFolder(entry: EntryRef): Promise<ModFolder | undefined>;
+  // Answers about a mod or a file.
   /** The folder a build of `mod` writes: the one that holds it, else the one its name gives it; undefined when its
    *  name gives none. */
   modFolderPath(mod: string): Promise<string | undefined>;
-  /** An origin's files, none when its folder is not there. */
-  originFiles(origin: FileOrigin): Promise<OriginFiles>;
   /** The source folder init makes a mod's repository in (ADR-0007); undefined when its name gives it none. */
   sourceFolder(mod: string): string | undefined;
   sourceMods(): Promise<SourceMods>;
