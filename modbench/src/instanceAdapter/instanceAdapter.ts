@@ -424,10 +424,12 @@ export interface InstanceAdapter {
   readonly managerFilesInModFolder: readonly string[];
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
-  /** A game file's or an origin file's size and hash at the path it is read from, the hash as mEdit's manifest
-   *  carries it (ADR-0024). Two files with one hash hold the same bytes. */
-  fileHash(path: string): Promise<FileRead<HashedFile>>;
-  /** The size and hash of the downloaded file at `path`, and of each of its entries. */
+  /** An origin file's size and hash at the path it is read from, remembered for this session alone: its lasting hash
+   *  is its manifest line, mEdit's (ADR-0024). Two files with one hash hold the same bytes. */
+  originFileHash(path: string): Promise<FileRead<HashedFile>>;
+  /** A game file's size and hash, the hash as mEdit's manifest carries it, kept in the adapter's index (ADR-0024). */
+  gameFileHash(path: string): Promise<FileRead<HashedFile>>;
+  /** The size and hash of the downloaded file at `path`, and of each of its entries, kept in the adapter's index. */
   downloadedFileHash(path: string): Promise<FileRead<HashedDownload>>;
 
   // Changes.

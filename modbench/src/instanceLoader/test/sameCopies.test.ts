@@ -46,7 +46,7 @@ async function writeCopy(root: string, origin: string, relativePath: string, bod
 const mod = (name: string) => ({ kind: 'mod', name } as const);
 
 function hashesRead(read: string[]): (adapter: InstanceAdapter) => InstanceAdapter {
-  return (adapter) => ({ ...adapter, fileHash: (path) => { read.push(path); return adapter.fileHash(path); } });
+  return (adapter) => ({ ...adapter, originFileHash: (path) => { read.push(path); return adapter.originFileHash(path); } });
 }
 
 const MODIFIED_ON_A_WHOLE_SECOND = new Date('2020-01-01T00:00:00Z');
@@ -108,7 +108,7 @@ describe('Instance — which copies of a file are the same', () => {
   it('answers a copy that cannot be read with the reason, beside the copies that could', async () => {
     const { root, instance } = instanceOver((adapter) => ({
       ...adapter,
-      fileHash: (path) => (path.includes(PATCH) ? Promise.resolve({ kind: 'unreadable', reason: 'locked by the game' }) : adapter.fileHash(path)),
+      originFileHash: (path) => (path.includes(PATCH) ? Promise.resolve({ kind: 'unreadable', reason: 'locked by the game' }) : adapter.originFileHash(path)),
     }));
     const gone = await writeCopy(root, `mods/${NONO}`, SHARED, 'aaaa');
     await modifiedOnAWholeSecond(

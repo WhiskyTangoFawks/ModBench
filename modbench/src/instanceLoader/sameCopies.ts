@@ -59,13 +59,13 @@ function numbered(copies: readonly Stamped[]): Copy[] {
   });
 }
 
-type CopyReads = Pick<InstanceAdapter, 'fileStamp' | 'fileHash'>;
+type CopyReads = Pick<InstanceAdapter, 'fileStamp' | 'originFileHash'>;
 
 async function contentsOf(adapter: CopyReads, path: string, stamp: FileRead<FileStamp>, sizes: readonly bigint[]): Promise<Contents> {
   if (stamp.kind === 'unreadable') return stamp;
   const { answer } = stamp;
   if (sizes.filter((size) => size === answer.size).length === 1) return { kind: 'ownSize' };
-  const hashed = await adapter.fileHash(path);
+  const hashed = await adapter.originFileHash(path);
   return hashed.kind === 'read' ? { kind: 'read', answer: hashed.answer.hash } : hashed;
 }
 
