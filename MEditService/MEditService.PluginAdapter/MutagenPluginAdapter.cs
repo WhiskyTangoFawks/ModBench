@@ -93,6 +93,13 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public bool Exists(string pluginPath) => File.Exists(pluginPath);
 
+    public IReadOnlyList<string> WrittenByCompile(RegisteredPlugin plugin, IReadOnlyList<string> paths, GameRelease gameRelease)
+    {
+        var modPath = new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path);
+        var stringsOf = LocalizedStrings.StringsFilesOf(modPath, gameRelease);
+        return [.. paths.Where(path => string.Equals(path, plugin.Name, StringComparison.OrdinalIgnoreCase) || stringsOf(path))];
+    }
+
     public string? HashOf(string pluginPath) => _hashes.Of(pluginPath);
 
     public void KeepHashesOf(IReadOnlySet<string> pluginPaths) => _hashes.Keep(pluginPaths);

@@ -50,7 +50,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [gone, setGone] = useState<{ records: string[]; copiesLacking: string[] } | null>(null);
   const [immutableSet, setImmutableSet] = useState<Set<ColumnKey>>(new Set());
   // Null until /plugins answers, and null again when it fails: fail-closed, so a panel that has
-  // not heard from /plugins offers no editing, compile or track (commands.md, No dead entries).
+  // not heard from /plugins offers no editing, build or init (commands.md, No dead entries).
   const [trackedSet, setTrackedSet] = useState<Set<ColumnKey> | null>(null);
   const [editableSet, setEditableSet] = useState<Set<ColumnKey> | null>(null);
   const [sourceUnreadableReasons, setSourceUnreadableReasons] = useState<Map<ColumnKey, UnreadableSource> | null>(null);

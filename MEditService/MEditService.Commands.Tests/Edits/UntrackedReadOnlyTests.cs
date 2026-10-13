@@ -63,15 +63,15 @@ public sealed class UntrackedReadOnlyTests
 
         Assert.NotEqual(trackable.Refusal, notTrackable.Refusal);
         Assert.DoesNotContain("patch", trackable.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Track", notTrackable.Message, StringComparison.Ordinal);
-        Assert.Contains("Track its mod", trackable.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Init", notTrackable.Message, StringComparison.Ordinal);
+        Assert.Contains("Init its mod", trackable.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task TrackingTheSameModFolder_TurnsTheRefusalIntoAnAcceptedEdit()
     {
         using var mod = SourceEditFixture.Untracked();
-        var tracked = await TrackEveryPluginOf.ModAsync(mod.LoadOrder, SourceEditFixture.ModFolderOrigin);
+        var tracked = await InitEveryPluginOf.ModAsync(mod.LoadOrder, SourceEditFixture.ModFolderOrigin);
         Assert.Empty(tracked.RefusalMessages());
 
         var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));

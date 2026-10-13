@@ -22,7 +22,7 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
     private readonly ISourceFiles _files = tree;
     private readonly Dictionary<PluginAddress, PluginSourceFiles> _filesByPlugin = new(PluginAddress.Comparer);
 
-    // One locator is one operation, so all live and die with it: the next Track, compile or edit
+    // One locator is one operation, so all live and die with it: the next init, compile or edit
     // looks at the tree again, never trusting a file timestamp (ADR-0003).
     private readonly Dictionary<string, string[]> _entriesByScanRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TreeScan> _scansBySourceRoot = new(StringComparer.Ordinal);

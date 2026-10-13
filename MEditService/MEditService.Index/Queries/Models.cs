@@ -7,7 +7,7 @@ using MEditService.Ports;
 namespace MEditService.Index.Queries;
 
 // One Kind B diagnosis. Text is PluginDiagnosis.Describe()'s exact refusal fragment, so the
-// Problems panel and the Track refusal share one vocabulary; Anchor/DefectClass/Tail ride
+// Problems panel and the init refusal share one vocabulary; Anchor/DefectClass/Tail ride
 // separately so the frontend can route a repair without re-parsing prose.
 public record PluginDiagnosisReport(
     string Plugin,

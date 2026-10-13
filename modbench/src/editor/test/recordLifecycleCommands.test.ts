@@ -694,7 +694,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
 
     await copy(RECORD_NODE);
 
-    expect(reporter.landings).toEqual(['No plugin can take the copy: Track a plugin to edit it.']);
+    expect(reporter.landings).toEqual(['No plugin can take the copy: Init a mod to edit its plugins.']);
     expect(showQuickPick).toHaveBeenCalledOnce();
   });
 

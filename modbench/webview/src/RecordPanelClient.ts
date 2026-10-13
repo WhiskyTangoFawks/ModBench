@@ -28,7 +28,7 @@ interface LoadedPanel {
   sourceUnreadableReasons: Map<ColumnKey, UnreadableSource> | null;
   // The columns whose copy can be written; null exactly when immutableSet is.
   editableSet: Set<ColumnKey> | null;
-  // The repository state of each origin that names a mod, which a column header offers track or decompile on.
+  // The repository state of each origin that names a mod, which a column header offers init or decompile on.
   modsByOrigin: Record<string, ModRepository>;
   // Whether the winner sweep has run (editor.md, States, story 3). Fails *closed*: an absent
   // answer reads as "not computed", never as "settled", or a status-fetch blip would render a

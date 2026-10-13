@@ -13,7 +13,7 @@ public enum DecompileRefusal
     PluginNotLoaded,
 
     /// <summary>The plugin is in no mod with a repository, so it has no working tree to go into; the
-    /// way out is Track.</summary>
+    /// way out is init.</summary>
     NotInTrackedMod,
 
     /// <summary>ADR-0006's gate refused it, or the plugin cannot be read or deep-parsed

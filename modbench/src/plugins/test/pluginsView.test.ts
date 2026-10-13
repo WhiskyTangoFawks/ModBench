@@ -126,7 +126,7 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { pluginsCommandsOver } from '../../test/mo2/adapterOver';
+import { adapterOver, pluginsCommandsOver } from '../../test/mo2/adapterOver';
 import { sourceCommands } from '../../sourceCommands/sourceCommands';
 import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -179,7 +179,7 @@ function pluginsView(
   const recordBrowser = new RecordBrowser(client);
   const reporters = new Map<string, RecordingReporter>();
   const plugins = createPluginsView({
-    instance, commands: pluginsCommandsOver('/instance'), sourceCommands: sourceCommands({ client }), recordBrowser, client,
+    instance, commands: pluginsCommandsOver('/instance'), sourceCommands: sourceCommands({ client, adapter: adapterOver('/instance') }), recordBrowser, client,
     pluginSync,
     channel: silentChannel,
     dataFolderFile: () => undefined, log: () => undefined,
@@ -188,7 +188,7 @@ function pluginsView(
     ask: scriptedDialog(), recordWrite: (command) => command(),
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     saveUnsavedPluginSource: () => Promise.resolve([]),
-    trackSelection: () => [], modsView: 'modbench.modList',
+    sourceGestureRows: () => [], modsView: 'modbench.modList',
   });
   const provider = () => present(h.providers[0], 'the Plugins tree data provider');
   const rows = async () => (await provider().getChildren()) ?? [];
@@ -213,7 +213,7 @@ beforeEach(() => {
 
 describe('the Plugins view registers its own gestures', () => {
   it.each([
-    'modbench.plugin.move', 'modbench.mod.track', 'modbench.plugin.decompile', 'modbench.mod.build', 'modbench.record.create',
+    'modbench.plugin.move', 'modbench.mod.init', 'modbench.plugin.decompile', 'modbench.mod.build', 'modbench.record.create',
     'modbench.plugin.rename', 'modbench.plugin.create', 'modbench.plugin.sync',
   ])('registers %s with the view', (command) => {
     pluginsView();
@@ -290,8 +290,8 @@ describe('the Plugins view says what it knows of a plugin\'s tracking and editab
       });
       const onInstance = () => plugins.onInstance({
         instance: new FakeInstance(value), instanceRoot: '/instance', commands: pluginsCommandsOver('/instance'),
-        sourceCommands: sourceCommands({ client: new InMemoryMEditClient() }),
-        pluginSync: syncRefusing().pluginSync, saveUnsavedPluginSource: () => Promise.resolve([]), trackSelection: () => [],
+        sourceCommands: sourceCommands({ client: new InMemoryMEditClient(), adapter: adapterOver('/instance') }),
+        pluginSync: syncRefusing().pluginSync, saveUnsavedPluginSource: () => Promise.resolve([]), sourceGestureRows: () => [],
         modsView: 'modbench.modList', dataFolderFile: () => undefined,
       });
       return { plugins, onInstance };

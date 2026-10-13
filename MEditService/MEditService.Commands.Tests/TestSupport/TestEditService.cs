@@ -1,5 +1,7 @@
+using MEditService.Commands.Build;
 using MEditService.Commands.Composition;
 using MEditService.LoadOrder;
+using MEditService.ModFolderAdapter;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
@@ -27,6 +29,7 @@ internal static class TestEditService
             .AddSingleton(documents)
             .AddSingleton(source ?? new GitSourceAdapter(documents))
             .AddSingleton(TimeProvider.System)
+            .AddSingleton<IModFolderRepository>(new ModFolderRepository(TimeProvider.System))
             .AddSingleton(notifications ?? new InMemoryNotificationPublisher())
             .AddSingleton(adapter ?? TestAdapters.Mutagen())
             .AddSingleton(SharedSchemaReflector.Instance)
@@ -49,10 +52,10 @@ internal static class TestEditService
     internal static CompilePluginHandler CompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<CompilePluginHandler>();
 
-    internal static TrackHandler TrackHandler(
+    internal static InitHandler InitHandler(
         LoadOrderHolder holder, IPluginAdapter? adapter = null, INotificationPublisher? notifications = null,
         ISourceAdapter? source = null) =>
-        Over(holder, adapter: adapter, notifications: notifications, source: source).GetRequiredService<TrackHandler>();
+        Over(holder, adapter: adapter, notifications: notifications, source: source).GetRequiredService<InitHandler>();
 
     internal static DecompilePluginHandler DecompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<DecompilePluginHandler>();

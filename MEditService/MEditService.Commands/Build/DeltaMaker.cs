@@ -6,7 +6,7 @@ namespace MEditService.Commands.Build;
 /// <summary>Keeps each delta a mod's files are proposed to come from, from the build folder or made from its base.
 /// A file whose delta is larger than its share of the file has no provider.</summary>
 internal sealed class DeltaMaker(
-    IModFolderRepository repository, InstanceToStage instance, string modFolder, IReadOnlyList<(string Name, InstallationFileToStage File)> installationFiles)
+    IModFolderRepository repository, InstanceToStage instance, string modFolder, IReadOnlyList<(string Name, InstallationFile File)> installationFiles)
 {
     /// <summary>True once the build folder refused a delta, whose exception then ends Keep.</summary>
     public bool NotWritten { get; private set; }

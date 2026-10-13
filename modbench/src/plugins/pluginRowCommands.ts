@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import {
-  isRefused, type MEditClient, type CompileDiagnostic, type BuildOutcome, type PluginAddress, type TrackOutcome,
+  isRefused, type MEditClient, type CompileDiagnostic, type BuildOutcome, type PluginAddress, type InitOutcome,
 } from '../client';
 import type { SourceFiles, SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance } from '../instanceLoader/instance';
@@ -9,7 +9,7 @@ import { modArgumentOf, pluginArgumentOf, rowNameOf } from '../drivingLib/argume
 import { recordArgumentOf } from '../drivingLib/recordArgument';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { trackProgressMessage } from './trackProgress';
+import { initProgressMessage } from './initProgress';
 import type { PluginsTreeNode } from './pluginRows';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
 import { gestureEntry, isClickedRow, selectionArgument } from '../drivingLib/gestureEntry';
@@ -32,19 +32,19 @@ function rowName(row: PluginAddress): string {
   return `${row.name} (${row.origin})`;
 }
 
-export interface TrackDeps {
+export interface InitDeps {
   progress: Pick<PluginsViewProgress, 'say'>;
   instance: Pick<Instance, 'refresh'>;
-  client: Pick<MEditClient, 'track'>;
+  commands: Pick<SourceCommands, 'init'>;
   reporter: Reporter;
-  onTracked: () => Promise<void>;
+  onInitialized: () => Promise<void>;
   /** The instance's mod folders by mod name, which say whether an origin is a mod. */
   modDirs: () => ReadonlyMap<string, string>;
   /** The Mods view's id, whose bar a gesture from a Mods row runs under. */
   modsView: string;
 }
 
-interface TrackTargets {
+interface ModTargets {
   mods: readonly string[];
   /** Rows named with why they were not sent: a plugin no mod provides, such as Overwrite's or the game's own, or a row that carries no mod or plugin. */
   refusedRows: readonly ItemRefusal<string>[];
@@ -53,20 +53,20 @@ interface TrackTargets {
 const NOT_IN_A_MOD = 'it is not in a mod';
 const NO_MOD_OR_PLUGIN = 'it carries no mod or plugin';
 
-/** commands.md, `track`: the mods of Mods rows, plugin rows, a column header, or the palette's
+/** commands.md, `init`: the mods of Mods rows, plugin rows, a column header, or the palette's
  *  selection, in one call. A plugin no mod provides is refused here, since mEdit is sent mods. */
-export function registerTrackCommand(deps: TrackDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
+export function registerInitCommand(deps: InitDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
   return vscode.commands.registerCommand(
-    'modbench.mod.track',
+    'modbench.mod.init',
     async (clicked?: unknown, selected?: readonly unknown[]) => {
       const rows = gestureEntry(clicked, selected, paletteSelection, isClickedRow).selection;
       const invokedFrom = rows.some((row) => modArgumentOf(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
-      await trackMods(deps, targetsOf(rows, deps.modDirs()), invokedFrom);
+      await initMods(deps, targetsOf(rows, deps.modDirs()), invokedFrom);
     },
   );
 }
 
-function targetsOf(rows: readonly unknown[], modDirs: ReadonlyMap<string, string>): TrackTargets {
+function targetsOf(rows: readonly unknown[], modDirs: ReadonlyMap<string, string>): ModTargets {
   const mods = new Set<string>();
   const refusedRows: ItemRefusal<string>[] = [];
   for (const row of rows) {
@@ -87,53 +87,53 @@ function pluginAddressOf(row: unknown): PluginAddress | undefined {
 
 // A mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost, so this runs
 // under the Plugins-view progress indicator.
-async function trackMods(deps: TrackDeps, { mods, refusedRows }: TrackTargets, invokedFrom: string): Promise<void> {
-  const { progress, instance, client, reporter, onTracked } = deps;
+async function initMods(deps: InitDeps, { mods, refusedRows }: ModTargets, invokedFrom: string): Promise<void> {
+  const { progress, instance, commands, reporter, onInitialized } = deps;
   const [firstMod] = mods;
   if (firstMod === undefined) {
-    if (refusedRows.length > 0) reportRefused(reporter, 0, { refused: [], tracked: [], refusedPlugins: refusedRows });
+    if (refusedRows.length > 0) reportRefused(reporter, 0, { refused: [], plugins: [], refusedPlugins: refusedRows });
     return;
   }
   const what = mods.length === 1 ? `"${firstMod}"` : `${mods.length} mods`;
 
   await runWritingGesture(invokedFrom, instance, async () => {
     try {
-      progress.say(trackProgressMessage(firstMod, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
-      const result = await client.track(mods, {
-        onProgress: (status) => { progress.say(trackProgressMessage(status.mod ?? firstMod, status)); },
+      progress.say(initProgressMessage(firstMod, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
+      const result = await commands.init(mods, {
+        onProgress: (status) => { progress.say(initProgressMessage(status.mod ?? firstMod, status)); },
       });
       if (isRefused(result)) { reporter.report('error', result.message); return; }
-      if (result.landed.length > 0) await onTracked();
+      if (result.landed.length > 0) await onInitialized();
       const outcome = {
         refused: result.refused,
-        tracked: result.landed.flatMap((landed) => landed.tracked),
+        plugins: result.landed.flatMap((landed) => landed.plugins),
         refusedPlugins: refusedRows,
       };
       if (outcome.refused.length + outcome.refusedPlugins.length > 0) reportRefused(reporter, mods.length, outcome);
-      else if (result.landed.length > 0) reporter.landed(`Tracked ${what}.`);
+      else if (result.landed.length > 0) reporter.landed(`Initialized ${what}.`);
     } finally {
       progress.say(undefined);
     }
   });
 }
 
-interface TrackReport {
-  refused: TrackOutcome['refused'];
-  tracked: readonly PluginAddress[];
+interface InitReport {
+  refused: InitOutcome['refused'];
+  plugins: readonly PluginAddress[];
   refusedPlugins: readonly ItemRefusal<string>[];
 }
 
 // commands.md, "each item lands on its own": one notification naming each refused mod and each
 // refused plugin.
-function reportRefused(reporter: Reporter, modCount: number, report: TrackReport): void {
+function reportRefused(reporter: Reporter, modCount: number, report: InitReport): void {
   const counts = [
     ...(report.refused.length > 0 ? [`${report.refused.length} of ${modCount} mods`] : []),
     ...(report.refusedPlugins.length > 0
-      ? [`${report.refusedPlugins.length} of ${report.tracked.length + report.refusedPlugins.length} plugins`]
+      ? [`${report.refusedPlugins.length} of ${report.plugins.length + report.refusedPlugins.length} plugins`]
       : []),
   ];
-  reporter.selectionOutcome(`Could not track ${counts.join(' and ')}.`, {
-    landed: report.tracked.map(rowName),
+  reporter.selectionOutcome(`Could not init ${counts.join(' and ')}.`, {
+    landed: report.plugins.map(rowName),
     refused: [
       ...report.refusedPlugins,
       ...report.refused,
@@ -199,7 +199,7 @@ function reportDecompiled(reporter: Reporter, outcome: SelectionOutcome<PluginAd
 /** What build needs: the build itself, the Instance loader's refresh, where the diagnostics go, and
  *  how the user is told. */
 export interface BuildDeps {
-  commands: SourceCommands;
+  commands: Pick<SourceCommands, 'build'>;
   instance: Pick<Instance, 'refresh'>;
   reporter: Reporter;
   problems: BuildProblems;
@@ -243,7 +243,7 @@ async function pickSourceMods(sourceMods: ReadonlySet<string>): Promise<string[]
   return picked?.map((item) => item.label);
 }
 
-async function buildMods(deps: BuildDeps, targets: TrackTargets, invokedFrom: string): Promise<void> {
+async function buildMods(deps: BuildDeps, targets: ModTargets, invokedFrom: string): Promise<void> {
   const { reporter, commands, instance } = deps;
   const sourceMods = deps.sourceMods();
   const mods = targets.mods.filter((mod) => sourceMods.has(mod));

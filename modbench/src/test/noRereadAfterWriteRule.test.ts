@@ -26,6 +26,12 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
     expect(messages[0]?.message).toBe(MESSAGE);
   });
 
+  it.each(['init', 'build'])('fails a view refresh after a source command, %s, writes', (write) => {
+    const messages = lint(`async function f(commands, tree) { await commands.${write}(mods); tree.refresh(); }\n`);
+
+    expect(messages).toHaveLength(1);
+  });
+
   it.each([...WRITES])('fails a refresh beside the %s write', (write) => {
     const messages = lint(`async function f(client, tree) { await client.${write}(x); tree.refresh(); }\n`);
 
@@ -39,8 +45,8 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   });
 
   it('passes a write run through runWritingGesture, and fails an instance refresh beside the write inside it', () => {
-    const through = lint('async function f(client, instance) { await client.track(x); await runWritingGesture(view, instance, noop); }\n');
-    const beside = lint('function f(client, instance) { return runWritingGesture(view, instance, async () => { await client.track(x); instance.refresh(); }); }\n');
+    const through = lint('async function f(commands, instance) { await commands.init(x); await runWritingGesture(view, instance, noop); }\n');
+    const beside = lint('function f(commands, instance) { return runWritingGesture(view, instance, async () => { await commands.init(x); instance.refresh(); }); }\n');
 
     expect(through).toEqual([]);
     expect(beside).toHaveLength(1);
@@ -79,7 +85,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   it('fails the call of a module-level helper that re-reads, made after a write', () => {
     const messages = lines(
       'function refreshAfterWrite(deps) { deps.refreshTree(); deps.refreshMatchingPlugins(); }',
-      'async function dispatchTrack(deps, plugins) { await deps.client.track(plugins); refreshAfterWrite(deps); }',
+      'async function dispatchInit(deps, mods) { await deps.commands.init(mods); refreshAfterWrite(deps); }',
     );
 
     expect(messages).toHaveLength(1);
@@ -88,7 +94,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
 
   it('fails the call of a helper declared after the function that calls it', () => {
     const messages = lines(
-      'async function dispatchTrack(deps, plugins) { await deps.client.track(plugins); refreshAfterWrite(deps); }',
+      'async function dispatchInit(deps, mods) { await deps.commands.init(mods); refreshAfterWrite(deps); }',
       'function refreshAfterWrite(deps) { deps.refreshTree(); }',
     );
 
@@ -125,7 +131,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   it('passes an anonymous export default function, which no name can call', () => {
     const messages = lines(
       'export default function (tree) { tree.invalidate(); }',
-      'async function f(client) { await client.track(x); }',
+      'async function f(client) { await client.init(x); }',
     );
 
     expect(messages).toEqual([]);
@@ -147,7 +153,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   });
 
   it('fails a re-read chained on a write with .finally, past a .then, as part of the caller', () => {
-    const messages = lint('function f(client, tree) { return client.track(x).then(report).finally(() => tree.invalidate()); }\n');
+    const messages = lint('function f(client, tree) { return client.init(x).then(report).finally(() => tree.invalidate()); }\n');
 
     expect(messages).toHaveLength(1);
   });
@@ -212,15 +218,15 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
 
   it('passes a helper that neither writes nor re-reads', () => {
     const messages = lines(
-      'function say(reporter) { reporter.landed("Tracked."); }',
-      'async function f(client, reporter) { await client.track(x); say(reporter); }',
+      'function say(reporter) { reporter.landed("Initialized."); }',
+      'async function f(client, reporter) { await client.init(x); say(reporter); }',
     );
 
     expect(messages).toEqual([]);
   });
 
   it('judges a nested function apart from the function around it', () => {
-    const messages = lint('async function outer(c, t) { await c.track(x); async function inner() { await c.track(y); t.refresh(); } }\n');
+    const messages = lint('async function outer(c, t) { await c.init(x); async function inner() { await c.init(y); t.refresh(); } }\n');
 
     expect(messages).toHaveLength(1);
   });
@@ -243,7 +249,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   });
 
   it('passes a write that re-reads nothing', () => {
-    const messages = lint('async function f(client, reporter) { await client.track(x); reporter.landed("Copied."); }\n');
+    const messages = lint('async function f(client, reporter) { await client.init(x); reporter.landed("Copied."); }\n');
 
     expect(messages).toEqual([]);
   });

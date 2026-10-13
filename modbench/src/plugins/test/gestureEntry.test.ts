@@ -83,7 +83,7 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([weapons]).singlePlugin).toBe(false);
   });
 
-  it('track sees a selection of plugins in mods with no repository, every one', () => {
+  it('init sees a selection of plugins in mods with no repository, every one', () => {
     expect(context([untracked, alsoUntracked])).toMatchObject({ allInUntrackedMod: true });
     expect(context([untracked, compilable])).toMatchObject({ allInUntrackedMod: false });
     expect(context([untracked, inOverwrite])).toMatchObject({ allInUntrackedMod: false });

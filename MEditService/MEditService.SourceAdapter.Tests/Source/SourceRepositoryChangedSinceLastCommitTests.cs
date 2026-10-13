@@ -32,7 +32,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     private ISourceRepository Tracked(params TreeFile[] extraFiles)
     {
         var files = new[] { new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody)) }.Concat(extraFiles).ToArray();
-        PluginBaselines.Track(
+        PluginBaselines.Init(
             _modFolder, files);
         return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
@@ -61,7 +61,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         var lookalikeFolderName = new string('x', widthOfThePorcelainStatusCodeAnEntryParseDrops) + rootSegment;
         var oldFolder = Directory.CreateDirectory(Path.Combine(_modFolder, lookalikeFolderName, PluginName)).FullName;
         File.WriteAllText(Path.Combine(oldFolder, "notes.txt"), "notes");
-        PluginBaselines.Track(_modFolder, [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
+        PluginBaselines.Init(_modFolder, [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
         var repository = TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
         var gitDir = Path.Combine(_modFolder, ".git");

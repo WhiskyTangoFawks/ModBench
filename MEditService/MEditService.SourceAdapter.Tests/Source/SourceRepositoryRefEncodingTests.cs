@@ -9,14 +9,14 @@ namespace MEditService.SourceAdapter.Tests.Source;
 public sealed class SourceRepositoryRefEncodingTests
 {
     [Fact]
-    public void Track_Succeeds_ForAPluginNameWithSpacesWhichGitRefNamesForbid()
+    public void Init_Succeeds_ForAPluginNameWithSpacesWhichGitRefNamesForbid()
     {
         using var modFolder = new ScratchDirectory("medit-refencoding-");
         const string plugin = "Invented Plugin With Spaces.esp";
-        PluginBaselines.Track(
+        PluginBaselines.Init(
             modFolder, [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
 
-        Assert.Equal("Track " + Path.GetFileName(modFolder), GitProbeSubject(modFolder));
+        Assert.Equal("Init " + Path.GetFileName(modFolder), GitProbeSubject(modFolder));
     }
 
     [Theory]
@@ -39,7 +39,7 @@ public sealed class SourceRepositoryRefEncodingTests
     public void ASpaceName_AndTheUnderscoreNameAnUnderscoreReplacementWouldMergeItWith_RecordTheirOwnBinaries()
     {
         using var modFolder = new ScratchDirectory("medit-refencoding-");
-        PluginBaselines.Track(modFolder, [.. FilesOf("A B.esp"), .. FilesOf("A_B.esp")]);
+        PluginBaselines.Init(modFolder, [.. FilesOf("A B.esp"), .. FilesOf("A_B.esp")]);
         var repository = TestAdapters.Source().OverFolder(TestMod.In(modFolder), GameRelease.Fallout4);
         var spaced = new PluginAddress("A B.esp", "TestMod");
         var underscored = new PluginAddress("A_B.esp", "TestMod");
@@ -65,7 +65,7 @@ public sealed class SourceRepositoryRefEncodingTests
 
     private static ISourceRepository TrackedOver(ScratchDirectory modFolder, string plugin)
     {
-        PluginBaselines.Track(modFolder, FilesOf(plugin));
+        PluginBaselines.Init(modFolder, FilesOf(plugin));
         return TestAdapters.Source().OverFolder(TestMod.In(modFolder), GameRelease.Fallout4);
     }
 

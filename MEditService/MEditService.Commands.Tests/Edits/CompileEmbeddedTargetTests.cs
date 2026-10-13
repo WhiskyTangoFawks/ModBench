@@ -58,9 +58,9 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
                 Target(enabled: true),
                 Referrer,
             ]);
-        TrackEveryPluginOf.ModAsync(_loadOrder, TargetOrigin)
+        InitEveryPluginOf.ModAsync(_loadOrder, TargetOrigin)
             .GetAwaiter().GetResult();
-        TrackEveryPluginOf.ModAsync(_loadOrder, ReferrerOrigin)
+        InitEveryPluginOf.ModAsync(_loadOrder, ReferrerOrigin)
             .GetAwaiter().GetResult();
     }
 
