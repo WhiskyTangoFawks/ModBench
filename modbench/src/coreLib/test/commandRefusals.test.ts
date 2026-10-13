@@ -3,7 +3,7 @@ import { entryNameRefusal, newModNameRefusal, type TakenNames } from '../command
 
 const mod = (name: string) => ({ kind: 'mod', name } as const);
 const separator = (name: string) => ({ kind: 'separator', name } as const);
-const folder = (kind: 'mod' | 'separator', name: string, folderName = name) => ({ kind, name, path: `/instance/mods/${folderName}` });
+const folder = (kind: 'mod' | 'separator', name: string, folderName = name) => ({ kind, name, folderName, path: `/instance/mods/${folderName}` });
 
 const taken: TakenNames = {
   mods: [mod('Listed Only'), mod('Harder VATS'), separator('Group A')],

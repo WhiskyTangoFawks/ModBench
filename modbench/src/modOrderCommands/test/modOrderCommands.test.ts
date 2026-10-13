@@ -56,7 +56,7 @@ async function foldersAsAValueListsThem(root: string, names: readonly string[]):
   const listed = (await adapterOver(root).reading()).modFolders?.all ?? [];
   return names.map((name) => {
     const path = join(root, 'mods', name);
-    return listed.find((folder) => folder.path === path) ?? { kind: 'mod', name, path };
+    return listed.find((folder) => folder.path === path) ?? { kind: 'mod', name, folderName: name, path };
   });
 }
 
@@ -1246,7 +1246,7 @@ describe('the names a separator or mod may take', () => {
   const bound = modlistCommands(adapterOver('/instance'), unscriptedMEdit);
 
   function commandsHolding(mods: readonly ModlistEntry[], folders: readonly Held[] = []) {
-    const taken = { mods, modFolders: folders.map((e) => ({ ...e, path: `/instance/mods/${e.name}` })) };
+    const taken = { mods, modFolders: folders.map((e) => ({ ...e, folderName: e.name, path: `/instance/mods/${e.name}` })) };
     return {
       separatorNameRefusal: (value: string, own: string) => bound.separatorNameRefusal(taken, value, own),
       renameModNameRefusal: (value: string, own: string) => bound.renameModNameRefusal(taken, value, own),
