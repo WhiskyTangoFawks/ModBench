@@ -1,8 +1,11 @@
 using MEditService.Index.Tests.TestSupport;
+using MEditService.Ports;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using static MEditService.Index.Tests.TestSupport.Announcements;
 
 namespace MEditService.Index.Tests.Plugins;
 
@@ -10,10 +13,12 @@ public sealed class LightRangeProblemTests : IDisposable
 {
     private const string Light = "Light.esp";
     private const uint OutsideTheRange = 0x1000;
+    private const string ModHeaderOpening = "\"ModHeader\": {";
 
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _light;
     private readonly string _outside;
+    private readonly InMemoryNotificationPublisher _notifications = new();
 
     public LightRangeProblemTests()
     {
@@ -29,20 +34,50 @@ public sealed class LightRangeProblemTests : IDisposable
             .Tracked();
         _light = _fixture.Plugins.Single();
         _outside = outside.ToString();
-        var header = Directory.EnumerateFiles(Path.Combine(_light.ModFolderOf(), PluginSourceRoot.For(Light)), "*.json").Single();
-        File.WriteAllText(header, File.ReadAllText(header).Replace("\"ModHeader\": {", "\"ModHeader\": {\n    \"Flags\": [\"Small\"],", StringComparison.Ordinal));
     }
 
     public void Dispose() => _fixture.Dispose();
 
+    private string HeaderFile => Directory.EnumerateFiles(Path.Combine(_light.ModFolderOf(), PluginSourceRoot.For(Light)), "*.json").Single();
+
+    private string HeaderFlaggedLight => File.ReadAllText(HeaderFile).Replace(ModHeaderOpening, ModHeaderOpening + "\n    \"Flags\": [\"Small\"],", StringComparison.Ordinal);
+
+    private IReadOnlyList<Index.Queries.SourceProblem> Problems(OpenedIndex index) => index.Queries.GetProblems().Value().Single().Problems;
+
+    private string OutsideFile(OpenedIndex index) =>
+        Path.GetRelativePath(_light.ModFolderOf(), _light.SourceFileOf(index.DocumentOf(_outside, _light.KeyOf())));
+
     [Fact]
     public void ARecordOutsideTheLightRange_IsAProblemOnItsFile_AndOnlyItsFile()
     {
+        File.WriteAllText(HeaderFile, HeaderFlaggedLight);
+
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
 
-        var problem = Assert.Single(index.Queries.GetProblems().Value().Single().Problems);
-        Assert.Equal(Path.GetRelativePath(_light.ModFolderOf(), _light.SourceFileOf(index.DocumentOf(_outside, _light.KeyOf()))), problem.SourceRelativePath);
+        var problem = Assert.Single(Problems(index));
+        Assert.Equal(OutsideFile(index), problem.SourceRelativePath);
         Assert.Contains("light range", problem.Message, StringComparison.Ordinal);
         Assert.Contains(_outside, problem.Message, StringComparison.Ordinal);
+        Assert.True(index.ReadFromItsPluginSource(_light.KeyOf()));
+    }
+
+    [Fact]
+    public void AHeaderTypedLight_IsAProblemOnTheRecordsFile_UntilItIsTypedOut_AndThePluginStaysItsSource()
+    {
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, notifications: _notifications);
+        Assert.Empty(Problems(index));
+
+        var before = _notifications.Notifications.Count;
+        index.Unsaved.Apply([new DocumentChange(HeaderFile, HeaderFlaggedLight)]);
+        Waits.Reached(() => _notifications.Since(before).Any(n => PluginChanged(_light)(n)), "the problem announced");
+
+        Assert.Equal(OutsideFile(index), Assert.Single(Problems(index)).SourceRelativePath);
+        Assert.True(index.ReadFromItsPluginSource(_light.KeyOf()));
+
+        before = _notifications.Notifications.Count;
+        index.Unsaved.Apply([]);
+        Waits.Reached(() => _notifications.Since(before).Any(n => PluginChanged(_light)(n)), "the problem cleared");
+
+        Assert.Empty(Problems(index));
     }
 }

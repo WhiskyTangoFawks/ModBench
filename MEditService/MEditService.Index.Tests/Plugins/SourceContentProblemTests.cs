@@ -25,6 +25,7 @@ public sealed class SourceContentProblemTests : IDisposable
         var problem = Assert.Single(index.SourceProblems());
         Assert.Equal((Relative(file), _fixture.Npc.ToString()), (problem.SourceRelativePath, problem.FormKey));
         Assert.Contains("NoSuchField", problem.Message, StringComparison.Ordinal);
+        Assert.True(index.ReadFromItsPluginSource(_fixture.Plugin));
     }
 
     [Fact]

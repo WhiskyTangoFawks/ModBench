@@ -14,6 +14,10 @@ namespace MEditService.SourceAdapter;
 /// document, and the FormKey it was read for when one is known.</summary>
 public sealed record UnreadableFile(string SourceRelativePath, string Message, string? FormKey = null);
 
+/// <summary>What is wrong with a file of a plugin's tree that the tree still reads: compile refuses or warns of
+/// it, and the FormKey it concerns when one is known.</summary>
+public sealed record FileProblem(string SourceRelativePath, string Message, string? FormKey = null);
+
 /// <summary>A FormKey a plugin's tree holds more than once, with the documents holding it as the mod
 /// folder spells them: one document when that document holds it twice.</summary>
 public sealed record ClaimedFormKey(string FormKey, IReadOnlyList<string> Documents)
@@ -33,21 +37,22 @@ public sealed record ClaimedFormKey(string FormKey, IReadOnlyList<string> Docume
 }
 
 /// <summary>Every document of a plugin's tree by the FormKey it declares, with its content stamp; each
-/// file that is no document; each FormKey declared twice; each file read as unsaved text; each file the
-/// layout places elsewhere.</summary>
+/// file that is no document; each FormKey declared twice; each file read as unsaved text; each problem the
+/// documents read still carry.</summary>
 public sealed record RecordStamps(
     IReadOnlyDictionary<string, string> ByFormKey, IReadOnlyList<UnreadableFile> Unreadable,
-    IReadOnlyList<ClaimedFormKey> Claimed, IReadOnlySet<string> Unsaved, IReadOnlyList<MisplacedFile> Misplaced)
+    IReadOnlyList<ClaimedFormKey> Claimed, IReadOnlySet<string> Unsaved, IReadOnlyList<FileProblem> Problems)
 {
     /// <summary>Equal when the same documents carry the same stamps, and the same files could not be
-    /// read, claim one FormKey or were read unsaved.</summary>
+    /// read, claim one FormKey, were read unsaved or carry a problem.</summary>
     public bool Equals(RecordStamps? other) =>
         other is not null
         && ByFormKey.Count == other.ByFormKey.Count
         && ByFormKey.All(stamp => other.ByFormKey.TryGetValue(stamp.Key, out var theirs) && theirs == stamp.Value)
         && Unreadable.SequenceEqual(other.Unreadable)
         && Claimed.SequenceEqual(other.Claimed)
-        && Unsaved.SetEquals(other.Unsaved);
+        && Unsaved.SetEquals(other.Unsaved)
+        && Problems.SequenceEqual(other.Problems);
 
     /// <summary>Each file that does not read was read unsaved, and so was every document but one of
     /// each FormKey claimed more than once.</summary>
@@ -55,10 +60,6 @@ public sealed record RecordStamps(
         (Unreadable.Count > 0 || Claimed.Count > 0)
         && Unreadable.All(file => Unsaved.Contains(file.SourceRelativePath))
         && Claimed.All(claim => claim.Documents.Count(document => !Unsaved.Contains(document)) <= 1);
-
-    /// <summary>What stops a read of this tree at its first file that does not read, when one does not.</summary>
-    public SourceFailure? FirstUnreadable =>
-        Unreadable.Count > 0 ? SourceStopException.Unreadable(Unreadable[0]).Failure : null;
 
     public override int GetHashCode() => ByFormKey.Count;
 }
@@ -86,7 +87,8 @@ internal static class TreeStamps
         foreach (var gone in Known.Keys.Where(tree => !Directory.Exists(tree))) Known.TryRemove(gone, out _);
         var known = Known.GetOrAdd(root, _ => new StampGatedMemo<KnownDocument>(TimeProvider.System));
         var listed = new HashSet<string>(StringComparer.Ordinal);
-        var misplaced = new List<MisplacedFile>();
+        var problems = new List<FileProblem>();
+        var misplaced = new List<FileProblem>();
         var keysByFile = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         FormIdLimit? limit = null;
         if (Directory.Exists(root))
@@ -108,33 +110,33 @@ internal static class TreeStamps
                 if (document is null) continue;
                 if (document.FormKey is not { } formKey)
                 {
-                    if (document.Refusal is { } fault) unreadable.Add(new UnreadableFile(relativePath, fault));
+                    if (document.Refusal is { } fault) problems.Add(new FileProblem(relativePath, fault));
                     continue;
                 }
                 holders.Hold(formKey, file);
                 stamps[formKey] = document.Content;
                 keysByFile[relativePath] = document.FormKeys;
                 limit ??= document.Limit;
-                if (document.BelongsAt is { } belongsAt) misplaced.Add(new MisplacedFile(formKey, relativePath, belongsAt));
-                if (document.Refusal is { } refusal) unreadable.Add(new UnreadableFile(relativePath, refusal, formKey));
+                if (document.BelongsAt is { } belongsAt) misplaced.Add(new FileProblem(relativePath, new MisplacedFile(formKey, relativePath, belongsAt).Message, formKey));
+                if (document.Refusal is { } refusal) problems.Add(new FileProblem(relativePath, refusal, formKey));
             }
         }
 
         known.Retain(listed);
         var claimedDocuments = holders.Claimed.SelectMany(claim => claim.Documents).ToHashSet(StringComparer.Ordinal);
-        misplaced.RemoveAll(file => claimedDocuments.Contains(file.HeldPath));
-        if (limit is not null) unreadable.AddRange(OutsideTheLimit(limit, plugin, keysByFile));
-        return new RecordStamps(stamps, unreadable, holders.Claimed, unsaved, misplaced);
+        problems.AddRange(misplaced.Where(file => !claimedDocuments.Contains(file.SourceRelativePath)));
+        if (limit is not null) problems.AddRange(OutsideTheLimit(limit, plugin, keysByFile));
+        return new RecordStamps(stamps, unreadable, holders.Claimed, unsaved, problems);
     }
 
-    private static IEnumerable<UnreadableFile> OutsideTheLimit(
+    private static IEnumerable<FileProblem> OutsideTheLimit(
         FormIdLimit limit, PluginAddress plugin, Dictionary<string, IReadOnlyList<string>> keysByFile)
     {
         var modKey = ModKey.FromFileName(plugin.Name);
         foreach (var (relativePath, keys) in keysByFile)
         {
             var outside = limit.Outside(modKey, keys.Select(key => FormKey.TryFactory(key, out var parsed) ? parsed : (FormKey?)null).OfType<FormKey>());
-            if (outside.Count > 0) yield return new UnreadableFile(relativePath, limit.Refusal(plugin.Name, outside), outside[0].ToString());
+            if (outside.Count > 0) yield return new FileProblem(relativePath, limit.Refusal(plugin.Name, outside), outside[0].ToString());
         }
     }
 

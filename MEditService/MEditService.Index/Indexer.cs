@@ -128,6 +128,11 @@ internal sealed class Indexer : IDisposable
         get { lock (_lock) return _scope?.Failed.SourceFileFailures ?? []; }
     }
 
+    public IReadOnlyList<(PluginAddress Plugin, FileProblem Problem)> FileProblems
+    {
+        get { lock (_lock) return _scope?.Failed.FileProblems ?? []; }
+    }
+
     public UnreadableSource? WhyTreeStopped(PluginAddress key)
     {
         lock (_lock) return _scope?.Failed.WhyTreeStopped(key);

@@ -35,20 +35,15 @@ internal sealed class Projector(
         // untracked folder answers empty instead of throwing.
         var repository = Over(plugin.Registered);
 
-        // A content fault is a file the tree reader takes as it stands and compile refuses: the tree is read
-        // for the sharper word it has for a fault of its own, and its rows are not taken.
-        var contentFault = repository.StampsOf(plugin.Key).FirstUnreadable;
         var timer = Stopwatch.StartNew();
         if (!repository.ReadDocuments(plugin.Key, documents =>
             {
-                if (contentFault is null) index.IndexTree(documents, plugin, plugin.Path);
-                else _ = documents.Records.Count();
+                index.IndexTree(documents, plugin, plugin.Path);
                 return true;
             }).Holds(out _, out var stopped))
         {
             return stopped;
         }
-        if (contentFault is not null) return contentFault;
         var indexMs = timer.ElapsedMilliseconds;
 
         timer.Restart();

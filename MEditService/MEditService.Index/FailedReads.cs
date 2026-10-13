@@ -16,6 +16,13 @@ internal sealed class FailedReads(Store index, ISourceAdapter source, ILogger lo
 
     private readonly Lock _lock = new();
     private readonly Dictionary<PluginAddress, Failure> _failed = new(PluginAddress.Comparer);
+    private readonly Dictionary<PluginAddress, IReadOnlyList<FileProblem>> _problems = new(PluginAddress.Comparer);
+
+    /// <summary>What the last read of each plugin found wrong in files it still read.</summary>
+    public IReadOnlyList<(PluginAddress Plugin, FileProblem Problem)> FileProblems
+    {
+        get { lock (_lock) return [.. _problems.SelectMany(held => held.Value.Select(problem => (held.Key, problem)))]; }
+    }
 
     public IReadOnlyList<PluginAddress> Keys
     {
@@ -68,6 +75,7 @@ internal sealed class FailedReads(Store index, ISourceAdapter source, ILogger lo
             state = ReadStateOf(plugin);
             var outcome = read(state);
             Settle(plugin.Key, FailureAfter(plugin.Key, state, outcome));
+            NoteProblems(plugin.Key, state.Stamps?.Problems ?? []);
             return outcome;
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
@@ -98,7 +106,24 @@ internal sealed class FailedReads(Store index, ISourceAdapter source, ILogger lo
 
     public void Forget(PluginAddress key)
     {
-        lock (_lock) _failed.Remove(key);
+        lock (_lock)
+        {
+            _failed.Remove(key);
+            _problems.Remove(key);
+        }
+    }
+
+    // The views read the problems again as they change, which no row announces.
+    private void NoteProblems(PluginAddress key, IReadOnlyList<FileProblem> found)
+    {
+        lock (_lock)
+        {
+            var before = _problems.GetValueOrDefault(key) ?? [];
+            if (before.SequenceEqual(found)) return;
+            if (found.Count == 0) _problems.Remove(key);
+            else _problems[key] = found;
+        }
+        index.Commit(projection => projection.ReadFailedOrRecovered(key));
     }
 
     // The views read a later read's failure again as it begins, changes and clears; the Output gets
@@ -133,16 +158,11 @@ internal sealed class FailedReads(Store index, ISourceAdapter source, ILogger lo
     private static Failure FailureOf(PluginAddress key, ReadState? state, bool stands, SourceFailure? treeStopped, UnreadableSource? why) =>
         new(state, stands, FilesOf(key, state, treeStopped), why);
 
-    // The tree read's own word for a file names its cause, so it stands over the state's.
-    private static IReadOnlyList<SourceFileFailure> FilesOf(PluginAddress key, ReadState? state, SourceFailure? treeStopped)
-    {
-        var stopped = SourceFileFailure.Of(key, treeStopped).ToList();
-        return
-        [
-            .. stopped.Concat((state?.FileFailuresOf(key) ?? []).Where(file => stopped.All(s => s.SourceRelativePath != file.SourceRelativePath)))
-                .DistinctBy(file => (file.SourceRelativePath, file.FormKey)),
-        ];
-    }
+    private static IReadOnlyList<SourceFileFailure> FilesOf(PluginAddress key, ReadState? state, SourceFailure? treeStopped) =>
+    [
+        .. (state?.FileFailuresOf(key) ?? []).Concat(SourceFileFailure.Of(key, treeStopped))
+            .DistinctBy(file => (file.SourceRelativePath, file.FormKey)),
+    ];
 
     private ReadState ReadStateOf(RegisteredPlugin plugin)
     {

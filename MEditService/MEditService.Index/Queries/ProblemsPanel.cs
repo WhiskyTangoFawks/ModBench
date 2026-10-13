@@ -14,6 +14,7 @@ internal static class ProblemsPanel
     {
         var derivations = reads.GetDerivations();
         var stopped = index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
+        var found = index.FileProblems.ToLookup(problem => problem.Plugin, PluginAddress.Comparer);
         var held = snapshot.Plugins.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         var missing = reads
             .GetReferencesToMissingRecordsOnFiles(plugin => held.GetValueOrDefault(plugin) is { } registered
@@ -26,18 +27,17 @@ internal static class ProblemsPanel
                 .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsTracked() || stopped.Contains(plugin.Key))
                 .Select(plugin => ProblemsOf(
                     plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
-                    [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. MisplacedFiles(source, plugin, snapshot.GameRelease, stopped[plugin.Key])],
+                    [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key])],
                     // A binary's links are not its tree's, whose files the panel shows them on.
                     derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom == DerivedFrom.SourceTree ? [.. missing[plugin.Key]] : [])),
         ];
     }
 
-    // A file the read stopped at has no place until it is mended.
-    private static IEnumerable<SourceProblem> MisplacedFiles(
-        ISourceAdapter source, RegisteredPlugin plugin, GameRelease release, IEnumerable<SourceFileFailure> stopped) =>
-        source.Over(plugin, release)?.StampsOf(plugin.Key).Misplaced
-            .Where(file => stopped.All(failure => failure.SourceRelativePath != file.HeldPath))
-            .Select(file => new SourceProblem(file.FormKey, null, null, file.HeldPath, file.Message)) ?? [];
+    // A file the read stopped at is already told by what stopped it.
+    private static IEnumerable<SourceProblem> Found(IEnumerable<FileProblem> problems, IEnumerable<SourceFileFailure> stopped) =>
+        problems
+            .Where(problem => stopped.All(failure => failure.SourceRelativePath != problem.SourceRelativePath))
+            .Select(problem => new SourceProblem(problem.FormKey, null, null, problem.SourceRelativePath, problem.Message));
 
     private static PluginProblems ProblemsOf(
         PluginAddress plugin, GameRelease release, IReadOnlyList<SourceFileFailure>? laterReadFailure, List<SourceProblem> stoppedAt,
