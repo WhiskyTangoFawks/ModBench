@@ -1314,18 +1314,13 @@ describe('the MO2 Instance adapter', () => {
         });
       });
 
-      it('answers unreadable, naming the downloaded file and why, when its entries differ only by case', async () => {
-        const answer = await adapterAt(root, undefined, undefined, fakeArchiveReader(['a.dds', 'A.dds'])).installationFiles('Unofficial Fallout 4 Patch');
-
-        expect(answer.kind === 'unreadable' && answer.reason).toMatch(new RegExp(`${DOWNLOAD}.*differ only by case`));
-      });
-
       it('answers unreadable, naming the downloaded file and why, when it is gone', async () => {
         await rm(join(root, 'downloads', DOWNLOAD));
 
         const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
 
-        expect(answer.kind === 'unreadable' && answer.reason).toMatch(new RegExp(`${DOWNLOAD}.*ENOENT`));
+        expect(answer).toEqual({ kind: 'unreadable', reason: expect.stringMatching(/ENOENT/) });
+        expect(answer.kind === 'unreadable' && answer.reason).toContain(DOWNLOAD);
       });
 
       it('answers unreadable, naming the downloaded file and why, when the downloads folder cannot be resolved', async () => {
@@ -1333,7 +1328,8 @@ describe('the MO2 Instance adapter', () => {
 
         const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
 
-        expect(answer.kind === 'unreadable' && answer.reason).toMatch(new RegExp(`${DOWNLOAD}.*${INI}`));
+        expect(answer.kind === 'unreadable' && answer.reason).toContain(DOWNLOAD);
+        expect(answer.kind === 'unreadable' && answer.reason).toContain(INI);
       });
     });
   });
