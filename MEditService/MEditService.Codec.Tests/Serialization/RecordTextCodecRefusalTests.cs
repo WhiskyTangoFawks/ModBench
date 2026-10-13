@@ -80,7 +80,7 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     [Fact]
     public void ANumberWhereATranslatedStringBelongs_IsRefused()
     {
-        Assert.StartsWith("Started an array without being inside the", Why(Edited(WeaponText(), root => root["Name"] = 5)), StringComparison.Ordinal);
+        Assert.Equal("Name holds a value of the wrong type.", Why(Edited(WeaponText(), root => root["Name"] = 5)));
     }
 
     [Fact]
@@ -147,6 +147,43 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     public void AMalformedFormKey_IsRefused_NamingTheField()
     {
         Assert.StartsWith("FormKey", Why(Edited(WeaponText(), root => root["FormKey"] = "not a form key")), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACellWhoseChildSlotHoldsNoChild_IsTheCellWithTheSlotLeftOut()
+    {
+        var cell = RecordTextCodec.SerializeToText(
+            new Cell(new FormKey(ModKey.FromFileName("Refusal.esp"), 0x801), Fallout4Release.Fallout4) { EditorID = "Room" },
+            Release);
+
+        Assert.Null(RecordTextCodec.WhyNotARecord(Edited(cell, root => root["Persistent"] = new JsonArray()), Release, "cell"));
+    }
+
+    [Fact]
+    public void ABlockLevelDocumentTheCodecWrote_IsTheLevel()
+    {
+        var level = RecordTypes.For(Release).InteriorCellBlockLevels[0];
+        var document = RecordTextCodec.BlankDocument(level, Release, Document.Empty.With(3, RecordTypes.BlockNumberMember));
+
+        Assert.Null(RecordTextCodec.WhyNotABlockLevel(document, Release, level));
+    }
+
+    [Fact]
+    public void ABlockLevelDocumentWithAValueOfTheWrongType_IsRefused_NamingTheField()
+    {
+        var level = RecordTypes.For(Release).InteriorCellBlockLevels[0];
+        var document = RecordTextCodec.BlankDocument(level, Release, Document.Empty.With(3, RecordTypes.BlockNumberMember));
+
+        Assert.StartsWith("BlockNumber", RecordTextCodec.WhyNotABlockLevel(Edited(document, root => root["BlockNumber"] = "text"), Release, level), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ABlockLevelDocumentWithAnUnknownField_IsRefused_NamingIt()
+    {
+        var level = RecordTypes.For(Release).InteriorCellBlockLevels[0];
+        var document = RecordTextCodec.BlankDocument(level, Release, Document.Empty.With(3, RecordTypes.BlockNumberMember));
+
+        Assert.Contains("Bogus", RecordTextCodec.WhyNotABlockLevel(Edited(document, root => root["Bogus"] = 1), Release, level), StringComparison.Ordinal);
     }
 
     [Fact]

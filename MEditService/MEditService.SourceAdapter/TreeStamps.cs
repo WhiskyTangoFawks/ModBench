@@ -180,19 +180,8 @@ internal static class TreeStamps
         var limit = refusal is null && recordType == PluginHeader.RecordType
             ? PluginFlags.LimitOf(HeaderDocument.Read(bytes, release), pluginName)
             : null;
-        var belongsAt = refusal is null && recordType is not null ? PlacementOf(relativePath, text, pluginName, formKey, recordType, release) : null;
+        var belongsAt = refusal is null && recordType is not null ? PluginSourceChecks.LayoutPathOf(relativePath, text, pluginName, formKey, recordType, release) : null;
         return new KnownDocument(
             formKey, ContentStamp(text), [.. DocumentTokens.FormKeysIn(bytes, release).Select(key => key.FormKey)], refusal, limit, belongsAt);
-    }
-
-    // A flat record's file is named by its FormKey and EditorID alone, so the document says where it belongs.
-    private static string? PlacementOf(
-        string relativePath, string text, string pluginName, string formKey, string recordType, GameRelease release)
-    {
-        if (recordType == PluginHeader.RecordType || GroupFolders.For(release).FlatFolderOf(recordType) is null) return null;
-        if (DocumentTokens.EditorIdIn(text) is not { WhyUnreadable: null } editorId) return null;
-
-        var belongsAt = SourceRepositoryLayout.FlatPathFor(pluginName, recordType, formKey, editorId.EditorId, release);
-        return belongsAt.Equals(relativePath, StringComparison.Ordinal) ? null : belongsAt;
     }
 }

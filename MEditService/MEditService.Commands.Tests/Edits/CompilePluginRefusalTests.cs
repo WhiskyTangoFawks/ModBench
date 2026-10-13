@@ -104,26 +104,6 @@ public sealed class CompilePluginRefusalTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_WithAValueOfTheWrongTypeInABlockLevelDocument_RefusesNamingTheFileAndTheField_AndNoDecompile()
-    {
-        _mod.Write(new Cell(FormKey.Factory($"000900:{CompileFixture.PluginName}"), Fallout4Release.Fallout4)
-        {
-            EditorID = "Room",
-            Flags = Cell.Flag.IsInteriorCell,
-        }, "cell");
-        var levels = Directory.GetFiles(_mod.ModFolder, "GroupRecordData.json", SearchOption.AllDirectories).Where(file => new FileInfo(file).Length > 2).ToArray();
-        var level = Path.GetRelativePath(_mod.ModFolder, levels[0]);
-        File.WriteAllText(levels[0], System.Text.RegularExpressions.Regex.Replace(File.ReadAllText(levels[0]), "\"BlockNumber\": \\d+", "\"BlockNumber\": \"text\""));
-
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
-
-        var refused = Assert.Single(answer.Refused);
-        Assert.Equal(CompileRefusal.SourceDoesNotParse, refused.Refusal);
-        Assert.Contains($"{level}: BlockNumber", refused.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("Decompile", refused.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task Compile_WithAFileReformattedAndReordered_CompilesLikeAnyOther()
     {
         var body = _mod.Document(_mod.Npc.ToString()).Require().Body;

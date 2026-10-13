@@ -1,4 +1,5 @@
 using System.Text;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -111,6 +112,18 @@ internal static class PluginSourceChecks
             .Order(StringComparer.Ordinal)
             .Select(relativePath => new SourceDivergence(SourceDivergenceKind.Unproduced, relativePath)));
         return new SourceComparison(divergences, misplaced);
+    }
+
+    // The layout names a flat record's file by its FormKey and EditorID alone, so the document says where it belongs;
+    // Compare finds the same files, and the containers', by regenerating the whole tree.
+    internal static string? LayoutPathOf(
+        string relativePath, string text, string pluginName, string formKey, string recordType, GameRelease release)
+    {
+        if (recordType == PluginHeader.RecordType || GroupFolders.For(release).FlatFolderOf(recordType) is null) return null;
+        if (DocumentTokens.EditorIdIn(text) is not { WhyUnreadable: null } editorId) return null;
+
+        var belongsAt = SourceRepositoryLayout.FlatPathFor(pluginName, recordType, formKey, editorId.EditorId, release);
+        return belongsAt.Equals(relativePath, StringComparison.Ordinal) ? null : belongsAt;
     }
 
     // A held file the codec writes nowhere and a file it writes where nothing is held, with the same

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.IO.Abstractions;
 using System.Reflection;
 using System.Text;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
@@ -36,28 +37,43 @@ public static class RecordTextCodec
     /// written back, it must mean what it says (ADR-0006). The header's type is
     /// <see cref="PluginHeader.RecordType"/>.</summary>
     public static string? WhyNotARecord(string text, GameRelease gameRelease, string? recordType) =>
-        WhyNotProduced(text, source => recordType == PluginHeader.RecordType
+        WhyNotProduced(text, gameRelease, source => recordType == PluginHeader.RecordType
             ? Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(source), gameRelease)))
             : RoundTrip(source, gameRelease, recordType));
 
     /// <summary>The same answer for a block level's document, named by its level in
     /// <see cref="RecordTypes.InteriorCellBlockLevels"/> or the worldspace's.</summary>
     public static string? WhyNotABlockLevel(string text, GameRelease gameRelease, string level) =>
-        WhyNotProduced(text, source => BlankDocument(level, gameRelease, Document.Parse(source)));
+        WhyNotProduced(text, gameRelease, source => BlankDocument(level, gameRelease, Document.Parse(source)));
 
-    private static string? WhyNotProduced(string text, Func<string, string> produce)
+    private static string? WhyNotProduced(string text, GameRelease gameRelease, Func<string, string> produce)
     {
         if (!Document.TryRead(text, out var written, out var whyNot)) return whyNot;
         try
         {
-            return DocumentMeaning.FirstDifference(written.Element, Document.Parse(produce(text)).Element) is { } at
+            return DocumentMeaning.FirstDifference(WithoutEmptyChildLists(written, gameRelease).Element, Document.Parse(produce(text)).Element) is { } at
                 ? $"{at} does not match what the current codec would produce from it."
                 : null;
         }
         catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
-            return ReadFault.Describe(ex, text, source => ThrownBy(produce, source));
+            return ReadFault.Describe(ex, text, source => ThrownBy(produce, source))
+                ?? ReadFault.MisreadMember(text, produce)
+                ?? ReadFault.Unlocated(ex);
         }
+    }
+
+    // A container with no children in a slot writes the same bytes as one whose document leaves the slot out
+    // (EmptyChildListBytesTests), and the codec writes no empty list.
+    private static Document WithoutEmptyChildLists(Document written, GameRelease gameRelease)
+    {
+        var slots = RecordTypes.For(gameRelease).EmbeddedSlotNames;
+        if (JsonNode.Parse(written.Element.GetRawText()) is not JsonObject root) return written;
+        var empty = root.Where(member => member.Value is JsonArray { Count: 0 } && slots.Contains(member.Key)).Select(member => member.Key).ToList();
+        if (empty.Count == 0) return written;
+
+        foreach (var slot in empty) _ = root.Remove(slot);
+        return Document.Parse(root.ToJsonString());
     }
 
     private static Exception? ThrownBy(Func<string, string> produce, string source)

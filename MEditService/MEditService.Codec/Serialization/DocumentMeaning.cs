@@ -59,17 +59,13 @@ public static class DocumentMeaning
         foreach (var member in written.EnumerateObject())
         {
             var memberPath = Member(path, member.Name);
-            if (!produced.TryGetProperty(member.Name, out var counterpart)) return IsEmptyList(member.Value) ? null : memberPath;
+            if (!produced.TryGetProperty(member.Name, out var counterpart)) return memberPath;
             if (Difference(member.Value, counterpart, memberPath) is { } found) return found;
         }
-        return produced.EnumerateObject().Where(member => !IsEmptyList(member.Value)).Select(member => member.Name)
-            .FirstOrDefault(name => !written.TryGetProperty(name, out _)) is { } extra
+        return produced.EnumerateObject().Select(member => member.Name).FirstOrDefault(name => !written.TryGetProperty(name, out _)) is { } extra
             ? Member(path, extra)
             : null;
     }
-
-    // The codec writes no empty list, and a list left empty means the list left out.
-    private static bool IsEmptyList(JsonElement value) => value.ValueKind == JsonValueKind.Array && value.GetArrayLength() == 0;
 
     private static string? ArrayDifference(JsonElement written, JsonElement produced, string path)
     {

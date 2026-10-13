@@ -108,6 +108,71 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
+    public void StampsOf_AFileWithAnUnknownField_IsAProblemOnThatFile_AndStillAStampedDocument()
+    {
+        File.WriteAllText(NpcFile, NpcBody.Replace("\"FormKey\"", "\"NoSuchField\": 1,\n  \"FormKey\"", StringComparison.Ordinal));
+
+        var stamps = _repository.StampsOf(Plugin);
+
+        var problem = Assert.Single(stamps.Problems);
+        Assert.Equal((Path.GetRelativePath(_modFolder, NpcFile), NpcFormKey), (problem.SourceRelativePath, problem.FormKey));
+        Assert.Contains("NoSuchField", problem.Message, StringComparison.Ordinal);
+        Assert.Contains(NpcFormKey, stamps.ByFormKey.Keys);
+        Assert.Empty(stamps.Unreadable);
+    }
+
+    [Fact]
+    public void StampsOf_AFlatRecordUnderAnotherLeafName_IsAProblemNamingWhereItBelongs()
+    {
+        var original = NpcFile;
+        var misplaced = Path.Combine(Path.GetDirectoryName(original).Require(), "Renamed.json");
+        File.Move(original, misplaced);
+
+        var problem = Assert.Single(_repository.StampsOf(Plugin).Problems);
+
+        Assert.Equal(Path.GetRelativePath(_modFolder, misplaced), problem.SourceRelativePath);
+        Assert.Contains($"belongs at {Path.GetRelativePath(_modFolder, original)}", problem.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StampsOf_ARecordOutsideTheLightRangeOfALightHeader_IsAProblemOnItsFile()
+    {
+        var light = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4) { IsSmallMaster = true };
+        File.WriteAllBytes(Path.Combine(_modFolder, PluginSourceRoot.HeaderDocument(PluginName)), HeaderDocument.Write(light));
+        var outside = SourceDocumentPath.Of(_modFolder, PluginName, "npc_", "001000:Fixture.esp", "Far", GameRelease.Fallout4);
+        Directory.CreateDirectory(Path.GetDirectoryName(outside).Require());
+        File.WriteAllText(outside, RecordTextCodec.SerializeToText(
+            new Npc(FormKey.Factory("001000:Fixture.esp"), Fallout4Release.Fallout4) { EditorID = "Far" }, GameRelease.Fallout4));
+
+        var problem = Assert.Single(_repository.StampsOf(Plugin).Problems);
+
+        Assert.Equal(Path.GetRelativePath(_modFolder, outside), problem.SourceRelativePath);
+        Assert.Contains("light range", problem.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StampsOf_ABlockLevelDocumentWithAValueOfTheWrongType_IsAProblemOnThatFile()
+    {
+        var level = Path.Combine(_modFolder, PluginSourceRoot.For(PluginName), "Cells", "0", "GroupRecordData.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(level).Require());
+        File.WriteAllText(level, "{\"BlockNumber\": \"text\"}");
+
+        var problem = Assert.Single(_repository.StampsOf(Plugin).Problems);
+
+        Assert.Equal(Path.GetRelativePath(_modFolder, level), problem.SourceRelativePath);
+        Assert.Contains("BlockNumber", problem.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StampsOf_ATreeWhoseProblemsDiffer_IsNotTheSameStamps()
+    {
+        var clean = _repository.StampsOf(Plugin);
+        File.WriteAllText(NpcFile, NpcBody.Replace("\"FormKey\"", "\"NoSuchField\": 1,\n  \"FormKey\"", StringComparison.Ordinal));
+
+        Assert.NotEqual(clean, _repository.StampsOf(Plugin));
+    }
+
+    [Fact]
     public void StampsOf_AFileDeclaringNoFormKey_IsReportedUnreadable()
     {
         File.WriteAllText(Path.Combine(Path.GetDirectoryName(NpcFile).Require(), "Stray - 000A00_Fixture.esp.json"), "{\"EditorID\":\"Stray\"}");

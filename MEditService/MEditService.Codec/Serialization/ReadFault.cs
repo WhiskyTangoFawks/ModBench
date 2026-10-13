@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 
@@ -11,17 +12,38 @@ internal static class ReadFault
 {
     private const string NullFormKey = "Null";
 
-    /// <summary>The reader's refusal of <paramref name="text"/>, naming every field it fails on where any can
-    /// be found; <paramref name="thrownBy"/> is what reading a document throws, or null.</summary>
-    internal static string Describe(Exception thrown, string text, Func<string, Exception?> thrownBy)
+    /// <summary>The reader's refusal of <paramref name="text"/>, naming every field it fails on; null where none
+    /// can be found. <paramref name="thrownBy"/> is what reading a document throws, or null.</summary>
+    internal static string? Describe(Exception thrown, string text, Func<string, Exception?> thrownBy)
     {
-        if (JsonNode.Parse(text) is not JsonObject root || thrownBy(Only(root, [])) is not null) return Unlocated(thrown);
+        if (JsonNode.Parse(text) is not JsonObject root || thrownBy(Only(root, [])) is not null) return null;
 
         var faults = FaultsIn(root, [], thrownBy).ToList();
-        return faults.Count > 0 ? string.Join("; ", faults.Select(fault => Say(fault.Path, fault.Thrown))) : Unlocated(thrown);
+        return faults.Count > 0 ? string.Join("; ", faults.Select(fault => Say(fault.Path, fault.Thrown))) : null;
     }
 
-    private static string Unlocated(Exception thrown) =>
+    /// <summary>A member the reader takes without throwing but reads as a value of another meaning, whose misreading
+    /// breaks the members after it: each member alone, against what the codec writes back of it.</summary>
+    internal static string? MisreadMember(string text, Func<string, string> produce)
+    {
+        if (JsonNode.Parse(text) is not JsonObject root) return null;
+
+        var misread = new List<string>();
+        foreach (var key in root.Select(member => member.Key).Where(key => key != RecordMembers.FormKey && key != LoquiUnions.UnionTypeDiscriminator))
+        {
+            var alone = Only(root, [key]);
+            using var written = JsonDocument.Parse(alone);
+            using var produced = JsonDocument.Parse(produce(alone));
+            if (!produced.RootElement.TryGetProperty(key, out var counterpart)
+                || DocumentMeaning.FirstDifference(written.RootElement.GetProperty(key), counterpart) is not null)
+            {
+                misread.Add($"{key} holds a value of the wrong type.");
+            }
+        }
+        return misread.Count > 0 ? string.Join("; ", misread) : null;
+    }
+
+    internal static string Unlocated(Exception thrown) =>
         IsRewrapped(thrown) && thrown.InnerException is NullReferenceException inner ? inner.Message : thrown.Message;
 
     // The generated reader's own NotImplementedException and NullReferenceException arrive as a

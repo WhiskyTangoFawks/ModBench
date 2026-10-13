@@ -151,7 +151,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
         index.NextSnapshotUntil(() => index.ReadFromItsPluginSource(Plugin), "the tree read again");
 
         Assert.Equal("EditedInTheTree", index.DocumentOf(_npc, Plugin).EditorId);
-        Assert.All(index.SourceProblems(), problem => Assert.Contains("belongs at", problem.Message, StringComparison.Ordinal));
+        Assert.Contains("belongs at", Assert.Single(index.SourceProblems()).Message, StringComparison.Ordinal);
     }
 
     [Fact]
