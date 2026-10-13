@@ -86,14 +86,12 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
         var journal = new WriteJournal(_repository.SourceFolder);
         try
         {
-            foreach (var (from, to) in Changes.Moves) journal.Move(from, to);
-            foreach (var path in Changes.Deletions) journal.DeleteTree(path);
-            foreach (var (path, text) in Changes.Documents) journal.Write(path, Encoding.UTF8.GetBytes(text));
-        }
-        catch (Exception cause) when (cause is not OutOfMemoryException)
-        {
-            if (journal.Report(cause, journal.UndoSince(0)) is { } report) throw report;
-            throw;
+            journal.PutBackOnFailure(() =>
+            {
+                foreach (var (from, to) in Changes.Moves) journal.Move(from, to);
+                foreach (var path in Changes.Deletions) journal.DeleteTree(path);
+                foreach (var (path, text) in Changes.Documents) journal.Write(path, Encoding.UTF8.GetBytes(text));
+            });
         }
         finally
         {

@@ -193,23 +193,21 @@ internal sealed class SourceRepositoryWrites(
         var journal = new WriteJournal(_sourceFolder);
         try
         {
-            var incoming = files.ToDictionary(file => Path.GetFullPath(Path.Combine(_sourceFolder, file.RelativePath)));
-            var held = Directory.Exists(root)
-                ? Directory.GetFiles(root, "*", SearchOption.AllDirectories)
-                    .ToDictionary(Path.GetFullPath, File.ReadAllBytes)
-                : [];
-            foreach (var (path, bytes) in held.Where(file => !incoming.ContainsKey(file.Key))) journal.DeleteIfHolds(path, bytes);
-            journal.DeleteEmptyDirectories(root);
-            journal.WriteAll(
-                incoming.Where(file => !held.TryGetValue(file.Key, out var bytes) || !bytes.AsSpan().SequenceEqual(file.Value.Content))
-                    .Select(file => file.Value),
-                _sourceFolder);
-            git.ParkDecompiled(pluginFileName, binarySha256);
-        }
-        catch (Exception cause) when (cause is not OutOfMemoryException)
-        {
-            if (journal.Report(cause, journal.UndoSince(0)) is { } report) throw report;
-            throw;
+            journal.PutBackOnFailure(() =>
+            {
+                var incoming = files.ToDictionary(file => Path.GetFullPath(Path.Combine(_sourceFolder, file.RelativePath)));
+                var held = Directory.Exists(root)
+                    ? Directory.GetFiles(root, "*", SearchOption.AllDirectories)
+                        .ToDictionary(Path.GetFullPath, File.ReadAllBytes)
+                    : [];
+                foreach (var (path, bytes) in held.Where(file => !incoming.ContainsKey(file.Key))) journal.DeleteIfHolds(path, bytes);
+                journal.DeleteEmptyDirectories(root);
+                journal.WriteAll(
+                    incoming.Where(file => !held.TryGetValue(file.Key, out var bytes) || !bytes.AsSpan().SequenceEqual(file.Value.Content))
+                        .Select(file => file.Value),
+                    _sourceFolder);
+                git.ParkDecompiled(pluginFileName, binarySha256);
+            });
         }
         finally
         {

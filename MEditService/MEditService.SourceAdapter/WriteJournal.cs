@@ -115,13 +115,27 @@ internal sealed class WriteJournal(string sourceFolder)
         File.Delete(path);
     }
 
-    internal void Move(string from, string to)
+    /// <summary>Runs <paramref name="steps"/>; one that fails puts back what the steps wrote.</summary>
+    internal void PutBackOnFailure(Action steps)
     {
-        MoveEntry(from, to);
-        RecordUndo(() => MoveEntry(to, from), to);
+        try
+        {
+            steps();
+        }
+        catch (Exception cause) when (cause is not OutOfMemoryException)
+        {
+            if (Report(cause, UndoSince(0)) is { } report) throw report;
+            throw;
+        }
     }
 
-    private static void MoveEntry(string source, string destination)
+    internal void Move(string from, string to)
+    {
+        MoveFileOrFolder(from, to);
+        RecordUndo(() => MoveFileOrFolder(to, from), to);
+    }
+
+    private static void MoveFileOrFolder(string source, string destination)
     {
         if (Directory.Exists(source)) Directory.Move(source, destination);
         else File.Move(source, destination);
