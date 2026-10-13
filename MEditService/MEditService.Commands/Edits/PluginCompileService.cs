@@ -101,7 +101,7 @@ internal sealed class PluginCompileService(
             return SourceDoesNotParse(plugin, unread);
         var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(comparison.Divergences, plugin);
         if (roundTripRefusal != null)
-            return CompileResult.Refused(CompileRefusal.SourceDoesNotRoundTrip, roundTripRefusal);
+            return CompileResult.Refused(CompileRefusal.SourceDoesNotParse, roundTripRefusal);
 
         var content = ContentFacts(tree, plugin, loadOrder);
 
@@ -194,10 +194,9 @@ internal sealed class PluginCompileService(
         if ((await adapter.ReadTreeAsync(files, loadOrder)).Holds(out var tree, out var failure)) return (tree, null);
 
         logger.LogWarning("{Plugin} could not be read from its source: {Reason}", plugin.Name, failure.Reason);
-        var why = failure is PluginFailure.Unparsed unparsed && repository.InSourceNames(plugin, unparsed.Diagnosis).Holds(out var named, out _)
-            ? named.Describe()
-            : failure.Reason;
-        return (null, $"{plugin.Name} could not be read from its source: {why} {RegenerateTheSource}");
+        if (failure is PluginFailure.Unparsed unparsed && repository.InSourceNames(plugin, unparsed.Diagnosis).Holds(out var named, out _))
+            return (null, $"{plugin.Name} could not be read from its source: {named.Describe()}");
+        return (null, $"{plugin.Name} could not be read from its source: {failure.Reason} {RegenerateTheSource}");
     }
 
     // ADR-0006. The generated deserializer skips an unrecognized property or file without

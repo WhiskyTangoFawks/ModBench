@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.TestSupport;
 
@@ -39,5 +40,19 @@ public sealed class SourceContentProblemTests : IDisposable
         Assert.Equal((Relative(misplaced), _fixture.Npc.ToString()), (problem.SourceRelativePath, problem.FormKey));
         Assert.Contains($"belongs at {Relative(file)}", problem.Message, StringComparison.Ordinal);
         Assert.NotNull(index.CopyIn(_fixture.Npc.ToString(), _fixture.Plugin));
+    }
+
+    [Fact]
+    public void ABlockLevelDocumentWithAValueOfTheWrongType_IsAProblemOnItsFile()
+    {
+        var level = Directory.EnumerateFiles(_fixture.Entry.ModFolderOf(), "GroupRecordData.json", SearchOption.AllDirectories)
+            .First(file => File.ReadAllText(file).Contains("BlockNumber", StringComparison.Ordinal));
+        File.WriteAllText(level, Regex.Replace(File.ReadAllText(level), "\"BlockNumber\": -?\\d+", "\"BlockNumber\": \"text\""));
+
+        using var index = Indexes.Reconciled(_fixture.GameDirectory, [_fixture.Entry]);
+
+        var problem = Assert.Single(index.SourceProblems());
+        Assert.Equal(Relative(level), problem.SourceRelativePath);
+        Assert.Contains("BlockNumber", problem.Message, StringComparison.Ordinal);
     }
 }
