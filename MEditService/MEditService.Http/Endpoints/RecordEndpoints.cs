@@ -252,15 +252,7 @@ internal static class RecordEndpoints
         var spelled = RecordEditEnvelope.Spell(edit?.Path ?? []);
         return EndpointMapping.Execute(
             "EditChanges", logger,
-            logReceived: () =>
-            {
-                if (logger.IsEnabled(LogLevel.Information))
-                {
-                    logger.LogInformation(
-                        "Received EditRecordChanges {Op} {Path} for {FormKey} in {Plugin} ({Origin})",
-                        edit?.Op, spelled, decoded, edit?.Plugin, edit?.Origin);
-                }
-            },
+            logReceived: () => LogEditReceived(logger, "EditRecordChanges", edit, decoded, spelled),
             validate: () => EditRequestProblem(edit),
             execute: () => edits.Changes(
                 new PluginAddress(request.Edit.Plugin, request.Edit.Origin), decoded,
@@ -275,20 +267,22 @@ internal static class RecordEndpoints
         var spelled = RecordEditEnvelope.Spell(request.Path ?? []);
         return EndpointMapping.Execute(
             "ScriptEdit", logger,
-            logReceived: () =>
-            {
-                if (logger.IsEnabled(LogLevel.Information))
-                {
-                    logger.LogInformation(
-                        "Received EditRecord {Op} {Path} for {FormKey} in {Plugin} ({Origin})",
-                        request.Op, spelled, decoded, request.Plugin, request.Origin);
-                }
-            },
+            logReceived: () => LogEditReceived(logger, "EditRecord", request, decoded, spelled),
             validate: () => EditRequestProblem(request),
             execute: () => edits.Edit(
                 new PluginAddress(request.Plugin, request.Origin), decoded,
                 new RecordEditEnvelope(request.Op, request.Path ?? [], request.EditedValue)),
             onApplied: _ => Results.NoContent());
+    }
+
+    private static void LogEditReceived(ILogger logger, string route, RecordEditRequest? edit, string formKey, string spelled)
+    {
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Received {Route} {Op} {Path} for {FormKey} in {Plugin} ({Origin})",
+                route, edit?.Op, spelled, formKey, edit?.Plugin, edit?.Origin);
+        }
     }
 
     private static IResult? EditRequestProblem(RecordEditRequest? request)
