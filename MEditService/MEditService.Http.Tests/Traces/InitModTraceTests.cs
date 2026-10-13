@@ -46,6 +46,45 @@ public sealed class InitModTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task InitOfAModInstalledFromADownloadedFile_AsModbenchSendsIt_CommitsAsAssetsOnlyTheFilesItDoesNotYield()
+    {
+        const string HashOfHello = "o22fiH2CxyY=";
+        var modFolder = OtherTool.ModFolderOf(_instance, Origin);
+        OtherTool.WritesTheFile(Path.Combine(modFolder, "textures", "yielded.dds"), "hello");
+        OtherTool.WritesTheFile(Path.Combine(modFolder, "textures", "added.dds"), "added after install");
+        await Loaded();
+        var sourceFolder = Client.SourceFolderSentFor(Origin);
+
+        var response = await Client.PostAsJsonAsync("/init", new
+        {
+            mods = new[]
+            {
+                new
+                {
+                    name = Origin,
+                    sourceFolder,
+                    installationFiles = new[]
+                    {
+                        new
+                        {
+                            path = Path.Combine(_instance.Root, "downloads", "Mod.7z"), size = 28, hash = "yMPjZVarjmw=",
+                            entries = new[] { new { path = "textures/yielded.dds", hash = HashOfHello } },
+                        },
+                    },
+                    modManagerFiles = new[] { "meta.ini" },
+                },
+            },
+        });
+
+        response.EnsureSuccessStatusCode();
+        Assert.Empty((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
+        var committed = GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "ls-tree", "-r", "--name-only", "HEAD")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Where(path => path.StartsWith("assets/", StringComparison.Ordinal));
+        Assert.Equal(["assets/textures/added.dds"], committed);
+    }
+
+    [Fact]
     public async Task InitOfNoMod_Is400()
     {
         await Loaded();

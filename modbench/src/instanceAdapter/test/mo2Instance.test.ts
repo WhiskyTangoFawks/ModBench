@@ -1276,11 +1276,60 @@ describe('the MO2 Instance adapter', () => {
         expect(await adapter.installationFiles('DragIn Manual Extract')).toEqual({ kind: 'read', answer: [] });
         expect(adapter.managerFilesInModFolder).toEqual(['meta.ini']);
       });
+    });
 
-      it('answers a mod installed from a downloaded file unreadable, naming the file, while no index of downloaded files is kept', async () => {
+    describe('a mod\'s installation files', () => {
+      const ENTRY = 'textures/a.dds';
+
+      it('answers the downloaded file its meta names, in the downloads folder, with its size and hash and each entry\'s', async () => {
+        const answer = await adapterAt(root, undefined, undefined, fakeArchiveReader([ENTRY])).installationFiles('Unofficial Fallout 4 Patch');
+
+        expect(answer).toEqual({
+          kind: 'read',
+          answer: [{ path: join(root, 'downloads', DOWNLOAD), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: ENTRY, hash: 'q7ZLRnu1+Os=' }] }],
+        });
+      });
+
+      describe('installed from a file outside the downloads folder, which MO2 records by its whole path', () => {
+        const recordingInstalledFrom = (path: string): Promise<void> =>
+          writeFile(join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\ninstallationFile=${path}\r\n`);
+
+        it('answers that file while it is there', async () => {
+          const elsewhere = join(root, 'elsewhere', 'Patch.7z');
+          await mkdir(join(root, 'elsewhere'));
+          await writeFile(elsewhere, 'hello');
+          await recordingInstalledFrom(elsewhere);
+
+          const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
+
+          expect(answer).toEqual({ kind: 'read', answer: [{ path: elsewhere, size: 5, hash: 'o22fiH2CxyY=', entries: [] }] });
+        });
+
+        it('answers the file of its name in the downloads folder once it is gone, as MO2 reinstalls it', async () => {
+          await recordingInstalledFrom(join(root, 'elsewhere', DOWNLOAD));
+
+          const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
+
+          expect(answer).toEqual({ kind: 'read', answer: [{ path: join(root, 'downloads', DOWNLOAD), size: 28, hash: 'yMPjZVarjmw=', entries: [] }] });
+        });
+      });
+
+      it('answers unreadable, naming the downloaded file and why, when it is gone', async () => {
+        await rm(join(root, 'downloads', DOWNLOAD));
+
+        const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
+
+        expect(answer.kind === 'unreadable' && answer.reason).toContain('ENOENT');
+        expect(answer.kind === 'unreadable' && answer.reason).toContain(DOWNLOAD);
+      });
+
+      it('answers unreadable, naming the downloaded file and why, when the downloads folder cannot be resolved', async () => {
+        await rm(join(root, INI));
+
         const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
 
         expect(answer.kind === 'unreadable' && answer.reason).toContain(DOWNLOAD);
+        expect(answer.kind === 'unreadable' && answer.reason).toContain(INI);
       });
     });
   });

@@ -34,6 +34,12 @@ describe('initProgressMessage', () => {
     expect(message).toContain('1 of 3 plugins');
   });
 
+  it('says reading its installation files while the Instance adapter reads them, before mEdit is asked', () => {
+    const message = initProgressMessage('ModA', { mod: 'ModA', phase: 'ReadingInstallationFiles' });
+
+    expect(message).toBe('Initializing "ModA" — reading its installation files…');
+  });
+
   it('says reading its files while it tells the assets from what the installation files yield', () => {
     const message = initProgressMessage('ModA', status({ phase: 'ReadingFiles', pluginsDone: 3, pluginsTotal: 3 }));
 
