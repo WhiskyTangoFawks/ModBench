@@ -57,7 +57,7 @@ public static class RecordTextCodec
         }
         catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
-            return ReadFault.Describe(ex, text, source => ThrownBy(produce, source))
+            return ReadFault.Describe(text, source => ThrownBy(produce, source))
                 ?? ReadFault.MisreadMember(text, produce)
                 ?? ReadFault.Unlocated(ex);
         }

@@ -62,7 +62,7 @@ public sealed class RowsChangedNotificationTests
         using var _ = fixture;
         using var __ = index;
         var gained = GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, moved.ToString());
-        entry.HandEdit(index.DocumentOf(moved.ToString(), entry.KeyOf()), "\"MovedNpc\"", "\"EditedNpc\"");
+        entry.RenameByHand(index.DocumentOf(moved.ToString(), entry.KeyOf()), "EditedNpc");
 
         index.NextSnapshot();
 

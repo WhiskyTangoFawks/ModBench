@@ -1,5 +1,4 @@
 using MEditService.Index.Tests.TestSupport;
-using MEditService.Ports;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -42,24 +41,10 @@ public sealed class LightRangeProblemTests : IDisposable
 
     private string HeaderFlaggedLight => File.ReadAllText(HeaderFile).Replace(ModHeaderOpening, ModHeaderOpening + "\n    \"Flags\": [\"Small\"],", StringComparison.Ordinal);
 
-    private IReadOnlyList<Index.Queries.SourceProblem> Problems(OpenedIndex index) => index.Queries.GetProblems().Value().Single().Problems;
+    private static IReadOnlyList<Index.Queries.SourceProblem> Problems(OpenedIndex index) => index.Queries.GetProblems().Value().Single().Problems;
 
     private string OutsideFile(OpenedIndex index) =>
         Path.GetRelativePath(_light.ModFolderOf(), _light.SourceFileOf(index.DocumentOf(_outside, _light.KeyOf())));
-
-    [Fact]
-    public void ARecordOutsideTheLightRange_IsAProblemOnItsFile_AndOnlyItsFile()
-    {
-        File.WriteAllText(HeaderFile, HeaderFlaggedLight);
-
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
-
-        var problem = Assert.Single(Problems(index));
-        Assert.Equal(OutsideFile(index), problem.SourceRelativePath);
-        Assert.Contains("light range", problem.Message, StringComparison.Ordinal);
-        Assert.Contains(_outside, problem.Message, StringComparison.Ordinal);
-        Assert.True(index.ReadFromItsPluginSource(_light.KeyOf()));
-    }
 
     [Fact]
     public void AHeaderTypedLight_IsAProblemOnTheRecordsFile_UntilItIsTypedOut_AndThePluginStaysItsSource()

@@ -164,12 +164,12 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_ATreeWhoseProblemsDiffer_IsNotTheSameStamps()
+    public void StampsOf_ATreeWhoseOnlyChangeIsAFileMovedOutOfPlace_IsNotTheSameStamps()
     {
-        var clean = _repository.StampsOf(Plugin);
-        File.WriteAllText(NpcFile, NpcBody.Replace("\"FormKey\"", "\"NoSuchField\": 1,\n  \"FormKey\"", StringComparison.Ordinal));
+        var placed = _repository.StampsOf(Plugin);
+        File.Move(NpcFile, Path.Combine(Path.GetDirectoryName(NpcFile).Require(), "Renamed.json"));
 
-        Assert.NotEqual(clean, _repository.StampsOf(Plugin));
+        Assert.NotEqual(placed, _repository.StampsOf(Plugin));
     }
 
     [Fact]

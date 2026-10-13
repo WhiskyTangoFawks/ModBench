@@ -114,8 +114,8 @@ internal static class PluginSourceChecks
         return new SourceComparison(divergences, misplaced);
     }
 
-    // The layout names a flat record's file by its FormKey and EditorID alone, so the document says where it belongs;
-    // Compare finds the same files, and the containers', by regenerating the whole tree.
+    // A flat record's file is named by its FormKey and EditorID alone, so one document says where it belongs.
+    // Compare places the containers' files too, by regenerating the whole tree.
     internal static string? LayoutPathOf(
         string relativePath, string text, string pluginName, string formKey, string recordType, GameRelease release)
     {

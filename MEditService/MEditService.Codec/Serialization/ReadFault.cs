@@ -14,7 +14,7 @@ internal static class ReadFault
 
     /// <summary>The reader's refusal of <paramref name="text"/>, naming every field it fails on; null where none
     /// can be found. <paramref name="thrownBy"/> is what reading a document throws, or null.</summary>
-    internal static string? Describe(Exception thrown, string text, Func<string, Exception?> thrownBy)
+    internal static string? Describe(string text, Func<string, Exception?> thrownBy)
     {
         if (JsonNode.Parse(text) is not JsonObject root || thrownBy(Only(root, [])) is not null) return null;
 
@@ -32,8 +32,9 @@ internal static class ReadFault
         foreach (var key in root.Select(member => member.Key).Where(key => key != RecordMembers.FormKey && key != LoquiUnions.UnionTypeDiscriminator))
         {
             var alone = Only(root, [key]);
+            if (ProducedOrNull(produce, alone) is not { } producedText) continue;
             using var written = JsonDocument.Parse(alone);
-            using var produced = JsonDocument.Parse(produce(alone));
+            using var produced = JsonDocument.Parse(producedText);
             if (!produced.RootElement.TryGetProperty(key, out var counterpart)
                 || DocumentMeaning.FirstDifference(written.RootElement.GetProperty(key), counterpart) is not null)
             {
@@ -41,6 +42,18 @@ internal static class ReadFault
             }
         }
         return misread.Count > 0 ? string.Join("; ", misread) : null;
+    }
+
+    private static string? ProducedOrNull(Func<string, string> produce, string source)
+    {
+        try
+        {
+            return produce(source);
+        }
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
+        {
+            return null;
+        }
     }
 
     internal static string Unlocated(Exception thrown) =>

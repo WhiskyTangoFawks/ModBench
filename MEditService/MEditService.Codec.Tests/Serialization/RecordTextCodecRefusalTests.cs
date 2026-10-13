@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
@@ -210,6 +211,14 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     public void AFloatSpelledWithMoreDigitsThanItsPrecision_IsTheSameRecord()
     {
         Assert.Null(Why(Edited(WeaponText(), root => root["Weight"] = JsonNode.Parse("2.5000000000001"))));
+    }
+
+    [Fact]
+    public void AHeaderWithAValueOfTheWrongType_IsRefused()
+    {
+        var header = Encoding.UTF8.GetString(HeaderDocument.Write(new Fallout4Mod(ModKey.FromFileName("Fresh.esp"), Fallout4Release.Fallout4)));
+
+        Assert.NotNull(RecordTextCodec.WhyNotARecord(Edited(header, root => root["ModHeader"].Require()["Stats"].Require()["Version"] = "x"), Release, PluginHeader.RecordType));
     }
 
     [Theory]
