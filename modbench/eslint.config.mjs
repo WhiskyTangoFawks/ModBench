@@ -33,7 +33,7 @@ const MESSAGE_API_SITES = [
 ];
 
 const PATHLESS_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'drivingLib', 'instanceLoader'];
-const PACKAGE_BOXES = ['client', 'sourceLanguage'];
+const PACKAGE_BOXES = ['client', 'sourceLanguage', 'agent'];
 const NOT_PRODUCTION = ['**/*.test.ts', '**/test/**'];
 
 const FS_IMPORT = {
@@ -97,10 +97,10 @@ function restrictedImports({ vscode, packages, path, client = false, inAdapter =
 // A view fires the commands the root bound to the Instance adapter; it takes only types from the core box.
 /** @type {Record<string, string[]>} */
 const BOUND_COMMAND_BOXES = {
-    mods: ['modlist/modlist', 'install/install'],
+    mods: ['modOrderCommands/modOrderCommands', 'install/install'],
     downloads: ['downloadsCommands/downloads'],
     toolbox: ['instanceCommands/instanceCommands'],
-    plugins: ['pluginsCommands/plugins', 'pluginsCommands/renamePlugin'],
+    plugins: ['pluginsCommands/plugins', 'pluginsCommands/renamePlugin', 'sourceCommands/sourceCommands'],
 };
 /** The Plugins box reaches the Instance adapter for its plugin-file rule alone; no other view reaches it. */
 /** @type {Record<string, string[]>} */
@@ -363,9 +363,10 @@ export default defineConfig(
                     './src/instanceAdapter/tsconfig.json',
                     './src/coreLib/tsconfig.json',
                     './src/instanceLoader/tsconfig.json',
-                    './src/modlist/tsconfig.json',
+                    './src/modOrderCommands/tsconfig.json',
                     './src/pluginsCommands/tsconfig.json',
                     './src/instanceCommands/tsconfig.json',
+                    './src/sourceCommands/tsconfig.json',
                     './src/downloadsCommands/tsconfig.json',
                     './src/install/tsconfig.json',
                     './src/client/tsconfig.json',
@@ -376,6 +377,7 @@ export default defineConfig(
                     './src/editor/tsconfig.json',
                     './src/toolbox/tsconfig.json',
                     './src/sourceLanguage/tsconfig.json',
+                    './src/agent/tsconfig.json',
                 ],
                 tsconfigRootDir: import.meta.dirname,
             },

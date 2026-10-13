@@ -28,7 +28,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance, each with its origin, path and provider, the active plugins in load order, and the plugins loaded with no line, as Mod Management decided them. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
+        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance, each with its origin, path and provider, the active plugins in load order, and the plugins loaded with no line, the archives the game loads and the loose strings files it reads, as Mod Management decided them. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
         put: operations["PutLoadOrder"];
         post?: never;
         delete?: never;
@@ -111,6 +111,39 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["PostRebuildIndex"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/modlist/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Writes each mod's manifest from the mod as it is (ADR-0022). A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the stage-progress notification. */
+        post: operations["StageModlist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/build": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["BuildMod"];
         delete?: never;
         options?: never;
         head?: never;
@@ -719,6 +752,27 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        BuildProgress: {
+            mod?: string | null;
+            /** Format: int32 */
+            modsDone: number;
+            /** Format: int32 */
+            modsTotal: number;
+        };
+        /** @enum {string} */
+        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder";
+        BuildRequest: {
+            mods: string[];
+        };
+        BuildResponse: {
+            applied: components["schemas"]["BuiltModResponse"][];
+            refused: components["schemas"]["ModBuildRefusal"][];
+        };
+        BuiltModResponse: {
+            mod: string;
+            compiled: components["schemas"]["CompiledPlugin"][];
+            refused: components["schemas"]["PluginCompileRefusal"][];
+        };
         CellChildRecords: {
             persistent: components["schemas"]["ChildRecordSummary"][];
             temporary: components["schemas"]["ChildRecordSummary"][];
@@ -844,6 +898,7 @@ export interface components {
             origin: string;
             name: string;
             folder: string;
+            sourceFolder?: string | null;
         };
         /** @enum {string} */
         DecompileRefusal: "None" | "PluginNotLoaded" | "NotInTrackedMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "AmbiguousSource" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
@@ -964,6 +1019,8 @@ export interface components {
             plugins: components["schemas"]["LoadOrderPlugin"][];
             active: components["schemas"]["PluginAddress"][];
             loadedWithNoLine: components["schemas"]["PluginAddress"][];
+            archives: string[];
+            stringsFiles: string[];
             gameDirectory: string;
             instanceRoot: string;
             gameRelease: string;
@@ -988,6 +1045,16 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        ModBuildRefusal: {
+            item: string;
+            refusal: components["schemas"]["BuildRefusal"];
+            message: string;
+        };
+        ModStageRefusal: {
+            item: string;
+            refusal: components["schemas"]["StageRefusal"];
+            message: string;
+        };
         ModTrackRefusal: {
             item: string;
             refusal: components["schemas"]["TrackRefusal"];
@@ -1008,9 +1075,11 @@ export interface components {
             sequence: number;
             loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
             trackProgress?: components["schemas"]["TrackProgress"] | null;
+            buildProgress?: components["schemas"]["BuildProgress"] | null;
             changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
             pluginWithUnreadableSources?: components["schemas"]["PluginWithUnreadableSource"][] | null;
             recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;
+            stageProgress?: components["schemas"]["StageProgress"] | null;
         };
         PathHop: {
             kind: string;
@@ -1067,6 +1136,7 @@ export interface components {
             kind: components["schemas"]["PluginProviderKind"];
             mod?: string | null;
             folder?: string | null;
+            sourceFolder?: string | null;
         };
         PluginRecordTypeCount: {
             type: string;
@@ -1281,6 +1351,52 @@ export interface components {
             fieldPath?: string | null;
             sourceRelativePath: string;
             message: string;
+        };
+        StageGameFileRequest: {
+            path: string;
+            /** Format: int64 */
+            size?: number | null;
+            hash: string;
+        };
+        StageInstallationFileEntryRequest: {
+            path: string;
+            hash: string;
+        };
+        StageInstallationFileRequest: {
+            path: string;
+            source?: string | null;
+            /** Format: int64 */
+            size?: number | null;
+            hash: string;
+            entries: components["schemas"]["StageInstallationFileEntryRequest"][];
+        };
+        StageModRequest: {
+            name: string;
+            folder: string;
+            installationFiles: components["schemas"]["StageInstallationFileRequest"][];
+            committedFiles: string[];
+        };
+        StageProgress: {
+            mod?: string | null;
+            /** Format: int32 */
+            modsDone: number;
+            /** Format: int32 */
+            modsTotal: number;
+        };
+        /** @enum {string} */
+        StageRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "ManifestNotWritten";
+        StageRequest: {
+            mods: components["schemas"]["StageModRequest"][];
+            gameFiles: components["schemas"]["StageGameFileRequest"][];
+        };
+        StageResponse: {
+            applied: components["schemas"]["StagedModResponse"][];
+            refused: components["schemas"]["ModStageRefusal"][];
+        };
+        StagedModResponse: {
+            mod: string;
+            manifestWritten: boolean;
+            noProvider: string[];
         };
         /** @enum {string} */
         TrackPhase: "Idle" | "Parsing" | "Serializing" | "Committing";
@@ -1640,6 +1756,90 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    StageModlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StageRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StageResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    BuildMod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuildRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

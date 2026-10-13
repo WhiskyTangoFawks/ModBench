@@ -179,10 +179,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const patch = { name: 'Patch.esp', origin: 'PatchMod' };
   const other = { name: 'Other.esp', origin: 'OtherMod' };
   const newPlugin = { name: 'New.esp', origin: 'ModA' };
-  const changes = { moves: [], deletions: [], documents: [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
-  const keptChanges = { record: kept, moves: [], deletions: ['/mods/ModA/plugin-source/MyPatch.esp/Npcs/Kept'], documents: [] };
-  const goneChanges = { record: gone, moves: [], deletions: [], documents: [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Cell.json', text: '{"cut": true}' }] };
-  const copied = { record: kept, destination: patch, moves: [], deletions: [], documents: [{ path: '/mods/PatchMod/plugin-source/Patch.esp/Header.json', text: '{"h":1}' }] };
+  const changes = { moves: [], deletions: [], documents: [{ path: '/source/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
+  const keptChanges = { record: kept, moves: [], deletions: ['/source/ModA/plugin-source/MyPatch.esp/Npcs/Kept'], documents: [] };
+  const goneChanges = { record: gone, moves: [], deletions: [], documents: [{ path: '/source/ModA/plugin-source/MyPatch.esp/Cell.json', text: '{"cut": true}' }] };
+  const copied = { record: kept, destination: patch, moves: [], deletions: [], documents: [{ path: '/source/PatchMod/plugin-source/Patch.esp/Header.json', text: '{"h":1}' }] };
   const diagnostic = { formKey: '000800:First.esp', sourceRelativePath: 'First.esp/Npc/A.json', message: 'Race: points at nothing' };
   const renamed: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'Renamed' };
   const editChanges = {
@@ -196,9 +196,9 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     { formKey: '000802:B.esp', plugin: { name: 'B.esp', origin: 'BMod' } },
   ];
   const documentText = { plugin: patch, documentText: '{}', alone: false };
-  const sharedFile = { kind: 'OwnFile', location: '/mods/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json' };
+  const sharedFile = { kind: 'OwnFile', location: '/source/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json' };
   const fileRecord = { formKey: sharedKey, plugin: 'Shared.esp', origin: 'ModA' };
-  const sourcePath = '/mods/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json';
+  const sourcePath = '/source/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json';
   const problems = [{
     plugin: { name: 'Refers.esp', origin: 'ReferringMod' },
     problems: [{ formKey: '000800:Refers.esp', targetFormKey: '000ABC:Absent.esp', sourceRelativePath: 'Refers.esp/Npcs/Npc.json', message: 'Race: 000ABC:Absent.esp is held by no active plugin' }],
@@ -219,8 +219,8 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: { applied: [keptChanges, goneChanges], refused: [{ item: untracked, refusal: 'PluginNotTracked', message: 'Other.esp is not tracked.' }] },
       reads: { applied: [keptChanges, goneChanges], refused: [{ item: untracked, reason: 'Other.esp is not tracked.' }] },
       path: '/records/delete-changes', body: { records: [kept, untracked, gone] } },
-    { name: 'createPlugin', verb: (c) => c.createPlugin(newPlugin, '/mods/ModA'), ...same({ ...newPlugin, path: '/mods/ModA/New.esp' }),
-      path: '/plugins/create', body: { origin: 'ModA', name: 'New.esp', folder: '/mods/ModA' } },
+    { name: 'createPlugin', verb: (c) => c.createPlugin(newPlugin, '/mods/ModA', '/source/ModA'), ...same({ ...newPlugin, path: '/mods/ModA/New.esp' }),
+      path: '/plugins/create', body: { origin: 'ModA', name: 'New.esp', folder: '/mods/ModA', sourceFolder: '/source/ModA' } },
     { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'),
       ...same({ treeName: 'Old.esp', ...editChanges }),
       path: '/plugins/rename-source-changes', body: { origin: 'ModA', name: 'Old.esp', newName: 'New.esp' } },
@@ -236,10 +236,16 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: { applied: [{ mod: 'ModA', tracked: [first] }], refused: [{ item: 'ModC', refusal: 'ModProvidesNoPlugin', message: 'ModC provides no plugin.' }] },
       reads: { landed: [{ mod: 'ModA', tracked: [first] }], refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }] },
       path: '/plugins/track', body: { mods: ['ModA', 'ModC'] } },
-    { name: 'compile', verb: (c) => c.compile([first, second]),
-      answer: { applied: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginNotTracked', message: 'Second.esp is not tracked, so there is no source to compile.' }] },
-      reads: { landed: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp is not tracked, so there is no source to compile.' }] },
-      path: '/plugins/compile', body: { plugins: [first, second] } },
+    { name: 'build', verb: (c) => c.build(['ModA', 'ModC']),
+      answer: {
+        applied: [{ mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginSourceUnreadable', message: 'Second.esp has no readable source.' }] }],
+        refused: [{ item: 'ModC', refusal: 'GitUnavailable', message: 'git was not found on PATH.' }],
+      },
+      reads: {
+        landed: [{ mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp has no readable source.' }] }],
+        refused: [{ item: 'ModC', reason: 'git was not found on PATH.' }],
+      },
+      path: '/build', body: { mods: ['ModA', 'ModC'] } },
     { name: 'decompile', verb: (c) => c.decompile([first, second]),
       answer: { applied: [first], refused: [{ item: second, refusal: 'NotInTrackedMod', message: 'Second.esp is not in a tracked mod.' }] },
       reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a tracked mod.' }] },
@@ -356,13 +362,13 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         text: 'MyPatch.esp has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can address. Clear the light flag in the header to draw above it.',
         refusal: 'Could not create a new npc_ record in "MyPatch.esp"' },
       { name: 'getCopyChanges', verb: (c) => c.getCopyChanges([kept], 'Override', [other], false), status: 503, body: { detail }, text: detail, refusal: 'Could not copy 1 record' },
-      { name: 'createPlugin', verb: (c) => c.createPlugin(newPlugin, '/mods/ModA'), status: 409,
+      { name: 'createPlugin', verb: (c) => c.createPlugin(newPlugin, '/mods/ModA', '/source/ModA'), status: 409,
         body: { detail: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'FileExists' },
         text: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'Could not create "New.esp"' },
       { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'), status: 409,
         body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename the source of "Old.esp"' },
       { name: 'track', verb: (c) => c.track(['ModA', 'ModB']), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not track 2 mods' },
-      { name: 'compile', verb: (c) => c.compile([first, second]), status: 503, body: detail, text: detail, refusal: 'Could not compile 2 plugins' },
+      { name: 'build', verb: (c) => c.build(['ModA', 'ModB']), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
       { name: 'decompile', verb: (c) => c.decompile([first, second]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
     ];
 
@@ -539,9 +545,11 @@ describe('HttpMEditClient — sendLoadOrder', () => {
   const active = [{ name: 'Foo.esp', origin: 'A' }];
   const loadedWithNoLine = [{ name: 'Foo.esp', origin: 'A' }];
   const appliedBody = { applied: true, version: 1 };
-  const snapshot = { plugins, active, loadedWithNoLine, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' };
+  const archives = ['/game/Data/Foo - Main.ba2'];
+  const stringsFiles = ['/mods/A/Strings/Foo_en.STRINGS'];
+  const snapshot = { plugins, active, loadedWithNoLine, archives, stringsFiles, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' };
 
-  it('PUTs every plugin with its line, the active plugins, the game directory and the instance root', async () => {
+  it('PUTs every plugin with its line, the active plugins, the archives and strings files, the game directory and the instance root', async () => {
     let putBody: unknown;
     const { response, push } = pushableStreamResponse();
     const fetch = routedFetch([
@@ -556,7 +564,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     push(readyTickThatSettlesPutLoadOrder());
     await load;
 
-    expect(putBody).toEqual({ plugins, active, loadedWithNoLine, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' });
+    expect(putBody).toEqual({ plugins, active, loadedWithNoLine, archives, stringsFiles, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' });
   });
 
   it('holds the PUT until the notification stream has connected, as the backend publishes its first tick as the PUT lands and a PUT that outran the stream would lose every tick published before it connects', async () => {

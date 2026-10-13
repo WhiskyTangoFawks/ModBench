@@ -19,7 +19,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
-const GUN_FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+const GUN_FILE = '/source/ModA/plugin-source/A.esp/Weapons/Gun.json';
 const GUN_TEXT = `{\n  "FormKey": "${GUN}",\n  "Base": "${GUN}",\n  "EditorID": "Gun"\n}`;
 
 function located(text = GUN_TEXT) {

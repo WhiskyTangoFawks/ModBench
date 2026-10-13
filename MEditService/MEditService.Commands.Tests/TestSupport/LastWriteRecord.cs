@@ -31,7 +31,7 @@ internal static class LastWriteRecord
     internal static void RefuseRefUpdates(string modFolder) =>
         GitHooks.Write(modFolder, "reference-transaction", "[ \"$1\" = prepared ] && exit 1\nexit 0");
 
-    private static PluginProvider.FromMod ModOf(string modFolder) => new(Path.GetFileName(modFolder), modFolder);
+    private static PluginProvider.FromMod ModOf(string modFolder) => new(Path.GetFileName(modFolder), modFolder, modFolder);
 
     private static string GitDir(string modFolder) => Path.Combine(modFolder, ".git");
 

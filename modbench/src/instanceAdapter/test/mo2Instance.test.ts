@@ -413,6 +413,99 @@ describe('the MO2 Instance adapter', () => {
         expect(await adapter.creationClubList(notFound, 'Fallout4')).toEqual([]);
       });
     });
+
+    describe('the archives the game\'s INIs list, where Mod Management takes the archives the game loads from', () => {
+      let game: string;
+
+      beforeEach(async () => {
+        game = await mkdtemp(join(tmpdir(), 'mo2-instance-ini-'));
+      });
+      afterEach(() => rm(game, { recursive: true, force: true }));
+
+      const found = (): GameFolder => ({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
+      const profileFile = (name: string): string => join(root, 'profiles', 'Default', name);
+      const localSettings = (on: boolean): Promise<void> => writeFile(profileFile('settings.ini'), `[General]\nLocalSettings=${on}\n`);
+
+      it('lists the default INI\'s archives key by key, in the order the release loads its keys, whatever the case of section, key or file', async () => {
+        await writeFile(join(game, 'fallout4_default.ini'), [
+          '[Display]', 'sResourceArchiveList=Not An Archive.ba2',
+          '[archive]', 'SResourceArchiveList=Fallout4 - Voices.ba2, Fallout4 - Meshes.ba2',
+          '; sResourceArchiveList2=Commented.ba2', 'sResourceStartUpArchiveList=Fallout4 - Startup.ba2,Fallout4 - Interface.ba2,',
+        ].join('\r\n'));
+
+        expect(await adapter.archiveList('Default', found(), 'Fallout4')).toEqual({
+          archives: ['Fallout4 - Startup.ba2', 'Fallout4 - Interface.ba2', 'Fallout4 - Voices.ba2', 'Fallout4 - Meshes.ba2'],
+          notes: ['The profile Default keeps no game INIs of its own: the archives listed are its default INI\'s, and none the game\'s own INIs add.'],
+        });
+      });
+
+      it('takes a key the profile\'s own INIs give over the default INI\'s, the custom INI\'s over the main one\'s, when the profile keeps its own', async () => {
+        await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\nsResourceArchiveList2=Default2.ba2\n');
+        await writeFile(profileFile('fallout4.ini'), '[Archive]\nsResourceArchiveList=Main.ba2\nsResourceArchiveList2=Main2.ba2\n');
+        await writeFile(profileFile('Fallout4Custom.ini'), '[Archive]\nsResourceArchiveList2=Custom2.ba2\n');
+        await localSettings(true);
+
+        expect(await adapter.archiveList('Default', found(), 'Fallout4')).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
+      });
+
+      it('reads none of the profile\'s INIs while the profile keeps no game INIs of its own', async () => {
+        await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
+        await writeFile(profileFile('Fallout4.ini'), '[Archive]\nsResourceArchiveList=Left Behind.ba2\n');
+        await localSettings(false);
+
+        expect((await adapter.archiveList('Default', found(), 'Fallout4')).archives).toEqual(['Default.ba2']);
+      });
+
+      it.each([
+        ['the game folder was not found', (): GameFolder => ({ kind: 'notFound', looked: [], setting: 'setting' }), 'Fallout4'],
+        ['the release has no row', found, undefined],
+      ])('lists none when %s', async (_why, gameFolder, release) => {
+        await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
+
+        expect((await adapter.archiveList('Default', gameFolder(), release)).archives).toEqual([]);
+      });
+
+      it('lists after the INIs\' archives the ones the release loads whatever they list', async () => {
+        await writeFile(join(game, 'Fallout_default.ini'), '[Archive]\nSArchiveList=Fallout - Textures.bsa, Fallout - Meshes.bsa\n');
+
+        expect((await adapter.archiveList('Default', found(), 'FalloutNV')).archives)
+          .toEqual(['Fallout - Textures.bsa', 'Fallout - Meshes.bsa', 'Update.bsa']);
+      });
+    });
+
+    describe('the game folder\'s archives and strings files', () => {
+      let game: string;
+
+      beforeEach(async () => {
+        game = await mkdtemp(join(tmpdir(), 'mo2-instance-archives-'));
+      });
+      afterEach(() => rm(game, { recursive: true, force: true }));
+
+      const found = (): GameFolder => ({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
+
+      it('answers the release\'s archives at the Data folder\'s root and the strings files in its strings folder, by their paths in it', async () => {
+        const data = join(game, 'Data');
+        await mkdir(join(data, 'STRINGS'), { recursive: true });
+        await mkdir(join(data, 'Nested.ba2'), { recursive: true });
+        await writeFile(join(data, 'Fallout4 - Interface.BA2'), '');
+        await writeFile(join(data, 'Skyrim - Interface.bsa'), '');
+        await writeFile(join(data, 'STRINGS', 'Fallout4_en.STRINGS'), '');
+        await writeFile(join(data, 'STRINGS', 'readme.txt'), '');
+
+        expect(await adapter.gameFolderArchives(found(), 'Fallout4')).toEqual({
+          kind: 'listed', archives: ['Fallout4 - Interface.BA2'], stringsFiles: ['STRINGS/Fallout4_en.STRINGS'],
+        });
+      });
+
+      it('answers unresolved when the game folder was not found', async () => {
+        expect(await adapter.gameFolderArchives({ kind: 'notFound', looked: [], setting: 'setting' }, 'Fallout4')).toEqual({ kind: 'unresolved' });
+      });
+
+      it('answers unreadable, with why, when its Data folder cannot be listed', async () => {
+        expect(await adapter.gameFolderArchives(found(), 'Fallout4'))
+          .toEqual({ kind: 'unreadable', reason: expect.stringMatching(/ENOENT/) as unknown });
+      });
+    });
   });
 
   describe('the watch', () => {
@@ -471,48 +564,57 @@ describe('the MO2 Instance adapter', () => {
       expect(setting).toBeUndefined();
     });
 
-    it('signals a change to every profile\'s two order files, the settings, a mod\'s files and overwrite', () => {
+    it('signals a change to every profile\'s two order files and its INIs, the settings, a mod\'s files, a mod\'s source and overwrite', () => {
       let signals = 0;
       adapterAt(root).subscribe(() => { signals++; });
 
       const watchedPaths = [
         'profiles/Default/modlist.txt', 'profiles/Secondary/plugins.txt', 'ModOrganizer.ini',
-        'mods/Harder VATS/Textures/a.dds', 'overwrite/F4SE/Plugins/x.ini',
+        'mods/Harder VATS/Textures/a.dds', 'source/Harder VATS/plugin-source/Harder VATS.esp/a.json', 'overwrite/F4SE/Plugins/x.ini',
+        'profiles/Default/settings.ini', 'profiles/Default/fallout4.INI',
       ];
       const pathsHeardByNoWatcher = watchedPaths.filter((relative) => !fire(root, relative));
       expect(pathsHeardByNoWatcher).toEqual([]);
       expect(fire(root, 'profiles/Default/other.txt')).toBe(false);
-      expect(signals).toBe(5);
+      expect(signals).toBe(8);
     });
 
     it.each(['HEAD', 'refs/heads/main', 'packed-refs', ''])(
-      'hears .git/%s in a mod\'s git repository', (inside) => {
+      'hears .git/%s in a mod\'s repository', (inside) => {
         let signals = 0;
         adapterAt(root).subscribe(() => { signals++; });
 
-        expect(fire(root, join('mods/Harder VATS/.git', inside), join('mods/Harder VATS/git', inside))).toBe(true);
+        expect(fire(root, join('source/Harder VATS/.git', inside), join('source/Harder VATS/git', inside))).toBe(true);
         expect(signals).toBe(1);
       });
 
     it('tells a ref from git\'s bookkeeping in a Windows path', () => {
       let signals = 0;
       adapterAt(root).subscribe(() => { signals++; });
-      const mods = live().find((w) => w.base === root && matchesGlob('mods/A/x.esp', w.pattern));
+      const source = live().find((w) => w.base === root && matchesGlob('source/A/x.json', w.pattern));
 
-      mods?.fireChange('C:\\MO2\\mods\\Harder VATS\\.git\\index');
-      mods?.fireChange('C:\\MO2\\mods\\Harder VATS\\.git\\refs\\heads\\main');
+      source?.fireChange('C:\\MO2\\source\\Harder VATS\\.git\\index');
+      source?.fireChange('C:\\MO2\\source\\Harder VATS\\.git\\refs\\heads\\main');
 
       expect(signals).toBe(1);
     });
 
     it.each(['index', 'objects/ab/cdef', 'logs/HEAD', 'ORIG_HEAD', 'FETCH_HEAD', 'HEAD.lock'])(
-      'hears nothing of .git/%s in a mod\'s git repository, git\'s own bookkeeping not reading as a change', (inside) => {
+      'hears nothing of .git/%s in a mod\'s repository, git\'s own bookkeeping not reading as a change', (inside) => {
         let signals = 0;
         adapterAt(root).subscribe(() => { signals++; });
 
-        expect(fire(root, join('mods/Harder VATS/.git', inside), join('mods/Harder VATS/git', inside))).toBe(true);
+        expect(fire(root, join('source/Harder VATS/.git', inside), join('source/Harder VATS/git', inside))).toBe(true);
         expect(signals).toBe(0);
       });
+
+    it('hears git\'s bookkeeping in a .git a mod\'s folder holds, which is the mod\'s content', () => {
+      let signals = 0;
+      adapterAt(root).subscribe(() => { signals++; });
+
+      expect(fire(root, 'mods/Harder VATS/.git/index', 'mods/Harder VATS/git/index')).toBe(true);
+      expect(signals).toBe(1);
+    });
 
     it('follows the downloads folder the last read of the settings resolved, signalling once when it moves, not the one where the instance began, so a download landing in the folder the settings name now is heard', async () => {
       let signals = 0;
@@ -565,6 +667,26 @@ describe('the MO2 Instance adapter', () => {
       }
     });
 
+    it('follows the release\'s default INI, and the archives and strings files of the Data folder, in any case, once read', async () => {
+      const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-archives-'));
+      try {
+        const found: GameFolder = { kind: 'found', root: game, dataFolder: join(game, 'Data') };
+        const watched = adapterAt(root);
+        watched.subscribe(() => undefined);
+
+        await watched.archiveList('Default', found, 'Fallout4');
+        await watched.gameFolderArchives(found, 'Fallout4');
+
+        expect(fire(game, 'fallout4_default.INI')).toBe(true);
+        expect(fire(game, 'Fallout4Prefs.ini')).toBe(false);
+        const heardByNoWatcher = ['Fallout4 - Interface.BA2', 'Strings/Fallout4_en.STRINGS'].filter((name) => !fire(join(game, 'Data'), name));
+        expect(heardByNoWatcher).toEqual([]);
+        expect(fire(join(game, 'Data'), 'Skyrim - Interface.bsa')).toBe(false);
+      } finally {
+        await rm(game, { recursive: true, force: true });
+      }
+    });
+
     it('follows no game folder when none is found', async () => {
       const watched = adapterAt(root);
       watched.subscribe(() => undefined);
@@ -602,15 +724,11 @@ describe('the MO2 Instance adapter', () => {
       const mod = (name: string) => ({ kind: 'mod' as const, name });
       const relativePaths = (files: readonly { relativePath: string }[]): string[] => files.map((f) => f.relativePath).sort();
 
-      it('walks a mod\'s folder, leaving out its metadata, its root plugin source tree, dot entries and writes in flight', async () => {
+      it('walks a mod\'s folder, leaving out its metadata and writes in flight', async () => {
         const folder = join(root, 'mods', 'Harder VATS');
         await mkdir(join(folder, 'Textures', 'Source'), { recursive: true });
         await writeFile(join(folder, 'Textures', 'a.dds'), '');
         await writeFile(join(folder, 'Textures', 'Source', 'kept.psc'), '');
-        await mkdir(join(folder, 'plugin-source'), { recursive: true });
-        await writeFile(join(folder, 'plugin-source', 'left.json'), '');
-        await mkdir(join(folder, '.git'), { recursive: true });
-        await writeFile(join(folder, '.git', 'HEAD'), '');
         await writeFile(tempWritePath(join(folder, 'Textures', 'b.dds')), '');
 
         const files = await adapter.originFiles(mod('Harder VATS'));
@@ -641,40 +759,29 @@ describe('the MO2 Instance adapter', () => {
         expect(files.notes.join('\n')).toMatch(/Broken\.esp/);
       });
 
-      it('leaves out a dot file, and a dot folder below the root, and keeps what sits beside them', async () => {
+      it('walks a dot entry, a .git and a root plugin-source folder as any other content, as MO2 deploys them', async () => {
         const folder = join(root, 'mods', 'Harder VATS');
+        await mkdir(join(folder, '.git'), { recursive: true });
+        await writeFile(join(folder, '.git', 'HEAD'), '');
         await writeFile(join(folder, '.gitignore'), '*\n');
-        await mkdir(join(folder, 'Textures', '.thumbs'), { recursive: true });
-        await writeFile(join(folder, 'Textures', '.thumbs', 'cache.bin'), '');
-        await writeFile(join(folder, 'Textures', 'a.dds'), '');
+        await mkdir(join(folder, 'plugin-source'), { recursive: true });
+        await writeFile(join(folder, 'plugin-source', 'shipped.json'), '');
 
         const paths = relativePaths((await adapter.originFiles(mod('Harder VATS'))).files);
 
-        expect(paths).toContain('Textures/a.dds');
-        expect(paths.filter((path) => path.split('/').some((segment) => segment.startsWith('.')))).toEqual([]);
+        expect(paths).toEqual(expect.arrayContaining(['.git/HEAD', '.gitignore', 'plugin-source/shipped.json']));
       });
 
-      it('leaves out a root plugin-source folder in any case, and keeps a root folder whose name only starts with plugin-source', async () => {
-        const folder = join(root, 'mods', 'Harder VATS');
-        await mkdir(join(folder, 'PLUGIN-SOURCE'), { recursive: true });
-        await writeFile(join(folder, 'PLUGIN-SOURCE', 'stray.json'), '');
-        await mkdir(join(folder, 'plugin-sourceish'), { recursive: true });
-        await writeFile(join(folder, 'plugin-sourceish', 'note.txt'), '');
+      it.each([
+        ['an upgrade', 'Harder VATS', (adapter: InstanceAdapter) => adapter.extractUpgrade('Harder VATS')],
+        ['a new mod', 'New Mod', (adapter: InstanceAdapter) => adapter.extractNewMod('New Mod')],
+      ])('leaves out the extraction of %s in flight', async (_, name, extract) => {
+        const extraction = await extract(adapter);
+        await writeFile(join(extraction.path, 'New.esp'), '');
 
-        const paths = relativePaths((await adapter.originFiles(mod('Harder VATS'))).files);
+        const paths = relativePaths((await adapter.originFiles(mod(name))).files);
 
-        expect(paths).toContain('plugin-sourceish/note.txt');
-        expect(paths).not.toContain('PLUGIN-SOURCE/stray.json');
-      });
-
-      it('keeps a root Source folder: it is ordinary content, not the plugin source root, as Skyrim SE\'s Creation Kit ships script sources at a release\'s own root Source/', async () => {
-        const folder = join(root, 'mods', 'Harder VATS');
-        await mkdir(join(folder, 'Source'), { recursive: true });
-        await writeFile(join(folder, 'Source', 'Script.psc'), '');
-
-        const paths = relativePaths((await adapter.originFiles(mod('Harder VATS'))).files);
-
-        expect(paths).toContain('Source/Script.psc');
+        expect(paths.filter((path) => path.endsWith('New.esp'))).toEqual([]);
       });
 
       it.each([
@@ -817,10 +924,29 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('a mod\'s repository', () => {
-      it('answers tracked for a mod whose folder holds a `.git`, tracked being its presence there, and not for a mod whose folder holds none', async () => {
-        await mkdir(join(root, 'mods', 'Harder VATS', '.git'));
+      it('answers a mod\'s source folder beside mods/, whether or not it is there, and none for a name that reaches outside it', () => {
+        expect(adapter.sourceFolder('Harder VATS')).toBe(join(root, 'source', 'Harder VATS'));
+        expect(adapter.sourceFolder('No Such Mod')).toBe(join(root, 'source', 'No Such Mod'));
+        expect(adapter.sourceFolder('../Harder VATS')).toBeUndefined();
+      });
+
+      it('answers tracked for a mod whose source folder beside mods/ holds a `.git`, and not for a mod whose own folder holds one', async () => {
+        await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
+        await mkdir(join(root, 'mods', 'Unofficial Fallout 4 Patch', '.git'));
 
         expect([await adapter.modTracked('Harder VATS'), await adapter.modTracked('Unofficial Fallout 4 Patch')]).toEqual([true, false]);
+      });
+
+      it('lists every repository under the source folder by its folder name, listed in the mod order or not, and no folder without a `.git`', async () => {
+        await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
+        await mkdir(join(root, 'source', 'Cloned And Unlisted', '.git'), { recursive: true });
+        await mkdir(join(root, 'source', 'No Repository'), { recursive: true });
+
+        expect((await adapter.sourceMods()).sort()).toEqual(['Cloned And Unlisted', 'Harder VATS']);
+      });
+
+      it('lists none when the instance has no source folder', async () => {
+        expect(await adapter.sourceMods()).toEqual([]);
       });
     });
   });
@@ -880,6 +1006,20 @@ describe('the MO2 Instance adapter', () => {
         join(root, 'mods', 'Harder VATS'), join(root, 'mods', 'Unassigned (Modlist Development)_separator'),
       ]);
     });
+  });
+
+  it('moves a mod\'s source folder to the trash, and answers false when it has none', async () => {
+    const trashed: string[] = [];
+    const trash = (path: string): Promise<void> => {
+      trashed.push(path);
+      return Promise.resolve();
+    };
+    await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
+
+    expect(await adapter.trashSourceFolder('Harder VATS', trash)).toBe(true);
+    expect(await adapter.trashSourceFolder('Unofficial Fallout 4 Patch', trash)).toBe(false);
+
+    expect(trashed).toEqual([join(root, 'source', 'Harder VATS')]);
   });
 
   describe('excluding and including a file of a mod or Overwrite', () => {
@@ -1544,10 +1684,9 @@ describe('the MO2 Instance adapter', () => {
       let extraction: UpgradeExtraction;
 
       beforeEach(async () => {
-        await mkdir(join(folder(), '.git'));
-        await writeFile(join(folder(), '.gitignore'), 'mine');
+        await writeFile(join(folder(), '.gitignore'), 'shipped');
         await writeFile(join(folder(), 'Old.esp'), '');
-        await mkdir(join(folder(), 'plugin-source', 'kept'), { recursive: true });
+        await mkdir(join(folder(), 'plugin-source', 'shipped'), { recursive: true });
         extraction = await adapter.extractUpgrade('unofficial fallout 4 patch');
         await writeFile(join(extraction.path, 'New.esp'), '');
       });
@@ -1557,15 +1696,27 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
       });
 
-      it('replaces the contents around the mod\'s repository and plugin source', async () => {
-        expect(await extraction.land(extraction.path, { gameName: 'Fallout4' })).toEqual({ refused: false });
+      it('replaces every entry the folder held, and leaves the mod\'s repository beside mods/ as it was', async () => {
+        const repository = join(root, 'source', mod);
+        await mkdir(join(repository, '.git'), { recursive: true });
+        const before = await snapshotTree(repository);
 
+        await extraction.land(extraction.path, { gameName: 'Fallout4' });
+
+        expect((await readdir(folder())).sort()).toEqual(['New.esp', 'meta.ini']);
+        expect(await snapshotTree(repository)).toEqual(before);
+      });
+
+      it('lands a release holding .git, .gitignore and plugin-source as any content', async () => {
+        await mkdir(join(extraction.path, '.git'));
+        await writeFile(join(extraction.path, '.gitignore'), 'released');
+        await mkdir(join(extraction.path, 'plugin-source'));
+
+        await extraction.land(extraction.path, { gameName: 'Fallout4' });
+
+        expect(await text(root, join('mods', mod, '.gitignore'))).toBe('released');
         expect(await isThere(join(folder(), '.git'))).toBe(true);
-        expect(await text(root, join('mods', mod, '.gitignore'))).toBe('mine');
-        expect(await isThere(join(folder(), 'plugin-source', 'kept'))).toBe(true);
-        expect(await isThere(join(folder(), 'Old.esp'))).toBe(false);
-        expect(await isThere(join(folder(), 'New.esp'))).toBe(true);
-        expect(await isThere(extraction.path)).toBe(false);
+        expect(await isThere(join(folder(), 'plugin-source', 'shipped'))).toBe(false);
       });
 
       it('abandoned, removes the extraction and keeps everything the folder held', async () => {
@@ -1573,38 +1724,6 @@ describe('the MO2 Instance adapter', () => {
 
         expect(await isThere(extraction.path)).toBe(false);
         expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
-        expect(await isThere(join(folder(), '.git'))).toBe(true);
-        expect(await isThere(join(folder(), 'plugin-source', 'kept'))).toBe(true);
-      });
-
-      it.each(['.git', '.gitignore', 'plugin-source', 'Plugin-Source', '.GITIGNORE'])(
-        'refuses a release holding %s, naming it, before anything is removed, matched case-insensitively as on Windows Plugin-Source is the kept plugin-source and the move onto it would fail part way while elsewhere it lands beside it and drops out of the mod\'s files',
-        async (entry) => {
-          await mkdir(join(extraction.path, entry));
-
-          expect(await extraction.land(extraction.path, { gameName: 'Fallout4' })).toEqual({ refused: true, repositoryOrPluginSourceEntry: entry });
-
-          expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
-          expect(await isThere(join(folder(), 'plugin-source', 'kept'))).toBe(true);
-        },
-      );
-
-      it('refuses a release holding a repository or plugin source entry the folder has none of, so a first upgrade does not plant one that every later upgrade then refuses', async () => {
-        await rm(join(folder(), 'plugin-source'), { recursive: true });
-        await mkdir(join(extraction.path, 'plugin-source'));
-
-        expect(await extraction.land(extraction.path, { gameName: 'Fallout4' })).toEqual({ refused: true, repositoryOrPluginSourceEntry: 'plugin-source' });
-
-        expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
-      });
-
-      it.each(['Source', 'source'])('does not refuse a release holding a root %s folder, Skyrim SE\'s Creation Kit shipping script sources at a release\'s own root Source/ — ordinary content, not a collision', async (entry) => {
-        await mkdir(join(extraction.path, entry));
-
-        expect(await extraction.land(extraction.path, { gameName: 'Fallout4' })).toEqual({ refused: false });
-
-        expect(await isThere(join(folder(), entry))).toBe(true);
-        expect(await isThere(join(folder(), 'plugin-source', 'kept'))).toBe(true);
       });
 
       it('settles a release nested below the extraction, leaving no wrapper behind', async () => {
@@ -1612,7 +1731,7 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(root, { recursive: true });
         await writeFile(join(root, 'Nested.esp'), '');
 
-        expect(await extraction.land(root, { gameName: 'Fallout4' })).toEqual({ refused: false });
+        await extraction.land(root, { gameName: 'Fallout4' });
 
         expect(await isThere(join(folder(), 'Nested.esp'))).toBe(true);
         expect(await isThere(extraction.path)).toBe(false);

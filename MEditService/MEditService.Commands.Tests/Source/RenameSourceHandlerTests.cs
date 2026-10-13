@@ -60,7 +60,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         var result = RenameSource(Old, newName);
 
         Assert.Null(result.Refusal);
-        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod), Line: null)));
+        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null)));
         TheInstanceAdapterRenamesTheFile(newName);
         Assert.Equal(compiledBefore, await CompiledBytes(Old with { Name = newName }));
     }
@@ -145,8 +145,8 @@ public sealed class RenameSourceHandlerTests : IDisposable
 
         Assert.Equal(RenameSourceRefusal.UnreadableSource, result.Refusal);
         Assert.Contains("SelfNpc", result.Message, StringComparison.Ordinal);
-        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod), Line: null)));
-        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("New.esp", TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod), Line: null)));
+        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null)));
+        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("New.esp", TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null)));
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         Assert.Null(result.Refusal);
         Assert.Contains(result.Changes.Require().Documents, document => document.Text.Contains("Unsaved", StringComparison.Ordinal));
         Assert.Equal(before, TrackedTree.Records(_trackedMod, Old));
-        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod), Line: null)));
+        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null)));
     }
 
     [Fact]
@@ -260,5 +260,5 @@ public sealed class RenameSourceHandlerTests : IDisposable
     }
 
     private ISourceRepository Repository =>
-        TestAdapters.Source().Open(new PluginProvider.FromMod(TrackedModName, _trackedMod), GameRelease.Fallout4).Require();
+        TestAdapters.Source().Open(new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), GameRelease.Fallout4).Require();
 }

@@ -16,22 +16,21 @@ internal sealed record LoadOrderResponse(bool Applied, long Version = 0);
 // Mod Management's snapshot (ADR-0013). InstanceRoot: one index file per instance, inside the instance root (ADR-0010).
 internal sealed record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
-    IReadOnlyList<PluginAddress> LoadedWithNoLine, string GameDirectory, string InstanceRoot,
-    string GameRelease);
+    IReadOnlyList<PluginAddress> LoadedWithNoLine, IReadOnlyList<string> Archives, IReadOnlyList<string> StringsFiles,
+    string GameDirectory, string InstanceRoot, string GameRelease);
 internal sealed record LoadOrderPlugin(string Name, string Path, string Origin, PluginProviderRequest Provider, int? Line, bool LineNamesIt);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum PluginProviderKind { Mod, Game, None }
 
-// Only Kind Mod has a Mod and a Folder.
-internal sealed record PluginProviderRequest(PluginProviderKind Kind, string? Mod = null, string? Folder = null)
+internal sealed record PluginProviderRequest(PluginProviderKind Kind, string? Mod = null, string? Folder = null, string? SourceFolder = null)
 {
     internal PluginProvider? ToProvider() => Kind switch
     {
-        PluginProviderKind.Game when Mod is null && Folder is null => PluginProvider.Game,
-        PluginProviderKind.None when Mod is null && Folder is null => PluginProvider.NoMod,
-        PluginProviderKind.Mod when !string.IsNullOrEmpty(Mod) && !string.IsNullOrEmpty(Folder) =>
-            new PluginProvider.FromMod(Mod, Folder),
+        PluginProviderKind.Game when Mod is null && Folder is null && SourceFolder is null => PluginProvider.Game,
+        PluginProviderKind.None when Mod is null && Folder is null && SourceFolder is null => PluginProvider.NoMod,
+        PluginProviderKind.Mod when !string.IsNullOrEmpty(Mod) && !string.IsNullOrEmpty(Folder) && !string.IsNullOrEmpty(SourceFolder) =>
+            new PluginProvider.FromMod(Mod, Folder, SourceFolder),
         _ => null,
     };
 }

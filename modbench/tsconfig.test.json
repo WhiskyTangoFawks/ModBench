@@ -15,9 +15,10 @@
     { "path": "./src/instanceAdapter" },
     { "path": "./src/coreLib" },
     { "path": "./src/instanceLoader" },
-    { "path": "./src/modlist" },
+    { "path": "./src/modOrderCommands" },
     { "path": "./src/pluginsCommands" },
     { "path": "./src/instanceCommands" },
+    { "path": "./src/sourceCommands" },
     { "path": "./src/downloadsCommands" },
     { "path": "./src/install" },
     { "path": "./src/client" },
@@ -27,7 +28,8 @@
     { "path": "./src/downloads" },
     { "path": "./src/plugins" },
     { "path": "./src/editor" },
-    { "path": "./src/sourceLanguage" }
+    { "path": "./src/sourceLanguage" },
+    { "path": "./src/agent" }
   ],
   "include": ["src/**/*.test.ts", "src/**/test/**/*.ts"],
   "exclude": ["src/test/integration"]

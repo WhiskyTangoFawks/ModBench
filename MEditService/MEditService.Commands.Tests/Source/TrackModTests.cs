@@ -20,7 +20,7 @@ public sealed class TrackModTests
     public async Task TrackMod_OfAModThatProvidesNoPlugin_RefusesThatModWithoutThrowing()
     {
         using var gameDir = new ScratchDirectory("medit-track-noorigin-game-");
-        var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], []);
+        var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], [], []);
 
         var result = await TrackEveryPluginOf.ModAsync(loadOrder, "NoSuchMod");
 
@@ -355,9 +355,10 @@ public sealed class TrackModTests
     }
 
     [Fact]
-    public async Task TrackMod_LocalizedPluginWithABsaBesideIt_TracksAndMaterializesTheRealString()
+    public async Task TrackMod_LocalizedPluginWithABsaBesideIt_ReadsItsStringsFromTheModFolder_AndMaterializesTheRealStringInTheSourceFolder()
     {
         using var modFolder = new ScratchDirectory("medit-trackservice-localized-");
+        using var sourceFolder = new ScratchDirectory("medit-trackservice-localized-source-");
         using var gameDir = new ScratchDirectory("medit-trackservice-localized-game-");
         var (pluginPath, door) = WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(modFolder);
 
@@ -367,12 +368,13 @@ public sealed class TrackModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true,
+                NamedProvider: new PluginProvider.FromMod("FixtureMod", modFolder, sourceFolder))]);
         await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
-        Assert.True(TestAdapters.Source().IsTracked(modFolder));
+        Assert.True(TestAdapters.Source().IsTracked(sourceFolder));
 
-        var sourceText = TrackedTree.Document(modFolder, new PluginAddress("Fixture.esp", "FixtureMod"), door.FormKey.ToString()).Require().Body;
+        var sourceText = TrackedTree.Document(sourceFolder, new PluginAddress("Fixture.esp", "FixtureMod"), door.FormKey.ToString()).Require().Body;
         Assert.Contains("The Big Door", sourceText);
     }
 
@@ -396,7 +398,7 @@ public sealed class TrackModTests
 
         const string stringsFileNamedByIsoLanguageCodeNotByLanguageName = "Fixture_en.STRINGS";
         Assert.Contains(stringsFileNamedByIsoLanguageCodeNotByLanguageName, result.Message);
-        Assert.Contains(gameDir.Path, result.Message);
+        Assert.Contains(modFolder.Path, result.Message);
         Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }
 

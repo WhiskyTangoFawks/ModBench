@@ -7,17 +7,17 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>Documents by identity over one tracked mod folder (ADR-0014), and ADR-0007's
-/// git verbs beneath them. Every verb tolerates the folder having vanished since last observed —
-/// MO2's Replace install shell-deletes mod folders.</summary>
+/// <summary>Documents by identity over one tracked source folder (ADR-0014), and ADR-0007's
+/// git verbs beneath them. Every verb tolerates the folder having vanished since last observed:
+/// another tool can delete it.</summary>
 public sealed class SourceRepository : ISourceRepository
 {
-    private readonly string _modFolder;
+    private readonly string _sourceFolder;
     private readonly string _modName;
     private readonly GameRelease _release;
     private readonly SourceRepositoryGit _git;
 
-    public string ModFolder => _modFolder;
+    public string SourceFolder => _sourceFolder;
 
     internal SourceRepositoryLocator Locator { get; }
 
@@ -27,33 +27,33 @@ public sealed class SourceRepository : ISourceRepository
 
     internal ISourceFiles Files { get; }
 
-    private SourceRepository(string modFolder, GameRelease release, string modName, ISourceFiles files)
+    private SourceRepository(string sourceFolder, GameRelease release, string modName, ISourceFiles files)
     {
-        (_modFolder, _release, _modName, Files) = (modFolder, release, modName, files);
-        _git = new SourceRepositoryGit(modFolder);
-        Locator = new SourceRepositoryLocator(modFolder, release, files);
-        Layout = new SourceRepositoryLayout(modFolder, release, Locator, files);
-        Writes = new SourceRepositoryWrites(modFolder, release, Locator, Layout, _git, files);
+        (_sourceFolder, _release, _modName, Files) = (sourceFolder, release, modName, files);
+        _git = new SourceRepositoryGit(sourceFolder);
+        Locator = new SourceRepositoryLocator(sourceFolder, release, files);
+        Layout = new SourceRepositoryLayout(sourceFolder, release, Locator, files);
+        Writes = new SourceRepositoryWrites(sourceFolder, release, Locator, Layout, _git, files);
     }
 
     /// <summary>This repository read through <paramref name="files"/>.</summary>
-    internal SourceRepository Over(ISourceFiles files) => new(_modFolder, _release, _modName, files);
+    internal SourceRepository Over(ISourceFiles files) => new(_sourceFolder, _release, _modName, files);
 
-    /// <summary>The repository over <paramref name="mod"/>'s folder, or null when the folder is not
+    /// <summary>The repository over <paramref name="mod"/>'s source folder, or null when the folder is not
     /// tracked and so has no source tree to answer from.</summary>
     internal static SourceRepository? Open(PluginProvider.FromMod mod, GameRelease release) =>
-        IsTracked(mod.Folder) ? Over(mod, release) : null;
+        IsTracked(mod.SourceFolder) ? Over(mod, release) : null;
 
-    /// <summary>The repository over a mod's folder, which refuses the last-written record of a plugin
+    /// <summary>The repository over a mod's source folder, which refuses the last-written record of a plugin
     /// another mod provides (ADR-0012): a repository knows only its folder.</summary>
     internal static SourceRepository Over(PluginProvider.FromMod mod, GameRelease release) =>
-        new(mod.Folder, release, mod.Name, DiskFiles.Instance);
+        new(mod.SourceFolder, release, mod.Name, DiskFiles.Instance);
 
-    /// <summary>True exactly when <paramref name="modFolder"/> holds a repository whose <c>main</c>
+    /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c>
     /// exists.</summary>
-    internal static bool IsTracked(string modFolder) => SourceRepositoryGit.IsTracked(modFolder);
+    internal static bool IsTracked(string sourceFolder) => SourceRepositoryGit.IsTracked(sourceFolder);
 
-    internal static bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.Folder);
+    internal static bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.SourceFolder);
 
     /// <summary>The refusal naming the instance root when it is not there; null when it is.</summary>
     public static string? InstanceRootNotFound(string? instanceRoot) =>
@@ -62,22 +62,22 @@ public sealed class SourceRepository : ISourceRepository
     /// <summary>Whether the plugin's source reads: its mod is tracked and holds one tree for it. A tracked mod
     /// holds none for a plugin another tool put there or whose source was deleted.</summary>
     internal static bool SourceReads(RegisteredPlugin plugin) =>
-        plugin.Provider is PluginProvider.FromMod mod && HoldsTreeFor(mod.Folder, plugin.Name);
+        plugin.Provider is PluginProvider.FromMod mod && HoldsTreeFor(mod.SourceFolder, plugin.Name);
 
-    private static bool HoldsTreeFor(string modFolder, string pluginFileName) =>
-        IsTracked(modFolder) && SourceRepositoryLayout.TreeNameIn(modFolder, pluginFileName).Holds(out _, out _);
+    private static bool HoldsTreeFor(string sourceFolder, string pluginFileName) =>
+        IsTracked(sourceFolder) && SourceRepositoryLayout.TreeNameIn(sourceFolder, pluginFileName).Holds(out _, out _);
 
     /// <summary>Why the plugin's source does not read though its mod is tracked: no folder, twin folders, or a plugin
     /// source that cannot be listed. Null when it reads, and when its mod is not tracked.</summary>
     internal static SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) =>
-        plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.Folder)
-        && !SourceRepositoryLayout.TreeNameIn(mod.Folder, plugin.Name).Holds(out _, out var why)
+        plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.SourceFolder)
+        && !SourceRepositoryLayout.TreeNameIn(mod.SourceFolder, plugin.Name).Holds(out _, out var why)
             ? why
             : null;
 
     /// <summary>A <c>.git</c> with no <c>main</c> that Track did not mark as its own: someone else's, which Track never
     /// writes to (ADR-0003).</summary>
-    internal static bool HoldsAnotherRepository(string modFolder) => SourceRepositoryGit.HoldsAnotherRepository(modFolder);
+    internal static bool HoldsAnotherRepository(string sourceFolder) => SourceRepositoryGit.HoldsAnotherRepository(sourceFolder);
 
     /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="TreeOf"/> answers it once written:
     /// what a round-trip gate compiles, so that it compiles what is written.</summary>
@@ -94,8 +94,8 @@ public sealed class SourceRepository : ISourceRepository
     /// <summary>A repository for a mod that has none: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>, of
     /// each plugin's door tree. Answers each plugin refused, every one when no repository was made.</summary>
     internal static IReadOnlyList<(string Plugin, string Reason)> Track(
-        string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins) =>
-        SourceFailure.Answer(() => GitTracking.Track(modFolder, plugins)).Holds(out var refused, out var failure)
+        string sourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins) =>
+        SourceFailure.Answer(() => GitTracking.Track(sourceFolder, plugins)).Holds(out var refused, out var failure)
             ? refused
             : [.. plugins.Select(plugin => (plugin.Plugin.Plugin, failure.Reason))];
 
@@ -140,7 +140,7 @@ public sealed class SourceRepository : ISourceRepository
                     $"The source of {identity.FormKey} in {plugin.Name} ({plugin.Origin}) is not a readable document.");
             }
             if (Locator.Locate(spelled, identity) is not { } unit) return;
-            using var documents = new SourceTreeDocuments(_modFolder, spelled.Name, _release, Files);
+            using var documents = new SourceTreeDocuments(_sourceFolder, spelled.Name, _release, Files);
             documents.RefuseUnreadable(identity.RecordType, identity.FormKey, body, unit.FullPath);
         });
 
@@ -167,7 +167,7 @@ public sealed class SourceRepository : ISourceRepository
     public Answer<DocumentContainment?, SourceFailure> ContainerOf(PluginAddress plugin, RecordIdentity identity) =>
         SourceFailure.Answer(() => Locator.ContainerOf(Spelled(plugin), identity));
 
-    /// <summary>The document holding <paramref name="identity"/>, relative to the mod folder — a
+    /// <summary>The document holding <paramref name="identity"/>, relative to the source folder — a
     /// diagnostic's path for the Problems panel. Null when nothing there holds it.</summary>
     public Answer<string?, SourceFailure> RelativePathOf(PluginAddress plugin, RecordIdentity identity) =>
         SourceFailure.Answer(() => Locator.Locate(Spelled(plugin), identity)?.RelativePath);
@@ -195,10 +195,10 @@ public sealed class SourceRepository : ISourceRepository
 
     private static string? TreeFolderHolding(RegisteredPlugin plugin, string fullPath) =>
         plugin.Provider is PluginProvider.FromMod mod
-        && SourceRepositoryLayout.TreeFolderHolding(mod.Folder, fullPath) is { } tree
+        && SourceRepositoryLayout.TreeFolderHolding(mod.SourceFolder, fullPath) is { } tree
         && tree.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
-        && IsTracked(mod.Folder)
-        && SourceRepositoryLayout.TreeNameIn(mod.Folder, plugin.Name).Holds(out var named, out _)
+        && IsTracked(mod.SourceFolder)
+        && SourceRepositoryLayout.TreeNameIn(mod.SourceFolder, plugin.Name).Holds(out var named, out _)
         && string.Equals(named, tree, SourceRepositoryLocator.PathComparison)
             ? tree
             : null;
@@ -271,7 +271,7 @@ public sealed class SourceRepository : ISourceRepository
     public Answer<T, SourceFailure> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read) =>
         SourceFailure.Answer(() =>
         {
-            using var documents = new SourceTreeDocuments(_modFolder, Spelled(plugin).Name, _release, Files);
+            using var documents = new SourceTreeDocuments(_sourceFolder, Spelled(plugin).Name, _release, Files);
             return read(documents);
         });
 
@@ -297,6 +297,9 @@ public sealed class SourceRepository : ISourceRepository
             return PluginSourceChecks.CollidingFormKeys(spelled.Name, Locator.FilesOf(spelled), formKeys, _release);
         });
 
+    public Answer<IReadOnlyList<RecordFile>, SourceFailure> RecordFilesOf(PluginAddress plugin) =>
+        SourceFailure.Answer(() => PluginSourceChecks.RecordFilesOf(Locator.FilesOf(Spelled(plugin)), _release));
+
     public Answer<SourceComparison, SourceFailure> Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>
         SourceFailure.Answer(() =>
         {
@@ -306,13 +309,13 @@ public sealed class SourceRepository : ISourceRepository
 
     /// <summary>One listing of the plugin's tree. A file whose file-system stamp is unchanged and
     /// settled is not read again, unless an unsaved text stands in for it.</summary>
-    public RecordStamps StampsOf(PluginAddress plugin) => TreeStamps.StampsOf(_modFolder, Spelled(plugin), Files);
+    public RecordStamps StampsOf(PluginAddress plugin) => TreeStamps.StampsOf(_sourceFolder, Spelled(plugin), Files);
 
     /// <summary>Every record the tree holds whose text differs from the last commit's, an embedded
     /// child among them; a tree with no repository is all added. A failed read answers why, never
     /// reads as a deletion.</summary>
     public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin) =>
-        SourceFailure.Answer(() => LastCommitComparison.Of(_modFolder, _release, _git, Locator, Spelled(plugin)));
+        SourceFailure.Answer(() => LastCommitComparison.Of(_sourceFolder, _release, _git, Locator, Spelled(plugin)));
 
     public Answer<SourceChanges, SourceFailure> ChangesToPut(PluginAddress plugin, SourceDocument document) =>
         SourceFailure.Answer(() => Writes.ChangesToPut(Spelled(plugin), document));
@@ -346,7 +349,7 @@ public sealed class SourceRepository : ISourceRepository
         SourceFailure.Answer<SourceChanges?>(() =>
         {
             var name = Spelled(plugin).Name;
-            var sources = Path.Combine(_modFolder, SourceRepositoryLayout.RootFolderName);
+            var sources = Path.Combine(_sourceFolder, SourceRepositoryLayout.RootFolderName);
             return Files.EntriesUnder(sources).Any(entry => string.Equals(Path.GetFileName(entry), newName, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(PathShape.DirectoryOf(entry), sources, SourceRepositoryLocator.PathComparison))
                 ? null
@@ -391,7 +394,7 @@ public sealed class SourceRepository : ISourceRepository
             throw new ArgumentException(
                 $"{plugin.Name} is provided by '{plugin.Origin}', and this repository holds '{_modName}'.", nameof(plugin));
         }
-        return SourceRepositoryLayout.TreeNameIn(_modFolder, plugin.Name);
+        return SourceRepositoryLayout.TreeNameIn(_sourceFolder, plugin.Name);
     }
 }
 

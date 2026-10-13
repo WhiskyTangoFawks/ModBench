@@ -6,7 +6,7 @@ vi.mock('vscode', () => ({
   Uri: { from: uriFrom },
 }));
 
-import { compilableSelected, pluginsKeyContext } from '../gestureEntry';
+import { pluginsKeyContext } from '../gestureEntry';
 import { pluralArgument, selectionArgument, singularArgument } from '../../drivingLib/gestureEntry';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';
 import type { RecordBrowserNode } from '../RecordBrowser';
@@ -104,13 +104,6 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([compilable, trackedReadOnly]).singleTracked).toBe(false);
     expect(context([weapons]).singleTracked).toBe(false);
     expect(context([]).singleTracked).toBe(false);
-  });
-
-  it('compile takes exactly one selected tracked, editable plugin', () => {
-    expect(compilableSelected([compilable])).toBe(compilable);
-    expect(compilableSelected([trackedReadOnly])).toBeUndefined();
-    expect(compilableSelected([untracked])).toBeUndefined();
-    expect(compilableSelected([compilable, alpha])).toBeUndefined();
   });
 
   it('create sees exactly one selected record type or plugin that is tracked and editable', () => {

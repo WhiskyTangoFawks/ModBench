@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { Instance, InstanceValue, InstanceView, ModSyncArguments } from '../instanceLoader/instance';
 import type { InstallCommands } from '../install/install';
-import type { ModlistCommands } from '../modlist/modlist';
+import type { ModlistCommands } from '../modOrderCommands/modOrderCommands';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
@@ -21,7 +21,7 @@ import { registerGoToModCommand } from './goToMod';
 import { registerConflictTable } from './conflictTableEditor';
 import {
   modsCopyValueText, registerCreateEmptyModCommand, registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands,
-  registerModMoveCommand, registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand,
+  registerModMoveCommand, registerOpenFolderCommand, registerOpenSourceCommand, registerSeparatorCommands, registerViewOnNexusCommand,
 } from './modManagementCommands';
 
 interface ModsViewDeps {
@@ -102,6 +102,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     ...registerSeparatorCommands(commands, instance, reporterFor('separator'), ask, trash, () => view.selection),
     registerCreateEmptyModCommand(commands, instance, reporterFor('mod.createEmpty')),
     registerOpenFolderCommand(instance, reporterFor('mod.openFolder'), () => view.selection),
+    registerOpenSourceCommand(instance, reporterFor('mod.openSource'), () => view.selection),
     registerGoToModCommand(instance, reporterFor('mod.goToMod'), {
       selection: () => view.selection,
       rowFor: (origin) => provider.rowFor(origin),

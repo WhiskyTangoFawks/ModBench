@@ -25,12 +25,14 @@ instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
 driving -> sourcecommands: "stage: the mods, or every mod, with the instance value" {class: track}
-sourcecommands -> client: "stage: each mod's folder and installation files, the game folder" {class: track}
+instance -> instanceadapter: "each downloaded file: bytes, when its index is stale" {class: track}
+instanceadapter -> sourcecommands: "each installation file: hash and entries · each game file a mod file overrides: hash" {class: track}
+sourcecommands -> client: "stage: each mod's folder and installation files with their hashes and entries, the game folder" {class: track}
 client -> http: envelope {class: track}
 http -> engine: envelope {class: track}
-modfolder -> modfolderadapter: "each mod's files: bytes · each installation file: bytes" {class: track}
-modfolderadapter -> engine: "bytes" {class: track}
-engine."per mod: hash, match, a delta for each changed file; refused when an installation file is missing; a source mod's manifest is its build's"
+modfolder -> modfolderadapter: "each mod's files: bytes, or the manifest line's hash when its stamp matches" {class: track}
+modfolderadapter -> engine: "hashed files" {class: track}
+engine."per mod: match, a delta for each changed file; refused when an installation file is missing; a source mod's manifest is its build's"
 engine -> port: "progress, per mod" {class: push}
 engine -> modfolderadapter: "each manifest that changed · each delta" {class: track}
 modfolderadapter -> modfolder: "manifests · the build folder" {class: track}

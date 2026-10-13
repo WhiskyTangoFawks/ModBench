@@ -1,13 +1,14 @@
-// MO2's watch: every file of the instance, the downloads folder, and the game folder's plugins and
-// Creation Club list, armed through VS Code's file watcher while anyone listens, and a change to the game-folder setting.
+// MO2's watch: every file of the instance, the downloads folder, the game folder's files Mod Management
+// reads, armed through VS Code's file watcher while anyone listens, and a change to the game-folder setting.
 
 import * as vscode from 'vscode';
 import type { Subscription } from './instanceAdapter';
-import { MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, SETTINGS_WATCH_GLOB } from './layout';
+import { MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, SETTINGS_WATCH_GLOB, SOURCE_GLOB } from './layout';
 
-type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins' | 'creationClubList';
+type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins' | 'creationClubList' | 'defaultIni' | 'gameFolderArchives';
 
-function isInstanceChange(path: string): boolean {
+// A repository's change is its working tree and its refs, never git's own bookkeeping.
+function isRepositoryChange(path: string): boolean {
   const segments = path.split(/[\\/]/);
   const gitIndex = segments.lastIndexOf('.git');
   if (gitIndex === -1) return true;
@@ -47,14 +48,14 @@ export function mo2Watch(instanceRoot: string, gameDirectoryChanged: (listener: 
   const changed = (): void => {
     for (const listener of [...listeners]) listener();
   };
-  const watch = (base: string, glob: string): Subscription =>
-    watchFiles(base, glob, (path) => {
-      if (isInstanceChange(path)) changed();
-    });
+  const watch = (base: string, glob: string): Subscription => watchFiles(base, glob, changed);
   const armed = (): boolean => listeners.size > 0;
 
   const arm = (): void => {
-    fixed = [MODS_GLOB, OVERWRITE_GLOB, MODLIST_GLOB, PLUGINS_GLOB, SETTINGS_WATCH_GLOB].map((glob) => watch(instanceRoot, glob));
+    fixed = [MODS_GLOB, OVERWRITE_GLOB, MODLIST_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, SETTINGS_WATCH_GLOB].map((glob) => watch(instanceRoot, glob));
+    fixed.push(watchFiles(instanceRoot, SOURCE_GLOB, (path) => {
+      if (isRepositoryChange(path)) changed();
+    }));
     fixed.push(gameDirectoryChanged(changed));
     for (const folder of followed.values()) folder.watch = watch(folder.base, folder.glob);
   };

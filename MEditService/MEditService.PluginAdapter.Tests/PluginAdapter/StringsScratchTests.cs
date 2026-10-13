@@ -33,8 +33,8 @@ public sealed class StringsScratchTests : IDisposable
         _pluginPath = Path.Combine(_modFolder, PluginName);
         LocalizedDoorPlugin.Write(_pluginPath, "The Big Door");
         LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(dataFolder, "Skyrim - Interface.bsa"));
-        _loadOrder = new LoadOrderSnapshot(dataFolder, null, GameRelease.SkyrimSE, [], [], [], [Path.Combine(dataFolder, "Skyrim - Interface.bsa")]);
-        _strings = new PluginStrings(_modFolder, dataFolder);
+        _loadOrder = new LoadOrderSnapshot(dataFolder, null, GameRelease.SkyrimSE, [], [], [], [Path.Combine(dataFolder, "Skyrim - Interface.bsa")], []);
+        _strings = new PluginStrings(_modFolder);
     }
 
     public void Dispose()
@@ -53,7 +53,7 @@ public sealed class StringsScratchTests : IDisposable
     {
         OpenDocuments().Dispose();
         (await Adapter.ReadSourceOfAsync(
-            new RegisteredPlugin(PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder), Line: null),
+            new RegisteredPlugin(PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder, _modFolder), Line: null),
             _loadOrder, _strings)).Answered();
 
         Assert.Empty(Directory.EnumerateFileSystemEntries(_temp));

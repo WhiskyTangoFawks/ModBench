@@ -7,7 +7,7 @@ import type { MoveToTrash } from '../ports/trash';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { fileExtension, isPluginFile } from './pluginFile';
-export { fileInFolder, isPluginSourcePath, pluginSourceFolderOf, PLUGIN_SOURCE_GLOB } from './layout';
+export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
 
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
 export { OVERWRITE_ORIGIN } from './codecs/modlistText';
@@ -151,6 +151,13 @@ export type DataFolderPlugins =
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
+/** The release's archives at the Data folder's root, and the strings files in its strings folder by
+ *  their paths in it, as the folder spells them; or why there is no answer, as for its plugins. */
+export type DataFolderArchives =
+  | { readonly kind: 'listed'; readonly archives: readonly string[]; readonly stringsFiles: readonly string[] }
+  | { readonly kind: 'unresolved' }
+  | { readonly kind: 'unreadable'; readonly reason: string };
+
 /** An entry directly in an extracted folder. */
 export interface ExtractedEntry {
   readonly name: string;
@@ -175,13 +182,10 @@ export interface NewModExtraction extends ModExtraction {
 }
 
 export interface UpgradeExtraction extends ModExtraction {
-  /** Replaces the mod's contents with the tree at `root` around its repository and plugin source,
-   *  setting `keys` over the meta and keeping each value `keys` leaves undefined. A release
-   *  holding an entry of either is refused first. */
-  land(root: string, keys: OwnedMetaKeys): Promise<Upgraded>;
+  /** Replaces the mod's contents with the tree at `root`, setting `keys` over the meta and keeping
+   *  each value `keys` leaves undefined. */
+  land(root: string, keys: OwnedMetaKeys): Promise<void>;
 }
-
-type Upgraded = { readonly refused: false } | { readonly refused: true; readonly repositoryOrPluginSourceEntry: string };
 
 interface InstanceSettings {
   readonly profile: string;
@@ -324,6 +328,12 @@ export interface InstanceAdapter {
   /** The plugins the game folder's Creation Club list names, in its order; none when the release
    *  has no Creation Club, the game folder is not found, or it holds no list. */
   creationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]>;
+  /** The archives the INIs list, in load order: the game folder's default INI, then the user's where the
+   *  manager keeps them, a key's last value winning. `notes` names each INI the game reads that this did not. */
+  archiveList(
+    profile: string, gameFolder: GameFolder, gameRelease: string | undefined,
+  ): Promise<{ readonly archives: readonly string[]; readonly notes: readonly string[] }>;
+  gameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined): Promise<DataFolderArchives>;
   /** The name of the downloaded file at `path`, the paths matched as the platform matches them;
    *  undefined when `path` is not in the downloads folder, or that folder cannot be resolved. */
   downloadedFileAt(path: string): Promise<string | undefined>;
@@ -336,8 +346,12 @@ export interface InstanceAdapter {
   entryFolder(entry: EntryRef): Promise<ModFolder | undefined>;
   /** An origin's files, none when its folder is not there. */
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
+  /** The mod's source folder, its repository's (ADR-0007); undefined when its name gives it none. */
+  sourceFolder(mod: string): string | undefined;
   /** ADR-0007. */
   modTracked(mod: string): Promise<boolean>;
+  /** Every repository in the source folder, by its folder's name, whether the mod order lists it or not. */
+  sourceMods(): Promise<string[]>;
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** The content digest of an origin file, at the path it is read from: two files with one digest
@@ -380,6 +394,8 @@ export interface InstanceAdapter {
   ): Promise<{ applied: true } | { applied: false; refusal: string }>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
+  /** Moves a mod's source folder into the trash; false when it has none. */
+  trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
   /** Makes the folder of a mod that is new. Refuses a folder already there, whatever it holds,
    *  matched as the manager matches names. */
   extractNewMod(mod: string): Promise<NewModExtraction>;

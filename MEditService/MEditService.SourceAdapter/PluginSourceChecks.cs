@@ -1,10 +1,12 @@
+using System.Text;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>A plugin's whole source tree, and the file the read stopped at, relative to the mod folder.
+/// <summary>A plugin's whole source tree, and the file the read stopped at, relative to the source folder.
 /// Files is empty when one is named: half a tree compiles to a binary missing records.</summary>
 public sealed record PluginSourceFiles(IReadOnlyList<TreeFile> Files, string? Unreadable);
 
@@ -16,19 +18,23 @@ public enum SourceDivergenceKind
     Unproduced,
 }
 
-/// <summary>The first file where a plugin's source and what the whole-mod door writes for it differ,
-/// as the mod folder spells it.</summary>
-public sealed record SourceDivergence(SourceDivergenceKind Kind, string Path);
+/// <summary>A file where a plugin's source and what the whole-mod door writes differ, and the field that
+/// differs where the file holds the door's document with another meaning.</summary>
+public sealed record SourceDivergence(SourceDivergenceKind Kind, string Path, string? Field = null);
 
 /// <summary>A record's file held at HeldPath, where the layout puts it at BelongsAt, both as the mod
 /// folder spells them.</summary>
 public sealed record MisplacedFile(string FormKey, string HeldPath, string BelongsAt);
 
-/// <summary>Where a plugin's source and what the door writes for it part ways, and the files that
-/// differ from it only in where they sit. A misplaced file is no divergence: it compiles.</summary>
-public sealed record SourceComparison(SourceDivergence? Divergence, IReadOnlyList<MisplacedFile> Misplaced);
+/// <summary>Every file where a plugin's source and what the door writes part ways, changes before files the
+/// door writes nowhere, and the files that differ only in where they sit, which compile.</summary>
+public sealed record SourceComparison(IReadOnlyList<SourceDivergence> Divergences, IReadOnlyList<MisplacedFile> Misplaced);
 
-/// <summary>The two questions asked of a plugin's source as files rather than as documents.</summary>
+/// <summary>A source file that carries a record, as the source folder spells it, with its text and the record type
+/// its path or its text names, null when neither does.</summary>
+public sealed record RecordFile(string Path, string Text, string? RecordType);
+
+/// <summary>The questions asked of a plugin's source as files rather than as documents.</summary>
 internal static class PluginSourceChecks
 {
     internal static IReadOnlyList<string> CollidingFormKeys(
@@ -52,11 +58,25 @@ internal static class PluginSourceChecks
         return colliding;
     }
 
+    internal static IReadOnlyList<RecordFile> RecordFilesOf(PluginSourceFiles source, GameRelease gameRelease)
+    {
+        var types = RecordTypes.For(gameRelease);
+        var records = new List<RecordFile>();
+        foreach (var file in source.Files.Where(file => !SourceRepositoryLayout.CarriesNoRecord(file.RelativePath)))
+        {
+            var text = Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(file.Content));
+            var recordType = SourceRepositoryLayout.RecordTypeOf(file.RelativePath, gameRelease)
+                ?? types.RecordTypeNamed(DocumentTokens.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator));
+            records.Add(new RecordFile(file.RelativePath, text, recordType));
+        }
+        return records;
+    }
+
     internal static SourceComparison Compare(
         string pluginFileName, PluginSourceFiles source, IReadOnlyList<TreeFile> serialized)
     {
         if (source.Unreadable is { } unreadable)
-            return new SourceComparison(new SourceDivergence(SourceDivergenceKind.Unreadable, unreadable), []);
+            return new SourceComparison([new SourceDivergence(SourceDivergenceKind.Unreadable, unreadable)], []);
 
         var regenerated = SourceRepositoryLayout.PristineFilesOf(pluginFileName, serialized);
         var held = source.Files.ToDictionary(file => file.RelativePath, file => file.Content, StringComparer.Ordinal);
@@ -66,29 +86,25 @@ internal static class PluginSourceChecks
         var belongingAt = misplaced.Select(file => file.BelongsAt).ToHashSet(StringComparer.Ordinal);
         var heldAt = misplaced.Select(file => file.HeldPath).ToHashSet(StringComparer.Ordinal);
 
+        var divergences = new List<SourceDivergence>();
         foreach (var file in regenerated.Where(file => !belongingAt.Contains(file.RelativePath)))
         {
-            if (held.TryGetValue(file.RelativePath, out var content) && content.AsSpan().SequenceEqual(file.Content))
-                continue;
-
-            return new SourceComparison(
-                new SourceDivergence(
-                    file.RelativePath == header ? SourceDivergenceKind.HeaderChanged : SourceDivergenceKind.DocumentChanged,
-                    file.RelativePath),
-                misplaced);
+            var kind = file.RelativePath == header ? SourceDivergenceKind.HeaderChanged : SourceDivergenceKind.DocumentChanged;
+            if (!held.TryGetValue(file.RelativePath, out var content)) divergences.Add(new SourceDivergence(kind, file.RelativePath));
+            else if (DocumentMeaning.FirstDifference(DocumentText.StripUtf8Bom(content), file.Content) is { } field)
+                divergences.Add(new SourceDivergence(kind, file.RelativePath, field));
         }
 
         var written = regenerated.Select(file => file.RelativePath).ToHashSet(StringComparer.Ordinal);
-        var unproduced = held.Keys
+        divergences.AddRange(held.Keys
             .Where(relativePath => !written.Contains(relativePath) && !heldAt.Contains(relativePath))
             .Order(StringComparer.Ordinal)
-            .FirstOrDefault();
-        return new SourceComparison(
-            unproduced is null ? null : new SourceDivergence(SourceDivergenceKind.Unproduced, unproduced), misplaced);
+            .Select(relativePath => new SourceDivergence(SourceDivergenceKind.Unproduced, relativePath)));
+        return new SourceComparison(divergences, misplaced);
     }
 
     // A held file the codec writes nowhere and a file it writes where nothing is held, with the same
-    // bytes, are one record at a leaf name the layout does not give it. Differing bytes stay a divergence.
+    // meaning, are one record at a leaf name the layout does not give it. Differing meaning stays a divergence.
     private static List<MisplacedFile> MisplacedFiles(
         string pluginFileName, IReadOnlyList<TreeFile> regenerated, Dictionary<string, byte[]> held)
     {
@@ -101,7 +117,7 @@ internal static class PluginSourceChecks
         {
             if (FormKeyOf(heldPath, content, pluginFileName) is not { } formKey) continue;
 
-            var at = unheld.FindIndex(file => file.Content.AsSpan().SequenceEqual(content));
+            var at = unheld.FindIndex(file => DocumentMeaning.FirstDifference(DocumentText.StripUtf8Bom(content), file.Content) is null);
             if (at < 0) continue;
 
             misplaced.Add(new MisplacedFile(formKey, heldPath, unheld[at].RelativePath));
@@ -112,7 +128,7 @@ internal static class PluginSourceChecks
 
     private static string? FormKeyOf(string relativePath, byte[] content, string pluginFileName) =>
         DocumentText.FormKeyDeclaredIn(
-            System.Text.Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(content)), relativePath, pluginFileName);
+            Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(content)), relativePath, pluginFileName);
 
     // One name per entry under the tree's own root: every file, and every directory once however many
     // files it holds, and a container's document is its directory's. A directory counted twice would read

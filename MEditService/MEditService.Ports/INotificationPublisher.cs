@@ -30,6 +30,9 @@ public sealed record LoadOrderStatusNotification(LoadOrderStatus Status) : INoti
 /// serializing and committing.</summary>
 public sealed record TrackProgressNotification(TrackProgress Progress) : INotification;
 
+/// <summary>A build's own progress (<see cref="BuildProgress"/>), per mod.</summary>
+public sealed record BuildProgressNotification(BuildProgress Progress) : INotification;
+
 /// <summary>At a snapshot: each tracked plugin whose bytes differ from what Modbench last wrote
 /// (ADR-0003). The mod's whole answer, so a plugin it leaves out matches; a mod whose
 /// repository went names none.</summary>

@@ -10,7 +10,7 @@ import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFo
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, trackedRepositoriesOver, type Editor } from './editor';
 import { createSourceLanguage, formKeyLocation } from './sourceLanguage';
-import { savePluginSource } from './sourceLanguage/dirtyPluginSource';
+import { saveModPluginSource } from './sourceLanguage/dirtyPluginSource';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
 import type { SourceEditing } from './drivingLib/sourceEditing';
@@ -18,11 +18,12 @@ import { applyWorkspaceChanges } from './drivingLib/applyWorkspaceChanges';
 import { oneAtATime } from './drivingLib/oneAtATime';
 import { Instance } from './instanceLoader/instance';
 import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
-import { originFiles, NO_ORIGIN_FILES, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
+import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import type { InstanceAdapter } from './instanceAdapter/instanceAdapter';
-import { attachPort, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
+import { serveAgent } from './agent/agentServer';
+import { agentPort, attachPort, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
 import { createPlugins, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
@@ -34,7 +35,8 @@ import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolb
 import { openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { pluginsCommands, pluginSyncOver } from './pluginsCommands/plugins';
-import { modSyncOver, modlistCommands } from './modlist/modlist';
+import { sourceCommands } from './sourceCommands/sourceCommands';
+import { modSyncOver, modlistCommands } from './modOrderCommands/modOrderCommands';
 import { warnIfFomod } from './install/fomodWarning';
 import { installCommands } from './install/install';
 import { downloadsCommands } from './downloadsCommands/downloads';
@@ -50,7 +52,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants'>;
+  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -69,7 +71,7 @@ interface InstanceSide {
   /** Absent together, on the path with no instance to read. */
   instance?: Instance;
   toolboxProvider: ToolboxProvider;
-  originFiles: OriginFilesOf;
+  sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
   downloadsSelection: () => readonly DownloadsTreeNode[];
 }
@@ -83,7 +85,7 @@ const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
 function buildBareSide(own: Own): InstanceSide {
   return {
     toolboxProvider: own(new ToolboxProvider({ instance: undefined })),
-    originFiles: NO_ORIGIN_FILES,
+    sourceFiles: NO_SOURCE_FILES,
     copyValue: [], downloadsSelection: () => [],
   };
 }
@@ -123,8 +125,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const trackSelection = selectionInFocusedView(
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
   const plugins = own(pluginsBox.onInstance({
-    instance, instanceRoot, commands: pluginsCommands({ adapter, client }), pluginSync, trackSelection, modsView: MODS_KEY_ARGS.view,
-    saveUnsavedPluginSource: (plugin) => savePluginSource((origin) => originFiles(instance.value, origin), plugin),
+    instance, instanceRoot, commands: pluginsCommands({ adapter, client }), sourceCommands: sourceCommands({ client }), pluginSync, trackSelection, modsView: MODS_KEY_ARGS.view,
+    saveUnsavedPluginSource: (mod) => saveModPluginSource((origin) => sourceFiles(instance.value, origin), mod),
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
@@ -164,7 +166,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   return {
     instance, toolboxProvider,
-    originFiles: (origin) => originFiles(instance.value, origin),
+    sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue],
     downloadsSelection: () => downloadsView.selection,
   };
@@ -253,8 +255,9 @@ export function activate(context: vscode.ExtensionContext): void {
     views,
     plugins,
     editor,
+    serveAgent({ port: agentPort(), instance: views.instance, reporter: reporterFor('agent'), log: outputChannel }),
     createSourceLanguage({
-      client: meditClient, originFiles: (origin) => views.originFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
+      client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     }),
   );
 }

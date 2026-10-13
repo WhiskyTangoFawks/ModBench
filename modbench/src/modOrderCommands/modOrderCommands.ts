@@ -152,6 +152,7 @@ function renameSeparator(
 interface TrashedEntry {
   name: string;
   lineRefusal?: string;
+  sourceRefusal?: string;
 }
 
 const dropOf = (entry: EntryRef): ModOrderChange =>
@@ -173,20 +174,32 @@ async function trashThenUnlist(
     .map((name) => ({ item: { name }, reason: entryNotFound({ kind, name }) }));
   const toUnlist: string[] = [];
   const trashed = new Set<string>();
+  const sourceRefusals = new Map<string, string>();
   for (const name of names.filter((n) => isListed(order, { kind, name: n }))) {
     try {
       if (await adapter.trashEntryFolder({ kind, name }, trash)) trashed.add(name);
       toUnlist.push(name);
     } catch (err) {
       refused.push({ item: { name }, reason: errorMessage(err) });
+      continue;
+    }
+    if (kind === 'mod') {
+      try {
+        await adapter.trashSourceFolder(name, trash);
+      } catch (err) {
+        sourceRefusals.set(name, errorMessage(err));
+      }
     }
   }
   const lines = await changeModOrder(adapter, profile, () => toUnlist.map((name) => dropOf({ kind, name })));
-  if (lines.applied) return { applied: true, outcome: { landed: toUnlist.map((name) => ({ name })), refused } };
+  const landedEntry = (name: string, lineRefusal?: string): TrashedEntry => ({
+    name, ...(lineRefusal !== undefined && { lineRefusal }), ...(sourceRefusals.has(name) && { sourceRefusal: sourceRefusals.get(name) }),
+  });
+  if (lines.applied) return { applied: true, outcome: { landed: toUnlist.map((name) => landedEntry(name)), refused } };
   return {
     applied: true,
     outcome: {
-      landed: toUnlist.filter((name) => trashed.has(name)).map((name) => ({ name, lineRefusal: lines.refusal })),
+      landed: toUnlist.filter((name) => trashed.has(name)).map((name) => landedEntry(name, lines.refusal)),
       refused: [
         ...refused,
         ...toUnlist.filter((name) => !trashed.has(name)).map((name) => ({ item: { name }, reason: lines.refusal })),

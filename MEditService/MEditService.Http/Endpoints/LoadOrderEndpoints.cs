@@ -16,7 +16,7 @@ internal static class LoadOrderEndpoints
             .WithDescription(
                 "Reconciles the load order against this snapshot (ADR-0013): every plugin file in " +
                 "the instance, each with its origin, path and provider, the active plugins in load order, and " +
-                "the plugins loaded with no line, as Mod Management decided them. Plugins new to the snapshot are opened and " +
+                "the plugins loaded with no line, the archives the game loads and the loose strings files it reads, as Mod Management decided them. Plugins new to the snapshot are opened and " +
                 "registered (indexed only if never seen), plugins absent from it are unregistered, " +
                 "plugins whose load index moved are re-registered SQL-only; then one winner sweep. " +
                 "Answers as soon as the snapshot is applied; the sweep runs after, reported on " +
@@ -42,12 +42,15 @@ internal static class LoadOrderEndpoints
             return Results.Problem("Each plugin entry must have a non-empty Name, Path, Origin and Provider.", statusCode: 400);
         }
         // Never defaulted here (ADR-0013).
-        if (req.Active is not { } active || req.LoadedWithNoLine is not { } loadedWithNoLine)
-            return Results.Problem("The snapshot must state its active plugins and those loaded with no line.", statusCode: 400);
+        if (req.Active is not { } active || req.LoadedWithNoLine is not { } loadedWithNoLine
+            || req.Archives is not { } archives || req.StringsFiles is not { } stringsFiles)
+        {
+            return Results.Problem("The snapshot must state its active plugins, those loaded with no line, its archives and its strings files.", statusCode: 400);
+        }
 
         var result = handler.Put(
             req.GameDirectory, req.InstanceRoot, gameRelease,
-            registered, active, loadedWithNoLine);
+            registered, active, loadedWithNoLine, archives, stringsFiles);
         return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : EndpointMapping.Refusal(result);
     }
 

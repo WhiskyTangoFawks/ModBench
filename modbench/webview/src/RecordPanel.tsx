@@ -379,7 +379,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                     vscodeContext={JSON.stringify(headerCellContext(
                       col.override.formKey, col.override.plugin, col.override.origin,
                       {
-                        compilable: tracked && !isImmutable,
                         editable: editableSet?.has(pluginKeyOf(col.override)) === true,
                         inMod: modsByOrigin[col.override.origin] ?? 'none',
                       },

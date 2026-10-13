@@ -39,12 +39,10 @@ Thumbs.db
 # Source reference (read-only, not part of this project)
 references/
 
-# MO2 test instances: the game files each developer copies in, Modbench's index, and what Track writes in a mod
+# MO2 test instances: the game files each developer copies in, Modbench's index, and the source folder Track writes
 /DevList*/Stock Game Folder/
 /DevList*/modbench/
-/DevList*/mods/*/.git/
-/DevList*/mods/*/.gitignore
-/DevList*/mods/*/plugin-source/
+/DevList*/source/
 
 # Pinned Vale binary, fetched by .claude/skills/validate/install-vale.sh
 /tools/

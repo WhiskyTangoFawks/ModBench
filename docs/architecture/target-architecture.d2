@@ -39,12 +39,12 @@ medit_core: "MEDIT · Core — the write side; it references the kernel and the 
   class: band; grid-rows: 1
   commands: "Commands\nowns: the write side\nhides: the rules that decide a write" {
     edits: "Record edits\ncompile, decompile and every edit to plugin source" {class: core}
-    engine: "Build engine — one deep module\nowns: a mod folder from its source or its manifest,\nand a manifest from a mod folder\nhides: hashing, matching, deltas, extraction, packing" {class: core}
+    engine: "Build engine — one deep module\nowns: a mod folder from its source or its manifest,\nand a manifest from a mod folder\nhides: matching, deltas, extraction, packing" {class: core}
   }
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
-  modlist: "mod order commands\nowns: the mod order" {class: core}
+  modordercommands: "mod order commands\nowns: the mod order" {class: core}
   sourcecommands: "source commands\nowns: init, stage, discard changes, clean, track and build\nhides: nothing: it hands the instance's facts to mEdit" {class: core}
   pluginscommands: "plugins commands\nowns: changes to the plugin order\nhides: the plugin-order rules" {class: core}
   instancecommands: "instance commands\nowns: changes to the instance as a whole" {class: core}
@@ -102,7 +102,7 @@ medit_data: "MEDIT · Systems of record" {
 }
 modbench_data: "MODBENCH · Systems of record; mEdit is the left column and always running" {
   class: band; grid-rows: 1
-  instance: "Instance\nthe mod manager's files · each profile's plugins.txt ·\nmods · Overwrite · downloaded files ·\nthe manifests · the repository · the source folder" {class: sor}
+  instance: "Instance\nthe mod manager's files · each profile's plugins.txt ·\nmods · Overwrite · downloaded files and their index ·\nthe manifests · the repository · the source folder" {class: sor}
   gamedata: "Game folder\nthe game's own plugins and files" {class: sor}
   tools: "Other tools\nthe mod manager, the user, the game — at any time" {class: other}
   medit: "mEdit\nthe left column" {class: driving}

@@ -13,7 +13,7 @@ namespace MEditService.Index.Tests.TestSupport;
 /// binary.</summary>
 internal static class TrackedMods
 {
-    internal static void Track(string pluginPath, string dataFolder, GameRelease release = GameRelease.Fallout4)
+    internal static void Track(string pluginPath, GameRelease release = GameRelease.Fallout4)
     {
         var modFolder = Path.GetDirectoryName(pluginPath)
             ?? throw new ArgumentException("A plugin path names a file inside a mod folder.", nameof(pluginPath));
@@ -21,25 +21,25 @@ internal static class TrackedMods
         var read = TestAdapters.Mutagen()
             .ReadSourceOfAsync(
                 new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null), EmptyLoadOrder.Of(release),
-                new PluginStrings(modFolder, dataFolder))
+                new PluginStrings(modFolder))
             .GetAwaiter().GetResult();
         var source = read.Answered();
 
         TestAdapters.Source().Track(modFolder, [(source.Files, new DecompiledPlugin(pluginName, source.BinarySha256))]);
     }
 
-    internal static void Track(LoadOrderEntry entry, string dataFolder, GameRelease release = GameRelease.Fallout4) =>
-        Track(entry.Path, dataFolder, release);
+    internal static void Track(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>
+        Track(entry.Path, release);
 
     /// <summary>Every plugin of the fixture tracked, so the Index reads each from its tree.</summary>
     internal static ScatteredFixtureData Tracked(this ScatteredFixtureData fixture)
     {
-        foreach (var entry in fixture.Plugins) Track(entry, fixture.GameDirectory);
+        foreach (var entry in fixture.Plugins) Track(entry);
         return fixture;
     }
 
     internal static ISourceRepository RepositoryOf(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>
-        TestAdapters.Source().OverFolder(new PluginProvider.FromMod(entry.Origin, entry.ModFolderOf()), release);
+        TestAdapters.Source().OverFolder(new PluginProvider.FromMod(entry.Origin, entry.ModFolderOf(), entry.ModFolderOf()), release);
 
     internal static PluginAddress KeyOf(this LoadOrderEntry entry) => new(entry.Name, entry.Origin);
 

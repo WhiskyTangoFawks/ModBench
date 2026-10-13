@@ -22,8 +22,8 @@ vi.mock('vscode', () => ({
 
 import { handUnsavedPluginSource } from '../handUnsaved';
 
-const FILE = '/mods/ModA/plugin-source/A.esp/Cells/Cell.json';
-const MOVED = '/mods/ModA/plugin-source/A.esp/Cells/Moved.json';
+const FILE = '/source/ModA/plugin-source/A.esp/Cells/Cell.json';
+const MOVED = '/source/ModA/plugin-source/A.esp/Cells/Moved.json';
 
 const document = (scheme: string, fsPath: string, text: string, isDirty = true): FakeDocument =>
   ({ uri: { scheme, fsPath, toString: () => `${scheme}:${fsPath}` }, isDirty, getText: () => text });

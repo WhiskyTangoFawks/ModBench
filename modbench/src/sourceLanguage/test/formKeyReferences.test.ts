@@ -22,7 +22,7 @@ const GUN = '000900:A.esp';
 const STAND = '000700:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
 const modB = { name: 'B.esp', origin: 'ModB' };
-const STAND_FILE = '/mods/ModA/plugin-source/A.esp/Stand.json';
+const STAND_FILE = '/source/ModA/plugin-source/A.esp/Stand.json';
 const STAND_RENDERED = 'Stand - 000700_A.esp.json';
 const AT_GUN = (text: string) => text.indexOf(GUN) + 1;
 const ASKING = `{ "FormKey": "000600:A.esp", "Template": "${GUN}" }`;
@@ -84,7 +84,7 @@ describe('Find All References on a FormKey (plugin-source.md, In the text editor
     const CELL = '000701:A.esp';
     const PLACED = '000702:A.esp';
     const PERSISTENT = '000703:A.esp';
-    const CELL_FILE = '/mods/ModA/plugin-source/A.esp/Cell.json';
+    const CELL_FILE = '/source/ModA/plugin-source/A.esp/Cell.json';
     const cell = `{ "FormKey": "${CELL}", "Placed": [{ "FormKey": "${PLACED}", "Base": "${GUN}" }], "Owner": "${GUN}", "Persistent": [{ "FormKey": "${PERSISTENT}", "Base": "${GUN}" }] }`;
     const onCell = (...rows: ReferenceResult[]) =>
       references(rows, { [key(CELL, modA)]: { file: CELL_FILE, text: cell }, [key(PERSISTENT, modA)]: { file: CELL_FILE, text: cell } });

@@ -13,7 +13,7 @@ import { createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
-  type BackendStatus, type CellChildRecords, type CompileOutcome,
+  type BackendStatus, type CellChildRecords, type BuildOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -217,12 +217,12 @@ class HttpMEditClient implements MEditClient {
     return isRefused(answer) ? answer : spec.outcome(answer);
   }
 
-  async createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused> {
+  async createPlugin(plugin: PluginAddress, folder: string, sourceFolder: string | undefined): Promise<PluginCreatedResponse | WriteRefused> {
     const failMsg = `Could not create "${plugin.name}"`;
     const answer = await this.mutate({
       op: `createPlugin(${plugin.name}, ${plugin.origin})`,
       failMsg,
-      post: () => this.apiClient.POST('/plugins/create', { body: { origin: plugin.origin, name: plugin.name, folder } }),
+      post: () => this.apiClient.POST('/plugins/create', { body: { origin: plugin.origin, name: plugin.name, folder, sourceFolder } }),
     });
     return answer;
   }
@@ -269,7 +269,6 @@ class HttpMEditClient implements MEditClient {
   // `instanceRoot` scopes the backend's index (ADR-0010). The signal aborts the PUT itself rather
   // than leaving it to notice a dead socket.
   private async putLoadOrder(snapshot: LoadOrderSnapshot, signal: AbortSignal): Promise<LoadOrderOutcome> {
-    const { plugins, active, loadedWithNoLine, gameDirectory, instanceRoot, gameRelease } = snapshot;
     // The backend publishes its first tick as this PUT lands, so a PUT that outran the stream
     // loses every tick published before it connects — and with them the progressive chevrons.
     await this.notifications.whenConnected();
@@ -287,7 +286,7 @@ class HttpMEditClient implements MEditClient {
     let result;
     try {
       result = await this.apiClient.PUT('/load-order', {
-        body: { plugins, active, loadedWithNoLine, gameDirectory, instanceRoot, gameRelease },
+        body: snapshot,
         signal,
       });
     } catch (e) {
@@ -449,15 +448,17 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  /** Each plugin compiles or is refused on its own. A cause no plugin escapes, no load order,
-   *  refuses the whole selection. Never refreshes the tree: a compiled binary changes only bytes on
-   *  disk. */
-  async compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused> {
+  /** Each mod builds or is refused on its own, and each plugin of a built mod compiles or is
+   *  refused on its own. Never refreshes the tree: a build changes only bytes on disk. */
+  async build(mods: readonly string[]): Promise<BuildOutcome | WriteRefused> {
     return this.mutateEach({
-      verb: 'compile', noun: 'plugin', items: plugins,
-      op: (counted) => `compile(${counted})`,
-      post: () => this.apiClient.POST('/plugins/compile', { body: { plugins: [...plugins] } }),
-      outcome: selectionOutcome,
+      verb: 'build', noun: 'mod', items: mods,
+      op: (counted) => `build(${counted})`,
+      post: () => this.apiClient.POST('/build', { body: { mods: [...mods] } }),
+      outcome: (answer) => selectionOutcome({
+        applied: answer.applied.map((m) => ({ mod: m.mod, compiled: m.compiled, refused: itemRefusals(m.refused) })),
+        refused: answer.refused,
+      }),
     });
   }
 

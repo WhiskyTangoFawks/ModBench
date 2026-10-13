@@ -68,7 +68,7 @@ function valueOf(
   return instanceValueFixture({
     gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
     pluginsLoadedWithNoLine: pluginsLoadedWithNoLine?.map((p) => (typeof p === 'string' ? { name: p, origin: 'Data/' } : p)),
-    plugins, paths: { overwriteDir: '/instance/overwrite', downloadsDir: '', modDirs: new Map(mods.map((m) => [m, `/instance/mods/${m}`])) },
+    plugins, paths: { overwriteDir: '/instance/overwrite', downloadsDir: '', modDirs: new Map(mods.map((m) => [m, `/instance/mods/${m}`])), sourceDirs: new Map() },
   });
 }
 
@@ -2113,7 +2113,7 @@ describe('PluginsTreeProvider — changed outside Modbench', () => {
 });
 
 describe('PluginsTreeProvider — a healthy plugin row after a reconcile', () => {
-  it('states only its kind and where track and compile apply, with no description and the base tooltip', async () => {
+  it('states only its kind and where track applies, with no description and the base tooltip', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('A.esp'), held('B.esp')]);
 

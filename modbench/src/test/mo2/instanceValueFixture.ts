@@ -10,6 +10,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     mods: [],
     modFolders: [],
     trackedMods: new Set(),
+    sourceMods: new Set(),
     profiles: ['Default'],
     files: new FileConflictLookup(),
     filesByMod: new Map(),
@@ -27,7 +28,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     loadOrderSnapshot: undefined,
     overwriteFiles: [],
     overwriteFolders: [],
-    paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map() },
+    paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map(), sourceDirs: new Map() },
   };
   const value = { ...base, ...overrides };
   const pluginOrder = value.plugins.filter((plugin) => plugin.line !== null && plugin.winning)

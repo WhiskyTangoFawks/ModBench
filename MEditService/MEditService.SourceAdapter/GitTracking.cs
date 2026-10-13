@@ -11,21 +11,21 @@ internal static class GitTracking
 {
     /// <summary>Answers each plugin whose files could not be written.</summary>
     internal static IReadOnlyList<(string Plugin, string Reason)> Track(
-        string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins)
+        string sourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins)
     {
-        if (SourceRepositoryGit.IsTracked(modFolder) || SourceRepositoryGit.HoldsAnotherRepository(modFolder))
-            throw new InvalidOperationException($"'{modFolder}' already holds a repository.");
+        if (SourceRepositoryGit.IsTracked(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
+            throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
 
-        WriteJournal journal = new(modFolder);
-        var (written, refused) = WriteEachPlugin(modFolder, plugins, journal);
+        WriteJournal journal = new(sourceFolder);
+        var (written, refused) = WriteEachPlugin(sourceFolder, plugins, journal);
         if (refused.Count > 0)
         {
             var unrestored = journal.UndoSince(0);
             return [(refused[0].Plugin, journal.Describe(refused[0].Reason, unrestored)), .. refused.Skip(1)];
         }
 
-        var git = new SourceRepositoryGit(modFolder);
-        var gitignorePath = Path.Combine(modFolder, ".gitignore");
+        var git = new SourceRepositoryGit(sourceFolder);
+        var gitignorePath = Path.Combine(sourceFolder, ".gitignore");
         try
         {
             if (!git.Exists)
@@ -33,7 +33,7 @@ internal static class GitTracking
             CreateRepository(git);
             journal.Write(gitignorePath, System.Text.Encoding.UTF8.GetBytes(GitignoreContent));
             git.Run("add", "-A");
-            git.Run("commit", "-q", "-m", $"Track {SourceRepositoryLayout.ModNameIn(modFolder)}");
+            git.Run("commit", "-q", "-m", $"Track {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
             foreach (var plugin in written)
             {
                 if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Plugin, binarySha256);
@@ -78,7 +78,7 @@ internal static class GitTracking
         git.Run("init", "-q", "-b", "main");
         git.Run("config", $"{SourceRepositoryGit.TrackMarkSection}.{SourceRepositoryGit.TrackMarkKey}", "true");
         git.Run("config", "core.autocrlf", "false");
-        // Git for Windows refuses a path past 260 characters unless told otherwise, and a mod folder's
+        // Git for Windows refuses a path past 260 characters unless told otherwise, and a source folder's
         // plugin source nests deep.
         git.Run("config", "core.longpaths", "true");
         git.Run("config", "commit.gpgsign", "false");
