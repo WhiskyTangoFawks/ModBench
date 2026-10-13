@@ -11,6 +11,8 @@ export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
 
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
 export { OVERWRITE_ORIGIN } from './codecs/modlistText';
+export type { ArchiveReader } from './archiveReader';
+export { sevenZip } from './sevenZip';
 
 /** The setting that names the game folder outright, and so the one that fixes a folder not found. */
 export const GAME_FOLDER_SETTING = 'modbench.mods.gameDirectory';

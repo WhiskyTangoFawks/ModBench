@@ -11,8 +11,7 @@ import { installCommands, type InstallAccess } from '../install';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 import { accessTo, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
 import { fakeArchiveReader } from '../../test/fakeArchiveReader';
-import type { ArchiveReader } from '../../instanceAdapter/archiveReader';
-import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
+import type { ArchiveReader, InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 
 const CORPUS_INI_GAME_NAME = 'Fallout 4';
 

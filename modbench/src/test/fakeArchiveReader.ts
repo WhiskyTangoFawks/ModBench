@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { ArchiveReader } from '../instanceAdapter/archiveReader';
+import type { ArchiveReader } from '../instanceAdapter/instanceAdapter';
 
 /** Every archive holds `files`; extracting one writes each under the destination. */
 export function fakeArchiveReader(files: readonly string[]): ArchiveReader {

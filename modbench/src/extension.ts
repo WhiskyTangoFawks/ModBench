@@ -5,7 +5,6 @@ import * as vscode from 'vscode';
 import { createMEditClient, stopMEditClient, type MEditClient } from './client';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
-import { sevenZip } from './instanceAdapter/sevenZip';
 import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
@@ -22,7 +21,7 @@ import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader
 import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
-import type { InstanceAdapter } from './instanceAdapter/instanceAdapter';
+import { sevenZip, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
 import { agentPort, attachPort, gameDirectoryOverrides, inheritedPythonPath, onGameDirectoryChange, onTerminalEnvChange } from './workspaceConfig';
 import { createPlugins, type Plugins } from './plugins';

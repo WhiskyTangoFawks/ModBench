@@ -8,9 +8,8 @@ import type { TailOf } from '../coreLib/boundCommand';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import {
-  type InstalledFileId, type InstanceAdapter, type ModExtraction, type NewModExtraction, type UpgradeExtraction,
+  type ArchiveReader, type InstalledFileId, type InstanceAdapter, type ModExtraction, type NewModExtraction, type UpgradeExtraction,
 } from '../instanceAdapter/instanceAdapter';
-import type { ArchiveReader } from '../instanceAdapter/archiveReader';
 import { modNameTakenRefusal, newModNameRefusal } from '../coreLib/commandRefusals';
 
 /** What install reaches the instance through. */
