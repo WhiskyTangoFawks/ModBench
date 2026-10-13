@@ -143,8 +143,13 @@ export const modSourceDir = (instanceRoot: string, modName: string): string | un
 /** The folder beside `mods/` that holds every mod's source folder (ADR-0007). */
 export const sourceRootDir = (instanceRoot: string): string => join(instanceRoot, SOURCE);
 
+const BUILD_CONFIGURATION_FILE = 'build.json';
+
+/** The key of the build configuration that names the mod folder its build writes. */
+export const BUILD_OUTPUT_KEY = 'output';
+
 /** The file in a source folder that says what its build makes (ADR-0007). */
-export const buildConfigurationFile = (sourceFolder: string): string => join(sourceFolder, 'build.json');
+export const buildConfigurationFile = (sourceFolder: string): string => join(sourceFolder, BUILD_CONFIGURATION_FILE);
 
 /** The git directory whose presence is what "tracked" means (ADR-0007). */
 export const repositoryGitDir = (sourceFolder: string): string => join(sourceFolder, GIT_DIR);

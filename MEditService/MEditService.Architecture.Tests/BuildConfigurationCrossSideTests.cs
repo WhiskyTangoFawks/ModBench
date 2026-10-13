@@ -1,0 +1,51 @@
+using System.Text.RegularExpressions;
+using MEditService.TestSupport;
+
+namespace MEditService.Architecture.Tests;
+
+public sealed class BuildConfigurationCrossSideTests
+{
+    private static readonly Regex BackendFileName =
+        new(@"internal const string BuildConfigurationFileName = ""([^""]+)"";", RegexOptions.Compiled);
+    private static readonly Regex FrontendFileName =
+        new(@"(?:export )?const BUILD_CONFIGURATION_FILE = '([^']+)';", RegexOptions.Compiled);
+    private static readonly Regex BackendOutputKey =
+        new(@"const string OutputKey = ""([^""]+)"";", RegexOptions.Compiled);
+    private static readonly Regex FrontendOutputKey =
+        new(@"(?:export )?const BUILD_OUTPUT_KEY = '([^']+)';", RegexOptions.Compiled);
+
+    private static readonly string Root = ServiceProjects.SolutionDirectory();
+    private static readonly string FrontendLayout = Path.Combine(Root, "..", "modbench", "src", "instanceAdapter", "layout.ts");
+
+    [Fact]
+    public void TheBackendAndFrontendFileNames_Agree() =>
+        Assert.Equal(
+            ValueIn(Path.Combine(Root, "MEditService.SourceAdapter", "SourceRepositoryLayout.cs"), BackendFileName),
+            ValueIn(FrontendLayout, FrontendFileName));
+
+    [Fact]
+    public void TheBackendAndFrontendOutputKeys_Agree() =>
+        Assert.Equal(
+            ValueIn(Path.Combine(Root, "MEditService.SourceAdapter", "BuildConfiguration.cs"), BackendOutputKey),
+            ValueIn(FrontendLayout, FrontendOutputKey));
+
+    [Fact]
+    public void TheScan_CatchesAPlantedMismatch()
+    {
+        using var dir = new ScratchDirectory("medit-build-configuration-cross-side-");
+        var backendFile = Path.Combine(dir, "BuildConfiguration.cs");
+        var frontendFile = Path.Combine(dir, "layout.ts");
+        File.WriteAllText(backendFile, "private const string OutputKey = \"output\";");
+        File.WriteAllText(frontendFile, "export const BUILD_OUTPUT_KEY = 'outputFolder';");
+
+        Assert.NotEqual(ValueIn(backendFile, BackendOutputKey), ValueIn(frontendFile, FrontendOutputKey));
+    }
+
+    private static string ValueIn(string file, Regex pattern)
+    {
+        var match = pattern.Match(File.ReadAllText(file));
+        return match.Success
+            ? match.Groups[1].Value
+            : throw new InvalidOperationException($"Expected '{file}' to declare the build configuration's name.");
+    }
+}

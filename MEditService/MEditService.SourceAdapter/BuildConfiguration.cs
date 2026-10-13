@@ -39,7 +39,7 @@ internal static class BuildConfiguration
             excluded.AddRange(change.Exclude.Where(added => !excluded.Contains(added, StringComparer.OrdinalIgnoreCase)));
             configuration.Remove(ExcludeKey);
             if (excluded.Count > 0)
-                configuration[ExcludeKey] = new JsonArray([.. excluded.Order(StringComparer.Ordinal).Select(p => JsonValue.Create(p))]);
+                configuration[ExcludeKey] = new JsonArray([.. excluded.Order(StringComparer.OrdinalIgnoreCase).Select(p => JsonValue.Create(p))]);
         }
 
         new WriteJournal(sourceFolder).Write(path, Spelled(configuration));

@@ -26,8 +26,8 @@ public sealed class BuildConfigurationChangeTests : IDisposable
     [Theory]
     [InlineData("{\"output\": \"Mod\"}", new[] { "textures/b.dds", "meshes" }, new string[0],
         "{\n  \"output\": \"Mod\",\n  \"exclude\": [\n    \"meshes\",\n    \"textures/b.dds\"\n  ]\n}\n")]
-    [InlineData("{\"output\": \"Mod\", \"exclude\": [\"textures/b.dds\"]}", new[] { "Textures/B.dds", "a.esp" }, new string[0],
-        "{\n  \"output\": \"Mod\",\n  \"exclude\": [\n    \"a.esp\",\n    \"textures/b.dds\"\n  ]\n}\n")]
+    [InlineData("{\"output\": \"Mod\", \"exclude\": [\"textures/b.dds\"]}", new[] { "Textures/B.dds", "a.esp", "Z.esp" }, new string[0],
+        "{\n  \"output\": \"Mod\",\n  \"exclude\": [\n    \"a.esp\",\n    \"textures/b.dds\",\n    \"Z.esp\"\n  ]\n}\n")]
     [InlineData("{\"output\": \"Mod\", \"exclude\": [\"a.esp\", \"textures/b.dds\"]}", new string[0], new[] { "Textures/B.dds" },
         "{\n  \"output\": \"Mod\",\n  \"exclude\": [\n    \"a.esp\"\n  ]\n}\n")]
     [InlineData("{\"output\": \"Mod\", \"exclude\": [\"a.esp\"]}", new string[0], new[] { "a.esp", "never.esp" },
@@ -54,20 +54,46 @@ public sealed class BuildConfigurationChangeTests : IDisposable
             BuildJson());
     }
 
+    [Fact]
+    public void AFolderWithNoConfiguration_RefusesAsUnreadable_AndGetsNone()
+    {
+        var failure = TestAdapters.Source().ChangeBuildConfiguration(_sourceFolder, new BuildConfigurationChange("Other", [], []));
+
+        Assert.Contains(_sourceFolder, Assert.IsType<SourceFailure.Unreadable>(failure).Reason, StringComparison.Ordinal);
+        Assert.False(File.Exists(BuildJsonPath));
+    }
+
     [Theory]
-    [InlineData(null)]
     [InlineData("{\"output\": ")]
     [InlineData("[\"output\"]")]
     [InlineData("{\"output\": \"Mod\", \"exclude\": [1]}")]
-    public void AConfigurationThatIsNotThereOrNotReadable_RefusesAsUnreadable_AndIsLeftAsItWas(string? before)
+    public void AConfigurationThatIsNotReadable_RefusesAsUnreadable_AndIsLeftAsItWas(string before)
     {
-        if (before is not null) WriteBuildJson(before);
+        WriteBuildJson(before);
 
         var failure = TestAdapters.Source().ChangeBuildConfiguration(_sourceFolder, new BuildConfigurationChange("Other", [], []));
 
-        var unreadable = Assert.IsType<SourceFailure.Unreadable>(failure);
-        Assert.Contains(_sourceFolder, unreadable.Reason, StringComparison.Ordinal);
-        Assert.Equal(before, File.Exists(BuildJsonPath) ? BuildJson() : null);
+        Assert.Contains(_sourceFolder, Assert.IsType<SourceFailure.Unreadable>(failure).Reason, StringComparison.Ordinal);
+        Assert.Equal(before, BuildJson());
+    }
+
+    [PosixFact]
+    public void AConfigurationTheDiskWillNotLetBeWritten_IsInaccessible_AndIsLeftAsItWas()
+    {
+        WriteBuildJson("{\"output\": \"Old Name\"}");
+        FileModes.Set(_sourceFolder, "555");
+        SourceFailure? failure;
+        try
+        {
+            failure = TestAdapters.Source().ChangeBuildConfiguration(_sourceFolder, new BuildConfigurationChange("New Name", [], []));
+        }
+        finally
+        {
+            FileModes.Set(_sourceFolder, "755");
+        }
+
+        Assert.IsType<SourceFailure.Inaccessible>(failure);
+        Assert.Equal("{\"output\": \"Old Name\"}", BuildJson());
     }
 
     private string BuildJsonPath => Path.Combine(_sourceFolder, "build.json");

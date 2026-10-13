@@ -1036,6 +1036,7 @@ export interface components {
         };
         InitModRequest: {
             name: string;
+            sourceFolder: string;
             installationFiles: components["schemas"]["InstallationFileRequest"][];
             modManagerFiles: string[];
         };

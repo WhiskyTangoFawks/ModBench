@@ -12,7 +12,7 @@ import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './d
 import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
 import {
   GAME_FOLDER_SETTING, type DataFolderArchives, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type ManagerNames, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type Subscription,
+  type ManagerNames, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { SameCopies, type FileCopies } from './sameCopies';
 import { errorMessage } from '../ports/errorMessage';
@@ -42,7 +42,8 @@ interface InstancePaths {
   readonly downloadsDir: string | undefined;
   /** Each listed mod's own folder, by mod name; a mod with no folder has none. */
   readonly modDirs: ReadonlyMap<string, string>;
-  /** Each listed mod's source folder, by mod name: the repository that builds it, else the one init would make, whether it is there or not. */
+  /** Each source mod's source folder, by mod name: the repository whose build configuration names it as its output,
+   *  listed in the mod order or not. */
   readonly sourceDirs: ReadonlyMap<string, string>;
 }
 
@@ -136,10 +137,20 @@ interface InstanceOptions {
   log: Log;
 }
 
+// A listed source mod under its name in the mod order, an unlisted one under the output its repository names.
+function sourceDirsOf(entries: readonly ModlistEntry[], sourceMods: SourceMods): Map<string, string> {
+  const listed = entries.flatMap((entry) => {
+    const folder = entry.kind === 'mod' ? sourceMods.folderOf(entry.name) : undefined;
+    return folder === undefined ? [] : [[entry.name, folder] as const];
+  });
+  const claimed = new Set(listed.map(([, folder]) => folder));
+  return new Map([...listed, ...[...sourceMods.folders].filter(([, folder]) => !claimed.has(folder))]);
+}
+
 // Each listed mod's folder is matched as the manager matches names.
 function pathsOf(
   runtimeOutput: OriginFiles, downloaded: DownloadedFiles, entries: readonly ModlistEntry[], modFolders: ModFolders | undefined,
-  sourceFolder: (mod: string) => string | undefined, sourceMods: ReadonlyMap<string, string>,
+  sourceMods: SourceMods,
 ): InstancePaths {
   return {
     overwriteDir: runtimeOutput.folder,
@@ -148,11 +159,7 @@ function pathsOf(
       const folder = entry.kind === 'mod' ? modFolders?.holding(entry) : undefined;
       return folder === undefined ? [] : [[entry.name, folder.path] as const];
     })),
-    sourceDirs: new Map([...new Set([...sourceMods.keys(), ...entries.filter((entry) => entry.kind === 'mod').map((entry) => entry.name)])]
-      .flatMap((name) => {
-        const folder = sourceMods.get(name) ?? sourceFolder(name);
-        return folder === undefined ? [] : [[name, folder] as const];
-      })),
+    sourceDirs: sourceDirsOf(entries, sourceMods),
   };
 }
 
@@ -465,7 +472,7 @@ export class Instance implements Subscription {
       ? await this.readInstalledInto(entries, modFolders?.all ?? [])
       : undefined;
     const modFolderList = modFolders?.all;
-    const paths = pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders, (mod) => adapter.sourceFolder(mod), sourceMods.folders);
+    const paths = pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders, sourceMods);
     const syncSource = {
       activeProfile: profile, modFolders: modFolderList, files: index.files, dataFolderPlugins, pluginsLoadedWithNoLine,
       pluginOrder,
@@ -475,8 +482,8 @@ export class Instance implements Subscription {
     return {
       mods: entries,
       modFolders: modFolderList,
-      trackedMods: new Set(entries.flatMap((entry) => (entry.kind === 'mod' && sourceMods.folders.has(entry.name) ? [entry.name] : []))),
-      sourceMods: new Set(sourceMods.folders.keys()),
+      trackedMods: new Set(entries.flatMap((entry) => (entry.kind === 'mod' && paths.sourceDirs.has(entry.name) ? [entry.name] : []))),
+      sourceMods: new Set(paths.sourceDirs.keys()),
       profiles,
       files: index.files,
       filesByMod: index.filesByMod,

@@ -1254,7 +1254,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
     ...instanceThatReads,
     value: instanceValueFixture({
       trackedMods: new Set(['M']),
-      paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map(), sourceDirs: new Map([['M', '/instance/source/M'], ['Plain', '/instance/source/Plain']]) },
+      paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map(), sourceDirs: new Map([['M', '/instance/source/M']]) },
     }),
   };
 
@@ -1461,7 +1461,7 @@ describe('open source: a source mod\'s source folder', () => {
       trackedMods: new Set(['Source Mod']),
       paths: {
         overwriteDir: undefined, downloadsDir: '', modDirs: new Map(),
-        sourceDirs: new Map([['Source Mod', '/instance/source/Source Mod'], ['Plain Mod', '/instance/source/Plain Mod']]),
+        sourceDirs: new Map([['Source Mod', '/instance/source/Source Mod']]),
       },
     }),
   };
@@ -1475,7 +1475,7 @@ describe('open source: a source mod\'s source folder', () => {
     expect(revealed()).toEqual(['/instance/source/Source Mod']);
   });
 
-  it('refuses a mod with no repository, naming it, though the value has a path where one would be', async () => {
+  it('refuses a mod with no repository, naming it', async () => {
     const reporter = recordingReporter();
 
     registerOpenSourceCommand(instance, reporter, () => []);

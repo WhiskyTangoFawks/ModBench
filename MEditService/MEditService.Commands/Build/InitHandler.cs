@@ -71,17 +71,17 @@ public sealed class InitHandler
 
         var mod = (PluginProvider.FromMod)plugins[0].Provider;
 
-        if (_source.IsTracked(mod.SourceFolder))
+        if (_source.IsTracked(toInit.SourceFolder))
         {
             return ItemAnswer<InitRefusal, InitializedMod>.Refused(InitRefusal.AlreadyInitialized,
-                $"'{mod.SourceFolder}' already holds the mod's repository. To put a plugin's source into its working tree, decompile it.");
+                $"'{toInit.SourceFolder}' already holds a repository. To put a plugin's source into its working tree, decompile it.");
         }
 
         // A .git with no main that init did not mark is someone else's, never written to (ADR-0003).
-        if (_source.HoldsAnotherRepository(mod.SourceFolder))
+        if (_source.HoldsAnotherRepository(toInit.SourceFolder))
         {
             return ItemAnswer<InitRefusal, InitializedMod>.Refused(InitRefusal.AlreadyInitialized,
-                $"'{mod.SourceFolder}' already holds a repository init did not make, with no main branch.");
+                $"'{toInit.SourceFolder}' already holds a repository init did not make, with no main branch.");
         }
 
         var verified = new List<(RegisteredPlugin Plugin, PluginSource Source)>();
@@ -129,7 +129,7 @@ public sealed class InitHandler
         }
 
         SetProgress(mod.Name, InitPhase.Committing, total, total);
-        if (Commit(mod, verified, assets) is { } failure)
+        if (Commit(mod, toInit.SourceFolder, verified, assets) is { } failure)
         {
             _logger.LogWarning("Refused to init {Mod}: {Reason}", mod.Name, failure.Reason);
             return ItemAnswer<InitRefusal, InitializedMod>.Refused(InitRefusal.CommitFailed, $"'{mod.Name}' was not initialized: {failure.Reason}");
@@ -157,15 +157,15 @@ public sealed class InitHandler
 
     // The adapter writes nothing when any of it fails (plugins.md, Init, story 5).
     private SourceFailure? Commit(
-        PluginProvider.FromMod mod, List<(RegisteredPlugin Plugin, PluginSource Source)> verified, List<Asset> assets)
+        PluginProvider.FromMod mod, string sourceFolder, List<(RegisteredPlugin Plugin, PluginSource Source)> verified, List<Asset> assets)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("Initializing {SourceFolder} with {PluginCount} plugin(s), {FileCount} source files and {AssetCount} asset(s)",
-                mod.SourceFolder, verified.Count, verified.Sum(v => v.Source.Files.Count), assets.Count);
+                sourceFolder, verified.Count, verified.Sum(v => v.Source.Files.Count), assets.Count);
         }
 
-        return _source.Init(mod.SourceFolder, mod.Name,
+        return _source.Init(sourceFolder, mod.Name,
             [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Name, v.Source.BinarySha256)))], assets);
     }
 

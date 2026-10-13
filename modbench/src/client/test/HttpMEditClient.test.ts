@@ -167,7 +167,7 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
   return { result, log, fetch, request };
 }
 
-const modToInit = (name: string) => ({ name, installationFiles: [], modManagerFiles: ['meta.ini'] });
+const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, installationFiles: [], modManagerFiles: ['meta.ini'] });
 
 describe('HttpMEditClient — what each verb sends and reads', () => {
   const myPatch = { name: 'MyPatch.esp', origin: 'ModA' };

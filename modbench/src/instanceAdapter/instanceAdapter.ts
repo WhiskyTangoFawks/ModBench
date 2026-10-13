@@ -259,6 +259,8 @@ export type OriginFileMarked =
  *  names as its output (ADR-0007). A note names each repository left out, and why. */
 export interface SourceMods {
   readonly folders: ReadonlyMap<string, string>;
+  /** The source folder that builds `mod`, its name matched as the manager matches names. */
+  folderOf(mod: string): string | undefined;
   readonly notes: readonly string[];
 }
 

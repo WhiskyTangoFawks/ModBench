@@ -83,7 +83,7 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
     },
 
     async trashSourceFolder(mod, trash) {
-      const source = (await sourceModsIn(instanceRoot)).folders.get(mod);
+      const source = (await sourceModsIn(instanceRoot)).folderOf(mod);
       if (source === undefined) return false;
       await trash(source);
       return true;

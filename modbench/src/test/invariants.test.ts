@@ -54,7 +54,7 @@ describe('only the Instance adapter touches a downloaded file\'s .meta', () => {
 function commandVerbs(source: string): string[] {
   const bound = new Set([...source.matchAll(/TailOf<typeof (\w+)>/g)].map((m) => m[1]));
   return [...source.matchAll(/^(export )?(?:async )?function (\w+)([\s\S]*?)\{\n/gm)]
-    .filter((m) => /InstanceAdapter/.test(present(m[3], "the signature")))
+    .filter((m) => /InstanceAdapter|SourceModWriters/.test(present(m[3], "the signature")))
     .filter((m) => m[1] !== undefined || bound.has(m[2]))
     .filter((m) => /applied|Result[<>]|SelectionOutcome<|Run\s*$/.test(present(m[3], "the function body between signature and opening brace")))
     .map((m) => present(m[2], "the function's name"));

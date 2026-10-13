@@ -51,18 +51,19 @@ internal static class ModEndpoints
         var mods = req.Mods ?? [];
         if (mods.Count == 0)
             return Results.Problem("At least one mod is required.", statusCode: 400);
-        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || (mod.InstallationFiles ?? []).Any(file => !file.IsWhole)
+        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.SourceFolder)
+            || (mod.InstallationFiles ?? []).Any(file => !file.IsWhole)
             || (mod.ModManagerFiles ?? []).Any(string.IsNullOrWhiteSpace)))
         {
             return Results.Problem(
-                "Every mod needs a name, and every installation file a path, a size, a hash and its entries, each with a path and a hash.",
+                "Every mod needs a name and a source folder, and every installation file a path, a size, a hash and its entries, each with a path and a hash.",
                 statusCode: 400);
         }
 
         return await EndpointMapping.Answered(
             "Init", logger,
             initHandler.InitAsync([.. mods.Select(mod => new ModToInit(
-                mod.Name, [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())], mod.ModManagerFiles ?? []))]),
+                mod.Name, mod.SourceFolder, [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())], mod.ModManagerFiles ?? []))]),
             EndpointMapping.Refusal,
             landed => new InitializedModResponse(landed.Item, landed.Outcome.Plugins),
             refused => new ModInitRefusal(refused.Item, refused.Refusal, refused.Message),
@@ -89,8 +90,8 @@ internal static class ModEndpoints
 
     private static bool IsFolderName(string name) => IsPathInTheMod(name) && !name.Contains('/', StringComparison.Ordinal);
 
-    private static bool IsPathInTheMod(string path) =>
-        !path.Contains('\\', StringComparison.Ordinal) && !Path.IsPathRooted(path)
+    private static bool IsPathInTheMod(string? path) =>
+        path is not null && !path.Contains('\\', StringComparison.Ordinal) && !Path.IsPathRooted(path)
         && path.Split('/').All(segment => !string.IsNullOrWhiteSpace(segment) && segment is not ("." or ".."));
 
     // build-mod: the selection (commands.md, A selection is one gesture).
@@ -127,10 +128,10 @@ internal sealed record BuildRequest(IReadOnlyList<string> Mods);
 /// <summary>The mods to init (ADR-0024).</summary>
 internal sealed record InitRequest(IReadOnlyList<InitModRequest> Mods);
 
-/// <summary>A mod by name, with its installation files in the mod manager's order and the mod manager's own files in
-/// its folder, by forward-slash path, which no build makes.</summary>
+/// <summary>A mod by name, with the source folder its repository goes in, its installation files in the mod manager's
+/// order and the mod manager's own files in its folder, by forward-slash path, which no build makes.</summary>
 internal sealed record InitModRequest(
-    string Name, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> ModManagerFiles);
+    string Name, string SourceFolder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> ModManagerFiles);
 
 /// <summary>A mod of the selection that landed: the plugins whose source its commit holds.</summary>
 internal sealed record InitializedModResponse(string Mod, IReadOnlyList<PluginAddress> Plugins);

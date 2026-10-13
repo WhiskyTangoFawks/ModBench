@@ -9,7 +9,7 @@ import { viewCopyValueText } from '../drivingLib/copyValue';
 import {
   pluralArgument, registerGesture, singularArgument, type GestureEntry, type RowOf,
 } from '../drivingLib/gestureEntry';
-import type { Instance, InstanceValue } from '../instanceLoader/instance';
+import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
@@ -19,9 +19,6 @@ import { endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, s
 import { errorMessage } from '../ports/errorMessage';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { reportFailure } from '../drivingLib/reportFailure';
-
-const sourceFoldersOf = ({ trackedMods, paths }: Pick<InstanceValue, 'trackedMods' | 'paths'>): ReadonlyMap<string, string> =>
-  new Map([...trackedMods].flatMap((mod) => { const folder = paths.sourceDirs.get(mod); return folder === undefined ? [] : [[mod, folder] as const]; }));
 
 // modbench.mod.enable / modbench.mod.disable: the whole selection through the entry (mods.md,
 // Menus and keys, story 3). Each mod lands on its own (commands.md, "A selection is one gesture").
@@ -62,7 +59,7 @@ export function registerFileExclusionCommands(
     const { verb } = FILE_MARKS[mark];
     const refs = rows.map((row) => row.ref);
     return runModsWriting(instance, async () => {
-      const outcome = await commands.markFiles(refs, mark, sourceFoldersOf(instance.value));
+      const outcome = await commands.markFiles(refs, mark, instance.value.paths.sourceDirs);
       reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${refs.length} files.`, outcome, fileLabel);
     });
   };
@@ -155,8 +152,8 @@ export function registerModContextCommands(
         const newName = await promptRename('Rename mod', oldName, modNamePrompt(commands, instance, oldName));
         if (newName === undefined) return;
         await runModsWriting(instance, async () => {
-          const { activeProfile, profiles, managerNames } = instance.value;
-          const result = await commands.renameMod(activeProfile, profiles, oldName, newName, sourceFoldersOf(instance.value).get(oldName));
+          const { activeProfile, profiles, managerNames, paths } = instance.value;
+          const result = await commands.renameMod(activeProfile, profiles, oldName, newName, paths.sourceDirs.get(oldName));
           if (!result.applied) {
             reporter.report('error', 'Failed to rename mod.', result.refusal);
             return;
@@ -329,7 +326,7 @@ export function registerOpenSourceCommand(
     const node = singularArgument(entry, 'mod');
     if (node === undefined) return;
     await reportFailure(reporter, `Failed to open the source of "${node.mod.name}".`, async () => {
-      const folder = sourceFoldersOf(instance.value).get(node.mod.name);
+      const folder = instance.value.paths.sourceDirs.get(node.mod.name);
       if (folder === undefined) throw new Error('It is not a source mod.');
       await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
     });

@@ -20,7 +20,7 @@ public interface ISourceAdapter
     SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin);
 
     /// <summary>The reads over the source folder of the mod providing <paramref name="plugin"/>, tree or not; null
-    /// when no mod provides it. One serves a batch, so what it learns of the tree is learned once.</summary>
+    /// when no source mod provides it. One serves a batch, so what it learns of the tree is learned once.</summary>
     ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release);
 
     /// <summary>The reads over <paramref name="plugin"/>'s source tree; null when it has none that reads.</summary>

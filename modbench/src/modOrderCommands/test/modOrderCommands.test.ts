@@ -787,6 +787,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     const SOURCE = '/instance/source/Harder VATS';
     const configuredBy = (mEdit: InMemoryMEditClient) =>
       mEdit.calls.filter((call) => call.method === 'changeBuildConfiguration').map((call) => call.args);
+    const fileOf = (mod: string, relativePath: string) => ({ origin: { kind: 'mod', name: mod }, relativePath }) as const;
 
     it('renames the folder and the output its build configuration names, then the lines', async () => {
       const mEdit = new InMemoryMEditClient();
@@ -820,7 +821,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
       await mkdir(join(dir, 'mods', 'Harder VATS', 'Textures'), { recursive: true });
       await writeFile(join(dir, 'mods', 'Harder VATS', ...from.split('/')), 'pixels');
-      const file = { origin: { kind: 'mod', name: 'Harder VATS' }, relativePath: from } as const;
+      const file = fileOf('Harder VATS', from);
 
       const outcome = await modlistCommands(adapterOver(dir), mEdit).markFiles([file], mark, new Map([['Harder VATS', SOURCE]]));
 
@@ -829,16 +830,75 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(await readFile(join(dir, 'mods', 'Harder VATS', ...to.split('/')), 'utf8')).toBe('pixels');
     });
 
-    it('puts a file\'s name back, refusing it, when mEdit refuses the build configuration', async () => {
+    it('asks mEdit once for every file of a source mod, before any file is marked, and marks none when it refuses', async () => {
+      const mEdit = new InMemoryMEditClient();
+      let unmarkedWhenAsked: string[] = [];
+      mEdit.setCommandHandler('changeBuildConfiguration', async () => {
+        unmarkedWhenAsked = await readdir(join(dir, 'mods', 'Harder VATS'));
+        return { refused: true, message: 'mEdit is unreachable' };
+      });
+      await writeFile(join(dir, 'mods', 'Harder VATS', 'a.dds'), 'pixels');
+      await writeFile(join(dir, 'mods', 'Harder VATS', 'b.dds'), 'pixels');
+      const files = [fileOf('Harder VATS', 'a.dds'), fileOf('Harder VATS', 'b.dds')];
+
+      const outcome = await modlistCommands(adapterOver(dir), mEdit).markFiles(files, 'Excluded', new Map([['Harder VATS', SOURCE]]));
+
+      expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds', 'b.dds'] }]]);
+      expect(unmarkedWhenAsked).toEqual(expect.arrayContaining(['a.dds', 'b.dds']));
+      expect(outcome).toEqual({ landed: [], refused: files.map((item) => ({ item, reason: 'mEdit is unreachable' })) });
+      expect(await readdir(join(dir, 'mods', 'Harder VATS'))).toEqual(expect.arrayContaining(['a.dds', 'b.dds']));
+    });
+
+    it('marks the file of a mod with no source though mEdit refuses a source mod\'s', async () => {
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'mEdit is unreachable' });
+      await writeFile(join(dir, 'mods', 'Harder VATS', 'a.dds'), 'pixels');
+      await writeFile(join(dir, 'mods', 'ENBoost - 12k', 'b.dds'), 'pixels');
+      const inSource = fileOf('Harder VATS', 'a.dds');
+      const inNoSource = fileOf('ENBoost - 12k', 'b.dds');
+
+      const outcome = await modlistCommands(adapterOver(dir), mEdit).markFiles([inSource, inNoSource], 'Excluded', new Map([['Harder VATS', SOURCE]]));
+
+      expect(outcome).toEqual({ landed: [inNoSource], refused: [{ item: inSource, reason: 'mEdit is unreachable' }] });
+      expect(await readFile(join(dir, 'mods', 'ENBoost - 12k', 'b.dds.mohidden'), 'utf8')).toBe('pixels');
+    });
+
+    it('takes back the exclusion of a file that could not be marked, and lands the rest', async () => {
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
+      await writeFile(join(dir, 'mods', 'Harder VATS', 'a.dds'), 'pixels');
+      const marked = fileOf('Harder VATS', 'a.dds');
+      const gone = fileOf('Harder VATS', 'gone.dds');
+
+      const outcome = await modlistCommands(adapterOver(dir), mEdit).markFiles([marked, gone], 'Excluded', new Map([['Harder VATS', SOURCE]]));
+
+      expect(outcome).toEqual({ landed: [marked], refused: [{ item: gone, reason: '"gone.dds" is gone from disk.' }] });
+      expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds', 'gone.dds'] }], [SOURCE, { include: ['gone.dds'] }]]);
+    });
+
+    it('names both failures when the exclusion of a file that could not be marked cannot be taken back', async () => {
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setCommandHandler('changeBuildConfiguration', (_, change) =>
+        Promise.resolve(change.exclude === undefined ? { refused: true, message: 'the disk refused the write' } : { changed: true }));
+      const gone = fileOf('Harder VATS', 'gone.dds');
+
+      const outcome = await modlistCommands(adapterOver(dir), mEdit).markFiles([gone], 'Excluded', new Map([['Harder VATS', SOURCE]]));
+
+      expect(outcome.refused.map(({ item }) => item)).toEqual([gone]);
+      expect(outcome.refused[0]?.reason).toMatch(/"gone\.dds" is gone from disk\..*the disk refused the write/);
+    });
+
+    it('names both failures when the folder cannot be put back after mEdit refuses the build configuration', async () => {
       const mEdit = new InMemoryMEditClient();
       mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'it holds no build configuration' });
-      await writeFile(join(dir, 'mods', 'Harder VATS', 'a.dds'), 'pixels');
-      const file = { origin: { kind: 'mod', name: 'Harder VATS' }, relativePath: 'a.dds' } as const;
+      const stuck = adapterWith(dir, (adapter) => ({
+        renameModFolder: (from, to) => (from === 'Harder VATS' ? adapter.renameModFolder(from, to) : Promise.reject(new Error('the folder is in use'))),
+      }));
 
-      const outcome = await modlistCommands(adapterOver(dir), mEdit).markFiles([file], 'Excluded', new Map([['Harder VATS', SOURCE]]));
+      const outcome = await modlistCommands(stuck, mEdit).renameMod('Default', ['Default'], 'Harder VATS', 'Harder VATS 2', SOURCE);
 
-      expect(outcome).toEqual({ landed: [], refused: [{ item: file, reason: 'it holds no build configuration' }] });
-      expect(await readFile(join(dir, 'mods', 'Harder VATS', 'a.dds'), 'utf8')).toBe('pixels');
+      assertRefusalNarrowedByHandSinceExpectMatchersAreTypedAny(outcome, 'it holds no build configuration');
+      assertRefusalNarrowedByHandSinceExpectMatchersAreTypedAny(outcome, 'the folder is in use');
     });
   });
 

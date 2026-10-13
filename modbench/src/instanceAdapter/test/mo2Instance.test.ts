@@ -941,10 +941,18 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(join(root, 'source', 'No Repository'), { recursive: true });
         await writeFile(join(root, 'source', 'No Repository', 'build.json'), '{ "output": "No Repository" }');
 
-        expect(await adapter.sourceMods()).toEqual({
-          folders: new Map([['Harder VATS', join(root, 'source', 'Harder VATS')], ['Renamed To', join(root, 'source', 'Renamed From')]]),
-          notes: [],
-        });
+        const { folders, notes } = await adapter.sourceMods();
+
+        expect(folders).toEqual(new Map([['Harder VATS', join(root, 'source', 'Harder VATS')], ['Renamed To', join(root, 'source', 'Renamed From')]]));
+        expect(notes).toEqual([]);
+      });
+
+      it('answers the source folder that builds a mod, its name matched without case', async () => {
+        await repository('Renamed From', '{ "output": "Renamed To" }');
+
+        const sourceMods = await adapter.sourceMods();
+
+        expect([sourceMods.folderOf('renamed to'), sourceMods.folderOf('Renamed From')]).toEqual([join(root, 'source', 'Renamed From'), undefined]);
       });
 
       it.each([
@@ -961,8 +969,19 @@ describe('the MO2 Instance adapter', () => {
         expect(notes).toEqual([expect.stringContaining(join(root, 'source', 'Unnamed'))]);
       });
 
-      it('gives an output two repositories name to the first by folder name, and says so', async () => {
-        await repository('Second', '{ "output": "Shared" }');
+      it('leaves out a repository whose build configuration cannot be read, says so, and lists the rest', async () => {
+        await repository('Unreadable', undefined);
+        await mkdir(join(root, 'source', 'Unreadable', 'build.json'));
+        await repository('Readable', '{ "output": "Readable" }');
+
+        const { folders, notes } = await adapter.sourceMods();
+
+        expect(folders).toEqual(new Map([['Readable', join(root, 'source', 'Readable')]]));
+        expect(notes).toEqual([expect.stringContaining(join(root, 'source', 'Unreadable'))]);
+      });
+
+      it('gives an output two repositories name, matched without case, to the first by folder name, and says so', async () => {
+        await repository('Second', '{ "output": "SHARED" }');
         await repository('First', '{ "output": "Shared" }');
 
         const { folders, notes } = await adapter.sourceMods();
@@ -972,7 +991,9 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('lists none when the instance has no source folder', async () => {
-        expect(await adapter.sourceMods()).toEqual({ folders: new Map(), notes: [] });
+        const { folders, notes } = await adapter.sourceMods();
+
+        expect([folders, notes]).toEqual([new Map(), []]);
       });
 
       it('answers no installation file for a mod whose meta records none, and its meta as the mod manager\'s own file', async () => {

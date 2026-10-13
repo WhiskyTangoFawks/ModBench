@@ -76,33 +76,65 @@ export interface OriginFileRef {
   readonly relativePath: string;
 }
 
-// mEdit writes a source mod's build configuration (mods.md, A source mod, story 2).
-type BuildConfigurationWriter = Pick<MEditClient, 'changeBuildConfiguration'>;
+interface SourceModWriters {
+  readonly adapter: InstanceAdapter;
+  readonly mEdit: Pick<MEditClient, 'changeBuildConfiguration'>;
+}
 
 const UNMARK: Record<OriginFileMark, OriginFileMark> = { Excluded: 'Included', Included: 'Excluded' };
 
-// `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked on its own, and, in a source mod,
-// the build configuration's exclusion with it. `sources` holds each source mod's source folder.
-async function markFiles(
-  { adapter, mEdit }: { adapter: InstanceAdapter; mEdit: BuildConfigurationWriter },
-  files: readonly OriginFileRef[], mark: OriginFileMark, sources: ReadonlyMap<string, string>,
-): Promise<SelectionOutcome<OriginFileRef>> {
+const exclusionChange = (mark: OriginFileMark, paths: string[]) => (mark === 'Excluded' ? { exclude: paths } : { include: paths });
+
+function markEach(adapter: InstanceAdapter, files: readonly OriginFileRef[], mark: OriginFileMark): Promise<SelectionOutcome<OriginFileRef>> {
   return selectionOutcomeOf(files, async (file): Promise<CommandResult> => {
     try {
       const marked = await adapter.markOriginFile(file.origin, file.relativePath, mark);
       if (marked.gone) return { applied: false, refusal: goneFromDisk(file.relativePath) };
       if ('refusal' in marked) return { applied: false, refusal: marked.refusal };
-      const source = file.origin.kind === 'mod' ? sources.get(file.origin.name) : undefined;
-      if (source === undefined) return { applied: true, wrote: true };
-      const path = adapter.includedPath(marked.relativePath);
-      const configured = await mEdit.changeBuildConfiguration(source, mark === 'Excluded' ? { exclude: [path] } : { include: [path] });
-      if (!isRefused(configured)) return { applied: true, wrote: true };
-      if (marked.wrote) await adapter.markOriginFile(file.origin, marked.relativePath, UNMARK[mark]);
-      return { applied: false, refusal: configured.message };
+      return { applied: true, wrote: true };
     } catch (err) {
       return refuse(err);
     }
   }, (file) => file);
+}
+
+// The configuration first, so a refusal that every file of the mod shares writes none of them.
+async function markInSourceMod(
+  { adapter, mEdit }: SourceModWriters, sourceFolder: string, files: readonly OriginFileRef[], mark: OriginFileMark,
+): Promise<SelectionOutcome<OriginFileRef>> {
+  const pathsOf = (of: readonly OriginFileRef[]) => of.map((file) => adapter.includedPath(file.relativePath));
+  const configured = await mEdit.changeBuildConfiguration(sourceFolder, exclusionChange(mark, pathsOf(files)));
+  if (isRefused(configured)) return { landed: [], refused: files.map((item) => ({ item, reason: configured.message })) };
+  const outcome = await markEach(adapter, files, mark);
+  if (outcome.refused.length === 0) return outcome;
+  const takenBack = await mEdit.changeBuildConfiguration(sourceFolder, exclusionChange(UNMARK[mark], pathsOf(outcome.refused.map(({ item }) => item))));
+  if (!isRefused(takenBack)) return outcome;
+  return {
+    landed: outcome.landed,
+    refused: outcome.refused.map(({ item, reason }) => ({
+      item, reason: `${reason} Its change to the build configuration could not be taken back: ${takenBack.message}`,
+    })),
+  };
+}
+
+// `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked on its own, and, in a source mod,
+// the build configuration's exclusion with it.
+async function markFiles(
+  writers: SourceModWriters, files: readonly OriginFileRef[], mark: OriginFileMark, sourceFolders: ReadonlyMap<string, string>,
+): Promise<SelectionOutcome<OriginFileRef>> {
+  const bySourceFolder = new Map<string | undefined, OriginFileRef[]>();
+  for (const file of files) {
+    const sourceFolder = file.origin.kind === 'mod' ? sourceFolders.get(file.origin.name) : undefined;
+    bySourceFolder.set(sourceFolder, [...(bySourceFolder.get(sourceFolder) ?? []), file]);
+  }
+  const landed: OriginFileRef[] = [];
+  const refused: ItemRefusal<OriginFileRef>[] = [];
+  for (const [sourceFolder, inIt] of bySourceFolder) {
+    const outcome = sourceFolder === undefined ? await markEach(writers.adapter, inIt, mark) : await markInSourceMod(writers, sourceFolder, inIt, mark);
+    landed.push(...outcome.landed);
+    refused.push(...outcome.refused);
+  }
+  return { landed, refused };
 }
 
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
@@ -296,21 +328,25 @@ export type RenameModResult =
   | { applied: true; lineRefusals: { profile: string; refusal: string }[] }
   | { applied: false; refusal: string };
 
-// The folder, then a source mod's build configuration in `source`, then the line in each of `profiles`, the active
-// one first. A profile that does not list the mod is left as it was.
+// The folder, then a source mod's build configuration in `sourceFolder`, then the line in each of `profiles`, the
+// active one first. A profile that does not list the mod is left as it was.
 async function renameMod(
-  { adapter, mEdit }: { adapter: InstanceAdapter; mEdit: BuildConfigurationWriter },
-  activeProfile: string, profiles: readonly string[], from: string, to: string, source?: string,
+  { adapter, mEdit }: SourceModWriters,
+  activeProfile: string, profiles: readonly string[], from: string, to: string, sourceFolder?: string,
 ): Promise<RenameModResult> {
   try {
     await adapter.renameModFolder(from, to);
-    const configured = source === undefined ? undefined : await mEdit.changeBuildConfiguration(source, { output: to });
-    if (configured !== undefined && isRefused(configured)) {
-      await adapter.renameModFolder(to, from);
-      return { applied: false, refusal: configured.message };
-    }
   } catch (err) {
     return refuse(err);
+  }
+  const configured = sourceFolder === undefined ? undefined : await mEdit.changeBuildConfiguration(sourceFolder, { output: to });
+  if (configured !== undefined && isRefused(configured)) {
+    try {
+      await adapter.renameModFolder(to, from);
+    } catch (err) {
+      return { applied: false, refusal: `${configured.message} The folder could not be renamed back to "${from}": ${errorMessage(err)}` };
+    }
+    return { applied: false, refusal: configured.message };
   }
   const lineRefusals: { profile: string; refusal: string }[] = [];
   const ordered = [activeProfile, ...profiles.filter((profile) => profile !== activeProfile)];
@@ -360,7 +396,7 @@ export function modSyncOver(adapter: InstanceAdapter): ModSyncRun {
 }
 
 /** The modlist's commands, bound to one instance: each takes the gesture's arguments only. */
-export function modlistCommands(adapter: InstanceAdapter, mEdit: BuildConfigurationWriter) {
+export function modlistCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['mEdit']) {
   return {
     setModsEnabled: (...args: TailOf<typeof setModsEnabled>) => setModsEnabled(adapter, ...args),
     moveMods: (...args: TailOf<typeof moveMods>) => moveMods(adapter, ...args),
