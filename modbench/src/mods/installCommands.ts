@@ -9,7 +9,7 @@ import { promptModName } from './promptModName';
 import { reportFailure } from '../drivingLib/reportFailure';
 import type { Reporter } from '../ports/reporter';
 import { runModsWriting } from './gestureEntry';
-import { downloadedFileSource, installDownloadedFile, type DownloadInstallDeps } from './installDownloaded';
+import { downloadedFileSource, installDownloadedFile, logUnmarked, type DownloadInstallDeps } from './installDownloaded';
 
 interface InstallOutcome {
   installed: boolean;
@@ -44,6 +44,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       const outcome = await commands.installMod(source, { kind: 'new', name }, instance.value.gameName);
       if (!outcome.applied) throw new Error(outcome.refusal);
       warnIfFomod(name, outcome.isFomod);
+      if (source.kind === 'downloadedFile') logUnmarked(downloadInstall.log, source.name, outcome.downloadRefusal);
       succeeded = true;
     }));
     return { installed: succeeded };

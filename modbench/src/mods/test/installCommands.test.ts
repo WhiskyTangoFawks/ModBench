@@ -134,6 +134,27 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     );
   });
 
+  it('archive: one of the instance\'s downloaded files that installs but cannot be marked is one Output line, not a failure', async () => {
+    const row = downloadRowFixture('foo.7z');
+    const log = vi.fn();
+    const reporter = recordingReporter();
+    showInputBox.mockResolvedValueOnce('New Mod');
+    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
+    showOpenDialog.mockResolvedValueOnce([{ fsPath: row.path }]);
+    installMod.mockResolvedValueOnce({ applied: true, isFomod: false, downloadRefusal: 'locked' });
+
+    registerModInstallCommands(deps({
+      instance: { value: instanceValueFixture({ downloads: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() },
+      reporterFor: () => reporter,
+      downloadInstall: { reporter: recordingReporter(), log, progressViewId: 'modbench.downloads' },
+    }));
+    const outcome = await invoke('modbench.mod.install');
+
+    expect(outcome).toEqual({ installed: true });
+    expect(log).toHaveBeenCalledWith('"foo.7z" was installed, but its Downloads status could not be updated: locked');
+    expect(reporter.reports).toEqual([]);
+  });
+
   it('archive: one outside the downloads folder, though it shares a downloaded file\'s name, installs as an archive under the name prompted, prefilled from it', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
