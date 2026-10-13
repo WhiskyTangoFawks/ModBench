@@ -1,4 +1,5 @@
 using MEditService.Index.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests.Indexing;
 
@@ -14,6 +15,23 @@ public sealed class SqlDoorSealTests(SqlDoorFixture fixture) : IClassFixture<Sql
     [InlineData("SELECT form_key FROM records; SELECT form_key FROM mirror.records")]
     public void AFilterThatReachesPastThePublicRelations_IsRefused(string sql) =>
         Assert.False(fixture.Index.Accepts(sql));
+
+    [Fact]
+    public void ASelectFromAFile_IsRefused_ForItReadsNoRecordView()
+    {
+        using var scratch = new ScratchDirectory("sealed-");
+        var file = Path.Combine(scratch, "sealed.csv");
+        File.WriteAllText(file, "form_key\nsecret\n");
+
+        Assert.False(fixture.Index.Accepts($"SELECT form_key FROM '{file}'"));
+        Assert.Contains("file", fixture.Index.Queries.SelectRows($"SELECT form_key FROM '{file}'").Refused().Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ASelectEndingInASemicolon_IsAnswered()
+    {
+        Assert.Single(fixture.Index.Queries.SelectRows("SELECT 1 AS n;").Value());
+    }
 
     [Theory]
     [InlineData("SELECT form_key FROM records")]

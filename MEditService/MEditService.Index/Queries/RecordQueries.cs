@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -409,6 +410,12 @@ internal sealed class RecordQueries(
         _index.SetFilter(sql, source) is { } rejection ? new IndexRefused(IndexRefusal.FilterRejected, rejection) : null);
 
     public void ClearFilter() => _index.ClearFilter();
+
+    public Answer<JsonElement[], IndexRefused> SelectRows(string sql) => IndexAnswer.Flat<JsonElement[]>(() =>
+    {
+        if (_index.Select(sql).Holds(out var rows, out var rejection)) return rows;
+        return new IndexRefused(IndexRefusal.SelectRejected, rejection);
+    });
 
     public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot)
     {

@@ -10,6 +10,9 @@ namespace MEditService.Http;
 internal sealed record FilterRequest(string Sql, string Source);
 internal sealed record FilterResponse(string? Sql, string? Source);
 
+internal sealed record SelectRequest(string Sql);
+internal sealed record SelectResponse(IReadOnlyList<JsonElement> Rows);
+
 /// <summary>Applied or refusal (ADR-0019): failures already ride LoadOrderStatus, so this names
 /// none.</summary>
 internal sealed record LoadOrderResponse(bool Applied, long Version = 0);

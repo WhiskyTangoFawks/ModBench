@@ -149,6 +149,39 @@ describe('BackendLifecycle.start', () => {
     expect(lifecycle.status).toBe('disconnected');
   });
 
+  it('tells a port listener the attached port as it subscribes', () => {
+    const lifecycle = new BackendLifecycle({ attachPort: 5172 });
+    const heard: number[] = [];
+
+    lifecycle.onPort((port) => heard.push(port));
+
+    expect(heard).toEqual([5172]);
+  });
+
+  it('tells a port listener the spawned backend\'s port once claimed, before the backend answers', async () => {
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(41000), spawn: () => makeChild(), executablePath: '/x/backend',
+      pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(false),
+    });
+    const heard: number[] = [];
+    lifecycle.onPort((port) => heard.push(port));
+    expect(heard).toEqual([]);
+
+    await lifecycle.start();
+
+    expect(heard).toEqual([41000]);
+  });
+
+  it('tells no port listener once it has unsubscribed', async () => {
+    const lifecycle = new BackendLifecycle({ freePort: () => Promise.resolve(41000), pollIntervalMs: 5, pollTimeoutMs: 5, checkHealth: () => Promise.resolve(false) });
+    const heard: number[] = [];
+    lifecycle.onPort((port) => heard.push(port))();
+
+    await lifecycle.start();
+
+    expect(heard).toEqual([]);
+  });
+
   it('attaches to the developer port once it answers', async () => {
     const lifecycle = new BackendLifecycle({ attachPort: 5172, checkHealth: () => Promise.resolve(true) });
     await lifecycle.start();
