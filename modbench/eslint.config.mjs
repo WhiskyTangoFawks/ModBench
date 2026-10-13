@@ -46,7 +46,11 @@ const PATH_IMPORT = {
 };
 const PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$)',
-    message: 'Only the mEdit client and the Source language import a package.',
+    message: 'Only the mEdit client, the Source language and the content digest (xxhash-wasm) import a package.',
+};
+const DIGEST_PACKAGE_IMPORT = {
+    regex: '^(?![.]|node:|vscode$|xxhash-wasm$)',
+    message: 'The content digest imports one package: the xxHash mEdit\'s manifest is hashed with.',
 };
 /** @param {string[]} [allowed] */
 const ADAPTER_INTERNALS_IMPORT = (allowed = []) => ({
@@ -243,7 +247,9 @@ export default defineConfig(
     {
         files: ['src/instanceAdapter/contentDigest.ts'],
         rules: {
-            'no-restricted-imports': restrictedImports({ vscode: true, packages: true, path: false, inAdapter: true, byteReads: false }),
+            'no-restricted-imports': restrictedImports({
+                vscode: true, packages: false, path: false, inAdapter: true, byteReads: false, extra: [DIGEST_PACKAGE_IMPORT],
+            }),
         },
     },
     {

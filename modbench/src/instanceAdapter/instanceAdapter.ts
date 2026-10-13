@@ -302,14 +302,20 @@ export interface FileStamp {
 /** A read of one file that answers why it could not be read, rather than failing whatever asked. */
 export type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
 
-/** A downloaded file the mod manager records a mod as installed from, with its size, its hash and each entry's, as
- *  the downloaded files' index keeps them (ADR-0013). */
-export interface InstallationFile {
-  readonly path: string;
+interface HashedFile {
   readonly size: number;
   readonly hash: string;
+}
+
+/** A downloaded file hashed whole and entry by entry. */
+export interface HashedDownload extends HashedFile {
   /** Each entry by its forward-slash path inside the file. */
   readonly entries: readonly { readonly path: string; readonly hash: string }[];
+}
+
+/** A downloaded file the mod manager records a mod as installed from, with its hashes. */
+export interface InstallationFile extends HashedDownload {
+  readonly path: string;
 }
 
 /** How a message names the mod manager, the file it keeps mod order in, and the file it keeps beside a downloaded file. */
@@ -402,9 +408,13 @@ export interface InstanceAdapter {
   readonly managerFilesInModFolder: readonly string[];
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
-  /** The content digest of an origin file, at the path it is read from: two files with one digest
-   *  hold the same bytes. */
-  contentDigest(path: string): Promise<FileRead<string>>;
+  /** An origin file's size and hash at the path it is read from, remembered for this session alone: its lasting hash
+   *  is its manifest line, mEdit's (ADR-0024). Two files with one hash hold the same bytes. */
+  originFileHash(path: string): Promise<FileRead<HashedFile>>;
+  /** A game file's size and hash, the hash as mEdit's manifest carries it, kept in the adapter's index (ADR-0024). */
+  gameFileHash(path: string): Promise<FileRead<HashedFile>>;
+  /** The size and hash of the downloaded file at `path`, and of each of its entries, kept in the adapter's index. */
+  downloadedFileHash(path: string): Promise<FileRead<HashedDownload>>;
 
   // Changes.
   /** Every change lands in one write, its folders with it. Naming an entry not there, or adding a

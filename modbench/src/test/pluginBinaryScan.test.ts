@@ -77,7 +77,7 @@ function undecodedReadsIn(sourceText: string, fileName: string): string[] {
 
 const DIGEST_IMPORTS: Readonly<Record<string, ReadonlySet<string>>> = {
   'node:fs': new Set(['createReadStream']),
-  'node:crypto': new Set(['createHash']),
+  'xxhash-wasm': new Set(['default']),
 };
 const DIGEST_EXPORT = 'digestOf';
 const DIGEST_RETURNS = 'Promise<string>';
@@ -91,10 +91,11 @@ function importOffences(statement: ts.ImportDeclaration): string[] {
   const from = ts.isStringLiteralLike(statement.moduleSpecifier) ? statement.moduleSpecifier.text : firstLine(statement);
   const allowed = DIGEST_IMPORTS[from];
   if (allowed === undefined) return [`imports ${from}`];
-  const bindings = statement.importClause?.namedBindings;
-  if (statement.importClause?.name || bindings === undefined || !ts.isNamedImports(bindings)) return [`imports ${from} whole`];
-  return bindings.elements.map((e) => (e.propertyName ?? e.name).text).filter((name) => !allowed.has(name))
-    .map((name) => `imports ${name} from ${from}`);
+  const clause = statement.importClause;
+  const bindings = clause?.namedBindings;
+  if (clause === undefined || (bindings !== undefined && !ts.isNamedImports(bindings))) return [`imports ${from} whole`];
+  const names = [...(clause.name ? ['default'] : []), ...(bindings?.elements.map((e) => (e.propertyName ?? e.name).text) ?? [])];
+  return names.filter((name) => !allowed.has(name)).map((name) => `imports ${name} from ${from}`);
 }
 
 function digestModuleOffences(sourceText: string, fileName: string): string[] {
@@ -136,17 +137,19 @@ describe('the extension interprets no plugin binary (ADR-0004): its one byte-lev
     expect(offenders).toEqual({});
   });
 
-  it('holds the digest module to node:fs, node:crypto and one exported function, so its bytes reach only a hash', () => {
+  it('holds the digest module to node:fs, xxhash-wasm and one exported function, so its bytes reach only a hash', () => {
     expect(digestModuleOffences(readFileSync(THE_DIGEST, 'utf8'), THE_DIGEST)).toEqual([]);
   });
 
-  it('flags a digest module that imports anything but createReadStream and createHash, which could carry the bytes elsewhere', () => {
-    const other = "import { createHash } from 'node:crypto';\nimport { createReadStream } from 'node:fs';\nimport { keep } from './layout';\nexport async function digestOf(p): Promise<string> { keep(p); }\n";
+  it('flags a digest module that imports anything but createReadStream and the xxHash package, which could carry the bytes elsewhere', () => {
+    const other = "import xxhash from 'xxhash-wasm';\nimport { createReadStream } from 'node:fs';\nimport { keep } from './layout';\nexport async function digestOf(p): Promise<string> { keep(p); }\n";
     expect(digestModuleOffences(other, 'contentDigest.ts')).toEqual(['imports ./layout']);
     const sibling = "import { createReadStream, writeFileSync } from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n";
     expect(digestModuleOffences(sibling, 'contentDigest.ts')).toEqual(['imports writeFileSync from node:fs']);
     const whole = "import * as fs from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n";
     expect(digestModuleOffences(whole, 'contentDigest.ts')).toEqual(['imports node:fs whole']);
+    const byDefault = "import fs from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n";
+    expect(digestModuleOffences(byDefault, 'contentDigest.ts')).toEqual(['imports default from node:fs']);
   });
 
   it('flags an import acquired in the body, which the import list does not show', () => {

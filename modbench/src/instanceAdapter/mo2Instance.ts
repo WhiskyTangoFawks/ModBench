@@ -18,7 +18,8 @@ import { mo2Archives } from './mo2Archives';
 import { mo2Installation } from './mo2Installation';
 import { mo2Reads, readInstance } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
-import { modsDir, profilesDir, settingsFile } from './layout';
+import { hashIndex } from './hashIndex';
+import { hashIndexDir, modsDir, profilesDir, settingsFile } from './layout';
 
 interface Mo2InstanceOptions {
   instanceRoot: string;
@@ -51,6 +52,7 @@ export function mo2InstanceAdapter({
   const adapter: Omit<InstanceAdapter, 'reading'> = {
     names,
     ...mo2Reads(context), ...mo2Archives(context), ...mo2Installation(context), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives),
+    ...hashIndex(hashIndexDir(instanceRoot), archives),
     subscribe: (listener) => context.watch.subscribe(listener),
   };
   return { ...adapter, reading: () => readInstance(adapter) };
