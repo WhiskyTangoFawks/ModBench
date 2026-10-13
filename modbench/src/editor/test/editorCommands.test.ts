@@ -9,7 +9,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 beforeEach(forgetRegistrations);
 
 describe('modbench.record.open from the palette, with no Argument', () => {
-  const open = () => commandHandlers.get('modbench.record.open')?.();
+  const open = (argument?: unknown) => commandHandlers.get('modbench.record.open')?.(argument);
   const winner = { name: 'A.esp', origin: 'ModA' };
   const rowOf = (formKey: string) => ({ argument: { kind: 'record', plugin: winner, formKey } });
   const renderingTheWinner = (): { meditClient: InMemoryMEditClient } => {
@@ -28,6 +28,15 @@ describe('modbench.record.open from the palette, with no Argument', () => {
       'vscode.openWith', '/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', 'modbench.record',
       { viewColumn: -1, preview: true },
     ]]);
+  });
+
+  it('opens a record given as pinned in the active group, not as a preview', async () => {
+    await register(renderingTheWinner());
+
+    await open({ argument: { kind: 'record', formKey: '000801:A.esp' }, pinned: true });
+
+    expect(executed().filter(([id]) => id === 'vscode.openWith').map(([, , , options]) => options))
+      .toEqual([{ viewColumn: -1, preview: false }]);
   });
 
   it('asks for a record when the focused view has none selected, and opens the one picked as a preview', async () => {
@@ -187,15 +196,15 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   });
 });
 
-describe('modbench.record.openToSide, the menus\' entry point', () => {
-  it('fires open with the menu selection, each record placed beside', async () => {
+describe('modbench.record.openPinned, the menus\' entry point', () => {
+  it('fires open with the menu selection, each record pinned', async () => {
     await register();
     const [a, b] = [{ argument: { kind: 'record', formKey: '000801:A.esp' } }, { argument: { kind: 'record', formKey: '000802:A.esp' } }];
 
-    await commandHandlers.get('modbench.record.openToSide')?.(a, [a, b]);
+    await commandHandlers.get('modbench.record.openPinned')?.(a, [a, b]);
 
     expect(executeCommand).toHaveBeenCalledWith('modbench.record.open', [
-      { ...a, placement: 'beside' }, { ...b, placement: 'beside' },
+      { ...a, pinned: true }, { ...b, pinned: true },
     ]);
   });
 });

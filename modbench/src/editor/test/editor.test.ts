@@ -1297,7 +1297,7 @@ describe('what a record tab\'s webview posts', () => {
 });
 
 describe('a click on a column\'s header', () => {
-  it('opens the records it names through the open command, with no placement', async () => {
+  it('opens the records it names through the open command, with no flag', async () => {
     const gun = { formKey: '000801:A.esp', plugin: COPY_PLUGIN };
     const { openDocument } = makeEditor();
     const tab = await openDocument(renderedUri(gun.formKey, 'Gun.json'));
@@ -1420,9 +1420,9 @@ describe('several records opened at once', () => {
   const gunDocument = renderedUri(GUN, 'Gun.json');
   const columnsPosted = (tab: FakePanel | undefined) => tab?.webview.postMessage.mock.calls.filter(([message]) => isShowColumns(message));
   const firstRead = { type: 'requestRecordLoad', requestId: 'r0', formKey: GUN, columns: [] };
-  const openSeveral = (placement?: 'beside') => h.commands.get('modbench.record.open')?.(
-    [{ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN }, placement }, { argument: { kind: 'record', formKey: AMMO }, placement },
-      { argument: { kind: 'record', formKey: KNIFE, plugin: knifeIn }, placement }]);
+  const openSeveral = () => h.commands.get('modbench.record.open')?.(
+    [{ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } }, { argument: { kind: 'record', formKey: AMMO } },
+      { argument: { kind: 'record', formKey: KNIFE, plugin: knifeIn } }]);
   function severalClient(): InMemoryMEditClient {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);

@@ -154,7 +154,7 @@ const paletteOffers = (command: string, context: Context): boolean =>
   present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
     .filter((e) => e.command === command).some((e) => holds(e.when, context));
 
-const OPEN_TO_THE_SIDE = 'modbench.record.openToSide';
+const OPEN_PINNED = 'modbench.record.openPinned';
 const REFERENCED_BY = 'modbench.record.referencedBy';
 
 describe('package.json activation', () => {
@@ -619,7 +619,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
 
   const REVEAL_ENTRY: [string, string] = ['modbench.plugin.reveal', '1_open'];
   const COPY_VALUE_ENTRY: [string, string] = ['modbench.copyValue', '5_copy'];
-  const OPEN_BESIDE_ENTRY: [string, string] = [OPEN_TO_THE_SIDE, '1_open'];
+  const OPEN_ENTRY: [string, string] = [OPEN_PINNED, '1_open'];
   const REFERENCES_ENTRY: [string, string] = [REFERENCED_BY, '1_open'];
   const ENABLE_ENTRY: [string, string] = ['modbench.plugin.enable', '2_change'];
   const DISABLE_ENTRY: [string, string] = ['modbench.plugin.disable', '2_change'];
@@ -647,11 +647,11 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ['recordType untracked editable creatable', []],
     ['recordType tracked creatable', []],
     ['recordType tracked editable', []],
-    ...recordKinds.map((kind): [string, [string, string][]] => [`${kind} tracked editable`, [OPEN_BESIDE_ENTRY, REFERENCES_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY, DELETE_RECORD_ENTRY]]),
-    ...containerKinds.map((kind): [string, [string, string][]] => [`${kind} tracked editable container`, [OPEN_BESIDE_ENTRY, REFERENCES_ENTRY, CREATE_RECORD_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY, DELETE_RECORD_ENTRY]]),
+    ...recordKinds.map((kind): [string, [string, string][]] => [`${kind} tracked editable`, [OPEN_ENTRY, REFERENCES_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY, DELETE_RECORD_ENTRY]]),
+    ...containerKinds.map((kind): [string, [string, string][]] => [`${kind} tracked editable container`, [OPEN_ENTRY, REFERENCES_ENTRY, CREATE_RECORD_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY, DELETE_RECORD_ENTRY]]),
     ...['untracked editable', 'tracked'].flatMap((conditions): [string, [string, string][]][] => [
-      [`record ${conditions}`, [OPEN_BESIDE_ENTRY, REFERENCES_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY]],
-      [`record ${conditions} container`, [OPEN_BESIDE_ENTRY, REFERENCES_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY]],
+      [`record ${conditions}`, [OPEN_ENTRY, REFERENCES_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY]],
+      [`record ${conditions} container`, [OPEN_ENTRY, REFERENCES_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY]],
     ]),
     ...['block', 'subBlock', 'placedGroup-persistent', 'indexing', 'error'].map((kind): [string, [string, string][]] => [kind, []]),
   ];
@@ -1153,9 +1153,9 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   });
 });
 
-describe('package.json open to the side', () => {
+describe('package.json open', () => {
   it('reads Open to the Side', () => {
-    expect(pkg.contributes.commands.find((c) => c.command === OPEN_TO_THE_SIDE)?.title).toBe('Open to the Side');
+    expect(pkg.contributes.commands.find((c) => c.command === OPEN_PINNED)?.title).toBe('Open');
   });
 });
 
@@ -1190,7 +1190,7 @@ const OPEN_REFERENCE = 'modbench.record.openReference';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
-const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_TO_THE_SIDE, OPEN_REFERENCE];
+const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE];
 const RETIRED_AHEAD_OF_CODE: string[] = [];
 
 describe('package.json registers every command under its catalog Command ID', () => {
@@ -1254,26 +1254,26 @@ describe('package.json Referenced By menus', () => {
       .filter((e) => holds(e.when, { view: 'references-view.tree', viewItem, ...facts }))
       .map((e) => [e.command, e.group]);
 
-  it('offers a referrer open to the side, referenced by, then copy value', () => {
+  it('offers a referrer open, referenced by, then copy value', () => {
     expect(menuOf('referencedByReferrer')).toEqual([
-      [OPEN_TO_THE_SIDE, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.copyValue', '5_copy@1'],
+      [OPEN_PINNED, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.copyValue', '5_copy@1'],
     ]);
   });
 
   it.each([
     ['an editable tracked container', 'referencedByHolder tracked editable container', [
-      [OPEN_TO_THE_SIDE, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.create', '3_create@1'],
+      [OPEN_PINNED, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.create', '3_create@1'],
       ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'], ['modbench.record.delete', '6_destroy@1'],
     ]],
     ['an editable tracked record', 'referencedByHolder tracked editable', [
-      [OPEN_TO_THE_SIDE, '1_open@1'], [REFERENCED_BY, '1_open@2'],
+      [OPEN_PINNED, '1_open@1'], [REFERENCED_BY, '1_open@2'],
       ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'], ['modbench.record.delete', '6_destroy@1'],
     ]],
     ['a record in a tracked plugin that is not editable', 'referencedByHolder tracked', [
-      [OPEN_TO_THE_SIDE, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'],
+      [OPEN_PINNED, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'],
     ]],
     ['a record in an untracked plugin', 'referencedByHolder untracked', [
-      [OPEN_TO_THE_SIDE, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'],
+      [OPEN_PINNED, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'],
     ]],
   ])('offers a plugin copy that is %s what a Plugins record row offers', (_, viewItem, expected) => {
     expect(menuOf(viewItem)).toEqual(expected);
