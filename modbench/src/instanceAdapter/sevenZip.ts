@@ -17,13 +17,13 @@ function spawnCollecting(bin: string, args: string[]): Promise<string> {
   });
 }
 
-async function withSevenZip(archivePath: string, verb: string, args: string[]): Promise<string> {
+async function stdoutOfSevenZip(archivePath: string, verb: string, args: string[]): Promise<string> {
   for (const bin of CANDIDATES) {
     try {
       return await spawnCollecting(bin, args);
     } catch (err) {
       if (errnoCode(err) === 'ENOENT') continue;
-      throw new Error(`Failed to ${verb} ${archivePath}: ${errorMessage(err)}`, { cause: err });
+      throw new Error(`Failed to ${verb} ${archivePath}: ${errorMessage(err)}`);
     }
   }
   throw new Error(
@@ -41,8 +41,8 @@ function fileEntries(listing: string): string[] {
 }
 
 export const sevenZip: ArchiveReader = {
-  list: async (archivePath) => fileEntries(await withSevenZip(archivePath, 'list', ['l', '-slt', '-ba', '-sccUTF-8', archivePath])),
+  list: async (archivePath) => fileEntries(await stdoutOfSevenZip(archivePath, 'list', ['l', '-slt', '-ba', '-sccUTF-8', archivePath])),
   extract: async (archivePath, destDir) => {
-    await withSevenZip(archivePath, 'extract', ['x', archivePath, `-o${destDir}`, '-y']);
+    await stdoutOfSevenZip(archivePath, 'extract', ['x', archivePath, `-o${destDir}`, '-y']);
   },
 };
