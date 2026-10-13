@@ -11,6 +11,8 @@ import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { serveAgent, type AgentServer } from '../agentServer';
+import { FileConflictLookup, modOrigin, RUNTIME_OUTPUT, type ConflictEntry } from '../../instanceLoader/fileConflictIndex';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -46,34 +48,34 @@ afterEach(async () => {
   await Promise.all(blockers.splice(0).map((blocker) => new Promise((done) => blocker.close(done))));
 });
 
-async function serve(instance: FakeInstance | undefined, port = 0) {
+async function serve(instance: FakeInstance | undefined, port = 0, mEdit?: InMemoryMEditClient) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const server = serveAgent({
-    port, instance, reporter, log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => lines.push(line) },
+    port, instance, mEdit, reporter, log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => lines.push(line) },
   });
   running.push(server);
   const address = await server.listening;
   return { reporter, lines, address, bound: address?.port };
 }
 
-async function clientOf(instance: FakeInstance | undefined): Promise<Client> {
-  const { bound } = await serve(instance);
+async function clientOf(instance: FakeInstance | undefined, mEdit?: InMemoryMEditClient): Promise<Client> {
+  const { bound } = await serve(instance, 0, mEdit);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
   clients.push(client);
   return client;
 }
 
-async function call(client: Client, name: string) {
-  const result = CallToolResultSchema.parse(await client.callTool({ name }));
+async function call(client: Client, name: string, args?: Record<string, unknown>) {
+  const result = CallToolResultSchema.parse(await client.callTool({ name, arguments: args }));
   const block = present(result.content[0], 'a content block');
   if (block.type !== 'text') throw new Error(`Expected text, got ${block.type}`);
   return { isError: result.isError === true, text: block.text };
 }
 
-async function read(client: Client, name: string): Promise<unknown> {
-  return JSON.parse((await call(client, name)).text);
+async function read(client: Client, name: string, args?: Record<string, unknown>): Promise<unknown> {
+  return JSON.parse((await call(client, name, args)).text);
 }
 
 describe('the agent server, given an instance value', () => {
@@ -82,7 +84,7 @@ describe('the agent server, given an instance value', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_mods', 'list_plugins', 'list_profiles', 'list_source_problems']);
+    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mods', 'list_plugins', 'list_profiles', 'list_source_problems', 'resolve_names']);
   });
 
   it('reads the profiles and the active one', async () => {
@@ -156,6 +158,113 @@ describe('the agent server, given an instance value', () => {
     const refusal = await call(client, 'list_profiles');
     expect(refusal.isError).toBe(true);
     expect(refusal.text).toContain('not been read');
+  });
+});
+
+const providing = (relativePath: string, ...providers: ConflictEntry['providers']): ConflictEntry =>
+  ({ relativePath, winner: `/m/${relativePath}`, winnerOrigin: providers[0] ?? RUNTIME_OUTPUT, providers });
+const [A, B, C] = ['A', 'B', 'C'].map(modOrigin);
+const asLookup = (...entries: ConflictEntry[]) => {
+  const files = new FileConflictLookup();
+  entries.forEach((entry) => { files.set(entry); });
+  return files;
+};
+const CONFLICTED = instanceValueFixture({
+  mods: [
+    { kind: 'mod', name: 'A', enabled: true },
+    { kind: 'separator', name: 'Textures', enabled: true },
+    { kind: 'mod', name: 'Textures', enabled: true },
+    { kind: 'mod', name: 'B', enabled: true },
+    { kind: 'mod', name: 'C', enabled: true },
+  ],
+  files: asLookup(
+    providing('textures/rock.dds', A, B),
+    providing('meshes/x.nif', B, C),
+    providing('f.esp', RUNTIME_OUTPUT, C),
+    providing('readme.txt', C),
+  ),
+});
+
+describe('the agent server, reading file order conflicts', () => {
+  it('reads, for each mod, the files it wins over which mods and the files it loses to which winner', async () => {
+    const client = await clientOf(new FakeInstance(CONFLICTED));
+
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'A' }, { name: 'B' }, { name: 'C' }] })).toEqual([
+      { mod: 'A', wins: [{ file: 'textures/rock.dds', over: ['B'] }], loses: [] },
+      { mod: 'B', wins: [{ file: 'meshes/x.nif', over: ['C'] }], loses: [{ file: 'textures/rock.dds', winner: 'A' }] },
+      { mod: 'C', wins: [], loses: [{ file: 'f.esp', winner: 'Overwrite' }, { file: 'meshes/x.nif', winner: 'B' }] },
+    ]);
+  });
+
+  it('reads every mod, and no separator, when it is given no mods', async () => {
+    const client = await clientOf(new FakeInstance(CONFLICTED));
+
+    const rows = await read(client, 'list_file_conflicts') as { mod: string }[];
+
+    expect(rows.map((row) => row.mod)).toEqual(['A', 'Textures', 'B', 'C']);
+  });
+
+  it('names a mod apart from a separator of the same name by which of the two it is', async () => {
+    const client = await clientOf(new FakeInstance(CONFLICTED));
+
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Textures', kind: 'mod' }] })).toEqual([{ mod: 'Textures', wins: [], loses: [] }]);
+    const separator = await call(client, 'list_file_conflicts', { mods: [{ name: 'Textures', kind: 'separator' }] });
+    expect(separator.isError).toBe(true);
+    expect(separator.text).toContain('separator');
+  });
+
+  it('refuses a name that means a mod and a separator, listing each as the agent can name it, and picks neither', async () => {
+    const client = await clientOf(new FakeInstance(CONFLICTED));
+
+    const refusal = await call(client, 'list_file_conflicts', { mods: [{ name: 'A' }, { name: 'Textures' }] });
+
+    expect(refusal).toEqual({
+      isError: true,
+      text: '"Textures" means more than one thing: separator Textures; mod Textures. Name it with its kind.',
+    });
+  });
+
+  it('refuses every name that cannot be resolved in one answer, so several names are named as a selection is', async () => {
+    const client = await clientOf(new FakeInstance(CONFLICTED));
+
+    const refusal = await call(client, 'list_file_conflicts', { mods: [{ name: 'Nope' }, { name: 'Textures' }, { name: 'A' }] });
+
+    expect(refusal.isError).toBe(true);
+    expect(refusal.text).toContain('Nothing is named "Nope".');
+    expect(refusal.text).toContain('"Textures" means more than one thing');
+  });
+});
+
+describe('the agent server, resolving names through mEdit', () => {
+  const shared = { name: 'Shared.esp', origin: 'ModA' };
+
+  it('hands mEdit the names, with their origins, and answers what each means', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', [{ plugin: shared }, { formKey: '000800:Shared.esp', editorId: 'SharedNpc' }]);
+    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    const named = await read(client, 'resolve_names', { names: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }] });
+
+    expect(mEdit.calls).toContainEqual({ method: 'resolveNames', args: [[{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }]] });
+    expect(named).toEqual([{ plugin: shared }, { formKey: '000800:Shared.esp', editorId: 'SharedNpc' }]);
+  });
+
+  it('refuses with mEdit\'s own listing of the matches, copying none of it', async () => {
+    const mEdit = new InMemoryMEditClient();
+    const listing = '"Shared.esp" means more than one thing: plugin Shared.esp (origin ModA); plugin Shared.esp (origin ModB).';
+    mEdit.setQueryAnswer('resolveNames', { failed: 'refused', refusal: listing });
+    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    expect(await call(client, 'resolve_names', { names: [{ name: 'Shared.esp' }] })).toEqual({ isError: true, text: listing });
+  });
+
+  it('refuses when mEdit is not available to the agent', async () => {
+    const client = await clientOf(new FakeInstance(VALUE));
+
+    const refusal = await call(client, 'resolve_names', { names: [{ name: 'Shared.esp' }] });
+
+    expect(refusal.isError).toBe(true);
+    expect(refusal.text).toContain('mEdit');
   });
 });
 
