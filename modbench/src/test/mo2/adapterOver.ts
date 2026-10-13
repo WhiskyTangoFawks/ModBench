@@ -29,9 +29,6 @@ export interface AdapterAnswers {
   detectors?: GameDetectors;
 }
 
-/** The downloads folder's answer for a test whose subject holds none: unresolved, watched never. */
-export const NO_DOWNLOADS: AdapterAnswers['downloadsFolder'] = { kind: 'unresolved', reason: 'this test reads no downloads' };
-
 /** A window whose focus never changes, for a test whose subject is not the recompute's triggers. */
 export const STEADY_WINDOW: ConstructorParameters<typeof Instance>[0]['window'] = {
   state: { focused: true },

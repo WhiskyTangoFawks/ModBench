@@ -29,6 +29,16 @@ describe('downloads commands over the committed corpus fixture: one path each fr
     expect((await readDownloadedFileMeta(dir, NAME))?.excluded).toBe(true);
   });
 
+  it('include writes one sidecar and nothing else, and the row reads back included', async () => {
+    assertSelectionOutcome(await downloadsCommands(adapterOver(dir)).excludeDownloads([NAME]), { landed: [NAME], refused: [] });
+    const before = await snapshotTree(dir);
+
+    assertSelectionOutcome(await downloadsCommands(adapterOver(dir)).includeDownloads([NAME]), { landed: [NAME], refused: [] });
+
+    assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
+    expect((await readDownloadedFileMeta(dir, NAME))?.excluded).toBe(false);
+  });
+
   it('delete trashes the archive and then the sidecar, and nothing else', async () => {
     const before = await snapshotTree(dir);
     const trashed: string[] = [];
