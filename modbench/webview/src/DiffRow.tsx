@@ -167,7 +167,7 @@ export function DiffRow({
 
         // mEdit sends no state for the master's own cell, nor for any cell of a lone copy.
         const cellState = diff.cellStatesByFocus
-          ? focusedCell?.plugin && diff.cellStatesByFocus[focusedCell.plugin]?.[key]
+          ? diff.cellStatesByFocus[focusedCell?.plugin ?? '']?.[key]
           : diff.cellStates[key] ?? masterOrOnlyOne(diff.values[key], key, columns);
         const cellStyle = {
           ...baseCell, ...getCellStyle(cellState), ...columnStyle(key),

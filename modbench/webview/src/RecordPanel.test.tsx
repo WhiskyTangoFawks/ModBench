@@ -2751,7 +2751,7 @@ describe('RecordPanel — several records coloured as xEdit\'s Compare Selected 
     renderPanel(compare, { plugins: [{ name: 'A.esp', isTracked: true }] });
     await screen.findByText('Ammo Name');
 
-    fireEvent.click(screen.getAllByText('Gun Name')[0] as HTMLElement);
+    fireEvent.click(required(screen.getAllByText('Gun Name')[0], 'the first Gun Name cell'));
     expect(backgrounds()).toEqual(['', loses, override]);
 
     fireEvent.click(screen.getByText('Ammo Name'));
