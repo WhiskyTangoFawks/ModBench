@@ -12,9 +12,11 @@ import { pastSequence, watcherFor } from './mo2/instanceLoop';
 import { instanceSyncs } from '../syncWiring';
 import { modSyncOver, type ModSyncResult } from '../modOrderCommands/modOrderCommands';
 import { type PluginSyncResult } from '../pluginsCommands/plugins';
-import type { ModFolder } from '../instanceAdapter/instanceAdapter';
+import type { InstanceReading, Mod, ModFolder } from '../instanceAdapter/instanceAdapter';
+import { fakeInstanceAdapter, modFoldersOf, readingFixture } from './fakeInstanceAdapter';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './mo2/corpusFixture';
-import { adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
+import { adapterOver } from './mo2/adapterOver';
+import { STEADY_WINDOW } from './steadyWindow';
 
 const noPluginSync = () => Promise.resolve<PluginSyncResult>({ applied: true, wrote: false, added: [], dropped: [] });
 
@@ -82,58 +84,82 @@ describe('mod sync and the Instance, over a real mods/ folder', () => {
 
     expect(await modlistText(root)).toContain(MOD);
   });
+});
+
+async function settledFakeInstance(overrides: Partial<InstanceReading>) {
+  const fake = fakeInstanceAdapter(readingFixture(overrides));
+  const instance = new Instance({
+    window: STEADY_WINDOW, adapter: fake.adapter, log: { info: () => {}, warn: () => {}, error: () => {} },
+  });
+  instances.push(instance);
+  const channel = channelDouble();
+  const syncs: Promise<ModSyncResult>[] = [];
+  const handed: (readonly ModFolder[] | undefined)[] = [];
+  const { modSync } = instanceSyncs({
+    instance, channel, syncPlugins: noPluginSync,
+    syncMods: (args) => {
+      handed.push(args.modFolders);
+      const run = modSyncOver(fake.adapter)(args);
+      syncs.push(run);
+      return run;
+    },
+  });
+  await instance.refresh();
+  await modSync.settled();
+  channel.info.mockClear();
+  fake.forgetCalls();
+  return { fake, instance, channel, syncs, handed };
+}
+
+const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true });
+
+describe('mod sync, as the Instance value drives it', () => {
+  const listed = { mods: [mod('Harder VATS')], modFolders: modFoldersOf('Harder VATS') };
 
   it('drops the line of a folder deleted by hand, off the Instance value alone', async () => {
-    const { root, instance, syncs } = await settledWiredInstance();
-    const before = instance.sequence;
-    await rm(join(root, 'mods', 'Harder VATS'), { recursive: true, force: true });
+    const { fake, instance, syncs } = await settledFakeInstance(listed);
 
-    watcherFor('mods/**').fireDelete(join(root, 'mods', 'Harder VATS'));
-    await pastSequence(instance, before);
+    fake.read({ modFolders: modFoldersOf() });
+    await instance.refresh();
     await syncs[syncs.length - 1];
 
-    expect(await modlistText(root)).not.toContain('Harder VATS');
+    expect(fake.calls).toEqual([{ verb: 'changeModOrder', profile: 'Default', changes: [{ kind: 'dropMod', mod: 'Harder VATS' }] }]);
   });
 
-  it('leaves modlist.txt as it is, and says why in one Output line, when mods/ goes missing', async () => {
-    const { root, instance, channel, syncs } = await settledWiredInstance();
-    const settled = await modlistText(root);
-    const before = instance.sequence;
-    await rm(join(root, 'mods'), { recursive: true, force: true });
+  it('writes nothing, and says why in one Output line, when mods/ goes missing', async () => {
+    const { fake, instance, channel, syncs } = await settledFakeInstance(listed);
 
-    watcherFor('mods/**').fireDelete(join(root, 'mods'));
-    await pastSequence(instance, before);
+    fake.read({ modFolders: undefined });
+    await instance.refresh();
     await syncs[syncs.length - 1];
 
-    expect(await modlistText(root)).toBe(settled);
+    expect(fake.calls).toEqual([]);
     expect(channel.error).toHaveBeenCalledTimes(1);
     expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('there is no folder for mods'));
   });
 
   it('hands the command the value\'s own mod folders, not a listing of its own', async () => {
-    const { root, instance, handed, syncs } = await settledWiredInstance();
-    const before = instance.sequence;
-    await mkdir(join(root, 'mods', 'Hand Extracted Mod'), { recursive: true });
+    const { fake, instance, handed, syncs } = await settledFakeInstance(listed);
 
-    watcherFor('mods/**').fireCreate(join(root, 'mods', 'Hand Extracted Mod'));
-    const value = await pastSequence(instance, before);
+    fake.read({ modFolders: modFoldersOf('Harder VATS', 'Hand Extracted Mod') });
+    await instance.refresh();
     await syncs[syncs.length - 1];
 
-    expect(handed[handed.length - 1]).toBe(value.modFolders);
-    expect(value.modFolders?.map((f) => f.name)).toContain('Hand Extracted Mod');
+    expect(handed[handed.length - 1]).toBe(instance.value.modFolders);
+    expect(fake.calls).toEqual([{
+      verb: 'changeModOrder', profile: 'Default', changes: [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'Hand Extracted Mod' } }],
+    }]);
   });
 
-  it('a further landed value once disk and modlist.txt agree writes nothing and logs nothing', async () => {
-    const { root, instance, channel, syncs } = await settledWiredInstance();
-    const settled = await modlistText(root);
-    const before = instance.sequence;
+  it('a further landed value once disk and mod order agree writes nothing and logs nothing', async () => {
+    const { fake, instance, channel, syncs } = await settledFakeInstance(listed);
 
-    watcherFor('profiles/*/plugins.txt').fireChange();
-    await pastSequence(instance, before);
+    fake.changed();
+    await pastSequence(instance, instance.sequence);
     const outcome = await syncs[syncs.length - 1];
 
     expect(outcome).toEqual({ applied: true, added: [], dropped: [] });
-    expect(await modlistText(root)).toBe(settled);
+    expect(fake.calls.flatMap((call) => (call.verb === 'changeModOrder' ? call.changes : []))).toEqual([]);
     expect(channel.info).not.toHaveBeenCalled();
     expect(channel.error).not.toHaveBeenCalled();
   });

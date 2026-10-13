@@ -60,13 +60,13 @@ import { present } from '../../ports/present';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { adapterOver } from '../../test/mo2/adapterOver';
+import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { downloadsCommands } from '../../downloadsCommands/downloads';
 
 type DownloadsViewDeps = Parameters<typeof createDownloadsView>[0];
 
-const downloadsViewDeps = (instanceRoot: string, instance: InstanceView & Pick<Instance, 'refresh'>): DownloadsViewDeps => ({
-  commands: downloadsCommands(adapterOver(instanceRoot)), instance, reporter: recordingReporter(),
+const downloadsViewDeps = (instance: InstanceView & Pick<Instance, 'refresh'>): DownloadsViewDeps => ({
+  commands: downloadsCommands(fakeInstanceAdapter().adapter), instance, reporter: recordingReporter(),
   ask: () => Promise.resolve(undefined), trash: () => Promise.resolve(),
   log: () => undefined,
   logUnresolved: () => undefined,
@@ -74,10 +74,9 @@ const downloadsViewDeps = (instanceRoot: string, instance: InstanceView & Pick<I
 const command = commandInvoker(h.state);
 const currentBox = currentBoxOf(h.state);
 
-const INSTANCE_ROOT = '/instance';
 const instanceOver = (...rows: ReturnType<typeof downloadRowFixture>[]) =>
   new FakeInstance(instanceValueFixture({ downloads: { kind: 'listed', rows } }));
-const viewOver = (instance: FakeInstance) => createDownloadsView(downloadsViewDeps(INSTANCE_ROOT, instance));
+const viewOver = (instance: FakeInstance) => createDownloadsView(downloadsViewDeps(instance));
 const downloadsTree = () => present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
 
 beforeEach(() => {
@@ -201,7 +200,7 @@ describe('the Downloads view writes the unresolved folder to the Output', () => 
   it('hands the reason to its log once the Instance value carries it', () => {
     const instance = new FakeInstance(instanceValueFixture());
     const lines: string[] = [];
-    createDownloadsView({ ...downloadsViewDeps(INSTANCE_ROOT, instance), logUnresolved: (line) => lines.push(line) });
+    createDownloadsView({ ...downloadsViewDeps(instance), logUnresolved: (line) => lines.push(line) });
 
     instance.publish(instanceValueFixture({ downloads: { kind: 'unresolved', reason: 'no folder' } }));
 

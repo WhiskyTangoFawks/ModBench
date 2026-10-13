@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -97,6 +98,18 @@ public sealed class PartialFormCompareTests : IDisposable
 
         Assert.Equal("Base.esm", waterHeight.WinnerColumn);
         Assert.Equal(MasterWaterHeight, Assert.IsType<JsonElement>(waterHeight.Values["Base.esm"]).GetSingle());
+    }
+
+    [Fact]
+    public void ARecordComparedWithItsPartialFormCopy_IsNoConflictOnTheCopysOwnField_ThoughItsValueDiffers()
+    {
+        var copies = new[] { "Base.esm", "Partial.esp" }
+            .Select(plugin => new RecordCopy(_cellKey.ToString(), new PluginAddress(plugin, PluginOrigin.DataDirectory)))
+            .ToList();
+
+        var waterHeight = _index.Queries.GetCompareRecords(copies).Value().Diffs.Single(d => d.FieldName == "WaterHeight");
+
+        Assert.Equal(ConflictAll.NoConflict, waterHeight.ConflictAll);
     }
 
     [Fact]

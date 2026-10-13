@@ -196,7 +196,8 @@ internal sealed class RecordQueries(
             indexed: true);
         var overrides = records.Select((r, i) => ToCompareOverride(r, state: null, columns[i], snapshot, reads)).ToList();
 
-        return new CompareResult(overrides, diffs, ConflictAll.NoConflict, RequireSchemas().DisplayNameFor(documents[0].RecordType));
+        var conflictAll = ConflictRules.Worst(ConflictAll.NoConflict, diffs.Select(diff => diff.ConflictAll));
+        return new CompareResult(overrides, diffs, conflictAll, RequireSchemas().DisplayNameFor(documents[0].RecordType));
     }
 
     // The text is the document carrying the record. A plugin's source tree says which document that is, as it

@@ -970,7 +970,7 @@ export interface components {
             diagnostics: components["schemas"]["CompileDiagnostic"][];
         };
         /** @enum {string} */
-        ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict";
+        ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictBenign";
         /** @enum {string} */
         ConflictThis: "OnlyOne" | "Master" | "IdenticalToMaster" | "Override" | "ConflictWins" | "ConflictLoses";
         ContainerChildSummary: {
@@ -1053,6 +1053,11 @@ export interface components {
             } | null;
             indexes?: {
                 [key: string]: number;
+            } | null;
+            cellStatesByFocus?: {
+                [key: string]: {
+                    [key: string]: components["schemas"]["ConflictThis"];
+                };
             } | null;
         };
         FieldMetadata: {
