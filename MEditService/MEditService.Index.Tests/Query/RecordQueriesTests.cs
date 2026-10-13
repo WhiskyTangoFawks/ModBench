@@ -111,7 +111,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     {
         var fixture = Built(TwoNpcsPlugin());
         var entry = fixture.Plugins.Single();
-        if (trackTheMod) TrackedMods.Track(entry, fixture.GameDirectory);
+        if (trackTheMod) TrackedMods.Track(entry);
         if (removeThePluginSource) Directory.Delete(PluginSourceRoot.In(entry.ModFolderOf(), PluginName), recursive: true);
 
         var plugin = Reconciled(fixture).PluginRowOf(PluginKey) ?? throw new InvalidOperationException("Expected the plugin's row.");
@@ -125,7 +125,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         var fixture = Built(new PluginFixtureBuilder("record-query")
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Tracked"), origin: "TrackedMod")
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Untracked"), origin: "UntrackedMod"));
-        TrackedMods.Track(fixture.Plugins.Single(p => p.Origin == "TrackedMod"), fixture.GameDirectory);
+        TrackedMods.Track(fixture.Plugins.Single(p => p.Origin == "TrackedMod"));
 
         var plugins = Reconciled(fixture).Queries.GetPlugins().Value();
 
@@ -1058,7 +1058,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
             mod.Npcs.AddNew("Edited");
         }, origin: PluginKey.Origin));
         var entry = fixture.Plugins.Single();
-        TrackedMods.Track(entry, fixture.GameDirectory);
+        TrackedMods.Track(entry);
         var index = Reconciled(fixture);
         var edited = index.DocumentOf(Npc02, PluginKey);
         var body = index.BodyOf(Npc02, PluginKey);

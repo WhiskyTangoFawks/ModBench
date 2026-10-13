@@ -16,7 +16,7 @@ public sealed class SkyrimModelIdentityTests
         var original = WriteWithArchivedStrings(Path.Combine(scratch, "original"), "Tür", Language.English, Language.German);
         var recompiled = WriteWithArchivedStrings(Path.Combine(scratch, "recompiled"), "Tür", Language.German, Language.English);
 
-        Assert.Null(DivergenceBetween(original, recompiled, scratch));
+        Assert.Null(DivergenceBetween(original, recompiled));
     }
 
     [Fact]
@@ -26,7 +26,7 @@ public sealed class SkyrimModelIdentityTests
         var original = WriteWithArchivedStrings(Path.Combine(scratch, "original"), "Tür", Language.English, Language.German);
         var recompiled = WriteWithArchivedStrings(Path.Combine(scratch, "recompiled"), "Tor", Language.German, Language.English);
 
-        Assert.Contains("field 'Name.Values[\"German\"]' changed", DivergenceBetween(original, recompiled, scratch), StringComparison.Ordinal);
+        Assert.Contains("field 'Name.Values[\"German\"]' changed", DivergenceBetween(original, recompiled), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -36,7 +36,7 @@ public sealed class SkyrimModelIdentityTests
         var original = Write(Path.Combine(scratch, "original"), header => header.Author = "Original");
         var recompiled = Write(Path.Combine(scratch, "recompiled"), header => header.Author = "Corrupted");
 
-        Assert.Contains("'Author'", DivergenceBetween(original, recompiled, scratch), StringComparison.Ordinal);
+        Assert.Contains("'Author'", DivergenceBetween(original, recompiled), StringComparison.Ordinal);
     }
 
     private static string Write(string folder, Action<SkyrimModHeader> setHeader)
@@ -48,10 +48,10 @@ public sealed class SkyrimModelIdentityTests
         return path;
     }
 
-    private static string? DivergenceBetween(string original, string recompiled, string scratch) =>
+    private static string? DivergenceBetween(string original, string recompiled) =>
         TestAdapters.Mutagen().DivergenceFrom(
             "Fixture.esp", original, recompiled, EmptyLoadOrder.Of(GameRelease.SkyrimSE),
-            new PluginStrings(Path.GetDirectoryName(original), scratch)).Answered();
+            new PluginStrings(Path.GetDirectoryName(original))).Answered();
 
     private static string WriteWithArchivedStrings(string folder, string german, params Language[] archiveOrder)
     {
