@@ -222,8 +222,7 @@ describe('the agent server, reading file order conflicts', () => {
 
     expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Textures', kind: 'mod' }] })).toEqual([{ mod: 'Textures', enabled: true, wins: [], loses: [] }]);
     const separator = await call(client, 'list_file_conflicts', { mods: [{ name: 'Textures', kind: 'separator' }] });
-    expect(separator.isError).toBe(true);
-    expect(separator.text).toContain('separator');
+    expect(separator).toEqual({ isError: true, text: '"Textures" is a separator; it has no files.' });
   });
 
   it('refuses a name that means a mod and a separator, listing each as the agent can name it, and picks neither', async () => {

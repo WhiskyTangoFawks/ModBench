@@ -117,6 +117,10 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     expect(isExcluded(join(CLIENT_DIR, 'MEditClient.ts'))).toBe(true);
   });
 
+  it('the agent box is excluded because it names records as the agent does, in mEdit\'s own vocabulary', () => {
+    expect(isExcluded(join(AGENT_DIR, 'resolveNames.ts'))).toBe(true);
+  });
+
   it('test files and test folders are excluded because their names and fixtures are prose and corpus data', () => {
     expect(isExcluded(join('mods', 'modList.test.ts'))).toBe(true);
     expect(isExcluded(join('mods', 'test', 'fixture.ts'))).toBe(true);
