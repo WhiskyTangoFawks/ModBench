@@ -21,7 +21,7 @@ import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader
 import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
-import type { InstanceAdapter } from './instanceAdapter/instanceAdapter';
+import { sevenZip, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
 import { agentPort, attachPort, gameDirectoryOverrides, inheritedPythonPath, onGameDirectoryChange, onTerminalEnvChange } from './workspaceConfig';
 import { createPlugins, type Plugins } from './plugins';
@@ -117,7 +117,7 @@ function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened 
 
 function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: OpenedInstance, deps: ViewsDeps): InstanceSide {
   const { outputChannel, client, plugins: pluginsBox, reporterFor, ask, trash, extensionId } = deps;
-  const install = installCommands({ instanceRoot, adapter });
+  const install = installCommands({ instanceRoot, adapter, archives: sevenZip });
   own(markFirstReadLanded(instance));
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const { modSync, pluginSync } = own(instanceSyncs({
