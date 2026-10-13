@@ -48,7 +48,7 @@ afterEach(async () => {
   await Promise.all(blockers.splice(0).map((blocker) => new Promise((done) => blocker.close(done))));
 });
 
-async function serve(instance: FakeInstance | undefined, port = 0, mEdit?: InMemoryMEditClient) {
+async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient()) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const server = serveAgent({
@@ -59,7 +59,7 @@ async function serve(instance: FakeInstance | undefined, port = 0, mEdit?: InMem
   return { reporter, lines, address, bound: address?.port };
 }
 
-async function clientOf(instance: FakeInstance | undefined, mEdit?: InMemoryMEditClient): Promise<Client> {
+async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient()): Promise<Client> {
   const { bound } = await serve(instance, 0, mEdit);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
@@ -256,15 +256,6 @@ describe('the agent server, resolving names through mEdit', () => {
     const client = await clientOf(new FakeInstance(VALUE), mEdit);
 
     expect(await call(client, 'resolve_names', { names: [{ name: 'Shared.esp' }] })).toEqual({ isError: true, text: listing });
-  });
-
-  it('refuses when mEdit is not available to the agent', async () => {
-    const client = await clientOf(new FakeInstance(VALUE));
-
-    const refusal = await call(client, 'resolve_names', { names: [{ name: 'Shared.esp' }] });
-
-    expect(refusal.isError).toBe(true);
-    expect(refusal.text).toContain('mEdit');
   });
 });
 

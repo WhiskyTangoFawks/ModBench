@@ -18,7 +18,7 @@ const AGENT_PORT_SETTING = 'modbench.agent.port';
 export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence'> | undefined;
-  mEdit?: Pick<MEditClient, 'resolveNames'>;
+  mEdit: Pick<MEditClient, 'resolveNames'>;
   reporter: Reporter;
   log: Log;
 }
