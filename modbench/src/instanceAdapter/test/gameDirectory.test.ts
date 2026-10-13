@@ -5,14 +5,11 @@ import { join, posix } from 'node:path';
 import {
   gameDirectoryResolver, normalizeGamePath, type GameDetectors,
 } from '../gameDirectory';
+import { NO_DETECTORS } from '../../test/noDetectors';
+import { documentsFolder } from '../documentsFolder';
 import type { GameDirectoryOverrides } from '../instanceAdapter';
 
 const noDetectPrefix = () => Promise.resolve(null);
-
-const NO_DETECTORS: GameDetectors = {
-  paths: () => Promise.resolve(null),
-  winePrefix: () => Promise.resolve(null),
-};
 
 const iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts = (gamePath?: string): string =>
   `[General]\r\ngameName=Fallout 4\r\n${gamePath === undefined ? '' : `gamePath=@ByteArray(${gamePath.replaceAll('\\', '\\\\')})\r\n`}`;
@@ -24,6 +21,20 @@ const STEAM_PLACE = 'the Steam install';
 const resolverWith = (
   overrides: GameDirectoryOverrides = {}, detectors: GameDetectors = NO_DETECTORS,
 ) => gameDirectoryResolver(() => overrides, detectors);
+
+describe('documentsFolder', () => {
+  it('reads a non-ASCII Documents path as UTF-8, having told PowerShell to write it so', async () => {
+    const commands: string[] = [];
+
+    const documents = await documentsFolder((command) => {
+      commands.push(command);
+      return Promise.resolve(Buffer.from('C:\\Users\\José\\Документы\r\n', 'utf8'));
+    });
+
+    expect(documents).toBe('C:\\Users\\José\\Документы');
+    expect(commands[0]).toMatch(/^\[Console\]::OutputEncoding=\[Text\.Encoding\]::UTF8;/);
+  });
+});
 
 describe('normalizeGamePath', () => {
   it('leaves a native Windows path untouched', async () => {
@@ -151,7 +162,7 @@ describe('the game directory resolver', () => {
     dirs.push(prefixDir);
     const gameRoot = join(prefixDir, 'drive_c', 'Games', 'Fallout4');
     await mkdir(join(gameRoot, 'Data'), { recursive: true });
-    const detectors: GameDetectors = { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(prefixDir) };
+    const detectors: GameDetectors = { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefixDir) };
 
     const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts('C:\\Games\\Fallout4'));
 
@@ -160,6 +171,7 @@ describe('the game directory resolver', () => {
 
   it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) answers not found, with the reason, and does not answer with the detected folder when a C: ini path has no determinable prefix', async () => {
     const detectors: GameDetectors = {
+      ...NO_DETECTORS,
       paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: () => Promise.resolve(null),
     };
@@ -177,6 +189,7 @@ describe('the game directory resolver', () => {
 
   it('falls back to Steam autodetection when the setting and the ini gamePath are both absent', async () => {
     const detectors: GameDetectors = {
+      ...NO_DETECTORS,
       paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: noDetectPrefix,
     };
@@ -204,6 +217,7 @@ describe('the game directory resolver', () => {
     const staleGameRoot = join(dir, 'Stale Game Folder');
     await mkdir(staleGameRoot, { recursive: true });
     const detectors: GameDetectors = {
+      ...NO_DETECTORS,
       paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: noDetectPrefix,
     };
@@ -224,6 +238,7 @@ describe('the game directory resolver', () => {
     const unknownGame = `[General]\r\ngameName=Morrowind\r\n`;
     let asked = false;
     const detectors: GameDetectors = {
+      ...NO_DETECTORS,
       paths: () => { asked = true; return Promise.resolve(null); },
       winePrefix: noDetectPrefix,
     };
@@ -243,6 +258,7 @@ describe('the game directory resolver', () => {
     const gameRoot = await gameFolder();
     let asked = 0;
     const detectors: GameDetectors = {
+      ...NO_DETECTORS,
       paths: () => { asked += 1; return Promise.resolve(null); },
       winePrefix: noDetectPrefix,
     };
@@ -257,6 +273,7 @@ describe('the game directory resolver', () => {
     const gameRoot = await gameFolder();
     let asked = 0;
     const detectors: GameDetectors = {
+      ...NO_DETECTORS,
       paths: () => { asked += 1; return Promise.resolve(null); },
       winePrefix: noDetectPrefix,
     };

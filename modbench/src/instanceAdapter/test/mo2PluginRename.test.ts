@@ -28,6 +28,7 @@ import type { FileOrigin, InstanceAdapter } from '../instanceAdapter';
 import { mo2InstanceAdapter } from '../mo2Instance';
 import { fakeArchiveReader } from '../../test/fakeArchiveReader';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
+import { NO_DETECTORS } from '../../test/noDetectors';
 
 const MOD = 'mods/Tracked Patch Mod';
 const ORIGIN: FileOrigin = { kind: 'mod', name: 'Tracked Patch Mod' };
@@ -70,7 +71,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
       instanceRoot: root,
       gameDirectoryOverrides: () => ({}),
       gameDirectoryChanged: () => ({ dispose: () => {} }),
-      detectors: { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(null) },
+      detectors: NO_DETECTORS,
       archives: fakeArchiveReader([]),
     });
     for (const [before] of NAMED_FOR_IT.slice(1)) await put(before);
