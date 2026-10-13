@@ -62,7 +62,7 @@ As a user, I want:
 4. A file with no provider written as such and reported, so the gap is in the diff and the rest of the modlist commits. Source: wabbajack.md, divergence 4
 5. A source mod's manifest left to its build, and the mod reported when its folder differs from what the build wrote. Source: ADR-0022
 6. It commits nothing. Source: catalog `stage`
-7. A file whose size and time match its manifest line kept with the line's hash, as status trusts it, so a stage after a stage reads nothing. Source: Status, story 3; ADR-0024
+7. A file whose size and time match its manifest line kept with the line's hash, as status trusts it, so a stage after a stage reads nothing. Source: Status, story 3
 
 ## Discard changes
 

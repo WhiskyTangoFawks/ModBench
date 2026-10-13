@@ -4,8 +4,8 @@ shape: sequence_diagram
 downloads: "Downloads · Mods" {class: driving}
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
-install: @../target-architecture.modbench_core.install
-install.label: install
+modordercommands: @../target-architecture.modbench_core.modordercommands
+modordercommands.label: mod order commands
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
 instance: @../target-architecture.modbench_data.instance
@@ -14,21 +14,14 @@ views: "every view" {class: driving}
 
 instanceloader -> downloads: "value: mods with this Nexus id, their installed files" {class: loadorder}
 downloads."the target pick"
-downloads -> install: "the source, and the target" {class: loadorder}
-
-new mod: "a new mod" {
-  install -> instanceadapter: "the new mod's files and meta.ini" {class: loadorder}
-}
-upgrade: "an upgrade" {
-  install -> instanceadapter: "the release's files, and meta.ini's owned keys" {class: loadorder}
-}
-
+downloads -> modordercommands: "the source, and the target" {class: loadorder}
+modordercommands -> instanceadapter: "install: the source, the target, the mod's metadata" {class: loadorder}
+instanceadapter."a new folder, or the release into the mod's own; the root chosen inside"
 from download: "from a downloaded file" {
-  install -> instanceadapter: "the downloaded file: installed" {class: loadorder}
+  modordercommands -> instanceadapter: "the downloaded file: installed" {class: loadorder}
 }
-
 instanceadapter -> instance: "the folder · the metadata" {class: loadorder}
-install -> downloads: applied or refusal {class: loadorder}
+modordercommands -> downloads: applied or refusal {class: loadorder}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> views: value {class: loadorder}
@@ -36,5 +29,5 @@ instanceloader."mod sync: update-load-order-file"
 instanceloader."the next snapshot: index-load-order; in a source mod, detect-external-change"
 
 refused: "refused, before any write" {
-  install -> downloads: "the refusal" {class: loadorder}
+  modordercommands -> downloads: "the refusal" {class: loadorder}
 }
