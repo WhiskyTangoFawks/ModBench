@@ -2,9 +2,8 @@
 
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
-import { ARCHIVE_EXTENSIONS } from '../install/archiveExtensions';
-import { defaultModName, defaultModNameForFolder } from '../install/archiveNames';
-import type { InstallCommands } from '../install/install';
+import { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder } from '../instanceAdapter/instanceAdapter';
+import type { ModlistCommands, ModSource } from '../modOrderCommands/modOrderCommands';
 import { downloadArgumentOf } from '../drivingLib/argument';
 import { promptModName } from './promptModName';
 import { reportFailure } from '../drivingLib/reportFailure';
@@ -18,7 +17,7 @@ interface InstallOutcome {
 const NOT_INSTALLED: InstallOutcome = { installed: false };
 
 interface ModInstallDeps {
-  install: InstallCommands;
+  commands: Pick<ModlistCommands, 'installMod' | 'newModNameRefusal'>;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporterFor: (tag: string) => Reporter;
   warnIfFomod: (name: string, isFomod: boolean) => void;
@@ -29,29 +28,20 @@ interface SourceKindItem extends vscode.QuickPickItem {
   sourceKind: 'archive' | 'folder';
 }
 
+type PickedSource = Extract<ModSource, { kind: 'archive' | 'folder' }>;
+
+const REPORTER_TAG: Record<PickedSource['kind'], string> = { archive: 'installFromArchive', folder: 'installFromFolder' };
+
 // modbench.mod.install: with no source, as from the Mods menu, it asks archive-or-folder first,
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
-  const { install, instance, reporterFor, warnIfFomod, downloadInstall } = deps;
-  const validateName = install.installNameRefusal;
-  const installArchive = async (archivePath: string): Promise<InstallOutcome> => {
-    const name = await promptModName(defaultModName(archivePath), validateName);
+  const { commands, instance, reporterFor, warnIfFomod, downloadInstall } = deps;
+  const installNew = async (source: PickedSource, defaultName: string): Promise<InstallOutcome> => {
+    const name = await promptModName(defaultName, commands.newModNameRefusal);
     if (!name) return NOT_INSTALLED;
     let succeeded = false;
-    await runModsWriting(instance, () => reportFailure(reporterFor('installFromArchive'), `Failed to install "${name}".`, async () => {
-      const outcome = await install.installFromArchive({ kind: 'new', name }, archivePath, { gameName: instance.value.gameName });
-      if (!outcome.applied) throw new Error(outcome.refusal);
-      warnIfFomod(name, outcome.isFomod);
-      succeeded = true;
-    }));
-    return { installed: succeeded };
-  };
-  const installFolder = async (folder: string): Promise<InstallOutcome> => {
-    const name = await promptModName(defaultModNameForFolder(folder), validateName);
-    if (!name) return NOT_INSTALLED;
-    let succeeded = false;
-    await runModsWriting(instance, () => reportFailure(reporterFor('installFromFolder'), `Failed to install "${name}".`, async () => {
-      const outcome = await install.installFromFolder({ kind: 'new', name }, folder, { gameName: instance.value.gameName });
+    await runModsWriting(instance, () => reportFailure(reporterFor(REPORTER_TAG[source.kind]), `Failed to install "${name}".`, async () => {
+      const outcome = await commands.installMod(source, { kind: 'new', name }, instance.value.gameName);
       if (!outcome.applied) throw new Error(outcome.refusal);
       warnIfFomod(name, outcome.isFomod);
       succeeded = true;
@@ -63,7 +53,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       const download = downloadArgumentOf(argument);
       if (download) {
         const installed = await installDownloadedFile(
-          download, install, instance, { ...downloadInstall, warnIfFomod });
+          download, commands, instance, { ...downloadInstall, warnIfFomod });
         return { installed };
       }
       const picked = await vscode.window.showQuickPick<SourceKindItem>(
@@ -81,7 +71,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
           openLabel: 'Install',
         });
         const archive = archivePicked?.[0]?.fsPath;
-        return archive ? installArchive(archive) : NOT_INSTALLED;
+        return archive ? installNew({ kind: 'archive', path: archive }, defaultModName(archive)) : NOT_INSTALLED;
       }
       const folderPicked = await vscode.window.showOpenDialog({
         canSelectFiles: false,
@@ -90,7 +80,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         openLabel: 'Install',
       });
       const folder = folderPicked?.[0]?.fsPath;
-      return folder ? installFolder(folder) : NOT_INSTALLED;
+      return folder ? installNew({ kind: 'folder', path: folder }, defaultModNameForFolder(folder)) : NOT_INSTALLED;
     }),
   ];
 }

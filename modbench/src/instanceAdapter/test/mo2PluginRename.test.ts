@@ -26,6 +26,7 @@ const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(re
 import { listDir } from '../files';
 import type { FileOrigin, InstanceAdapter } from '../instanceAdapter';
 import { mo2InstanceAdapter } from '../mo2Instance';
+import { fakeArchiveReader } from '../../test/fakeArchiveReader';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 
 const MOD = 'mods/Tracked Patch Mod';
@@ -70,6 +71,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
       gameDirectoryOverrides: () => ({}),
       gameDirectoryChanged: () => ({ dispose: () => {} }),
       detectors: { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(null) },
+      archives: fakeArchiveReader([]),
     });
     for (const [before] of NAMED_FOR_IT.slice(1)) await put(before);
     for (const path of NOT_NAMED_FOR_IT) await put(path);

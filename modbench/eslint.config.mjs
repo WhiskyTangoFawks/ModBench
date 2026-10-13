@@ -97,14 +97,18 @@ function restrictedImports({ vscode, packages, path, client = false, inAdapter =
 // A view fires the commands the root bound to the Instance adapter; it takes only types from the core box.
 /** @type {Record<string, string[]>} */
 const BOUND_COMMAND_BOXES = {
-    mods: ['modOrderCommands/modOrderCommands', 'install/install'],
+    mods: ['modOrderCommands/modOrderCommands', 'modOrderCommands/install'],
     downloads: ['downloadsCommands/downloads'],
     toolbox: ['instanceCommands/instanceCommands'],
     plugins: ['pluginsCommands/plugins', 'pluginsCommands/renamePlugin', 'sourceCommands/sourceCommands'],
 };
-/** The Plugins box reaches the Instance adapter for its plugin-file rule alone; no other view reaches it. */
+/** A view reaches the Instance adapter for a file-name rule alone: Plugins for a plugin file's, Mods and Downloads for an archive's. */
 /** @type {Record<string, string[]>} */
-const ADAPTER_NAMES_A_VIEW_MAY_IMPORT = { plugins: ['fileExtension'] };
+const ADAPTER_NAMES_A_VIEW_MAY_IMPORT = {
+    plugins: ['fileExtension'],
+    mods: ['ARCHIVE_EXTENSIONS', 'defaultModName', 'defaultModNameForFolder'],
+    downloads: ['isArchiveName'],
+};
 /** @param {string} view */
 const boundCommandImports = (view) => ['error', {
     patterns: [
@@ -116,7 +120,7 @@ const boundCommandImports = (view) => ['error', {
         {
             group: ['**/instanceAdapter/**'],
             ...(ADAPTER_NAMES_A_VIEW_MAY_IMPORT[view] ? { allowImportNames: ADAPTER_NAMES_A_VIEW_MAY_IMPORT[view] } : {}),
-            message: 'A view holds bound commands and reaches the Instance adapter for nothing but the plugin-file rule.',
+            message: 'A view holds bound commands and reaches the Instance adapter for nothing but a file-name rule.',
         },
     ],
 }];
@@ -368,7 +372,6 @@ export default defineConfig(
                     './src/instanceCommands/tsconfig.json',
                     './src/sourceCommands/tsconfig.json',
                     './src/downloadsCommands/tsconfig.json',
-                    './src/install/tsconfig.json',
                     './src/client/tsconfig.json',
                     './src/drivingLib/tsconfig.json',
                     './src/mods/tsconfig.json',

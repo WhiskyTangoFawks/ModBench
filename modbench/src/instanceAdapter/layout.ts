@@ -3,7 +3,7 @@
 // `formatLiteralScan.test.ts` refuses a second speller.
 
 import { randomBytes } from 'node:crypto';
-import { join, posix, win32 } from 'node:path';
+import { join } from 'node:path';
 import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
@@ -115,14 +115,6 @@ export const pluginsFile = (instanceRoot: string, profile: string): string =>
 
 export const downloadFile = (downloadsDir: string, name: string): string => join(downloadsDir, name);
 
-/** The name of the downloaded file at `path`; undefined when `path` is not one in `downloadsDir`.
- *  Windows matches paths without case. */
-export function downloadNameAt(downloadsDir: string, path: string, platform: NodeJS.Platform): string | undefined {
-  const paths = platform === 'win32' ? win32 : posix;
-  const key = (p: string): string => (platform === 'win32' ? paths.normalize(p).toLowerCase() : paths.normalize(p));
-  const name = paths.basename(path);
-  return key(paths.join(downloadsDir, name)) === key(path) ? name : undefined;
-}
 
 export const downloadSidecarFile = (downloadsDir: string, name: string): string =>
   join(downloadsDir, name + DOWNLOAD_SIDECAR_SUFFIX);

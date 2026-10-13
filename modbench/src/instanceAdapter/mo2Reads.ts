@@ -15,7 +15,7 @@ import {
   type DataFolderPlugins, type InstanceReading, type ModFolders, type ModMeta, type ModlistEntry, type DownloadedFile, type DownloadedFiles, type FileRead, type GameFolder, type InstanceAdapter,
 } from './instanceAdapter';
 import {
-  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, entryDir, downloadNameAt, downloadSidecarFile, isTempWrite, modlistFile,
+  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, entryDir, downloadSidecarFile, isTempWrite, modlistFile,
   modMetaFile, modSourceDir, pluginsFile, profilesDir, settingsFile,
 } from './layout';
 import { folderHolding, listedAs, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
@@ -25,8 +25,8 @@ import { isPluginFile } from './pluginFile';
 
 type Mo2Reads = Omit<InstanceAdapter,
   | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
-  | 'trashDownloadedFileMeta' | 'selectProfile' | 'markOriginFile' | 'includedPath' | 'excludedSuffix' | 'renamePlugin' | 'extractedEntries'
-  | 'extractNewMod' | 'extractUpgrade' | 'subscribe' | 'names' | 'archiveList' | 'gameFolderArchives' | 'installationFiles'
+  | 'trashDownloadedFileMeta' | 'selectProfile' | 'markOriginFile' | 'includedPath' | 'excludedSuffix' | 'renamePlugin' | 'install'
+  | 'subscribe' | 'names' | 'archiveList' | 'gameFolderArchives' | 'installationFiles'
   | 'managerFilesInModFolder' | 'reading'>;
 
 async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile[] | undefined> {
@@ -136,11 +136,6 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
     gameFolderPlugins: listGameFolderPlugins,
 
     creationClubList: readCreationClubList,
-
-    async downloadedFileAt(path) {
-      const resolution = await resolveDownloadsFolder(instanceRoot, await get(settingsFile(instanceRoot)));
-      return resolution.kind === 'resolved' ? downloadNameAt(resolution.downloadsDir, path, process.platform) : undefined;
-    },
 
     entryFolder: (entry) => folderHolding(context, entry),
     modFolderPath: async (name) => (await folderHolding(context, { kind: 'mod', name }))?.path ?? entryDir(instanceRoot, { kind: 'mod', name }),

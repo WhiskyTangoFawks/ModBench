@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import type { Instance, InstanceValue, InstanceView, ModSyncArguments } from '../instanceLoader/instance';
-import type { InstallCommands } from '../install/install';
 import type { ModlistCommands } from '../modOrderCommands/modOrderCommands';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -26,7 +25,6 @@ import {
 
 interface ModsViewDeps {
   instance: InstanceView & Pick<Instance, 'refresh' | 'sameCopies'>;
-  install: InstallCommands;
   commands: ModlistCommands;
   log: (line: string) => void;
   reporterFor: (tag: string) => Reporter;
@@ -51,7 +49,7 @@ interface ModsView extends vscode.Disposable {
  *  each have exactly one owner. Split apart, a row change and a filter keystroke race for them and
  *  the loser silently vanishes. */
 export function createModsView(deps: ModsViewDeps): ModsView {
-  const { instance, install, commands, log, modSync, reporterFor, ask, trash } = deps;
+  const { instance, commands, log, modSync, reporterFor, ask, trash } = deps;
   const provider = new ModListProvider({ instance });
   const view = vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: provider,
@@ -112,7 +110,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     ...registerConflictTable(instance, deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
     vscode.commands.registerCommand('modbench.mod.sync', (value: InstanceValue) => modSync.run(value.modSyncArguments)),
     ...registerModInstallCommands({
-      install, instance, reporterFor, warnIfFomod: deps.warnIfFomod, downloadInstall: deps.downloadInstall,
+      commands, instance, reporterFor, warnIfFomod: deps.warnIfFomod, downloadInstall: deps.downloadInstall,
     }),
     registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), deps.nexusRow),
     ...registerSortDirectionToggle('mod', provider),

@@ -13,7 +13,6 @@
     { "path": "./src/instanceCommands" },
     { "path": "./src/sourceCommands" },
     { "path": "./src/downloadsCommands" },
-    { "path": "./src/install" },
     { "path": "./src/client" },
     { "path": "./src/drivingLib" },
     { "path": "./src/toolbox" },

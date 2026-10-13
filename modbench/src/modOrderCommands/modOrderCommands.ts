@@ -10,7 +10,10 @@ import { goneFromDisk, newModNameRefusal } from '../coreLib/commandRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { isRefused, type MEditClient } from '../client';
+import { installMod } from './install';
 export type { SelectionResult };
+export type { InstallTarget } from '../instanceAdapter/instanceAdapter';
+export type { DownloadedFileSource, InstallResult, ModSource } from './install';
 
 async function changeModOrder(adapter: InstanceAdapter, profile: string, decide: DecideModOrder): Promise<CommandResult> {
   try {
@@ -447,6 +450,7 @@ export function modlistCommands(adapter: InstanceAdapter, mEdit: SourceModWriter
     separatorNameRefusal: (...args: TailOf<typeof separatorNameRefusal>) => separatorNameRefusal(adapter, ...args),
     renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(adapter, ...args),
     newModNameRefusal: (name: string) => newModNameRefusal(adapter, name),
+    installMod: (...args: TailOf<typeof installMod>) => installMod(adapter, ...args),
   };
 }
 

@@ -9,8 +9,8 @@
   },
   "references": [
     { "path": "../drivingLib" },
+    { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },
-    { "path": "../install" },
     { "path": "../modOrderCommands" },
     { "path": "../ports" },
     { "path": "../wire" }

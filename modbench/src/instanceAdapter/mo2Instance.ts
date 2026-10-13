@@ -6,7 +6,7 @@ import { MODLIST_FILE_NAME } from './codecs/modlistText';
 import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
 import { gameDirectoryResolver, type GameDetectors } from './gameDirectory';
-import type { GameDirectoryOverrides, InstanceAdapter, ManagerNames, Subscription } from './instanceAdapter';
+import type { ArchiveReader, GameDirectoryOverrides, InstanceAdapter, ManagerNames, Subscription } from './instanceAdapter';
 import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
@@ -26,6 +26,7 @@ interface Mo2InstanceOptions {
   gameDirectoryChanged: (listener: () => void) => Subscription;
   /** Steam and Wine detection; the real ones when omitted. */
   detectors?: GameDetectors;
+  archives: ArchiveReader;
 }
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
@@ -36,7 +37,7 @@ export function isMo2Instance(root: string): boolean {
 }
 
 export function mo2InstanceAdapter({
-  instanceRoot, gameDirectoryOverrides, gameDirectoryChanged, detectors,
+  instanceRoot, gameDirectoryOverrides, gameDirectoryChanged, detectors, archives,
 }: Mo2InstanceOptions): InstanceAdapter {
   const context: Mo2Context = {
     instanceRoot,
@@ -47,7 +48,7 @@ export function mo2InstanceAdapter({
   const names: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX };
   const adapter: Omit<InstanceAdapter, 'reading'> = {
     names,
-    ...mo2Reads(context), ...mo2Archives(context), ...mo2Installation(context), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context),
+    ...mo2Reads(context), ...mo2Archives(context), ...mo2Installation(context), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives),
     subscribe: (listener) => context.watch.subscribe(listener),
   };
   return { ...adapter, reading: () => readInstance(adapter) };

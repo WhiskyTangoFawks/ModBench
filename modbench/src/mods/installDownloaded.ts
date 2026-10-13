@@ -1,5 +1,5 @@
 import type { Instance } from '../instanceLoader/instance';
-import type { InstallCommands } from '../install/install';
+import type { ModlistCommands } from '../modOrderCommands/modOrderCommands';
 import { chooseInstallTarget } from './installTarget';
 import { promptModName } from './promptModName';
 import { reportFailure } from '../drivingLib/reportFailure';
@@ -15,7 +15,7 @@ export interface DownloadInstallDeps {
 }
 
 export async function installDownloadedFile(
-  argument: DownloadArgument, install: InstallCommands, instance: Pick<Instance, 'value' | 'refresh'>, deps: DownloadInstallDeps,
+  argument: DownloadArgument, commands: Pick<ModlistCommands, 'installMod' | 'newModNameRefusal'>, instance: Pick<Instance, 'value' | 'refresh'>, deps: DownloadInstallDeps,
 ): Promise<boolean> {
   let installed = false;
   let downloadRefusal: string | undefined;
@@ -24,11 +24,11 @@ export async function installDownloadedFile(
     const row = downloads.kind === 'listed' ? downloads.rows.find((listed) => listed.name === argument.row.name) : undefined;
     if (!row) throw new Error(`"${argument.row.name}" is gone from Downloads.`);
     const target = await chooseInstallTarget(
-      row, (defaultName) => promptModName(defaultName, (name) => install.installNameRefusal(name)));
+      row, (defaultName) => promptModName(defaultName, (name) => commands.newModNameRefusal(name)));
     if (!target) return;
-    const outcome = await runWritingGesture(deps.progressViewId, instance, () => install.installFromArchive(target, row.path, {
-      gameName: instance.value.gameName, modID: row.modID, fileID: row.fileID, version: row.version,
-    }));
+    const { name, path, modID, fileID, version } = row;
+    const outcome = await runWritingGesture(deps.progressViewId, instance, () => commands.installMod(
+      { kind: 'downloadedFile', name, path, modID, fileID, version }, target, instance.value.gameName));
     if (!outcome.applied) throw new Error(outcome.refusal);
     deps.warnIfFomod(target.name, outcome.isFomod);
     downloadRefusal = outcome.downloadRefusal;
