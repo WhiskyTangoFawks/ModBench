@@ -6,7 +6,7 @@ import {
   entryNotFound, type DecideModOrder, type EntryRef, type FileOrigin, type InstanceAdapter,
   type ModFolder, type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
-import { entryNameRefusal, goneFromDisk, newModNameRefusal, type TakenNames } from '../coreLib/commandRefusals';
+import { entryNameRefusal, goneFromDisk, newModNameRefusal, type EntryKey, type TakenNames } from '../coreLib/commandRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { isRefused, type MEditClient } from '../client';
@@ -182,13 +182,13 @@ const MOD_NAME_WITH_PATH_SEPARATOR = 'A mod name cannot contain / or \\';
 
 // Why `requested` cannot name a separator, or `undefined` when it can: a separator of that name is
 // listed or has a folder, compared without case. `own`, the separator being renamed, is no clash.
-const separatorNameRefusal = (taken: TakenNames, requested: string, own?: string): string | undefined =>
-  entryNameRefusal(taken, 'separator', requested, SEPARATOR_NAME_CLASH, own);
+const separatorNameRefusal = (key: EntryKey, taken: TakenNames, requested: string, own?: string): string | undefined =>
+  entryNameRefusal(key, taken, 'separator', requested, SEPARATOR_NAME_CLASH, own);
 
 // Why `requested` cannot rename mod `own`, or `undefined` when it can: it holds a path separator, or
 // another mod of that name is listed or has a folder, compared without case.
-const renameModNameRefusal = (taken: TakenNames, requested: string, own: string): string | undefined =>
-  (/[\\/]/.test(requested) ? MOD_NAME_WITH_PATH_SEPARATOR : entryNameRefusal(taken, 'mod', requested, MOD_NAME_CLASH, own));
+const renameModNameRefusal = (key: EntryKey, taken: TakenNames, requested: string, own: string): string | undefined =>
+  (/[\\/]/.test(requested) ? MOD_NAME_WITH_PATH_SEPARATOR : entryNameRefusal(key, taken, 'mod', requested, MOD_NAME_CLASH, own));
 
 // The first index of the run of mods directly on the winning side of the separator at `at`.
 function groupStartOf(order: readonly ModlistEntry[], at: number): number {
@@ -411,6 +411,7 @@ export function modSyncOver(adapter: InstanceAdapter): ModSyncRun {
 
 /** The modlist's commands, bound to one instance: each takes the gesture's arguments only. */
 export function modlistCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['mEdit']) {
+  const entryKey: EntryKey = (entry) => adapter.entryKey(entry);
   return {
     setModsEnabled: (...args: TailOf<typeof setModsEnabled>) => setModsEnabled(adapter, ...args),
     moveMods: (...args: TailOf<typeof moveMods>) => moveMods(adapter, ...args),
@@ -422,9 +423,9 @@ export function modlistCommands(adapter: InstanceAdapter, mEdit: SourceModWriter
     uninstallMods: (...args: TailOf<typeof uninstallMods>) => uninstallMods(adapter, ...args),
     createEmptyMod: (...args: TailOf<typeof createEmptyMod>) => createEmptyMod(adapter, ...args),
     renameMod: (...args: TailOf<typeof renameMod>) => renameMod({ adapter, mEdit }, ...args),
-    separatorNameRefusal,
-    renameModNameRefusal,
-    newModNameRefusal,
+    separatorNameRefusal: (...args: TailOf<typeof separatorNameRefusal>) => separatorNameRefusal(entryKey, ...args),
+    renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(entryKey, ...args),
+    newModNameRefusal: (...args: TailOf<typeof newModNameRefusal>) => newModNameRefusal(entryKey, ...args),
     installMod: (...args: TailOf<typeof installMod>) => installMod(adapter, ...args),
   };
 }

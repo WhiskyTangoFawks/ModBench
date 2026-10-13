@@ -18,7 +18,7 @@ import {
   modMetaFile, modSourceDir, pluginsFile, profilesDir, settingsFile,
 } from './layout';
 import { type ArchiveReads, mo2Archives } from './mo2Archives';
-import { folderHolding, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
+import { entryKey, folderHolding, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
 import { sourceModsIn } from './sourceMods';
 import { isPluginFile } from './pluginFile';
@@ -154,11 +154,12 @@ export function readingSource(context: Mo2Context): ReadingSource {
   };
 }
 
-export function mo2Reads(context: Mo2Context): Pick<InstanceAdapter, 'modFolderPath' | 'sourceFolder' | 'fileStamp'> {
+export function mo2Reads(context: Mo2Context): Pick<InstanceAdapter, 'modFolderPath' | 'sourceFolder' | 'fileStamp' | 'entryKey'> {
   const { instanceRoot } = context;
   return {
     modFolderPath: async (name) => (await folderHolding(context, { kind: 'mod', name }))?.path ?? entryDir(instanceRoot, { kind: 'mod', name }),
     sourceFolder: (mod) => modSourceDir(instanceRoot, mod),
+    entryKey,
     fileStamp: (path) => readOrReason(() => stampOf(path)),
   };
 }

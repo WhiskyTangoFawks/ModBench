@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { ArchiveReader } from './archiveReader';
 import { digestOf } from './contentDigest';
 import { append, ensureDir, get, listDir, makeTempDir, readOrReason, remove, stampOf, withLock } from './files';
-import type { FileRead, FileStamp, HashedDownload, InstanceAdapter } from './instanceAdapter';
+import type { FileRead, FileStamp, HashedDownload, HashedFile, InstanceAdapter } from './instanceAdapter';
 
 const INDEX_FILE = 'hashes.jsonl';
 const EXTRACTION_PREFIX = 'entries-';
@@ -71,7 +71,14 @@ function refuseCaseCollisions(entries: readonly string[]): void {
 
 /** The adapter's hashes, its index in `folder`, which it alone writes; a downloaded file's entries are hashed from
  *  its extraction there. */
-export function hashIndex(folder: string, archives: ArchiveReader): Pick<InstanceAdapter, 'originFileHash' | 'gameFileHash' | 'downloadedFileHash'> {
+export interface HashIndex extends Pick<InstanceAdapter, 'originFileHash'> {
+  /** A game file's size and hash, the hash as mEdit's manifest carries it, kept in the index (ADR-0013). */
+  gameFileHash(path: string): Promise<FileRead<HashedFile>>;
+  /** The size and hash of the downloaded file at `path`, and of each of its entries, kept in the index. */
+  downloadedFileHash(path: string): Promise<FileRead<HashedDownload>>;
+}
+
+export function hashIndex(folder: string, archives: ArchiveReader): HashIndex {
   const indexFile = join(folder, INDEX_FILE);
   const kept: Record<Kind, Map<string, Kept>> = { origin: new Map(), game: new Map(), download: new Map() };
   let loaded: Promise<void> | undefined;

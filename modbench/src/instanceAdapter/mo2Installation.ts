@@ -3,6 +3,7 @@
 import { basename, isAbsolute } from 'node:path';
 import { MOD_META_FILE_NAME, parseMetaIni } from './codecs/metaIni';
 import { exists, get, readOrReason } from './files';
+import type { HashIndex } from './hashIndex';
 import type { FileRead, InstallationFile, InstanceAdapter } from './instanceAdapter';
 import { downloadFile, modMetaFile } from './layout';
 import { currentDownloadsDir, readOrAbsent, type Mo2Context } from './mo2Context';
@@ -14,7 +15,7 @@ async function reinstallPath(context: Mo2Context, recorded: string): Promise<str
 }
 
 export function mo2Installation(
-  context: Mo2Context, { downloadedFileHash }: Pick<InstanceAdapter, 'downloadedFileHash'>,
+  context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>,
 ): Pick<InstanceAdapter, 'installationFiles' | 'managerFilesInModFolder'> {
   return {
     async installationFiles(mod) {

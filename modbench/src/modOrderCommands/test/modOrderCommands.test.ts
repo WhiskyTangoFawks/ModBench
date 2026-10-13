@@ -1245,6 +1245,25 @@ describe('the names a separator or mod may take', () => {
   type Held = Pick<ModlistEntry, 'kind' | 'name'>;
   const bound = modlistCommands(adapterOver('/instance'), unscriptedMEdit);
 
+  it('folds a separator\'s name as MO2 folds it into a folder name: trimmed, trailing dots dropped, without case', () => {
+    const taken = { mods: [{ kind: 'separator' as const, name: 'Unassigned (Modlist Development)', enabled: true }], modFolders: [] };
+
+    expect(bound.separatorNameRefusal(taken, ' unassigned (modlist development). ', 'Group B')).toBe(SEPARATOR_CLASH);
+  });
+
+  it('refuses a mod the name of a separator\'s folder, and a separator the name of a mod\'s folder, as MO2 knows an entry by its folder\'s name', () => {
+    const taken = {
+      mods: [],
+      modFolders: [
+        { kind: 'separator', name: 'Group A', path: '/instance/mods/Group A_separator', folderName: 'Group A_separator' },
+        { kind: 'mod', name: 'Group B_separator', path: '/instance/mods/Group B_separator', folderName: 'Group B_separator' },
+      ] as const,
+    };
+
+    expect(bound.renameModNameRefusal(taken, 'group a_SEPARATOR', 'Mod B')).toBe(MOD_CLASH);
+    expect(bound.separatorNameRefusal(taken, 'Group B', 'Group C')).toBe(SEPARATOR_CLASH);
+  });
+
   function commandsHolding(mods: readonly ModlistEntry[], folders: readonly Held[] = []) {
     const taken = { mods, modFolders: folders.map((e) => ({ ...e, folderName: e.name, path: `/instance/mods/${e.name}` })) };
     return {

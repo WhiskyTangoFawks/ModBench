@@ -11,23 +11,26 @@ export interface TakenNames {
   readonly modFolders: readonly ModFolder[] | undefined;
 }
 
-const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
+/** How the manager matches an entry's name: two entries with one key are one name to it. */
+export type EntryKey = (entry: EntryRef) => string;
 
-/** Why a new mod may not take `name`, trimmed: a folder already holds a mod of that name, or is
- *  named so (a separator's folder), compared without case. Undefined for a free name, or a blank one. */
-export function newModNameRefusal({ modFolders }: TakenNames, name: string): string | undefined {
+/** Why a new mod may not take `name`, trimmed: a folder already holds an entry under its key.
+ *  Undefined for a free name, or a blank one. */
+export function newModNameRefusal(key: EntryKey, { modFolders }: TakenNames, name: string): string | undefined {
   const trimmed = name.trim();
   if (!trimmed) return undefined;
-  return modFolders?.some((folder) => sameName(folder.folderName, trimmed)) ? modNameTakenRefusal(trimmed) : undefined;
+  const wanted = key({ kind: 'mod', name: trimmed });
+  return modFolders?.some((folder) => key(folder) === wanted) ? modNameTakenRefusal(trimmed) : undefined;
 }
 
-/** `clash` when another entry of `kind` is listed or has a folder under `requested`, compared
- *  without case; `own`, the entry being renamed, is no clash. */
+/** `clash` when an entry is listed or has a folder under the key `requested` has as `kind`;
+ *  `own`, the entry being renamed, is no clash. */
 export function entryNameRefusal(
-  { mods, modFolders }: TakenNames, kind: EntryRef['kind'], requested: string, clash: string, own?: string,
+  key: EntryKey, { mods, modFolders }: TakenNames, kind: EntryRef['kind'], requested: string, clash: string, own?: string,
 ): string | undefined {
-  if (own !== undefined && sameName(own, requested)) return undefined;
-  return [...mods, ...(modFolders ?? [])].some((entry) => entry.kind === kind && sameName(entry.name, requested)) ? clash : undefined;
+  const wanted = key({ kind, name: requested });
+  if (own !== undefined && key({ kind, name: own }) === wanted) return undefined;
+  return [...mods, ...(modFolders ?? [])].some((entry) => key(entry) === wanted) ? clash : undefined;
 }
 
 /** The refusal of a mark on a file that is gone. */

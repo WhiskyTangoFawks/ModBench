@@ -57,7 +57,7 @@ export function mo2InstanceAdapter({
     names,
     reading: () => readInstance(source),
     ...mo2Reads(context), ...mo2Installation(context, hashes), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives),
-    ...hashes,
+    originFileHash: hashes.originFileHash,
     subscribe: (listener) => context.watch.subscribe(listener),
   };
 }

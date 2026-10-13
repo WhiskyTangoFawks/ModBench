@@ -294,7 +294,7 @@ export interface FileStamp {
 /** A read of one file that answers why it could not be read, rather than failing whatever asked. */
 export type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
 
-interface HashedFile {
+export interface HashedFile {
   readonly size: number;
   readonly hash: string;
 }
@@ -373,10 +373,6 @@ export interface InstanceAdapter {
   /** An origin file's size and hash at the path it is read from, remembered for this session alone: its lasting hash
    *  is its manifest line, mEdit's (ADR-0013). Two files with one hash hold the same bytes. */
   originFileHash(path: string): Promise<FileRead<HashedFile>>;
-  /** A game file's size and hash, the hash as mEdit's manifest carries it, kept in the adapter's index (ADR-0013). */
-  gameFileHash(path: string): Promise<FileRead<HashedFile>>;
-  /** The size and hash of the downloaded file at `path`, and of each of its entries, kept in the adapter's index. */
-  downloadedFileHash(path: string): Promise<FileRead<HashedDownload>>;
 
   // Changes.
   /** Every change lands in one write, its folders with it. Naming an entry not there, or adding a
@@ -404,6 +400,8 @@ export interface InstanceAdapter {
    *  include on an unmarked name a folder excludes, and a mark replacing a file. Rejects a path
    *  outside the origin. */
   markOriginFile(origin: FileOrigin, relativePath: string, mark: OriginFileMark): Promise<OriginFileMarked>;
+  /** How the manager matches an entry's name; two entries with one key are one name to it. */
+  entryKey(entry: EntryRef): string;
   /** The path a file or folder of an origin has when nothing excludes it. */
   includedPath(relativePath: string): string;
   /** The suffix the manager gives an excluded file's or folder's name. */
