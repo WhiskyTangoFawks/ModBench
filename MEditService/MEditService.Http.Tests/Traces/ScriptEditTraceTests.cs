@@ -3,9 +3,9 @@ using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Http.Tests.Api;
+namespace MEditService.Http.Tests.Traces;
 
-public sealed class EditRecordApiTests : HostedTests
+public sealed class ScriptEditTraceTests : HostedTests
 {
     private const string Plugin = "Scripted.esp";
     private const string Origin = "ScriptedMod";
@@ -13,7 +13,7 @@ public sealed class EditRecordApiTests : HostedTests
 
     private async Task<(string NpcFile, string FormKey)> LoadedAndTracked()
     {
-        var fx = Owned(new PluginFixtureBuilder("api-edit")
+        var fx = Owned(new PluginFixtureBuilder("trace-script-edit")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();

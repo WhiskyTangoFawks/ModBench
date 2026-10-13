@@ -1,0 +1,37 @@
+# A script's edit, blue.
+...@../styles
+shape: sequence_diagram
+scripts: @../target-architecture.medit_drivers.scripts
+scripts.label: Scripts
+http: @../target-architecture.medit_driving.http
+http.label: HTTP endpoints
+commands: @../target-architecture.medit_core.commands.edits
+commands.label: Record edits
+sourceadapter: @../target-architecture.medit_repositories.sourceadapter
+sourceadapter.label: Source adapter
+source: @../target-architecture.medit_data.source
+
+scripts -> http: "edit: plugin, origin, FormKey, op, field path, value" {class: edit}
+http -> commands: envelope {class: edit}
+source -> sourceadapter: documents {class: edit}
+sourceadapter -> commands: "the documents it reads, an unsaved one in place of its file" {class: edit}
+commands -> sourceadapter: "each move, deletion and document's new text" {class: edit}
+sourceadapter -> source: "moves, then deletions, then documents" {class: edit}
+sourceadapter -> commands: written {class: edit}
+commands -> http: applied {class: edit}
+http -> scripts: "204: nothing" {class: edit}
+
+refused: "refused, before any write: no git, not tracked, or a file held unsaved" {
+  sourceadapter -> commands: "the file held unsaved" {class: edit}
+  commands -> http: the refusal {class: edit}
+  http -> scripts: the refusal {class: edit}
+}
+
+stopped: "the disk stops the write part way" {
+  sourceadapter -> source: "what it wrote, put back" {class: edit}
+  sourceadapter -> commands: the failure {class: edit}
+  commands -> http: the refusal {class: edit}
+  http -> scripts: the refusal {class: edit}
+}
+
+scripts."a refusal raises, naming why"
