@@ -136,6 +136,21 @@ public sealed class UnsavedDocumentTests : IDisposable
     }
 
     [Fact]
+    public void AHandedDocumentWithAnUnknownField_IsAProblemOnItsFile_UntilItIsTypedOut()
+    {
+        var misspelled = Typed("\"FormKey\"", "\"NoSuchField\": 1,\n  \"FormKey\"");
+        HandUntil(PluginChanged(_tracked), new DocumentChange(_file, misspelled));
+
+        var problem = Assert.Single(ProblemsOfTracked().Problems);
+        Assert.Equal(Relative(_file), problem.SourceRelativePath);
+        Assert.Contains("NoSuchField", problem.Message, StringComparison.Ordinal);
+
+        Hand(new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedAgain\"")));
+
+        Assert.Empty(ProblemsOfTracked().Problems);
+    }
+
+    [Fact]
     public void AHandedDocumentThatDoesNotRead_WhenTheIndexOpens_LeavesTheRowsItHeld()
     {
         _index.Dispose();
