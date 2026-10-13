@@ -37,7 +37,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     private ISourceRepository Repository => TestAdapters.Source().OverFolder(TestMod.In(_modFolder), GameRelease.Fallout4);
 
     private RegisteredPlugin Registered(PluginAddress plugin) =>
-        new(plugin.Name, plugin.Origin, "", TestMod.In(_modFolder), Line: null);
+        new(plugin.Name, plugin.Origin, "", TestMod.In(_modFolder), Line: null, PluginStrings.None);
 
     [Fact]
     public void SourceReads_ATreeItsFolderSpellsInAnotherCase_IsTrue()

@@ -37,7 +37,7 @@ public static class PluginFailures
         ((IModGetter)mod).WriteToBinary(path);
         Directory.Delete(Path.Combine(folder.Path, "Strings"), recursive: true);
         var plugin = SnapshotPlugins.Of([new LoadOrderEntry("Localized.esp", path, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true)]).Single();
-        return (await TestAdapters.Mutagen().ReadSourceOfAsync(plugin, EmptyLoadOrder.Of(GameRelease.Fallout4), new PluginStrings(folder.Path))).Failure();
+        return (await TestAdapters.Mutagen().ReadSourceOfAsync(plugin, EmptyLoadOrder.Of(GameRelease.Fallout4))).Failure();
     }
 
     private static PluginFailure ReadOf(string path) =>

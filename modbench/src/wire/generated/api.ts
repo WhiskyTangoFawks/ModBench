@@ -1151,6 +1151,8 @@ export interface components {
             /** Format: int32 */
             line?: number | null;
             lineNamesIt: boolean;
+            archives: string[];
+            stringsFiles: string[];
         };
         LoadOrderRequest: {
             plugins: components["schemas"]["LoadOrderPlugin"][];

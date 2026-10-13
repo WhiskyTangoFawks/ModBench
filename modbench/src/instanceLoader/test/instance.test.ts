@@ -866,6 +866,21 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(logs).toContainEqual(expect.stringMatching(/^\[instance\] The profile Default keeps no game INIs of its own/));
   });
 
+  it('hands a mod\u2019s plugin a strings file added beside it, at the next read', async () => {
+    const { gameFolder } = await gameListing('');
+    const { root, instance } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
+    await instance.refresh();
+    const stringsFile = join(root, 'mods', 'Tracked Patch Mod', 'Strings', 'Tracked Patch Mod_en.STRINGS');
+    await mkdir(dirname(stringsFile));
+    await writeFile(stringsFile, '');
+
+    await instance.refresh();
+
+    expect(instance.value.loadOrderSnapshot).toMatchObject({
+      plugins: expect.arrayContaining([expect.objectContaining({ origin: 'Tracked Patch Mod', stringsFiles: [stringsFile] })]) as unknown,
+    });
+  });
+
   it('tells once, until it changes, each archive the INIs list that nothing holds', async () => {
     const { gameFolder } = await gameListing('Fallout4 - Interface.ba2, Gone.ba2');
     const { instance, logs } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });

@@ -4,7 +4,6 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Archives;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Strings;
 
@@ -37,10 +36,16 @@ public sealed class GameDataStringsTests : IDisposable
 
     private string[] _stringsFilesTheGameReads = [];
 
-    private LoadOrderSnapshot LoadOrder => new(_dataFolder, null, GameRelease.SkyrimSE, [], [], [], _archivesTheGameLoads, _stringsFilesTheGameReads);
+    private LoadOrderSnapshot LoadOrder =>
+        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], _archivesTheGameLoads, _stringsFilesTheGameReads);
 
+    private RegisteredPlugin Plugin => new(
+        PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder, _modFolder), new PluginLine(0, NamesIt: true),
+        HandedStrings.Of(_pluginPath));
 
-    private RegisteredPlugin Plugin => new(PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder, _modFolder), Line: null);
+    private RegisteredPlugin GameCopy => new(
+        PluginName, PluginOrigin.DataDirectory, Path.Combine(_dataFolder, PluginName), PluginProvider.Game, Line: null,
+        HandedStrings.Of(Path.Combine(_dataFolder, PluginName)));
 
     private void MoveStringsIntoGameData(string archiveName)
     {
@@ -48,18 +53,86 @@ public sealed class GameDataStringsTests : IDisposable
         TheGameLoads(archiveName);
     }
 
-    private RepositoriesLib.Answer<IPluginDocuments, PluginFailure> OpenDocuments(string pluginPath) =>
+    private RepositoriesLib.Answer<IPluginDocuments, PluginFailure> OpenDocuments(string pluginPath, PluginStrings? handed = null) =>
         Adapter.OpenDocuments(
             new ModPath(ModKey.FromFileName(PluginName), pluginPath), LoadOrder,
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE),
-            new PluginStrings(Path.GetDirectoryName(pluginPath)));
+            handed ?? HandedStrings.Of(pluginPath));
+
+    [Fact]
+    public void OpenDocuments_TwoCopiesOfAPluginEachWithItsOwnStrings_EachReadsItsOwn()
+    {
+        var (overridden, loadOrder) = AnOverriddenCopy("The Overridden Door");
+
+        Assert.Equal(
+            [true, true],
+            [DoorOf(Plugin, loadOrder).Contains(DoorName, StringComparison.Ordinal), DoorOf(overridden, loadOrder).Contains("The Overridden Door", StringComparison.Ordinal)]);
+    }
+
+    [Fact]
+    public void ReadContent_ACopyTheGamesListsDoNotAnswerForWithNoStringsOfItsOwn_NamesThemMissing()
+    {
+        var (overridden, loadOrder) = AnOverriddenCopy("The Overridden Door");
+        Directory.Delete(LocalizedDoorPlugin.LooseStrings(overridden.Path), recursive: true);
+
+        var (content, _) = Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), overridden.Path), loadOrder, PluginStrings.None).Answered();
+
+        Assert.Equal(["Update_English.STRINGS", "Update_English.ILSTRINGS", "Update_English.DLSTRINGS"], content.MissingStringsFiles);
+    }
+
+    private (RegisteredPlugin Overridden, LoadOrderSnapshot LoadOrder) AnOverriddenCopy(string doorName)
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(_root, "mods", "Overridden")).FullName;
+        var path = Path.Combine(folder, PluginName);
+        LocalizedDoorPlugin.Write(path, doorName);
+        var overridden = new RegisteredPlugin(
+            PluginName, "Overridden", path, new PluginProvider.FromMod("Overridden", folder, folder), new PluginLine(0, NamesIt: false), HandedStrings.Of(path));
+        return (overridden, new LoadOrderSnapshot(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, overridden], [Plugin.Key], [], [], Plugin.Strings.StringsFiles));
+    }
+
+    private static string DoorOf(RegisteredPlugin copy, LoadOrderSnapshot loadOrder)
+    {
+        using var documents = Adapter.OpenDocuments(
+            new ModPath(ModKey.FromFileName(PluginName), copy.Path), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE),
+            copy.Strings).Answered();
+        return Assert.Single(documents.Records).Text;
+    }
+
+    [Fact]
+    public void OpenDocuments_StringsFilesHandedFromAnotherFolder_AreTheOnesRead()
+    {
+        var elsewhere = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "Elsewhere")).FullName, PluginName);
+        LocalizedDoorPlugin.Write(elsewhere, "La Grande Porte");
+
+        using var documents = OpenDocuments(_pluginPath, HandedStrings.Of(elsewhere)).Answered();
+
+        Assert.Contains("La Grande Porte", documents.Records.Single().Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OpenDocuments_AStringsFileBesideThePluginThatIsNotHanded_IsNotRead()
+    {
+        using var documents = OpenDocuments(_pluginPath, PluginStrings.None).Answered();
+
+        Assert.DoesNotContain(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReadContent_ALocalizedPluginWithOneOfItsStringsFilesHanded_NamesTheOthersMissing()
+    {
+        var handed = new PluginStrings([], [Path.Combine(LocalizedDoorPlugin.LooseStrings(_pluginPath), "Update_English.STRINGS")]);
+
+        var (content, _) = Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), _pluginPath), LoadOrder, handed).Answered();
+
+        Assert.Equal(["Update_English.ILSTRINGS", "Update_English.DLSTRINGS"], content.MissingStringsFiles);
+    }
 
     [Fact]
     public async Task ReadSourceOf_APluginWhoseStringsAreInAnArchiveForItTheGameLoads_ReadsThemFromThere()
     {
         MoveStringsIntoGameData("Update.bsa");
 
-        var source = (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, new PluginStrings(_modFolder))).Answered();
+        var source = (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder)).Answered();
 
         Assert.Contains(source.Files, file => Encoding.UTF8.GetString(file.Content).Contains(DoorName, StringComparison.Ordinal));
     }
@@ -135,24 +208,6 @@ public sealed class GameDataStringsTests : IDisposable
         Assert.DoesNotContain("Another Door", documents.Records.Single().Text, StringComparison.Ordinal);
     }
 
-    [PosixFact]
-    public async Task ReadSourceOf_APluginWhoseStringsAreInAnArchiveBesideItWithAnUpperCaseExtension_RefusesNamingTheStringsFile()
-    {
-        LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_modFolder, "Update.BSA"));
-
-        var source = await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, new PluginStrings(_modFolder));
-
-        Assert.Equal("Update_English.STRINGS", Assert.IsType<PluginFailure.MissingStrings>(source.Failure()).File);
-    }
-
-    [PosixFact]
-    public void MutagensArchiveLookup_MissesAnArchiveWithAnUpperCaseExtension_UntilItMatchesTheExtensionInAnyCase()
-    {
-        LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_modFolder, "Update.BSA"));
-
-        Assert.Empty(Archive.GetApplicableArchivePaths(GameRelease.SkyrimSE, _modFolder, ModKey.FromFileName(PluginName)));
-    }
-
     [Fact]
     public void OpenRecordLookup_APluginWhoseStringsAreInAnArchiveForItTheGameLoads_ReadsItsNamesFromThere()
     {
@@ -182,7 +237,7 @@ public sealed class GameDataStringsTests : IDisposable
         LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_dataFolder, "Skyrim - Interface.bsa"));
         TheGameLoads("Skyrim - Interface.bsa");
 
-        var source = (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, new PluginStrings(_modFolder))).Answered();
+        var source = (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder)).Answered();
 
         Assert.Contains(source.Files, file => Encoding.UTF8.GetString(file.Content).Contains(DoorName, StringComparison.Ordinal));
     }
@@ -209,7 +264,7 @@ public sealed class GameDataStringsTests : IDisposable
         File.Delete(copyInTranslation);
         _stringsFilesTheGameReads = [Path.Combine(LocalizedDoorPlugin.LooseStrings(copyInTranslation), "Update_English.STRINGS")];
 
-        var source = await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, new PluginStrings(_modFolder));
+        var source = await Adapter.ReadSourceOfAsync(Plugin, LoadOrder);
 
         Assert.IsType<PluginFailure.MissingStrings>(source.Failure());
     }
@@ -231,7 +286,7 @@ public sealed class GameDataStringsTests : IDisposable
         MoveStringsIntoGameData("Update.bsa");
         WriteOnlyFrenchStringsBesideThePlugin();
 
-        var source = (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, new PluginStrings(_modFolder))).Answered();
+        var source = (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder)).Answered();
 
         Assert.Contains(source.Files, file => Encoding.UTF8.GetString(file.Content).Contains(DoorName, StringComparison.Ordinal));
     }
@@ -312,16 +367,18 @@ public sealed class GameDataStringsTests : IDisposable
         var masterPath = Path.Combine(_dataFolder, master);
         LocalizedDoorPlugin.WriteFallout4(masterPath, DoorName);
         LocalizedDoorPlugin.PackStrings(masterPath, Path.Combine(_dataFolder, "Fallout4 - Interface.ba2"));
+        var copy = new RegisteredPlugin(master, PluginOrigin.DataDirectory, masterPath, PluginProvider.Game, Line: null, HandedStrings.Of(masterPath));
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(master), masterPath), new LoadOrderSnapshot(_dataFolder, null, GameRelease.Fallout4, [], [], [], [Path.Combine(_dataFolder, "Fallout4 - Interface.ba2")], []),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), new PluginStrings(_dataFolder)).Answered();
+            new ModPath(ModKey.FromFileName(master), masterPath),
+            new LoadOrderSnapshot(_dataFolder, null, GameRelease.Fallout4, [copy], [copy.Key], [copy.Key], [Path.Combine(_dataFolder, "Fallout4 - Interface.ba2")], []),
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), copy.Strings).Answered();
 
         Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
     }
 
     private async Task<string> DoorSource() =>
-        (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder, new PluginStrings(_modFolder))).Answered().Files
+        (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder)).Answered().Files
             .Select(file => Encoding.UTF8.GetString(file.Content))
             .Single(content => content.Contains("MainDoor", StringComparison.Ordinal) && content.Contains("Values", StringComparison.Ordinal));
 

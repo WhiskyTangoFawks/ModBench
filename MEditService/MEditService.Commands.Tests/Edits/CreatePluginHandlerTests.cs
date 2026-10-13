@@ -75,7 +75,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     }
 
     private static RegisteredPlugin Registered(string name, string origin, string folder) =>
-        new(name, origin, Path.Combine(folder, name), new PluginProvider.FromMod(origin, folder, folder), Line: null);
+        new(name, origin, Path.Combine(folder, name), new PluginProvider.FromMod(origin, folder, folder), Line: null, PluginStrings.None);
 
     [Fact]
     public async Task CreatePlugin_IntoATrackedMod_LandsItsSourceAsWorkingTreeChanges_AndLeavesTheOthersAsTheyWere()
@@ -198,7 +198,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         public PluginFailure Unread { get; } = PluginFailures.Unparsed();
 
         public override Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
-            RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, PluginStrings strings, CancellationToken cancel = default)
+            RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, CancellationToken cancel = default)
         {
             Before?.Invoke();
             return Task.FromResult<Answer<PluginSource, PluginFailure>>(Unread);

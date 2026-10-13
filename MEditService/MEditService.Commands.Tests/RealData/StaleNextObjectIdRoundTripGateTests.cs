@@ -1,7 +1,6 @@
 using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -68,7 +67,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         await scratch.CompileService().CompileLandedAsync(scratch.Plugin);
 
         var divergence = TestAdapters.Mutagen().DivergenceFrom(
-            fileName, original, scratch.PluginPath, EmptyLoadOrder.Of(GameRelease.Fallout4), new PluginStrings(before.Path)).Answered();
+            fileName, original, scratch.PluginPath, EmptyLoadOrder.Of(GameRelease.Fallout4), HandedStrings.Of(original)).Answered();
         Assert.Null(divergence);
     }
 

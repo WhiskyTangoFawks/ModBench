@@ -517,6 +517,8 @@ internal sealed class Indexer : IDisposable
             .Where(key => open.TryGetValue(key, out var h) && (h.Key != key || h.Path != wanted[key].Path || h.Registration != Registration.In(snapshot, key)))
             .ToList();
         var respelled = resolved.Select(r => r.Key).Where(key => held.IsSpelledOtherwise(key)).ToList();
+        // A plugin's text is read through its strings files, so other ones are a new read of it (ADR-0003).
+        var restrung = resolved.Where(r => open.TryGetValue(r.Key, out var h) && !h.Strings.Equals(r.Strings)).ToList();
         // A plugin in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
         var arriving = resolved.Where(r => !open.ContainsKey(r.Key) && !scope.Failed.StillFailing(r)).ToList();
@@ -528,7 +530,8 @@ internal sealed class Indexer : IDisposable
 
         bool conflictsComputed;
         lock (_lock) conflictsComputed = _conflictsComputed;
-        if (leaving.Count == 0 && moved.Count == 0 && respelled.Count == 0 && arriving.Count == 0 && reDerived.Count == 0 && conflictsComputed)
+        if (leaving.Count == 0 && moved.Count == 0 && respelled.Count == 0 && arriving.Count == 0 && reDerived.Count == 0 && restrung.Count == 0
+            && conflictsComputed)
         {
             _logger.LogDebug("Load order snapshot is identical to what is held; nothing to reconcile");
             return false;
@@ -574,6 +577,14 @@ internal sealed class Indexer : IDisposable
         }
 
         ReDeriveMovedTruths(scope, reDerived, token);
+        foreach (var plugin in restrung)
+        {
+            token.ThrowIfCancellationRequested();
+            ReadOne(scope, plugin, state =>
+                held.Open(plugin, Registration.In(snapshot, plugin.Key), snapshot).Holds(out var metadata, out var failure)
+                    ? ReadWhole(scope, metadata, state)
+                    : ReadOutcome.Failed(failure), token);
+        }
 
         // Two distinct numbers: time to the first queryable plugin (the tree becomes usable) and
         // time to the winner sweep completing. Measured here rather than client-side, where the
@@ -816,12 +827,8 @@ internal sealed class Indexer : IDisposable
     // never as a mod this side holds.
     private ReadOutcome IndexFromBinary(OpenScope scope, PluginMetadata plugin, DerivedFrom derivedFrom)
     {
-        if (!_adapter.OpenDocuments(
-                new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path),
-                scope.LoadOrder,
-                scope.Store.Schemas,
-                new PluginStrings(Path.GetDirectoryName(plugin.Path)))
-            .Holds(out var opened, out var failure))
+        var modPath = new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path);
+        if (!_adapter.OpenDocuments(modPath, scope.LoadOrder, scope.Store.Schemas, plugin.Strings).Holds(out var opened, out var failure))
         {
             _logger.LogWarning(failure.Error, "Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);
             return ReadOutcome.Failed(failure);
@@ -988,12 +995,7 @@ internal sealed class Indexer : IDisposable
         ReadOutcome outcome;
         try
         {
-            outcome = scope.Store.Commit(projection =>
-            {
-                var read = scope.Failed.Read(plugin.Registered, state => IndexOnePlugin(scope, plugin, state, CancellationToken.None));
-                if (read.Failure is null) projection.PluginChanged(key);
-                return read;
-            });
+            outcome = scope.Store.Commit(_ => scope.Failed.Read(plugin.Registered, state => ReadWhole(scope, plugin, state)));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -1008,6 +1010,13 @@ internal sealed class Indexer : IDisposable
         if (scope.Held.ClearFailure(key)) PublishStatus();
         return true;
     }
+
+    private ReadOutcome ReadWhole(OpenScope scope, PluginMetadata plugin, ReadState state) => scope.Store.Commit(projection =>
+    {
+        var read = IndexOnePlugin(scope, plugin, state, CancellationToken.None);
+        if (read.Failure is null) projection.PluginChanged(plugin.Key);
+        return read;
+    });
 
     /// <summary>The filter in force and the source its SQL came from, read together so a
     /// concurrent set never pairs one filter's SQL with another's source.</summary>

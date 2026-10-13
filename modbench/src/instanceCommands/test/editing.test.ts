@@ -16,7 +16,7 @@ const NO_SNAPSHOT: LoadOrderSource = { gameName: 'Fallout 4', gameRelease: 'Fall
 const REFUSED: LoadOrderSource = { ...NO_SNAPSHOT, loadOrderSnapshot: { refusal: 'a.esp has no mod folder' } };
 
 function valueWith(name: string): LoadOrderSource {
-  const plugin = { name, path: `/game/Data/${name}`, origin: 'Base Mod', provider: { kind: 'Game' as const }, line: null, lineNamesIt: false };
+  const plugin = { name, path: `/game/Data/${name}`, origin: 'Base Mod', provider: { kind: 'Game' as const }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] };
   return {
     ...NO_SNAPSHOT,
     loadOrderSnapshot: { plugins: [plugin], active: [{ name, origin: 'Base Mod' }], loadedWithNoLine: [], archives: [], stringsFiles: [], dataFolder: '/game/Data' },

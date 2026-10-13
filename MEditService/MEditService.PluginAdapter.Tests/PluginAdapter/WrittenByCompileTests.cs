@@ -20,7 +20,7 @@ public sealed class WrittenByCompileTests : IDisposable
     public void Dispose() => _modFolder.Dispose();
 
     private RegisteredPlugin Plugin => new(
-        PluginName, "Doors", Path.Combine(_modFolder, PluginName), new PluginProvider.FromMod("Doors", _modFolder, _modFolder), Line: null);
+        PluginName, "Doors", Path.Combine(_modFolder, PluginName), new PluginProvider.FromMod("Doors", _modFolder, _modFolder), Line: null, PluginStrings.None);
 
     [Fact]
     public void OfALocalizedPlugin_AreThePluginAndItsStringsInEveryLanguage_AndNoOtherPluginsStrings()

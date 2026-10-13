@@ -19,11 +19,8 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
     internal async Task<Decompiled> DecompileAsync(
         LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, string modFolder, Action onParsed, CancellationToken cancel)
     {
-        // Naming where the strings are: "pass nothing" is not neutral for a Localized plugin.
-        var strings = new PluginStrings(modFolder);
-
         // A fresh deep parse, not the load order's own overlay, whose lifetime this gate does not control.
-        if (!(await adapter.ReadSourceOfAsync(plugin, loadOrder, strings, cancel)).Holds(out var source, out var failure))
+        if (!(await adapter.ReadSourceOfAsync(plugin, loadOrder, cancel)).Holds(out var source, out var failure))
         {
             logger.LogWarning(failure.Error, "Refused to decompile {Plugin}: {Reason}", plugin.Name, failure.Reason);
             return failure switch
@@ -41,7 +38,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         }
 
         onParsed();
-        if (await VerifyRoundTrip(plugin.Name, plugin.Path, source, loadOrder, strings, cancel) is { } refusal)
+        if (await VerifyRoundTrip(plugin.Name, plugin.Path, source, loadOrder, plugin.Strings, cancel) is { } refusal)
             return Decompiled.Refused(DecompileRefusal.RoundTripFailed, refusal);
 
         return new Decompiled(source, DecompileRefusal.None, "");
