@@ -106,7 +106,7 @@ internal static class LocalizedStrings
         var languageFormat = LanguageFormat(gameRelease);
         return path => path.StartsWith(folder, StringComparison.OrdinalIgnoreCase)
             && path.IndexOf('/', folder.Length) < 0
-            && StringsFile.Named(path[folder.Length..], plugin.ModKey, languageFormat, folder: null, () => []) is not null;
+            && StringsFile.Named(path[folder.Length..], plugin.ModKey, languageFormat, () => []) is not null;
     }
 
     private static bool IsLocalized(ModPath plugin, GameRelease gameRelease) =>
