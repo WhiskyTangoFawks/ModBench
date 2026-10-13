@@ -1,5 +1,5 @@
 import { isRefused, type InitMod, type InitOutcome, type InitStatus, type MEditClient, type WriteRefused } from '../client';
-import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 
 interface SourceCommandsDeps {
@@ -24,7 +24,7 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
         else {
           sent.push({
             name: mod,
-            installationFiles: installed.answer.map((file) => ({ ...file, entries: [...file.entries] })),
+            installationFiles: installed.answer.map(onTheWire),
             modManagerFiles: [...adapter.managerFilesInModFolder],
           });
         }
@@ -37,3 +37,7 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
 }
 
 export type SourceCommands = ReturnType<typeof sourceCommands>;
+
+function onTheWire(file: InstallationFile): InitMod['installationFiles'][number] {
+  return { ...file, entries: [...file.entries] };
+}

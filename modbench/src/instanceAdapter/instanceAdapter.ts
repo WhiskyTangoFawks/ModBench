@@ -297,19 +297,14 @@ export interface FileStamp {
 /** A read of one file that answers why it could not be read, rather than failing whatever asked. */
 export type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
 
-/** An entry of a downloaded file, by its forward-slash path inside it, and its hash. */
-export interface HashedEntry {
-  readonly path: string;
-  readonly hash: string;
-}
-
 /** A downloaded file the mod manager records a mod as installed from, with its size, its hash and each entry's, as
  *  the downloaded files' index keeps them (ADR-0024). */
 export interface InstallationFile {
   readonly path: string;
   readonly size: number;
   readonly hash: string;
-  readonly entries: readonly HashedEntry[];
+  /** Each entry by its forward-slash path inside the file. */
+  readonly entries: readonly { readonly path: string; readonly hash: string }[];
 }
 
 /** How a message names the mod manager, the file it keeps mod order in, and the file it keeps beside a downloaded file. */
