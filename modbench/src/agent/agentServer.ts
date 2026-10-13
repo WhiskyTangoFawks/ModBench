@@ -7,7 +7,12 @@ import type { InstanceView } from '../instanceLoader/instance';
 import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
-import { INSTANCE_READS, Refusal } from './instanceReads';
+import type { MEditClient } from '../client/MEditClient';
+import { FILE_CONFLICTS } from './fileConflicts';
+import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
+import { INSTANCE_READS } from './instanceReads';
+import { Refusal } from './refusal';
+import { RESOLVE_NAMES } from './resolveNames';
 import { SOURCE_PROBLEMS } from './sourceProblems';
 
 const AGENT_PORT_SETTING = 'modbench.agent.port';
@@ -15,6 +20,7 @@ const AGENT_PORT_SETTING = 'modbench.agent.port';
 export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence'> | undefined;
+  mEdit: Pick<MEditClient, 'resolveNames'>;
   reporter: Reporter;
   log: Log;
 }
@@ -30,9 +36,9 @@ function currentValue(instance: AgentServerOptions['instance']) {
   return instance.value;
 }
 
-function answer(log: Log, name: string, work: () => unknown) {
+async function answer(log: Log, name: string, work: () => unknown) {
   try {
-    return { content: [{ type: 'text' as const, text: JSON.stringify(work()) }] };
+    return { content: [{ type: 'text' as const, text: JSON.stringify(await work()) }] };
   } catch (error) {
     if (!(error instanceof Refusal)) throw error;
     log.warn(`[agent] ${name}: ${error.message}`);
@@ -40,11 +46,17 @@ function answer(log: Log, name: string, work: () => unknown) {
   }
 }
 
-function mcpServerOf({ instance, log }: AgentServerOptions): McpServer {
+function mcpServerOf({ instance, mEdit, log }: AgentServerOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' });
   for (const read of INSTANCE_READS) {
     server.registerTool(read.name, { description: read.description }, () => answer(log, read.name, () => read.of(currentValue(instance))));
   }
+  server.registerTool(FILE_CONFLICTS.name, { description: FILE_CONFLICTS.description, inputSchema: FILE_CONFLICTS.input },
+    (args) => answer(log, FILE_CONFLICTS.name, () => FILE_CONFLICTS.of(currentValue(instance), args)));
+  server.registerTool(RESOLVE_INSTANCE_NAMES.name, { description: RESOLVE_INSTANCE_NAMES.description, inputSchema: RESOLVE_INSTANCE_NAMES.input },
+    (args) => answer(log, RESOLVE_INSTANCE_NAMES.name, () => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args)));
+  server.registerTool(RESOLVE_NAMES.name, { description: RESOLVE_NAMES.description, inputSchema: RESOLVE_NAMES.input },
+    (args) => answer(log, RESOLVE_NAMES.name, () => RESOLVE_NAMES.of(mEdit, args)));
   server.registerTool(SOURCE_PROBLEMS.name, { description: SOURCE_PROBLEMS.description }, () => answer(log, SOURCE_PROBLEMS.name, SOURCE_PROBLEMS.of));
   return server;
 }
