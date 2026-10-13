@@ -160,11 +160,11 @@ export interface InitOutcome {
   refused: readonly ItemRefusal<string>[];
 }
 
-/** A mod to init, with its installation files and the mod manager's own files in its folder (ADR-0024). */
+/** A mod to init, with its installation files and the mod manager's own files in its folder (ADR-0013). */
 export type InitMod = components['schemas']['InitModRequest'];
 
 /** A mod to build: the source folder whose build configuration names it, its folder and its installation files
- *  (ADR-0024). */
+ *  (ADR-0013). */
 export type BuildMod = components['schemas']['BuildModRequest'];
 
 /** The instance's facts every mod's build needs: the suffix of an excluded name, and the release's archive variants. */

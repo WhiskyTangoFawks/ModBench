@@ -316,7 +316,7 @@ export interface FileStamp {
 export type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
 
 /** A downloaded file the mod manager records a mod as installed from, with its size, its hash and each entry's, as
- *  the downloaded files' index keeps them (ADR-0024). */
+ *  the downloaded files' index keeps them (ADR-0013). */
 export interface InstallationFile {
   readonly path: string;
   readonly size: number;
