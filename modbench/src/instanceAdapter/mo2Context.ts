@@ -55,7 +55,7 @@ export async function listModFolders(
   const installing = await Promise.all(candidates?.map((name) => isBeingInstalled(modDir(instanceRoot, name))) ?? []);
   return candidates
     ?.filter((_, i) => !installing[i])
-    .map((name) => ({ ...entryNamed(name), path: modDir(instanceRoot, name) }));
+    .map((name) => ({ ...entryNamed(name), folderName: name, path: modDir(instanceRoot, name) }));
 }
 
 export function modFoldersOf(all: readonly ModFolder[]): ModFolders {

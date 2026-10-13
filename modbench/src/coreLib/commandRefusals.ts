@@ -13,14 +13,12 @@ export interface TakenNames {
 
 const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
-const folderNameOf = (path: string): string => path.split(/[\\/]/).pop() ?? '';
-
 /** Why a new mod may not take `name`, trimmed: a folder already holds a mod of that name, or is
  *  named so (a separator's folder), compared without case. Undefined for a free name, or a blank one. */
 export function newModNameRefusal({ modFolders }: TakenNames, name: string): string | undefined {
   const trimmed = name.trim();
   if (!trimmed) return undefined;
-  return modFolders?.some((folder) => sameName(folderNameOf(folder.path), trimmed)) ? modNameTakenRefusal(trimmed) : undefined;
+  return modFolders?.some((folder) => sameName(folder.folderName, trimmed)) ? modNameTakenRefusal(trimmed) : undefined;
 }
 
 /** `clash` when another entry of `kind` is listed or has a folder under `requested`, compared

@@ -84,10 +84,12 @@ export type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
 export const entryNotFound = (entry: EntryRef): string =>
   `${entry.kind === 'mod' ? 'Mod' : 'Separator'} not found in modlist: ${entry.name}`;
 
-/** A folder that holds a mod or a separator, decoded into the entry it holds. */
+/** A folder that holds a mod or a separator, decoded into the entry it holds; `folderName` is the
+ *  folder's own name, as the manager spells it. */
 export interface ModFolder {
   readonly kind: ModlistEntry['kind'];
   readonly name: string;
+  readonly folderName: string;
   readonly path: string;
 }
 
