@@ -77,11 +77,11 @@ public sealed class InitHandler
                 $"'{toInit.SourceFolder}' already holds a repository. To put a plugin's source into its working tree, decompile it.");
         }
 
-        // A .git with no main that decompile and commit did not mark is someone else's, never written to (ADR-0003).
+        // A .git with no main that Modbench did not make is someone else's, never written to (ADR-0003).
         if (_source.HoldsAnotherRepository(toInit.SourceFolder))
         {
             return ItemAnswer<InitRefusal, InitializedMod>.Refused(InitRefusal.AlreadyInitialized,
-                $"'{toInit.SourceFolder}' already holds a repository decompile and commit did not make, with no main branch.");
+                $"'{toInit.SourceFolder}' already holds a repository with no main branch, made outside Modbench.");
         }
 
         var verified = new List<(RegisteredPlugin Plugin, PluginSource Source)>();
