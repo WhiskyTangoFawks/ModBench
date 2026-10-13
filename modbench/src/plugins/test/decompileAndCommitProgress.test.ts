@@ -52,7 +52,7 @@ describe('decompileAndCommitProgressMessage', () => {
     expect(message).toContain('committing');
   });
 
-  it('names the mod being initialized in every phase', () => {
+  it('names the mod being decompiled and committed in every phase', () => {
     for (const phase of ['Idle', 'Parsing', 'Serializing', 'ReadingFiles', 'Committing'] as const) {
       expect(decompileAndCommitProgressMessage('MyMod', status({ phase }))).toContain('MyMod');
     }

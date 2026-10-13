@@ -542,7 +542,7 @@ describe('RecordPanel — column header native right-click menu', () => {
     ['a disabled plugin in an untracked mod', { isTracked: false, isImmutable: true }, { ModA: 'untracked' }, 'untracked'],
     ['a plugin the game provides', { isTracked: false, isImmutable: true }, {}, 'none'],
     ['a plugin in Overwrite', { isTracked: false }, {}, 'none'],
-  ] as const)('the header of %s names the repository state of its origin\'s mod, which init and decompile are offered on', async (_what, facts, modsByOrigin, inMod) => {
+  ] as const)('the header of %s names the repository state of its origin\'s mod, which decompile and commit and decompile are offered on', async (_what, facts, modsByOrigin, inMod) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const compare = compareResultFixture({
       conflictAll: 'OnlyOne',

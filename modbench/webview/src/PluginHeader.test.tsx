@@ -70,7 +70,7 @@ describe('PluginHeader', () => {
       'The game does not load it, so no other copy is compared.'],
     ['the game’s own plugin', { isImmutable: true }, '(read-only)', 'The game’s plugins are not edited.'],
     ['a plugin in Overwrite', { override: { isInOverwrite: true }, isTracked: false }, '(in Overwrite)',
-      'Overwrite is not a mod; move the plugin into a mod and init that mod.'],
+      'Overwrite is not a mod; move the plugin into a mod and decompile and commit that mod.'],
     ['a plugin that is not tracked', { isTracked: false }, '(untracked)',
       '“Decompile and Commit Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, makes it editable.'],
     ['a tracked plugin whose plugin source is unreadable', { sourceUnreadable: WHY }, '(plugin source unreadable)',

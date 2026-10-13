@@ -58,8 +58,8 @@ describe('sourceCommands build', () => {
   });
 });
 
-describe('sourceCommands init', () => {
-  it('hands mEdit each mod with the source folder init makes its repository in, the installation files the mod manager records and its own files in the mod folder', async () => {
+describe('sourceCommands decompileAndCommit', () => {
+  it('hands mEdit each mod with the source folder decompile and commit makes its repository in, the installation files the mod manager records and its own files in the mod folder', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('init', { landed: [{ mod: 'ModA', plugins: [] }, { mod: 'ModB', plugins: [] }], refused: [] });
     const adapter = fakeAdapter({ installations: new Map([['ModA', recording([INSTALLED])]]) });
@@ -75,7 +75,7 @@ describe('sourceCommands init', () => {
     }]);
   });
 
-  it('refuses a mod whose installation files cannot be answered, naming why, and inits the rest', async () => {
+  it('refuses a mod whose installation files cannot be answered, naming why, and decompiles and commits the rest', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('init', { landed: [{ mod: 'ModB', plugins: [] }], refused: [] });
     const adapter = fakeAdapter({ installations: new Map([['ModA', unreadable('its installation file is not indexed')]]) });
