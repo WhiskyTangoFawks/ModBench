@@ -116,7 +116,25 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     }));
   });
 
-  it('archive: installs as a new mod under the name prompted, prefilled from the archive', async () => {
+  it('archive: one of the instance\'s downloaded files installs as that downloaded file, so it is marked installed as MO2 marks it', async () => {
+    const row = downloadRowFixture('foo.7z', { modID: '111', fileID: '222', version: '2.0' });
+    showInputBox.mockResolvedValueOnce('New Mod');
+    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
+    showOpenDialog.mockResolvedValueOnce([{ fsPath: row.path }]);
+    installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
+
+    registerModInstallCommands(deps({
+      instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE, downloads: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() },
+    }));
+    await invoke('modbench.mod.install');
+
+    expect(installMod).toHaveBeenCalledWith(
+      { kind: 'downloadedFile', name: 'foo.7z', path: row.path, modID: '111', fileID: '222', version: '2.0' },
+      { kind: 'new', name: 'New Mod' }, GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE,
+    );
+  });
+
+  it('archive: one outside the downloads folder, though it shares a downloaded file\'s name, installs as an archive under the name prompted, prefilled from it', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([{ fsPath: '/archive/foo.7z' }]);

@@ -13,6 +13,7 @@ export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
 export { OVERWRITE_ORIGIN } from './codecs/modlistText';
 export type { ArchiveReader } from './archiveReader';
 export { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, isArchiveName } from './archiveNames';
+export { samePath } from './samePath';
 export { sevenZip } from './sevenZip';
 
 /** The setting that names the game folder outright, and so the one that fixes a folder not found. */

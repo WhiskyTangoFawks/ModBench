@@ -1,11 +1,15 @@
-import type { Instance } from '../instanceLoader/instance';
-import type { ModlistCommands } from '../modOrderCommands/modOrderCommands';
+import type { DownloadFile, Instance } from '../instanceLoader/instance';
+import type { ModlistCommands, ModSource } from '../modOrderCommands/modOrderCommands';
 import { chooseInstallTarget } from './installTarget';
 import { promptModName } from './promptModName';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { DownloadArgument } from '../drivingLib/argument';
 import type { Reporter } from '../ports/reporter';
+
+/** A downloaded file of the instance value as install takes it. */
+export const downloadedFileSource = ({ name, path, modID, fileID, version }: DownloadFile): ModSource =>
+  ({ kind: 'downloadedFile', name, path, modID, fileID, version });
 
 export interface DownloadInstallDeps {
   reporter: Reporter;
@@ -26,9 +30,8 @@ export async function installDownloadedFile(
     const target = await chooseInstallTarget(
       row, (defaultName) => promptModName(defaultName, (name) => commands.newModNameRefusal(name)));
     if (!target) return;
-    const { name, path, modID, fileID, version } = row;
     const outcome = await runWritingGesture(deps.progressViewId, instance, () => commands.installMod(
-      { kind: 'downloadedFile', name, path, modID, fileID, version }, target, instance.value.gameName));
+      downloadedFileSource(row), target, instance.value.gameName));
     if (!outcome.applied) throw new Error(outcome.refusal);
     deps.warnIfFomod(target.name, outcome.isFomod);
     downloadRefusal = outcome.downloadRefusal;

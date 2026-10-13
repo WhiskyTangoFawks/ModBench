@@ -102,11 +102,12 @@ const BOUND_COMMAND_BOXES = {
     toolbox: ['instanceCommands/instanceCommands'],
     plugins: ['pluginsCommands/plugins', 'pluginsCommands/renamePlugin', 'sourceCommands/sourceCommands'],
 };
-/** A view reaches the Instance adapter for a file-name rule alone: Plugins for a plugin file's, Mods and Downloads for an archive's. */
+/** A view reaches the Instance adapter for a rule over file names and paths alone: Plugins for a plugin file's, Mods and
+ *  Downloads for an archive's, and Mods for which downloaded file a picked path is. */
 /** @type {Record<string, string[]>} */
 const ADAPTER_NAMES_A_VIEW_MAY_IMPORT = {
     plugins: ['fileExtension'],
-    mods: ['ARCHIVE_EXTENSIONS', 'defaultModName', 'defaultModNameForFolder'],
+    mods: ['ARCHIVE_EXTENSIONS', 'defaultModName', 'defaultModNameForFolder', 'samePath'],
     downloads: ['isArchiveName'],
 };
 /** @param {string} view */
@@ -120,7 +121,7 @@ const boundCommandImports = (view) => ['error', {
         {
             group: ['**/instanceAdapter/**'],
             ...(ADAPTER_NAMES_A_VIEW_MAY_IMPORT[view] ? { allowImportNames: ADAPTER_NAMES_A_VIEW_MAY_IMPORT[view] } : {}),
-            message: 'A view holds bound commands and reaches the Instance adapter for nothing but a file-name rule.',
+            message: 'A view holds bound commands and reaches the Instance adapter for nothing but a rule over file names and paths.',
         },
     ],
 }];
