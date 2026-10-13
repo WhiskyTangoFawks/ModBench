@@ -2054,6 +2054,8 @@ describe('The Problems panel on plugin source', () => {
     original = readFileSync(modlistPath, 'utf8');
     mkdirSync(modDir, { recursive: true });
     mkdirSync(path.dirname(file), { recursive: true });
+    mkdirSync(path.join(sourceDir, '.git'));
+    writeFileSync(path.join(sourceDir, 'build.json'), JSON.stringify({ output: plugin.origin }));
     writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY }, null, 2));
     await waitFor('mod sync to give the new folder its line', () => readFileSync(modlistPath, 'utf8').includes(plugin.origin));
   });

@@ -51,7 +51,7 @@ export function registerModEnableCommands(
 // modbench.mod.excludeFile / modbench.mod.includeFile: the direction is the command's, so a mixed
 // selection takes the right-clicked row's (mods.md, Menus and keys, story 7).
 export function registerFileExclusionCommands(
-  commands: ModlistCommands, instance: Pick<Instance, 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
+  commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
   const run = (mark: OriginFileMark) => (entry: GestureEntry<ModlistNode>) => {
     const rows = pluralArgument(entry, 'file');
@@ -59,8 +59,12 @@ export function registerFileExclusionCommands(
     const { verb } = FILE_MARKS[mark];
     const refs = rows.map((row) => row.ref);
     return runModsWriting(instance, async () => {
-      const outcome = await commands.markFiles(refs, mark);
-      reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${refs.length} files.`, outcome, fileLabel);
+      const result = await commands.markFiles(refs, mark, instance.value.paths.sourceDirs);
+      if (!result.applied) {
+        reporter.report('error', `Could not ${verb} ${refs.length} files.`, result.refusal);
+        return;
+      }
+      reporter.selectionOutcome(`Could not ${verb} ${result.outcome.refused.length} of ${refs.length} files.`, result.outcome, fileLabel);
     });
   };
   return [
@@ -152,8 +156,8 @@ export function registerModContextCommands(
         const newName = await promptRename('Rename mod', oldName, modNamePrompt(commands, instance, oldName));
         if (newName === undefined) return;
         await runModsWriting(instance, async () => {
-          const { activeProfile, profiles, managerNames } = instance.value;
-          const result = await commands.renameMod(activeProfile, profiles, oldName, newName);
+          const { activeProfile, profiles, managerNames, paths } = instance.value;
+          const result = await commands.renameMod(activeProfile, profiles, oldName, newName, paths.sourceDirs.get(oldName));
           if (!result.applied) {
             reporter.report('error', 'Failed to rename mod.', result.refusal);
             return;
@@ -325,9 +329,8 @@ export function registerOpenSourceCommand(
   return registerGesture('modbench.mod.openSource', viewSelection, async (entry) => {
     const node = singularArgument(entry, 'mod');
     if (node === undefined) return;
-    const { trackedMods, paths } = instance.value;
     await reportFailure(reporter, `Failed to open the source of "${node.mod.name}".`, async () => {
-      const folder = trackedMods.has(node.mod.name) ? paths.sourceDirs.get(node.mod.name) : undefined;
+      const folder = instance.value.paths.sourceDirs.get(node.mod.name);
       if (folder === undefined) throw new Error('It is not a source mod.');
       await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
     });

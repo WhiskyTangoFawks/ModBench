@@ -111,6 +111,8 @@ public static class CommandHandlers
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<INotificationPublisher>()));
 
+        services.AddSingleton(sp => new BuildConfigurationHandler(sp.GetRequiredService<ISourceAdapter>()));
+
         services.AddSingleton(sp => new CreatePluginHandler(
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<LoadOrderHolder>(),

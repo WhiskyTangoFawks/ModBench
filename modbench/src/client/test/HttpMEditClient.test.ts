@@ -167,7 +167,7 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
   return { result, log, fetch, request };
 }
 
-const modToInit = (name: string) => ({ name, installationFiles: [], modManagerFiles: ['meta.ini'] });
+const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, installationFiles: [], modManagerFiles: ['meta.ini'] });
 
 describe('HttpMEditClient — what each verb sends and reads', () => {
   const myPatch = { name: 'MyPatch.esp', origin: 'ModA' };
@@ -276,6 +276,8 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   it.each([
     { name: 'moveLastWritten', verb: (c: MEditClient) => c.moveLastWritten({ name: 'Old.esp', origin: 'ModA' }, 'OLD.esp', 'New.esp'),
       reads: { moved: true }, path: '/plugins/move-last-written', body: { origin: 'ModA', name: 'Old.esp', treeName: 'OLD.esp', newName: 'New.esp' } },
+    { name: 'changeBuildConfiguration', verb: (c: MEditClient) => c.changeBuildConfiguration('/instance/source/Old', { output: 'New', exclude: ['a.dds'] }),
+      reads: { changed: true }, path: '/build-configuration', body: { sourceFolder: '/instance/source/Old', output: 'New', exclude: ['a.dds'] } },
     { name: 'rebuildIndex', verb: (c: MEditClient) => c.rebuildIndex('/instance', 'Fallout4'),
       reads: { rebuilt: true }, path: '/index/rebuild', body: { instanceRoot: '/instance', gameRelease: 'Fallout4' } },
   ])('$name posts $path and reads a 204 as done', async ({ verb, reads, path, body }) => {
@@ -372,6 +374,8 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       { name: 'init', verb: (c) => c.init([modToInit('ModA'), modToInit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not init 2 mods' },
       { name: 'build', verb: (c) => c.build(['ModA', 'ModB']), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
       { name: 'decompile', verb: (c) => c.decompile([first, second]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
+      { name: 'changeBuildConfiguration', verb: (c) => c.changeBuildConfiguration('/instance/source/ModA', { exclude: ['a.dds'] }), status: 422,
+        body: { detail: 'It holds no build configuration.' }, text: 'It holds no build configuration.', refusal: 'Could not change the build configuration in "/instance/source/ModA"' },
     ];
 
     it.each(writes)('$name resolves a WriteRefused with the server text, asking once', async ({ verb, status, body, text, refusal }) => {
@@ -382,10 +386,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       expect(log.lines.error).toEqual([expect.stringContaining(`failed (${status})`)]);
     });
 
-    it.each(writes)('$name resolves a thrown request the same way', async ({ verb, refusal }) => {
+    it.each(writes)('$name resolves a thrown request the same way, as one that never reached mEdit', async ({ verb, refusal }) => {
       const { result, log } = await exchange(verb, rejects('socket hang up'));
 
-      expect(result).toEqual({ refused: true, message: `${refusal} — mEdit could not be reached.` });
+      expect(result).toEqual({ refused: true, message: `${refusal} — mEdit could not be reached.`, unreachable: true });
       expect(log.lines.error).toEqual([expect.stringContaining('socket hang up')]);
     });
 

@@ -34,7 +34,7 @@ export interface LoadOrderPlugin {
   winning: boolean;
 }
 
-type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string; sourceFolder: string } | { kind: 'Game' } | { kind: 'None' };
+type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string; sourceFolder?: string } | { kind: 'Game' } | { kind: 'None' };
 
 // `lineNamesIt`: the line names this copy of its filename, for Editing's judgements (ADR-0013).
 type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin' | 'line'> & { provider: SnapshotProvider; lineNamesIt: boolean };
@@ -229,7 +229,7 @@ export function loadOrderSnapshotOf(value: {
   readonly gameFolder: GameFolder;
   readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
   readonly modFolders: ModFolders | undefined;
-  /** Each mod's source folder, by mod name. */
+  /** Each source mod's source folder, by mod name. */
   readonly sourceDirs: ReadonlyMap<string, string>;
   readonly archives: ArchiveSources;
 }): LoadOrderSnapshotValue | LoadOrderSnapshotRefusal | undefined {
@@ -247,8 +247,9 @@ export function loadOrderSnapshotOf(value: {
     data: { kind: 'Game' },
     mod: (name) => {
       const folder = value.modFolders?.holding({ kind: 'mod', name });
+      if (folder === undefined) return undefined;
       const sourceFolder = value.sourceDirs.get(name);
-      return folder === undefined || sourceFolder === undefined ? undefined : { kind: 'Mod', mod: name, folder: folder.path, sourceFolder };
+      return sourceFolder === undefined ? { kind: 'Mod', mod: name, folder: folder.path } : { kind: 'Mod', mod: name, folder: folder.path, sourceFolder };
     },
   });
   const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p) =>

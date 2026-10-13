@@ -62,7 +62,16 @@ internal static class Wire
 
     /// <summary>Each mod as one with no installation file and no file of the mod manager's.</summary>
     internal static Task<HttpResponseMessage> Init(this HttpClient client, IEnumerable<string> mods) =>
-        client.PostAsJsonAsync("/init", new { mods = mods.Select(name => new { name, installationFiles = Array.Empty<object>(), modManagerFiles = Array.Empty<string>() }) });
+        client.PostAsJsonAsync("/init", new
+        {
+            mods = mods.Select(name => new
+            {
+                name,
+                sourceFolder = client.SourceFolderSentFor(name),
+                installationFiles = Array.Empty<object>(),
+                modManagerFiles = Array.Empty<string>(),
+            }),
+        });
 
     internal static Task<HttpResponseMessage> Decompile(
         this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins) =>

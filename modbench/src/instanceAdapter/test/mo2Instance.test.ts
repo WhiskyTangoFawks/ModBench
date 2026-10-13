@@ -924,29 +924,76 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('a mod\'s repository', () => {
+      const repository = async (folder: string, buildConfiguration: string | undefined): Promise<void> => {
+        await mkdir(join(root, 'source', folder, '.git'), { recursive: true });
+        if (buildConfiguration !== undefined) await writeFile(join(root, 'source', folder, 'build.json'), buildConfiguration);
+      };
+
       it('answers a mod\'s source folder beside mods/, whether or not it is there, and none for a name that reaches outside it', () => {
         expect(adapter.sourceFolder('Harder VATS')).toBe(join(root, 'source', 'Harder VATS'));
         expect(adapter.sourceFolder('No Such Mod')).toBe(join(root, 'source', 'No Such Mod'));
         expect(adapter.sourceFolder('../Harder VATS')).toBeUndefined();
       });
 
-      it('answers tracked for a mod whose source folder beside mods/ holds a `.git`, and not for a mod whose own folder holds one', async () => {
-        await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
-        await mkdir(join(root, 'mods', 'Unofficial Fallout 4 Patch', '.git'));
+      it('lists every repository under the source folder by the mod its build configuration names as its output, with its folder, and no folder without a `.git`', async () => {
+        await repository('Harder VATS', '{ "output": "Harder VATS" }');
+        await repository('Renamed From', '{ "output": "Renamed To" }');
+        await mkdir(join(root, 'source', 'No Repository'), { recursive: true });
+        await writeFile(join(root, 'source', 'No Repository', 'build.json'), '{ "output": "No Repository" }');
 
-        expect([await adapter.modTracked('Harder VATS'), await adapter.modTracked('Unofficial Fallout 4 Patch')]).toEqual([true, false]);
+        const { folders, notes } = await adapter.sourceMods();
+
+        expect(folders).toEqual(new Map([['Harder VATS', join(root, 'source', 'Harder VATS')], ['Renamed To', join(root, 'source', 'Renamed From')]]));
+        expect(notes).toEqual([]);
       });
 
-      it('lists every repository under the source folder by its folder name, listed in the mod order or not, and no folder without a `.git`', async () => {
-        await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
-        await mkdir(join(root, 'source', 'Cloned And Unlisted', '.git'), { recursive: true });
-        await mkdir(join(root, 'source', 'No Repository'), { recursive: true });
+      it('answers the source folder that builds a mod, its name matched without case', async () => {
+        await repository('Renamed From', '{ "output": "Renamed To" }');
 
-        expect((await adapter.sourceMods()).sort()).toEqual(['Cloned And Unlisted', 'Harder VATS']);
+        const sourceMods = await adapter.sourceMods();
+
+        expect([sourceMods.folderOf('renamed to'), sourceMods.folderOf('Renamed From')]).toEqual([join(root, 'source', 'Renamed From'), undefined]);
+      });
+
+      it.each([
+        ['no build configuration', undefined],
+        ['a build configuration that is not JSON', '{ "output": '],
+        ['a build configuration that names no output', '{ "exclude": [] }'],
+        ['an output that is not a folder name', '{ "output": "../Elsewhere" }'],
+      ])('leaves out a repository with %s, and says so', async (_, configuration) => {
+        await repository('Unnamed', configuration);
+
+        const { folders, notes } = await adapter.sourceMods();
+
+        expect(folders).toEqual(new Map());
+        expect(notes).toEqual([expect.stringContaining(join(root, 'source', 'Unnamed'))]);
+      });
+
+      it('leaves out a repository whose build configuration cannot be read, says so, and lists the rest', async () => {
+        await repository('Unreadable', undefined);
+        await mkdir(join(root, 'source', 'Unreadable', 'build.json'));
+        await repository('Readable', '{ "output": "Readable" }');
+
+        const { folders, notes } = await adapter.sourceMods();
+
+        expect(folders).toEqual(new Map([['Readable', join(root, 'source', 'Readable')]]));
+        expect(notes).toEqual([expect.stringContaining(join(root, 'source', 'Unreadable'))]);
+      });
+
+      it('gives an output two repositories name, matched without case, to the first by folder name, and says so', async () => {
+        await repository('Second', '{ "output": "SHARED" }');
+        await repository('First', '{ "output": "Shared" }');
+
+        const { folders, notes } = await adapter.sourceMods();
+
+        expect(folders).toEqual(new Map([['Shared', join(root, 'source', 'First')]]));
+        expect(notes).toEqual([expect.stringContaining(join(root, 'source', 'Second'))]);
       });
 
       it('lists none when the instance has no source folder', async () => {
-        expect(await adapter.sourceMods()).toEqual([]);
+        const { folders, notes } = await adapter.sourceMods();
+
+        expect([folders, notes]).toEqual([new Map(), []]);
       });
 
       it('answers no installation file for a mod whose meta records none, and its meta as the mod manager\'s own file', async () => {
@@ -1019,18 +1066,20 @@ describe('the MO2 Instance adapter', () => {
     });
   });
 
-  it('moves a mod\'s source folder to the trash, and answers false when it has none', async () => {
+  it('moves to the trash the repository whose build configuration names the mod, and answers false when none does', async () => {
     const trashed: string[] = [];
     const trash = (path: string): Promise<void> => {
       trashed.push(path);
       return Promise.resolve();
     };
-    await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
+    await mkdir(join(root, 'source', 'Renamed From', '.git'), { recursive: true });
+    await writeFile(join(root, 'source', 'Renamed From', 'build.json'), '{ "output": "Harder VATS" }');
+    await mkdir(join(root, 'source', 'Unofficial Fallout 4 Patch'), { recursive: true });
 
     expect(await adapter.trashSourceFolder('Harder VATS', trash)).toBe(true);
     expect(await adapter.trashSourceFolder('Unofficial Fallout 4 Patch', trash)).toBe(false);
 
-    expect(trashed).toEqual([join(root, 'source', 'Harder VATS')]);
+    expect(trashed).toEqual([join(root, 'source', 'Renamed From')]);
   });
 
   describe('excluding and including a file of a mod or Overwrite', () => {
@@ -1109,6 +1158,15 @@ describe('the MO2 Instance adapter', () => {
       expect(await adapter.markOriginFile(modOrigin, 'b.dds', 'Included')).toEqual({ gone: false, wrote: false, relativePath: 'b.dds' });
 
       assertOnlyChanged(before, await snapshotTree(root), new Set());
+    });
+
+    it.each([
+      ['a.dds', 'a.dds'],
+      ['Textures/a.dds.mohidden', 'Textures/a.dds'],
+      ['Textures.mohidden/a.dds.MOHIDDEN', 'Textures/a.dds'],
+      ['Textures.mohidden', 'Textures'],
+    ])('answers the path %s has when nothing excludes it: %s', (relativePath, included) => {
+      expect(adapter.includedPath(relativePath)).toBe(included);
     });
 
     it('answers gone for a file that is not there', async () => {

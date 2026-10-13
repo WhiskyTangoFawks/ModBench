@@ -32,6 +32,8 @@ export function isMEditGone(status: BackendStatus): status is 'disconnected' | '
 export interface WriteRefused {
   readonly refused: true;
   readonly message: string;
+  /** The request never reached mEdit, so no answer of mEdit's says anything of its items. */
+  readonly unreachable?: true;
 }
 
 /** `WriteRefused`'s one structural tag — a plain check, not `instanceof`, so a scripted client's
@@ -193,6 +195,10 @@ export type ReferenceResult = components['schemas']['ReferenceResult'];
  *  (plugins.md, Record filter). */
 export type RecordFilter = components['schemas']['FilterRequest'];
 
+/** A change to a source mod's build configuration: the output folder's new name, and paths in the mod folder to
+ *  exclude or include. */
+export type BuildConfigurationChange = Omit<components['schemas']['BuildConfigurationRequest'], 'sourceFolder'>;
+
 /** target-architecture.d2's mEdit client (ADR-0002). */
 export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
@@ -223,6 +229,8 @@ export interface MEditClient {
   // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
   // the call itself refused, with nothing written.
   decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
+  // Rename's and exclude's half in mEdit: the build configuration in `sourceFolder`, written in its working tree.
+  changeBuildConfiguration(sourceFolder: string, change: BuildConfigurationChange): Promise<{ changed: true } | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
   build(mods: readonly string[]): Promise<BuildOutcome | WriteRefused>;

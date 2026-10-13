@@ -66,6 +66,19 @@ public sealed class InitModTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task InitOfAModWithoutASourceFolder_Is400()
+    {
+        await Loaded();
+
+        var response = await Client.PostAsJsonAsync("/init", new
+        {
+            mods = new[] { new { name = Origin, installationFiles = Array.Empty<object>(), modManagerFiles = Array.Empty<string>() } },
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task InitOfAModWithAnInstallationFileThatHasNoHash_Is400()
     {
         await Loaded();
