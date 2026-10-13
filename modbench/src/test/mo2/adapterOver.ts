@@ -6,6 +6,8 @@ import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
 import { providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
 import { pluginsCommands, type PluginsCommands } from '../../pluginsCommands/plugins';
 import type { Instance } from '../../instanceLoader/instance';
+import { fakeArchiveReader } from '../fakeArchiveReader';
+import type { InstallAccess } from '../../install/install';
 
 /** The adapter's answers a test fixes in place of asking the machine it runs on. */
 export interface AdapterAnswers {
@@ -23,9 +25,9 @@ export const STEADY_WINDOW: ConstructorParameters<typeof Instance>[0]['window'] 
   onDidChangeWindowState: () => ({ dispose: () => {} }),
 };
 
-/** What install reaches the instance through, over `root`. */
-export function accessTo(root: string, answers: AdapterAnswers = {}): { instanceRoot: string; adapter: InstanceAdapter } {
-  return { instanceRoot: root, adapter: adapterOver(root, answers) };
+/** What install reaches the instance through, over `root`, with an archive reader holding nothing. */
+export function accessTo(root: string, answers: AdapterAnswers = {}): InstallAccess {
+  return { instanceRoot: root, adapter: adapterOver(root, answers), archives: fakeArchiveReader([]) };
 }
 
 /** MO2's adapter over `root`, detecting no game install, with the answers a test fixes in place. */
