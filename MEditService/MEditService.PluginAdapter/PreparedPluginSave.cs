@@ -29,7 +29,7 @@ public sealed class PreparedPluginSave : IDisposable
     /// <summary>The temp-written binary read back with the temp strings and the master styles it was
     /// written with.</summary>
     internal IMod Reread(ModKey plugin, GameRelease release) =>
-        MutagenPluginAdapter.OpenForWrite(new ModPath(plugin, _tmpPath), release, new PluginStrings(_tmpDir, _tmpDir), _masterStyles);
+        MutagenPluginAdapter.OpenForWrite(new ModPath(plugin, _tmpPath), release, new PluginStrings(_tmpDir), _masterStyles);
 
     /// <summary>The hash of the binary Commit puts in place, spelled as the commit trailers spell it.</summary>
     public string BinarySha256() => PluginBinaryHash.TrailerFormOfFile(_tmpPath);

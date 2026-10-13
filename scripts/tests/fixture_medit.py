@@ -100,6 +100,8 @@ def snapshot(instance, game):
         'plugins': plugins,
         'active': [{'name': name, 'origin': mod} for name, mod in PLUGINS],
         'loadedWithNoLine': [],
+        'archives': [],
+        'stringsFiles': [],
         'gameDirectory': str(game),
         'instanceRoot': str(instance),
         'gameRelease': 'Fallout4',

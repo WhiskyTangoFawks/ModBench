@@ -10,7 +10,7 @@ public static class FixtureReadParameters
     // Mutagen's listings resolution reads the LocalAppData environment variable with no
     // injectable seam; a fixture's own strings folder below stops the implicit lookup, so this
     // only fills a placeholder when nothing real is there.
-    public static BinaryReadParameters For(PluginStrings strings)
+    public static BinaryReadParameters For(string pluginFolder)
     {
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LocalAppData")))
             Environment.SetEnvironmentVariable("LocalAppData", Path.GetTempPath());
@@ -19,8 +19,8 @@ public static class FixtureReadParameters
         {
             StringsParam = new StringsReadParameters
             {
-                StringsFolderOverride = Path.Combine(strings.PluginFolder ?? strings.DataFolderPath, "Strings"),
-                BsaFolderOverride = strings.PluginFolder ?? strings.DataFolderPath,
+                StringsFolderOverride = Path.Combine(pluginFolder, "Strings"),
+                BsaFolderOverride = pluginFolder,
             },
         };
     }
