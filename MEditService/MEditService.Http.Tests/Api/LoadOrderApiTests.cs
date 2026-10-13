@@ -150,7 +150,15 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         {
             gameDirectory = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
-            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, Provider = new { Kind = "Mod", Mod = p.Origin, Folder = Path.GetDirectoryName(p.Path) } }),
+            plugins = _fixture.Plugins.Select(p => new
+            {
+                p.Name,
+                p.Path,
+                p.Origin,
+                Provider = new { Kind = "Mod", Mod = p.Origin, Folder = Path.GetDirectoryName(p.Path) },
+                p.Strings.Archives,
+                p.Strings.StringsFiles,
+            }),
             active = SnapshotPlugins.Active(_fixture.Plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
             archives = Array.Empty<string>(),
