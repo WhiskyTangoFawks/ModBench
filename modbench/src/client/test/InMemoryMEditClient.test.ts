@@ -13,8 +13,8 @@ describe('InMemoryMEditClient — recorded calls', () => {
   it('records a command call with its arguments', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', { landed: [], refused: [] });
-    await client.build(['MyMod']);
-    expect(client.calls).toContainEqual({ method: 'build', args: [['MyMod']] });
+    await client.build([], { excludedSuffix: '.mohidden', archives: null });
+    expect(client.calls).toContainEqual({ method: 'build', args: [[], { excludedSuffix: '.mohidden', archives: null }] });
   });
 });
 
@@ -84,10 +84,10 @@ describe('InMemoryMEditClient — a scripted command failure', () => {
     const client = new InMemoryMEditClient();
     client.setCommandFailure('build', new Error('the build step failed'));
 
-    await expect(client.build(['MyMod'])).rejects.toThrow('the build step failed');
+    await expect(client.build([], { excludedSuffix: '.mohidden', archives: null })).rejects.toThrow('the build step failed');
 
     client.setCommandResult('build', { landed: [], refused: [] });
-    await expect(client.build(['MyMod'])).rejects.toThrow('the build step failed');
+    await expect(client.build([], { excludedSuffix: '.mohidden', archives: null })).rejects.toThrow('the build step failed');
   });
 });
 

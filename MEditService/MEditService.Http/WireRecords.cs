@@ -12,6 +12,8 @@ internal sealed record FilterResponse(string? Sql, string? Source);
 
 internal sealed record SelectRequest(string Sql);
 internal sealed record SelectResponse(IReadOnlyList<JsonElement> Rows);
+internal sealed record ResolveNamesRequest(IReadOnlyList<NameQuery> Names);
+internal sealed record ResolveNamesResponse(IReadOnlyList<NamedObject> Named);
 
 /// <summary>Applied or refusal (ADR-0019): failures already ride LoadOrderStatus, so this names
 /// none.</summary>
@@ -21,7 +23,9 @@ internal sealed record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
     IReadOnlyList<PluginAddress> LoadedWithNoLine, IReadOnlyList<string> Archives, IReadOnlyList<string> StringsFiles,
     string GameDirectory, string InstanceRoot, string GameRelease);
-internal sealed record LoadOrderPlugin(string Name, string Path, string Origin, PluginProviderRequest Provider, int? Line, bool LineNamesIt);
+internal sealed record LoadOrderPlugin(
+    string Name, string Path, string Origin, PluginProviderRequest Provider, int? Line, bool LineNamesIt, IReadOnlyList<string> Archives,
+    IReadOnlyList<string> StringsFiles);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum PluginProviderKind { Mod, Game, None }
@@ -32,7 +36,7 @@ internal sealed record PluginProviderRequest(PluginProviderKind Kind, string? Mo
     {
         PluginProviderKind.Game when Mod is null && Folder is null && SourceFolder is null => PluginProvider.Game,
         PluginProviderKind.None when Mod is null && Folder is null && SourceFolder is null => PluginProvider.NoMod,
-        PluginProviderKind.Mod when !string.IsNullOrEmpty(Mod) && !string.IsNullOrEmpty(Folder) && !string.IsNullOrEmpty(SourceFolder) =>
+        PluginProviderKind.Mod when !string.IsNullOrEmpty(Mod) && !string.IsNullOrEmpty(Folder) && SourceFolder is null or { Length: > 0 } =>
             new PluginProvider.FromMod(Mod, Folder, SourceFolder),
         _ => null,
     };

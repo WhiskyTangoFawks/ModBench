@@ -15,7 +15,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     public void TheTrackedPluginReallyIngestedFromSource_NotViaTheBinaryFallback()
     {
         Assert.Empty(fixture.FromSource.Status.Failures);
-        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(RealDataPlugin.PluginFileName, SourceParityFixture.Origin, "", new PluginProvider.FromMod(SourceParityFixture.Origin, fixture.ModFolder, fixture.ModFolder), Line: null)));
+        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(RealDataPlugin.PluginFileName, SourceParityFixture.Origin, "", new PluginProvider.FromMod(SourceParityFixture.Origin, fixture.ModFolder, fixture.ModFolder), Line: null, PluginStrings.None)));
     }
 
     [Fact]

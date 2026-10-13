@@ -5,6 +5,7 @@
     "outDir": "../../out/projects/modOrderCommands"
   },
   "references": [
+    { "path": "../client" },
     { "path": "../coreLib" },
     { "path": "../instanceAdapter" },
     { "path": "../ports" }

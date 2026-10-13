@@ -30,7 +30,7 @@ public sealed class UnsavedTextTests : IDisposable
     private ISourceRepository Repository => TestAdapters.Source().OverFolder(TestMod.In(_modFolder), Release);
 
     private ISourceRepositoryReads Reads =>
-        new GitSourceAdapter(_unsaved).Over(new RegisteredPlugin(PluginName, TestMod.Name, Path.Combine(_modFolder, PluginName), TestMod.In(_modFolder), Line: null), Release)
+        new GitSourceAdapter(_unsaved).Over(new RegisteredPlugin(PluginName, TestMod.Name, Path.Combine(_modFolder, PluginName), TestMod.In(_modFolder), Line: null, PluginStrings.None), Release)
         ?? throw new InvalidOperationException("Expected a mod to provide the plugin.");
 
     private static string NpcBody(string editorId) => $"{{\n  \"FormKey\": \"{Npc}\",\n  \"EditorID\": \"{editorId}\"\n}}";

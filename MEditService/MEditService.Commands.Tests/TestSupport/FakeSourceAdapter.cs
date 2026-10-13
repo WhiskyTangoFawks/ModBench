@@ -14,11 +14,18 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 {
     private readonly Dictionary<string, FakeMod> _mods = new(StringComparer.Ordinal);
     private readonly HashSet<string> _foreignRepositories = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, SourceToBuild> _builds = new(StringComparer.Ordinal);
     private readonly List<(string SourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins, IReadOnlyList<Asset> Assets)> _inits = [];
 
     internal int SessionsOpened { get; private set; }
 
     internal IReadOnlyList<(string SourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins, IReadOnlyList<Asset> Assets)> InitCalls => _inits;
+
+    internal FakeSourceAdapter Building(string sourceFolder, SourceToBuild source)
+    {
+        _builds[sourceFolder] = source;
+        return this;
+    }
 
     internal FakeSourceAdapter HoldingAnotherRepository(string modFolder)
     {
@@ -38,12 +45,12 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         return this;
     }
 
-    public bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.SourceFolder);
+    public bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && IsTracked(sourceFolder);
 
     public bool IsTracked(string modFolder) => _mods.ContainsKey(modFolder);
 
     public bool SourceReads(RegisteredPlugin plugin) =>
-        plugin.Provider is PluginProvider.FromMod mod && _mods.TryGetValue(mod.SourceFolder, out var tracked) && tracked.SourceReads;
+        plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && _mods.TryGetValue(sourceFolder, out var tracked) && tracked.SourceReads;
 
     public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => throw Unreached();
 
@@ -52,7 +59,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     public IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held)
     {
         SessionsOpened++;
-        return new FakeWriteSession(new FakeRepository(_mods[provider.SourceFolder]));
+        return new FakeWriteSession(new FakeRepository(_mods[provider.SourceFolder ?? throw Unreached()]));
     }
 
     public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) => throw Unreached();
@@ -80,6 +87,10 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         _inits.Add((sourceFolder, plugins, assets));
         return null;
     }
+
+    public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) => _builds[sourceFolder];
+
+    public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) => throw Unreached();
 
     public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
         TestAdapters.Source().ReadBackOf(pluginFileName, tree, gameRelease);
@@ -208,7 +219,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         public Answer<IReadOnlyList<string>, SourceFailure> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys) =>
             throw Unreached();
 
-        public Answer<IReadOnlyList<RecordFile>, SourceFailure> RecordFilesOf(PluginAddress plugin) =>
+        public Answer<IReadOnlyList<RefusedFile>, SourceFailure> RefusedFilesOf(PluginAddress plugin) =>
             throw Unreached();
 
         public Answer<SourceComparison, SourceFailure> Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>

@@ -71,6 +71,41 @@ public sealed class LoadOrderLocalizedTests
     }
 
     [Fact]
+    public void ALocalizedPluginWhoseStringsFilesAreHandedInALaterSnapshot_IsReadAgainWithThem()
+    {
+        var holder = new LoadOrderHolder();
+        FormKey doorFormKey = default;
+        var data = new PluginFixtureBuilder("load-order-localized-handed-later")
+            .WithPlugin("Fixture.esp", mod =>
+            {
+                var door = mod.Doors.AddNew("MainDoor");
+                door.Name = new TranslatedString(Language.English, "The Big Door");
+                mod.UsingLocalization = true;
+                doorFormKey = door.FormKey;
+            })
+            .Build();
+        using (data)
+        {
+            var strings = Path.Combine(data.DataFolder, "Strings");
+            var aside = Path.Combine(data.DataFolder, "Strings aside");
+            Directory.Move(strings, aside);
+            using var index = Indexes.Open(holder);
+            index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
+            var key = new PluginAddress("Fixture.esp", PluginOrigin.DataDirectory);
+            var before = Assert.Single(index.CopyIn(doorFormKey.ToString(), key).Require().Fields, f => f.Metadata.Name == "Name");
+
+            Directory.Move(aside, strings);
+            index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
+
+            var after = Assert.Single(index.CopyIn(doorFormKey.ToString(), key).Require().Fields, f => f.Metadata.Name == "Name");
+            Assert.Equal(
+                [("Fixture_en.STRINGS, Fixture_en.ILSTRINGS, Fixture_en.DLSTRINGS", false), (null, true)],
+                [(before.CheckError, before.Value?.ToString()?.Contains("The Big Door") == true),
+                    (after.CheckError, after.Value?.ToString()?.Contains("The Big Door") == true)]);
+        }
+    }
+
+    [Fact]
     public void ALocalizedPluginMissingOneStringsFile_NamesThatFileOnItsName() =>
         Assert.Equal("Fixture_en.STRINGS", NameCheckErrorLeaving(["Fixture_en.ILSTRINGS", "Fixture_en.DLSTRINGS"]));
 

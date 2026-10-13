@@ -34,7 +34,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
             new LoadOrderEntry("Other.esp", Path.Combine(_untrackedMod, "Other.esp"), UntrackedModName, 2, Enabled: true, Winning: true),
         ]));
         var tracked = TestEditService.InitHandler(_holder)
-            .InitAsync(ToInit.Named(TrackedModName))
+            .InitAsync(ToInit.In(_holder.Held?.Snapshot, TrackedModName))
             .GetAwaiter().GetResult();
         Assert.Equal([Tracked("First.esp")], Assert.Single(tracked.Landed).Outcome.Plugins);
         WritePlugin(_trackedMod, "Second.esp", "SecondNpc");
@@ -111,7 +111,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.NotInTrackedMod, refused.Refusal);
         Assert.Contains("Other.esp", refused.Message, StringComparison.Ordinal);
-        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("Other.esp", UntrackedModName, "", new PluginProvider.FromMod(UntrackedModName, _untrackedMod, _untrackedMod), Line: null)));
+        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("Other.esp", UntrackedModName, "", new PluginProvider.FromMod(UntrackedModName, _untrackedMod, _untrackedMod), Line: null, PluginStrings.None)));
     }
 
     [PosixFact]

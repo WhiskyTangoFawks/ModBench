@@ -137,6 +137,17 @@ internal static class EndpointMapping
             _ => 422,
         });
 
+    /// <summary>A build configuration change's refusal, leaving the configuration as it was (ADR-0019).</summary>
+    internal static IResult Refusal(BuildConfigurationRefusal refusal, string? message) => Results.Problem(
+        detail: message,
+        statusCode: refusal switch
+        {
+            // The request is sound; the disk refused the write.
+            BuildConfigurationRefusal.WriteFailed => 500,
+            _ => 422,
+        },
+        extensions: new Dictionary<string, object?> { ["refusal"] = refusal.ToString() });
+
     /// <summary>Put load order's own refusal: a bad request, since none of them is found by touching the Index.</summary>
     internal static IResult Refusal(PutLoadOrderResult result) => Results.Problem(
         detail: result.Message,
@@ -165,7 +176,7 @@ internal static class EndpointMapping
             statusCode: refused.Refusal switch
             {
                 IndexRefusal.NoLoadOrder or IndexRefusal.IndexNotReady => StatusCodes.Status503ServiceUnavailable,
-                IndexRefusal.FilterRejected or IndexRefusal.SelectRejected => StatusCodes.Status400BadRequest,
+                IndexRefusal.FilterRejected or IndexRefusal.SelectRejected or IndexRefusal.NameRefused => StatusCodes.Status400BadRequest,
                 IndexRefusal.SourceStopped => StatusCodes.Status422UnprocessableEntity,
                 _ => throw new InvalidEnumArgumentException(nameof(refused), (int)refused.Refusal, typeof(IndexRefusal)),
             }));

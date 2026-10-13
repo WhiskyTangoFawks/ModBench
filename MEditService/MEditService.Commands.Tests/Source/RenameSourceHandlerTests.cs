@@ -43,7 +43,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         WritePlugin(_untrackedMod, "Other.esp");
 
         Apply(Old.Name);
-        TestEditService.InitHandler(_holder).InitAsync(ToInit.Named(TrackedModName)).GetAwaiter().GetResult();
+        TestEditService.InitHandler(_holder).InitAsync(ToInit.In(_holder.Held?.Snapshot, TrackedModName)).GetAwaiter().GetResult();
         WritePlugin(_trackedMod, "Loose.esp");
         Apply(Old.Name);
     }
@@ -60,7 +60,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         var result = RenameSource(Old, newName);
 
         Assert.Null(result.Refusal);
-        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null)));
+        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null, PluginStrings.None)));
         TheInstanceAdapterRenamesTheFile(newName);
         Assert.Equal(compiledBefore, await CompiledBytes(Old with { Name = newName }));
     }
@@ -145,8 +145,8 @@ public sealed class RenameSourceHandlerTests : IDisposable
 
         Assert.Equal(RenameSourceRefusal.UnreadableSource, result.Refusal);
         Assert.Contains("SelfNpc", result.Message, StringComparison.Ordinal);
-        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null)));
-        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("New.esp", TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null)));
+        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null, PluginStrings.None)));
+        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("New.esp", TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null, PluginStrings.None)));
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         Assert.Null(result.Refusal);
         Assert.Contains(result.Changes.Require().Documents, document => document.Text.Contains("Unsaved", StringComparison.Ordinal));
         Assert.Equal(before, TrackedTree.Records(_trackedMod, Old));
-        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null)));
+        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null, PluginStrings.None)));
     }
 
     [Fact]

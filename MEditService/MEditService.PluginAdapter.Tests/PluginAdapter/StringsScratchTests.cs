@@ -20,8 +20,8 @@ public sealed class StringsScratchTests : IDisposable
     private readonly string _temp;
     private readonly string _modFolder;
     private readonly string _pluginPath;
+    private readonly RegisteredPlugin _plugin;
     private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginStrings _strings;
 
     public StringsScratchTests()
     {
@@ -33,8 +33,10 @@ public sealed class StringsScratchTests : IDisposable
         _pluginPath = Path.Combine(_modFolder, PluginName);
         LocalizedDoorPlugin.Write(_pluginPath, "The Big Door");
         LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(dataFolder, "Skyrim - Interface.bsa"));
-        _loadOrder = new LoadOrderSnapshot(dataFolder, null, GameRelease.SkyrimSE, [], [], [], [Path.Combine(dataFolder, "Skyrim - Interface.bsa")], []);
-        _strings = new PluginStrings(_modFolder);
+        _plugin = new RegisteredPlugin(
+            PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder, _modFolder), new PluginLine(0, NamesIt: true),
+            HandedStrings.Of(_pluginPath));
+        _loadOrder = new LoadOrderSnapshot(dataFolder, null, GameRelease.SkyrimSE, [_plugin], [_plugin.Key], [], [Path.Combine(dataFolder, "Skyrim - Interface.bsa")], []);
     }
 
     public void Dispose()
@@ -46,15 +48,13 @@ public sealed class StringsScratchTests : IDisposable
 
     private IPluginDocuments OpenDocuments() =>
         Adapter.OpenDocuments(new ModPath(ModKey.FromFileName(PluginName), _pluginPath), _loadOrder,
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE), _strings).Answered();
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE), _plugin.Strings).Answered();
 
     [Fact]
     public async Task ReadsOfStringsCopiedFromAnArchiveTheGameLoads_LeaveNothingInTemp()
     {
         OpenDocuments().Dispose();
-        (await Adapter.ReadSourceOfAsync(
-            new RegisteredPlugin(PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder, _modFolder), Line: null),
-            _loadOrder, _strings)).Answered();
+        (await Adapter.ReadSourceOfAsync(_plugin, _loadOrder)).Answered();
 
         Assert.Empty(Directory.EnumerateFileSystemEntries(_temp));
     }

@@ -191,7 +191,7 @@ function registerPluginGestures(
       modDirs: () => instance.value.paths.modDirs, modsView,
     }, sourceGestureRows),
     registerBuildCommand({
-      commands: sourceCommands, instance, reporter: reporterFor('mod.build'), problems: buildProblems,
+      commands: sourceCommands, instance, gameRelease: () => instance.value.gameRelease, reporter: reporterFor('mod.build'), problems: buildProblems,
       sourceFiles: (origin) => sourceFiles(instance.value, origin), saveUnsaved: saveUnsavedPluginSource,
       modDirs: () => instance.value.paths.modDirs, sourceMods: () => instance.value.sourceMods, modsView,
     }, sourceGestureRows),

@@ -43,6 +43,11 @@ function countingSettings(adapter: InstanceAdapter, reads: { count: number }): I
   return { ...adapter, settings: () => { reads.count++; return adapter.settings(); } };
 }
 
+async function repository(root: string, folder: string, output: string): Promise<void> {
+  await mkdir(join(root, 'source', folder, '.git'), { recursive: true });
+  await writeFile(join(root, 'source', folder, 'build.json'), JSON.stringify({ output }));
+}
+
 function realInstance(hooks: Hooks = {}): {
   root: string;
   instance: Instance;
@@ -250,24 +255,31 @@ describe('Instance — the value', () => {
       .toEqual({ kind: 'separator', name: 'Unassigned (Modlist Development)', enabled: false });
   });
 
-  it('carries each mod whose source folder holds a repository as tracked, and no other, the source folder alone saying whether init is offered', async () => {
-    const { root, instance } = realInstance();
-    await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
+  it('carries each mod a repository builds, its name matched without case, as tracked, with that repository as its source folder, wherever the repository is, and says which repositories build no mod', async () => {
+    const { root, instance, logs } = realInstance();
+    await repository(root, 'Harder VATS', 'Harder VATS');
+    await repository(root, 'Renamed From', '[nodelete] radfall');
+    await repository(root, 'Cloned And Unlisted', 'Cloned And Unlisted');
+    await mkdir(join(root, 'source', 'No Configuration', '.git'), { recursive: true });
 
     await instance.refresh();
 
-    expect([...instance.value.trackedMods]).toEqual(['Harder VATS']);
+    expect([...instance.value.trackedMods].sort()).toEqual(['Harder VATS', '[NODELETE] Radfall']);
+    expect([...instance.value.sourceMods].sort()).toEqual(['Cloned And Unlisted', 'Harder VATS', '[NODELETE] Radfall']);
+    expect(instance.value.paths.sourceDirs.get('[NODELETE] Radfall')).toBe(join(root, 'source', 'Renamed From'));
+    expect(instance.value.paths.sourceDirs.get('Cloned And Unlisted')).toBe(join(root, 'source', 'Cloned And Unlisted'));
+    expect(logs).toContainEqual(expect.stringContaining(join(root, 'source', 'No Configuration')));
   });
 
-  it('carries every repository under the source folder as a source mod, listed in the mod order or not, with its source folder', async () => {
+  it('carries no source folder for a mod named as a renamed repository\'s folder still is, that repository being the source of the mod its build configuration names', async () => {
     const { root, instance } = realInstance();
-    await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
-    await mkdir(join(root, 'source', 'Cloned And Unlisted', '.git'), { recursive: true });
+    await repository(root, 'Harder VATS', 'Harder VATS Renamed');
 
     await instance.refresh();
 
-    expect([...instance.value.sourceMods].sort()).toEqual(['Cloned And Unlisted', 'Harder VATS']);
-    expect(instance.value.paths.sourceDirs.get('Cloned And Unlisted')).toBe(join(root, 'source', 'Cloned And Unlisted'));
+    expect(instance.value.trackedMods.has('Harder VATS')).toBe(false);
+    expect(instance.value.paths.sourceDirs.has('Harder VATS')).toBe(false);
+    expect(instance.value.paths.sourceDirs.get('Harder VATS Renamed')).toBe(join(root, 'source', 'Harder VATS'));
   });
 
   it('carries a folder under mods with no line for the active profile as a mod folder, never as a mod, so mod sync hears of it though the Mods tree renders `mods` alone', async () => {
@@ -854,6 +866,21 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(logs).toContainEqual(expect.stringMatching(/^\[instance\] The profile Default keeps no game INIs of its own/));
   });
 
+  it('hands a mod\u2019s plugin a strings file added beside it, at the next read', async () => {
+    const { gameFolder } = await gameListing('');
+    const { root, instance } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
+    await instance.refresh();
+    const stringsFile = join(root, 'mods', 'Tracked Patch Mod', 'Strings', 'Tracked Patch Mod_en.STRINGS');
+    await mkdir(dirname(stringsFile));
+    await writeFile(stringsFile, '');
+
+    await instance.refresh();
+
+    expect(instance.value.loadOrderSnapshot).toMatchObject({
+      plugins: expect.arrayContaining([expect.objectContaining({ origin: 'Tracked Patch Mod', stringsFiles: [stringsFile] })]) as unknown,
+    });
+  });
+
   it('tells once, until it changes, each archive the INIs list that nothing holds', async () => {
     const { gameFolder } = await gameListing('Fallout4 - Interface.ba2, Gone.ba2');
     const { instance, logs } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
@@ -1050,15 +1077,15 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.gameName).toBe('Rewritten Mid Recompute');
   });
 
-  it('carries the source folder the adapter answers for each listed mod, one with no mod folder too, and hands it to the facts', async () => {
+  it('carries a source folder for each source mod alone, one with no mod folder too, and hands it to the facts', async () => {
     const { root, instance } = realInstance();
+    await repository(root, 'Radfall', '[NODELETE] Radfall');
 
     await instance.refresh();
 
-    const { paths, mods } = instance.value;
-    const listed = mods.filter((m) => m.kind === 'mod').map((m) => m.name);
-    expect(listed).toContain('[NODELETE] Radfall');
-    expect(paths.sourceDirs).toEqual(new Map(listed.map((name) => [name, adapterOver(root).sourceFolder(name)])));
+    const { paths } = instance.value;
+    expect(paths.modDirs.has('[NODELETE] Radfall')).toBe(false);
+    expect(paths.sourceDirs).toEqual(new Map([['[NODELETE] Radfall', join(root, 'source', 'Radfall')]]));
     expect(factsOf(instance).sourceDirs()).toBe(paths.sourceDirs);
   });
 
@@ -1271,11 +1298,12 @@ describe('Instance — what a command is handed instead of probing for it', () =
     expect(instance.value.pluginsLoadedWithNoLine).toEqual([{ name: 'DLCCoast.esm', origin: 'Consumer' }]);
   });
 
-  it('carries the load order snapshot put load order sends, keyed on the game folder it was derived from, each mod with its folder and its source folder', async () => {
+  it('carries the load order snapshot put load order sends, keyed on the game folder it was derived from, each mod with its folder and a source mod with its source folder', async () => {
     const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
     const dataFolder = join(root, 'Game', 'Data');
     await mkdir(dataFolder, { recursive: true });
     await writeFile(join(root, 'mods', 'Consumer', 'DLCCoast.esm'), '');
+    await repository(root, 'Consumer Source', 'Consumer');
     setResolver(() => Promise.resolve({ kind: 'found', root: dirname(dataFolder), dataFolder }));
 
     await instance.refresh();
@@ -1284,12 +1312,27 @@ describe('Instance — what a command is handed instead of probing for it', () =
       dataFolder,
       plugins: [{
         name: 'DLCCoast.esm',
-        provider: { kind: 'Mod', mod: 'Consumer', folder: join(root, 'mods', 'Consumer'), sourceFolder: join(root, 'source', 'Consumer') },
+        provider: { kind: 'Mod', mod: 'Consumer', folder: join(root, 'mods', 'Consumer'), sourceFolder: join(root, 'source', 'Consumer Source') },
       }],
       loadedWithNoLine: [{ name: 'DLCCoast.esm', origin: 'Consumer' }],
     });
     const { loadOrderSnapshot } = instance.value;
     expect(loadOrderSnapshot && 'active' in loadOrderSnapshot ? loadOrderSnapshot.active : []).toContainEqual({ name: 'DLCCoast.esm', origin: 'Consumer' });
+  });
+
+  it('sends no source folder for a mod named as a renamed repository\'s folder still is', async () => {
+    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
+    const dataFolder = join(root, 'Game', 'Data');
+    await mkdir(dataFolder, { recursive: true });
+    await writeFile(join(root, 'mods', 'Consumer', 'DLCCoast.esm'), '');
+    await repository(root, 'Consumer', 'Consumer Renamed');
+    setResolver(() => Promise.resolve({ kind: 'found', root: dirname(dataFolder), dataFolder }));
+
+    await instance.refresh();
+
+    const { loadOrderSnapshot } = instance.value;
+    expect(loadOrderSnapshot && 'plugins' in loadOrderSnapshot ? loadOrderSnapshot.plugins.map((p) => p.provider) : [])
+      .toEqual([{ kind: 'Mod', mod: 'Consumer', folder: join(root, 'mods', 'Consumer') }]);
   });
 
   it('carries a game master a mod provides at its file\'s spelling, the one the snapshot sends', async () => {

@@ -103,13 +103,15 @@ import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
+const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
+
 const currentBox = currentBoxOf(h.state);
 
 const shownRows = async () => (await present(h.providers.get('modbench.modList'), 'the Mods tree data provider').getChildren()) ?? [];
 const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row));
 
 const otherDeps = () => ({
-  install: installCommands({ ...accessTo('/instance'), archives: fakeArchiveReader([]) }), commands: modlistCommands(adapterOver('/instance')), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
+  install: installCommands({ ...accessTo('/instance'), archives: fakeArchiveReader([]) }), commands: modlistCommands(adapterOver('/instance'), unscriptedMEdit), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
   extensionUri: Uri.file('/extension'), warnIfFomod: vi.fn(), downloadInstall: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
 });
 

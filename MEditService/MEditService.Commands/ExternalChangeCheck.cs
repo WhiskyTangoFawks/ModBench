@@ -56,7 +56,7 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
     }
 
     // Bytes that cannot be read, or a last write that cannot, match nothing (ADR-0003).
-    private static bool MatchesLastWrite(ISourceRepository repository, PluginAddress plugin, string? observed) =>
+    internal static bool MatchesLastWrite(ISourceRepository repository, PluginAddress plugin, string? observed) =>
         observed is not null
         && repository.LastWrittenBinarySha256s(plugin).Holds(out var written, out _)
         && written.Contains(observed, StringComparer.OrdinalIgnoreCase);

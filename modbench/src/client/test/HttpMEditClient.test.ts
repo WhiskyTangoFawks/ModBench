@@ -167,7 +167,9 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
   return { result, log, fetch, request };
 }
 
-const modToInit = (name: string) => ({ name, installationFiles: [], modManagerFiles: ['meta.ini'] });
+const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, installationFiles: [], modManagerFiles: ['meta.ini'] });
+const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, installationFiles: [] });
+const buildFacts = { excludedSuffix: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } } };
 
 describe('HttpMEditClient — what each verb sends and reads', () => {
   const myPatch = { name: 'MyPatch.esp', origin: 'ModA' };
@@ -238,16 +240,24 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: { applied: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', refusal: 'ModProvidesNoPlugin', message: 'ModC provides no plugin.' }] },
       reads: { landed: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }] },
       path: '/init', body: { mods: [modToInit('ModA'), modToInit('ModC')] } },
-    { name: 'build', verb: (c) => c.build(['ModA', 'ModC']),
+    { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModC')], buildFacts),
       answer: {
-        applied: [{ mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginSourceUnreadable', message: 'Second.esp has no readable source.' }] }],
+        applied: [{
+          mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginSourceUnreadable', message: 'Second.esp has no readable source.' }],
+          archivesRefused: [{ item: 'ModA.ba2', refusal: 'VariantNotWritten', message: 'Modbench packs no archive for this game.' }], overwritten: ['a.nif'],
+          failure: 'The build stopped before compiling.',
+        }],
         refused: [{ item: 'ModC', refusal: 'GitUnavailable', message: 'git was not found on PATH.' }],
       },
       reads: {
-        landed: [{ mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp has no readable source.' }] }],
+        landed: [{
+          mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp has no readable source.' }],
+          archivesRefused: [{ item: 'ModA.ba2', reason: 'Modbench packs no archive for this game.' }], overwritten: ['a.nif'],
+          failure: 'The build stopped before compiling.',
+        }],
         refused: [{ item: 'ModC', reason: 'git was not found on PATH.' }],
       },
-      path: '/build', body: { mods: ['ModA', 'ModC'] } },
+      path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
     { name: 'decompile', verb: (c) => c.decompile([first, second]),
       answer: { applied: [first], refused: [{ item: second, refusal: 'NotInTrackedMod', message: 'Second.esp is not in a tracked mod.' }] },
       reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a tracked mod.' }] },
@@ -276,6 +286,8 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   it.each([
     { name: 'moveLastWritten', verb: (c: MEditClient) => c.moveLastWritten({ name: 'Old.esp', origin: 'ModA' }, 'OLD.esp', 'New.esp'),
       reads: { moved: true }, path: '/plugins/move-last-written', body: { origin: 'ModA', name: 'Old.esp', treeName: 'OLD.esp', newName: 'New.esp' } },
+    { name: 'changeBuildConfiguration', verb: (c: MEditClient) => c.changeBuildConfiguration('/instance/source/Old', { output: 'New', exclude: ['a.dds'] }),
+      reads: { changed: true }, path: '/build-configuration', body: { sourceFolder: '/instance/source/Old', output: 'New', exclude: ['a.dds'] } },
     { name: 'rebuildIndex', verb: (c: MEditClient) => c.rebuildIndex('/instance', 'Fallout4'),
       reads: { rebuilt: true }, path: '/index/rebuild', body: { instanceRoot: '/instance', gameRelease: 'Fallout4' } },
   ])('$name posts $path and reads a 204 as done', async ({ verb, reads, path, body }) => {
@@ -370,8 +382,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'), status: 409,
         body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename the source of "Old.esp"' },
       { name: 'init', verb: (c) => c.init([modToInit('ModA'), modToInit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not init 2 mods' },
-      { name: 'build', verb: (c) => c.build(['ModA', 'ModB']), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
+      { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModB')], buildFacts), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
       { name: 'decompile', verb: (c) => c.decompile([first, second]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
+      { name: 'changeBuildConfiguration', verb: (c) => c.changeBuildConfiguration('/instance/source/ModA', { exclude: ['a.dds'] }), status: 422,
+        body: { detail: 'It holds no build configuration.' }, text: 'It holds no build configuration.', refusal: 'Could not change the build configuration in "/instance/source/ModA"' },
     ];
 
     it.each(writes)('$name resolves a WriteRefused with the server text, asking once', async ({ verb, status, body, text, refusal }) => {
@@ -382,10 +396,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       expect(log.lines.error).toEqual([expect.stringContaining(`failed (${status})`)]);
     });
 
-    it.each(writes)('$name resolves a thrown request the same way', async ({ verb, refusal }) => {
+    it.each(writes)('$name resolves a thrown request the same way, as one that never reached mEdit', async ({ verb, refusal }) => {
       const { result, log } = await exchange(verb, rejects('socket hang up'));
 
-      expect(result).toEqual({ refused: true, message: `${refusal} — mEdit could not be reached.` });
+      expect(result).toEqual({ refused: true, message: `${refusal} — mEdit could not be reached.`, unreachable: true });
       expect(log.lines.error).toEqual([expect.stringContaining('socket hang up')]);
     });
 
@@ -543,7 +557,7 @@ describe('HttpMEditClient — searchRecords', () => {
 });
 
 describe('HttpMEditClient — sendLoadOrder', () => {
-  const plugins = [{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', provider: { kind: 'Mod' as const, mod: 'A', folder: '/mods/A' }, line: 3, lineNamesIt: true }];
+  const plugins = [{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', provider: { kind: 'Mod' as const, mod: 'A', folder: '/mods/A' }, line: 3, lineNamesIt: true, archives: [], stringsFiles: [] }];
   const active = [{ name: 'Foo.esp', origin: 'A' }];
   const loadedWithNoLine = [{ name: 'Foo.esp', origin: 'A' }];
   const appliedBody = { applied: true, version: 1 };

@@ -417,6 +417,38 @@ internal sealed class RecordQueries(
         return new IndexRefused(IndexRefusal.SelectRejected, rejection);
     });
 
+    public Answer<IReadOnlyList<NamedObject>, IndexRefused> ResolveNames(IReadOnlyList<NameQuery> names) =>
+        IndexAnswer.Flat<IReadOnlyList<NamedObject>>(() =>
+        {
+            var snapshot = _loadOrder.Require();
+            var reads = _index.RequireWholeSetReads();
+            var matches = names.Select(query => (Query: query, Matches: NamedBy(query, snapshot, reads))).ToList();
+            var unresolved = matches.Where(m => m.Matches.Count != 1).ToList();
+            if (unresolved.Count > 0)
+                return new IndexRefused(IndexRefusal.NameRefused, string.Join(" ", unresolved.Select(m => Unresolved(m.Query, m.Matches))));
+            return matches.Select(m => m.Matches[0]).ToList();
+        });
+
+    private static List<NamedObject> NamedBy(NameQuery query, LoadOrderSnapshot snapshot, RelationReads reads)
+    {
+        var plugins = snapshot.Plugins
+            .Where(p => string.Equals(p.Name, query.Name, StringComparison.OrdinalIgnoreCase)
+                && (query.Origin is null || string.Equals(p.Origin, query.Origin, StringComparison.OrdinalIgnoreCase)))
+            .Select(p => new NamedObject(p.Key, null, null));
+        var records = query.Origin is null
+            ? reads.RecordsNamed(query.Name).Select(r => new NamedObject(null, r.FormKey, r.EditorId))
+            : [];
+        return [.. plugins, .. records];
+    }
+
+    private static string Unresolved(NameQuery query, List<NamedObject> matches)
+    {
+        var given = query.Origin is null ? $"\"{query.Name}\"" : $"\"{query.Name}\" from {query.Origin}";
+        if (matches.Count == 0) return $"Nothing is named {given}.";
+        var listed = matches.Select(m => m.Plugin is { } plugin ? $"plugin {plugin.Name} (origin {plugin.Origin})" : $"record {m.FormKey}");
+        return $"{given} means more than one thing: {string.Join("; ", listed)}.";
+    }
+
     public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
         if (SourceRepository.InstanceRootNotFound(instanceRoot) is { } notFound)
