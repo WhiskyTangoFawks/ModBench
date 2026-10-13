@@ -5,7 +5,6 @@ import type {
 } from '../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
-/** What a reading holds for mods that own no files: an entry for each listed mod. */
 function noFilesFor(mods: readonly ModlistEntry[]): ReadonlyMap<string, OriginFiles> {
   return new Map(mods.flatMap((entry) => (entry.kind === 'mod'
     ? [[entry.name, { origin: entry.name, folder: `/mods/${entry.name}`, files: [], folders: [], notes: [] }] as const]
