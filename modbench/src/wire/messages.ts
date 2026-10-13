@@ -148,8 +148,8 @@ export interface ColumnHeaderContext {
   argument: ArgumentOf<'record'>;
   // commands.md, delete: the column's plugin is tracked and not read-only, and the plugin source reads.
   editable: boolean;
-  // editor.md, Menus and keys: init is offered on a plugin in a mod with no source, decompile and build on one
-  // in a tracked mod. None is a plugin in no mod: the game's and Overwrite's.
+  // editor.md, Menus and keys: which of decompile and commit, or decompile and build, a plugin's mod is offered.
+  // None is a plugin in no mod: the game's and Overwrite's.
   inMod: ModRepository | 'none';
   preventDefaultContextMenuItems: true;
 }

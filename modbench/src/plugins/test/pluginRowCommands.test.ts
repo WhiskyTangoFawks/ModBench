@@ -43,7 +43,7 @@ const instanceThatReads = {
 };
 
 import {
-  registerInitCommand, registerBuildCommand, registerDecompileCommand, BuildProblems,
+  registerDecompileAndCommitCommand, registerBuildCommand, registerDecompileCommand, BuildProblems,
 } from '../pluginRowCommands';
 import { sourceFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -61,7 +61,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('modbench.mod.init', () => {
+describe('modbench.mod.decompileAndCommit', () => {
   const FIRST = { name: 'First.esp', origin: 'ModA' };
   const SECOND = { name: 'Second.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
@@ -79,51 +79,51 @@ describe('modbench.mod.init', () => {
     return new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);
   }
 
-  function initCommands() {
+  function decompileAndCommitCommands() {
     let answer: InitOutcome | WriteRefused = { landed: [], refused: [] };
-    const init = vi.fn((_mods: readonly string[], _options?: { onProgress?: (status: InitStatus) => void }) => Promise.resolve(answer));
+    const decompileAndCommit = vi.fn((_mods: readonly string[], _options?: { onProgress?: (status: InitStatus) => void }) => Promise.resolve(answer));
     return {
-      init,
+      decompileAndCommit,
       answers: (next: InitOutcome | WriteRefused) => { answer = next; },
-      sent: () => init.mock.calls.map(([mods]) => mods),
+      sent: () => decompileAndCommit.mock.calls.map(([mods]) => mods),
     };
   }
 
-  function invokeInit(
-    commands: ReturnType<typeof initCommands>, onInitialized = vi.fn().mockResolvedValue(undefined),
+  function invokeDecompileAndCommit(
+    commands: ReturnType<typeof decompileAndCommitCommands>, onCommitted = vi.fn().mockResolvedValue(undefined),
     paletteSelection: () => readonly unknown[] = () => [],
   ) {
     const said: (string | undefined)[] = [];
     const progress = { say: (message: string | undefined) => said.push(message) };
     const reporter = recordingReporter();
-    registerInitCommand({
-      progress, instance: instanceThatReads, commands, reporter, onInitialized, modsView: 'modbench.modList', modDirs: () => MOD_DIRS,
+    registerDecompileAndCommitCommand({
+      progress, instance: instanceThatReads, commands, reporter, onCommitted, modsView: 'modbench.modList', modDirs: () => MOD_DIRS,
     }, paletteSelection);
     return {
-      handler: present(handlers.get('modbench.mod.init'), 'the init command registerInitCommand registers'),
-      onInitialized, reporter, said,
+      handler: present(handlers.get('modbench.mod.decompileAndCommit'), 'the decompile and commit command registerDecompileAndCommitCommand registers'),
+      onCommitted, reporter, said,
     };
   }
 
-  it('on a plugin row, inits the plugin\'s mod, asking nothing', async () => {
-    const commands = initCommands();
+  it('on a plugin row, decompiles and commits the plugin\'s mod, asking nothing', async () => {
+    const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler, onInitialized, reporter } = invokeInit(commands);
+    const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
 
     await handler(row(FIRST));
 
     expect(commands.sent()).toEqual([['ModA']]);
     expect(createQuickPick).not.toHaveBeenCalled();
     expect(showQuickPick).not.toHaveBeenCalled();
-    expect(reporter.landings).toEqual(['Initialized "ModA".']);
+    expect(reporter.landings).toEqual(['Decompiled and committed "ModA".']);
     expect(reporter.reports).toEqual([]);
-    expect(onInitialized).toHaveBeenCalledOnce();
+    expect(onCommitted).toHaveBeenCalledOnce();
   });
 
-  it('ends the gesture on a read the Instance loader makes after the init, and clears its message line', async () => {
-    const commands = initCommands();
+  it('ends the gesture on a read the Instance loader makes after the decompile and commit, and clears its message line', async () => {
+    const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler, said } = invokeInit(commands);
+    const { handler, said } = invokeDecompileAndCommit(commands);
 
     await handler(row(FIRST));
 
@@ -134,66 +134,66 @@ describe('modbench.mod.init', () => {
   });
 
   it('shows the Mods view\'s bar when a Mods row was clicked', async () => {
-    const commands = initCommands();
+    const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler } = invokeInit(commands);
+    const { handler } = invokeDecompileAndCommit(commands);
 
     await handler(new ModsRowStandIn('ModA'));
 
     expect(progressSteps[0]).toBe('progress opens on modbench.modList');
   });
 
-  it('on selected plugin rows of one mod, inits that mod once', async () => {
-    const commands = initCommands();
+  it('on selected plugin rows of one mod, decompiles and commits that mod once', async () => {
+    const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler } = invokeInit(commands);
+    const { handler } = invokeDecompileAndCommit(commands);
 
     await handler(row(SECOND), [row(FIRST), row(SECOND)]);
 
     expect(commands.sent()).toEqual([['ModA']]);
   });
 
-  it('on selected Mods rows, inits every mod in one call', async () => {
-    const commands = initCommands();
+  it('on selected Mods rows, decompiles and commits every mod in one call', async () => {
+    const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
-    const { handler, reporter } = invokeInit(commands);
+    const { handler, reporter } = invokeDecompileAndCommit(commands);
     const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
 
     await handler(mods[1], mods);
 
     expect(commands.sent()).toEqual([['ModA', 'ModB']]);
-    expect(reporter.landings).toEqual(['Initialized 2 mods.']);
+    expect(reporter.landings).toEqual(['Decompiled and committed 2 mods.']);
   });
 
-  it('names a row that carries neither a mod nor a plugin, and inits the rest', async () => {
-    const commands = initCommands();
+  it('names a row that carries neither a mod nor a plugin, and decompiles and commits the rest', async () => {
+    const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler, reporter } = invokeInit(commands);
+    const { handler, reporter } = invokeDecompileAndCommit(commands);
     const withoutArgument = { label: 'Odd', kind: 'plugin', plugin: { name: FIRST.name }, origin: FIRST.origin };
 
     await handler(row(FIRST), [row(FIRST), withoutArgument]);
 
     expect(commands.sent()).toEqual([['ModA']]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not init 1 of 3 plugins.', detail: '"Odd" (it carries no mod or plugin)',
+      severity: 'error', message: 'Could not decompile and commit 1 of 3 plugins.', detail: '"Odd" (it carries no mod or plugin)',
     }]);
   });
 
-  it('from the palette, inits the mod of a Plugins selection', async () => {
-    const commands = initCommands();
+  it('from the palette, decompiles and commits the mod of a Plugins selection', async () => {
+    const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modB([OTHER])], refused: [] });
-    const { handler, reporter } = invokeInit(commands, undefined, () => [row(OTHER)]);
+    const { handler, reporter } = invokeDecompileAndCommit(commands, undefined, () => [row(OTHER)]);
 
     await handler();
 
     expect(commands.sent()).toEqual([['ModB']]);
-    expect(reporter.landings).toEqual(['Initialized "ModB".']);
+    expect(reporter.landings).toEqual(['Decompiled and committed "ModB".']);
   });
 
-  it('on an Editor column header, inits the column plugin\'s mod', async () => {
-    const commands = initCommands();
+  it('on an Editor column header, decompiles and commits the column plugin\'s mod', async () => {
+    const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler } = invokeInit(commands);
+    const { handler } = invokeDecompileAndCommit(commands);
     const header = {
       webviewSection: 'recordHeader', argument: { kind: 'record', formKey: '000801:Other.esp', plugin: { name: 'Second.esp', origin: 'ModA' } },
       editable: false, preventDefaultContextMenuItems: true,
@@ -205,56 +205,56 @@ describe('modbench.mod.init', () => {
   });
 
   it('names a mod mEdit refused while the rest land', async () => {
-    const commands = initCommands();
+    const commands = decompileAndCommitCommands();
     commands.answers({
       landed: [modA([FIRST])],
       refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }],
     });
-    const { handler, onInitialized, reporter } = invokeInit(commands);
+    const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
     const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModC')];
 
     await handler(mods[0], mods);
 
     expect(commands.sent()).toEqual([['ModA', 'ModC']]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not init 1 of 2 mods.', detail: '"ModC" (ModC provides no plugin.)',
+      severity: 'error', message: 'Could not decompile and commit 1 of 2 mods.', detail: '"ModC" (ModC provides no plugin.)',
     }]);
     expect(reporter.landings).toEqual([]);
-    expect(onInitialized).toHaveBeenCalledOnce();
+    expect(onCommitted).toHaveBeenCalledOnce();
   });
 
-  it('never sends an origin that is not a mod as a mod name: refuses that plugin as not in a mod and inits the rest', async () => {
-    const commands = initCommands();
+  it('never sends an origin that is not a mod as a mod name: refuses that plugin as not in a mod and decompiles and commits the rest', async () => {
+    const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modB([OTHER])], refused: [] });
-    const { handler, onInitialized, reporter } = invokeInit(commands);
+    const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
     const loose = { name: 'Loose.esp', origin: 'Overwrite' };
 
     await handler(row(OTHER), [row(OTHER), row(loose)]);
 
     expect(commands.sent()).toEqual([['ModB']]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not init 1 of 2 plugins.', detail: '"Loose.esp (Overwrite)" (it is not in a mod)',
+      severity: 'error', message: 'Could not decompile and commit 1 of 2 plugins.', detail: '"Loose.esp (Overwrite)" (it is not in a mod)',
     }]);
-    expect(onInitialized).toHaveBeenCalledOnce();
+    expect(onCommitted).toHaveBeenCalledOnce();
   });
 
   it('calls mEdit with nothing when every plugin selected is in no mod, and names each', async () => {
-    const commands = initCommands();
-    const { handler, onInitialized, reporter } = invokeInit(commands);
+    const commands = decompileAndCommitCommands();
+    const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
 
     await handler(row({ name: 'Loose.esp', origin: 'Overwrite' }));
 
     expect(commands.sent()).toEqual([]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not init 1 of 1 plugins.', detail: '"Loose.esp (Overwrite)" (it is not in a mod)',
+      severity: 'error', message: 'Could not decompile and commit 1 of 1 plugins.', detail: '"Loose.esp (Overwrite)" (it is not in a mod)',
     }]);
-    expect(onInitialized).not.toHaveBeenCalled();
+    expect(onCommitted).not.toHaveBeenCalled();
   });
 
   it('sends the mod as the instance spells it when the plugin\'s origin differs in case', async () => {
-    const commands = initCommands();
+    const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST])], refused: [] });
-    const { handler } = invokeInit(commands);
+    const { handler } = invokeDecompileAndCommit(commands);
 
     await handler(row({ name: 'First.esp', origin: 'moda' }));
 
@@ -262,34 +262,34 @@ describe('modbench.mod.init', () => {
   });
 
   it('reports the ready-to-show message at error and lands nothing when the backend refuses the whole selection', async () => {
-    const commands = initCommands();
-    commands.answers({ refused: true, message: 'Could not init 1 mod — git was not found on PATH.' });
-    const { handler, onInitialized, reporter } = invokeInit(commands);
+    const commands = decompileAndCommitCommands();
+    commands.answers({ refused: true, message: 'Could not decompile and commit 1 mod — git was not found on PATH.' });
+    const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
 
     await handler(row(OTHER));
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not init 1 mod — git was not found on PATH.', detail: undefined },
+      { severity: 'error', message: 'Could not decompile and commit 1 mod — git was not found on PATH.', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
-    expect(onInitialized).not.toHaveBeenCalled();
+    expect(onCommitted).not.toHaveBeenCalled();
   });
 
-  it('names the mod it is about to init before mEdit answers, then the mod mEdit reports progress on, phase included', async () => {
-    const commands = initCommands();
+  it('names the mod it is about to decompile and commit before mEdit answers, then the mod mEdit reports progress on, phase included', async () => {
+    const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
-    const { handler, said } = invokeInit(commands);
+    const { handler, said } = invokeDecompileAndCommit(commands);
     const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
 
     await handler(mods[0], mods);
 
-    expect(said).toContain('Initializing "ModA"…');
+    expect(said).toContain('Decompiling and committing "ModA"…');
 
-    const [, options] = present(commands.init.mock.calls[0], 'the init call');
+    const [, options] = present(commands.decompileAndCommit.mock.calls[0], 'the decompile and commit call');
     said.length = 0;
-    present(options, 'the init options').onProgress?.({ mod: 'ModB', phase: 'Committing', pluginsDone: 2, pluginsTotal: 2 });
+    present(options, 'the decompile and commit options').onProgress?.({ mod: 'ModB', phase: 'Committing', pluginsDone: 2, pluginsTotal: 2 });
 
-    expect(said).toEqual(['Initializing "ModB" — committing to git…']);
+    expect(said).toEqual(['Decompiling and committing "ModB" — committing to git…']);
   });
 });
 

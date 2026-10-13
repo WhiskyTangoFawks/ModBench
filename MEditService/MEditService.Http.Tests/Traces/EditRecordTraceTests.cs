@@ -137,7 +137,7 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await Body(response);
         Assert.Equal("PluginNotTracked", problem.GetProperty("refusal").GetString());
-        Assert.Contains("Init", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
+        Assert.Contains("Decompile and commit", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
     }
 
     [Fact]

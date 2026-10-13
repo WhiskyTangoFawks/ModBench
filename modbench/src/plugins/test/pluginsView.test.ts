@@ -214,7 +214,7 @@ beforeEach(() => {
 
 describe('the Plugins view registers its own gestures', () => {
   it.each([
-    'modbench.plugin.move', 'modbench.mod.init', 'modbench.plugin.decompile', 'modbench.mod.build', 'modbench.record.create',
+    'modbench.plugin.move', 'modbench.mod.decompileAndCommit', 'modbench.plugin.decompile', 'modbench.mod.build', 'modbench.record.create',
     'modbench.plugin.rename', 'modbench.plugin.create', 'modbench.plugin.sync',
   ])('registers %s with the view', (command) => {
     pluginsView();

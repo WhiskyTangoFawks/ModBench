@@ -126,7 +126,7 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · rename… (source) · create record… · init (a mod with no source) · decompile (in a source mod) · build (in a source mod) · copy value |
+| Plugin menu | reveal · enable or disable · rename… (source) · create record… · decompile and commit (a mod with no source) · decompile (in a source mod) · build (in a source mod) · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open · referenced by · create record… (on a container record) · copy… · copy value · delete |
@@ -138,7 +138,7 @@ As a user, I want:
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's Argument in the catalog says. Source: catalog Argument
 2. A click on a record to open it in the record panel, and a click on an enabled plugin row to open its header, which is a record. A click on a disabled plugin row only selects it. Source: catalog `open`
 3. Enable or disable over a mixed selection to behave as in Mods (Menus and keys, story 2). Source: mods.md
-4. The gestures that edit a plugin's records absent on a plugin with no source and on a plugin whose plugin source is unreadable: create record and delete, and the plugin as a copy destination. Init or decompile is on its row. Source: No dead entries
+4. The gestures that edit a plugin's records absent on a plugin with no source and on a plugin whose plugin source is unreadable: create record and delete, and the plugin as a copy destination. Decompile and commit, or decompile, is on its row. Source: No dead entries
 5. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its file name. Source: catalog `copy value`; [editor-fields.md](editor-fields.md)
 
 ## Drag and drop
@@ -165,11 +165,11 @@ As a user, I want:
 6. The new plugin empty: a header with no records and no masters, flagged by its extension: `.esm` a master, `.esl` a light plugin.
 7. A plugin created in a source mod to land with its plugin source, as working-tree changes I can review. Source: CONTEXT.md, Source mod
 
-### Init
+### Decompile and commit
 
 As a user, I want:
 
-1. No prompt. While it runs, the view's message line names the mod and the phase. Source: catalog `init`
+1. No prompt. While it runs, the view's message line names the mod and the phase. Source: catalog `decompile and commit`
 2. The repository to track `plugin-source/`, the mod's assets, the build configuration and `.gitignore`, and nothing else. The assets are the files no installation file yields. Source: ADR-0007
 3. One commit, `Init <mod>`, holding the source of every plugin the mod provides, the assets and the build configuration.
 4. Each file's line endings kept as written.

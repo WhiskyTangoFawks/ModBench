@@ -9,7 +9,7 @@ import { modArgumentOf, pluginArgumentOf, rowNameOf } from '../drivingLib/argume
 import { recordArgumentOf } from '../drivingLib/recordArgument';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { initProgressMessage } from './initProgress';
+import { decompileAndCommitProgressMessage } from './decompileAndCommitProgress';
 import type { PluginsTreeNode } from './pluginRows';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
 import { gestureEntry, isClickedRow, selectionArgument } from '../drivingLib/gestureEntry';
@@ -32,12 +32,12 @@ function rowName(row: PluginAddress): string {
   return `${row.name} (${row.origin})`;
 }
 
-export interface InitDeps {
+export interface DecompileAndCommitDeps {
   progress: Pick<PluginsViewProgress, 'say'>;
   instance: Pick<Instance, 'refresh'>;
-  commands: Pick<SourceCommands, 'init'>;
+  commands: Pick<SourceCommands, 'decompileAndCommit'>;
   reporter: Reporter;
-  onInitialized: () => Promise<void>;
+  onCommitted: () => Promise<void>;
   /** The instance's mod folders by mod name, which say whether an origin is a mod. */
   modDirs: () => ReadonlyMap<string, string>;
   /** The Mods view's id, whose bar a gesture from a Mods row runs under. */
@@ -53,15 +53,15 @@ interface ModTargets {
 const NOT_IN_A_MOD = 'it is not in a mod';
 const NO_MOD_OR_PLUGIN = 'it carries no mod or plugin';
 
-/** commands.md, `init`: the mods of Mods rows, plugin rows, a column header, or the palette's
+/** commands.md, `decompile and commit`: the mods of Mods rows, plugin rows, a column header, or the palette's
  *  selection, in one call. A plugin no mod provides is refused here, since mEdit is sent mods. */
-export function registerInitCommand(deps: InitDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
+export function registerDecompileAndCommitCommand(deps: DecompileAndCommitDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
   return vscode.commands.registerCommand(
-    'modbench.mod.init',
+    'modbench.mod.decompileAndCommit',
     async (clicked?: unknown, selected?: readonly unknown[]) => {
       const rows = gestureEntry(clicked, selected, paletteSelection, isClickedRow).selection;
       const invokedFrom = rows.some((row) => modArgumentOf(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
-      await initMods(deps, targetsOf(rows, deps.modDirs()), invokedFrom);
+      await decompileAndCommitMods(deps, targetsOf(rows, deps.modDirs()), invokedFrom);
     },
   );
 }
@@ -87,8 +87,8 @@ function pluginAddressOf(row: unknown): PluginAddress | undefined {
 
 // A mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost, so this runs
 // under the Plugins-view progress indicator.
-async function initMods(deps: InitDeps, { mods, refusedRows }: ModTargets, invokedFrom: string): Promise<void> {
-  const { progress, instance, commands, reporter, onInitialized } = deps;
+async function decompileAndCommitMods(deps: DecompileAndCommitDeps, { mods, refusedRows }: ModTargets, invokedFrom: string): Promise<void> {
+  const { progress, instance, commands, reporter, onCommitted } = deps;
   const [firstMod] = mods;
   if (firstMod === undefined) {
     if (refusedRows.length > 0) reportRefused(reporter, 0, { refused: [], plugins: [], refusedPlugins: refusedRows });
@@ -98,26 +98,26 @@ async function initMods(deps: InitDeps, { mods, refusedRows }: ModTargets, invok
 
   await runWritingGesture(invokedFrom, instance, async () => {
     try {
-      progress.say(initProgressMessage(firstMod, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
-      const result = await commands.init(mods, {
-        onProgress: (status) => { progress.say(initProgressMessage(status.mod ?? firstMod, status)); },
+      progress.say(decompileAndCommitProgressMessage(firstMod, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
+      const result = await commands.decompileAndCommit(mods, {
+        onProgress: (status) => { progress.say(decompileAndCommitProgressMessage(status.mod ?? firstMod, status)); },
       });
       if (isRefused(result)) { reporter.report('error', result.message); return; }
-      if (result.landed.length > 0) await onInitialized();
+      if (result.landed.length > 0) await onCommitted();
       const outcome = {
         refused: result.refused,
         plugins: result.landed.flatMap((landed) => landed.plugins),
         refusedPlugins: refusedRows,
       };
       if (outcome.refused.length + outcome.refusedPlugins.length > 0) reportRefused(reporter, mods.length, outcome);
-      else if (result.landed.length > 0) reporter.landed(`Initialized ${what}.`);
+      else if (result.landed.length > 0) reporter.landed(`Decompiled and committed ${what}.`);
     } finally {
       progress.say(undefined);
     }
   });
 }
 
-interface InitReport {
+interface DecompileAndCommitReport {
   refused: InitOutcome['refused'];
   plugins: readonly PluginAddress[];
   refusedPlugins: readonly ItemRefusal<string>[];
@@ -125,14 +125,14 @@ interface InitReport {
 
 // commands.md, "each item lands on its own": one notification naming each refused mod and each
 // refused plugin.
-function reportRefused(reporter: Reporter, modCount: number, report: InitReport): void {
+function reportRefused(reporter: Reporter, modCount: number, report: DecompileAndCommitReport): void {
   const counts = [
     ...(report.refused.length > 0 ? [`${report.refused.length} of ${modCount} mods`] : []),
     ...(report.refusedPlugins.length > 0
       ? [`${report.refusedPlugins.length} of ${report.plugins.length + report.refusedPlugins.length} plugins`]
       : []),
   ];
-  reporter.selectionOutcome(`Could not init ${counts.join(' and ')}.`, {
+  reporter.selectionOutcome(`Could not decompile and commit ${counts.join(' and ')}.`, {
     landed: report.plugins.map(rowName),
     refused: [
       ...report.refusedPlugins,
