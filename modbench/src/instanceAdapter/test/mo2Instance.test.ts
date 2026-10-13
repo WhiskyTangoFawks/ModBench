@@ -1955,6 +1955,21 @@ describe('the MO2 Instance adapter', () => {
       expect(await metaOf(DOWNLOAD)).toMatch(/removed=false/);
     });
 
+    it('rewrites nothing for a mark already set, whether excluded or included over a removed=false key', async () => {
+      await adapter.markDownloadedFile(DOWNLOAD, 'Excluded');
+      expect(await adapter.markDownloadedFile(DOWNLOAD, 'Excluded')).toEqual({ gone: false, wrote: false });
+
+      await adapter.markDownloadedFile(DOWNLOAD, 'Included');
+      expect(await adapter.markDownloadedFile(DOWNLOAD, 'Included')).toEqual({ gone: false, wrote: false });
+    });
+
+    it('keeps both marks of two writes racing, rather than the second writer dropping the first key', async () => {
+      await Promise.all([adapter.markDownloadedFile('manual.zip', 'Excluded'), adapter.markDownloadedFile('manual.zip', 'Installed')]);
+
+      expect(await metaOf('manual.zip')).toMatch(/removed=true/);
+      expect(await metaOf('manual.zip')).toMatch(/installed=true/);
+    });
+
     it('writes no metadata for a file already included, so a file at rest does not gain metadata', async () => {
       expect(await adapter.markDownloadedFile('manual.zip', 'Included')).toEqual({ gone: false, wrote: false });
 
@@ -1998,6 +2013,19 @@ describe('the MO2 Instance adapter', () => {
 
       assertOnlyChanged(before, await snapshotTree(root), new Set([INI]));
       expect((await source.settings()).profile).toBe('Secondary');
+    });
+
+    it('serializes concurrent selections, so the last one issued is the selected one', async () => {
+      const [first, second] = await Promise.all([adapter.selectProfile('Secondary'), adapter.selectProfile('Default')]);
+
+      expect([first, second]).toEqual([{ wrote: true }, { wrote: true }]);
+      expect((await source.settings()).profile).toBe('Default');
+    });
+
+    it('rejects when the settings cannot be read', async () => {
+      await rm(join(root, INI));
+
+      await expect(adapter.selectProfile('Secondary')).rejects.toThrow(/ENOENT/);
     });
 
     it('writes nothing when the profile is already selected, not rewriting an unwrapped value', async () => {

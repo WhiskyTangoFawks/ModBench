@@ -56,6 +56,10 @@ export interface InstanceAnswers {
   stamps?: ReadonlyMap<string, FileStamp>;
   /** The downloaded files a mod's installation records, by mod name. */
   installationFiles?: ReadonlyMap<string, readonly InstallationFile[]>;
+  /** Mods whose installation files cannot be answered, by mod name, with why. */
+  unreadableInstallations?: ReadonlyMap<string, string>;
+  /** Mods whose name gives them no source folder. */
+  unsourcedMods?: ReadonlySet<string>;
   /** The folder a build of each mod writes, by mod name; a mod not there has `/mods/<name>`. */
   modFolderPaths?: ReadonlyMap<string, string>;
   installed?: InstallOutcome;
@@ -100,8 +104,11 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     reading: () => Promise.resolve(current),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
     modFolderPath: (mod) => Promise.resolve(answers.modFolderPaths?.get(mod) ?? `/mods/${mod}`),
-    sourceFolder: (mod) => `/source/${mod}`,
-    installationFiles: (mod) => Promise.resolve({ kind: 'read', answer: answers.installationFiles?.get(mod) ?? [] }),
+    sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
+    installationFiles: (mod) => {
+      const reason = answers.unreadableInstallations?.get(mod);
+      return Promise.resolve(reason === undefined ? { kind: 'read', answer: answers.installationFiles?.get(mod) ?? [] } : { kind: 'unreadable', reason });
+    },
     managerFilesInModFolder: ['meta.ini'],
     fileStamp: (path) => answer(answers.stamps?.get(path), path),
     originFileHash: (path) => {
