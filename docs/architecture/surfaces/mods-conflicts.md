@@ -10,7 +10,7 @@ Each story cites its source. A story with no source is owned here.
 
 As a user, I want:
 
-1. Open conflicts, on a mod row that has a file order conflict, to open the mod's table as a preview editor, which my next open replaces. Source: catalog `open conflicts`; VS Code's preview editors
+1. Open conflicts, on a mod row, to open the mod's table as a preview editor, which my next open replaces. Source: catalog `open conflicts`; VS Code's preview editors
 2. The tab titled `Conflicts: <mod name>`. Source: MO2
 3. A mod whose table is open in a tab of its own to be shown, not opened twice. Source: VS Code
 
