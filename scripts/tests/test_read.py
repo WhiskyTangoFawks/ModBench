@@ -33,6 +33,17 @@ class ReadAgainstTheFixtureInstance(unittest.TestCase):
             medit.read('MBDevLight.esl', '000801:MBDevLight.esl')
         self.assertIn('no such record', str(raised.exception))
 
+    def test_reads_the_copy_a_row_names(self):
+        with window_of(self.url):
+            [row] = medit.select("SELECT form_key, plugin, origin FROM records WHERE editor_id = '10mmFromB'")
+            recipe = medit.read((row['plugin'], row['origin']), row['form_key'])
+        self.assertEqual(recipe['EditorID'], '10mmFromB')
+
+    def test_raises_naming_a_record_given_as_a_plugin(self):
+        with window_of(self.url), self.assertRaises(medit.MEditError) as raised:
+            medit.read('10mmFromA', '004822:Fallout4.esm')
+        self.assertIn("10mmFromA is not a plugin", str(raised.exception))
+
     def test_raises_for_a_name_that_is_no_plugin(self):
         with window_of(self.url), self.assertRaises(medit.MEditError) as raised:
             medit.read('NoSuchPlugin.esp', '000800:NoSuchPlugin.esp')
@@ -51,7 +62,7 @@ class ReferencesAnswered(unittest.TestCase):
         with medit_answering(200, answer) as url, window_of(url):
             referrers = medit.references('000800:Other.esp')
         self.assertEqual(referrers, [{
-            'form_key': '000800:Mod.esp', 'plugin': {'name': 'Mod.esp', 'origin': 'Some Mod'},
+            'form_key': '000800:Mod.esp', 'plugin': 'Mod.esp', 'origin': 'Some Mod',
             'field_path': 'Conditions[0].Data.ParameterOneRecord', 'record_type': 'cobj', 'editor_id': 'Recipe'}])
 
 

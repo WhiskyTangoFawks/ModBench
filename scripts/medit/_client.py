@@ -17,9 +17,12 @@ def select(sql):
 def resolve(*names):
     """What each name means: a plugin file name, or a record's EditorID or FormKey; (name, origin) picks a plugin."""
     queries = [{'name': name} if isinstance(name, str) else {'name': name[0], 'origin': name[1]} for name in names]
-    return [
-        {'plugin': named['plugin'], 'form_key': named['formKey'], 'editor_id': named['editorId']}
-        for named in _call('POST', '/names/resolve', {'names': queries})['named']]
+    return [_resolved(named) for named in _call('POST', '/names/resolve', {'names': queries})['named']]
+
+
+def _resolved(named):
+    plugin = named['plugin'] or {'name': None, 'origin': None}
+    return {'plugin': plugin['name'], 'origin': plugin['origin'], 'form_key': named['formKey'], 'editor_id': named['editorId']}
 
 
 def read(plugin, form_key):
@@ -27,7 +30,7 @@ def read(plugin, form_key):
     [named] = resolve(plugin)
     if named['plugin'] is None:
         raise MEditError(f'{plugin} is not a plugin.')
-    name, origin = named['plugin']['name'], named['plugin']['origin']
+    name, origin = named['plugin'], named['origin']
     document = _call('GET', f'/plugins/{_quoted(name)}/records/{_quoted(form_key)}/rendered-document?origin={_quoted(origin)}')
     return json.loads(document['text'])
 
@@ -36,7 +39,7 @@ def references(form_key):
     """The records that reference a record, each with its plugin and the field that holds the reference."""
     return [
         {
-            'form_key': referrer['formKey'], 'plugin': {'name': referrer['plugin'], 'origin': referrer['origin']},
+            'form_key': referrer['formKey'], 'plugin': referrer['plugin'], 'origin': referrer['origin'],
             'field_path': referrer['fieldPath'], 'record_type': referrer['recordType'], 'editor_id': referrer['editorId']}
         for referrer in _call('GET', f'/records/{_quoted(form_key)}/references')]
 
