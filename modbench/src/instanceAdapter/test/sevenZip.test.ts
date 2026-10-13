@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { copyFile, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sevenZip } from '../sevenZip';
@@ -13,7 +13,7 @@ describe('sevenZip, spawning the binary itself', () => {
   beforeAll(async () => {
     bin = await mkdtemp(join(tmpdir(), 'fake-7z-'));
     await copyFile(process.execPath, join(bin, FAKE_7Z));
-    await writeFile(join(bin, 'exit-as-asked.cjs'), 'process.stdout.write(process.env.FAKE_7Z_ECHO_ARGS ? "Path = " + process.argv.slice(2).join(" ") : process.env.FAKE_7Z_STDOUT ?? ""); process.exit(Number(process.env.FAKE_7Z_EXIT));');
+    await writeFile(join(bin, 'exit-as-asked.cjs'), 'require("fs").writeFileSync(process.env.FAKE_7Z_ARGV_FILE, JSON.stringify([require("path").basename(process.argv[1]), ...process.argv.slice(2)])); process.stdout.write(process.env.FAKE_7Z_STDOUT ?? ""); process.exit(Number(process.env.FAKE_7Z_EXIT));');
   });
   afterAll(() => rm(bin, { recursive: true, force: true }));
   beforeEach(() => {
@@ -27,18 +27,24 @@ describe('sevenZip, spawning the binary itself', () => {
     else process.env.NODE_OPTIONS = originalNodeOptions;
     delete process.env.FAKE_7Z_EXIT;
     delete process.env.FAKE_7Z_STDOUT;
-    delete process.env.FAKE_7Z_ECHO_ARGS;
+    delete process.env.FAKE_7Z_ARGV_FILE;
   });
 
+  const argvFile = () => join(bin, 'argv.json');
+  const argvAsked = async (): Promise<unknown> => JSON.parse(await readFile(argvFile(), 'utf8'));
+
   const fakeNodeAs7zPreloadedToExit = (code: number) => {
+    process.env.FAKE_7Z_ARGV_FILE = argvFile();
     process.env.FAKE_7Z_EXIT = String(code);
     process.env.NODE_OPTIONS = `--require=${JSON.stringify(join(bin, 'exit-as-asked.cjs'))}`;
   };
 
-  it('resolves when the binary exits 0', async () => {
+  it('extracts into the destination, overwriting, by asking 7z for exactly that', async () => {
     fakeNodeAs7zPreloadedToExit(0);
 
-    await expect(sevenZip.extract('/tmp/mod.7z', '/tmp/stage')).resolves.toBeUndefined();
+    await sevenZip.extract('/tmp/mod.7z', '/tmp/stage');
+
+    expect(await argvAsked()).toEqual(['x', '/tmp/mod.7z', '-o/tmp/stage', '-y']);
   });
 
   it('rejects with the exit code in the message when the binary exits non-zero', async () => {
@@ -68,11 +74,10 @@ describe('sevenZip, spawning the binary itself', () => {
   it('reads non-ASCII entry names as UTF-8 and asks 7z to write them so', async () => {
     fakeNodeAs7zPreloadedToExit(0);
     process.env.FAKE_7Z_STDOUT = 'Path = café/日本.esp\nAttributes = A\n';
+
     await expect(sevenZip.list('/tmp/mod.7z')).resolves.toEqual(['café/日本.esp']);
 
-    process.env.FAKE_7Z_ECHO_ARGS = '1';
-    const [asked] = await sevenZip.list('/tmp/mod.7z');
-    expect(asked?.split(' ')).toContain('-sccUTF-8');
+    expect(await argvAsked()).toEqual(['l', '-slt', '-ba', '-sccUTF-8', '/tmp/mod.7z']);
   });
 
   it('rejects a listing with the exit code in the message when the binary exits non-zero', async () => {
@@ -87,7 +92,9 @@ describe('sevenZip, spawning the binary itself', () => {
     fakeNodeAs7zPreloadedToExit(0);
 
     try {
-      await expect(sevenZip.extract('/tmp/mod.7z', '/tmp/stage')).resolves.toBeUndefined();
+      await sevenZip.extract('/tmp/mod.7z', '/tmp/stage');
+
+      expect(await argvAsked()).toContain('/tmp/mod.7z');
     } finally {
       await rename(only7za, join(bin, FAKE_7Z));
     }

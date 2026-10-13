@@ -23,7 +23,6 @@ import { registerModInstallCommands } from '../mods/installCommands';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { installCommands } from '../install/install';
 import { accessTo } from './mo2/adapterOver';
-import { fakeArchiveReader } from './fakeArchiveReader';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { fakeQuickPick } from '../drivingLib/test/quickPickDouble';
 import { recordingReporter } from './surfacingDoubles';
@@ -36,7 +35,7 @@ describe('the Downloads-Mods seam: modbench.mod.install given a Downloads row', 
     const { qp, escape } = fakeQuickPick<{ label: string }>();
     createQuickPick.mockReturnValue(qp);
     registerModInstallCommands({
-      install: installCommands({ ...accessTo('/instance'), archives: fakeArchiveReader([]) }), instance,
+      install: installCommands(accessTo('/instance')), instance,
       reporterFor: () => recordingReporter(), warnIfFomod: vi.fn(),
       downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     });
