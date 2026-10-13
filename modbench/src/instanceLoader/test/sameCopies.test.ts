@@ -28,7 +28,7 @@ function instanceOver(wrap: (adapter: InstanceAdapter) => InstanceAdapter = (ada
   const root = cloneCorpusFixture();
   roots.push(root);
   const instance = new Instance({
-    adapter: wrap(adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND, downloadedFiles: NO_DOWNLOADS })),
+    adapter: wrap(adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND, downloadsFolder: NO_DOWNLOADS })),
     window: STEADY_WINDOW,
     log: { info: () => {}, warn: () => {}, error: () => {} },
   });

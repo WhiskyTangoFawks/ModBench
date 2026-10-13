@@ -11,7 +11,7 @@ import type { PluginAddress } from '../wire/pluginAddress';
 import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './downloadRows';
 import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
 import {
-  GAME_FOLDER_SETTING, type DownloadedFiles, type FileOrigin, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
+  GAME_FOLDER_SETTING, type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ManagerNames, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { sameCopies, type FileCopies } from './sameCopies';
@@ -163,13 +163,6 @@ function pathsOf(
     sourceDirs: sourceDirsOf(entries, sourceMods),
   };
 }
-
-// A mod's listing is the reading's; a mod it holds none for is not there.
-const modListing = ({ modFiles }: InstanceReading, origin: FileOrigin): OriginFiles => {
-  const listing = origin.kind === 'mod' ? modFiles.get(origin.name) : undefined;
-  if (listing === undefined) throw new Error(`The reading holds no files for ${origin.kind === 'mod' ? origin.name : 'run-time output'}`);
-  return listing;
-};
 
 const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   mods: [],
@@ -392,9 +385,7 @@ export class Instance implements Subscription {
       creationClubList: creationClub, dataFolderArchives, runtimeOutput, modFolders, profiles, sourceMods,
     } = reading;
     this.tellReading(reading);
-    const index = await buildFileConflictIndex(
-      entries, runtimeOutput.files, { originFiles: (origin) => Promise.resolve(modListing(reading, origin)) }, (line) => log.info(line),
-    );
+    const index = buildFileConflictIndex(entries, runtimeOutput.files, reading.modFiles, (line) => log.info(line));
     const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);
     const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins);
     // Installed reads every mod folder, not one profile's mod order: a folder no profile has synced

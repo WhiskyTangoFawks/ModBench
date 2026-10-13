@@ -6,7 +6,7 @@ import {
   entryNotFound, type DecideModOrder, type EntryRef, type FileOrigin, type InstanceAdapter,
   type ModFolder, type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
-import { goneFromDisk, newModNameRefusal } from '../coreLib/commandRefusals';
+import { entryNameRefusal, goneFromDisk, newModNameRefusal, type EntryKey, type TakenNames } from '../coreLib/commandRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { isRefused, type MEditClient } from '../client';
@@ -180,32 +180,15 @@ const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
 const MOD_NAME_CLASH = 'A mod with this name already exists';
 const MOD_NAME_WITH_PATH_SEPARATOR = 'A mod name cannot contain / or \\';
 
-async function entryNameRefusal(
-  adapter: InstanceAdapter, profile: string, kind: EntryKind, requested: string, clash: string, own?: string,
-): Promise<string | undefined> {
-  const listed = await adapter.orderEntry(profile, { kind, name: requested });
-  if (listed !== undefined && listed.name !== own) return clash;
-  const holding = await adapter.entryFolder({ kind, name: requested });
-  if (holding === undefined) return undefined;
-  const ownFolder = own === undefined ? undefined : await adapter.entryFolder({ kind, name: own });
-  return ownFolder?.path === holding.path ? undefined : clash;
-}
-
-// Why `requested` cannot name a separator, or `undefined` when it can: the profile's mod order
-// lists one of that name, or a folder holds one, matched as the instance matches names. `own`, the
-// separator being renamed, is no clash.
-const separatorNameRefusal = (
-  adapter: InstanceAdapter, profile: string, requested: string, own?: string,
-): Promise<string | undefined> => entryNameRefusal(adapter, profile, 'separator', requested, SEPARATOR_NAME_CLASH, own);
+// Why `requested` cannot name a separator, or `undefined` when it can: a separator of that name is
+// listed or has a folder, compared without case. `own`, the separator being renamed, is no clash.
+const separatorNameRefusal = (key: EntryKey, taken: TakenNames, requested: string, own?: string): string | undefined =>
+  entryNameRefusal(key, taken, 'separator', requested, SEPARATOR_NAME_CLASH, own);
 
 // Why `requested` cannot rename mod `own`, or `undefined` when it can: it holds a path separator, or
-// another mod of that name is listed or has a folder, matched as the instance matches names.
-const renameModNameRefusal = (
-  adapter: InstanceAdapter, profile: string, requested: string, own: string,
-): Promise<string | undefined> =>
-  (/[\\/]/.test(requested)
-    ? Promise.resolve(MOD_NAME_WITH_PATH_SEPARATOR)
-    : entryNameRefusal(adapter, profile, 'mod', requested, MOD_NAME_CLASH, own));
+// another mod of that name is listed or has a folder, compared without case.
+const renameModNameRefusal = (key: EntryKey, taken: TakenNames, requested: string, own: string): string | undefined =>
+  (/[\\/]/.test(requested) ? MOD_NAME_WITH_PATH_SEPARATOR : entryNameRefusal(key, taken, 'mod', requested, MOD_NAME_CLASH, own));
 
 // The first index of the run of mods directly on the winning side of the separator at `at`.
 function groupStartOf(order: readonly ModlistEntry[], at: number): number {
@@ -247,14 +230,8 @@ const dropOf = (entry: EntryRef): ModOrderChange =>
 // line. An entry never trashed refuses outright on a line failure; a trashed one still lands,
 // carrying the failure rather than folding it into a refusal.
 async function trashThenUnlist(
-  adapter: InstanceAdapter, profile: string, kind: EntryKind, names: readonly string[], trash: MoveToTrash,
+  adapter: InstanceAdapter, profile: string, order: readonly ModlistEntry[], kind: EntryKind, names: readonly string[], trash: MoveToTrash,
 ): Promise<SelectionResult<TrashedEntry>> {
-  let order: readonly ModlistEntry[];
-  try {
-    order = await adapter.modOrder(profile);
-  } catch (err) {
-    return refuse(err);
-  }
   const refused: ItemRefusal<TrashedEntry>[] = names.filter((name) => !isListed(order, { kind, name }))
     .map((name) => ({ item: { name }, reason: entryNotFound({ kind, name }) }));
   const toUnlist: string[] = [];
@@ -297,9 +274,9 @@ async function trashThenUnlist(
 // before its line: a refused trash writes nothing for that separator (commands.md, *A failed
 // gesture writes nothing*).
 function deleteSeparators(
-  adapter: InstanceAdapter, profile: string, names: readonly string[], trash: MoveToTrash,
+  adapter: InstanceAdapter, profile: string, order: readonly ModlistEntry[], names: readonly string[], trash: MoveToTrash,
 ): Promise<SelectionResult<TrashedEntry>> {
-  return trashThenUnlist(adapter, profile, 'separator', names, trash);
+  return trashThenUnlist(adapter, profile, order, 'separator', names, trash);
 }
 
 // A mod handed to `uninstallMods`: its own name, and the downloaded file it was installed from,
@@ -318,10 +295,10 @@ interface UninstalledMod extends TrashedEntry {
 // `modbench.mod.uninstall` over the selection: each mod's folder to the trash, then its line,
 // then its downloaded file marked unless that file is gone (mods.md, Reporting, story 4).
 async function uninstallMods(
-  adapter: InstanceAdapter, profile: string, mods: readonly ModToUninstall[], trash: MoveToTrash,
+  adapter: InstanceAdapter, profile: string, order: readonly ModlistEntry[], mods: readonly ModToUninstall[], trash: MoveToTrash,
 ): Promise<SelectionResult<UninstalledMod>> {
   const archiveOf = new Map(mods.map((m) => [m.name, m.archiveFilename] as const));
-  const result = await trashThenUnlist(adapter, profile, 'mod', mods.map((m) => m.name), trash);
+  const result = await trashThenUnlist(adapter, profile, order, 'mod', mods.map((m) => m.name), trash);
   if (!result.applied) return result;
   const landed: UninstalledMod[] = [];
   for (const entry of result.outcome.landed) {
@@ -350,8 +327,6 @@ export type CreateEmptyModResult =
 // folder already holds is refused.
 async function createEmptyMod(adapter: InstanceAdapter, profile: string, name: string): Promise<CreateEmptyModResult> {
   try {
-    const refusal = await newModNameRefusal(adapter, name);
-    if (refusal !== undefined) return { applied: false, refusal };
     await adapter.createModFolder(name);
   } catch (err) {
     return refuse(err);
@@ -436,6 +411,7 @@ export function modSyncOver(adapter: InstanceAdapter): ModSyncRun {
 
 /** The modlist's commands, bound to one instance: each takes the gesture's arguments only. */
 export function modlistCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['mEdit']) {
+  const entryKey: EntryKey = (entry) => adapter.entryKey(entry);
   return {
     setModsEnabled: (...args: TailOf<typeof setModsEnabled>) => setModsEnabled(adapter, ...args),
     moveMods: (...args: TailOf<typeof moveMods>) => moveMods(adapter, ...args),
@@ -447,9 +423,9 @@ export function modlistCommands(adapter: InstanceAdapter, mEdit: SourceModWriter
     uninstallMods: (...args: TailOf<typeof uninstallMods>) => uninstallMods(adapter, ...args),
     createEmptyMod: (...args: TailOf<typeof createEmptyMod>) => createEmptyMod(adapter, ...args),
     renameMod: (...args: TailOf<typeof renameMod>) => renameMod({ adapter, mEdit }, ...args),
-    separatorNameRefusal: (...args: TailOf<typeof separatorNameRefusal>) => separatorNameRefusal(adapter, ...args),
-    renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(adapter, ...args),
-    newModNameRefusal: (name: string) => newModNameRefusal(adapter, name),
+    separatorNameRefusal: (...args: TailOf<typeof separatorNameRefusal>) => separatorNameRefusal(entryKey, ...args),
+    renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(entryKey, ...args),
+    newModNameRefusal: (...args: TailOf<typeof newModNameRefusal>) => newModNameRefusal(entryKey, ...args),
     installMod: (...args: TailOf<typeof installMod>) => installMod(adapter, ...args),
   };
 }

@@ -34,7 +34,7 @@ export async function installDownloadedFile(
     const row = downloads.kind === 'listed' ? downloads.rows.find((listed) => listed.name === argument.row.name) : undefined;
     if (!row) throw new Error(`"${argument.row.name}" is gone from Downloads.`);
     const target = await chooseInstallTarget(
-      row, (defaultName) => promptModName(defaultName, (name) => commands.newModNameRefusal(name)));
+      row, (defaultName) => promptModName(defaultName, (name) => commands.newModNameRefusal(instance.value, name)));
     if (!target) return;
     const outcome = await runWritingGesture(deps.progressViewId, instance, () => commands.installMod(
       downloadedFileSource(row), target, instance.value.gameName));
