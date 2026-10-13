@@ -2,14 +2,13 @@ using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod's manifest from the mod as it is: each file is named for the first provider that holds its
-/// bytes, and a file nothing holds has no provider.</summary>
+/// <summary>A mod's manifest from the mod as it is: each file comes from the first provider that holds its bytes,
+/// else from a delta of the first copy at its path, else from nothing.</summary>
 internal sealed class ManifestBuilder
 {
     private readonly List<(string Name, InstallationFileToStage File)> _installationFiles;
     private readonly Dictionary<string, GameFileToStage> _gameFiles = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<(string Name, ILookup<string, HashedEntry> ByHash, Dictionary<string, HashedEntry> ByPath)> _indexes;
-    private readonly Dictionary<string, ManifestSource> _gameFilesUsed = new(StringComparer.Ordinal);
 
     public ManifestBuilder(IEnumerable<(string Name, InstallationFileToStage File)> installationFiles, IEnumerable<GameFileToStage> gameFiles)
     {
@@ -24,23 +23,23 @@ internal sealed class ManifestBuilder
         ];
     }
 
-    public Manifest Build(IReadOnlyList<HashedFile> files)
-    {
-        var manifestFiles = files.Select(file => new ManifestFile(file.Path, file.Hash, file.Stamp, ProviderOf(file))).ToList();
-        return new Manifest(
-            [.. _installationFiles.Select(file => new ManifestSource(file.Name, file.File.Size, file.File.Hash, file.File.Source))],
-            [.. _gameFilesUsed.Values],
-            manifestFiles);
-    }
+    public Manifest Manifest(IReadOnlyList<ManifestFile> files) => new(
+        [.. _installationFiles.Select(file => new ManifestSource(file.Name, file.File.Size, file.File.Hash, file.File.Source))],
+        [
+            .. files.Select(file => file.Provider switch
+                {
+                    FileProvider.GameFile game => game.Path,
+                    FileProvider.GameFileDelta game => game.Path,
+                    _ => null,
+                })
+                .OfType<string>()
+                .Distinct(StringComparer.Ordinal)
+                .Select(path => _gameFiles[path])
+                .Select(game => new ManifestSource(game.Path, game.Size, game.Hash)),
+        ],
+        files);
 
-    private static Dictionary<string, HashedEntry> IndexByPath(IReadOnlyList<HashedEntry> entries)
-    {
-        Dictionary<string, HashedEntry> byPath = new(StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in entries) byPath.TryAdd(entry.Path, entry);
-        return byPath;
-    }
-
-    private FileProvider ProviderOf(HashedFile file)
+    public FileProvider ProviderOf(HashedFile file)
     {
         if (_indexes.Count > 0 && _indexes[0].ByPath.TryGetValue(file.Path, out var sameFirst) && sameFirst.Hash == file.Hash)
             return new FileProvider.FirstInstallationFile();
@@ -53,12 +52,21 @@ internal sealed class ManifestBuilder
             return new FileProvider.InstallationFileEntry(name, entry.Path);
         }
 
-        if (_gameFiles.TryGetValue(file.Path, out var game) && game.Hash == file.Hash)
+        _gameFiles.TryGetValue(file.Path, out var game);
+        if (game?.Hash == file.Hash) return new FileProvider.GameFile(game.Path);
+
+        foreach (var (name, _, byPath) in _indexes)
         {
-            _gameFilesUsed[game.Path] = new ManifestSource(game.Path, game.Size, game.Hash);
-            return new FileProvider.GameFile(game.Path);
+            if (byPath.TryGetValue(file.Path, out var copy)) return new FileProvider.InstallationFileDelta(name, copy.Path, copy.Hash);
         }
 
-        return new FileProvider.NoProvider();
+        return game is null ? new FileProvider.NoProvider() : new FileProvider.GameFileDelta(game.Path, game.Hash);
+    }
+
+    private static Dictionary<string, HashedEntry> IndexByPath(IReadOnlyList<HashedEntry> entries)
+    {
+        Dictionary<string, HashedEntry> byPath = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in entries) byPath.TryAdd(entry.Path, entry);
+        return byPath;
     }
 }

@@ -31,7 +31,7 @@ internal static class ManifestText
                 var root = parsed.RootElement;
                 if (root.ValueKind == JsonValueKind.Object
                     && root.TryGetProperty("path", out var path) && path.GetString() is { } file
-                    && root.TryGetProperty("hash", out var hash) && hash.GetString() is { } hashText
+                    && root.TryGetProperty("hash", out var hash) && hash.GetString() is { } hashText && FileHash.IsHash(hashText)
                     && root.TryGetProperty("size", out var size) && size.TryGetInt64(out var bytes)
                     && root.TryGetProperty("modified", out var modified) && modified.TryGetInt64(out var at))
                 {
@@ -45,6 +45,10 @@ internal static class ManifestText
         }
         return stamps;
     }
+
+    /// <summary>A delta's name: the name of the file it makes, then the hashes of its base and of that file.</summary>
+    public static string DeltaName(string path, string baseHash, string fileHash) =>
+        $"{path[(path.LastIndexOf('/') + 1)..]}.{FileHash.Hex(baseHash)}_{FileHash.Hex(fileHash)}.octodiff";
 
     private static void Line(StringBuilder text, Action<Utf8JsonWriter> write)
     {
@@ -84,6 +88,19 @@ internal static class ManifestText
             case FileProvider.GameFile game:
                 writer.WriteStartObject("from");
                 writer.WriteString("gameFile", game.Path);
+                writer.WriteEndObject();
+                break;
+            case FileProvider.InstallationFileDelta delta:
+                writer.WriteStartObject("from");
+                writer.WriteString("installationFile", delta.InstallationFile);
+                writer.WriteString("path", delta.Path);
+                writer.WriteString("delta", DeltaName(file.Path, delta.BaseHash, file.Hash));
+                writer.WriteEndObject();
+                break;
+            case FileProvider.GameFileDelta delta:
+                writer.WriteStartObject("from");
+                writer.WriteString("gameFile", delta.Path);
+                writer.WriteString("delta", DeltaName(file.Path, delta.BaseHash, file.Hash));
                 writer.WriteEndObject();
                 break;
             case FileProvider.NoProvider:

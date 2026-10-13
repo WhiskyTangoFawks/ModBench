@@ -7,6 +7,8 @@ namespace MEditService.ModFolderAdapter.Tests;
 public sealed class ModFolderRepositoryTests : IDisposable
 {
     private const string HashOfHello = "o22fiH2CxyY=";
+    private const string HashOfHelloWithACapitalO = "0RePZfC1RR4=";
+    private const string DeltaFromHelloToHelloWithACapitalO = "a36d9f887d82c726_d1178f65f0b5451e.octodiff";
 
     private readonly ScratchDirectory _root = new("modfolder-adapter-");
     private readonly ModFolderRepository _repository = new(new FakeTimeProvider(TimeProvider.System.GetUtcNow().AddDays(1)));
@@ -29,9 +31,18 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void AFileWhoseSizeAndTimeMatchItsManifestLine_KeepsTheLinesHash()
     {
         var stamp = Stamped("a.txt", "hello");
+        _repository.WriteManifest(_root, "mod", Manifest(new ManifestFile("a.txt", HashOfHelloWithACapitalO, stamp, new FileProvider.NoProvider())));
+
+        Assert.Equal(HashOfHelloWithACapitalO, OnlyFile().Hash);
+    }
+
+    [Fact]
+    public void AFileWhoseManifestLineHashIsNoHash_IsHashed()
+    {
+        var stamp = Stamped("a.txt", "hello");
         _repository.WriteManifest(_root, "mod", Manifest(new ManifestFile("a.txt", "LINE", stamp, new FileProvider.NoProvider())));
 
-        Assert.Equal("LINE", OnlyFile().Hash);
+        Assert.Equal(HashOfHello, OnlyFile().Hash);
     }
 
     [Theory]
@@ -91,6 +102,16 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void AGameFile_IsOpenedByItsPathUnderTheDataFolder()
+    {
+        Write(Path.Combine("Data", "meshes", "a.nif"), "hello");
+
+        using var reader = new StreamReader(_repository.OpenGameFile(Path.Combine(_root, "Data"), "meshes/a.nif"));
+
+        Assert.Equal("hello", reader.ReadToEnd());
+    }
+
+    [Fact]
     public void Files_LeavesOutTheModsManifest_AndEachFileItIsToldTo()
     {
         Write("a.txt", "abc");
@@ -112,6 +133,8 @@ public sealed class ModFolderRepositoryTests : IDisposable
                 new ManifestFile("b.nif", "H2", stamp, new FileProvider.InstallationFileEntry("Patch.zip", "Data/b.nif")),
                 new ManifestFile("a.nif", "H1", stamp, new FileProvider.FirstInstallationFile()),
                 new ManifestFile("c.esm", "H4", null, new FileProvider.GameFile("Data/Game.esm")),
+                new ManifestFile("d/d.nif", HashOfHelloWithACapitalO, stamp, new FileProvider.InstallationFileDelta("Patch.zip", "Data/d.nif", HashOfHello)),
+                new ManifestFile("e.esm", HashOfHelloWithACapitalO, null, new FileProvider.GameFileDelta("Data/Game.esm", HashOfHello)),
             ]);
 
         Assert.True(_repository.WriteManifest(_root, "mod", manifest));
@@ -123,6 +146,9 @@ public sealed class ModFolderRepositoryTests : IDisposable
             + "{\"path\":\"a.nif\",\"hash\":\"H1\",\"size\":5,\"modified\":1234}\n"
             + "{\"path\":\"b.nif\",\"hash\":\"H2\",\"size\":5,\"modified\":1234,\"from\":{\"installationFile\":\"Patch.zip\",\"path\":\"Data/b.nif\"}}\n"
             + "{\"path\":\"c.esm\",\"hash\":\"H4\",\"from\":{\"gameFile\":\"Data/Game.esm\"}}\n"
+            + $"{{\"path\":\"d/d.nif\",\"hash\":\"{HashOfHelloWithACapitalO}\",\"size\":5,\"modified\":1234,"
+            + $"\"from\":{{\"installationFile\":\"Patch.zip\",\"path\":\"Data/d.nif\",\"delta\":\"d.nif.{DeltaFromHelloToHelloWithACapitalO}\"}}}}\n"
+            + $"{{\"path\":\"e.esm\",\"hash\":\"{HashOfHelloWithACapitalO}\",\"from\":{{\"gameFile\":\"Data/Game.esm\",\"delta\":\"e.esm.{DeltaFromHelloToHelloWithACapitalO}\"}}}}\n"
             + "{\"path\":\"z.txt\",\"hash\":\"H3\",\"size\":5,\"modified\":1234,\"from\":null}\n",
             File.ReadAllText(Path.Combine(_root, "mod.manifest")));
     }
@@ -152,6 +178,72 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal((byte)'{', bytes[0]);
         Assert.Contains("café", System.Text.Encoding.UTF8.GetString(bytes));
     }
+
+    [Fact]
+    public void ADelta_IsWrittenIntoTheBuildFolder_NamedForTheFileItMakesAndTheHashesOfBothEnds()
+    {
+        var build = Path.Combine(_root, "build");
+
+        Assert.True(_repository.WriteDelta(build, "meshes/a.nif", HashOfHello, HashOfHelloWithACapitalO, Writing([1, 2, 3], keep: true)));
+
+        Assert.Equal([$"a.nif.{DeltaFromHelloToHelloWithACapitalO}"], Directory.GetFiles(build).Select(Path.GetFileName));
+        Assert.Equal(3, _repository.DeltaSize(build, "meshes/a.nif", HashOfHello, HashOfHelloWithACapitalO));
+    }
+
+    [Fact]
+    public void ADeltaTheBuildFolderDoesNotHold_HasNoSize()
+    {
+        var build = Path.Combine(_root, "build");
+        _repository.WriteDelta(build, "a.nif", HashOfHello, HashOfHelloWithACapitalO, Writing([1], keep: true));
+
+        Assert.Null(_repository.DeltaSize(build, "a.nif", HashOfHelloWithACapitalO, HashOfHello));
+    }
+
+    [Fact]
+    public void ADeltaNotKept_LeavesNothingInTheBuildFolder()
+    {
+        var build = Path.Combine(_root, "build");
+
+        Assert.False(_repository.WriteDelta(build, "a.nif", HashOfHello, HashOfHelloWithACapitalO, Writing([1], keep: false)));
+
+        Assert.Empty(Directory.GetFiles(build));
+    }
+
+    [Fact]
+    public void ADeltaWhoseWritingFails_LeavesNothingInTheBuildFolder()
+    {
+        var build = Path.Combine(_root, "build");
+
+        Assert.Throws<IOException>(() => _repository.WriteDelta(build, "a.nif", HashOfHello, HashOfHelloWithACapitalO, delta =>
+        {
+            delta.WriteByte(1);
+            throw new IOException("the base went away");
+        }));
+
+        Assert.Empty(Directory.GetFiles(build));
+    }
+
+    [Fact]
+    public void AScratchFile_IsASeekableFileInTheBuildFolder_GoneOnceClosed()
+    {
+        var build = Path.Combine(_root, "build");
+
+        using (var scratch = _repository.CreateScratchFile(build))
+        {
+            scratch.Write([1, 2, 3]);
+            scratch.Position = 1;
+            Assert.Equal(2, scratch.ReadByte());
+            Assert.Single(Directory.GetFiles(build));
+        }
+
+        Assert.Empty(Directory.GetFiles(build));
+    }
+
+    private static Func<Stream, bool> Writing(byte[] delta, bool keep) => stream =>
+    {
+        stream.Write(delta);
+        return keep;
+    };
 
     private static Manifest Manifest(params ManifestFile[] files) => new([], [], files);
 
