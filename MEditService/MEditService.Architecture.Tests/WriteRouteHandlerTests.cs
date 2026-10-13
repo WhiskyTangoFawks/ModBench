@@ -12,6 +12,7 @@ public sealed class WriteRouteHandlerTests
     internal static readonly (string Method, string Pattern, Type Handler)[] Routes =
     [
         ("POST", "/records/{formKey}/edit-changes", typeof(EditRecordChangesHandler)),
+        ("POST", "/records/{formKey}/edit", typeof(EditRecordHandler)),
         ("POST", "/records/delete-changes", typeof(DeleteRecordChangesHandler)),
         ("POST", "/records/copy-changes", typeof(CopyRecordChangesHandler)),
         ("POST", "/plugins/create", typeof(CreatePluginHandler)),

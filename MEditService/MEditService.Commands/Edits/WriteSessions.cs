@@ -16,4 +16,14 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
             _byFolder[mod.Folder] = session = source.WriteSessionOver(mod, release, unsaved);
         return session;
     }
+
+    /// <summary>Writes each session's changes to the disk, until one refuses or fails.</summary>
+    internal SourceFailure? Write()
+    {
+        foreach (var session in _byFolder.Values)
+        {
+            if (session.Write() is { } failure) return failure;
+        }
+        return null;
+    }
 }

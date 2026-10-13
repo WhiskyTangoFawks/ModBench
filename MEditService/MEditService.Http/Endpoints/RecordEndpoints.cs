@@ -186,6 +186,21 @@ internal static class RecordEndpoints
         .ProducesProblem(422)
         .ProducesProblem(500);
 
+        app.MapPost("/records/{formKey}/edit", (string formKey, RecordEditRequest request, EditRecordHandler edits) =>
+            EditRecord(formKey, request, edits, logger))
+        .WithName("EditRecord")
+        .WithSummary("Writes an edit of a record to plugin source: a script's edit.")
+        .WithDescription(
+            "Writes to the working tree what the same edit's changes answer, an unsaved document read in place of its " +
+            "file. An edit that would write a file held unsaved is refused naming it, and nothing is written.")
+        .WithTags("Records")
+        .Produces(204)
+        .ProducesProblem(400)
+        .ProducesProblem(404)
+        .ProducesProblem(409)
+        .ProducesProblem(422)
+        .ProducesProblem(500);
+
         app.MapPost("/records/delete-changes", (RecordDeleteChangesRequest request, DeleteRecordChangesHandler edits) =>
             DeleteRecordChanges(request, edits, logger))
         .WithName("DeleteRecordChanges")
@@ -252,6 +267,28 @@ internal static class RecordEndpoints
                 new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.EditedValue)),
             outcome: answer => answer.Outcome,
             onApplied: answer => Results.Ok(RecordEditChangesResponse.Of(decoded, spelled, answer)));
+    }
+
+    internal static IResult EditRecord(string formKey, RecordEditRequest request, EditRecordHandler edits, ILogger logger)
+    {
+        var decoded = Uri.UnescapeDataString(formKey);
+        var spelled = RecordEditEnvelope.Spell(request.Path ?? []);
+        return EndpointMapping.Execute(
+            "ScriptEdit", logger,
+            logReceived: () =>
+            {
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation(
+                        "Received EditRecord {Op} {Path} for {FormKey} in {Plugin} ({Origin})",
+                        request.Op, spelled, decoded, request.Plugin, request.Origin);
+                }
+            },
+            validate: () => EditRequestProblem(request),
+            execute: () => edits.Edit(
+                new PluginAddress(request.Plugin, request.Origin), decoded,
+                new RecordEditEnvelope(request.Op, request.Path ?? [], request.EditedValue)),
+            onApplied: _ => Results.NoContent());
     }
 
     private static IResult? EditRequestProblem(RecordEditRequest? request)

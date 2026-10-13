@@ -59,6 +59,16 @@ public sealed class RefusalLoggingApiTests : HostedTests
     }
 
     [Fact]
+    public async Task ARefusedScriptEdit_IsLoggedOnce_NamingWhy()
+    {
+        await LoadedAndTracked();
+
+        await Client.ScriptEdit("000FFF:Held.esp", Plugin, Origin, "EditorID", "Renamed");
+
+        AssertLoggedOnce("Refused ScriptEdit", "RecordNotFound");
+    }
+
+    [Fact]
     public async Task ARefusedCreateRecord_IsLoggedOnce_NamingWhy()
     {
         await LoadedAndTracked();

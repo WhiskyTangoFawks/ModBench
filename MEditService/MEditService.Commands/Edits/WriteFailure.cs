@@ -28,6 +28,7 @@ internal static class WriteFailure
         SourceFailure.SlotHeld => RecordEditRefusal.ChildSlotHeldByAnotherRecord,
         SourceFailure.Unreadable => RecordEditRefusal.RecordParseFailed,
         SourceFailure.GitUnavailable => RecordEditRefusal.GitUnavailable,
+        SourceFailure.Unsaved => RecordEditRefusal.UnsavedChanges,
         SourceFailure.Inaccessible or SourceFailure.GitFailed => RecordEditRefusal.SourceAccessFailed,
         _ => throw new InvalidOperationException($"Expected one of the failures the Source adapter answers, not {failure.GetType().Name}."),
     };
