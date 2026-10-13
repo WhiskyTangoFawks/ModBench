@@ -61,7 +61,7 @@ A row is a record, so it offers what a record offers in Plugins ([plugins.md](pl
 
 | Where | Items, in order |
 |---|---|
-| Referrer menu | open to the side · referenced by · copy value |
+| Referrer menu | open · referenced by · copy value |
 | Where it is held | the record menu of Plugins |
 | Keys | none: VS Code's References view does not share its selection. |
 

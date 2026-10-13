@@ -9,7 +9,7 @@ Each story cites its source. A story with no source is owned here.
 - ConflictAll, one for each row: the state of that field across every copy.
 - ConflictThis, one for each cell: this plugin's copy of the field against the others.
 
-The axes are independent. A Conflict row can hold a Master cell and a ConflictWins cell. xEdit's benign and ignored states come from its priority table, which Modbench does not have, but for the version stamps (xedit.md, divergence 7).
+The axes are independent. A Conflict row can hold a Master cell and a ConflictWins cell. xEdit's benign and ignored states come from its priority table, which Modbench does not have, but for the version stamps (xedit.md, divergence 7). A compare of several records caps each row at ConflictBenign, as xEdit does (What takes part, story 6).
 
 ## Rows
 
@@ -18,6 +18,7 @@ The axes are independent. A Conflict row can hold a Master cell and a ConflictWi
 | OnlyOne, NoConflict | none | one copy has the field, or every copy agrees |
 | Override | green | copies change the field, and none disagrees with another |
 | Conflict | orange | copies disagree on the field |
+| ConflictBenign | orange | opened on several records, they disagree on the field |
 
 Source: ADR-0018; xedit.md, divergence 4
 
@@ -53,6 +54,7 @@ As a user, I want:
 3. A field's winner to be the last copy that has a value for it, so a Partial Form copy that leaves a field out never wins it. Source: xEdit
 4. Arrays compared as they align ([editor-fields.md](editor-fields.md), Arrays). Source: xEdit
 5. A container's conflict to be its own fields'. Its child records compare as records of their own, never as a list in the container: the game loads every plugin's children, not the winner's list. Source: ruling; xEdit
+6. A panel opened on several records to compare the records with each other. A row is NoConflict where they agree on the field, and ConflictBenign where they do not. A cell is compared with its row's cell in the focused column: it is Master in the focused column, Override where it is the same, and ConflictLoses where it differs. This is an exception to The two axes: a cell compares with the focused column, not with the other copies. Source: xEdit Compare Selected
 
 ## The colours
 
