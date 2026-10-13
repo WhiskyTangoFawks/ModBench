@@ -91,6 +91,7 @@ export function mo2Landing(context: Mo2Context, archives: ArchiveReader): Pick<I
     (source.kind === 'archive' ? archives.extract(source.path, path) : copyTree(source.path, path));
 
   return {
+    // One lock per instance: two installs of one name must not both pass the name check.
     install: (source, target, keys) => withLock(context.instanceRoot, async () => {
       const holding = await folderHolding(context, { kind: 'mod', name: target.name });
       if ((target.kind === 'new') !== (holding === undefined)) return { landed: false };
