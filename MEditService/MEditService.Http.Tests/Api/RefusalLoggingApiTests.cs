@@ -65,7 +65,7 @@ public sealed class RefusalLoggingApiTests : HostedTests
 
         await Client.ScriptEdit("000FFF:Held.esp", Plugin, Origin, "EditorID", "Renamed");
 
-        AssertLoggedOnce("Refused ScriptEdit", "RecordNotFound");
+        AssertLoggedOnce("Refused EditRecord", "RecordNotFound");
     }
 
     [Fact]

@@ -266,7 +266,7 @@ internal static class RecordEndpoints
         var decoded = Uri.UnescapeDataString(formKey);
         var spelled = RecordEditEnvelope.Spell(request.Path ?? []);
         return EndpointMapping.Execute(
-            "ScriptEdit", logger,
+            "EditRecord", logger,
             logReceived: () => LogEditReceived(logger, "EditRecord", request, decoded, spelled),
             validate: () => EditRequestProblem(request),
             execute: () => edits.Edit(

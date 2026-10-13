@@ -529,6 +529,22 @@ public sealed class WriteSessionTests : IDisposable
     }
 
     [Fact]
+    public void AMoveOntoAFolderHoldingAFileUnsaved_IsRefusedNamingTheFile_AndWritesNothing()
+    {
+        var held = FullPath(Path.Combine(
+            PluginSourceRoot.For(PluginName), "Cells", "0", "0", $"RenamedCell - {_cell.FormKey.ID:X6}_{PluginName}", "Unsaved.json"));
+        var session = Session(new DocumentChange(held, "{}"));
+        Assert.Null(Write(session, repository => repository.ChangesToPut(Plugin, Renamed(_cell, "cell", CellPath, "RenamedCell"))));
+        var before = TreeSnapshot.Of(_modFolder);
+
+        var refused = session.Write().Failed();
+
+        Assert.IsType<SourceFailure.Unsaved>(refused);
+        Assert.Contains(held, refused.Reason, StringComparison.Ordinal);
+        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+    }
+
+    [Fact]
     public void AFileHeldUnsavedThatTheWriteDoesNotReach_IsNoRefusal()
     {
         var session = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));

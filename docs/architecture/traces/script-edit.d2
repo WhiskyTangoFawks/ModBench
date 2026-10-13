@@ -15,14 +15,21 @@ scripts -> http: "edit: plugin, origin, FormKey, op, field path, value" {class: 
 http -> commands: envelope {class: edit}
 source -> sourceadapter: documents {class: edit}
 sourceadapter -> commands: "the documents it reads, an unsaved one in place of its file" {class: edit}
-commands -> sourceadapter: "each move, deletion and document's new text" {class: edit}
+commands -> sourceadapter: "the record's new text" {class: edit}
+sourceadapter."the moves, deletions and documents that text makes"
+commands -> sourceadapter: write {class: signal}
 sourceadapter -> source: "moves, then deletions, then documents" {class: edit}
 sourceadapter -> commands: written {class: edit}
 commands -> http: applied {class: edit}
 http -> scripts: "204: nothing" {class: edit}
 
-refused: "refused, before any write: no git, not tracked, or a file held unsaved" {
-  sourceadapter -> commands: "the file held unsaved" {class: edit}
+edit_refused: "refused before any write: no git, not tracked, or the edit itself" {
+  commands -> http: the refusal {class: edit}
+  http -> scripts: the refusal {class: edit}
+}
+
+unsaved_refused: "refused before any write: a file held unsaved" {
+  sourceadapter -> commands: "the refusal, naming the file" {class: edit}
   commands -> http: the refusal {class: edit}
   http -> scripts: the refusal {class: edit}
 }

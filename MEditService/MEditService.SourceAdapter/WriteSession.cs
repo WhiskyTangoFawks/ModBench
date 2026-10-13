@@ -74,7 +74,7 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
     {
         if (_writing) throw new InvalidOperationException("Write waits for Atomically to end: the changes inside it may still be put back.");
         var (moves, deletions, documents) = Changes;
-        var held = moves.Select(move => move.From).Concat(deletions).Concat(documents.Select(document => document.Path))
+        var held = moves.SelectMany(move => new[] { move.From, move.To }).Concat(deletions).Concat(documents.Select(document => document.Path))
             .SelectMany(_unsaved.HeldAtOrUnder)
             .Distinct(StringComparer.Ordinal)
             .ToList();
