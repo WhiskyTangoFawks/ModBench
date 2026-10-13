@@ -388,8 +388,8 @@ export interface InstanceAdapter {
   /** The plugins the game folder's Creation Club list names, in its order; none when the release
    *  has no Creation Club, the game folder is not found, or it holds no list. */
   creationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]>;
-  /** The archives the INIs list, in load order: the game folder's default INI, then the user's (the profile's if it
-   *  keeps its own, else My Games'), a key's last value winning. `notes` says what was not read, and where it looked. */
+  /** The archives the INIs list, in load order: the default INI, then the profile's own INIs or else My Games',
+   *  a key's last value winning. `notes` says what was not read, and where it looked. */
   archiveList(
     profile: string, gameFolder: GameFolder, gameRelease: string | undefined,
   ): Promise<{ readonly archives: readonly string[]; readonly notes: readonly string[] }>;
