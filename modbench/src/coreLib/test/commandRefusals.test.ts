@@ -3,10 +3,11 @@ import { entryNameRefusal, newModNameRefusal, type TakenNames } from '../command
 
 const mod = (name: string) => ({ kind: 'mod', name } as const);
 const separator = (name: string) => ({ kind: 'separator', name } as const);
+const folder = (kind: 'mod' | 'separator', name: string, folderName = name) => ({ kind, name, path: `/instance/mods/${folderName}` });
 
 const taken: TakenNames = {
   mods: [mod('Listed Only'), mod('Harder VATS'), separator('Group A')],
-  modFolders: [mod('Harder VATS'), mod('Folder Only'), separator('Group A')],
+  modFolders: [folder('mod', 'Harder VATS'), folder('mod', 'Folder Only'), folder('separator', 'Group A', 'Group A_separator')],
 };
 
 describe('newModNameRefusal', () => {
@@ -28,6 +29,10 @@ describe('newModNameRefusal', () => {
 
   it('checks the name trimmed', () => {
     expect(newModNameRefusal(taken, '  Harder VATS ')).toMatch(/"Harder VATS" already exists/);
+  });
+
+  it('names the collision for the name of a separator\'s folder, the manager knowing a mod by its folder\'s name', () => {
+    expect(newModNameRefusal(taken, 'group a_SEPARATOR')).toMatch(/"group a_SEPARATOR" already exists/);
   });
 
   it('is silent while the instance has no folder for mods', () => {

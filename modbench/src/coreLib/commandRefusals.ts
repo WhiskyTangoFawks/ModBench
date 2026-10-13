@@ -1,4 +1,4 @@
-import type { EntryRef } from '../instanceAdapter/instanceAdapter';
+import type { EntryRef, ModFolder } from '../instanceAdapter/instanceAdapter';
 
 /** The refusal of a new mod whose name a folder already holds: one wording for create and install. */
 export const modNameTakenRefusal = (name: string): string =>
@@ -8,17 +8,19 @@ export const modNameTakenRefusal = (name: string): string =>
  *  `modFolders` is undefined when there is no folder for mods at all. */
 export interface TakenNames {
   readonly mods: readonly EntryRef[];
-  readonly modFolders: readonly EntryRef[] | undefined;
+  readonly modFolders: readonly ModFolder[] | undefined;
 }
 
 const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
-/** Why a new mod may not take `name`, trimmed: a folder already holds a mod of that name, compared
- *  without case. Undefined for a free name, or a blank one. */
+const folderNameOf = (path: string): string => path.split(/[\\/]/).pop() ?? '';
+
+/** Why a new mod may not take `name`, trimmed: a folder already holds a mod of that name, or is
+ *  named so (a separator's folder), compared without case. Undefined for a free name, or a blank one. */
 export function newModNameRefusal({ modFolders }: TakenNames, name: string): string | undefined {
   const trimmed = name.trim();
   if (!trimmed) return undefined;
-  return modFolders?.some((folder) => folder.kind === 'mod' && sameName(folder.name, trimmed)) ? modNameTakenRefusal(trimmed) : undefined;
+  return modFolders?.some((folder) => sameName(folderNameOf(folder.path), trimmed)) ? modNameTakenRefusal(trimmed) : undefined;
 }
 
 /** `clash` when another entry of `kind` is listed or has a folder under `requested`, compared
