@@ -5,12 +5,16 @@ import { join } from 'node:path';
 import { digestOf } from '../contentDigest';
 
 describe('digestOf', () => {
-  it('answers the SHA-256 of the file\'s bytes as lower-case hex, so two files with one digest hold the same bytes', async () => {
+  it.each([
+    ['hello', 'o22fiH2CxyY='],
+    ['kept', 'gO3vE0ddOto='],
+    ['vanilla', '/Qk9lLVYbZs='],
+  ])('answers the hash of %s that mEdit\'s manifest carries: xxHash64, its eight little-endian bytes in base64', async (body, hash) => {
     const root = await mkdtemp(join(tmpdir(), 'medit-digest-'));
     try {
       const path = join(root, 'a.esp');
-      await writeFile(path, 'abc');
-      expect(await digestOf(path)).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+      await writeFile(path, body);
+      expect(await digestOf(path)).toBe(hash);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

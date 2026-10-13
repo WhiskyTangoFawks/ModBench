@@ -9,7 +9,6 @@ import { parseMetaIni } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
 import { creationClubListFile, dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
-import { digestOf } from './contentDigest';
 import { factsOf, get, listDir, stampOf } from './files';
 import {
   type DataFolderPlugins, type InstanceReading, type ModFolders, type ModMeta, type ModlistEntry, type DownloadedFile, type DownloadedFiles, type FileRead, type GameFolder, type InstanceAdapter,
@@ -27,7 +26,7 @@ type Mo2Reads = Omit<InstanceAdapter,
   | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
   | 'trashDownloadedFileMeta' | 'selectProfile' | 'markOriginFile' | 'includedPath' | 'excludedSuffix' | 'renamePlugin' | 'extractedEntries'
   | 'extractNewMod' | 'extractUpgrade' | 'subscribe' | 'names' | 'archiveList' | 'gameFolderArchives' | 'installationFiles'
-  | 'managerFilesInModFolder' | 'reading'>;
+  | 'managerFilesInModFolder' | 'reading' | 'fileHash' | 'downloadedFileHash'>;
 
 async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile[] | undefined> {
   const dirents = await readOrAbsent(() => listDir(downloadsDir), undefined);
@@ -152,8 +151,6 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
     sourceMods: () => sourceModsIn(instanceRoot),
 
     fileStamp: (path) => answerOrReason(() => stampOf(path)),
-
-    contentDigest: (path) => answerOrReason(() => digestOf(path)),
   };
 }
 

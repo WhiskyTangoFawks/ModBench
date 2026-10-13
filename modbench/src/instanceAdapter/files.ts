@@ -4,7 +4,7 @@
 
 import { constants, type Dirent } from 'node:fs';
 import {
-  access, chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, stat, writeFile,
+  access, appendFile, chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, stat, writeFile,
 } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import {
@@ -165,6 +165,11 @@ async function writeAtomic(path: string, text: string): Promise<void> {
 /** Writes `text` to `path` outright — no read-back, no splice, no lock: install's own meta.ini. */
 export function write(path: string, text: string): Promise<void> {
   return writeAtomic(path, text);
+}
+
+/** Adds `text` at the end of `path`, making the file when it is not there. */
+export function append(path: string, text: string): Promise<void> {
+  return appendFile(path, text);
 }
 
 /** Moves `from` to `to` in one filesystem step — an install's own entries moving up into a mod folder. */

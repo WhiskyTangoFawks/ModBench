@@ -14,7 +14,7 @@ import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type FileOrigin, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ManagerNames, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
-import { SameCopies, type FileCopies } from './sameCopies';
+import { sameCopies, type FileCopies } from './sameCopies';
 import { errorMessage } from '../ports/errorMessage';
 import { modSyncArgumentsOf, pluginSyncArgumentsOf, type ModSyncArguments, type PluginSyncArguments } from './syncArguments';
 
@@ -227,11 +227,8 @@ export class Instance implements Subscription {
   // The listed archives nothing holds already told, so each is one Output line until it changes.
   private archivesTold: ReadonlySet<string> = new Set();
 
-  private readonly copies: SameCopies;
-
   constructor(private readonly options: InstanceOptions) {
     this.current = emptyValue(options.adapter.names);
-    this.copies = new SameCopies(options.adapter);
     this.changes = options.adapter.subscribe(() => this.schedule());
     let focused = options.window.state.focused;
     this.focus = options.window.onDidChangeWindowState((state) => {
@@ -309,7 +306,7 @@ export class Instance implements Subscription {
   /** For each file of the value it holds, by its path, which of its providers' copies are the
    *  same, or why a copy could not be read. */
   sameCopies(relativePaths: readonly string[]): Promise<FileCopies[]> {
-    return this.copies.of(this.current, relativePaths);
+    return sameCopies(this.options.adapter, this.current, relativePaths);
   }
 
   dispose(): void {
