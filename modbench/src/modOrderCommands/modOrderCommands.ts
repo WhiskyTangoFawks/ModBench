@@ -150,9 +150,8 @@ async function markInSourceMod(
   };
 }
 
-// `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked on its own, and, in a source mod,
-// the build configuration's exclusion with it. Every source mod's configuration comes first, so a refusal every
-// file of a mod shares writes none of them, and an mEdit that cannot be reached refuses the whole selection.
+// `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked on its own, a source mod's build
+// configuration first, so a refusal all its files share writes none of them (commands.md, A selection is one gesture).
 async function markFiles(
   { adapter, mEdit }: SourceModWriters, files: readonly OriginFileRef[], mark: OriginFileMark, sourceFolders: ReadonlyMap<string, string>,
 ): Promise<SelectionResult<OriginFileRef>> {
