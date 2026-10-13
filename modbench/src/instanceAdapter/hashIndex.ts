@@ -1,5 +1,5 @@
-// The hashes the adapter keeps (ADR-0024): a downloaded file's and a game file's in an index in a folder of its own,
-// an origin file's for the session, each trusted while its file's stamp is the one it was hashed at.
+// The hashes the adapter keeps (ADR-0024): downloaded and game files' in its index, origin files' for the session,
+// each trusted while its file's stamp is the one it was hashed at.
 
 import { join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
