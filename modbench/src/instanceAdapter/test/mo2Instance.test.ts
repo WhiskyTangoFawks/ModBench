@@ -307,6 +307,12 @@ describe('the MO2 Instance adapter', () => {
       expect(settings.gameRelease).toBeUndefined();
     });
 
+    it('rejects when the settings name no game', async () => {
+      await writeFile(join(root, INI), '[General]\r\nselected_profile=@ByteArray(Default)\r\n');
+
+      await expect(source.settings()).rejects.toThrow(/gameName/);
+    });
+
     it('rejects when the settings name no selected profile', async () => {
       await writeFile(join(root, INI), '[General]\r\ngameName=Fallout 4\r\n');
 
@@ -525,6 +531,13 @@ describe('the MO2 Instance adapter', () => {
       await rm(join(root, 'mods'), { recursive: true });
 
       expect(await source.modFolders()).toBeUndefined();
+    });
+
+    it('rejects when mods/ is there but cannot be listed, only its absence meaning there is no folder for mods', async () => {
+      await rm(join(root, 'mods'), { recursive: true });
+      await writeFile(join(root, 'mods'), 'not a directory');
+
+      await expect(source.modFolders()).rejects.toThrow();
     });
 
     it('answers the plugins in plugin order, with their enabled state', async () => {
@@ -1110,6 +1123,17 @@ describe('the MO2 Instance adapter', () => {
 
         expect(relativePaths(files.files)).toEqual(['sibling.dds']);
         expect(files.notes.join('\n')).toMatch(/cycle.*loop/);
+      });
+
+      it('rejects when a folder below an origin cannot be read, rather than listing fewer files', async () => {
+        const nested = join(root, 'overwrite', 'SKSE');
+        await mkdir(nested, { recursive: true });
+        vi.mocked(readdir).mockImplementation(async (path, options) => {
+          if (String(path) === nested) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+          return actualReaddir(path, options);
+        });
+
+        await expect(source.originFiles({ kind: 'runtimeOutput' })).rejects.toThrow(/permission denied/);
       });
 
       it('rejects when a link\'s target cannot be checked for a reason other than its absence, simulated through a mocked stat as chmod denies nothing when the runner is root', async () => {
