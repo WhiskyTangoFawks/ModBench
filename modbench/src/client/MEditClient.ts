@@ -203,6 +203,8 @@ export interface CopyChangesOutcome {
   applied: readonly CopyChanges[];
   refused: readonly ItemRefusal<CopyItem>[];
 }
+export type NameQuery = components['schemas']['NameQuery'];
+export type NamedObject = components['schemas']['NamedObject'];
 export type ReferenceResult = components['schemas']['ReferenceResult'];
 /** The record filter mEdit holds: its SQL and the name of the source it came from
  *  (plugins.md, Record filter). */
@@ -276,6 +278,9 @@ export interface MEditClient {
   /** Several records side by side: one column per copy, in order, with no conflict state. With no
    *  `compare`, `missing` names each copy no plugin gave and why. */
   getRecordsComparison(copies: RecordCopy[]): Promise<CompareRecordsResponse | ReadFailed>;
+  /** What each name means, in order, or why one cannot be: mEdit's refusal names every name it could not resolve, with each
+   *  match of an ambiguous one. A name with an origin names a plugin. */
+  resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed>;
   getReferences(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
   /** The referrers of the active plugins and of the inactive tracked ones. */
   getReferencesInActiveOrTrackedPlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed>;

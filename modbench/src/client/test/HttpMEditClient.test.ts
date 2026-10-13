@@ -325,6 +325,18 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/plugins/problems', query: {} },
   ];
 
+  it('resolveNames posts the names given and reads the objects they mean, in order', async () => {
+    const { result, request } = await exchange(
+      (c) => c.resolveNames([{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }]),
+      answers(200, { named: [{ plugin: shared }, { formKey: sharedKey, editorId: 'SharedNpc' }] }),
+    );
+
+    expect(request.method).toBe('POST');
+    expect(new URL(request.url).pathname).toBe('/names/resolve');
+    expect(await request.json()).toEqual({ names: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }] });
+    expect(result).toEqual([{ plugin: shared }, { formKey: sharedKey, editorId: 'SharedNpc' }]);
+  });
+
   it.each(gets)('$name gets $path and reads the answer untransformed', async ({ verb, answer, path, query }) => {
     const { result, request } = await exchange(verb, answers(200, answer));
 
@@ -416,6 +428,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     const refusedReads: { what: string; verb: Verb; status: number; detail: string }[] = [
       { what: 'getComparison(000801:Broken.esp)', verb: (c) => c.getComparison('000801:Broken.esp'), status: 500, detail: 'boom' },
       { what: 'getRecordsComparison', verb: (c) => c.getRecordsComparison([]), status: 400, detail: 'No records.' },
+      { what: 'resolveNames', verb: (c) => c.resolveNames([{ name: 'Gone' }]), status: 400, detail: 'Nothing is named "Gone".' },
       { what: 'getCreatableRecordTypes', verb: (c) => c.getCreatableRecordTypes(), status: 503, detail: cannotAnswer },
       { what: 'getChildRecordTypes(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getChildRecordTypes(shared, sharedKey), status: 503, detail: cannotAnswer },
       { what: 'getRenderedDocument(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getRenderedDocument(shared, sharedKey), status: 503, detail: cannotAnswer },

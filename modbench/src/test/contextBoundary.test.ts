@@ -10,6 +10,7 @@ const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'ut
 const importsOf = (source: string): string[] => importSpecifiers(source, 'source.ts');
 
 const CLIENT_DIR = 'client';
+const AGENT_DIR = 'agent';
 const PLUGINS_VIEW_DIR = 'plugins';
 const EDITOR_DIR = 'editor';
 const SOURCE_LANGUAGE_DIR = 'sourceLanguage';
@@ -25,7 +26,7 @@ function isExcluded(relativePath: string): boolean {
   const segments = relativePath.split(sep);
   if (segments.includes(GENERATED_DIR)) return true;
   if (segments[0] === WIRE_DIR) return true;
-  if (segments[0] === CLIENT_DIR) return true;
+  if (segments[0] === CLIENT_DIR || segments[0] === AGENT_DIR) return true;
   if (isEditingView(relativePath)) return true;
   if (COMPOSITION_ROOT.includes(relativePath)) return true;
   if (isTestSupport(relativePath)) return true;
@@ -114,6 +115,10 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
 
   it('the client box is excluded because it is the seam Editing speaks through, in the backend\'s own vocabulary', () => {
     expect(isExcluded(join(CLIENT_DIR, 'MEditClient.ts'))).toBe(true);
+  });
+
+  it('the agent box is excluded because it names records as the agent does, in mEdit\'s own vocabulary', () => {
+    expect(isExcluded(join(AGENT_DIR, 'resolveNames.ts'))).toBe(true);
   });
 
   it('test files and test folders are excluded because their names and fixtures are prose and corpus data', () => {

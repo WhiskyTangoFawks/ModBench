@@ -256,7 +256,7 @@ export function activate(context: vscode.ExtensionContext): void {
     views,
     plugins,
     editor,
-    serveAgent({ port: agentPort(), instance: views.instance, reporter: reporterFor('agent'), log: outputChannel }),
+    serveAgent({ port: agentPort(), instance: views.instance, mEdit: meditClient, reporter: reporterFor('agent'), log: outputChannel }),
     reachMEditFromTerminals(context.environmentVariableCollection, meditClient, vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath, inheritedPythonPath, onTerminalEnvChange),
     createSourceLanguage({
       client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
