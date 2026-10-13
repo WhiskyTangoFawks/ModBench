@@ -5,7 +5,7 @@ import type { InstanceAdapter, OriginFileMark, OriginFileMarked } from './instan
 import { excludedName, fileInFolder, includedName, isExcludedName, originDir } from './layout';
 import type { Mo2Context } from './mo2Context';
 
-type Mo2OriginFiles = Pick<InstanceAdapter, 'markOriginFile'>;
+type Mo2OriginFiles = Pick<InstanceAdapter, 'markOriginFile' | 'includedPath'>;
 
 function fileUnder(folder: string | undefined, relativePath: string): string | undefined {
   const reachesOut = relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
@@ -31,5 +31,8 @@ export function mo2OriginFiles({ instanceRoot }: Mo2Context): Mo2OriginFiles {
         return { gone: false, wrote: true, relativePath: renamed(relativePath) };
       });
     },
+
+    includedPath: (relativePath) =>
+      relativePath.split('/').map((segment) => (isExcludedName(segment) ? includedName(segment) : segment)).join('/'),
   };
 }

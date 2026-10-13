@@ -582,6 +582,9 @@ public sealed class FailedReadStateTests : IDisposable
             IReadOnlyList<Asset> assets) =>
             _inner.Init(sourceFolder, output, plugins, assets);
 
+        public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) =>
+            _inner.ChangeBuildConfiguration(sourceFolder, change);
+
         public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
             _inner.ReadBackOf(pluginFileName, tree, gameRelease);
     }

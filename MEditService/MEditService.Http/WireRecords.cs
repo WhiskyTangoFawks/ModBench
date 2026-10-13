@@ -37,7 +37,7 @@ internal sealed record PluginProviderRequest(PluginProviderKind Kind, string? Mo
     {
         PluginProviderKind.Game when Mod is null && Folder is null && SourceFolder is null => PluginProvider.Game,
         PluginProviderKind.None when Mod is null && Folder is null && SourceFolder is null => PluginProvider.NoMod,
-        PluginProviderKind.Mod when !string.IsNullOrEmpty(Mod) && !string.IsNullOrEmpty(Folder) && !string.IsNullOrEmpty(SourceFolder) =>
+        PluginProviderKind.Mod when !string.IsNullOrEmpty(Mod) && !string.IsNullOrEmpty(Folder) && SourceFolder is null or { Length: > 0 } =>
             new PluginProvider.FromMod(Mod, Folder, SourceFolder),
         _ => null,
     };
