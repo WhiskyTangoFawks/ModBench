@@ -115,7 +115,6 @@ export const pluginsFile = (instanceRoot: string, profile: string): string =>
 
 export const downloadFile = (downloadsDir: string, name: string): string => join(downloadsDir, name);
 
-
 export const downloadSidecarFile = (downloadsDir: string, name: string): string =>
   join(downloadsDir, name + DOWNLOAD_SIDECAR_SUFFIX);
 
