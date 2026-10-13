@@ -13,6 +13,7 @@ import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
 import { INSTANCE_READS } from './instanceReads';
 import { Refusal } from './refusal';
 import { RESOLVE_NAMES } from './resolveNames';
+import { SELECT_ROWS } from './selectRows';
 import { SOURCE_PROBLEMS } from './sourceProblems';
 
 const AGENT_PORT_SETTING = 'modbench.agent.port';
@@ -20,7 +21,7 @@ const AGENT_PORT_SETTING = 'modbench.agent.port';
 export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence'> | undefined;
-  mEdit: Pick<MEditClient, 'resolveNames'>;
+  mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows'>;
   reporter: Reporter;
   log: Log;
 }
@@ -57,6 +58,8 @@ function mcpServerOf({ instance, mEdit, log }: AgentServerOptions): McpServer {
     (args) => answer(log, RESOLVE_INSTANCE_NAMES.name, () => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args)));
   server.registerTool(RESOLVE_NAMES.name, { description: RESOLVE_NAMES.description, inputSchema: RESOLVE_NAMES.input },
     (args) => answer(log, RESOLVE_NAMES.name, () => RESOLVE_NAMES.of(mEdit, args)));
+  server.registerTool(SELECT_ROWS.name, { description: SELECT_ROWS.description, inputSchema: SELECT_ROWS.input },
+    (args) => answer(log, SELECT_ROWS.name, () => SELECT_ROWS.of(mEdit, args)));
   server.registerTool(SOURCE_PROBLEMS.name, { description: SOURCE_PROBLEMS.description }, () => answer(log, SOURCE_PROBLEMS.name, SOURCE_PROBLEMS.of));
   return server;
 }
