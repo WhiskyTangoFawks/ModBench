@@ -27,6 +27,7 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, matchesGlob } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
+import { readInstance } from '../mo2Reads';
 import { OVERWRITE_ORIGIN, type Subscription } from '../instanceAdapter';
 import type { GameDetectors } from '../gameDirectory';
 import type {
@@ -135,6 +136,30 @@ describe('the MO2 Instance adapter', () => {
         await symlink(join(root, 'nowhere'), join(root, 'mods', 'Dangling'));
 
         expect([...(await adapter.reading()).skippedLinks.keys()]).toEqual(['Dangling']);
+      });
+
+      it('reads each listed mod\'s meta once, so one reading holds one answer for it', async () => {
+        const reads: string[] = [];
+        const counting = { ...adapter, modMeta: (mod: string) => { reads.push(mod); return adapter.modMeta(mod); } };
+
+        const reading = await readInstance(counting);
+
+        const listed = reading.mods.filter((e) => e.kind === 'mod').map((e) => e.name);
+        expect(reads.filter((mod) => listed.includes(mod)).sort()).toEqual([...listed].sort());
+      });
+
+      it('does not read the meta of a folder the mod order does not list while the downloads are unresolved, so an unreadable one does not fail the reading', async () => {
+        await mkdir(join(root, 'mods', 'Unlisted'));
+        const unreadable = {
+          ...adapter,
+          settings: async () => ({
+            ...(await adapter.settings()),
+            downloadedFiles: () => Promise.resolve({ kind: 'unresolved' as const, reason: 'no downloads' }),
+          }),
+          modMeta: (mod: string) => (mod === 'Unlisted' ? Promise.reject(new Error('EACCES')) : adapter.modMeta(mod)),
+        };
+
+        await expect(readInstance(unreadable)).resolves.toMatchObject({ downloadedFiles: { kind: 'unresolved' } });
       });
 
       it('answers the game folder as not found, with its Data folder unresolved, when no game folder is found', async () => {

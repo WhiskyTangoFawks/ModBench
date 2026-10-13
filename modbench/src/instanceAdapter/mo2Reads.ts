@@ -12,7 +12,7 @@ import { creationClubListFile, dataFolderOf, gameReleaseForGame } from '../table
 import { digestOf } from './contentDigest';
 import { factsOf, get, listDir, stampOf } from './files';
 import {
-  type DataFolderPlugins, type InstanceReading, type ModlistEntry, type DownloadedFile, type DownloadedFiles, type FileRead, type GameFolder, type InstanceAdapter,
+  type DataFolderPlugins, type InstanceReading, type ModFolders, type ModMeta, type ModlistEntry, type DownloadedFile, type DownloadedFiles, type FileRead, type GameFolder, type InstanceAdapter,
 } from './instanceAdapter';
 import {
   DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, entryDir, downloadNameAt, downloadSidecarFile, isTempWrite, modlistFile,
@@ -177,6 +177,22 @@ async function settledMods(source: ReadingSource, profile: string): Promise<Modl
   return modsWithMeta(source, profile);
 }
 
+const metaOf = ({ version, nexusId, archiveFilename, installedFiles }: ModMeta): ModMeta =>
+  ({ version, nexusId, archiveFilename, installedFiles });
+
+// A listed mod's meta is the one already read. A folder the mod order does not list is read only
+// when downloaded files are there to be matched against it.
+async function folderMetaOf(
+  source: ReadingSource, entries: readonly ModlistEntry[], folders: ModFolders | undefined, downloadsListed: boolean,
+): Promise<ReadonlyMap<string, ModMeta>> {
+  const read = new Map(entries.flatMap((entry) => (entry.kind === 'mod' ? [[entry.name, metaOf(entry)] as const] : [])));
+  const unlisted = downloadsListed
+    ? (folders?.all ?? []).filter((folder) => folder.kind === 'mod' && !read.has(folder.name))
+    : [];
+  const unlistedMetas = await Promise.all(unlisted.map(async ({ name }) => [name, await source.modMeta(name)] as const));
+  return new Map([...read, ...unlistedMetas]);
+}
+
 /** The instance whole, every fact against the one read of the settings, so a profile switch
  *  mid-read cannot mix one profile's mod order with another's plugin order. */
 export async function readInstance(source: ReadingSource): Promise<InstanceReading> {
@@ -186,10 +202,11 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
   const modsRead = settledMods(source, profile);
   const modFoldersRead = source.modFolders((name, reason) => skippedLinks.set(name, reason));
   const sourceModsRead = source.sourceMods();
+  const downloadsRead = settings.downloadedFiles();
   const [mods, pluginOrder, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceMods, modFiles, folderMeta] = await Promise.all([
     modsRead,
     source.pluginOrder(profile),
-    settings.downloadedFiles(),
+    downloadsRead,
     settings.gameFolder().then(async (gameFolder) => ({
       gameFolder,
       dataFolderPlugins: await source.gameFolderPlugins(gameFolder),
@@ -203,14 +220,14 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
     sourceModsRead,
     modsRead.then(async (entries) => new Map(await Promise.all(entries.filter((entry) => entry.kind === 'mod')
       .map(async ({ name }) => [name, await source.originFiles({ kind: 'mod', name })] as const)))),
-    modFoldersRead.then((folders) => Promise.all((folders?.all ?? []).filter((folder) => folder.kind === 'mod')
-      .map(async ({ name }) => [name, await source.modMeta(name)] as const))),
+    Promise.all([modsRead, modFoldersRead, downloadsRead]).then(([entries, folders, downloads]) =>
+      folderMetaOf(source, entries, folders, downloads.kind === 'listed' && downloads.files !== undefined)),
   ]);
   const { archiveList, dataFolderArchives, ...gameFacts } = game;
   return {
     profile, gameName, gameRelease, mods, pluginOrder, downloadedFiles, ...gameFacts,
     archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
-    profiles, modFolders, skippedLinks, runtimeOutput, modFiles, folderMeta: new Map(folderMeta),
+    profiles, modFolders, skippedLinks, runtimeOutput, modFiles, folderMeta,
     sourceMods,
   };
 }
