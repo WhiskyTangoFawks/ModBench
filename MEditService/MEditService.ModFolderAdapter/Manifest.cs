@@ -28,5 +28,12 @@ public abstract record FileProvider
 
     public sealed record GameFile(string Path) : FileProvider;
 
+    /// <summary>The delta named for the file, applied to the installation file's entry at Path, whose hash is
+    /// BaseHash.</summary>
+    public sealed record InstallationFileDelta(string InstallationFile, string Path, string BaseHash) : FileProvider;
+
+    /// <summary>The delta named for the file, applied to the game file at Path, whose hash is BaseHash.</summary>
+    public sealed record GameFileDelta(string Path, string BaseHash) : FileProvider;
+
     public sealed record NoProvider : FileProvider;
 }
