@@ -55,7 +55,7 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
   const ask = Object.assign<AskQuestion, { asked: typeof dialog.asked }>(
     (...args) => { stepsWhenAsked.push([...progressSteps]); return dialog(...args); }, { asked: dialog.asked });
   const renameFiles = vi.fn().mockResolvedValue(undefined);
-  const adapter = { ...adapterOver('/instance'), renamePlugin: renameFiles, checkPluginRename: vi.fn().mockResolvedValue({ applied: true }) };
+  const adapter = { ...adapterOver('/instance'), renamePlugin: renameFiles };
   const instance = {
     value: instanceValueFixture({
       gameRelease: 'Fallout4',
