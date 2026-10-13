@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { join } from 'node:path';
 import type { Mod, Separator, ModlistEntry } from '../instance';
 import {
   buildFileConflictIndex, modOrigin, goToModCandidates, inFileOrderConflict, fileOrderConflictOf, RUNTIME_OUTPUT, type ConflictEntry,
@@ -12,11 +11,20 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { modFilesOf, sourceOver } from '../../test/mo2/adapterOver';
 
-const fixtureRoot = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'conflict-instance');
-const caseFixtureRoot = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'case-conflict-instance');
 
-const indexOver = async (root: string, entries: ModlistEntry[], overwrite: OriginFile[] = []) =>
-  buildFileConflictIndex(entries, overwrite, await modFilesOf(sourceOver(root), entries), () => {});
+const fileIn = (folder: string, relativePath: string): OriginFile =>
+  ({ relativePath, path: `${folder}/${relativePath}`, sourcePath: `${folder}/${relativePath}`, excluded: false, excludedByName: false });
+
+const modPath = (name: string, relativePath: string): string => `/mods/${name}/${relativePath}`;
+
+const indexOver = (entries: ModlistEntry[], filesByMod: Record<string, string[]>, overwrite: OriginFile[] = []) =>
+  buildFileConflictIndex(entries, overwrite, new Map(Object.entries(filesByMod).map(([name, paths]) => [name, {
+    origin: name, folder: `/mods/${name}`, folders: [], notes: [], files: paths.map((path) => fileIn(`/mods/${name}`, path)),
+  }])), () => {});
+
+const SHARED = 'textures/shared/foo.dds';
+const conflicting = { ModA: [SHARED], ModB: [SHARED, 'meshes/onlyB.nif'] };
+const caseConflicting = { ModA: ['Textures/Foo.dds'], ModB: ['textures/foo.dds'], RootA: ['Foo.esp'], RootB: ['foo.ESP'] };
 
 const answering = (names: readonly string[], answer: Omit<OriginFiles, 'origin'>): ReadonlyMap<string, OriginFiles> =>
   new Map(names.map((name) => [name, { origin: name, ...answer }]));
@@ -25,56 +33,50 @@ const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled
 const separator = (name: string, enabled = true): Separator => ({ kind: 'separator', name, enabled });
 
 describe('buildFileConflictIndex', () => {
-  it('resolves the winner for an overridden file to the first enabled mod, modlist.txt being winning-first', async () => {
+  it('resolves the winner for an overridden file to the first enabled mod, modlist.txt being winning-first', () => {
     const entries: ModlistEntry[] = [mod('ModA'), mod('ModB')];
-    const index = await indexOver(fixtureRoot, entries);
+    const index = indexOver(entries, conflicting);
 
     const entry = index.files.get('textures/shared/foo.dds');
     expect(entry?.winnerOrigin).toEqual(modOrigin('ModA'));
-    expect(entry?.winner).toBe(join(fixtureRoot, 'mods', 'ModA', 'textures', 'shared', 'foo.dds'));
+    expect(entry?.winner).toBe(modPath('ModA', SHARED));
     expect(entry?.providers).toEqual([modOrigin('ModA'), modOrigin('ModB')]);
   });
 
-  it('flips the winner when the mods are reordered', async () => {
-    const index = await indexOver(fixtureRoot, [mod('ModB'), mod('ModA')]);
+  it('flips the winner when the mods are reordered', () => {
+    const index = indexOver([mod('ModB'), mod('ModA')], conflicting);
     expect(index.files.get('textures/shared/foo.dds')?.winnerOrigin).toEqual(modOrigin('ModB'));
   });
 
-  it('excludes disabled mods from conflict resolution', async () => {
-    const index = await indexOver(fixtureRoot, [mod('ModA', false), mod('ModB')]);
+  it('excludes disabled mods from conflict resolution', () => {
+    const index = indexOver([mod('ModA', false), mod('ModB')], conflicting);
     const entry = index.files.get('textures/shared/foo.dds');
     expect(entry?.providers).toEqual([modOrigin('ModB')]);
     expect(entry?.winnerOrigin).toEqual(modOrigin('ModB'));
   });
 
-  it('lists a disabled mod\'s own files under filesByMod, as an enabled mod\'s are, apart from conflict resolution', async () => {
-    const index = await indexOver(fixtureRoot, [mod('ModA', false), mod('ModB')]);
+  it('lists a disabled mod\'s own files under filesByMod, as an enabled mod\'s are, apart from conflict resolution', () => {
+    const index = indexOver([mod('ModA', false), mod('ModB')], conflicting);
     expect(index.filesByMod.get('ModA')?.map((f) => f.relativePath)).toEqual(['textures/shared/foo.dds']);
     expect(index.filesByMod.get('ModB')?.map((f) => f.relativePath).sort()).toEqual(['meshes/onlyB.nif', 'textures/shared/foo.dds']);
   });
 
-  it('records a single-provider file with providers.length === 1', async () => {
-    const index = await indexOver(fixtureRoot, [mod('ModA'), mod('ModB')]);
+  it('records a single-provider file with providers.length === 1', () => {
+    const index = indexOver([mod('ModA'), mod('ModB')], conflicting);
     const entry = index.files.get('meshes/onlyB.nif');
     expect(entry?.providers).toEqual([modOrigin('ModB')]);
     expect(entry?.winnerOrigin).toEqual(modOrigin('ModB'));
   });
 
-  it('lists nested subdirectory relative paths through the index\'s iteration surface', async () => {
-    const index = await indexOver(fixtureRoot, [mod('ModA'), mod('ModB')]);
+  it('lists nested subdirectory relative paths through the index\'s iteration surface', () => {
+    const index = indexOver([mod('ModA'), mod('ModB')], conflicting);
     const paths = [...index.files].map((e) => e.relativePath);
     expect(paths).toContain('meshes/onlyB.nif');
     expect(paths).toContain('textures/shared/foo.dds');
   });
 
-  it('groups each mod\'s own files under filesByMod', async () => {
-    const index = await indexOver(fixtureRoot, [mod('ModA'), mod('ModB')]);
-    const modBFiles = index.filesByMod.get('ModB')?.map((f) => f.relativePath).sort();
-    expect(modBFiles).toEqual(['meshes/onlyB.nif', 'textures/shared/foo.dds']);
-  });
-
-  it('excludes an enabled separator from the index — a separator is not a mod, even though it also carries `enabled`', async () => {
-    const index = await indexOver(fixtureRoot, [separator('Unassigned'), mod('ModA'), mod('ModB')]);
+  it('excludes an enabled separator from the index — a separator is not a mod, even though it also carries `enabled`', () => {
+    const index = indexOver([separator('Unassigned'), mod('ModA'), mod('ModB')], conflicting);
     expect(index.filesByMod.has('Unassigned')).toBe(false);
     expect(index.files.get('textures/shared/foo.dds')?.winnerOrigin).toEqual(modOrigin('ModA'));
   });
@@ -83,8 +85,8 @@ describe('buildFileConflictIndex', () => {
 describe('buildFileConflictIndex — Overwrite is the winning-most provider', () => {
   const overwriteCopy = { relativePath: 'textures/shared/foo.dds', path: '/instance/overwrite/textures/shared/foo.dds', sourcePath: '/instance/overwrite/textures/shared/foo.dds', excluded: false, excludedByName: false };
 
-  it('wins a path over every mod that provides it, and is listed as a provider', async () => {
-    const index = await indexOver(fixtureRoot, [mod('ModA'), mod('ModB')], [overwriteCopy]);
+  it('wins a path over every mod that provides it, and is listed as a provider', () => {
+    const index = indexOver([mod('ModA'), mod('ModB')], conflicting, [overwriteCopy]);
 
     const entry = index.files.get('textures/shared/foo.dds');
     expect(entry?.winner).toBe(overwriteCopy.path);
@@ -92,13 +94,13 @@ describe('buildFileConflictIndex — Overwrite is the winning-most provider', ()
     expect(entry?.providers).toEqual([{ kind: 'runtimeOutput' }, modOrigin('ModA'), modOrigin('ModB')]);
   });
 
-  it('is the sole provider of a path no mod ships', async () => {
-    const index = await indexOver(fixtureRoot, [mod('ModA')], [{ relativePath: 'only.txt', path: '/o/only.txt', sourcePath: '/o/only.txt', excluded: false, excludedByName: false }]);
+  it('is the sole provider of a path no mod ships', () => {
+    const index = indexOver([mod('ModA')], conflicting, [{ relativePath: 'only.txt', path: '/o/only.txt', sourcePath: '/o/only.txt', excluded: false, excludedByName: false }]);
     expect(index.files.get('only.txt')).toMatchObject({ winnerOrigin: { kind: 'runtimeOutput' }, providers: [{ kind: 'runtimeOutput' }] });
   });
 
-  it('keeps Overwrite out of every mod\'s own files', async () => {
-    const index = await indexOver(fixtureRoot, [mod('ModA')], [overwriteCopy]);
+  it('keeps Overwrite out of every mod\'s own files', () => {
+    const index = indexOver([mod('ModA')], conflicting, [overwriteCopy]);
     expect(index.filesByMod.has(OVERWRITE_ORIGIN)).toBe(false);
   });
 
@@ -115,8 +117,8 @@ describe('buildFileConflictIndex — Overwrite is the winning-most provider', ()
 });
 
 describe('buildFileConflictIndex — case-insensitive conflicts, as Proton/Wine folds case over case-sensitive ext4', () => {
-  it('resolves case-variant paths from two mods to a single conflict entry with both providers', async () => {
-    const index = await indexOver(caseFixtureRoot, [mod('ModA'), mod('ModB')]);
+  it('resolves case-variant paths from two mods to a single conflict entry with both providers', () => {
+    const index = indexOver([mod('ModA'), mod('ModB')], caseConflicting);
 
     expect([...index.files]).toHaveLength(1);
     const entry = index.files.get('Textures/Foo.dds');
@@ -125,11 +127,11 @@ describe('buildFileConflictIndex — case-insensitive conflicts, as Proton/Wine 
     expect(entryOtherCasing).toBe(entry);
   });
 
-  it('picks the same winner by priority whether casing matches or varies', async () => {
-    const top = await indexOver(caseFixtureRoot, [mod('ModA'), mod('ModB')]);
+  it('picks the same winner by priority whether casing matches or varies', () => {
+    const top = indexOver([mod('ModA'), mod('ModB')], caseConflicting);
     expect(top.files.get('textures/foo.dds')?.winnerOrigin).toEqual(modOrigin('ModA'));
 
-    const flipped = await indexOver(caseFixtureRoot, [mod('ModB'), mod('ModA')]);
+    const flipped = indexOver([mod('ModB'), mod('ModA')], caseConflicting);
     expect(flipped.files.get('textures/foo.dds')?.winnerOrigin).toEqual(modOrigin('ModB'));
   });
 
@@ -150,18 +152,18 @@ describe('buildFileConflictIndex — case-insensitive conflicts, as Proton/Wine 
     });
   });
 
-  it('keeps the winner\'s own original casing in relativePath and winner, regardless of lookup casing', async () => {
-    const index = await indexOver(caseFixtureRoot, [mod('ModA'), mod('ModB')]);
+  it('keeps the winner\'s own original casing in relativePath and winner, regardless of lookup casing', () => {
+    const index = indexOver([mod('ModA'), mod('ModB')], caseConflicting);
 
     const entry = index.files.get('TEXTURES/FOO.DDS');
     expect(entry?.relativePath).toBe('Textures/Foo.dds');
-    expect(entry?.winner).toBe(join(caseFixtureRoot, 'mods', 'ModA', 'Textures', 'Foo.dds'));
+    expect(entry?.winner).toBe(modPath('ModA', 'Textures/Foo.dds'));
   });
 
-  it('folds a case-variant root-level plugin pair of two mods to one winner', async () => {
-    const index = await indexOver(caseFixtureRoot, [mod('RootA'), mod('RootB')]);
+  it('folds a case-variant root-level plugin pair of two mods to one winner', () => {
+    const index = indexOver([mod('RootA'), mod('RootB')], caseConflicting);
 
-    expect([...index.files].map((entry) => entry.winner)).toEqual([join(caseFixtureRoot, 'mods', 'RootA', 'Foo.esp')]);
+    expect([...index.files].map((entry) => entry.winner)).toEqual([modPath('RootA', 'Foo.esp')]);
   });
 });
 

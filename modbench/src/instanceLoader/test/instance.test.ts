@@ -1,132 +1,82 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
-import { present } from '../../ports/present';
-import { cloneCorpusFixture, DEFAULT_MODLIST } from '../../test/mo2/corpusFixture';
-import type { GameFolder, InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
+import type {
+  DataFolderArchives, DataFolderPlugins, DownloadedFile, DownloadedFiles, GameFolder, InstanceAdapter, InstanceReading, Mod, ModFolder,
+  ModFolders, OriginFile, OriginFiles, Separator, SourceMods,
+} from '../../instanceAdapter/instanceAdapter';
+import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
-
-vi.mock('vscode', () => fakeVscodeModule());
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>();
-  return { ...actual, readdir: vi.fn(actual.readdir) };
-});
-
 import { Instance, type InstanceValue } from '../instance';
 import { factsOf } from '../instanceFacts';
-import { adapterOver, STEADY_WINDOW } from '../../test/mo2/adapterOver';
 
-const roots: string[] = [];
 const instances: Instance[] = [];
 
-afterEach(async () => {
+afterEach(() => {
   for (const instance of instances.splice(0)) instance.dispose();
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-  watchers.length = 0;
 });
 
-const DATA_FOLDER = '/game/Data';
-
-type ResolveGameFolder = () => Promise<GameFolder>;
-
-const resolvesDataFolder: ResolveGameFolder = () =>
-  Promise.resolve({ kind: 'found', root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
-const resolvesNotFound: ResolveGameFolder = () => Promise.resolve(GAME_FOLDER_NOT_FOUND);
-
-interface Hooks {
-  resolveGameFolder?: ResolveGameFolder;
+interface WindowState {
+  focused: boolean;
 }
 
-function countingReadings(adapter: InstanceAdapter, reads: { count: number }): InstanceAdapter {
-  return { ...adapter, reading: () => { reads.count++; return adapter.reading(); } };
-}
+const mod = (name: string, enabled = true, meta: Partial<Mod> = {}): Mod => ({ kind: 'mod', name, enabled, ...meta });
+const separator = (name: string): Separator => ({ kind: 'separator', name, enabled: false });
 
-async function repository(root: string, folder: string, output: string): Promise<void> {
-  await mkdir(join(root, 'source', folder, '.git'), { recursive: true });
-  await writeFile(join(root, 'source', folder, 'build.json'), JSON.stringify({ output }));
-}
+const fileIn = (folder: string, relativePath: string): OriginFile =>
+  ({ relativePath, path: `${folder}/${relativePath}`, sourcePath: `${folder}/${relativePath}`, excluded: false, excludedByName: false });
 
-function realInstance(hooks: Hooks = {}): {
-  root: string;
-  instance: Instance;
-  logs: string[];
-  warnings: string[];
-  errorLines: string[];
-  readings: { count: number };
-  setResolver: (resolve: ResolveGameFolder) => void;
-} {
-  const root = cloneCorpusFixture();
-  roots.push(root);
+const filesOfMod = (name: string, ...relativePaths: string[]): OriginFiles =>
+  ({ origin: name, folder: `/mods/${name}`, files: relativePaths.map((path) => fileIn(`/mods/${name}`, path)), folders: [], notes: [] });
+
+const modFoldersOf = (...names: string[]): ModFolders => {
+  const all: ModFolder[] = names.map((name) => ({ kind: 'mod', name, path: `/mods/${name}` }));
+  return { all, holding: (entry) => all.find((folder) => folder.kind === entry.kind && folder.name.toLowerCase() === entry.name.toLowerCase()) };
+};
+
+const sourceModsOf = (folders: Record<string, string>, notes: string[] = []): SourceMods => ({
+  folders: new Map(Object.entries(folders)),
+  folderOf: (name) => Object.entries(folders).find(([output]) => output.toLowerCase() === name.toLowerCase())?.[1],
+  notes,
+});
+
+const GAME_FOLDER: GameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
+const inDataFolder = (...names: string[]): DataFolderPlugins => ({ kind: 'listed', names: new Set(names) });
+const GAME_FOUND: Partial<InstanceReading> = {
+  gameFolder: GAME_FOLDER,
+  dataFolderPlugins: inDataFolder(),
+  dataFolderArchives: { kind: 'listed', archives: [], stringsFiles: [] } satisfies DataFolderArchives,
+};
+
+const downloadedFile = (name: string): DownloadedFile =>
+  ({ name, path: `/downloads/${name}`, metaPath: `/downloads/${name}.meta`, size: 1, mtimeMs: 1, meta: undefined });
+const downloads = (...names: string[]): DownloadedFiles =>
+  ({ kind: 'listed', downloadsDir: '/downloads', files: names.map(downloadedFile) });
+
+function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: InstanceAdapter) => InstanceAdapter = (adapter) => adapter) {
+  const fake = fakeInstanceAdapter(readingFixture(overrides));
   const logs: string[] = [];
-  const errorLines: string[] = [];
   const warnings: string[] = [];
-  const readings = { count: 0 };
-  let resolve = hooks.resolveGameFolder ?? resolvesDataFolder;
-  const instance = new Instance({
-    window: STEADY_WINDOW,
-    adapter: countingReadings(adapterOver(root, { gameFolder: () => resolve() }), readings),
-    log: { info: (msg) => logs.push(msg), warn: (msg) => warnings.push(msg), error: (line) => errorLines.push(line) },
-  });
-  instances.push(instance);
-  return {
-    root, instance, logs, warnings, errorLines, readings,
-    setResolver: (next) => { resolve = next; },
-  };
-}
-
-function signalledInstance(): {
-  instance: Instance; signal: () => void; windowState: (state: WindowState) => void;
-  listeners: ReadonlySet<unknown>; windowListeners: ReadonlySet<unknown>;
-} {
-  const root = cloneCorpusFixture();
-  roots.push(root);
-  const listeners = new Set<() => void>();
+  const errorLines: string[] = [];
   const windowListeners = new Set<(state: WindowState) => void>();
   const window = {
-    state: { focused: true, active: true },
+    state: { focused: true },
     onDidChangeWindowState: (listener: (state: WindowState) => void) => {
       windowListeners.add(listener);
       return { dispose: () => { windowListeners.delete(listener); } };
     },
   };
   const instance = new Instance({
-    adapter: {
-      ...adapterOver(root, { gameFolder: resolvesDataFolder }),
-      subscribe: (listener) => {
-        listeners.add(listener);
-        return { dispose: () => { listeners.delete(listener); } };
-      },
-    },
+    adapter: wrap(fake.adapter),
     window,
-    log: { info: () => {}, warn: () => {}, error: () => {} },
+    log: { info: (msg) => logs.push(msg), warn: (msg) => warnings.push(msg), error: (line) => errorLines.push(line) },
   });
   instances.push(instance);
   return {
-    instance,
-    signal: () => { for (const listener of [...listeners]) listener(); },
-    windowState: (state) => {
+    instance, fake, logs, warnings, errorLines, windowListeners,
+    windowState: (state: WindowState) => {
       window.state = state;
       for (const listener of [...windowListeners]) listener(state);
     },
-    listeners,
-    windowListeners,
   };
-}
-
-interface WindowState {
-  focused: boolean;
-  active: boolean;
-}
-
-const NONO = 'Ñoño\'s Retexture';
-
-async function writeModFile(root: string, modName: string, relativePath: string, body: string): Promise<string> {
-  const path = join(root, 'mods', modName, relativePath);
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, body);
-  return path;
 }
 
 function pastSequence(instance: Instance, sequence: number): Promise<InstanceValue> {
@@ -140,59 +90,30 @@ function pastSequence(instance: Instance, sequence: number): Promise<InstanceVal
   });
 }
 
-async function readUntilNoArmedReadIsLeft(instance: Instance): Promise<void> {
-  await instance.refresh();
-  await instance.refresh();
-}
-
-const fakeSettleClockLeavingSetImmediateReal = (): void => {
+const settleClockLeavingSetImmediateReal = (): void => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 };
 
-const TIMED_OUT = Symbol('timed out waiting for a recompute');
+const listedRows = (value: InstanceValue) => (value.downloads.kind === 'listed' ? value.downloads.rows : []);
 
-function pastSequenceWithin(instance: Instance, sequence: number, ms: number): Promise<InstanceValue | typeof TIMED_OUT> {
-  return Promise.race([
-    pastSequence(instance, sequence),
-    new Promise<typeof TIMED_OUT>((resolve) => setTimeout(() => resolve(TIMED_OUT), ms)),
-  ]);
-}
-
-const watcherFor = (glob: string): FakeWatcher => {
-  const found = watchers.filter((w) => w.pattern === glob);
-  expect(found).toHaveLength(1);
-  return present(found[0], `the sole watcher for ${glob}`);
-};
-
-async function rewriteOutsideModbench(path: string, from: string, to: string): Promise<void> {
-  const text = await readFile(path, 'utf8');
-  expect(text).toContain(from);
-  await writeFile(path, text.replace(from, to));
-}
-
-const enableHarderVatsOutsideModbench = (root: string): Promise<void> =>
-  rewriteOutsideModbench(join(root, DEFAULT_MODLIST), '-Harder VATS', '+Harder VATS');
-
-const isEnabled = (value: InstanceValue, name: string) => value.mods.find((m) => m.name === name)?.enabled;
-
-const listedDownloadsOf = (value: InstanceValue) => (value.downloads.kind === 'listed' ? value.downloads.rows : []);
+const NONO = 'Ñoño\'s Retexture';
+const PATCH = 'Unofficial Fallout 4 Patch';
 
 describe('Instance — the value', () => {
   it('hands the first value once read, and the held one without another read once it has landed', async () => {
-    const { instance, readings } = realInstance();
+    const { instance, fake } = loader({ mods: [mod('A')] });
 
     const first = await instance.landed();
-    const readsAfterFirst = readings.count;
     const again = await instance.landed();
 
-    expect(instance.sequence).toBeGreaterThan(0);
-    expect(first.mods.length).toBeGreaterThan(0);
+    expect(instance.sequence).toBe(1);
+    expect(first.mods).toEqual([mod('A')]);
     expect(again).toBe(first);
-    expect(readings.count).toBe(readsAfterFirst);
+    expect(fake.readings).toBe(1);
   });
 
   it('starts empty at sequence 0, before anything has been read', () => {
-    const { instance } = realInstance();
+    const { instance } = loader({ mods: [mod('A')] });
 
     expect(instance.sequence).toBe(0);
     expect(instance.value.mods).toEqual([]);
@@ -201,265 +122,141 @@ describe('Instance — the value', () => {
     expect(instance.value.filesByMod.size).toBe(0);
   });
 
-  it('carries the mods in override order, with separators and enabled, after a refresh', async () => {
-    const { instance } = realInstance();
-
-    await instance.refresh();
-
-    expect(instance.sequence).toBe(1);
-    expect(instance.value.mods.map((m) => [m.kind, m.name, m.enabled])).toEqual([
-      ['mod', 'Ñoño\'s Retexture', true],
-      ['mod', 'Tracked Patch Mod', true],
-      ['mod', 'SKK Fast Start new game (Fallout 4)', true],
-      ['separator', 'Unassigned (Modlist Development)', false],
-      ['mod', '[NODELETE] Radfall', true],
-      ['mod', 'Unofficial Fallout 4 Patch', true],
-      ['separator', 'Radfall - All-In-One Survival Overhaul', false],
-      ['mod', 'ENBoost - 12k', true],
-      ['mod', 'Harder VATS', false],
-      ['mod', 'Cracked and Smudged Pip-Boy Screen', true],
-    ]);
-  });
-
-  it('joins each mod\'s meta.ini onto its entry, and leaves an absent or empty-valued one undefined', async () => {
-    const { instance } = realInstance();
-
-    await instance.refresh();
-
-    const byName = new Map(instance.value.mods.map((m) => [m.name, m]));
-    expect(byName.get('Unofficial Fallout 4 Patch')).toMatchObject({
-      nexusId: '4598',
-      version: '2.1.5.0',
-      archiveFilename: 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z',
+  it('carries the reading\'s mods, mod folders, profiles, game and game folder as one value, a mod folder with no line a folder and never a mod', async () => {
+    const mods = [mod(NONO), separator('Section'), mod('Harder VATS', false)];
+    const { instance } = loader({
+      mods, modFolders: modFoldersOf(NONO, 'Hand Extracted Mod'), profile: 'Secondary', profiles: ['Default', 'Secondary'],
+      gameName: 'Fallout 4', gameRelease: 'Fallout4', gameFolder: GAME_FOLDER,
     });
-    expect(byName.get('Harder VATS')).toEqual({ kind: 'mod', name: 'Harder VATS', enabled: false });
-  });
-
-  it('never carries meta fields on a separator entry, even when a same-named mod folder exists', async () => {
-    const { root, instance } = realInstance();
-    await writeModFile(root, 'Unassigned (Modlist Development)', 'meta.ini', '[General]\r\nmodid=555\r\nversion=9.9.9\r\n');
 
     await instance.refresh();
 
-    expect(instance.value.mods.find((e) => e.name === 'Unassigned (Modlist Development)'))
-      .toEqual({ kind: 'separator', name: 'Unassigned (Modlist Development)', enabled: false });
+    const { value } = instance;
+    expect(value.mods).toEqual(mods);
+    expect(value.modFolders?.map((f) => f.name)).toEqual([NONO, 'Hand Extracted Mod']);
+    expect(value.activeProfile).toBe('Secondary');
+    expect(value.profiles).toEqual(['Default', 'Secondary']);
+    expect([value.gameName, value.gameRelease, value.nexusSlug]).toEqual(['Fallout 4', 'Fallout4', 'fallout4']);
+    expect(value.gameFolder).toEqual(GAME_FOLDER);
   });
 
-  it('carries each mod a repository builds, its name matched without case, as tracked, with that repository as its source folder, wherever the repository is, and says which repositories build no mod', async () => {
-    const { root, instance, logs } = realInstance();
-    await repository(root, 'Harder VATS', 'Harder VATS');
-    await repository(root, 'Renamed From', '[nodelete] radfall');
-    await repository(root, 'Cloned And Unlisted', 'Cloned And Unlisted');
-    await mkdir(join(root, 'source', 'No Configuration', '.git'), { recursive: true });
+  it('carries each mod a repository builds as tracked, with that repository as its source folder, and each repository alone as a source mod', async () => {
+    const { instance, logs } = loader({
+      mods: [mod('Harder VATS'), mod('[NODELETE] Radfall'), mod('Plain')],
+      sourceMods: sourceModsOf(
+        { 'Harder VATS': '/source/Harder VATS', '[nodelete] radfall': '/source/Renamed From', 'Cloned And Unlisted': '/source/Cloned And Unlisted' },
+        ['/source/No Configuration builds no mod'],
+      ),
+    });
 
     await instance.refresh();
 
     expect([...instance.value.trackedMods].sort()).toEqual(['Harder VATS', '[NODELETE] Radfall']);
     expect([...instance.value.sourceMods].sort()).toEqual(['Cloned And Unlisted', 'Harder VATS', '[NODELETE] Radfall']);
-    expect(instance.value.paths.sourceDirs.get('[NODELETE] Radfall')).toBe(join(root, 'source', 'Renamed From'));
-    expect(instance.value.paths.sourceDirs.get('Cloned And Unlisted')).toBe(join(root, 'source', 'Cloned And Unlisted'));
-    expect(logs).toContainEqual(expect.stringContaining(join(root, 'source', 'No Configuration')));
+    expect(instance.value.paths.sourceDirs.get('[NODELETE] Radfall')).toBe('/source/Renamed From');
+    expect(instance.value.paths.sourceDirs.get('Cloned And Unlisted')).toBe('/source/Cloned And Unlisted');
+    expect(logs).toContain('[instance] /source/No Configuration builds no mod');
   });
 
-  it('tells once, until it changes or clears, that a repository builds no mod', async () => {
-    const { root, instance, logs } = realInstance();
-    const repositoryFolder = join(root, 'source', 'No Configuration');
-    const told = (): number => logs.filter((line) => line.includes(repositoryFolder)).length;
-    await mkdir(join(repositoryFolder, '.git'), { recursive: true });
-
-    await instance.refresh();
-    await instance.refresh();
-    expect(told()).toBe(1);
-
-    await rm(repositoryFolder, { recursive: true });
-    await instance.refresh();
-    await mkdir(join(repositoryFolder, '.git'), { recursive: true });
-    await instance.refresh();
-    expect(told()).toBe(2);
-  });
-
-  it('carries no source folder for a mod named as a renamed repository\'s folder still is, that repository being the source of the mod its build configuration names', async () => {
-    const { root, instance } = realInstance();
-    await repository(root, 'Harder VATS', 'Harder VATS Renamed');
+  it('carries no source folder for a mod named as a renamed repository\'s folder still is, that repository being the source of the mod its build names', async () => {
+    const { instance } = loader({ mods: [mod('Harder VATS')], sourceMods: sourceModsOf({ 'Harder VATS Renamed': '/source/Harder VATS' }) });
 
     await instance.refresh();
 
     expect(instance.value.trackedMods.has('Harder VATS')).toBe(false);
     expect(instance.value.paths.sourceDirs.has('Harder VATS')).toBe(false);
-    expect(instance.value.paths.sourceDirs.get('Harder VATS Renamed')).toBe(join(root, 'source', 'Harder VATS'));
+    expect(instance.value.paths.sourceDirs.get('Harder VATS Renamed')).toBe('/source/Harder VATS');
   });
 
-  it('carries a folder under mods with no line for the active profile as a mod folder, never as a mod, so mod sync hears of it though the Mods tree renders `mods` alone', async () => {
-    const { root, instance } = realInstance();
-    await mkdir(join(root, 'mods', 'Hand Extracted Mod'), { recursive: true });
+  it('tells once, until it changes or clears, each note of the reading', async () => {
+    const note = 'no mod is built by /source/No Configuration';
+    const { instance, logs, fake } = loader({ sourceMods: sourceModsOf({}, [note]) });
+    const told = (): number => logs.filter((line) => line.includes(note)).length;
 
     await instance.refresh();
+    await instance.refresh();
+    expect(told()).toBe(1);
 
-    expect(instance.value.modFolders?.map((f) => f.name)).toContain('Hand Extracted Mod');
-    expect(instance.value.mods.map((m) => m.name)).not.toContain('Hand Extracted Mod');
+    fake.read({ sourceMods: sourceModsOf({}) });
+    await instance.refresh();
+    fake.read({ sourceMods: sourceModsOf({}, [note]) });
+    await instance.refresh();
+    expect(told()).toBe(2);
   });
 
-  it('carries a mod folder that is a link to a folder, as MO2 lists it (modinfo.cpp, QDir::Dirs without NoSymLinks), and not a link to a file', async () => {
-    const { root, instance } = realInstance();
-    const target = await mkdtemp(join(tmpdir(), 'linked-mod-'));
-    try {
-      await symlink(target, join(root, 'mods', 'Linked Mod'), 'junction');
-      await writeFile(join(target, 'readme.txt'), '');
-      await symlink(join(target, 'readme.txt'), join(root, 'mods', 'Linked File'));
-
-      await instance.refresh();
-
-      expect(instance.value.modFolders?.map((f) => f.name)).toContain('Linked Mod');
-      expect(instance.value.modFolders?.map((f) => f.name)).not.toContain('Linked File');
-    } finally {
-      await rm(target, { recursive: true, force: true });
-    }
-  });
-
-  it('skips a mod folder link whose target cannot be checked as MO2 does, without failing the recompute, and tells it once rather than on every watched change', async () => {
-    const { root, instance, logs, errorLines } = realInstance();
-    await mkdir(join(root, 'mods', 'Real Mod'));
-    await symlink(join(root, 'mods', 'Loop'), join(root, 'mods', 'Loop'));
+  it('tells once rather than on every watched change that a link in mods/ cannot be followed, without failing the recompute', async () => {
+    const { instance, logs, errorLines } = loader({ modFolders: modFoldersOf('Real Mod'), skippedLinks: new Map([['Loop', 'too many levels']]) });
 
     await instance.refresh();
     await instance.refresh();
 
     expect(errorLines).toEqual([]);
-    expect(instance.value.modFolders?.map((f) => f.name)).toContain('Real Mod');
-    expect(instance.value.modFolders?.map((f) => f.name)).not.toContain('Loop');
-    expect(logs.filter((line) => line.includes('Loop'))).toHaveLength(1);
+    expect(instance.sequence).toBe(2);
+    expect(logs.filter((line) => line.includes('Loop'))).toEqual(['[instance] mods/Loop is a link Modbench cannot follow, so it is not a mod folder: too many levels']);
   });
 
-  it('never carries a stray file such as Thumbs.db directly under mods as a mod folder, only a directory being one', async () => {
-    const { root, instance } = realInstance();
-    await writeFile(join(root, 'mods', 'Thumbs.db'), '');
-
-    await instance.refresh();
-
-    expect(instance.value.modFolders?.map((f) => f.name)).not.toContain('Thumbs.db');
-  });
-
-  it('carries the winner of a path two enabled mods provide, and each listed mod\'s own files, a disabled mod\'s too', async () => {
-    const { root, instance } = realInstance();
-    const winner = await writeModFile(root, NONO, 'textures/shared.dds', 'winning');
-    await writeModFile(root, 'Unofficial Fallout 4 Patch', 'textures/shared.dds', 'losing');
-    await writeModFile(root, 'Harder VATS', 'textures/shared.dds', 'disabled');
+  it('carries the winner of a path two enabled mods provide, and each listed mod\'s own files and folders, a disabled mod\'s too', async () => {
+    const folder = { relativePath: 'textures', path: '/mods/Harder VATS/textures', excluded: false };
+    const { instance } = loader({
+      mods: [mod(NONO), mod(PATCH), mod('Harder VATS', false)],
+      modFiles: new Map([
+        [NONO, filesOfMod(NONO, 'textures/shared.dds')],
+        [PATCH, filesOfMod(PATCH, 'textures/shared.dds')],
+        ['Harder VATS', { ...filesOfMod('Harder VATS', 'textures/shared.dds'), folders: [folder] }],
+      ]),
+    });
 
     await instance.refresh();
 
     const entry = instance.value.files.get('textures/shared.dds');
-    expect(entry?.winner).toBe(winner);
-    expect(entry?.winnerOrigin).toEqual({ kind: 'mod', name: NONO });
-    expect(entry?.providers).toEqual([{ kind: 'mod', name: NONO }, { kind: 'mod', name: 'Unofficial Fallout 4 Patch' }]);
+    expect(entry?.winner).toBe(`/mods/${NONO}/textures/shared.dds`);
+    expect(entry?.providers).toEqual([{ kind: 'mod', name: NONO }, { kind: 'mod', name: PATCH }]);
     expect(instance.value.filesByMod.get('Harder VATS')?.map((f) => f.relativePath)).toEqual(['textures/shared.dds']);
-    expect(instance.value.filesByMod.get('Tracked Patch Mod')?.map((f) => f.relativePath)).toEqual(['Tracked Patch Mod.esp']);
-    expect(instance.value.foldersByMod.get('Harder VATS')?.map((f) => f.relativePath)).toEqual(['textures']);
+    expect(instance.value.foldersByMod.get('Harder VATS')).toEqual([folder]);
   });
 
-  it('carries every plugin — listed, unlisted and Data-folder — with origin, line, enabled and winning', async () => {
-    const { root, instance } = realInstance();
+  it('carries every plugin — listed, unlisted and Data-folder — with origin, line, enabled and winning, a disabled mod\'s own plugin too', async () => {
+    const { instance } = loader({
+      ...GAME_FOUND,
+      dataFolderPlugins: inDataFolder('Unofficial Fallout 4 Patch.esp'),
+      mods: [mod(NONO), mod('Harder VATS', false)],
+      pluginOrder: [{ name: 'NonAsciiRetexture.esp', enabled: true }, { name: 'Unofficial Fallout 4 Patch.esp', enabled: true }],
+      modFiles: new Map([
+        [NONO, filesOfMod(NONO, 'NonAsciiRetexture.esp', 'NonAsciiRetexture - Addon.esl')],
+        ['Harder VATS', filesOfMod('Harder VATS', 'Harder VATS.esp')],
+      ]),
+    });
 
     await instance.refresh();
 
     expect(instance.value.plugins).toEqual([
-      { name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, line: 0, enabled: true, winning: true },
-      { name: 'Tracked Patch Mod.esp', path: join(root, 'mods', 'Tracked Patch Mod', 'Tracked Patch Mod.esp'), origin: 'Tracked Patch Mod', line: 1, enabled: true, winning: true },
-      { name: 'Unofficial Fallout 4 Patch.esp', path: join(DATA_FOLDER, 'Unofficial Fallout 4 Patch.esp'), origin: 'Data/', line: 2, enabled: true, winning: true },
-      { name: 'ccSBJFO4003-Grenade.esl', path: join(DATA_FOLDER, 'ccSBJFO4003-Grenade.esl'), origin: 'Data/', line: 3, enabled: true, winning: true },
-      { name: 'NonAsciiRetexture - Addon.esl', path: join(root, 'mods', NONO, 'NonAsciiRetexture - Addon.esl'), origin: NONO, line: null, enabled: false, winning: true },
+      { name: 'NonAsciiRetexture.esp', path: `/mods/${NONO}/NonAsciiRetexture.esp`, origin: NONO, line: 0, enabled: true, winning: true },
+      { name: 'Unofficial Fallout 4 Patch.esp', path: '/game/Data/Unofficial Fallout 4 Patch.esp', origin: 'Data/', line: 1, enabled: true, winning: true },
+      { name: 'NonAsciiRetexture - Addon.esl', path: `/mods/${NONO}/NonAsciiRetexture - Addon.esl`, origin: NONO, line: null, enabled: false, winning: true },
+      { name: 'Harder VATS.esp', path: '/mods/Harder VATS/Harder VATS.esp', origin: 'Harder VATS', line: null, enabled: false, winning: false },
     ]);
-  });
-
-  it('carries a disabled mod\'s own plugin, with no line, not enabled, not winning, so the snapshot names plugins of disabled mods too', async () => {
-    const { root, instance } = realInstance();
-    const path = await writeModFile(root, 'Harder VATS', 'Harder VATS.esp', 'disabled mod plugin');
-
-    await instance.refresh();
-
-    expect(instance.value.plugins).toContainEqual(
-      { name: 'Harder VATS.esp', path, origin: 'Harder VATS', line: null, enabled: false, winning: false },
-    );
-  });
-
-  it('sends the overridden plugin of a filename two enabled mods provide, at the same line', async () => {
-    const { root, instance } = realInstance();
-    const overridden = await writeModFile(root, 'Unofficial Fallout 4 Patch', 'NonAsciiRetexture.esp', 'overridden plugin');
-
-    await instance.refresh();
-
-    expect(instance.value.plugins).toContainEqual(
-      { name: 'NonAsciiRetexture.esp', path: overridden, origin: 'Unofficial Fallout 4 Patch', line: 0, enabled: true, winning: false },
-    );
-  });
-});
-
-describe('Instance — the overwrite folder', () => {
-  it('resolves a listed plugin to the overwrite plugin, sending the mod plugin as overridden', async () => {
-    const { root, instance } = realInstance();
-    const overwritePlugin = join(root, 'overwrite', 'NonAsciiRetexture.esp');
-    await writeFile(overwritePlugin, 'overwrite-plugin');
-
-    await instance.refresh();
-
-    const plugins = instance.value.plugins.filter((p) => p.name === 'NonAsciiRetexture.esp');
-    expect(plugins).toEqual([
-      { name: 'NonAsciiRetexture.esp', path: overwritePlugin, origin: 'overwrite/', line: 0, enabled: true, winning: true },
-      { name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, line: 0, enabled: true, winning: false },
-    ]);
-  });
-
-  it('sends an unlisted plugin sitting in overwrite/ with no line, winning-most', async () => {
-    const { root, instance } = realInstance();
-    await writeFile(join(root, 'overwrite', 'New.esp'), '');
-    await writeFile(join(root, 'overwrite', 'notes.txt'), '');
-
-    await instance.refresh();
-
-    expect(instance.value.plugins.filter((p) => p.origin === 'overwrite/')).toEqual([
-      { name: 'New.esp', path: join(root, 'overwrite', 'New.esp'), origin: 'overwrite/', line: null, enabled: false, winning: true },
-    ]);
-  });
-
-  it('falls through to mod resolution when there is no overwrite folder at all', async () => {
-    const { root, instance } = realInstance();
-    await rm(join(root, 'overwrite'), { recursive: true, force: true });
-
-    await instance.refresh();
-
-    expect(instance.value.plugins.find((p) => p.name === 'NonAsciiRetexture.esp'))
-      .toEqual({ name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, line: 0, enabled: true, winning: true });
-  });
-
-  it('never treats a directory under overwrite/ sharing a plugin\'s name as that plugin\'s file', async () => {
-    const { root, instance } = realInstance();
-    await mkdir(join(root, 'overwrite', 'NonAsciiRetexture.esp'), { recursive: true });
-
-    await instance.refresh();
-
-    expect(instance.value.plugins.filter((p) => p.name === 'NonAsciiRetexture.esp'))
-      .toEqual([{ name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, line: 0, enabled: true, winning: true }]);
   });
 });
 
 describe('Instance — built by watching', () => {
   it('listens for the adapter\'s signal and the window\'s state from construction, before any read, until disposed', () => {
-    const { instance, listeners, windowListeners } = signalledInstance();
+    const { instance, fake, windowListeners } = loader();
     expect(instance.sequence).toBe(0);
-    expect([listeners.size, windowListeners.size]).toEqual([1, 1]);
+    expect([fake.subscribers, windowListeners.size]).toEqual([1, 1]);
 
     instance.dispose();
 
-    expect([listeners.size, windowListeners.size]).toEqual([0, 0]);
+    expect([fake.subscribers, windowListeners.size]).toEqual([0, 0]);
   });
 
   it('recomputes once for a burst of the adapter\'s signals, a per-signal recompute landing five more', async () => {
-    const { instance, signal } = signalledInstance();
+    const { instance, fake } = loader();
     await instance.refresh();
     const before = instance.sequence;
 
-    fakeSettleClockLeavingSetImmediateReal();
+    settleClockLeavingSetImmediateReal();
     try {
-      for (let i = 0; i < 6; i++) signal();
+      for (let i = 0; i < 6; i++) fake.changed();
       await vi.advanceTimersByTimeAsync(1000);
     } finally {
       vi.useRealTimers();
@@ -471,18 +268,18 @@ describe('Instance — built by watching', () => {
   });
 
   it('recomputes when the window regains focus, and not when it loses it, focus being the one signal no watcher can lose', async () => {
-    const { instance, windowState } = signalledInstance();
+    const { instance, windowState } = loader();
     await instance.refresh();
     const before = instance.sequence;
 
-    fakeSettleClockLeavingSetImmediateReal();
+    settleClockLeavingSetImmediateReal();
     try {
-      windowState({ focused: false, active: false });
+      windowState({ focused: false });
       await vi.advanceTimersByTimeAsync(1000);
       await instance.refresh();
       expect(instance.sequence).toBe(before + 1);
 
-      windowState({ focused: true, active: true });
+      windowState({ focused: true });
       await vi.advanceTimersByTimeAsync(1000);
       await instance.refresh();
       expect(instance.sequence).toBe(before + 3);
@@ -491,15 +288,14 @@ describe('Instance — built by watching', () => {
     }
   });
 
-  it('recomputes nothing while the window keeps its focus, `active` moving as VS Code reports a focused window going idle or coming back from idle', async () => {
-    const { instance, windowState } = signalledInstance();
+  it('recomputes nothing while the window keeps its focus', async () => {
+    const { instance, windowState } = loader();
     await instance.refresh();
     const before = instance.sequence;
 
-    fakeSettleClockLeavingSetImmediateReal();
+    settleClockLeavingSetImmediateReal();
     try {
-      windowState({ focused: true, active: false });
-      windowState({ focused: true, active: true });
+      windowState({ focused: true });
       await vi.advanceTimersByTimeAsync(1000);
       await instance.refresh();
     } finally {
@@ -510,17 +306,17 @@ describe('Instance — built by watching', () => {
   });
 
   it('settles the window regaining focus with the adapter\'s signals, into one recompute, the focus restarting the settle the signal began', async () => {
-    const { instance, signal, windowState } = signalledInstance();
+    const { instance, fake, windowState } = loader();
     await instance.refresh();
-    windowState({ focused: false, active: false });
+    windowState({ focused: false });
     const before = instance.sequence;
 
     const msWhereTheSignalsOwnSettleHasRunOut = 150;
-    fakeSettleClockLeavingSetImmediateReal();
+    settleClockLeavingSetImmediateReal();
     try {
-      signal();
+      fake.changed();
       await vi.advanceTimersByTimeAsync(msWhereTheSignalsOwnSettleHasRunOut);
-      windowState({ focused: true, active: true });
+      windowState({ focused: true });
       await vi.advanceTimersByTimeAsync(msWhereTheSignalsOwnSettleHasRunOut);
       await instance.refresh();
     } finally {
@@ -531,14 +327,14 @@ describe('Instance — built by watching', () => {
   });
 
   it('a refresh mid-burst is the burst\'s recompute, not a second one', async () => {
-    const { instance, signal } = signalledInstance();
+    const { instance, fake } = loader();
     await instance.refresh();
     const before = instance.sequence;
 
     const msWhereAWaitLeftArmedWouldFire = 1000;
     vi.useFakeTimers();
     try {
-      signal();
+      fake.changed();
       await instance.refresh();
       await vi.advanceTimersByTimeAsync(msWhereAWaitLeftArmedWouldFire);
     } finally {
@@ -549,77 +345,36 @@ describe('Instance — built by watching', () => {
     expect(instance.sequence).toBe(before + 2);
   });
 
-  it('catches a file written in the gap before the just-bound downloads watcher can arm, which fires no watcher event, only the adapter\'s signal on following the folder catching it', async () => {
-    const { root, instance } = realInstance();
-    fakeSettleClockLeavingSetImmediateReal();
-    try {
-      await instance.refresh();
-      const before = instance.sequence;
-
-      await writeFile(join(root, 'downloads', 'RaceCondition.7z'), 'bytes');
-      const landing = pastSequence(instance, before);
-      await vi.advanceTimersByTimeAsync(1000);
-
-      const after = await landing;
-      expect(after.downloads.kind === 'listed' && after.downloads.rows.some((d) => d.name === 'RaceCondition.7z')).toBe(true);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) lands mods and plugins even when download_directory names an untranslatable drive letter, losing only the downloads rows', async () => {
-    const { root, instance } = realInstance();
+  it('yields the next value at a higher sequence when the adapter signals a change', async () => {
+    const { instance, fake } = loader({ mods: [mod('Harder VATS', false)] });
     await instance.refresh();
     const before = instance.sequence;
-    const iniPath = join(root, 'ModOrganizer.ini');
-    const originalIni = await readFile(iniPath, 'utf8');
 
-    await writeFile(iniPath, `${originalIni}download_directory=D:\\Games\\downloads\r\n`);
-    await instance.refresh();
+    fake.read({ mods: [mod('Harder VATS', true)] });
+    fake.changed();
 
-    expect(instance.sequence).toBeGreaterThan(before);
-    expect(instance.readFailure).toBeUndefined();
-    expect(instance.value.mods.length).toBeGreaterThan(0);
-    expect(instance.value.downloads).toMatchObject({ kind: 'unresolved' });
-    if (instance.value.downloads.kind !== 'unresolved') throw new Error('unreachable');
-    expect(instance.value.downloads.reason).toMatch(/download_directory/);
+    const landed = await pastSequence(instance, before);
+    expect(landed.mods).toEqual([mod('Harder VATS', true)]);
   });
 
-  it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) lists, watches and exposes as paths.downloadsDir nothing from the default downloads/ folder while download_directory is unresolved, which downloads.md story 1 forbids', async () => {
-    const { root, instance } = realInstance();
-    await mkdir(join(root, 'downloads'), { recursive: true });
-    await writeFile(join(root, 'downloads', 'RealArchive.7z'), 'bytes');
+  it('corrects the value on refresh after a change the adapter never signalled, a profile switch included', async () => {
+    const { instance, fake } = loader({ mods: [mod('Harder VATS', false)], profile: 'Default' });
     await instance.refresh();
-    expect(listedDownloadsOf(instance.value)).toContainEqual(expect.objectContaining({ name: 'RealArchive.7z' }));
-    const iniPath = join(root, 'ModOrganizer.ini');
-    const originalIni = await readFile(iniPath, 'utf8');
-
-    await writeFile(iniPath, `${originalIni}download_directory=D:\\Games\\downloads\r\n`);
-    await instance.refresh();
-
-    expect(instance.value.downloads).toMatchObject({ kind: 'unresolved' });
-    expect(watchers.filter((w) => w.base === join(root, 'downloads') && !w.disposed)).toHaveLength(0);
-    expect(instance.value.paths.downloadsDir).toBeUndefined();
-  });
-
-  it('yields the next value at a higher sequence when a file is rewritten outside Modbench', async () => {
-    const { root, instance } = realInstance();
-    await readUntilNoArmedReadIsLeft(instance);
-    expect(isEnabled(instance.value, 'Harder VATS')).toBe(false);
     const before = instance.sequence;
 
-    await enableHarderVatsOutsideModbench(root);
-    watcherFor('profiles/*/modlist.txt').fireChange(join(root, DEFAULT_MODLIST));
+    fake.read({ mods: [mod('Harder VATS', true)], profile: 'Secondary' });
+    expect(instance.value.mods).toEqual([mod('Harder VATS', false)]);
+    await instance.refresh();
 
-    expect(isEnabled(await pastSequence(instance, before), 'Harder VATS')).toBe(true);
-    expect(instance.sequence).toBeGreaterThan(before);
+    expect(instance.value.mods).toEqual([mod('Harder VATS', true)]);
+    expect(instance.value.activeProfile).toBe('Secondary');
+    expect(instance.sequence).toBe(before + 1);
   });
-
 });
 
 describe('Instance — a write that changes several files', () => {
   it('lands no value read inside it, and lands the refresh after it', async () => {
-    const { instance } = realInstance();
+    const { instance } = loader();
     await instance.refresh();
     const before = instance.sequence;
 
@@ -632,13 +387,13 @@ describe('Instance — a write that changes several files', () => {
   });
 
   it('reports only the failure of the read after it, not of one inside it that fails on a file the write is half-way through', async () => {
-    const { root, instance, errorLines } = realInstance();
+    const { instance, fake, errorLines } = loader();
     await instance.refresh();
     const heard = vi.fn();
     instance.onReadFailure(heard);
 
     await instance.quiet(async () => {
-      await writeFile(join(root, 'ModOrganizer.ini'), '');
+      fake.failReading('ModOrganizer.ini is empty');
       await instance.refresh();
     });
 
@@ -648,66 +403,28 @@ describe('Instance — a write that changes several files', () => {
 });
 
 describe('Instance — a value that survives a bad read', () => {
-  it('keeps the previous value and logs when a file is half-written', async () => {
-    const { root, instance, errorLines } = realInstance();
-    await readUntilNoArmedReadIsLeft(instance);
+  it('keeps the previous value, logs, and reports the failure to failure subscribers when the reading fails after a value has landed', async () => {
+    const { instance, fake, errorLines } = loader({ mods: [mod('A')] });
+    await instance.refresh();
     const value = instance.value;
     const before = instance.sequence;
+    const failures: (string | undefined)[] = [];
+    instance.onReadFailure(() => failures.push(instance.readFailure));
 
-    await writeFile(join(root, 'ModOrganizer.ini'), '');
+    fake.failReading('ModOrganizer.ini is half-written');
     await instance.refresh();
 
     expect(instance.value).toBe(value);
     expect(instance.sequence).toBe(before);
     expect(errorLines).toHaveLength(1);
     expect(errorLines[0]).toContain('ModOrganizer.ini');
+    expect(failures).toEqual(['ModOrganizer.ini is half-written']);
+    expect(instance.readFailure).toBe(failures[0]);
   });
 
-  it('keeps the value when a mod\'s meta.ini is present but unreadable — never silently "no metadata"', async () => {
-    const { root, instance, errorLines } = realInstance();
-    await readUntilNoArmedReadIsLeft(instance);
-    const value = instance.value;
-    const before = instance.sequence;
-
-    await rm(join(root, 'mods', 'Harder VATS', 'meta.ini'), { force: true });
-    await mkdir(join(root, 'mods', 'Harder VATS', 'meta.ini'));
-    await instance.refresh();
-
-    expect(instance.value).toBe(value);
-    expect(instance.sequence).toBe(before);
-    expect(errorLines).toHaveLength(1);
-  });
-
-  it('keeps the value when a folder inside overwrite/ is unreadable, simulated through a mocked readdir as chmod denial is bypassed when the runner is root — never silently a smaller count', async () => {
-    const { root, instance, errorLines } = realInstance();
-    const nested = join(root, 'overwrite', 'SKSE');
-    await mkdir(nested, { recursive: true });
-    await writeFile(join(nested, 'skse.log'), '');
-    await readUntilNoArmedReadIsLeft(instance);
-    const value = instance.value;
-    const before = instance.sequence;
-
-    const { readdir: actualReaddir } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
-    vi.mocked(readdir).mockImplementation(async (path, ...rest) => {
-      if (String(path) === nested) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
-      return actualReaddir(path, ...rest);
-    });
-    try {
-      await instance.refresh();
-    } finally {
-      vi.mocked(readdir).mockImplementation(actualReaddir);
-    }
-
-    expect(instance.value).toBe(value);
-    expect(instance.sequence).toBe(before);
-    expect(errorLines).toHaveLength(1);
-  });
-
-  it('reports a failed first read to failure subscribers, so a tree can settle on an error node instead of a spinner that never ends, holds the sequence at 0, and lands the next successful read at sequence 1', async () => {
-    const { root, instance } = realInstance();
-    const ini = join(root, 'ModOrganizer.ini');
-    const complete = await readFile(ini, 'utf8');
-    await writeFile(ini, '');
+  it('reports a failed first read to failure subscribers, so a tree can settle on an error node, holds the sequence at 0, and lands the next successful read at sequence 1', async () => {
+    const { instance, fake } = loader({ mods: [mod('A')] });
+    fake.failReading('ModOrganizer.ini is empty');
     const failures: (string | undefined)[] = [];
     const landed: number[] = [];
     instance.onReadFailure(() => failures.push(instance.readFailure));
@@ -715,13 +432,11 @@ describe('Instance — a value that survives a bad read', () => {
 
     await instance.refresh();
 
-    expect(failures).toHaveLength(1);
-    expect(failures[0]).toContain('ModOrganizer.ini');
-    expect(instance.readFailure).toBe(failures[0]);
+    expect(failures).toEqual(['ModOrganizer.ini is empty']);
     expect(landed).toEqual([]);
     expect(instance.sequence).toBe(0);
 
-    await writeFile(ini, complete);
+    fake.failReading(undefined);
     await instance.refresh();
 
     expect(landed).toEqual([1]);
@@ -729,55 +444,21 @@ describe('Instance — a value that survives a bad read', () => {
     expect(failures).toHaveLength(1);
   });
 
-  it('settles a refresh once its own read has failed, and again once a read lands', async () => {
-    const { root, instance } = realInstance();
-    const ini = join(root, 'ModOrganizer.ini');
-    const complete = await readFile(ini, 'utf8');
-    await writeFile(ini, '');
-
+  it('publishes an empty mod list, since zero mods is legal', async () => {
+    const { instance, fake } = loader({ mods: [mod('A')], modFiles: new Map([['A', filesOfMod('A', 'a.dds')]]) });
     await instance.refresh();
-
-    expect(instance.readFailure).toContain('ModOrganizer.ini');
-
-    await writeFile(ini, complete);
-    await instance.refresh();
-
-    expect(instance.readFailure).toBeUndefined();
-  });
-
-  it('reports a failure after a value has landed, keeping that value', async () => {
-    const { root, instance } = realInstance();
-    await readUntilNoArmedReadIsLeft(instance);
-    const value = instance.value;
-    const before = instance.sequence;
-    const failures: (string | undefined)[] = [];
-    instance.onReadFailure(() => failures.push(instance.readFailure));
-
-    await writeFile(join(root, 'ModOrganizer.ini'), '');
-    await instance.refresh();
-
-    expect(instance.value).toBe(value);
-    expect(instance.sequence).toBe(before);
-    expect(failures).toHaveLength(1);
-    expect(instance.readFailure).toBe(failures[0]);
-  });
-
-  it('publishes an empty mod list once the re-read agrees, since zero mods is legal', async () => {
-    const { root, instance } = realInstance();
-    await readUntilNoArmedReadIsLeft(instance);
     const before = instance.sequence;
 
-    await writeFile(join(root, DEFAULT_MODLIST), '');
+    fake.read({ mods: [], modFiles: new Map() });
     await instance.refresh();
 
     expect(instance.value.mods).toEqual([]);
-    expect([...instance.value.files].map((entry) => entry.relativePath)).toEqual(['F4SE/Plugins/SomePlugin.log']);
     expect(instance.value.filesByMod.size).toBe(0);
     expect(instance.sequence).toBe(before + 1);
   });
 
   it('keeps recomputing after a subscriber throws', async () => {
-    const { instance, errorLines } = realInstance();
+    const { instance, errorLines } = loader();
     const seen: number[] = [];
     instance.subscribe(() => {
       throw new Error('subscriber exploded');
@@ -790,86 +471,105 @@ describe('Instance — a value that survives a bad read', () => {
     expect(seen).toEqual([1, 2]);
     expect(errorLines.filter((m) => m.includes('subscriber threw'))).toHaveLength(2);
   });
+});
 
-  it('corrects the value on refresh after a watcher event that never arrived', async () => {
-    const { root, instance } = realInstance();
-    await readUntilNoArmedReadIsLeft(instance);
-    const before = instance.sequence;
+describe('Instance — downloads', () => {
+  const ARCHIVE = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
-    await enableHarderVatsOutsideModbench(root);
-    expect(isEnabled(instance.value, 'Harder VATS')).toBe(false);
+  it('carries the downloaded files as rows, and the folder they are listed from', async () => {
+    const { instance } = loader({ downloadedFiles: downloads(ARCHIVE) });
 
     await instance.refresh();
 
-    expect(isEnabled(instance.value, 'Harder VATS')).toBe(true);
+    expect(listedRows(instance.value).map((row) => row.name)).toEqual([ARCHIVE]);
+    expect(instance.value.paths.downloadsDir).toBe('/downloads');
+  });
+
+  it('reads a download as Installed from the meta of a mod folder, one with no line in the mod order too, and drops it once the folder is gone', async () => {
+    const { instance, fake } = loader({
+      mods: [mod(PATCH)],
+      downloadedFiles: downloads(ARCHIVE, 'Off-Profile-1.7z'),
+      folderMeta: new Map([[PATCH, { archiveFilename: ARCHIVE }], ['Off Profile Mod', { archiveFilename: 'Off-Profile-1.7z' }]]),
+    });
+    await instance.refresh();
+    expect(listedRows(instance.value).map((row) => [row.name, row.status])).toEqual([[ARCHIVE, 'Installed'], ['Off-Profile-1.7z', 'Installed']]);
+
+    fake.read({ folderMeta: new Map() });
+    await instance.refresh();
+
+    expect(listedRows(instance.value).map((row) => row.status)).toEqual(['Downloaded', 'Downloaded']);
+  });
+
+  it('yields a value with no downloads, rather than a failure, when the downloads folder is absent', async () => {
+    const { instance, fake } = loader({ downloadedFiles: downloads(ARCHIVE) });
+    await instance.refresh();
+    const before = instance.sequence;
+
+    fake.read({ downloadedFiles: { kind: 'listed', downloadsDir: '/downloads', files: undefined } });
+    await instance.refresh();
+
     expect(instance.sequence).toBe(before + 1);
+    expect(instance.value.downloads).toEqual({ kind: 'listed', rows: [] });
+  });
+
+  it('lands mods and plugins when the downloads folder is unresolved, losing only the rows and the folder', async () => {
+    const reason = 'download_directory names a drive letter this machine cannot translate';
+    const { instance } = loader({ mods: [mod('A')], downloadedFiles: { kind: 'unresolved', reason } });
+
+    await instance.refresh();
+
+    expect(instance.readFailure).toBeUndefined();
+    expect(instance.value.mods).toEqual([mod('A')]);
+    expect(instance.value.downloads).toEqual({ kind: 'unresolved', reason });
+    expect(instance.value.paths.downloadsDir).toBeUndefined();
   });
 });
 
-const switchToSecondaryOutsideModbench = (root: string): Promise<void> => rewriteOutsideModbench(
-  join(root, 'ModOrganizer.ini'), 'selected_profile=@ByteArray(Default)', 'selected_profile=@ByteArray(Secondary)',
-);
+describe('Instance — game folder and the archives the game loads', () => {
+  const SUPPLIED = '/game/Data/Fallout4 - Interface.ba2';
 
-describe('Instance — downloads, profile and game directory', () => {
-  it('carries downloads with status and hidden, the active profile, the resolved game directory and release, from one value', async () => {
-    const { instance } = realInstance();
+  it('hands the snapshot the archives the INIs list, and tells once, until it changes, the INIs it did not find', async () => {
+    const note = 'The profile Default keeps no game INIs of its own';
+    const { instance, warnings, logs } = loader({
+      ...GAME_FOUND,
+      archiveList: ['Fallout4 - Interface.ba2'],
+      archiveListNotes: [note],
+      dataFolderArchives: { kind: 'listed', archives: ['Fallout4 - Interface.ba2'], stringsFiles: [] },
+    });
 
     await instance.refresh();
+    await instance.refresh();
 
-    expect(listedDownloadsOf(instance.value)).toContainEqual(
-      expect.objectContaining({
-        name: 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z',
-        status: 'Installed',
-        excluded: false,
-      }),
-    );
-    expect(instance.value.activeProfile).toBe('Default');
-    expect(instance.value.gameName).toBe('Fallout 4');
-    expect(instance.value.gameRelease).toBe('Fallout4');
-    expect(instance.value.nexusSlug).toBe('fallout4');
-    expect(instance.value.gameFolder).toEqual({ kind: 'found', root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
+    expect(instance.value.loadOrderSnapshot).toMatchObject({ archives: [SUPPLIED] });
+    expect(warnings).toEqual([`[instance] ${note}`]);
+    expect(logs).toEqual([]);
   });
 
-  const gameListing = async (listed: string): Promise<{ gameFolder: GameFolder; dataFolder: string }> => {
-    const game = await mkdtemp(join(tmpdir(), 'medit-instance-archives-'));
-    roots.push(game);
-    const dataFolder = join(game, 'Data');
-    await mkdir(dataFolder);
-    await writeFile(join(dataFolder, 'Fallout4 - Interface.ba2'), '');
-    await writeFile(join(game, 'Fallout4_Default.ini'), `[Archive]\nsResourceStartUpArchiveList=${listed}\n`);
-    return { gameFolder: { kind: 'found', root: game, dataFolder }, dataFolder };
-  };
-
-  it('hands the snapshot the archives the game\u2019s default INI lists, from the game folder, and tells that the profile keeps no INIs of its own', async () => {
-    const { gameFolder, dataFolder } = await gameListing('Fallout4 - Interface.ba2');
-    const { instance, warnings } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
+  it('tells once, until it changes, each archive the INIs list that nothing holds', async () => {
+    const { instance, logs } = loader({
+      ...GAME_FOUND,
+      archiveList: ['Fallout4 - Interface.ba2', 'Gone.ba2'],
+      dataFolderArchives: { kind: 'listed', archives: ['Fallout4 - Interface.ba2'], stringsFiles: [] },
+    });
 
     await instance.refresh();
+    await instance.refresh();
 
-    expect(instance.value.loadOrderSnapshot).toMatchObject({ archives: [join(dataFolder, 'Fallout4 - Interface.ba2')] });
-    expect(warnings).toContainEqual(expect.stringMatching(/^\[instance\] The profile Default keeps no game INIs of its own/));
+    expect(logs).toEqual(['[instance] The game\'s INIs list the archive Gone.ba2, which no mod, Overwrite or game folder holds.']);
   });
 
-  it('warns once, until it changes, that the game\u2019s own INIs were not found', async () => {
-    const { gameFolder } = await gameListing('Fallout4 - Interface.ba2');
-    const { instance, logs, warnings } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
-
+  it('hands a mod\'s plugin a strings file added beside it, at the next read', async () => {
+    const reading: Partial<InstanceReading> = {
+      ...GAME_FOUND,
+      mods: [mod('Tracked Patch Mod')],
+      pluginOrder: [{ name: 'Tracked Patch Mod.esp', enabled: true }],
+      modFolders: modFoldersOf('Tracked Patch Mod'),
+    };
+    const { instance, fake } = loader({ ...reading, modFiles: new Map([['Tracked Patch Mod', filesOfMod('Tracked Patch Mod', 'Tracked Patch Mod.esp')]]) });
     await instance.refresh();
-    await instance.refresh();
 
-    const mine = (lines: string[]): string[] => lines.filter((line) => line.includes('keeps no game INIs of its own'));
-    expect(mine(warnings)).toHaveLength(1);
-    expect(mine(logs)).toEqual([]);
-  });
-
-  it('hands a mod\u2019s plugin a strings file added beside it, at the next read', async () => {
-    const { gameFolder } = await gameListing('');
-    const { root, instance } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
-    await instance.refresh();
-    const stringsFile = join(root, 'mods', 'Tracked Patch Mod', 'Strings', 'Tracked Patch Mod_en.STRINGS');
-    await mkdir(dirname(stringsFile));
-    await writeFile(stringsFile, '');
-
+    const stringsFile = '/mods/Tracked Patch Mod/Strings/Tracked Patch Mod_en.STRINGS';
+    fake.read({ modFiles: new Map([['Tracked Patch Mod', filesOfMod('Tracked Patch Mod', 'Tracked Patch Mod.esp', 'Strings/Tracked Patch Mod_en.STRINGS')]]) });
     await instance.refresh();
 
     expect(instance.value.loadOrderSnapshot).toMatchObject({
@@ -877,386 +577,143 @@ describe('Instance — downloads, profile and game directory', () => {
     });
   });
 
-  it('tells once, until it changes, each archive the INIs list that nothing holds', async () => {
-    const { gameFolder } = await gameListing('Fallout4 - Interface.ba2, Gone.ba2');
-    const { instance, logs } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
-
+  it('lands a value carrying the game folder not found, rather than a failure, and back again when it is found', async () => {
+    const { instance, fake, errorLines } = loader({ mods: [mod('A')], gameFolder: GAME_FOLDER });
     await instance.refresh();
-    await instance.refresh();
-
-    expect(logs.filter((line) => line.includes('Gone.ba2'))).toEqual([
-      '[instance] The game\'s INIs list the archive Gone.ba2, which no mod, Overwrite or game folder holds.',
-    ]);
-  });
-
-  it('drops a download\u2019s Installed row once the mod that named it is gone, sidecar claim and all', async () => {
-    const { root, instance } = realInstance();
-    const archive = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
-    const statusOf = () => listedDownloadsOf(instance.value).find((d) => d.name === archive)?.status;
-    await instance.refresh();
-    expect(statusOf()).toBe('Installed');
-
-    await rm(join(root, 'mods', 'Unofficial Fallout 4 Patch'), { recursive: true, force: true });
-    await instance.refresh();
-
-    expect(statusOf()).toBe('Uninstalled');
-  });
-
-  it('reads a download as Installed from a mod folder with no line in the active profile\u2019s modlist', async () => {
-    const { root, instance } = realInstance();
-    await mkdir(join(root, 'downloads'), { recursive: true });
-    await writeFile(join(root, 'downloads', 'Off-Profile-1.7z'), 'archive bytes');
-    await writeModFile(root, 'Off Profile Mod', 'meta.ini', '[General]\r\ninstallationFile=Off-Profile-1.7z\r\n');
-
-    await instance.refresh();
-
-    expect(instance.value.mods.map((m) => m.name)).not.toContain('Off Profile Mod');
-    expect(instance.value.modFolders?.map((f) => f.name)).toContain('Off Profile Mod');
-    const download = listedDownloadsOf(instance.value).find((d) => d.name === 'Off-Profile-1.7z');
-    expect(download?.status).toBe('Installed');
-  });
-
-  it('keeps the value when an off-profile mod\'s meta.ini is present but unreadable, only ENOENT reading as empty', async () => {
-    const { root, instance, errorLines } = realInstance();
-    await readUntilNoArmedReadIsLeft(instance);
-    const value = instance.value;
     const before = instance.sequence;
 
-    await mkdir(join(root, 'mods', 'Off Profile Mod', 'meta.ini'), { recursive: true });
-    await instance.refresh();
-
-    expect(instance.value).toBe(value);
-    expect(instance.sequence).toBe(before);
-    expect(errorLines).toHaveLength(1);
-  });
-
-  it('reflects a profile switch made outside Modbench in the next value', async () => {
-    const { root, instance } = realInstance();
-    await instance.refresh();
-    expect(instance.value.activeProfile).toBe('Default');
-
-    await switchToSecondaryOutsideModbench(root);
-    await instance.refresh();
-
-    expect(instance.value.activeProfile).toBe('Secondary');
-  });
-
-  it('follows a profile switch on its own watcher, with no refresh asked for, as a switch rewrites only ModOrganizer.ini', async () => {
-    const { root, instance } = realInstance();
-    await readUntilNoArmedReadIsLeft(instance);
-    const before = instance.sequence;
-
-    await switchToSecondaryOutsideModbench(root);
-    watcherFor('ModOrganizer.ini').fireChange();
-
-    const landed = await pastSequenceWithin(instance, before, 2000);
-    expect(landed).not.toBe(TIMED_OUT);
-    expect(instance.value.activeProfile).toBe('Secondary');
-  });
-
-  it('yields a value with no downloads, rather than a failure, when downloads/ is absent', async () => {
-    const { root, instance } = realInstance();
-    await readUntilNoArmedReadIsLeft(instance);
-    expect(listedDownloadsOf(instance.value).length).toBeGreaterThan(0);
-    const before = instance.sequence;
-
-    await rm(join(root, 'downloads'), { recursive: true, force: true });
-    await instance.refresh();
-
-    expect(instance.sequence).toBe(before + 1);
-    expect(instance.value.downloads).toEqual({ kind: 'listed', rows: [] });
-  });
-
-  it('yields a value whose mod folders are unknown, rather than a failure, when mods/ is absent, as absent is not empty and mod sync would drop every line against an empty list', async () => {
-    const { root, instance } = realInstance();
-    await readUntilNoArmedReadIsLeft(instance);
-    expect(instance.value.modFolders?.length).toBeGreaterThan(0);
-    const before = instance.sequence;
-
-    await rm(join(root, 'mods'), { recursive: true, force: true });
-    await instance.refresh();
-
-    expect(instance.sequence).toBe(before + 1);
-    expect(instance.value.modFolders).toBeUndefined();
-  });
-
-  it('lands a value carrying the game folder not found, with each place looked, rather than a failure', async () => {
-    const { instance, setResolver, errorLines } = realInstance();
-    await instance.refresh();
-    expect(instance.value.gameFolder.kind).toBe('found');
-    const before = instance.sequence;
-
-    setResolver(resolvesNotFound);
+    fake.read({ gameFolder: GAME_FOLDER_NOT_FOUND });
     await instance.refresh();
 
     expect(instance.sequence).toBe(before + 1);
     expect(instance.readFailure).toBeUndefined();
     expect(errorLines).toEqual([]);
     expect(instance.value.gameFolder).toEqual(GAME_FOLDER_NOT_FOUND);
-    expect(instance.value.mods.length).toBeGreaterThan(0);
+    expect(instance.value.mods).toEqual([mod('A')]);
+
+    fake.read({ gameFolder: GAME_FOLDER });
+    await instance.refresh();
+
+    expect(instance.value.gameFolder).toEqual(GAME_FOLDER);
   });
 
-  it('fails the read, keeping the last value, when the configuration names no game, rather than reading as the game folder not found', async () => {
-    const { root, instance, errorLines } = realInstance();
-    await readUntilNoArmedReadIsLeft(instance);
-    const before = instance.sequence;
-    const ini = join(root, 'ModOrganizer.ini');
-    await writeFile(ini, (await readFile(ini, 'utf8')).replace(/gameName=.*\r?\n/, ''));
+  it('keeps every plugins.txt line as a row when the game folder is not found, Data-only rows line-only with no path, a mod-provided row keeping its real path', async () => {
+    const { instance } = loader({
+      mods: [mod(NONO)],
+      pluginOrder: [{ name: 'NonAsciiRetexture.esp', enabled: true }, { name: 'Unofficial Fallout 4 Patch.esp', enabled: true }],
+      modFiles: new Map([[NONO, filesOfMod(NONO, 'NonAsciiRetexture.esp')]]),
+    });
 
     await instance.refresh();
 
-    expect(instance.sequence).toBe(before);
-    expect(instance.readFailure).toMatch(/gameName/);
-    expect(errorLines).toHaveLength(1);
+    expect(instance.value.plugins).toEqual([
+      { name: 'NonAsciiRetexture.esp', path: `/mods/${NONO}/NonAsciiRetexture.esp`, origin: NONO, line: 0, enabled: true, winning: true },
+      { name: 'Unofficial Fallout 4 Patch.esp', path: undefined, origin: 'Data/', line: 1, enabled: true, winning: true },
+    ]);
   });
 
-  it('keeps every plugins.txt line as a row when the game directory is unresolved, Data-only rows line-only with no path rather than a guess or a drop, a mod-provided row keeping its real path', async () => {
-    const { instance, setResolver } = realInstance();
-    await instance.refresh();
-    const withGameDirectory = instance.value.plugins;
-    const dataOnlyBefore = withGameDirectory.find((p) => p.name === 'Unofficial Fallout 4 Patch.esp');
-    expect(dataOnlyBefore?.origin).toBe('Data/');
-    expect(dataOnlyBefore?.path).toEqual(expect.any(String));
-    const modProvidedBefore = withGameDirectory.find((p) => p.name === 'NonAsciiRetexture.esp');
-    expect(modProvidedBefore?.path).toEqual(expect.any(String));
-
-    setResolver(resolvesNotFound);
-    await instance.refresh();
-
-    const modProvided = instance.value.plugins.find((p) => p.name === 'NonAsciiRetexture.esp');
-    expect(modProvided).toEqual(modProvidedBefore);
-    const dataOnly = instance.value.plugins.find((p) => p.name === 'Unofficial Fallout 4 Patch.esp');
-    expect(dataOnly).toBeDefined();
-    expect(dataOnly?.line).toBe(dataOnlyBefore?.line);
-    expect(dataOnly?.enabled).toBe(dataOnlyBefore?.enabled);
-    expect(dataOnly?.origin).toBe('Data/');
-    expect(dataOnly?.path).toBeUndefined();
-  });
-
-  it('recomputes with the game directory the resolver now answers, yielding a new value and sequence', async () => {
-    const { root, instance, setResolver } = realInstance();
-    await instance.refresh();
-    const before = instance.sequence;
-    const explicitDir = join(root, 'ExplicitGame');
-    setResolver(() => Promise.resolve({ kind: 'found', root: explicitDir, dataFolder: join(explicitDir, 'Data') }));
-
-    await instance.refresh();
-
-    expect(instance.sequence).toBe(before + 1);
-    expect(instance.value.gameFolder).toEqual({ kind: 'found', root: explicitDir, dataFolder: join(explicitDir, 'Data') });
-  });
-
-  it('carries a source folder for each source mod alone, one with no mod folder too, and hands it to the facts', async () => {
-    const { root, instance } = realInstance();
-    await repository(root, 'Radfall', '[NODELETE] Radfall');
+  it('carries the paths a view renders: overwrite/, downloads/ and each listed mod\'s own folder, matched as the manager matches names, where it has one', async () => {
+    const { instance } = loader({
+      mods: [mod('tracked'), mod('Radfall'), separator('Section')],
+      modFolders: modFoldersOf('Tracked'),
+      runtimeOutput: { origin: 'overwrite', folder: '/overwrite', files: [], folders: [], notes: [] },
+    });
 
     await instance.refresh();
 
     const { paths } = instance.value;
-    expect(paths.modDirs.has('[NODELETE] Radfall')).toBe(false);
-    expect(paths.sourceDirs).toEqual(new Map([['[NODELETE] Radfall', join(root, 'source', 'Radfall')]]));
-    expect(factsOf(instance).sourceDirs()).toBe(paths.sourceDirs);
+    expect(paths.overwriteDir).toBe('/overwrite');
+    expect(paths.downloadsDir).toBe('/downloads');
+    expect(paths.modDirs).toEqual(new Map([['tracked', '/mods/Tracked']]));
   });
 
-  it('carries the paths a view renders: overwrite/, downloads/ and each listed mod’s own folder, where it has one', async () => {
-    const { root, instance } = realInstance();
+  it('carries a source folder for each source mod alone, one with no mod folder too, and hands it to the facts', async () => {
+    const { instance } = loader({ mods: [mod('Radfall')], sourceMods: sourceModsOf({ Radfall: '/source/Radfall' }) });
 
     await instance.refresh();
 
-    const { paths, mods } = instance.value;
-    expect(paths.overwriteDir).toBe(join(root, 'overwrite'));
-    expect(paths.downloadsDir).toBe(join(root, 'downloads'));
-    const first = present(mods.find((m) => m.kind === 'mod'), 'the fixture\'s first mod');
-    expect(paths.modDirs.get(first.name)).toBe(join(root, 'mods', first.name));
-    const modListedWithNoFolderUnderMods = '[NODELETE] Radfall';
-    expect(paths.modDirs.has(modListedWithNoFolderUnderMods)).toBe(false);
-    expect(paths.modDirs.size).toBe(mods.filter((m) => m.kind === 'mod').length - 1);
+    const { paths } = instance.value;
+    expect(paths.modDirs.has('Radfall')).toBe(false);
+    expect(paths.sourceDirs).toEqual(new Map([['Radfall', '/source/Radfall']]));
+    expect(factsOf(instance).sourceDirs()).toBe(paths.sourceDirs);
   });
 
   it('names the mod manager and its mod-order file as the adapter does rather than as the value spells them, before the first read too', () => {
-    const adapter = { ...adapterOver('/an/instance', { gameFolder: resolvesNotFound }), names: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' } };
-    const instance = new Instance({ window: STEADY_WINDOW, adapter, log: { info: () => {}, warn: () => {}, error: () => {} } });
-    instances.push(instance);
+    const names = { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' };
+    const { instance } = loader({}, (adapter) => ({ ...adapter, names }));
 
-    expect(instance.value.managerNames).toEqual({ manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' });
+    expect(instance.value.managerNames).toEqual(names);
   });
 
   it('names no folder before the first read lands, the adapter alone knowing where the instance keeps its folders', () => {
-    const instance = new Instance({
-      window: STEADY_WINDOW,
-      adapter: adapterOver('/an/instance', { gameFolder: resolvesNotFound }),
-      log: { info: () => {}, warn: () => {}, error: () => {} },
-    });
-    instances.push(instance);
+    const { instance } = loader();
 
     expect(instance.sequence).toBe(0);
     expect(instance.value.paths).toEqual({ overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map(), sourceDirs: new Map() });
   });
 });
 
-async function minimalInstanceWithoutCorpusMasters(): Promise<{
-  root: string; instance: Instance; logs: string[]; warnings: string[]; errorLines: string[];
-  setResolver: (resolve: ResolveGameFolder) => void;
-}> {
-  const root = await mkdtemp(join(tmpdir(), 'medit-instance-status-'));
-  roots.push(root);
-  await mkdir(join(root, 'profiles', 'Default'), { recursive: true });
-  await writeFile(join(root, 'ModOrganizer.ini'), '[General]\nselected_profile=@ByteArray(Default)\ngameName=Fallout 4\n');
-  await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '+Consumer\n');
-  await writeFile(join(root, 'profiles', 'Default', 'plugins.txt'), '');
-  await mkdir(join(root, 'mods', 'Consumer'), { recursive: true });
-  const logs: string[] = [];
-  const errorLines: string[] = [];
-  const warnings: string[] = [];
-  let resolve: ResolveGameFolder = resolvesNotFound;
-  const instance = new Instance({
-    window: STEADY_WINDOW,
-    adapter: adapterOver(root, { gameFolder: () => resolve() }),
-    log: { info: (msg) => logs.push(msg), warn: (msg) => warnings.push(msg), error: (line) => errorLines.push(line) },
-  });
-  instances.push(instance);
-  return { root, instance, logs, warnings, errorLines, setResolver: (next) => { resolve = next; } };
-}
-
 describe('Instance — Overwrite\'s files', () => {
-  it('carries each file and folder under the overwrite/ folder, recursive, by the path in it and where it sits', async () => {
-    const { root, instance } = await minimalInstanceWithoutCorpusMasters();
+  it('carries each file and folder under the overwrite/ folder, by the path in it and where it sits', async () => {
+    const log = fileIn('/overwrite', 'F4SE/plugin.log');
+    const folder = { relativePath: 'F4SE', path: '/overwrite/F4SE', excluded: false };
+    const { instance, fake } = loader();
     await instance.refresh();
     expect(instance.value.overwriteFiles).toEqual([]);
 
-    await mkdir(join(root, 'overwrite', 'F4SE'), { recursive: true });
-    await writeFile(join(root, 'overwrite', 'F4SE', 'plugin.log'), 'x');
+    fake.read({ runtimeOutput: { origin: 'overwrite', folder: '/overwrite', files: [log], folders: [folder], notes: [] } });
     await instance.refresh();
 
-    const log = join(root, 'overwrite', 'F4SE', 'plugin.log');
-    expect(instance.value.overwriteFiles).toEqual([{ relativePath: 'F4SE/plugin.log', path: log, sourcePath: log, excluded: false, excludedByName: false }]);
-    expect(instance.value.overwriteFolders).toEqual([{ relativePath: 'F4SE', path: join(root, 'overwrite', 'F4SE'), excluded: false }]);
-  });
-});
-
-describe('Instance — listing mods/, on a profile listing no mod folder so only its own failure can fail the read', () => {
-  const separatorOnly = async (root: string): Promise<void> => {
-    await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '-Section_separator\n');
-  };
-
-  it('keeps the value when mods/ is present but cannot be listed, as only ENOENT is "no mods/ yet" and any other failure must not read as every folder having its line', async () => {
-    const { root, instance, errorLines } = await minimalInstanceWithoutCorpusMasters();
-    await separatorOnly(root);
-    await readUntilNoArmedReadIsLeft(instance);
-    const value = instance.value;
-    const before = instance.sequence;
-
-    await rm(join(root, 'mods'), { recursive: true, force: true });
-    await writeFile(join(root, 'mods'), 'not a directory');
-    await instance.refresh();
-
-    expect(instance.value).toBe(value);
-    expect(instance.sequence).toBe(before);
-    expect(instance.readFailure).toBeDefined();
-    expect(errorLines).toHaveLength(1);
-  });
-
-  it('lands a value whose mod folders are unknown when mods/ is absent entirely, ENOENT alone being tolerated', async () => {
-    const { root, instance } = await minimalInstanceWithoutCorpusMasters();
-    await separatorOnly(root);
-    await rm(join(root, 'mods'), { recursive: true, force: true });
-
-    await instance.refresh();
-
-    expect(instance.sequence).toBe(1);
-    expect(instance.value.modFolders).toBeUndefined();
+    expect(instance.value.overwriteFiles).toEqual([log]);
+    expect(instance.value.overwriteFolders).toEqual([folder]);
   });
 });
 
 describe('Instance — what a command is handed instead of probing for it', () => {
   it('carries what mod sync and plugin sync are handed, read with the rest of the value', async () => {
-    const { root, instance } = await minimalInstanceWithoutCorpusMasters();
-    await writeFile(join(root, 'mods', 'Consumer', 'Mine.esp'), 'plugin');
+    const { instance } = loader({
+      mods: [mod('Consumer')], modFolders: modFoldersOf('Consumer'), modFiles: new Map([['Consumer', filesOfMod('Consumer', 'Mine.esp')]]),
+    });
 
     await instance.refresh();
 
     const { value } = instance;
-    expect(value.modSyncArguments).toEqual({ profile: value.activeProfile, modFolders: value.modFolders });
-    expect(value.pluginSyncArguments.profile).toBe(value.activeProfile);
+    expect(value.modSyncArguments).toEqual({ profile: 'Default', modFolders: value.modFolders });
+    expect(value.pluginSyncArguments.profile).toBe('Default');
     expect(value.pluginSyncArguments.provided).toEqual(new Map([['mine.esp', 'Mine.esp']]));
     expect(value.pluginSyncArguments.inData).toBe(value.dataFolderPlugins);
   });
 
-  it('lists every profile directory and no stray file beside them', async () => {
-    const { root, instance } = realInstance();
-    await writeFile(join(root, 'profiles', 'stray.txt'), 'not a profile');
+  it('carries mod folders unknown, rather than a failure, when there is no folder for mods at all, absent not being empty', async () => {
+    const { instance, fake } = loader({ modFolders: modFoldersOf('A') });
+    await instance.refresh();
+    const before = instance.sequence;
 
+    fake.read({ modFolders: undefined });
     await instance.refresh();
 
-    expect([...instance.value.profiles].sort()).toEqual(['Default', 'Secondary']);
-  });
-
-  it('names every folder under mods/, listed or not', async () => {
-    const { root, instance } = await minimalInstanceWithoutCorpusMasters();
-    await mkdir(join(root, 'mods', 'Unlisted Folder'), { recursive: true });
-
-    await instance.refresh();
-
-    expect(present(instance.value.modFolders, 'the listed mods/ folders').map((f) => f.name).sort()).toEqual(['Consumer', 'Unlisted Folder']);
-  });
-
-  it('carries the folder of a listed mod whose line names it in another case, as the mod manager matches names by its own rule rather than by exact name', async () => {
-    const { root, instance } = await minimalInstanceWithoutCorpusMasters();
-    await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '+consumer\n');
-
-    await instance.refresh();
-
-    expect(instance.value.paths.modDirs.get('consumer')).toBe(join(root, 'mods', 'Consumer'));
-  });
-
-  it("carries the game Data folder's root plugins, case-folded, and nothing below it", async () => {
-    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
-    const dataFolder = join(root, 'Game', 'Data');
-    await mkdir(join(dataFolder, 'Textures'), { recursive: true });
-    await writeFile(join(dataFolder, 'Fallout4.ESM'), '');
-    await writeFile(join(dataFolder, 'Fallout4.ba2'), '');
-    await writeFile(join(dataFolder, 'Hidden.esp.mohidden'), '');
-    await writeFile(join(dataFolder, 'Textures', 'Nested.esp'), '');
-    setResolver(() => Promise.resolve({ kind: 'found', root: dirname(dataFolder), dataFolder }));
-
-    await instance.refresh();
-
-    const listed = instance.value.dataFolderPlugins;
-    expect(listed.kind).toBe('listed');
-    expect([...(listed.kind === 'listed' ? listed.names : [])].sort()).toEqual(['Fallout4.ESM']);
-  });
-
-  it('tells an unresolved game directory from a folder that resolved and could not be read, an unreadable folder not being an empty set that would prune every plugins.txt line', async () => {
-    const { instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
-
-    await instance.refresh();
-    expect(instance.value.dataFolderPlugins).toEqual({ kind: 'unresolved' });
-
-    setResolver(() => Promise.resolve({ kind: 'found', root: '/nowhere', dataFolder: '/nowhere/Data' }));
-    await instance.refresh();
-
-    expect(instance.value.dataFolderPlugins).toMatchObject({ kind: 'unreadable' });
-    expect(instance.sequence).toBe(2);
+    expect(instance.sequence).toBe(before + 1);
+    expect(instance.value.modFolders).toBeUndefined();
+    expect(instance.value.modSyncArguments.modFolders).toBeUndefined();
   });
 
   it('tells once while it stands that the Data folder could not be listed', async () => {
-    const { instance, warnings, setResolver } = await minimalInstanceWithoutCorpusMasters();
-    setResolver(() => Promise.resolve({ kind: 'found', root: '/nowhere', dataFolder: '/nowhere/Data' }));
+    const { instance, warnings } = loader({ gameFolder: GAME_FOLDER, dataFolderPlugins: { kind: 'unreadable', reason: 'EACCES' } });
 
     await instance.refresh();
     await instance.refresh();
 
-    expect(warnings.filter((m) => m.includes('Data folder could not be listed'))).toHaveLength(1);
+    expect(instance.value.dataFolderPlugins).toEqual({ kind: 'unreadable', reason: 'EACCES' });
+    expect(warnings).toEqual(['[instance] the game\'s Data folder could not be listed: EACCES']);
   });
 
-  it('carries the plugins the game loads with no line: its masters from the per-release table, then its Creation Club plugins from the game folder\'s list, each only where the game can load it from', async () => {
-    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
-    const gameRoot = join(root, 'Game');
-    const dataFolder = join(gameRoot, 'Data');
-    await mkdir(dataFolder, { recursive: true });
-    for (const name of ['DLCRobot.esm', 'Fallout4.esm', 'ccListed.esl']) await writeFile(join(dataFolder, name), '');
-    await writeFile(join(gameRoot, 'Fallout4.ccc'), 'ccMissing.esl\r\nccListed.esl\r\n');
-    setResolver(() => Promise.resolve({ kind: 'found', root: gameRoot, dataFolder }));
+  it('carries the plugins the game loads with no line: its masters from the per-release table, then its Creation Club plugins, each only where the game can load it from', async () => {
+    const { instance } = loader({
+      gameFolder: GAME_FOLDER,
+      gameRelease: 'Fallout4',
+      dataFolderPlugins: inDataFolder('DLCRobot.esm', 'Fallout4.esm', 'ccListed.esl'),
+      creationClubList: ['ccMissing.esl', 'ccListed.esl'],
+    });
 
     await instance.refresh();
 
@@ -1264,61 +721,11 @@ describe('Instance — what a command is handed instead of probing for it', () =
       ['Fallout4.esm', 'DLCRobot.esm', 'ccListed.esl'].map((name) => ({ name, origin: 'Data/' })));
   });
 
-  it('carries a game master an enabled mod provides where the game folder holds none', async () => {
-    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
-    const dataFolder = join(root, 'Game', 'Data');
-    await mkdir(dataFolder, { recursive: true });
-    await writeFile(join(root, 'mods', 'Consumer', 'DLCCoast.esm'), '');
-    setResolver(() => Promise.resolve({ kind: 'found', root: dirname(dataFolder), dataFolder }));
-
-    await instance.refresh();
-
-    expect(instance.value.pluginsLoadedWithNoLine).toEqual([{ name: 'DLCCoast.esm', origin: 'Consumer' }]);
-  });
-
-  it('carries the load order snapshot put load order sends, keyed on the game folder it was derived from, each mod with its folder and a source mod with its source folder', async () => {
-    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
-    const dataFolder = join(root, 'Game', 'Data');
-    await mkdir(dataFolder, { recursive: true });
-    await writeFile(join(root, 'mods', 'Consumer', 'DLCCoast.esm'), '');
-    await repository(root, 'Consumer Source', 'Consumer');
-    setResolver(() => Promise.resolve({ kind: 'found', root: dirname(dataFolder), dataFolder }));
-
-    await instance.refresh();
-
-    expect(instance.value.loadOrderSnapshot).toMatchObject({
-      dataFolder,
-      plugins: [{
-        name: 'DLCCoast.esm',
-        provider: { kind: 'Mod', mod: 'Consumer', folder: join(root, 'mods', 'Consumer'), sourceFolder: join(root, 'source', 'Consumer Source') },
-      }],
-      loadedWithNoLine: [{ name: 'DLCCoast.esm', origin: 'Consumer' }],
+  it('carries a game master an enabled mod provides where the game folder holds none, at its file\'s spelling, in the snapshot too', async () => {
+    const { instance } = loader({
+      ...GAME_FOUND, gameRelease: 'Fallout4', mods: [mod('Consumer')], modFolders: modFoldersOf('Consumer'),
+      modFiles: new Map([['Consumer', filesOfMod('Consumer', 'dlccoast.esm')]]),
     });
-    const { loadOrderSnapshot } = instance.value;
-    expect(loadOrderSnapshot && 'active' in loadOrderSnapshot ? loadOrderSnapshot.active : []).toContainEqual({ name: 'DLCCoast.esm', origin: 'Consumer' });
-  });
-
-  it('sends no source folder for a mod named as a renamed repository\'s folder still is', async () => {
-    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
-    const dataFolder = join(root, 'Game', 'Data');
-    await mkdir(dataFolder, { recursive: true });
-    await writeFile(join(root, 'mods', 'Consumer', 'DLCCoast.esm'), '');
-    await repository(root, 'Consumer', 'Consumer Renamed');
-    setResolver(() => Promise.resolve({ kind: 'found', root: dirname(dataFolder), dataFolder }));
-
-    await instance.refresh();
-
-    const { loadOrderSnapshot } = instance.value;
-    expect(loadOrderSnapshot && 'plugins' in loadOrderSnapshot ? loadOrderSnapshot.plugins.map((p) => p.provider) : [])
-      .toEqual([{ kind: 'Mod', mod: 'Consumer', folder: join(root, 'mods', 'Consumer') }]);
-  });
-
-  it('carries a game master a mod provides at its file\'s spelling, the one the snapshot sends', async () => {
-    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
-    const dataFolder = join(root, 'Game', 'Data');
-    await mkdir(dataFolder, { recursive: true });
-    await writeFile(join(root, 'mods', 'Consumer', 'dlccoast.esm'), '');
-    setResolver(() => Promise.resolve({ kind: 'found', root: dirname(dataFolder), dataFolder }));
 
     await instance.refresh();
 
@@ -1327,68 +734,34 @@ describe('Instance — what a command is handed instead of probing for it', () =
     expect(instance.value.loadOrderSnapshot).toMatchObject({ loadedWithNoLine: [provided] });
   });
 
-  it.skipIf(process.platform === 'win32')('(Windows cannot hold two names that differ only in case) sends both plugins of a mod whose names differ only in case, whatever case the line names them in', async () => {
-    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
-    const dataFolder = join(root, 'Game', 'Data');
-    await mkdir(dataFolder, { recursive: true });
-    await writeFile(join(root, 'mods', 'Consumer', 'Foo.esp'), '');
-    await writeFile(join(root, 'mods', 'Consumer', 'foo.esp'), '');
-    await writeFile(join(root, 'profiles', 'Default', 'plugins.txt'), '*FOO.esp\n');
-    setResolver(() => Promise.resolve({ kind: 'found', root: dirname(dataFolder), dataFolder }));
+  it('carries the load order snapshot put load order sends, keyed on the game folder it was derived from, each mod with its folder and a source mod with its source folder', async () => {
+    const { instance } = loader({
+      ...GAME_FOUND, gameRelease: 'Fallout4', mods: [mod('Consumer')], modFolders: modFoldersOf('Consumer'),
+      modFiles: new Map([['Consumer', filesOfMod('Consumer', 'DLCCoast.esm')]]),
+      sourceMods: sourceModsOf({ Consumer: '/source/Consumer Source' }),
+    });
 
     await instance.refresh();
 
+    expect(instance.value.loadOrderSnapshot).toMatchObject({
+      dataFolder: '/game/Data',
+      plugins: [{
+        name: 'DLCCoast.esm',
+        provider: { kind: 'Mod', mod: 'Consumer', folder: '/mods/Consumer', sourceFolder: '/source/Consumer Source' },
+      }],
+      loadedWithNoLine: [{ name: 'DLCCoast.esm', origin: 'Consumer' }],
+    });
     const { loadOrderSnapshot } = instance.value;
-    const sent = loadOrderSnapshot && 'plugins' in loadOrderSnapshot ? loadOrderSnapshot.plugins : [];
-    expect(sent.map((p) => [p.origin, p.name]).sort()).toEqual([['Consumer', 'Foo.esp'], ['Consumer', 'foo.esp']]);
+    expect(loadOrderSnapshot && 'active' in loadOrderSnapshot ? loadOrderSnapshot.active : []).toContainEqual({ name: 'DLCCoast.esm', origin: 'Consumer' });
   });
 
   it('carries no answer and no snapshot while the game folder is not found', async () => {
-    const { instance } = await minimalInstanceWithoutCorpusMasters();
+    const { instance } = loader({ mods: [mod('Consumer')] });
 
     await instance.refresh();
 
+    expect(instance.value.gameFolder.kind).toBe('notFound');
     expect(instance.value.pluginsLoadedWithNoLine).toBeUndefined();
     expect(instance.value.loadOrderSnapshot).toBeUndefined();
-  });
-});
-
-describe('Instance — the sidecar file id and meta.ini installedFiles', () => {
-  it('carries a download row\'s fileID from its sidecar and a mod\'s installedFiles pairs from meta.ini', async () => {
-    const { root, instance } = await minimalInstanceWithoutCorpusMasters();
-    await mkdir(join(root, 'downloads'), { recursive: true });
-    await writeFile(join(root, 'downloads', 'Consumer-1-2-3.7z'), 'archive bytes');
-    await writeFile(
-      join(root, 'downloads', 'Consumer-1-2-3.7z.meta'),
-      '[General]\r\nmodID=1000\r\nfileID=2000\r\ninstalled=true\r\n',
-    );
-    await writeFile(
-      join(root, 'mods', 'Consumer', 'meta.ini'),
-      '[General]\r\ngameName=Fallout4\r\nmodid=1000\r\n[installedFiles]\r\n1\\modid=1000\r\n1\\fileid=2000\r\nsize=1\r\n',
-    );
-
-    await instance.refresh();
-
-    const download = listedDownloadsOf(instance.value).find((d) => d.name === 'Consumer-1-2-3.7z');
-    expect(download?.fileID).toBe('2000');
-
-    const mod = instance.value.mods.find((m) => m.name === 'Consumer');
-    expect(mod).toMatchObject({ installedFiles: [{ nexusId: '1000', fileId: '2000' }] });
-  });
-
-  it('carries no fileID on a download row whose sidecar has none, and no installedFiles on a mod with no meta.ini section', async () => {
-    const { root, instance } = await minimalInstanceWithoutCorpusMasters();
-    await mkdir(join(root, 'downloads'), { recursive: true });
-    await writeFile(join(root, 'downloads', 'Plain-1.7z'), 'archive bytes');
-    await writeFile(join(root, 'downloads', 'Plain-1.7z.meta'), '[General]\r\nmodID=1000\r\n');
-    await writeFile(join(root, 'mods', 'Consumer', 'meta.ini'), '[General]\r\ngameName=Fallout4\r\n');
-
-    await instance.refresh();
-
-    const download = listedDownloadsOf(instance.value).find((d) => d.name === 'Plain-1.7z');
-    expect(download?.fileID).toBeUndefined();
-
-    const mod = instance.value.mods.find((m) => m.name === 'Consumer');
-    expect(mod).toMatchObject({ installedFiles: undefined });
   });
 });

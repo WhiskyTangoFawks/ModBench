@@ -1,11 +1,19 @@
 import type {
   DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, HashedFile, InstallationFile,
-  InstallOutcome, InstallSource, InstallTarget, InstanceAdapter, InstanceReading, ModOrderChange, OriginFileMark, OriginFileMarked,
+  InstallOutcome, InstallSource, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
   OwnedMetaKeys, PluginOrderChange, Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
-/** An `InstanceReading` of an empty instance, every field overridable. */
+/** What a reading holds for mods that own no files: an entry for each listed mod. */
+function noFilesFor(mods: readonly ModlistEntry[]): ReadonlyMap<string, OriginFiles> {
+  return new Map(mods.flatMap((entry) => (entry.kind === 'mod'
+    ? [[entry.name, { origin: entry.name, folder: `/mods/${entry.name}`, files: [], folders: [], notes: [] }] as const]
+    : [])));
+}
+
+/** An `InstanceReading` of an empty instance, every field overridable. A listed mod with no files
+ *  given has none. */
 export function readingFixture(overrides: Partial<InstanceReading> = {}): InstanceReading {
   return {
     profile: 'Default',
@@ -24,7 +32,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     modFolders: undefined,
     skippedLinks: new Map(),
     runtimeOutput: { origin: 'overwrite', folder: undefined, files: [], folders: [], notes: [] },
-    modFiles: new Map(),
+    modFiles: noFilesFor(overrides.mods ?? []),
     folderMeta: new Map(),
     sourceMods: { folders: new Map(), folderOf: () => undefined, notes: [] },
     ...overrides,
@@ -75,6 +83,10 @@ export interface FakeInstanceAdapter {
   read(next: Partial<InstanceReading>): void;
   /** Tells every subscriber the instance changed. */
   changed(): void;
+  /** Every `reading()` after this rejects with the message, until it is called with `undefined`. */
+  failReading(message: string | undefined): void;
+  /** How many times the reading was asked for. */
+  readonly readings: number;
   readonly subscribers: number;
 }
 
@@ -87,6 +99,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   const calls: AdapterCall[] = [];
   const hashed: string[] = [];
   const listeners = new Set<() => void>();
+  let readings = 0;
+  let readingFailure: string | undefined;
 
   const record = <T>(call: AdapterCall, result: T): Promise<T> => {
     calls.push(call);
@@ -97,7 +111,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     Promise.resolve(found === undefined ? { kind: 'unreadable', reason: `no answer fixed for ${path}` } : { kind: 'read', answer: found });
 
   const adapter: InstanceAdapter = {
-    reading: () => Promise.resolve(current),
+    reading: () => {
+      readings++;
+      return readingFailure === undefined ? Promise.resolve(current) : Promise.reject(new Error(readingFailure));
+    },
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
     modFolderPath: (mod) => Promise.resolve(answers.modFolderPaths?.get(mod) ?? `/mods/${mod}`),
     sourceFolder: (mod) => `/source/${mod}`,
@@ -140,8 +157,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
 
   return {
     adapter, calls, hashed,
-    read: (next) => { current = { ...current, ...next }; },
+    read: (next) => { current = { ...current, ...(next.mods !== undefined && next.modFiles === undefined ? { modFiles: noFilesFor(next.mods) } : {}), ...next }; },
     changed: () => { for (const listener of [...listeners]) listener(); },
+    failReading: (message) => { readingFailure = message; },
+    get readings() { return readings; },
     get subscribers() { return listeners.size; },
   };
 }
