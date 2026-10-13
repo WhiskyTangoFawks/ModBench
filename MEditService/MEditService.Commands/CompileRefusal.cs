@@ -24,11 +24,12 @@ public enum CompileRefusal
     /// closing that program.</summary>
     SourceFileHeld,
 
-    /// <summary>The source does not parse; the way out is Decompile.</summary>
+    /// <summary>A source file the Codec refuses, or one the whole-mod read cannot parse; the way out is the files
+    /// named.</summary>
     SourceDoesNotParse,
 
-    /// <summary>The source does not round-trip through the codec (ADR-0006); the way out is
-    /// Decompile.</summary>
+    /// <summary>The source differs from what the codec produces from it (ADR-0006): the way out is the files
+    /// named, or Decompile for a file the codec produces nothing from.</summary>
     SourceDoesNotRoundTrip,
 
     /// <summary>The plugin written from the source would not hold a value the source does, such as a

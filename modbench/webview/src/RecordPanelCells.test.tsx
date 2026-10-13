@@ -254,6 +254,21 @@ describe('RecordPanel — the check error is the diff node\'s own, per column', 
   });
 });
 
+describe('RecordPanel — a translated text whose strings file is missing', () => {
+  const nameMeta = fieldMeta({ name: 'Name', type: 'translatedString' });
+  const missing = { TargetLanguage: 'English' };
+  const file = 'Fixture_en.STRINGS';
+
+  it('reads as the error, with the file it looked for in its tooltip', async () => {
+    renderPanel(recordOf(
+      [{ meta: nameMeta, master: missing, mod: missing }],
+      [leaf({ [MASTER]: missing, [MOD]: missing }, { checkErrors: { [MOD]: file } })]));
+    await screen.findByText('Name');
+    expect(within(cellAt('Name', 2)).getByTitle(file)).toHaveTextContent('<Error: No strings file>');
+    expect(within(cellAt('Name', 1)).queryByText('<Error: No strings file>')).not.toBeInTheDocument();
+  });
+});
+
 describe('RecordPanel — a reference cell', () => {
   const raceMeta = fieldMeta({ name: 'Race', type: 'formKey', validFormKeyTypes: ['race'] });
   const reference = recordOf(

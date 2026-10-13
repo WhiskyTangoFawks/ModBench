@@ -20,7 +20,7 @@ public sealed class TrackModTests
     public async Task TrackMod_OfAModThatProvidesNoPlugin_RefusesThatModWithoutThrowing()
     {
         using var gameDir = new ScratchDirectory("medit-track-noorigin-game-");
-        var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], []);
+        var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], [], []);
 
         var result = await TrackEveryPluginOf.ModAsync(loadOrder, "NoSuchMod");
 
@@ -398,7 +398,7 @@ public sealed class TrackModTests
 
         const string stringsFileNamedByIsoLanguageCodeNotByLanguageName = "Fixture_en.STRINGS";
         Assert.Contains(stringsFileNamedByIsoLanguageCodeNotByLanguageName, result.Message);
-        Assert.Contains(gameDir.Path, result.Message);
+        Assert.Contains(modFolder.Path, result.Message);
         Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }
 

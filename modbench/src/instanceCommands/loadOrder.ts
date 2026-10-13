@@ -14,7 +14,7 @@ export interface InstanceGame {
 /** The slice of the instance value put load order sends. */
 export interface LoadOrderSource extends InstanceGame {
   readonly loadOrderSnapshot:
-    | (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine'> & { readonly dataFolder: string })
+    | (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine' | 'archives' | 'stringsFiles'> & { readonly dataFolder: string })
     | { readonly refusal: string }
     | undefined;
 }
@@ -34,9 +34,9 @@ export async function putLoadOrder(
 ): Promise<PutLoadOrderResult> {
   if (!value.loadOrderSnapshot) return { sent: false };
   if ('refusal' in value.loadOrderSnapshot) return { sent: false, refusal: value.loadOrderSnapshot.refusal };
-  const { plugins, active, loadedWithNoLine, dataFolder } = value.loadOrderSnapshot;
+  const { plugins, active, loadedWithNoLine, archives, stringsFiles, dataFolder } = value.loadOrderSnapshot;
   const snapshot: LoadOrderSnapshot = {
-    plugins, active, loadedWithNoLine, gameDirectory: dataFolder, instanceRoot, gameRelease: releaseOf(value),
+    plugins, active, loadedWithNoLine, archives, stringsFiles, gameDirectory: dataFolder, instanceRoot, gameRelease: releaseOf(value),
   };
   return { sent: true, snapshot, outcome: await client.sendLoadOrder(snapshot) };
 }

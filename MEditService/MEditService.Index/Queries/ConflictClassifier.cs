@@ -85,6 +85,9 @@ internal sealed class ConflictClassifier(ILogger logger)
             ColumnOrder: OrderOf(records, columns),
             ComparedOrder: OrderOf([.. records.Take(comparedCount ?? records.Count)], columns),
             PartialFormColumns: records.Select((r, i) => (r, i)).Where(t => t.r.IsPartialForm).Select(t => columns[t.i]).ToHashSet(StringComparer.Ordinal),
+            MissingStringsFiles: records.Select((r, i) => (File: r.MissingStringsFile, Column: columns[i]))
+                .Where(t => t.File is not null)
+                .ToDictionary(t => t.Column, t => t.File ?? "", StringComparer.Ordinal),
             ShadowedColumns: shadowed,
             StatesOf: cellStates,
             FormKey: records[0].FormKey,
@@ -107,6 +110,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         IReadOnlyList<(string Column, int LoadOrderIndex)> ColumnOrder,
         IReadOnlyList<(string Column, int LoadOrderIndex)> ComparedOrder,
         IReadOnlySet<string> PartialFormColumns,
+        IReadOnlyDictionary<string, string> MissingStringsFiles,
         IReadOnlySet<string> ShadowedColumns,
         CellStatesOf StatesOf,
         string FormKey,
@@ -311,7 +315,9 @@ internal sealed class ConflictClassifier(ILogger logger)
             // absent value is not an unset link to report.
             if (ctx.PartialFormColumns.Contains(column)) continue;
             var meta = shapes[column];
-            if (CheckErrorBuilder.Build(meta, value as JsonElement?, resolve, ctx.Release, ctx.Indexed) is { } error)
+            if (CheckErrorBuilder.Build(
+                    meta, value as JsonElement?, resolve, ctx.Release, ctx.Indexed,
+                    missingStringsFile: ctx.MissingStringsFiles.GetValueOrDefault(column)) is { } error)
                 checkErrors[column] = error;
             if (meta.Type != "formKey") continue;
             var fk = FormReferences.ExtractString(value);

@@ -54,7 +54,7 @@ public sealed class RecordTableSchema
     /// <summary>Every column's node in <paramref name="document"/>, null where the document omits it,
     /// checked against what <paramref name="resolve"/> answers. No document holds a header's masters
     /// (ADR-0008), so their column reads null here.</summary>
-    public List<FieldValue> FieldsOf(Document document, Func<string, ResolvedFormKey?> resolve, GameRelease release, bool indexed)
+    public List<FieldValue> FieldsOf(Document document, Func<string, ResolvedFormKey?> resolve, GameRelease release, bool indexed, string? missingStringsFile = null)
     {
         var root = document.Element;
         var fields = new List<FieldValue>(RecordColumns.Count);
@@ -67,7 +67,7 @@ public sealed class RecordTableSchema
             var meta = col.Field;
             // The check reads the shape this record's own class gives the column; the wire keeps the
             // column's whole metadata, variants included, so the editor can pick the same.
-            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, root), value, resolve, release, indexed)));
+            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, root), value, resolve, release, indexed, missingStringsFile: missingStringsFile)));
         }
         return fields;
     }

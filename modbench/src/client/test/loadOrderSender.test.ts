@@ -15,6 +15,8 @@ function snapshot(name: string): LoadOrderSnapshot {
     plugins: [{ name, path: `/game/Data/${name}`, origin: DATA_DIRECTORY_ORIGIN, provider: { kind: 'Game' }, line: null, lineNamesIt: false }],
     active: [{ name, origin: DATA_DIRECTORY_ORIGIN }],
     loadedWithNoLine: [],
+    archives: [],
+    stringsFiles: [],
     gameDirectory: '/game/Data',
     instanceRoot: '/instance',
     gameRelease: 'Fallout4',

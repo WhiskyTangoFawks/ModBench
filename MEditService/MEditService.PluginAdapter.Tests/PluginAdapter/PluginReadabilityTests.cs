@@ -29,7 +29,7 @@ public sealed class PluginReadabilityTests : IDisposable
     private Task<Answer<PluginSource, PluginFailure>> ReadSourceAt(string path) =>
         Adapter.ReadSourceOfAsync(
             new RegisteredPlugin(Path.GetFileName(path), PluginOrigin.DataDirectory, path, PluginProvider.Game, Line: null),
-            EmptyLoadOrder.Of(GameRelease.Fallout4), new PluginStrings(null, _data.DataFolder));
+            EmptyLoadOrder.Of(GameRelease.Fallout4), new PluginStrings(_data.DataFolder));
 
     [Fact]
     public async Task APluginThatIsNotThere_IsInaccessible() =>
