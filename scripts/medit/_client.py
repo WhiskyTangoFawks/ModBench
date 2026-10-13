@@ -13,6 +13,14 @@ def select(sql):
     return _post('/records/select', {'sql': sql})['rows']
 
 
+def resolve(*names):
+    """What each name means: a plugin file name, or a record's EditorID or FormKey; (name, origin) picks a plugin."""
+    queries = [{'name': name} if isinstance(name, str) else {'name': name[0], 'origin': name[1]} for name in names]
+    return [
+        {'plugin': named['plugin'], 'form_key': named['formKey'], 'editor_id': named['editorId']}
+        for named in _post('/names/resolve', {'names': queries})['named']]
+
+
 def _post(path, body):
     port = os.environ.get('MEDIT_PORT')
     if port is None:

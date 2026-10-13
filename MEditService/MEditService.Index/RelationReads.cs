@@ -73,6 +73,25 @@ internal sealed class RelationReads(
             connection, $"SELECT EXISTS (SELECT 1 FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1)", formKey);
     }
 
+    /// <summary>The records a name can mean: the one whose FormKey it is, and every one whose winning copy's
+    /// EditorID it is, whatever the case. A record no active plugin holds is read from its first copy.</summary>
+    public IReadOnlyList<(string FormKey, string? EditorId)> RecordsNamed(string name)
+    {
+        using var connection = store.OpenReadConnection();
+        var formKey = Mutagen.Bethesda.Plugins.FormKey.TryFactory(name, out var parsed) ? parsed.ToString() : null;
+        return DuckDbSql.Rows(
+            connection,
+            $"""
+            SELECT form_key, editor_id FROM (
+                SELECT form_key, editor_id FROM {TableDdlBuilder.PluginRecordsView}
+                QUALIFY row_number() OVER (PARTITION BY form_key ORDER BY is_winner DESC, plugin, origin) = 1)
+            WHERE lower(editor_id) = lower($1) OR form_key = $2
+            ORDER BY form_key
+            """,
+            reader => (reader.GetString(0), reader.GetStringOrNull(1)),
+            name, formKey);
+    }
+
     /// <summary>Every plugin's copy of <paramref name="formKey"/>, in load order. Null if the
     /// FormKey isn't indexed anywhere.</summary>
     public OverrideStack? GetOverrideStack(string formKey)
