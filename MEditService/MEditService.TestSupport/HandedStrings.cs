@@ -3,7 +3,7 @@ using MEditService.LoadOrder;
 namespace MEditService.TestSupport;
 
 /// <summary>The strings files Mod Management hands for the plugin copy at <c>pluginPath</c>: those in its folder's
-/// strings folder named for it, and the archives at the folder's root named for it (ADR-0024).</summary>
+/// strings folder named for it, and the archives at the folder's root named for it (ADR-0013).</summary>
 public static class HandedStrings
 {
     private static readonly string[] ArchiveExtensions = [".bsa", ".ba2"];

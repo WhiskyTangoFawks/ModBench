@@ -96,8 +96,7 @@ import type { ModSyncResult } from '../../modOrderCommands/modOrderCommands';
 import { rowLabelOf } from '../../drivingLib/argument';
 import { present } from '../../ports/present';
 import { modlistCommands } from '../../modOrderCommands/modOrderCommands';
-import { installCommands } from '../../install/install';
-import { accessTo, adapterOver } from '../../test/mo2/adapterOver';
+import { adapterOver } from '../../test/mo2/adapterOver';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -110,7 +109,7 @@ const shownRows = async () => (await present(h.providers.get('modbench.modList')
 const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row));
 
 const otherDeps = () => ({
-  install: installCommands(accessTo('/instance')), commands: modlistCommands(adapterOver('/instance'), unscriptedMEdit), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
+  commands: modlistCommands(adapterOver('/instance'), unscriptedMEdit), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
   extensionUri: Uri.file('/extension'), warnIfFomod: vi.fn(), downloadInstall: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
 });
 

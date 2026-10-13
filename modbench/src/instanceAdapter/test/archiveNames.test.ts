@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import { ARCHIVE_EXTENSIONS } from '../archiveExtensions';
-import { defaultModName, defaultModNameForFolder, isArchiveName } from '../archiveNames';
+import { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, isArchiveName } from '../archiveNames';
 
 describe('isArchiveName', () => {
   it('takes a name ending in an extension install can extract, case-insensitively', () => {

@@ -13,7 +13,7 @@ public sealed record RegisteredPlugin(string Name, string Origin, string Path, P
 }
 
 /// <summary>The strings files beside one copy of a plugin, loose, and the archives named for it in its folder,
-/// in the order they are read. Mod Management finds them (ADR-0024).</summary>
+/// in the order they are read. Mod Management finds them (ADR-0013).</summary>
 public sealed record PluginStrings(IReadOnlyList<string> Archives, IReadOnlyList<string> StringsFiles)
 {
     public static readonly PluginStrings None = new([], []);

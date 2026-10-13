@@ -11,7 +11,7 @@ export const WRITES = new Set([
     'setPluginsParticipation', 'setPluginsEnabled', 'reorderPlugins', 'appendPlugin', 'onPluginCheckboxChanged',
     'createPlugin', 'init', 'build', 'applyWorkspaceChanges', 'renamePlugin',
     'setModsEnabled', 'markFiles', 'moveMods', 'moveSeparators', 'uninstallMods', 'renameSeparator', 'insertSeparator',
-    'deleteSeparators', 'createEmptyMod', 'installFromArchive', 'installFromFolder',
+    'deleteSeparators', 'createEmptyMod', 'installMod',
     'excludeDownloads', 'includeDownloads', 'deleteDownloads',
 ]);
 

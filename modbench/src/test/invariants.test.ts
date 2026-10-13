@@ -8,7 +8,7 @@ const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'ut
 
 describe('every MO2 text-file write command has a corpus test', () => {
   const WRITERS = [
-    'downloadsCommands/downloads.ts', 'install/installedMark.ts', 'modOrderCommands/modOrderCommands.ts',
+    'downloadsCommands/downloads.ts', 'modOrderCommands/install.ts', 'modOrderCommands/modOrderCommands.ts',
     'pluginsCommands/plugins.ts', 'instanceCommands/instanceCommands.ts',
   ];
   const writeVerbs = WRITERS.flatMap((file) => commandVerbs(read(file)));
@@ -27,7 +27,7 @@ describe('every MO2 text-file write command has a corpus test', () => {
     expect(writeVerbs).toContain('modSyncOver');
     expect(writeVerbs).toContain('pluginSyncOver');
     expect(writeVerbs).toContain('deleteDownloads');
-    expect(writeVerbs).toContain('markDownloadInstalled');
+    expect(writeVerbs).toContain('installMod');
   });
 
   it.each(writeVerbs)('%s', (verb) => {

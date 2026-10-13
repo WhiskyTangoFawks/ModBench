@@ -2,13 +2,12 @@
 // over one instance root.
 
 import { existsSync } from 'node:fs';
-import type { ArchiveReader } from './archiveReader';
 import { MODLIST_FILE_NAME } from './codecs/modlistText';
 import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
 import { gameDirectoryResolver, STEAM, type GameDetectors } from './gameDirectory';
 import { myGamesResolver } from './myGames';
-import type { GameDirectoryOverrides, InstanceAdapter, ManagerNames, Subscription } from './instanceAdapter';
+import type { ArchiveReader, GameDirectoryOverrides, InstanceAdapter, ManagerNames, Subscription } from './instanceAdapter';
 import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
@@ -20,7 +19,6 @@ import { mo2Installation } from './mo2Installation';
 import { mo2Reads, readInstance } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
 import { hashIndex } from './hashIndex';
-import { sevenZip } from './sevenZip';
 import { hashIndexDir, modsDir, profilesDir, settingsFile } from './layout';
 
 interface Mo2InstanceOptions {
@@ -30,8 +28,7 @@ interface Mo2InstanceOptions {
   gameDirectoryChanged: (listener: () => void) => Subscription;
   /** Steam and Wine detection; the real ones when omitted. */
   detectors?: GameDetectors;
-  /** The real one when omitted. */
-  archives?: ArchiveReader;
+  archives: ArchiveReader;
 }
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
@@ -42,7 +39,7 @@ export function isMo2Instance(root: string): boolean {
 }
 
 export function mo2InstanceAdapter({
-  instanceRoot, gameDirectoryOverrides, gameDirectoryChanged, detectors, archives = sevenZip,
+  instanceRoot, gameDirectoryOverrides, gameDirectoryChanged, detectors, archives,
 }: Mo2InstanceOptions): InstanceAdapter {
   const context: Mo2Context = {
     instanceRoot,
@@ -55,7 +52,7 @@ export function mo2InstanceAdapter({
   const names: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX };
   const adapter: Omit<InstanceAdapter, 'reading'> = {
     names,
-    ...mo2Reads(context), ...mo2Archives(context), ...mo2Installation(context, hashes), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context),
+    ...mo2Reads(context), ...mo2Archives(context), ...mo2Installation(context, hashes), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives),
     ...hashes,
     subscribe: (listener) => context.watch.subscribe(listener),
   };
