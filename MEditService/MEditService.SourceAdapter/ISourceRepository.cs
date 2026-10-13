@@ -52,7 +52,7 @@ public interface ISourceRepository : ISourceRepositoryReads
     Answer<IReadOnlyList<string>, SourceFailure> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys);
 
     /// <summary>Every file of the plugin's tree that carries a record, with its text and record type.</summary>
-    Answer<IReadOnlyList<RecordFile>, SourceFailure> RecordFilesOf(PluginAddress plugin);
+    Answer<IReadOnlyList<RefusedFile>, SourceFailure> RefusedFilesOf(PluginAddress plugin);
 
     /// <summary>Where the source and <paramref name="serialized"/>, the whole-mod door's tree, first part ways,
     /// and the files held at another leaf name than the layout's. An unreadable file outranks the rest.</summary>

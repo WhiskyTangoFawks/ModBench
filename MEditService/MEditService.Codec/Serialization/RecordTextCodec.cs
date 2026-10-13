@@ -35,21 +35,29 @@ public static class RecordTextCodec
     /// <summary>Null when the text is a record's document, else compile's reason for refusing it: read and
     /// written back, it must mean what it says (ADR-0006). The header's type is
     /// <see cref="PluginHeader.RecordType"/>.</summary>
-    public static string? WhyNotARecord(string text, GameRelease gameRelease, string? recordType)
+    public static string? WhyNotARecord(string text, GameRelease gameRelease, string? recordType) =>
+        WhyNotProduced(text, source => recordType == PluginHeader.RecordType
+            ? Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(source), gameRelease)))
+            : RoundTrip(source, gameRelease, recordType));
+
+    /// <summary>The same answer for a block level's document, a group's cells or a worldspace's, named by
+    /// its level in <see cref="RecordTypes.InteriorCellBlockLevels"/> or
+    /// <see cref="RecordTypes.ExteriorCellBlockLevels"/>.</summary>
+    public static string? WhyNotABlockLevel(string text, GameRelease gameRelease, string level) =>
+        WhyNotProduced(text, source => BlankDocument(level, gameRelease, Document.Parse(source)));
+
+    private static string? WhyNotProduced(string text, Func<string, string> produce)
     {
         if (!Document.TryRead(text, out var written, out var whyNot)) return whyNot;
-        string Produce(string source) => recordType == PluginHeader.RecordType
-            ? Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(source), gameRelease)))
-            : RoundTrip(source, gameRelease, recordType);
         try
         {
-            return DocumentMeaning.FirstDifference(written.Element, Document.Parse(Produce(text)).Element) is { } at
+            return DocumentMeaning.FirstDifference(written.Element, Document.Parse(produce(text)).Element) is { } at
                 ? $"{at} does not match what the current codec would produce from it."
                 : null;
         }
         catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
-            return ReadFault.Describe(ex, text, source => ThrownBy(Produce, source));
+            return ReadFault.Describe(ex, text, source => ThrownBy(produce, source));
         }
     }
 

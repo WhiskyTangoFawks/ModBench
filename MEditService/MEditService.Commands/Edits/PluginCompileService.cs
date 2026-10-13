@@ -61,11 +61,7 @@ internal sealed class PluginCompileService(
                 $"{plugin.Name}'s source folder holds no files, so there is nothing to compile. {RegenerateTheSource}");
         }
 
-        if (!repository.RecordFilesOf(plugin).Holds(out var recordFiles, out unread)) return SourceDoesNotParse(plugin, unread);
-        var refusedFiles = recordFiles
-            .Select(file => (file.Path, Reason: RecordTextCodec.WhyNotARecord(file.Text, loadOrder.GameRelease, file.RecordType)))
-            .Where(file => file.Reason is not null)
-            .ToList();
+        if (!repository.RefusedFilesOf(plugin).Holds(out var refusedFiles, out unread)) return SourceDoesNotParse(plugin, unread);
         if (refusedFiles.Count > 0)
         {
             return CompileResult.Refused(

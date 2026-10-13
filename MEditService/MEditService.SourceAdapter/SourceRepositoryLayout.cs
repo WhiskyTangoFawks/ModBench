@@ -314,6 +314,18 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
         RecordTypeOf(relativePath, gameRelease)
         ?? RecordTypes.For(gameRelease).RecordTypeNamed(DocumentTokens.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator));
 
+    /// <summary>The block level a group's metadata document at <paramref name="relativePath"/> is, as the
+    /// codec names it; null for a group's own, which has no level of its own.</summary>
+    internal static string? BlockLevelOf(string relativePath, GameRelease gameRelease)
+    {
+        var path = new LayoutPath(relativePath);
+        var types = RecordTypes.For(gameRelease);
+        var interior = path.GroupFolderName == GroupFolders.For(gameRelease).FolderOf(types.Cell);
+        var levels = interior ? types.InteriorCellBlockLevels : types.ExteriorCellBlockLevels;
+        var depth = path.DirectoriesBelowGroupFolder - (interior ? 0 : 1);
+        return depth >= 1 && depth <= levels.Count ? levels[depth - 1] : null;
+    }
+
     /// <summary>Null on anything not shaped like a flat record's path or the header's root document,
     /// so a tree walk never misreads a container path as a flat record.</summary>
     internal static SourceRecordIdentity? ParseDocumentPath(string relativePath, GameRelease gameRelease)
@@ -333,8 +345,10 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     /// <summary>True for a file under the source root that holds no record — group and block metadata,
     /// and anything that is not a document at all. No row is derived from one.</summary>
     internal static bool CarriesNoRecord(string filePath) =>
-        !filePath.EndsWith(JsonSuffix, StringComparison.OrdinalIgnoreCase)
-        || Path.GetFileName(filePath).Equals(GroupRecordDataFileName, StringComparison.Ordinal);
+        !filePath.EndsWith(JsonSuffix, StringComparison.OrdinalIgnoreCase) || IsGroupDocument(filePath);
+
+    internal static bool IsGroupDocument(string filePath) =>
+        Path.GetFileName(filePath).Equals(GroupRecordDataFileName, StringComparison.Ordinal);
 
     /// <summary>Whether <paramref name="path"/> names the header's own document. A suffix, not an
     /// equality: the caller may spell it absolute, relative to the source folder, or as git does.</summary>

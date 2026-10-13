@@ -71,7 +71,7 @@ internal static class TreeStamps
         new(StringComparer.Ordinal);
 
     private sealed record KnownDocument(
-        string FormKey, string Content, IReadOnlyList<string> FormKeys, string? Refusal, FormIdLimit? Limit, string? BelongsAt);
+        string? FormKey, string Content, IReadOnlyList<string> FormKeys, string? Refusal, FormIdLimit? Limit, string? BelongsAt);
 
     internal static string ContentStamp(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
@@ -95,7 +95,7 @@ internal static class TreeStamps
             // EditorID that may contain the separator, so a path is not a decidable identity.
             foreach (var file in Directory.EnumerateFiles(root, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories))
             {
-                if (SourceRepositoryLayout.CarriesNoRecord(file)) continue;
+                if (!file.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase)) continue;
                 listed.Add(file);
 
                 var relativePath = Path.GetRelativePath(sourceFolder, file);
@@ -106,12 +106,17 @@ internal static class TreeStamps
                     ? Read(files, file, relativePath, plugin.Name, release, unreadable)
                     : known.Of(file, () => Read(files, file, relativePath, plugin.Name, release, unreadable));
                 if (document is null) continue;
-                holders.Hold(document.FormKey, file);
-                stamps[document.FormKey] = document.Content;
+                if (document.FormKey is not { } formKey)
+                {
+                    if (document.Refusal is { } fault) unreadable.Add(new UnreadableFile(relativePath, fault));
+                    continue;
+                }
+                holders.Hold(formKey, file);
+                stamps[formKey] = document.Content;
                 keysByFile[relativePath] = document.FormKeys;
                 limit ??= document.Limit;
-                if (document.BelongsAt is { } belongsAt) misplaced.Add(new MisplacedFile(document.FormKey, relativePath, belongsAt));
-                if (document.Refusal is { } refusal) unreadable.Add(new UnreadableFile(relativePath, refusal, document.FormKey));
+                if (document.BelongsAt is { } belongsAt) misplaced.Add(new MisplacedFile(formKey, relativePath, belongsAt));
+                if (document.Refusal is { } refusal) unreadable.Add(new UnreadableFile(relativePath, refusal, formKey));
             }
         }
 
@@ -149,6 +154,13 @@ internal static class TreeStamps
         }
 
         var text = Encoding.UTF8.GetString(bytes);
+        if (SourceRepositoryLayout.IsGroupDocument(file))
+        {
+            return new KnownDocument(
+                FormKey: null, ContentStamp(text), FormKeys: [],
+                PluginSourceChecks.WhyRefused(relativePath, text, recordType: null, release), Limit: null, BelongsAt: null);
+        }
+
         if (DocumentText.FormKeyDeclaredIn(text, file, pluginName) is not { } formKey)
         {
             unreadable.Add(new UnreadableFile(
@@ -160,7 +172,7 @@ internal static class TreeStamps
         }
 
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, text, release);
-        var refusal = recordType is null ? null : RecordTextCodec.WhyNotARecord(text, release, recordType);
+        var refusal = PluginSourceChecks.WhyRefused(relativePath, text, recordType, release);
         var limit = refusal is null && recordType == PluginHeader.RecordType
             ? PluginFlags.LimitOf(HeaderDocument.Read(bytes, release), pluginName)
             : null;
