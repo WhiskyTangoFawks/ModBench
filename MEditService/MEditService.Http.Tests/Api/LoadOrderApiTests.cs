@@ -62,6 +62,30 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Equal([archives, stringsFiles], [held.Archives, held.StringsFiles]);
     }
 
+    [Fact]
+    public async Task PutLoadOrder_ThePluginsOwnArchivesAndStringsFiles_AreTheOnesItsCopyHolds()
+    {
+        var handed = _fixture.Plugins[0] with
+        {
+            NamedStrings = new([Path.Combine(_fixture.DataFolder, "A - Main.ba2")], [Path.Combine(_fixture.DataFolder, "Strings", "A_en.STRINGS")]),
+        };
+
+        var response = await _client.PutLoadOrderAndAwaitReady(new
+        {
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
+            plugins = _fixture.Plugins.Skip(1).Prepend(handed).Select(p => p.Wire),
+            active = SnapshotPlugins.Active(_fixture.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
+            gameRelease = "Fallout4",
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(handed.Strings, loaded.Services.GetRequiredService<LoadOrderHolder>().Require().Plugin(handed.Key)?.Strings);
+    }
+
     [Theory]
     [InlineData("active")]
     [InlineData("loadedWithNoLine")]
@@ -100,7 +124,15 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         {
             gameDirectory = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
-            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, Provider = new { Kind = kind, Mod = mod, Folder = folder, SourceFolder = sourceFolder } }),
+            plugins = _fixture.Plugins.Select(p => new
+            {
+                p.Name,
+                p.Path,
+                p.Origin,
+                Provider = new { Kind = kind, Mod = mod, Folder = folder, SourceFolder = sourceFolder },
+                p.Strings.Archives,
+                p.Strings.StringsFiles,
+            }),
             active = SnapshotPlugins.Active(_fixture.Plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
             archives = Array.Empty<string>(),
@@ -118,9 +150,40 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         {
             gameDirectory = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
-            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Strings.Archives, p.Strings.StringsFiles }),
             active = SnapshotPlugins.Active(_fixture.Plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
+            gameRelease = "Fallout4",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("archives")]
+    [InlineData("stringsFiles")]
+    public async Task PutLoadOrder_APluginWithAListItNeverDefaultsLeftOut_Returns400(string omitted)
+    {
+        var plugins = _fixture.Plugins.Select(p => new Dictionary<string, object>
+        {
+            ["name"] = p.Name,
+            ["path"] = p.Path,
+            ["origin"] = p.Origin,
+            ["provider"] = new { Kind = "Game" },
+            ["archives"] = p.Strings.Archives,
+            ["stringsFiles"] = p.Strings.StringsFiles,
+        }).ToList();
+        foreach (var plugin in plugins) plugin.Remove(omitted);
+
+        var response = await _client.PutAsJsonAsync("/load-order", new
+        {
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
+            plugins,
+            active = Array.Empty<object>(),
+            loadedWithNoLine = Array.Empty<object>(),
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
             gameRelease = "Fallout4",

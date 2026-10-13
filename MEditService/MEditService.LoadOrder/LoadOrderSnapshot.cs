@@ -10,6 +10,28 @@ namespace MEditService.LoadOrder;
 public sealed record RegisteredPlugin(string Name, string Origin, string Path, PluginProvider Provider, PluginLine? Line)
 {
     public PluginAddress Key => new(Name, Origin);
+
+    public PluginStrings Strings { get; init; } = PluginStrings.None;
+}
+
+/// <summary>The strings files beside one copy of a plugin, loose, and the archives named for it in its folder,
+/// in the order they are read. Mod Management finds them (ADR-0024).</summary>
+public sealed record PluginStrings(IReadOnlyList<string> Archives, IReadOnlyList<string> StringsFiles)
+{
+    public static readonly PluginStrings None = new([], []);
+
+    // Copied, not aliased: a caller keeping its list would otherwise mutate this value.
+    public IReadOnlyList<string> Archives { get; } = [.. Archives];
+
+    public IReadOnlyList<string> StringsFiles { get; } = [.. StringsFiles];
+
+    // Structural, not a record's default, as LoadOrderSnapshot's is.
+    public bool Equals(PluginStrings? other) =>
+        other is not null
+        && Archives.SequenceEqual(other.Archives, StringComparer.OrdinalIgnoreCase)
+        && StringsFiles.SequenceEqual(other.StringsFiles, StringComparer.OrdinalIgnoreCase);
+
+    public override int GetHashCode() => HashCode.Combine(Archives.Count, StringsFiles.Count);
 }
 
 /// <summary>A <c>plugins.txt</c> line's place, and whether it names this copy of its filename: the copy Mod

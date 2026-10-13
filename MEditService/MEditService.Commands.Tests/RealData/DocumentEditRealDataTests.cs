@@ -5,7 +5,6 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -79,7 +78,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
     private static readonly Lazy<IReadOnlyList<Gesture>> EveryGesture = new(() =>
     {
         var modPath = new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath);
-        var strings = new PluginStrings(Path.GetDirectoryName(CutDownPluginFixture.PluginPath)
+        var strings = HandedStrings.Beside(Path.GetDirectoryName(CutDownPluginFixture.PluginPath)
             ?? throw new InvalidOperationException("Expected the cut-down plugin's path to sit in a directory."));
         using var documents = TestAdapters.Mutagen().OpenDocuments(modPath, EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas, strings).Answered();
         return [.. documents.Records.Prepend(documents.Header).SelectMany(GesturesOn)];

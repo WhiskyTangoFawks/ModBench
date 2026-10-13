@@ -34,7 +34,7 @@ public sealed class StringsScratchTests : IDisposable
         LocalizedDoorPlugin.Write(_pluginPath, "The Big Door");
         LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(dataFolder, "Skyrim - Interface.bsa"));
         _loadOrder = new LoadOrderSnapshot(dataFolder, null, GameRelease.SkyrimSE, [], [], [], [Path.Combine(dataFolder, "Skyrim - Interface.bsa")], []);
-        _strings = new PluginStrings(_modFolder);
+        _strings = HandedStrings.Beside(_modFolder);
     }
 
     public void Dispose()

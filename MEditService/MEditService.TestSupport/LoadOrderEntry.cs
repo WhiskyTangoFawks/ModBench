@@ -6,7 +6,7 @@ namespace MEditService.TestSupport;
 /// which alone decides the active plugins from these facts (ADR-0013).</summary>
 public record LoadOrderEntry(
     string Name, string Path, string Origin, int? Line, bool Enabled, bool Winning, bool LoadedWithNoLine = false,
-    PluginProvider? NamedProvider = null)
+    PluginProvider? NamedProvider = null, PluginStrings? NamedStrings = null)
 {
     public PluginAddress Key => new(Name, Origin);
 
@@ -21,10 +21,25 @@ public record LoadOrderEntry(
             : throw new InvalidOperationException($"'{Path}' has no folder."),
     };
 
+    /// <summary>The fixture's one strings rule: every strings file and archive beside the plugin as the snapshot is
+    /// taken, unless <see cref="NamedStrings"/> says otherwise.</summary>
+    public PluginStrings Strings => NamedStrings ?? HandedStrings.Beside(
+        System.IO.Path.GetDirectoryName(Path) ?? throw new InvalidOperationException($"'{Path}' has no folder."));
+
     private bool Is(string reserved) => string.Equals(Origin, reserved, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The plugin as the PUT /load-order body carries it.</summary>
-    public object Wire => new { Name, Path, Origin, Provider = ProviderWire.Of(Provider), Line, LineNamesIt = Winning };
+    public object Wire => new
+    {
+        Name,
+        Path,
+        Origin,
+        Provider = ProviderWire.Of(Provider),
+        Line,
+        LineNamesIt = Winning,
+        Strings.Archives,
+        Strings.StringsFiles,
+    };
 }
 
 /// <summary>A provider as the PUT /load-order body spells it.</summary>

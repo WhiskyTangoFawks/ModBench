@@ -195,6 +195,8 @@ export interface PluginCompanionRule {
   readonly isArchive: (relativePath: string) => boolean;
   /** A strings file of any plugin, in any language, in the strings folder at a folder's root. */
   readonly isStringsFile: (relativePath: string) => boolean;
+  /** One of `plugin`'s strings files, in the strings folder at a folder's root. */
+  isStringsFileOf(plugin: string, relativePath: string): boolean;
 }
 
 const STRINGS_FOLDER = 'strings';
@@ -218,24 +220,27 @@ export function pluginCompanionRule(release: string | undefined): PluginCompanio
   const companions = release === undefined ? undefined : GAME_PATHS[release]?.pluginCompanions;
   if (companions === undefined) return undefined;
   const languages = companions.stringsLanguages.map((language) => language.toLowerCase());
+  const isStringsFile = (relativePath: string): boolean => {
+    const [folder, name, ...below] = relativePath.toLowerCase().split('/');
+    return folder === STRINGS_FOLDER && below.length === 0 && STRINGS_EXTENSIONS.some((extension) => name?.endsWith(extension));
+  };
+  const inStringsFolder = (plugin: string, name: string): boolean => {
+    const key = name.toLowerCase();
+    const stem = stemOf(plugin);
+    return languages.some((language) => STRINGS_EXTENSIONS.some((extension) => key === `${stem}_${language}${extension}`));
+  };
   return {
     stringsFolder: STRINGS_FOLDER,
     archiveExtension: companions.archiveExtension,
     isArchiveOf: (plugin, name) => isArchiveOf(stemOf(plugin), name, companions.archiveExtension),
     isArchive: (relativePath) => !relativePath.includes('/') && relativePath.toLowerCase().endsWith(companions.archiveExtension),
-    isStringsFile: (relativePath) => {
-      const [folder, name, ...below] = relativePath.toLowerCase().split('/');
-      return folder === STRINGS_FOLDER && below.length === 0 && STRINGS_EXTENSIONS.some((extension) => name?.endsWith(extension));
-    },
+    isStringsFile,
+    isStringsFileOf: (plugin, relativePath) => isStringsFile(relativePath) && inStringsFolder(plugin, relativePath.slice(STRINGS_FOLDER.length + 1)),
     inRoot: (plugin, name) => {
       const stem = stemOf(plugin);
       return isArchiveOf(stem, name, companions.archiveExtension) || (companions.pluginIni && name.toLowerCase() === `${stem}.ini`);
     },
-    inStringsFolder: (plugin, name) => {
-      const key = name.toLowerCase();
-      const stem = stemOf(plugin);
-      return languages.some((language) => STRINGS_EXTENSIONS.some((extension) => key === `${stem}_${language}${extension}`));
-    },
+    inStringsFolder,
   };
 }
 

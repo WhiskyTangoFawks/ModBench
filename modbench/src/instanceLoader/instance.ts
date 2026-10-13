@@ -3,7 +3,7 @@
 import type { Log } from '../ports/log';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
-  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, type ArchiveSources,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, OVERWRITE_ORIGIN, pluginsLoadedWithNoLineOf, type ArchiveSources,
   type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
   type LoadOrderSnapshotValue,
 } from './loadOrderSnapshot';
@@ -468,7 +468,10 @@ export class Instance implements Subscription {
       activeProfile: profile, modFolders: modFolderList, files: index.files, dataFolderPlugins, pluginsLoadedWithNoLine,
       pluginOrder,
     };
-    const archiveSources: ArchiveSources = { gameRelease, listed: archiveList, inData: dataFolderArchives, files: index.files };
+    const archiveSources: ArchiveSources = {
+      gameRelease, listed: archiveList, inData: dataFolderArchives, files: index.files,
+      filesByOrigin: new Map([...index.filesByMod, [OVERWRITE_ORIGIN, runtimeOutput.files]]),
+    };
     this.tellArchivesNothingHolds(archiveSources);
     return {
       mods: entries,

@@ -1,7 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -21,7 +20,7 @@ internal static class TrackedMods
         var read = TestAdapters.Mutagen()
             .ReadSourceOfAsync(
                 new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null), EmptyLoadOrder.Of(release),
-                new PluginStrings(modFolder))
+                HandedStrings.Beside(modFolder))
             .GetAwaiter().GetResult();
         var source = read.Answered();
 

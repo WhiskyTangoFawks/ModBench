@@ -36,8 +36,15 @@ export interface LoadOrderPlugin {
 
 type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string; sourceFolder: string } | { kind: 'Game' } | { kind: 'None' };
 
+// The strings files beside one copy of a plugin, loose in its strings folder, and the archives named for
+// it at its folder's root, in the order they are read.
+interface StringsBeside {
+  readonly archives: string[];
+  readonly stringsFiles: string[];
+}
+
 // `lineNamesIt`: the line names this copy of its filename, for Editing's judgements (ADR-0013).
-type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin' | 'line'> & { provider: SnapshotProvider; lineNamesIt: boolean };
+type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin' | 'line'> & StringsBeside & { provider: SnapshotProvider; lineNamesIt: boolean };
 
 /** The snapshot was not built, and why: the user is told once (common.md, Reporting). */
 export interface LoadOrderSnapshotRefusal {
@@ -63,6 +70,8 @@ export interface ArchiveSources {
   readonly listed: readonly string[];
   readonly inData: DataFolderArchives;
   readonly files: FileWinners;
+  /** Each mod's own files, a disabled mod's too, and Overwrite's, by origin. */
+  readonly filesByOrigin: ReadonlyMap<string, readonly OriginFile[]>;
 }
 
 /** A plugins.txt line with no resolvable plugin file: no mod or overwrite/ provides it, and
@@ -188,6 +197,9 @@ export function buildLoadOrderRows(
   return [...listed, ...outside];
 }
 
+const byFoldedPath = (a: { readonly relativePath: string }, b: { readonly relativePath: string }): number =>
+  (foldPath(a.relativePath) < foldPath(b.relativePath) ? -1 : 1);
+
 // Each file by its folded path in the Data folder: the Mod override order's winner, else the game folder's.
 function winningFiles(
   dataFolder: string, inData: readonly string[], files: FileWinners, isOne: (relativePath: string) => boolean,
@@ -206,11 +218,24 @@ function archivesAndStringsOf(
   if (rule === undefined || inData.kind !== 'listed') return { archives: [], stringsFiles: [] };
   const archives = winningFiles(dataFolder, inData.archives, files, rule.isArchive);
   const pluginArchives = active.flatMap(({ name }) =>
-    [...archives.values()].filter((archive) => rule.isArchiveOf(name, archive.relativePath))
-      .sort((a, b) => (foldPath(a.relativePath) < foldPath(b.relativePath) ? -1 : 1)));
+    [...archives.values()].filter((archive) => rule.isArchiveOf(name, archive.relativePath)).sort(byFoldedPath));
   const loaded = [...listed.flatMap((name) => archives.get(foldPath(name)) ?? []), ...pluginArchives].map(({ path }) => path);
   const strings = winningFiles(dataFolder, inData.stringsFiles, files, rule.isStringsFile);
   return { archives: [...new Set(loaded)], stringsFiles: [...strings.values()].map(({ path }) => path) };
+}
+
+function stringsBeside(
+  { gameRelease, inData, filesByOrigin }: ArchiveSources, dataFolder: string, { name, origin }: PluginAddress,
+): StringsBeside {
+  const rule = pluginCompanionRule(gameRelease);
+  if (rule === undefined || inData.kind !== 'listed') return { archives: [], stringsFiles: [] };
+  const files = origin === DATA_DIRECTORY_ORIGIN
+    ? [...inData.archives, ...inData.stringsFiles].map((relativePath) => ({ relativePath, path: fileInFolder(dataFolder, relativePath) }))
+    : (filesByOrigin.get(origin) ?? []).filter((file) => !file.excluded).map(({ relativePath, sourcePath }) => ({ relativePath, path: sourcePath }));
+  return {
+    archives: files.filter(({ relativePath }) => rule.isArchive(relativePath) && rule.isArchiveOf(name, relativePath)).sort(byFoldedPath).map(({ path }) => path),
+    stringsFiles: files.filter(({ relativePath }) => rule.isStringsFileOf(name, relativePath)).map(({ path }) => path),
+  };
 }
 
 /** The archives the INIs list that no mod, no Overwrite and no game folder holds: the game loads none
@@ -272,7 +297,9 @@ export function loadOrderSnapshotOf(value: {
       continue;
     }
     const key = exactPluginAddressKey({ name, origin });
-    if (!sent.has(key)) sent.set(key, { name, path, origin, provider, line, lineNamesIt: line !== null && winning });
+    if (!sent.has(key)) {
+      sent.set(key, { name, path, origin, provider, line, lineNamesIt: line !== null && winning, ...stringsBeside(value.archives, dataFolder, { name, origin }) });
+    }
   }
   if (unprovided.size > 0) return { refusal: refusalOf(unprovided) };
   const active = [...loadedWithNoLine, ...fromLines].map(({ name, origin }) => ({ name, origin }));

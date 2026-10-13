@@ -64,7 +64,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var modPath = new ModPath(plugin.Path);
-        return Opened<IPluginRecords>(modPath, new PluginStrings(Path.GetDirectoryName(plugin.Path)), loadOrder, loaded =>
+        return Opened<IPluginRecords>(modPath, plugin.Strings, loadOrder, loaded =>
             new ModRecordLookup(loaded.Getter, new PluginRecordBytes(modPath, loadOrder), schemas, loaded));
     }
 
