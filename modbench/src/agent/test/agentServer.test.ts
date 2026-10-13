@@ -163,7 +163,9 @@ describe('the agent server, given an instance value', () => {
 
 const providing = (relativePath: string, ...providers: ConflictEntry['providers']): ConflictEntry =>
   ({ relativePath, winner: `/m/${relativePath}`, winnerOrigin: providers[0] ?? RUNTIME_OUTPUT, providers });
-const [A, B, C] = ['A', 'B', 'C'].map(modOrigin);
+const A = modOrigin('A');
+const B = modOrigin('B');
+const C = modOrigin('C');
 const asLookup = (...entries: ConflictEntry[]) => {
   const files = new FileConflictLookup();
   entries.forEach((entry) => { files.set(entry); });
