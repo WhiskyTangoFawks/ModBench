@@ -332,7 +332,46 @@ export interface ManagerNames {
   readonly downloadMetadataFile: string;
 }
 
+/** The instance as parsed facts, every one from the same read of its settings. */
+export interface InstanceReading {
+  /** The profile the mod manager's configuration selects. */
+  readonly profile: string;
+  /** The game as the mod manager's configuration names it. */
+  readonly gameName: string;
+  /** Mutagen's release of that game; undefined when the tables hold none for it. */
+  readonly gameRelease: string | undefined;
+  /** Mod order, a mod's meta folded into its entry. */
+  readonly mods: readonly ModlistEntry[];
+  readonly pluginOrder: readonly PluginEntry[];
+  readonly downloadedFiles: DownloadedFiles;
+  readonly gameFolder: GameFolder;
+  readonly dataFolderPlugins: DataFolderPlugins;
+  readonly creationClubList: readonly string[];
+  /** The archives the INIs list, in load order. */
+  readonly archiveList: readonly string[];
+  /** Each INI the game reads that the archive list did not. */
+  readonly archiveListNotes: readonly string[];
+  readonly dataFolderArchives: DataFolderArchives;
+  readonly profiles: readonly string[];
+  /** Undefined when there is no folder for mods at all. */
+  readonly modFolders: ModFolders | undefined;
+  /** Each link in mods/ that cannot be followed, by name, with why. */
+  readonly skippedLinks: ReadonlyMap<string, string>;
+  /** The files the game wrote at run time. */
+  readonly runtimeOutput: OriginFiles;
+  /** Each listed mod's own files, by mod name. */
+  readonly modFiles: ReadonlyMap<string, OriginFiles>;
+  /** Each listed mod's meta by name, and an unlisted mod folder's when downloaded files are there to match against it. */
+  readonly folderMeta: ReadonlyMap<string, ModMeta>;
+  /** Every repository in the source folder. */
+  readonly sourceMods: SourceMods;
+}
+
 export interface InstanceAdapter {
+  /** The whole instance in one generation. A mod order that parses to no entries is read again
+   *  after a settle before it is believed: another tool may be half-way through writing it. */
+  reading(): Promise<InstanceReading>;
+
   // Parsed reads.
   readonly names: ManagerNames;
   settings(): Promise<InstanceSettings>;

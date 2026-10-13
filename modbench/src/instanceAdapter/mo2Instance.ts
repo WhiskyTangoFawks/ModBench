@@ -6,7 +6,7 @@ import { MODLIST_FILE_NAME } from './codecs/modlistText';
 import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
 import { gameDirectoryResolver, type GameDetectors } from './gameDirectory';
-import type { GameDirectoryOverrides, InstanceAdapter, Subscription } from './instanceAdapter';
+import type { GameDirectoryOverrides, InstanceAdapter, ManagerNames, Subscription } from './instanceAdapter';
 import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
@@ -15,7 +15,7 @@ import { mo2Landing } from './mo2Landing';
 import { mo2PluginRename } from './mo2PluginRename';
 import { mo2Archives } from './mo2Archives';
 import { mo2Installation } from './mo2Installation';
-import { mo2Reads } from './mo2Reads';
+import { mo2Reads, readInstance } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
 import { modsDir, profilesDir, settingsFile } from './layout';
 
@@ -44,9 +44,11 @@ export function mo2InstanceAdapter({
     resolveDownloadsFolder: downloadsDirectoryResolver(detectors),
     watch: mo2Watch(instanceRoot, gameDirectoryChanged),
   };
-  return {
-    names: { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX },
+  const names: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX };
+  const adapter: Omit<InstanceAdapter, 'reading'> = {
+    names,
     ...mo2Reads(context), ...mo2Archives(context), ...mo2Installation(context), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context),
     subscribe: (listener) => context.watch.subscribe(listener),
   };
+  return { ...adapter, reading: () => readInstance(adapter) };
 }

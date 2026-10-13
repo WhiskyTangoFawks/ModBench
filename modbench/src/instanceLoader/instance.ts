@@ -11,7 +11,7 @@ import type { PluginAddress } from '../wire/pluginAddress';
 import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './downloadRows';
 import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
 import {
-  GAME_FOLDER_SETTING, type DataFolderArchives, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
+  GAME_FOLDER_SETTING, type DownloadedFiles, type FileOrigin, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ManagerNames, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { SameCopies, type FileCopies } from './sameCopies';
@@ -27,8 +27,7 @@ export type { ModSyncArguments, PluginSyncArguments } from './syncArguments';
 export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder } from '../instanceAdapter/instanceAdapter';
 
-// How long another tool's write takes to settle: the wait a burst coalesces into one recompute on,
-// and the wait before an empty mod order is believed.
+// How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.
 const SETTLE_MS = 200;
 
 type DownloadsResult =
@@ -162,6 +161,13 @@ function pathsOf(
     sourceDirs: sourceDirsOf(entries, sourceMods),
   };
 }
+
+// A mod's listing is the reading's; a mod it holds none for is not there.
+const modListing = ({ modFiles }: InstanceReading, origin: FileOrigin): OriginFiles => {
+  const listing = origin.kind === 'mod' ? modFiles.get(origin.name) : undefined;
+  if (listing === undefined) throw new Error(`The reading holds no files for ${origin.kind === 'mod' ? origin.name : 'run-time output'}`);
+  return listing;
+};
 
 const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   mods: [],
@@ -314,24 +320,26 @@ export class Instance implements Subscription {
     this.failureListeners = [];
   }
 
-  private async readModFolders(): Promise<ModFolders | undefined> {
-    const skipped = new Map<string, string>();
-    const folders = await this.options.adapter.modFolders((name, reason) => skipped.set(name, reason));
+  private tellReading({ skippedLinks, archiveListNotes, sourceMods, runtimeOutput, dataFolderPlugins, dataFolderArchives }: InstanceReading): void {
+    const { log } = this.options;
+    for (const note of [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes]) log.info(`[instance] ${note}`);
+    this.tellSkippedLinks(skippedLinks);
+    for (const note of archiveListNotes) log.info(`[instance] ${note}`);
+    // An unreadable Data folder or its archives is an answer, never a failed read: the whole value
+    // would otherwise go stale over a folder outside the instance.
+    if (dataFolderPlugins.kind === 'unreadable') log.warn(`[instance] the game's Data folder could not be listed: ${dataFolderPlugins.reason}`);
+    if (dataFolderArchives.kind === 'unreadable') {
+      log.warn(`[instance] the game's archives and strings files could not be listed: ${dataFolderArchives.reason}`);
+    }
+  }
+
+  private tellSkippedLinks(skipped: ReadonlyMap<string, string>): void {
     for (const [name, reason] of skipped) {
       if (!this.linksTold.has(name)) {
         this.options.log.info(`[instance] mods/${name} is a link Modbench cannot follow, so it is not a mod folder: ${reason}`);
       }
     }
     this.linksTold = new Set(skipped.keys());
-    return folders;
-  }
-
-  // An unreadable Data folder is an answer, never a failed read: the whole value would otherwise
-  // go stale over a folder outside the instance.
-  private async readGameFolderPlugins(gameFolder: GameFolder): Promise<DataFolderPlugins> {
-    const plugins = await this.options.adapter.gameFolderPlugins(gameFolder);
-    if (plugins.kind === 'unreadable') this.options.log.warn(`[instance] the game's Data folder could not be listed: ${plugins.reason}`);
-    return plugins;
   }
 
   // xEdit reports a listed archive it cannot find; the game loads none, so the views stay true.
@@ -341,18 +349,6 @@ export class Instance implements Subscription {
       this.options.log.info(`[instance] The game's INIs list the archive ${name}, which no mod, Overwrite or game folder holds.`);
     }
     this.archivesTold = new Set(missing);
-  }
-
-  private async readArchiveList(profile: string, gameFolder: GameFolder, gameRelease: string | undefined): Promise<readonly string[]> {
-    const { archives, notes } = await this.options.adapter.archiveList(profile, gameFolder, gameRelease);
-    for (const note of notes) this.options.log.info(`[instance] ${note}`);
-    return archives;
-  }
-
-  private async readGameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined): Promise<DataFolderArchives> {
-    const archives = await this.options.adapter.gameFolderArchives(gameFolder, gameRelease);
-    if (archives.kind === 'unreadable') this.options.log.warn(`[instance] the game's archives and strings files could not be listed: ${archives.reason}`);
-    return archives;
   }
 
   private schedule(): void {
@@ -400,77 +396,25 @@ export class Instance implements Subscription {
     }
   }
 
-  private async readModOrder(profile: string): Promise<ModlistEntry[]> {
-    const { adapter } = this.options;
-    const entries = await adapter.modOrder(profile);
-    return Promise.all(entries.map(async (entry) =>
-      (entry.kind === 'mod' ? { ...entry, ...(await adapter.modMeta(entry.name)) } : entry)));
-  }
-
-  // A mod order read mid-write can parse to no entries, and zero mods is legal, so an empty one is
-  // re-read after a settle before being believed. A partial parse reads as a real removal.
-  private async readMods(profile: string): Promise<ModlistEntry[]> {
-    const entries = await this.readModOrder(profile);
-    if (entries.length > 0) return entries;
-    await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-    const confirmed = await this.readModOrder(profile);
-    if (confirmed.length > 0) {
-      this.options.log.info(`[instance] mod order read as empty mid-write; the re-read found ${confirmed.length} entries`);
-    }
-    return confirmed;
-  }
-
-  // Installed reads every mod folder, not one profile's mod order: a folder no profile has synced
-  // into its mod order yet still owns its meta's claim. A separator is never installed from a
-  // downloaded file.
-  private async readInstalledInto(
-    entries: readonly ModlistEntry[], modFolders: readonly ModFolder[],
-  ): Promise<ReadonlyMap<string, readonly string[]>> {
-    // Read once: an active-profile mod's archiveFilename is already in `entries`.
-    const knownArchiveFilenames = new Map<string, string | undefined>();
-    for (const entry of entries) if (entry.kind === 'mod') knownArchiveFilenames.set(entry.name, entry.archiveFilename);
-    const metas = await Promise.all(modFolders.filter((folder) => folder.kind === 'mod').map(async ({ name }) => ({
-      name,
-      archiveFilename: knownArchiveFilenames.has(name)
-        ? knownArchiveFilenames.get(name)
-        : (await this.options.adapter.modMeta(name)).archiveFilename,
-    })));
-    return modsByArchiveFilename(metas);
-  }
-
   private async read(): Promise<InstanceValue> {
     const { adapter, log } = this.options;
-    // The settings are read first and every later read is against the profile they name, so a
-    // profile switch mid-recompute cannot mix one profile's mod order with another's plugin order.
-    const settings = await adapter.settings();
-    const { profile, gameName, gameRelease } = settings;
-    const entries = await this.readMods(profile);
-    const runtimeOutputRead = adapter.originFiles({ kind: 'runtimeOutput' });
-    const [index, pluginOrder, downloadsOutcome, runtimeOutput, modFolders, profiles, game, sourceMods] = await Promise.all([
-      runtimeOutputRead.then((output) => buildFileConflictIndex(entries, output.files, adapter, (line) => log.info(line))),
-      adapter.pluginOrder(profile),
-      // Both answers come from the settings read above, so a rewrite cannot land two generations
-      // in one value.
-      settings.downloadedFiles(),
-      runtimeOutputRead,
-      this.readModFolders(),
-      adapter.profiles(),
-      settings.gameFolder().then(async (gameFolder) => ({
-        gameFolder,
-        dataFolderPlugins: await this.readGameFolderPlugins(gameFolder),
-        creationClub: await adapter.creationClubList(gameFolder, gameRelease),
-        archiveList: await this.readArchiveList(profile, gameFolder, gameRelease),
-        dataFolderArchives: await this.readGameFolderArchives(gameFolder, gameRelease),
-      })),
-      adapter.sourceMods(),
-    ]);
-    for (const note of [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes]) log.info(`[instance] ${note}`);
-    const { gameFolder, dataFolderPlugins, creationClub, archiveList, dataFolderArchives } = game;
+    const reading = await adapter.reading();
+    const {
+      profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadsOutcome, gameFolder, dataFolderPlugins,
+      creationClubList: creationClub, dataFolderArchives, runtimeOutput, modFolders, profiles, sourceMods,
+    } = reading;
+    this.tellReading(reading);
+    const index = await buildFileConflictIndex(
+      entries, runtimeOutput.files, { originFiles: (origin) => Promise.resolve(modListing(reading, origin)) }, (line) => log.info(line),
+    );
     const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);
     const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins);
-    const installedInto = downloadsOutcome.kind === 'listed' && downloadsOutcome.files
-      ? await this.readInstalledInto(entries, modFolders?.all ?? [])
-      : undefined;
+    // Installed reads every mod folder, not one profile's mod order: a folder no profile has synced
+    // into its mod order yet still owns its meta's claim. A separator is never installed from a
+    // downloaded file.
+    const installedInto = modsByArchiveFilename(
+      [...reading.folderMeta].map(([name, meta]) => ({ name, archiveFilename: meta.archiveFilename })),
+    );
     const modFolderList = modFolders?.all;
     const paths = pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders, sourceMods);
     const syncSource = {
@@ -478,7 +422,7 @@ export class Instance implements Subscription {
       pluginOrder,
     };
     const archiveSources: ArchiveSources = {
-      gameRelease, listed: archiveList, inData: dataFolderArchives, files: index.files,
+      gameRelease, listed: reading.archiveList, inData: dataFolderArchives, files: index.files,
       filesByOrigin: new Map([...index.filesByMod, [OVERWRITE_ORIGIN, runtimeOutput.files]]),
     };
     this.tellArchivesNothingHolds(archiveSources);
@@ -496,7 +440,7 @@ export class Instance implements Subscription {
         ? { kind: 'unresolved', reason: downloadsOutcome.reason }
         : {
           kind: 'listed',
-          rows: downloadsOutcome.files && installedInto ? buildDownloadRows(downloadsOutcome.files, installedInto, entries) : [],
+          rows: downloadsOutcome.files ? buildDownloadRows(downloadsOutcome.files, installedInto, entries) : [],
         },
       activeProfile: profile,
       managerNames: adapter.names,
