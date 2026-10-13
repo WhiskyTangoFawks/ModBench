@@ -267,6 +267,14 @@ describe('the agent server, resolving names against the instance', () => {
     expect(await call(client, 'resolve_instance_names', { downloads: ['rocks.7z'] })).toEqual({ isError: true, text: 'no downloads folder' });
   });
 
+  it('refuses every name that cannot be resolved in one answer, downloaded files and files in a mod together', async () => {
+    const refusal = await resolve({ downloads: ['gone.7z'], files: [{ mod: { name: 'B' }, path: 'meshes/none.nif' }] });
+
+    expect(refusal).toEqual({
+      isError: true, text: 'Nothing is named "gone.7z" among the downloaded files. Nothing is named "meshes/none.nif" in mod B.',
+    });
+  });
+
   it('names a file in a mod by its path in the mod, answering the mod\'s own casing', async () => {
     expect(await resolve({ files: [{ mod: { name: 'B' }, path: 'textures/rock.dds' }] })).toEqual({
       isError: false, text: JSON.stringify({ downloads: [], files: [{ mod: 'B', file: 'Textures/Rock.DDS' }] }),

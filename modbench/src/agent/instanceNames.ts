@@ -1,6 +1,17 @@
 import { z } from 'zod';
 import type { InstanceValue } from '../instanceLoader/instance';
+import { Refusal } from './instanceReads';
 import { downloadsNamed, filesNamed, type FileName } from './names';
+
+function refusing<T>(refusals: string[], otherwise: T, work: () => T): T {
+  try {
+    return work();
+  } catch (error) {
+    if (!(error instanceof Refusal)) throw error;
+    refusals.push(error.message);
+    return otherwise;
+  }
+}
 
 export const RESOLVE_INSTANCE_NAMES = {
   name: 'resolve_instance_names',
@@ -13,8 +24,10 @@ export const RESOLVE_INSTANCE_NAMES = {
       path: z.string(),
     })).optional(),
   },
-  of: (value: InstanceValue, { downloads = [], files = [] }: { downloads?: string[]; files?: FileName[] }) => ({
-    downloads: downloadsNamed(value.downloads, downloads),
-    files: filesNamed(value, files),
-  }),
+  of: (value: InstanceValue, { downloads = [], files = [] }: { downloads?: string[]; files?: FileName[] }) => {
+    const refusals: string[] = [];
+    const named = { downloads: refusing(refusals, [], () => downloadsNamed(value.downloads, downloads)), files: refusing(refusals, [], () => filesNamed(value, files)) };
+    if (refusals.length > 0) throw new Refusal(refusals.join(' '));
+    return named;
+  },
 };
