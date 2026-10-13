@@ -6,7 +6,7 @@ Work in the branch's worktree with absolute paths. Do not build or run tests; th
 
 Run the repo's review skill against `main`, the merge-base, with the spec lines the originating ticket points at as the Spec axis, the ticket and its epic with their comments as context, judged under root CLAUDE.md's chain of authority, and the repo's standards and every ADR in `docs/adr/` as the Standards axis.
 
-The orchestrator's fillings name the **breaks** the executor reported: where it built to a document above the ticket. A reported break is not a finding. The fillings also carry the refactorer's report. An item it declined is a finding only when its reason is wrong. Everything else you judge yourself, and you verify each axis's load-bearing claim against the source before repeating it.
+The orchestrator's fillings name the breaks the executor reported: where it built to a document above the ticket. A reported break is not a finding. The fillings also carry the refactorer's report. A smell it declined is a finding only when its reason is wrong. Everything else you judge yourself, and you verify each axis's load-bearing claim against the source before repeating it.
 
 An item you would send to the maintainer carries its resolution: the texts in the chain that bear on it, and why they leave it open. An item the chain answers is a finding.
 
