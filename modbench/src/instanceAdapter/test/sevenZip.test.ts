@@ -9,6 +9,7 @@ describe('sevenZip, spawning the binary itself', () => {
   let bin: string;
   let originalPath: string | undefined;
   let originalNodeOptions: string | undefined;
+  const argvFile = () => join(bin, 'argv.json');
 
   beforeAll(async () => {
     bin = await mkdtemp(join(tmpdir(), 'fake-7z-'));
@@ -16,7 +17,8 @@ describe('sevenZip, spawning the binary itself', () => {
     await writeFile(join(bin, 'exit-as-asked.cjs'), 'require("fs").writeFileSync(process.env.FAKE_7Z_ARGV_FILE, JSON.stringify([require("path").basename(process.argv[1]), ...process.argv.slice(2)])); process.stdout.write(process.env.FAKE_7Z_STDOUT ?? ""); process.exit(Number(process.env.FAKE_7Z_EXIT));');
   });
   afterAll(() => rm(bin, { recursive: true, force: true }));
-  beforeEach(() => {
+  beforeEach(async () => {
+    await rm(argvFile(), { force: true });
     originalPath = process.env.PATH;
     originalNodeOptions = process.env.NODE_OPTIONS;
     process.env.PATH = bin;
@@ -30,7 +32,6 @@ describe('sevenZip, spawning the binary itself', () => {
     delete process.env.FAKE_7Z_ARGV_FILE;
   });
 
-  const argvFile = () => join(bin, 'argv.json');
   const argvAsked = async (): Promise<unknown> => JSON.parse(await readFile(argvFile(), 'utf8'));
 
   const fakeNodeAs7zPreloadedToExit = (code: number) => {
@@ -94,7 +95,7 @@ describe('sevenZip, spawning the binary itself', () => {
     try {
       await sevenZip.extract('/tmp/mod.7z', '/tmp/stage');
 
-      expect(await argvAsked()).toContain('/tmp/mod.7z');
+      expect(await argvAsked()).toEqual(['x', '/tmp/mod.7z', '-o/tmp/stage', '-y']);
     } finally {
       await rename(only7za, join(bin, FAKE_7Z));
     }
