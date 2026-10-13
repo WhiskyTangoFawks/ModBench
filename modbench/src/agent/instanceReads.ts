@@ -1,6 +1,5 @@
 import type { InstanceValue } from '../instanceLoader/instance';
-
-export class Refusal extends Error {}
+import { Refusal } from './refusal';
 
 export interface Read {
   readonly name: string;

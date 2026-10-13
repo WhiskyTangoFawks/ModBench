@@ -19,7 +19,7 @@ import {
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAddress, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome,
-  type RecordFilter, type ReferenceResult, type PluginAddress, type InitMod, type InitStatus, type InitOutcome,
+  type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type InitMod, type InitStatus, type InitOutcome,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
@@ -615,6 +615,11 @@ class HttpMEditClient implements MEditClient {
   getRecordHolders(formKey: string): Promise<PluginAddress[] | ReadFailed> {
     return this.read(`getRecordHolders(${formKey})`, (signal) => this.apiClient.GET('/records/{formKey}/compare', { params: { path: { formKey } }, signal }),
       (data) => (data?.overrides ?? []).map((o) => ({ name: o.plugin, origin: o.origin })), { absent: { status: 404, answers: [] } });
+  }
+
+  resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed> {
+    return this.read('resolveNames', (signal) => this.apiClient.POST('/names/resolve', { body: { names: [...names] }, signal }),
+      (data) => (data ? data.named : NO_ANSWER));
   }
 
   getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null | ReadFailed> {
