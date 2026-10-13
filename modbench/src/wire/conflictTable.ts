@@ -12,7 +12,7 @@ export const CONFLICT_CELL_VALUES = ['size', 'dateModified', 'contents'] as cons
 export type ConflictCellValue = (typeof CONFLICT_CELL_VALUES)[number];
 
 export type ConflictCellState = Exclude<ConflictThis, 'OnlyOne'>;
-export type ConflictRowState = Exclude<ConflictAll, 'OnlyOne'>;
+export type ConflictRowState = Exclude<ConflictAll, 'OnlyOne' | 'ConflictBenign'>;
 
 export interface ConflictColumn {
   readonly name: string;

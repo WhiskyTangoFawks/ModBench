@@ -61,6 +61,7 @@ const themeColour = (name: ColourName): string => `var(--vscode-modbench-${name}
 const ROW_BG: Partial<Record<ConflictAll, string>> = {
   Override: themeColour('conflictRowOverride'),
   Conflict: themeColour('conflictRowConflict'),
+  ConflictBenign: themeColour('conflictRowConflict'),
 };
 
 export const rowBackground = (conflictAll: ConflictAll): string | undefined => ROW_BG[conflictAll];

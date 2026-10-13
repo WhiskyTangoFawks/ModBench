@@ -58,6 +58,28 @@ internal static class ConflictRules
         return !ctx.ValuesEqual(pluginValue, ctx.WinnerValue) ? ConflictThis.ConflictLoses : ConflictThis.Override;
     }
 
+    public static bool AllSame(IEnumerable<object?> values, Func<object?, object?, bool> valuesEqual)
+    {
+        var all = values.ToList();
+        return all.TrueForAll(value => valuesEqual(all[0], value));
+    }
+
+    // xEdit's Compare Selected paint: the focused column is Master, and every other cell is
+    // Override where its value is the focused cell's, ConflictLoses where it is not.
+    public static Dictionary<string, IReadOnlyDictionary<string, ConflictThis>> StatesByFocus(
+        IReadOnlyDictionary<string, object?> valuesByColumn, Func<object?, object?, bool> valuesEqual)
+    {
+        ConflictThis StateOf(string focused, string column) => column == focused ? ConflictThis.Master
+            : ComparedWith(valuesByColumn[focused], valuesByColumn[column], valuesEqual);
+
+        return valuesByColumn.Keys.ToDictionary(
+            focused => focused,
+            focused => (IReadOnlyDictionary<string, ConflictThis>)valuesByColumn.Keys.ToDictionary(column => column, column => StateOf(focused, column)));
+    }
+
+    private static ConflictThis ComparedWith(object? focused, object? cell, Func<object?, object?, bool> valuesEqual) =>
+        valuesEqual(focused, cell) ? ConflictThis.Override : ConflictThis.ConflictLoses;
+
     // One column's own state across every row: the most severe cell it holds, Master for the
     // master's own column, and none for a column with no cell.
     public static ConflictThis? AggregateThis(
@@ -98,7 +120,7 @@ internal static class ConflictRules
 
     // Takes the more severe of the two; OnlyOne is terminal and passes through.
     // Explicit severity table so this doesn't depend on enum declaration order.
-    public static ConflictAll Escalate(ConflictAll generic, ConflictAll contribution)
+    private static ConflictAll Escalate(ConflictAll generic, ConflictAll contribution)
     {
         return generic switch
         {
@@ -107,11 +129,15 @@ internal static class ConflictRules
         };
     }
 
+    public static ConflictAll Worst(ConflictAll seed, IEnumerable<ConflictAll> contributions) =>
+        contributions.Aggregate(seed, Escalate);
+
     private static int Severity(ConflictAll conflictAll) => conflictAll switch
     {
         ConflictAll.NoConflict => 0,
         ConflictAll.Override => 1,
         ConflictAll.Conflict => 2,
-        _ => 3, // OnlyOne: terminal, never expected as a `contribution` argument.
+        ConflictAll.ConflictBenign => 3,
+        _ => 4, // OnlyOne: terminal, never expected as a `contribution` argument.
     };
 }

@@ -166,7 +166,9 @@ export function DiffRow({
         // and `draggable` consumes the mousedown that would start a selection.
 
         // mEdit sends no state for the master's own cell, nor for any cell of a lone copy.
-        const cellState = diff.cellStates[key] ?? masterOrOnlyOne(diff.values[key], key, columns);
+        const cellState = diff.cellStatesByFocus
+          ? diff.cellStatesByFocus[focusedCell?.plugin ?? '']?.[key]
+          : diff.cellStates[key] ?? masterOrOnlyOne(diff.values[key], key, columns);
         const cellStyle = {
           ...baseCell, ...getCellStyle(cellState), ...columnStyle(key),
         };
