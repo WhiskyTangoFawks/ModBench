@@ -1590,6 +1590,18 @@ describe('the MO2 Instance adapter', () => {
       expect(holding?.path).toBe(join(root, 'mods', 'Harder VATS'));
     });
 
+    it('rejects without deciding or writing when mods/ is there but cannot be listed', async () => {
+      await rm(join(root, 'mods'), { recursive: true });
+      await writeFile(join(root, 'mods'), 'not a directory');
+      const before = await snapshotTree(root);
+      const decide = vi.fn(() => []);
+
+      await expect(adapter.changeModOrder('Default', decide)).rejects.toThrow(/ENOTDIR/);
+
+      expect(decide).not.toHaveBeenCalled();
+      expect(await snapshotTree(root)).toEqual(before);
+    });
+
     it('lands every change in one write of mod order alone', async () => {
       const before = await snapshotTree(root);
 
