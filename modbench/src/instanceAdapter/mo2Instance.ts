@@ -20,17 +20,18 @@ import { mo2Watch } from './mo2Watch';
 import { hashIndex } from './hashIndex';
 import { hashIndexDir, modsDir, profilesDir, settingsFile } from './layout';
 
-interface Mo2InstanceOptions {
-  instanceRoot: string;
+interface Mo2Machine {
   gameDirectoryOverrides: () => GameDirectoryOverrides;
   /** Hears the setting behind `gameDirectoryOverrides` change. */
   gameDirectoryChanged: (listener: () => void) => Subscription;
   /** Steam and Wine detection; the real ones when omitted. */
   detectors?: GameDetectors;
-  archives: ArchiveReader;
-  /** Parts of the context a test fixes in place of the machine's. */
-  context?: Partial<Mo2Context>;
 }
+
+type Mo2InstanceOptions = {
+  instanceRoot: string;
+  archives: ArchiveReader;
+} & (Mo2Machine | { context: Mo2Context });
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
  *  reads `true` here (common.md, States, story 4). Synchronous: the composition
@@ -39,16 +40,14 @@ export function isMo2Instance(root: string): boolean {
   return existsSync(settingsFile(root)) && existsSync(modsDir(root)) && existsSync(profilesDir(root));
 }
 
-export function mo2InstanceAdapter({
-  instanceRoot, gameDirectoryOverrides, gameDirectoryChanged, detectors, archives, context: replaced,
-}: Mo2InstanceOptions): InstanceAdapter {
-  const context: Mo2Context = {
+export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter {
+  const { instanceRoot, archives } = options;
+  const context: Mo2Context = 'context' in options ? options.context : {
     instanceRoot,
-    resolveGameFolder: gameDirectoryResolver(gameDirectoryOverrides, detectors),
-    resolveDownloadsFolder: downloadsDirectoryResolver(detectors),
-    resolveMyGames: myGamesResolver(instanceRoot, detectors ?? STEAM),
-    watch: mo2Watch(instanceRoot, gameDirectoryChanged),
-    ...replaced,
+    resolveGameFolder: gameDirectoryResolver(options.gameDirectoryOverrides, options.detectors),
+    resolveDownloadsFolder: downloadsDirectoryResolver(options.detectors),
+    resolveMyGames: myGamesResolver(instanceRoot, options.detectors ?? STEAM),
+    watch: mo2Watch(instanceRoot, options.gameDirectoryChanged),
   };
   const hashes = hashIndex(hashIndexDir(instanceRoot), archives);
   const names: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX };
