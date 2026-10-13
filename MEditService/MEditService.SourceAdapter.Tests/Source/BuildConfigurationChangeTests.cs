@@ -15,7 +15,7 @@ public sealed class BuildConfigurationChangeTests : IDisposable
     [Fact]
     public void ANewOutput_IsWrittenIntoTheWorkingTree_AndNothingIsCommitted()
     {
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Old Name", [], []));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Old Name", [], [], []));
 
         Assert.Null(TestAdapters.Source().ChangeBuildConfiguration(_sourceFolder, new BuildConfigurationChange("New Name", [], [])));
 

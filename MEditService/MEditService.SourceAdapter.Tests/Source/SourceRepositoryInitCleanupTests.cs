@@ -35,7 +35,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         [
             new Asset("textures/a.dds", () => new MemoryStream("a"u8.ToArray())),
             new Asset("textures/held.dds", () => throw new IOException("textures/held.dds is held by another process")),
-        ]);
+        ], []);
 
         Assert.Contains("textures/held.dds is held by another process", failure.Require().Reason, StringComparison.Ordinal);
         Assert.False(TestAdapters.Source().IsTracked(_modFolder));
@@ -53,7 +53,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         [
             new Asset("a.txt", () => new MemoryStream("ours"u8.ToArray())),
             new Asset("b.txt", () => throw new IOException("b.txt is held by another process")),
-        ]);
+        ], []);
 
         Assert.Equal("theirs", File.ReadAllText(existing));
     }

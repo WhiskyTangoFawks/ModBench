@@ -31,7 +31,7 @@ public sealed class SourceRepositoryInitTests : IDisposable
     public void Init_MakesOneCommitNamedForTheMod_HoldingEveryPluginsSourceTheAssetsAndTheBuildConfiguration()
     {
         TestAdapters.Source().Init(
-            _sourceFolder, TestMod.Name, [DoorTreeOf("A.esp"), DoorTreeOf("B.esp")], [Asset("textures/a.dds", "texture")]);
+            _sourceFolder, TestMod.Name, [DoorTreeOf("A.esp"), DoorTreeOf("B.esp")], [Asset("textures/a.dds", "texture")], []);
 
         Assert.Equal([$"Init {TestMod.Name}"], SubjectsOnMain());
         Assert.Equal(
@@ -44,7 +44,7 @@ public sealed class SourceRepositoryInitTests : IDisposable
     {
         byte[] bytes = [0x44, 0x44, 0x53, 0x20, 0x00, 0xFF, 0x0D, 0x0A];
 
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, TestMod.Name, [], [new Asset("Textures/Sub Folder/a.dds", () => new MemoryStream(bytes))]));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, TestMod.Name, [], [new Asset("Textures/Sub Folder/a.dds", () => new MemoryStream(bytes))], []));
 
         Assert.Equal(bytes, File.ReadAllBytes(Path.Combine(_sourceFolder, "assets", "Textures", "Sub Folder", "a.dds")));
         Assert.Equal(string.Empty, Git("status", "--porcelain"));
@@ -53,7 +53,7 @@ public sealed class SourceRepositoryInitTests : IDisposable
     [Fact]
     public void Init_WritesABuildConfigurationThatNamesTheOutputFolder()
     {
-        TestAdapters.Source().Init(_sourceFolder, "The Output", [DoorTreeOf("A.esp")], []);
+        TestAdapters.Source().Init(_sourceFolder, "The Output", [DoorTreeOf("A.esp")], [], []);
 
         Assert.Equal("{\n  \"output\": \"The Output\"\n}\n", Git("show", "main:build.json"));
     }
@@ -82,7 +82,7 @@ public sealed class SourceRepositoryInitTests : IDisposable
                 (SourceOf("First.esp"), new DecompiledPlugin("First.esp", "AAAA")),
                 (SourceOf("Second.esp"), new DecompiledPlugin("Second.esp", "BBBB")),
             ],
-            []);
+            [], []);
 
         var repository = TestAdapters.Source().OverFolder(TestMod.In(_sourceFolder), GameRelease.Fallout4);
         Assert.Equal(["AAAA"], repository.LastWrittenBinarySha256s(new PluginAddress("First.esp", TestMod.Name)).Value());

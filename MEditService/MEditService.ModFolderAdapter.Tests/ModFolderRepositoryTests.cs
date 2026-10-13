@@ -189,14 +189,39 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal("bytes", content.ReadToEnd());
     }
 
-    [Fact]
-    public void WriteFile_PutsTheStreamsBytesAtThePath_ReplacingWhatWasThere()
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("old archive, longer than the new one", true)]
+    [InlineData("old", true)]
+    [InlineData("new", false)]
+    public void WriteFile_PutsTheStreamsBytesAtThePath_SayingWhetherItReplacedOtherBytes(string? there, bool replaced)
     {
-        Write("mod.ba2", "old archive, longer than the new one");
+        if (there is not null) Write("mod.ba2", there);
 
-        _repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8));
+        Assert.Equal(replaced, _repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8)));
 
         Assert.Equal("new", File.ReadAllText(Path.Combine(_root, "mod.ba2")));
+    }
+
+    [Fact]
+    public void WriteFile_OfTheBytesAlreadyThere_LeavesTheFileUntouched()
+    {
+        var stamp = Stamped("mod.ba2", "same");
+
+        _repository.WriteFile(_root, "mod.ba2", content => content.Write("same"u8));
+
+        Assert.Equal(stamp, FileStamp.Of(Path.Combine(_root, "mod.ba2")));
+        Assert.Equal(["mod.ba2"], Directory.GetFiles(_root).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public void WriteFile_IntoAFolderNotThereYet_CreatesIt()
+    {
+        var folder = Path.Combine(_root, "mods", "New");
+
+        _repository.WriteFile(folder, "a.txt", content => content.Write("new"u8));
+
+        Assert.Equal("new", File.ReadAllText(Path.Combine(folder, "a.txt")));
     }
 
     [Fact]

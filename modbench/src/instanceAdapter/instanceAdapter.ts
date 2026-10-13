@@ -363,6 +363,9 @@ export interface InstanceAdapter {
   modFolders(skippedLink?: (name: string, reason: string) => void): Promise<ModFolders | undefined>;
   /** The folder that holds `entry`, matched as the manager matches names; undefined when none does. */
   entryFolder(entry: EntryRef): Promise<ModFolder | undefined>;
+  /** The folder a build of `mod` writes: the one that holds it, else the one its name gives it; undefined when its
+   *  name gives none. */
+  modFolderPath(mod: string): Promise<string | undefined>;
   /** An origin's files, none when its folder is not there. */
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
   /** The source folder init makes a mod's repository in (ADR-0007); undefined when its name gives it none. */
@@ -406,6 +409,8 @@ export interface InstanceAdapter {
   markOriginFile(origin: FileOrigin, relativePath: string, mark: OriginFileMark): Promise<OriginFileMarked>;
   /** The path a file or folder of an origin has when nothing excludes it. */
   includedPath(relativePath: string): string;
+  /** The suffix the manager gives an excluded file's or folder's name. */
+  readonly excludedSuffix: string;
   /** Renames plugin `from` of `origin`, its named files and its line in every profile, in one
    *  write; a failed write puts every file back. Refuses, changing nothing, a taken name or a
    *  plugin not there. */

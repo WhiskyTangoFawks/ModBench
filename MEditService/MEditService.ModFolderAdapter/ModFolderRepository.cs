@@ -24,21 +24,44 @@ public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepositor
 
     public string InstallationFileName(string path) => Path.GetFileName(path);
 
-    public void WriteFile(string folder, string path, Action<Stream> write)
+    public string FolderName(string modFolder) => Path.GetFileName(Path.TrimEndingDirectorySeparator(modFolder));
+
+    public string PathIn(string modFolder, string file) => Path.GetRelativePath(modFolder, file).Replace('\\', '/');
+
+    public bool WriteFile(string folder, string path, Action<Stream> write)
     {
         var target = Path.Combine(folder, path);
+        Directory.CreateDirectory(folder);
         var partial = Path.Combine(folder, ".medit_tmp_" + Path.GetRandomFileName() + ".tmp");
         try
         {
             using (var content = new FileStream(partial, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
                 write(content);
+            var there = File.Exists(target);
+            if (there && SameBytes(partial, target)) return false;
             Directory.CreateDirectory(Path.GetDirectoryName(target) ?? folder);
             File.Move(partial, target, overwrite: true);
+            return there;
         }
         finally
         {
             File.Delete(partial);
         }
+    }
+
+    private static bool SameBytes(string one, string other)
+    {
+        using var a = File.OpenRead(one);
+        using var b = File.OpenRead(other);
+        if (a.Length != b.Length) return false;
+        Span<byte> left = stackalloc byte[1 << 14], right = stackalloc byte[1 << 14];
+        int read;
+        while ((read = a.ReadAtLeast(left, left.Length, throwOnEndOfStream: false)) > 0)
+        {
+            b.ReadExactly(right[..read]);
+            if (!left[..read].SequenceEqual(right[..read])) return false;
+        }
+        return true;
     }
 
     public Stream OpenInstallationFile(string path) => File.OpenRead(path);

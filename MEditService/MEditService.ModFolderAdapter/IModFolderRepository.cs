@@ -15,9 +15,16 @@ public interface IModFolderRepository
     /// <summary>The name of the installation file at <paramref name="path"/>, without its folder.</summary>
     string InstallationFileName(string path);
 
-    /// <summary>Writes the file at <paramref name="path"/> under <paramref name="folder"/> from what <paramref name="write"/>
-    /// puts in the seekable stream it is given. A write that throws leaves the folder as it was.</summary>
-    void WriteFile(string folder, string path, Action<Stream> write);
+    /// <summary>The name of the mod folder at <paramref name="modFolder"/>, without the folder it is in.</summary>
+    string FolderName(string modFolder);
+
+    /// <summary>The forward-slash path relative to <paramref name="modFolder"/> of the file at <paramref name="file"/>.</summary>
+    string PathIn(string modFolder, string file);
+
+    /// <summary>Writes the file at <paramref name="path"/> under <paramref name="folder"/> from <paramref name="write"/>'s
+    /// seekable stream. A throwing write, or the bytes already there, leave the folder as it was. True when it replaced
+    /// other bytes.</summary>
+    bool WriteFile(string folder, string path, Action<Stream> write);
 
     Stream OpenInstallationFile(string path);
 

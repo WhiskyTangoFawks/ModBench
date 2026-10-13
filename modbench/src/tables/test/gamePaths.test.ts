@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  archiveListsOf, creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
+  archiveListsOf, archiveVariantsOf, creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
 describe('gameReleaseForGame', () => {
@@ -28,6 +28,18 @@ describe('gameReleaseForGame', () => {
   it('answers undefined for an unknown game rather than guessing one', () => {
     expect(gameReleaseForGame('Some Game')).toBeUndefined();
     expect(gameReleaseForGame('')).toBeUndefined();
+  });
+});
+
+describe('archiveVariantsOf', () => {
+  it.each([
+    ['Fallout4', { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } }],
+    ['Fallout4VR', { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } }],
+    ['Starfield', undefined],
+    ['SkyrimSE', undefined],
+    [undefined, undefined],
+  ])('answers the variants %s\'s archives pack as, and none for a release whose archives mEdit is not known to write so the game loads them', (release, variants) => {
+    expect(archiveVariantsOf(release)).toEqual(variants);
   });
 });
 

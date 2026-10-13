@@ -13,4 +13,22 @@ public enum BuildRefusal
 
     /// <summary>No load order has been received, so the gesture has nothing to act on.</summary>
     NoLoadOrder,
+
+    /// <summary>The source folder holds no build configuration that reads, or assets one mod folder cannot hold.</summary>
+    SourceUnreadable,
+
+    /// <summary>The build configuration names an output folder that is not the mod's (mods.md, Build, story 4).</summary>
+    OutputNotThisMod,
+
+    /// <summary>An installation file the base comes from is not among the mod's, or not in the downloads folder.</summary>
+    InstallationFileMissing,
+
+    /// <summary>An installation file holds no entry the base names: it is not the file init found.</summary>
+    EntryMissing,
+
+    /// <summary>An archive takes a file that is not an asset of the source.</summary>
+    ArchiveFileNotAnAsset,
+
+    /// <summary>A file of the mod folder could not be written, or one it is made from could not be read.</summary>
+    NotWritten,
 }

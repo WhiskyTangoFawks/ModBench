@@ -51,6 +51,26 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     internal static string RootIn(string sourceFolder, string pluginFileName) =>
         Path.Combine(sourceFolder, RootFor(pluginFileName));
 
+    /// <summary>The plugins whose source the folder holds, by the name of each one's tree.</summary>
+    internal static IReadOnlyList<string> PluginsIn(string sourceFolder)
+    {
+        var sources = Path.Combine(sourceFolder, RootFolderName);
+        return Directory.Exists(sources)
+            ? [.. Directory.EnumerateDirectories(sources).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal)]
+            : [];
+    }
+
+    /// <summary>Every file under the assets folder, by its forward-slash path in the mod folder.</summary>
+    internal static IReadOnlyList<Asset> AssetsIn(string sourceFolder)
+    {
+        var assets = Path.Combine(sourceFolder, AssetsFolderName);
+        return Directory.Exists(assets)
+            ? [.. Directory.EnumerateFiles(assets, "*", SearchOption.AllDirectories)
+                .Order(StringComparer.Ordinal)
+                .Select(file => new Asset(Path.GetRelativePath(assets, file).Replace('\\', '/'), () => File.OpenRead(file)))]
+            : [];
+    }
+
     /// <summary>The folder of the mod's plugin source holding <paramref name="pluginFileName"/>'s tree: the one spelled
     /// so, else the only one spelled so without case, as a ModKey compares a name. Else why there is none.</summary>
     internal static Answer<string, SourceFailure> TreeNameIn(string sourceFolder, string pluginFileName) =>

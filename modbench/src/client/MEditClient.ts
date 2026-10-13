@@ -163,10 +163,21 @@ export interface InitOutcome {
 /** A mod to init, with its installation files and the mod manager's own files in its folder (ADR-0024). */
 export type InitMod = components['schemas']['InitModRequest'];
 
+/** A mod to build: the source folder whose build configuration names it, its folder and its installation files
+ *  (ADR-0024). */
+export type BuildMod = components['schemas']['BuildModRequest'];
+
+/** The instance's facts every mod's build needs: the suffix of an excluded name, and the release's archive variants. */
+export type BuildFacts = Omit<components['schemas']['BuildRequest'], 'mods'>;
+
 interface BuiltMod {
   mod: string;
   compiled: readonly CompiledPlugin[];
   refused: readonly ItemRefusal<PluginAddress>[];
+  /** Each archive not packed, by its path in the mod folder; it stays as it was. */
+  archivesRefused: readonly ItemRefusal<string>[];
+  /** Each file the build replaced that held other bytes, by its path in the mod folder. */
+  overwritten: readonly string[];
 }
 
 /** Build's answer: each mod built, with the plugins it compiled and the plugins it refused, or
@@ -233,7 +244,7 @@ export interface MEditClient {
   changeBuildConfiguration(sourceFolder: string, change: BuildConfigurationChange): Promise<{ changed: true } | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
-  build(mods: readonly string[]): Promise<BuildOutcome | WriteRefused>;
+  build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).

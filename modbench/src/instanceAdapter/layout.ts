@@ -68,7 +68,7 @@ export const entryDir = (instanceRoot: string, entry: EntryRef): string | undefi
 export const originDir = (instanceRoot: string, origin: FileOrigin): string | undefined =>
   (origin.kind === 'runtimeOutput' ? overwriteDir(instanceRoot) : entryDir(instanceRoot, { kind: 'mod', name: origin.name }));
 
-const EXCLUDED_SUFFIX = '.mohidden';
+export const EXCLUDED_SUFFIX = '.mohidden';
 
 export const isExcludedName = (name: string): boolean => name.toLowerCase().endsWith(EXCLUDED_SUFFIX);
 

@@ -201,6 +201,8 @@ function reportDecompiled(reporter: Reporter, outcome: SelectionOutcome<PluginAd
 export interface BuildDeps {
   commands: Pick<SourceCommands, 'build'>;
   instance: Pick<Instance, 'refresh'>;
+  /** The instance's release, which says what its archives pack as. */
+  gameRelease: () => string | undefined;
   reporter: Reporter;
   problems: BuildProblems;
   sourceFiles: SourceFilesOf;
@@ -257,12 +259,13 @@ async function buildMods(deps: BuildDeps, targets: ModTargets, invokedFrom: stri
   }
   if (!(await savedFirst(deps, mods))) return;
   await runWritingGesture(invokedFrom, instance, async () => {
-    const outcome = await commands.build(mods);
+    const outcome = await commands.build(mods, deps.gameRelease());
     if (isRefused(outcome)) { reporter.report('error', outcome.message); return; }
     for (const { compiled } of outcome.landed) {
       for (const plugin of compiled) deps.problems.publish(plugin, deps.sourceFiles(plugin.origin), plugin.diagnostics);
     }
     reportBuilt(reporter, { landed: outcome.landed, refused: [...outcome.refused, ...refusedRows] });
+    reportOverwritten(reporter, outcome);
   });
 }
 
@@ -295,16 +298,19 @@ function diagnosticsWords(count: number): string {
 function reportBuilt(reporter: Reporter, outcome: BuildOutcome): void {
   const compiled = outcome.landed.flatMap((built) => built.compiled);
   const refusedPlugins = outcome.landed.flatMap((built) => built.refused);
+  const refusedArchives = outcome.landed.flatMap(({ mod, archivesRefused }) =>
+    archivesRefused.map(({ item, reason }) => ({ item: inMod(item, mod), reason })));
   const diagnostics = compiled.reduce((sum, plugin) => sum + plugin.diagnostics.length, 0);
-  if (outcome.refused.length + refusedPlugins.length > 0) {
+  if (outcome.refused.length + refusedPlugins.length + refusedArchives.length > 0) {
     const counts = [
       ...(outcome.refused.length > 0 ? [`${outcome.refused.length} of ${outcome.landed.length + outcome.refused.length} mods`] : []),
       ...(refusedPlugins.length > 0 ? [`${refusedPlugins.length} of ${compiled.length + refusedPlugins.length} plugins`] : []),
+      ...(refusedArchives.length > 0 ? [`${refusedArchives.length} ${refusedArchives.length === 1 ? 'archive' : 'archives'}`] : []),
     ];
     const rest = diagnostics > 0 ? ` The rest compiled with ${diagnosticsWords(diagnostics)}` : '';
     reporter.selectionOutcome(`Could not build ${counts.join(' and ')}.${rest}`, {
       landed: outcome.landed.map((built) => built.mod),
-      refused: [...outcome.refused, ...refusedPlugins.map(({ item, reason }) => ({ item: rowName(item), reason }))],
+      refused: [...outcome.refused, ...refusedPlugins.map(({ item, reason }) => ({ item: rowName(item), reason })), ...refusedArchives],
     }, (name) => name);
     return;
   }
@@ -312,6 +318,21 @@ function reportBuilt(reporter: Reporter, outcome: BuildOutcome): void {
   if (only === undefined) return;
   const what = more.length === 0 ? `"${only.mod}"` : `${outcome.landed.length} mods`;
   reporter.landed(diagnostics > 0 ? `Built ${what} with ${diagnosticsWords(diagnostics)}` : `Built ${what}.`);
+}
+
+// mods.md, A source mod, story 4: a file the build overwrote is named, whatever else the build did.
+function reportOverwritten(reporter: Reporter, outcome: BuildOutcome): void {
+  const overwritten = outcome.landed.flatMap(({ mod, overwritten: paths }) => paths.map((path) => inMod(path, mod)));
+  if (overwritten.length === 0) return;
+  reporter.report(
+    'warning',
+    `Build overwrote ${overwritten.length} ${overwritten.length === 1 ? 'file' : 'files'} that differed.`,
+    overwritten.map((name) => `"${name}"`).join(', '),
+  );
+}
+
+function inMod(path: string, mod: string): string {
+  return `${path} (${mod})`;
 }
 
 /** The build's diagnostics in the Problems panel. A build replaces those of each plugin it compiled

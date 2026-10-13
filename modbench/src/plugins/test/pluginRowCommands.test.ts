@@ -305,7 +305,9 @@ describe('modbench.mod.build', () => {
   const SOURCE_MODS = new Set(['ModA', 'ModB', 'ModS', 'ModX']);
   const FILES = valueWithSourceDirs(new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, normalize(`/instance/source/${mod}`)])));
   const built = (mod: string, plugins: PluginAddress[] = [], refused: { item: PluginAddress; reason: string }[] = []) =>
-    ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused });
+    ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [], overwritten: [] });
+  const builds: [readonly string[], string | undefined][] = [];
+  beforeEach(() => { builds.length = 0; });
 
   class ModsRowStandIn extends TreeItem {
     readonly kind = 'mod';
@@ -322,12 +324,13 @@ describe('modbench.mod.build', () => {
     const diagnostics = new FakeDiagnosticCollection();
     registerBuildCommand({
       commands: {
-        build: (mods) => {
+        build: (mods, gameRelease) => {
           progressSteps.push('build');
-          return client.build(mods);
+          builds.push([mods, gameRelease]);
+          return client.build([], { excludedSuffix: '', archives: null });
         },
       },
-      instance: instanceThatReads,
+      instance: instanceThatReads, gameRelease: () => 'Fallout4',
       reporter, problems: new BuildProblems(diagnostics),
       modDirs: () => MOD_DIRS, sourceMods: () => SOURCE_MODS, modsView: 'modbench.modList',
       sourceFiles: (origin) => sourceFiles(FILES, origin),
@@ -345,7 +348,7 @@ describe('modbench.mod.build', () => {
     };
   }
 
-  const buildCalls = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'build').map((c) => c.args);
+  const buildCalls = () => builds.map(([mods]) => [mods]);
 
   it('on a Mods row, builds the mod, and the Mods view\'s progress bar closes once the Instance loader has read again, and lands once', async () => {
     const client = new InMemoryMEditClient();
@@ -354,7 +357,7 @@ describe('modbench.mod.build', () => {
 
     await handler(new ModsRowStandIn('ModA'));
 
-    expect(buildCalls(client)).toEqual([[['ModA']]]);
+    expect(builds).toEqual([[['ModA'], 'Fallout4']]);
     expect(progressSteps).toEqual([
       `save ${normalize('/instance/source/ModA')}`, 'progress opens on modbench.modList', 'build', 'Instance loader: read every file again', 'progress closes',
     ]);
@@ -369,7 +372,7 @@ describe('modbench.mod.build', () => {
 
     await handler(row(PATCH));
 
-    expect(buildCalls(client)).toEqual([[['ModA']]]);
+    expect(buildCalls()).toEqual([[['ModA']]]);
     expect(progressSteps).toContain('progress opens on modbench.pluginListTree');
   });
 
@@ -383,7 +386,7 @@ describe('modbench.mod.build', () => {
       editable: true, inMod: 'tracked', preventDefaultContextMenuItems: true,
     });
 
-    expect(buildCalls(client)).toEqual([[['ModB']]]);
+    expect(buildCalls()).toEqual([[['ModB']]]);
   });
 
   it('builds the mods of a selection once each, in one call', async () => {
@@ -394,7 +397,7 @@ describe('modbench.mod.build', () => {
 
     await handler(rows[0], rows);
 
-    expect(buildCalls(client)).toEqual([[['ModA', 'ModB']]]);
+    expect(buildCalls()).toEqual([[['ModA', 'ModB']]]);
     expect(reporter.landings).toEqual(['Built 2 mods.']);
   });
 
@@ -405,7 +408,7 @@ describe('modbench.mod.build', () => {
 
     await handler(new ModsRowStandIn('ModS'));
 
-    expect(buildCalls(client)).toEqual([[['ModS']]]);
+    expect(buildCalls()).toEqual([[['ModS']]]);
     expect(reporter.landings).toEqual(['Built "ModS".']);
   });
 
@@ -416,7 +419,7 @@ describe('modbench.mod.build', () => {
 
     await handler(new ModsRowStandIn('ModA'));
 
-    expect(buildCalls(client)).toEqual([]);
+    expect(buildCalls()).toEqual([]);
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not build: VS Code did not save its plugin source.', detail: unsaved }]);
     expect(reporter.landings).toEqual([]);
   });
@@ -430,7 +433,7 @@ describe('modbench.mod.build', () => {
     await handler(rows[0], rows);
 
     expect(progressSteps).toEqual([`save ${normalize('/instance/source/ModA')}`, `save ${normalize('/instance/source/ModB')}`]);
-    expect(buildCalls(client)).toEqual([]);
+    expect(buildCalls()).toEqual([]);
     expect(reporter.reports.map((r) => r.detail)).toEqual([unsaved]);
   });
 
@@ -440,7 +443,7 @@ describe('modbench.mod.build', () => {
 
     await handler(new ModsRowStandIn('ModX'));
 
-    expect(buildCalls(client)).toEqual([]);
+    expect(buildCalls()).toEqual([]);
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not build: no source folder for these mods.', detail: 'ModX' }]);
   });
 
@@ -480,7 +483,7 @@ describe('modbench.mod.build', () => {
 
     await handler(rows[0], rows);
 
-    expect(buildCalls(client)).toEqual([[['ModA']]]);
+    expect(buildCalls()).toEqual([[['ModA']]]);
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not build 1 of 2 mods.', detail: '"ModC" (it is not a source mod)' },
     ]);
@@ -490,7 +493,7 @@ describe('modbench.mod.build', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', {
       landed: [{
-        mod: 'ModA', refused: [],
+        mod: 'ModA', refused: [], archivesRefused: [], overwritten: [],
         compiled: [compiledPluginFixture({
           plugin: PATCH,
           diagnostics: [{ formKey: '000800:MyPatch.esp', sourceRelativePath: 'Source/A.json', message: 'Race: points at nothing' }],
@@ -515,7 +518,7 @@ describe('modbench.mod.build', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', {
       landed: [{
-        mod: 'ModA', refused: [],
+        mod: 'ModA', refused: [], archivesRefused: [], overwritten: [],
         compiled: [
           compiledPluginFixture({ plugin: PATCH, diagnostics: [diagnosticOf(PATCH)] }),
           compiledPluginFixture({ plugin: SIBLING, diagnostics: [diagnosticOf(SIBLING)] }),
@@ -538,7 +541,7 @@ describe('modbench.mod.build', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', {
       landed: [{
-        mod: 'ModA', refused: [{ item: OTHER, reason: 'no source' }],
+        mod: 'ModA', refused: [{ item: OTHER, reason: 'no source' }], archivesRefused: [], overwritten: [],
         compiled: [compiledPluginFixture({
           plugin: PATCH,
           diagnostics: [
@@ -557,6 +560,38 @@ describe('modbench.mod.build', () => {
       severity: 'error',
       message: 'Could not build 1 of 2 plugins. The rest compiled with 2 diagnostics. See the Problems panel.',
       detail: '"Other.esp (ModB)" (no source)',
+    }]);
+  });
+
+  it('names each archive a built mod did not pack and why, in the same notification', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('build', {
+      landed: [{ ...built('ModA', [PATCH]), archivesRefused: [{ item: 'ModA - Main.ba2', reason: 'Modbench packs no archive for this game.' }] }],
+      refused: [],
+    });
+    const { handler, reporter } = registered(client);
+
+    await handler(new ModsRowStandIn('ModA'));
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not build 1 archive.', detail: '"ModA - Main.ba2 (ModA)" (Modbench packs no archive for this game.)' },
+    ]);
+  });
+
+  it('names each file the build overwrote that differed, beside the landing', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('build', {
+      landed: [{ ...built('ModA', [PATCH]), overwritten: ['MyPatch.esp', 'textures/a.dds'] }, { ...built('ModB'), overwritten: ['b.nif'] }],
+      refused: [],
+    });
+    const { handler, reporter } = registered(client);
+    const rows = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
+
+    await handler(rows[0], rows);
+
+    expect(reporter.landings).toEqual(['Built 2 mods.']);
+    expect(reporter.reports).toEqual([{
+      severity: 'warning', message: 'Build overwrote 3 files that differed.', detail: '"MyPatch.esp (ModA)", "textures/a.dds (ModA)", "b.nif (ModB)"',
     }]);
   });
 
@@ -581,7 +616,7 @@ describe('modbench.mod.build', () => {
     await handler();
 
     expect(showQuickPick).not.toHaveBeenCalled();
-    expect(buildCalls(client)).toEqual([[['ModB']]]);
+    expect(buildCalls()).toEqual([[['ModB']]]);
   });
 
   it.each([
@@ -597,7 +632,7 @@ describe('modbench.mod.build', () => {
     await handler();
 
     expect(showQuickPick).toHaveBeenCalledOnce();
-    expect(buildCalls(client)).toEqual([[['ModB']]]);
+    expect(buildCalls()).toEqual([[['ModB']]]);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -611,7 +646,7 @@ describe('modbench.mod.build', () => {
 
     expect(showQuickPick).toHaveBeenCalledWith(
       [{ label: 'ModA' }, { label: 'ModB' }, { label: 'ModS' }, { label: 'ModX' }], { canPickMany: true, placeHolder: 'Build which mods?' });
-    expect(buildCalls(client)).toEqual([[['ModA', 'ModB']]]);
+    expect(buildCalls()).toEqual([[['ModA', 'ModB']]]);
   });
 
   it('from the palette, builds nothing when the pick is dismissed', async () => {
@@ -621,7 +656,7 @@ describe('modbench.mod.build', () => {
 
     await handler();
 
-    expect(buildCalls(client)).toEqual([]);
+    expect(buildCalls()).toEqual([]);
     expect(reporter.reports).toEqual([]);
   });
 });

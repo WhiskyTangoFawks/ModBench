@@ -20,7 +20,7 @@ public sealed class SourceRepositoryInitGitignoreTests
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
 
-        TestAdapters.Source().Init(sourceFolder, "Mod", [Plugin], [new Asset("meshes/a.nif", () => new MemoryStream("nif"u8.ToArray()))]);
+        TestAdapters.Source().Init(sourceFolder, "Mod", [Plugin], [new Asset("meshes/a.nif", () => new MemoryStream("nif"u8.ToArray()))], []);
 
         Assert.Equal(
             [".gitignore", "assets/meshes/a.nif", "build.json", "plugin-source/Test.esp/npc_/Test.esp/000001.json"],
@@ -31,7 +31,7 @@ public sealed class SourceRepositoryInitGitignoreTests
     public void Init_IgnoresAFileLaterPutBesideTheSource_AndTracksOneLaterPutAmongTheAssets()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
-        TestAdapters.Source().Init(sourceFolder, "Mod", [Plugin], []);
+        TestAdapters.Source().Init(sourceFolder, "Mod", [Plugin], [], []);
         File.WriteAllText(Path.Combine(sourceFolder, "Test.esp"), "a stray build output");
         Directory.CreateDirectory(Path.Combine(sourceFolder, "assets", "textures"));
         File.WriteAllText(Path.Combine(sourceFolder, "assets", "textures", "new.dds"), "a new asset");
@@ -44,7 +44,7 @@ public sealed class SourceRepositoryInitGitignoreTests
     public void Init_DoesNotUnignoreATopLevelFolderThatMerelyEndsWithPluginSource_ForThePatternIsNotASuffixMatch()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
-        TestAdapters.Source().Init(sourceFolder, "Mod", [Plugin], []);
+        TestAdapters.Source().Init(sourceFolder, "Mod", [Plugin], [], []);
         Directory.CreateDirectory(Path.Combine(sourceFolder, "My-plugin-source"));
         File.WriteAllText(Path.Combine(sourceFolder, "My-plugin-source", "notes.txt"), "Notes");
 

@@ -41,15 +41,11 @@ internal sealed class ManifestBuilder
 
     public FileProvider ProviderOf(HashedFile file)
     {
-        if (_indexes.Count > 0 && _indexes[0].ByPath.TryGetValue(file.Path, out var sameFirst) && sameFirst.Hash == file.Hash)
-            return new FileProvider.FirstInstallationFile();
-
-        foreach (var (name, byHash, byPath) in _indexes)
+        if (EntryHolding(file) is (var first, var holder, var entry))
         {
-            var holding = byHash[file.Hash].ToList();
-            if (holding.Count == 0) continue;
-            var entry = byPath.TryGetValue(file.Path, out var samePath) && samePath.Hash == file.Hash ? samePath : holding[0];
-            return new FileProvider.InstallationFileEntry(name, entry.Path);
+            return first && string.Equals(entry.Path, file.Path, StringComparison.OrdinalIgnoreCase)
+                ? new FileProvider.FirstInstallationFile()
+                : new FileProvider.InstallationFileEntry(holder, entry.Path);
         }
 
         _gameFiles.TryGetValue(file.Path, out var game);
@@ -61,6 +57,20 @@ internal sealed class ManifestBuilder
         }
 
         return game is null ? new FileProvider.NoProvider() : new FileProvider.GameFileDelta(game.Path, game.Hash);
+    }
+
+    /// <summary>The first installation file holding the file's bytes, and its entry holding them: the one at the file's
+    /// path when there is one. Null when none holds them.</summary>
+    public (bool First, string Name, HashedEntry Entry)? EntryHolding(HashedFile file)
+    {
+        foreach (var (at, (name, byHash, byPath)) in _indexes.Index())
+        {
+            var holding = byHash[file.Hash].ToList();
+            if (holding.Count == 0) continue;
+            return (at == 0, name, byPath.TryGetValue(file.Path, out var samePath) && samePath.Hash == file.Hash ? samePath : holding[0]);
+        }
+
+        return null;
     }
 
     private static Dictionary<string, HashedEntry> IndexByPath(IReadOnlyList<HashedEntry> entries)

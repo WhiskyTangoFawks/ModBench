@@ -117,10 +117,10 @@ public sealed class InitHandler
         }
 
         SetProgress(mod.Name, InitPhase.ReadingFiles, total, total);
-        List<Asset> assets;
+        (List<Asset> Assets, List<BaseFile> Base) files;
         try
         {
-            assets = AssetsOf(mod, toInit, plugins, loadOrder.GameRelease);
+            files = FilesOf(mod, toInit, plugins, loadOrder.GameRelease);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -129,7 +129,7 @@ public sealed class InitHandler
         }
 
         SetProgress(mod.Name, InitPhase.Committing, total, total);
-        if (Commit(mod, toInit.SourceFolder, verified, assets) is { } failure)
+        if (Commit(mod, toInit.SourceFolder, verified, files.Assets, files.Base) is { } failure)
         {
             _logger.LogWarning("Refused to init {Mod}: {Reason}", mod.Name, failure.Reason);
             return ItemAnswer<InitRefusal, InitializedMod>.Refused(InitRefusal.CommitFailed, $"'{mod.Name}' was not initialized: {failure.Reason}");
@@ -138,26 +138,25 @@ public sealed class InitHandler
         return ItemAnswer<InitRefusal, InitializedMod>.Landed(new InitializedMod([.. plugins.Select(p => p.Key)]));
     }
 
-    // The assets are the files no installation file yields (plugins.md, Init, story 2). What compile writes for the
-    // mod's plugins is a build output, and the mod manager's files are its own.
-    private List<Asset> AssetsOf(PluginProvider.FromMod mod, ModToInit toInit, List<RegisteredPlugin> plugins, GameRelease release)
+    // The assets are the files no installation file yields (plugins.md, Init, story 2), and the base the entry each other
+    // file comes from. What compile writes is a build output, and the mod manager's files are its own.
+    private (List<Asset> Assets, List<BaseFile> Base) FilesOf(
+        PluginProvider.FromMod mod, ModToInit toInit, List<RegisteredPlugin> plugins, GameRelease release)
     {
         var all = _modFolders.Files(mod.Folder, mod.Name, toInit.ModManagerFiles.ToHashSet(StringComparer.Ordinal));
         var paths = all.Select(file => file.Path).ToList();
         var compiled = plugins.SelectMany(plugin => _plugins.WrittenByCompile(plugin, paths, release)).ToHashSet(StringComparer.Ordinal);
         var matching = new ManifestBuilder(toInit.InstallationFiles.Select(file => (_modFolders.InstallationFileName(file.Path), file)), []);
-        return
-        [
-            .. all
-                .Where(file => !compiled.Contains(file.Path)
-                    && matching.ProviderOf(file) is not (FileProvider.FirstInstallationFile or FileProvider.InstallationFileEntry))
-                .Select(file => new Asset(file.Path, () => _modFolders.OpenFile(mod.Folder, file.Path))),
-        ];
+        var held = all.Where(file => !compiled.Contains(file.Path)).Select(file => (File: file, Held: matching.EntryHolding(file))).ToList();
+        return (
+            [.. held.Where(file => file.Held is null).Select(file => new Asset(file.File.Path, () => _modFolders.OpenFile(mod.Folder, file.File.Path)))],
+            [.. held.Select(file => file.Held is (_, var name, var entry) ? new BaseFile(file.File.Path, name, entry.Path) : null).OfType<BaseFile>()]);
     }
 
     // The adapter writes nothing when any of it fails (plugins.md, Init, story 5).
     private SourceFailure? Commit(
-        PluginProvider.FromMod mod, string sourceFolder, List<(RegisteredPlugin Plugin, PluginSource Source)> verified, List<Asset> assets)
+        PluginProvider.FromMod mod, string sourceFolder, List<(RegisteredPlugin Plugin, PluginSource Source)> verified, List<Asset> assets,
+        List<BaseFile> baseFiles)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -165,8 +164,8 @@ public sealed class InitHandler
                 sourceFolder, verified.Count, verified.Sum(v => v.Source.Files.Count), assets.Count);
         }
 
-        return _source.Init(sourceFolder, mod.Name,
-            [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Name, v.Source.BinarySha256)))], assets);
+        return _source.Init(sourceFolder, _modFolders.FolderName(mod.Folder),
+            [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Name, v.Source.BinarySha256)))], assets, baseFiles);
     }
 
     private void SetProgress(string? mod, InitPhase phase, int pluginsDone, int pluginsTotal) =>
