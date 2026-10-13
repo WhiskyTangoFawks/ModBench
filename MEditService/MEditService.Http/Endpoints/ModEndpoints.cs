@@ -128,8 +128,8 @@ internal sealed record BuildRequest(IReadOnlyList<string> Mods);
 /// <summary>The mods to init (ADR-0024).</summary>
 internal sealed record InitRequest(IReadOnlyList<InitModRequest> Mods);
 
-/// <summary>A mod by name, with the source folder its repository goes in, its installation files in the mod manager's
-/// order and the mod manager's own files in its folder, by forward-slash path, which no build makes.</summary>
+/// <summary>A mod by name, the folder its repository goes in, its installation files in the mod manager's order, and the
+/// mod manager's own files in its folder, by forward-slash path, which no build makes.</summary>
 internal sealed record InitModRequest(
     string Name, string SourceFolder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> ModManagerFiles);
 
