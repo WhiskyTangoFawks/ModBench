@@ -18,6 +18,9 @@ import { LABEL_COLUMN } from './labelColumn';
 import type { ArrayParentContext } from '../../src/wire/messages';
 import type { CellDrag } from './cellDrag';
 
+// The only check error a translated text carries is its missing strings file, named by the error.
+const NO_STRINGS_FILE = '<Error: No strings file>';
+
 interface RenderCellExtras {
   checkError?: string | null;
   resolution?: FormKeyResolution;
@@ -73,6 +76,13 @@ function renderCell(
         onCommit={onCommit}
         collapsed={rowCollapsed}
       />
+    );
+  }
+  if (meta.type === 'translatedString' && checkError) {
+    return (
+      <span title={checkError}>
+        <ScalarCell value={value} meta={meta} editable={onCommit != null} onCommit={onCommit} displayOverride={NO_STRINGS_FILE} />
+      </span>
     );
   }
   return (
