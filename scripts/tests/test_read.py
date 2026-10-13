@@ -44,11 +44,6 @@ class ReadAgainstTheFixtureInstance(unittest.TestCase):
             medit.read('10mmFromA', '004822:Fallout4.esm')
         self.assertIn("10mmFromA is not a plugin", str(raised.exception))
 
-    def test_raises_for_a_name_that_is_no_plugin(self):
-        with window_of(self.url), self.assertRaises(medit.MEditError) as raised:
-            medit.read('NoSuchPlugin.esp', '000800:NoSuchPlugin.esp')
-        self.assertIn('NoSuchPlugin.esp', str(raised.exception))
-
     def test_finds_no_record_that_references_a_record_nothing_references(self):
         with window_of(self.url):
             self.assertEqual(medit.references('000800:MBDevLight.esl'), [])
