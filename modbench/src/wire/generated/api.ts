@@ -1034,6 +1034,11 @@ export interface components {
             indexes?: {
                 [key: string]: number;
             } | null;
+            cellStatesByFocus?: {
+                [key: string]: {
+                    [key: string]: components["schemas"]["ConflictThis"];
+                };
+            } | null;
         };
         FieldMetadata: {
             name: string;

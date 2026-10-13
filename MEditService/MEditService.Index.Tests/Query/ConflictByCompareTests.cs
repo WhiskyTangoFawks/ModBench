@@ -67,6 +67,14 @@ public class ConflictByCompareTests
     }
 
     [Fact]
+    public void ACompareOfOneRecordsCopies_CarriesNoStatesByFocus()
+    {
+        var result = ComparedCopies.Of(Notes("SomeNotes"));
+
+        Assert.All(result.Diffs, d => Assert.Null(d.CellStatesByFocus));
+    }
+
+    [Fact]
     public void SinglePluginShowsEveryNonNullField()
     {
         var result = ComparedCopies.Of(Notes("SomeNotes", "SomeName"));

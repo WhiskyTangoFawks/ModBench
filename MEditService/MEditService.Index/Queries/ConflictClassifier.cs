@@ -162,7 +162,8 @@ internal sealed class ConflictClassifier(ILogger logger)
 
         var links = LinkFacts(shapes, values, ctx);
         return new FieldDiff(
-            label, values, winnerColumn, cellStates, conflictAll, children, links.Resolutions, links.CheckErrors);
+            label, values, winnerColumn, cellStates, conflictAll, children, links.Resolutions, links.CheckErrors,
+            CellStatesByFocus: ctx.Agree ? ConflictRules.StatesByFocus(values, same) : null);
     }
 
     // A table of several record classes carries the document's discriminator as a column, and a

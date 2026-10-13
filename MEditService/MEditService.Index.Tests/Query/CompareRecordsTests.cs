@@ -70,6 +70,8 @@ public sealed class CompareRecordsTests : IDisposable
     private static string Column(CompareResult compare, int index) =>
         compare.Overrides[index].Column ?? throw new InvalidOperationException("Expected the column to be named.");
 
+    private static FieldDiff Row(CompareResult compare, string field) => compare.Diffs.Single(d => d.FieldName == field);
+
     private static IEnumerable<FieldDiff> Flatten(IEnumerable<FieldDiff> diffs) =>
         diffs.SelectMany(d => new[] { d }.Concat(Flatten(d.Children ?? [])));
 
@@ -132,6 +134,44 @@ public sealed class CompareRecordsTests : IDisposable
         Assert.Equal(ConflictAll.NoConflict, rows["FormVersion"].ConflictAll);
         Assert.Equal(ConflictAll.ConflictBenign, rows["EditorID"].ConflictAll);
         Assert.Equal(ConflictAll.ConflictBenign, compare.ConflictAll);
+    }
+
+    [Fact]
+    public void ACellIsMasterInTheFocusedColumn_OverrideWhereItsValueIsTheSame_AndConflictLosesWhereItDiffers()
+    {
+        var compare = Compare(Copy(_chest, BasePlugin), Copy(_chest, BasePlugin), Copy(_otherChest, ModPlugin));
+        var (first, second, third) = (Column(compare, 0), Column(compare, 1), Column(compare, 2));
+
+        var byFocus = Row(compare, "EditorID").CellStatesByFocus.Require();
+
+        Assert.Equal(
+            new Dictionary<string, ConflictThis> { [first] = ConflictThis.Master, [second] = ConflictThis.Override, [third] = ConflictThis.ConflictLoses },
+            byFocus[first]);
+        Assert.Equal(
+            new Dictionary<string, ConflictThis> { [first] = ConflictThis.ConflictLoses, [second] = ConflictThis.ConflictLoses, [third] = ConflictThis.Master },
+            byFocus[third]);
+    }
+
+    [Fact]
+    public void AnAbsentValueIsAnEmptyKey_OverrideAgainstAbsent_ConflictLosesAgainstAPresentValue()
+    {
+        var compare = Compare(Copy(_chest, BasePlugin), Copy(_sword, ModPlugin), Copy(_sword, ModPlugin));
+        var (chest, sword, otherSword) = (Column(compare, 0), Column(compare, 1), Column(compare, 2));
+
+        var focusedOnSword = Row(compare, "Items").CellStatesByFocus.Require()[sword];
+
+        Assert.Equal(ConflictThis.ConflictLoses, focusedOnSword[chest]);
+        Assert.Equal(ConflictThis.Override, focusedOnSword[otherSword]);
+    }
+
+    [Fact]
+    public void AFieldTheGameIgnoresStillTakesStatesInACompare_ForXEditsPaintRecoloursEveryCell()
+    {
+        var compare = Compare(Copy(_chest, BasePlugin), Copy(_chest, BasePlugin));
+
+        var byFocus = Row(compare, "FormVersion").CellStatesByFocus.Require();
+
+        Assert.Equal(ConflictThis.Override, byFocus[Column(compare, 0)][Column(compare, 1)]);
     }
 
     [Fact]

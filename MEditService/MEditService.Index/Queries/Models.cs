@@ -110,7 +110,11 @@ public record FieldDiff(
     // rather than the whole record's, which FieldValue.CheckError on the root field states.
     IReadOnlyDictionary<string, string>? CheckErrors = null,
     // An array element's own index in each column's array that holds it; null on any other node.
-    IReadOnlyDictionary<string, int>? Indexes = null);
+    IReadOnlyDictionary<string, int>? Indexes = null,
+    // Only in a comparison of several records: each cell's state when each column is the focused
+    // one, keyed by the focused column and then the cell's column. The panel picks the entry for the
+    // column it has focused.
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, ConflictThis>>? CellStatesByFocus = null);
 
 internal sealed record ClassifyResult(
     ConflictAll ConflictAll,
