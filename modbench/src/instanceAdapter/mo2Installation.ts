@@ -10,7 +10,7 @@ import { currentDownloadsDir, readOrAbsent, type Mo2Context } from './mo2Context
 
 // MO2 records a file installed from outside the downloads folder by its whole path, and reinstalls from the
 // downloads folder by its name once that path is gone.
-async function recordedPath(context: Mo2Context, recorded: string): Promise<string> {
+async function reinstallPath(context: Mo2Context, recorded: string): Promise<string> {
   return isAbsolute(recorded) && (await exists(recorded)) ? recorded : downloadFile(await currentDownloadsDir(context), basename(recorded));
 }
 
@@ -25,7 +25,7 @@ export function mo2Installation(
         ({ kind: 'unreadable', reason: `Modbench cannot tell what ${archiveFilename} installs: ${why}` });
       let path: string;
       try {
-        path = await recordedPath(context, archiveFilename);
+        path = await reinstallPath(context, archiveFilename);
       } catch (err) {
         return refused(errorMessage(err));
       }
