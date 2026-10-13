@@ -7,7 +7,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Traces;
 
-public sealed class InitModTraceTests : HostedTests
+public sealed class DecompileAndCommitTraceTests : HostedTests
 {
     private const string Plugin = "Initialized.esp";
     private const string Origin = "InitializedMod";
