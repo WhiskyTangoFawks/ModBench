@@ -17,6 +17,7 @@ const PROFILES = 'profiles';
 const MODS = 'mods';
 const SOURCE = 'source';
 const DOWNLOADS = 'downloads';
+const HASH_INDEX = 'hash-index';
 
 export const profilesDir = (instanceRoot: string): string => join(instanceRoot, PROFILES);
 
@@ -142,6 +143,9 @@ export const modSourceDir = (instanceRoot: string, modName: string): string | un
 
 /** The folder beside `mods/` that holds every mod's source folder (ADR-0007). */
 export const sourceRootDir = (instanceRoot: string): string => join(instanceRoot, SOURCE);
+
+/** The folder at the instance root that holds the adapter's index of hashes, which the adapter alone writes. */
+export const hashIndexDir = (instanceRoot: string): string => join(instanceRoot, HASH_INDEX);
 
 const BUILD_CONFIGURATION_FILE = 'build.json';
 

@@ -1,12 +1,17 @@
 // The one byte-level read in the extension (ADR-0004): the bytes go into a hash and nowhere else.
 
-import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
+import xxhash from 'xxhash-wasm';
 
-/** Streamed: a texture or an archive runs to gigabytes. */
+const hasher = xxhash();
+
+/** xxHash64 as Wabbajack writes it, its eight little-endian bytes in base64: the hash mEdit's manifest
+ *  carries (ADR-0023). Streamed: a texture or an archive runs to gigabytes. */
 export async function digestOf(path: string): Promise<string> {
-  const hash = createHash('sha256');
+  const hash = (await hasher).create64();
   const bytes: AsyncIterable<Buffer> = createReadStream(path);
   for await (const chunk of bytes) hash.update(chunk);
-  return hash.digest('hex');
+  const digest = Buffer.alloc(8);
+  digest.writeBigUInt64LE(hash.digest());
+  return digest.toString('base64');
 }
