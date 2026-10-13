@@ -76,17 +76,25 @@ internal static class LocalizedStrings
     /// <summary>A missing strings file is refused by name: <c>TranslatedString.TryLookup</c> returns false
     /// silently for one. Asked of the lookup the read uses.</summary>
     internal static string? FindMissingStringsFile(
+        IModGetter mod, string pluginName, PluginStrings strings, LoadOrderSnapshot loadOrder, GameRelease gameRelease) =>
+        FindMissingStringsFiles(mod, pluginName, strings, loadOrder, gameRelease) is [var first, ..] ? first : null;
+
+    /// <summary>Every strings file the lookup did not find. A translated text's own file is among them
+    /// whenever it reads no text for want of its file.</summary>
+    internal static IReadOnlyList<string> FindMissingStringsFiles(
         IModGetter mod, string pluginName, PluginStrings strings, LoadOrderSnapshot loadOrder, GameRelease gameRelease)
     {
-        if (!mod.UsingLocalization) return null;
+        if (!mod.UsingLocalization) return [];
 
         var languageFormat = LanguageFormat(gameRelease);
         var plugin = ModKey.FromFileName(pluginName);
         var found = Find(strings, loadOrder, plugin, gameRelease);
-        return Sources
-            .Where(source => !found.ContainsKey((source, Target)))
-            .Select(source => StringsUtility.GetFileName(languageFormat, plugin, Target, source))
-            .FirstOrDefault();
+        return
+        [
+            .. Sources
+                .Where(source => !found.ContainsKey((source, Target)))
+                .Select(source => StringsUtility.GetFileName(languageFormat, plugin, Target, source)),
+        ];
     }
 
     private static bool IsLocalized(ModPath plugin, GameRelease gameRelease) =>
