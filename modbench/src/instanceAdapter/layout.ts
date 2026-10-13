@@ -44,7 +44,8 @@ export function mo2FolderName(name: string): string {
 }
 
 // Another tool can write a mod line with a `/`; a name that reaches outside `mods/` builds no path.
-const modFolderName = (modName: string): string | undefined =>
+/** The folder a mod's name gives it; `undefined` when it gives none. */
+export const modFolderName = (modName: string): string | undefined =>
   (modName === '' || modName === '.' || modName === '..' || /[\\/]/.test(modName) ? undefined : modName);
 
 // Another tool can write a separator name MO2 never gives a folder; such a separator builds no path.
@@ -141,6 +142,9 @@ export const modSourceDir = (instanceRoot: string, modName: string): string | un
 
 /** The folder beside `mods/` that holds every mod's source folder (ADR-0007). */
 export const sourceRootDir = (instanceRoot: string): string => join(instanceRoot, SOURCE);
+
+/** The file in a source folder that says what its build makes (ADR-0007). */
+export const buildConfigurationFile = (sourceFolder: string): string => join(sourceFolder, 'build.json');
 
 /** The git directory whose presence is what "tracked" means (ADR-0007). */
 export const repositoryGitDir = (sourceFolder: string): string => join(sourceFolder, GIT_DIR);

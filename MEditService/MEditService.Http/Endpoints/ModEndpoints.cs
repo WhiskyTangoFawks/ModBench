@@ -1,5 +1,6 @@
 using MEditService.Commands.Build;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -29,6 +30,17 @@ internal static class ModEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
+        app.MapPost("/build-configuration", ChangeBuildConfiguration)
+            .WithName("ChangeBuildConfiguration")
+            .WithTags("Mods")
+            .WithDescription(
+                "Writes a source mod's build configuration in its working tree, keeping all else it says: the output folder's " +
+                "new name, and the paths in the mod folder its build excludes. Modbench writes the mod folder in the same gesture.")
+            .Produces(204)
+            .ProducesProblem(400)
+            .ProducesProblem(422)
+            .ProducesProblem(500);
+
         return app;
     }
 
@@ -57,6 +69,30 @@ internal static class ModEndpoints
             (applied, refused) => new InitResponse(applied, refused));
     }
 
+    internal static IResult ChangeBuildConfiguration(
+        BuildConfigurationRequest req, BuildConfigurationHandler handler, ILoggerFactory loggerFactory)
+    {
+        IReadOnlyList<string> exclude = req.Exclude ?? [], include = req.Include ?? [];
+        if (string.IsNullOrWhiteSpace(req.SourceFolder) || (req.Output is { } output && !IsFolderName(output))
+            || !exclude.Concat(include).All(IsPathInTheMod) || (req.Output is null && exclude.Count + include.Count == 0))
+        {
+            return Results.Problem(
+                "A source folder is required, with an output that is a folder name, or paths in the mod folder to exclude or include.",
+                statusCode: 400);
+        }
+
+        var result = handler.Change(req.SourceFolder, new BuildConfigurationChange(req.Output, exclude, include));
+        if (result.Refusal is not { } refusal) return Results.NoContent();
+        EndpointMapping.LogRefusal(loggerFactory.CreateLogger(nameof(ModEndpoints)), "Change build configuration", refusal, result.Message, req.SourceFolder);
+        return EndpointMapping.Refusal(refusal, result.Message);
+    }
+
+    private static bool IsFolderName(string name) => IsPathInTheMod(name) && !name.Contains('/', StringComparison.Ordinal);
+
+    private static bool IsPathInTheMod(string path) =>
+        !path.Contains('\\', StringComparison.Ordinal) && !Path.IsPathRooted(path)
+        && path.Split('/').All(segment => !string.IsNullOrWhiteSpace(segment) && segment is not ("." or ".."));
+
     // build-mod: the selection (commands.md, A selection is one gesture).
     internal static async Task<IResult> Build(BuildRequest req, BuildHandler buildHandler, ILoggerFactory loggerFactory)
     {
@@ -79,6 +115,11 @@ internal static class ModEndpoints
             (applied, refused) => new BuildResponse(applied, refused));
     }
 }
+
+/// <summary>A source mod's folder, and what to change in its build configuration: the output folder's new name, and
+/// forward-slash paths in the mod folder to exclude or include.</summary>
+internal sealed record BuildConfigurationRequest(
+    string SourceFolder, string? Output, IReadOnlyList<string>? Exclude, IReadOnlyList<string>? Include);
 
 /// <summary>The mods by name; the load order says each one's plugins.</summary>
 internal sealed record BuildRequest(IReadOnlyList<string> Mods);

@@ -42,7 +42,7 @@ interface InstancePaths {
   readonly downloadsDir: string | undefined;
   /** Each listed mod's own folder, by mod name; a mod with no folder has none. */
   readonly modDirs: ReadonlyMap<string, string>;
-  /** Each listed mod's source folder, by mod name, whether it is there or not. */
+  /** Each listed mod's source folder, by mod name: the repository that builds it, else the one init would make, whether it is there or not. */
   readonly sourceDirs: ReadonlyMap<string, string>;
 }
 
@@ -56,7 +56,7 @@ export interface InstanceValue {
   readonly modFolders: readonly ModFolder[] | undefined;
   /** The tracked mods (ADR-0007). */
   readonly trackedMods: ReadonlySet<string>;
-  /** Every repository in the source folder, listed in the mod order or not. */
+  /** Every mod a repository in the source folder builds, listed in the mod order or not. */
   readonly sourceMods: ReadonlySet<string>;
   /** Every profile, the switch's choices. */
   readonly profiles: readonly string[];
@@ -139,7 +139,7 @@ interface InstanceOptions {
 // Each listed mod's folder is matched as the manager matches names.
 function pathsOf(
   runtimeOutput: OriginFiles, downloaded: DownloadedFiles, entries: readonly ModlistEntry[], modFolders: ModFolders | undefined,
-  sourceFolder: (mod: string) => string | undefined, sourceMods: readonly string[],
+  sourceFolder: (mod: string) => string | undefined, sourceMods: ReadonlyMap<string, string>,
 ): InstancePaths {
   return {
     overwriteDir: runtimeOutput.folder,
@@ -148,8 +148,11 @@ function pathsOf(
       const folder = entry.kind === 'mod' ? modFolders?.holding(entry) : undefined;
       return folder === undefined ? [] : [[entry.name, folder.path] as const];
     })),
-    sourceDirs: new Map([...new Set([...sourceMods, ...entries.filter((entry) => entry.kind === 'mod').map((entry) => entry.name)])]
-      .flatMap((name) => { const folder = sourceFolder(name); return folder === undefined ? [] : [[name, folder] as const]; })),
+    sourceDirs: new Map([...new Set([...sourceMods.keys(), ...entries.filter((entry) => entry.kind === 'mod').map((entry) => entry.name)])]
+      .flatMap((name) => {
+        const folder = sourceMods.get(name) ?? sourceFolder(name);
+        return folder === undefined ? [] : [[name, folder] as const];
+      })),
   };
 }
 
@@ -436,7 +439,7 @@ export class Instance implements Subscription {
     const { profile, gameName, gameRelease } = settings;
     const entries = await this.readMods(profile);
     const runtimeOutputRead = adapter.originFiles({ kind: 'runtimeOutput' });
-    const [index, pluginOrder, downloadsOutcome, runtimeOutput, modFolders, profiles, game, trackedMods, sourceMods] = await Promise.all([
+    const [index, pluginOrder, downloadsOutcome, runtimeOutput, modFolders, profiles, game, sourceMods] = await Promise.all([
       runtimeOutputRead.then((output) => buildFileConflictIndex(entries, output.files, adapter, (line) => log.info(line))),
       adapter.pluginOrder(profile),
       // Both answers come from the settings read above, so a rewrite cannot land two generations
@@ -452,10 +455,9 @@ export class Instance implements Subscription {
         archiveList: await this.readArchiveList(profile, gameFolder, gameRelease),
         dataFolderArchives: await this.readGameFolderArchives(gameFolder, gameRelease),
       })),
-      Promise.all(entries.map(async (entry) => (entry.kind === 'mod' && await adapter.modTracked(entry.name) ? [entry.name] : []))),
       adapter.sourceMods(),
     ]);
-    for (const note of runtimeOutput.notes) log.info(`[instance] ${runtimeOutput.origin}: ${note}`);
+    for (const note of [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes]) log.info(`[instance] ${note}`);
     const { gameFolder, dataFolderPlugins, creationClub, archiveList, dataFolderArchives } = game;
     const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);
     const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins);
@@ -463,7 +465,7 @@ export class Instance implements Subscription {
       ? await this.readInstalledInto(entries, modFolders?.all ?? [])
       : undefined;
     const modFolderList = modFolders?.all;
-    const paths = pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders, (mod) => adapter.sourceFolder(mod), sourceMods);
+    const paths = pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders, (mod) => adapter.sourceFolder(mod), sourceMods.folders);
     const syncSource = {
       activeProfile: profile, modFolders: modFolderList, files: index.files, dataFolderPlugins, pluginsLoadedWithNoLine,
       pluginOrder,
@@ -473,8 +475,8 @@ export class Instance implements Subscription {
     return {
       mods: entries,
       modFolders: modFolderList,
-      trackedMods: new Set(trackedMods.flat()),
-      sourceMods: new Set(sourceMods),
+      trackedMods: new Set(entries.flatMap((entry) => (entry.kind === 'mod' && sourceMods.folders.has(entry.name) ? [entry.name] : []))),
+      sourceMods: new Set(sourceMods.folders.keys()),
       profiles,
       files: index.files,
       filesByMod: index.filesByMod,

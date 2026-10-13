@@ -137,6 +137,17 @@ internal static class EndpointMapping
             _ => 422,
         });
 
+    /// <summary>A build configuration change's refusal, leaving the configuration as it was (ADR-0019).</summary>
+    internal static IResult Refusal(BuildConfigurationRefusal refusal, string? message) => Results.Problem(
+        detail: message,
+        statusCode: refusal switch
+        {
+            // The request is sound; the disk refused the write.
+            BuildConfigurationRefusal.WriteFailed => 500,
+            _ => 422,
+        },
+        extensions: new Dictionary<string, object?> { ["refusal"] = refusal.ToString() });
+
     /// <summary>Put load order's own refusal: a bad request, since none of them is found by touching the Index.</summary>
     internal static IResult Refusal(PutLoadOrderResult result) => Results.Problem(
         detail: result.Message,

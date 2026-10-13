@@ -11,6 +11,9 @@ import {
 } from './corpusFixture';
 import { adapterOver, readModlistEntries } from './adapterOver';
 import type { Mod } from '../../instanceLoader/instance';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+
+const unscriptedMEdit = new InMemoryMEditClient();
 
 const isMod = (name: string) => (e: { kind: string; name: string }): e is Mod => e.kind === 'mod' && e.name === name;
 
@@ -28,7 +31,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('setModsEnabled on a selection already in that state is a byte-identical no-op over the whole instance', async () => {
     const before = await snapshotTree(dir);
-    const outcome = await modlistCommands(adapterOver(dir)).setModsEnabled(PROFILE, ['Unofficial Fallout 4 Patch'], true);
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).setModsEnabled(PROFILE, ['Unofficial Fallout 4 Patch'], true);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set());
     expect(outcome).toEqual({ applied: true, outcome: { landed: ['Unofficial Fallout 4 Patch'], refused: [] } });
@@ -36,7 +39,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('setModsEnabled flips only the mods asked for that are not already in that state, refuses a mod not in the modlist by name, and touches only modlist.txt, in one write', async () => {
     const before = await snapshotTree(dir);
-    const outcome = await modlistCommands(adapterOver(dir)).setModsEnabled(PROFILE, ["Ñoño's Retexture", 'Unofficial Fallout 4 Patch', 'No Such Mod'], false);
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).setModsEnabled(PROFILE, ["Ñoño's Retexture", 'Unofficial Fallout 4 Patch', 'No Such Mod'], false);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -54,14 +57,14 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('moveMods moves a mod to the winning end of mod order, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir)).moveMods(PROFILE, ['ENBoost - 12k'], { kind: 'modOrder' }, 'winning');
+    await modlistCommands(adapterOver(dir), unscriptedMEdit).moveMods(PROFILE, ['ENBoost - 12k'], { kind: 'modOrder' }, 'winning');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
   });
 
   it('insertSeparator adds a separator line and its empty mods/ folder, touching no other file', async () => {
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir)).insertSeparator(PROFILE, 'QA Corpus Marker', { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
+    await modlistCommands(adapterOver(dir), unscriptedMEdit).insertSeparator(PROFILE, 'QA Corpus Marker', { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -73,7 +76,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     const OLD_META = 'mods/Unassigned (Modlist Development)_separator/meta.ini';
     const NEW_META = 'mods/Renamed QA Group_separator/meta.ini';
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir)).renameSeparator(PROFILE, 'Unassigned (Modlist Development)', 'Renamed QA Group');
+    await modlistCommands(adapterOver(dir), unscriptedMEdit).renameSeparator(PROFILE, 'Unassigned (Modlist Development)', 'Renamed QA Group');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST, OLD_META, NEW_META]));
 
@@ -84,7 +87,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('renameSeparator of a separator with no folder renames its line alone, and makes no folder', async () => {
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir)).renameSeparator(PROFILE, 'Radfall - All-In-One Survival Overhaul', 'Renamed QA Group');
+    await modlistCommands(adapterOver(dir), unscriptedMEdit).renameSeparator(PROFILE, 'Radfall - All-In-One Survival Overhaul', 'Renamed QA Group');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -95,7 +98,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
   it('deleteSeparators of a separator with no folder removes its line alone, and trashes nothing', async () => {
     const trashed: string[] = [];
     const before = await snapshotTree(dir);
-    const outcome = await modlistCommands(adapterOver(dir)).deleteSeparators(PROFILE, ['Radfall - All-In-One Survival Overhaul'], (path) => {
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).deleteSeparators(PROFILE, ['Radfall - All-In-One Survival Overhaul'], (path) => {
       trashed.push(path);
       return Promise.resolve();
     });
@@ -114,7 +117,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     const trashed: string[] = [];
     const modsBefore = (await readModlistEntries(dir)).filter((e) => e.kind === 'mod');
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir)).deleteSeparators(PROFILE, ['Unassigned (Modlist Development)'], async (path) => {
+    await modlistCommands(adapterOver(dir), unscriptedMEdit).deleteSeparators(PROFILE, ['Unassigned (Modlist Development)'], async (path) => {
       trashed.push(path);
       await rm(path, { recursive: true });
     });
@@ -128,14 +131,14 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('moveSeparators touches only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir)).moveSeparators(PROFILE, ['Unassigned (Modlist Development)'], { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
+    await modlistCommands(adapterOver(dir), unscriptedMEdit).moveSeparators(PROFILE, ['Unassigned (Modlist Development)'], { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
   });
 
   it('createEmptyMod adds one empty mods/ folder and one disabled modlist line, and nothing else', async () => {
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir)).createEmptyMod(PROFILE, 'QA Empty Mod');
+    await modlistCommands(adapterOver(dir), unscriptedMEdit).createEmptyMod(PROFILE, 'QA Empty Mod');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -171,7 +174,7 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
   it('excludes a mod\'s file and an Overwrite file, then includes them back byte-identical', async () => {
     const before = await snapshotTree(dir);
 
-    const excluded = await modlistCommands(adapterOver(dir)).markFiles([inMod, inOverwrite], 'Excluded');
+    const excluded = await modlistCommands(adapterOver(dir), unscriptedMEdit).markFiles([inMod, inOverwrite], 'Excluded', new Map());
 
     expect(excluded).toEqual({
       landed: [inMod, inOverwrite],
@@ -185,9 +188,9 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
     expect(after.get('mods/DragIn Manual Extract/textures/dummy.dds.mohidden')).toEqual(before.get('mods/DragIn Manual Extract/textures/dummy.dds'));
     expect(after.get('overwrite/F4SE/Plugins/SomePlugin.log.mohidden')).toEqual(before.get('overwrite/F4SE/Plugins/SomePlugin.log'));
 
-    await modlistCommands(adapterOver(dir)).markFiles([
+    await modlistCommands(adapterOver(dir), unscriptedMEdit).markFiles([
       { ...inMod, relativePath: 'textures/dummy.dds.mohidden' }, { ...inOverwrite, relativePath: 'F4SE/Plugins/SomePlugin.log.mohidden' },
-    ], 'Included');
+    ], 'Included', new Map());
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
   });
@@ -196,12 +199,12 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
     const own = { ...inMod, relativePath: 'textures/dummy.dds.mohidden' };
     const gone = { ...inMod, relativePath: 'Missing.esp' };
     const byFolder = { ...inMod, relativePath: 'meshes.mohidden/a.nif' };
-    await modlistCommands(adapterOver(dir)).markFiles([inMod], 'Excluded');
+    await modlistCommands(adapterOver(dir), unscriptedMEdit).markFiles([inMod], 'Excluded', new Map());
     await mkdir(join(dir, 'mods', 'DragIn Manual Extract', 'meshes.mohidden'));
     await writeFile(join(dir, 'mods', 'DragIn Manual Extract', 'meshes.mohidden', 'a.nif'), '');
     const before = await snapshotTree(dir);
 
-    const outcome = await modlistCommands(adapterOver(dir)).markFiles([gone, byFolder, own], 'Included');
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).markFiles([gone, byFolder, own], 'Included', new Map());
 
     expect(outcome.landed).toEqual([own]);
     expect(outcome.refused.map(({ item }) => item)).toEqual([gone, byFolder]);

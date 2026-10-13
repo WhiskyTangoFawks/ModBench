@@ -46,6 +46,9 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved) : ISourceAdapter
         IReadOnlyList<Asset> assets) =>
         SourceFailure.Answer(() => GitInit.Init(sourceFolder, output, plugins, assets));
 
+    public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) =>
+        SourceFailure.Answer(() => BuildConfiguration.Change(sourceFolder, change));
+
     public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
         SourceRepository.ReadBackOf(pluginFileName, tree, gameRelease);
 

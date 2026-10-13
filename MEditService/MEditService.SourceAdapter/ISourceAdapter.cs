@@ -61,6 +61,10 @@ public interface ISourceAdapter
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets);
 
+    /// <summary>Writes <paramref name="change"/> into the build configuration in <paramref name="sourceFolder"/>, keeping all
+    /// else it says, in the working tree.</summary>
+    SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change);
+
     /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="ISourceRepository.TreeOf"/> answers it once
     /// written: what a round-trip gate compiles, so that it compiles what is written.</summary>
     IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease);

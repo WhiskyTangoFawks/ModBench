@@ -81,6 +81,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         return null;
     }
 
+    public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) => throw Unreached();
+
     public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
         TestAdapters.Source().ReadBackOf(pluginFileName, tree, gameRelease);
 

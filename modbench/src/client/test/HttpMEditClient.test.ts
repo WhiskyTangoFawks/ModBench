@@ -276,6 +276,8 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   it.each([
     { name: 'moveLastWritten', verb: (c: MEditClient) => c.moveLastWritten({ name: 'Old.esp', origin: 'ModA' }, 'OLD.esp', 'New.esp'),
       reads: { moved: true }, path: '/plugins/move-last-written', body: { origin: 'ModA', name: 'Old.esp', treeName: 'OLD.esp', newName: 'New.esp' } },
+    { name: 'changeBuildConfiguration', verb: (c: MEditClient) => c.changeBuildConfiguration('/instance/source/Old', { output: 'New', exclude: ['a.dds'] }),
+      reads: { changed: true }, path: '/build-configuration', body: { sourceFolder: '/instance/source/Old', output: 'New', exclude: ['a.dds'] } },
     { name: 'rebuildIndex', verb: (c: MEditClient) => c.rebuildIndex('/instance', 'Fallout4'),
       reads: { rebuilt: true }, path: '/index/rebuild', body: { instanceRoot: '/instance', gameRelease: 'Fallout4' } },
   ])('$name posts $path and reads a 204 as done', async ({ verb, reads, path, body }) => {

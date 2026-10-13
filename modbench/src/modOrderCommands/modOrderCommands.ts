@@ -9,6 +9,7 @@ import {
 import { goneFromDisk, newModNameRefusal } from '../coreLib/commandRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
+import { isRefused, type MEditClient } from '../client';
 export type { SelectionResult };
 
 async function changeModOrder(adapter: InstanceAdapter, profile: string, decide: DecideModOrder): Promise<CommandResult> {
@@ -75,16 +76,29 @@ export interface OriginFileRef {
   readonly relativePath: string;
 }
 
-// `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked on its own.
+// mEdit writes a source mod's build configuration (mods.md, A source mod, story 2).
+type BuildConfigurationWriter = Pick<MEditClient, 'changeBuildConfiguration'>;
+
+const UNMARK: Record<OriginFileMark, OriginFileMark> = { Excluded: 'Included', Included: 'Excluded' };
+
+// `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked on its own, and, in a source mod,
+// the build configuration's exclusion with it. `sources` holds each source mod's source folder.
 async function markFiles(
-  adapter: InstanceAdapter, files: readonly OriginFileRef[], mark: OriginFileMark,
+  { adapter, mEdit }: { adapter: InstanceAdapter; mEdit: BuildConfigurationWriter },
+  files: readonly OriginFileRef[], mark: OriginFileMark, sources: ReadonlyMap<string, string>,
 ): Promise<SelectionOutcome<OriginFileRef>> {
   return selectionOutcomeOf(files, async (file): Promise<CommandResult> => {
     try {
       const marked = await adapter.markOriginFile(file.origin, file.relativePath, mark);
       if (marked.gone) return { applied: false, refusal: goneFromDisk(file.relativePath) };
       if ('refusal' in marked) return { applied: false, refusal: marked.refusal };
-      return { applied: true, wrote: true };
+      const source = file.origin.kind === 'mod' ? sources.get(file.origin.name) : undefined;
+      if (source === undefined) return { applied: true, wrote: true };
+      const path = adapter.includedPath(marked.relativePath);
+      const configured = await mEdit.changeBuildConfiguration(source, mark === 'Excluded' ? { exclude: [path] } : { include: [path] });
+      if (!isRefused(configured)) return { applied: true, wrote: true };
+      if (marked.wrote) await adapter.markOriginFile(file.origin, marked.relativePath, UNMARK[mark]);
+      return { applied: false, refusal: configured.message };
     } catch (err) {
       return refuse(err);
     }
@@ -282,13 +296,19 @@ export type RenameModResult =
   | { applied: true; lineRefusals: { profile: string; refusal: string }[] }
   | { applied: false; refusal: string };
 
-// The folder first, then the line in each of `profiles`, the active one first. A mod a profile
-// does not list leaves that profile as it was.
+// The folder, then a source mod's build configuration in `source`, then the line in each of `profiles`, the active
+// one first. A profile that does not list the mod is left as it was.
 async function renameMod(
-  adapter: InstanceAdapter, activeProfile: string, profiles: readonly string[], from: string, to: string,
+  { adapter, mEdit }: { adapter: InstanceAdapter; mEdit: BuildConfigurationWriter },
+  activeProfile: string, profiles: readonly string[], from: string, to: string, source?: string,
 ): Promise<RenameModResult> {
   try {
     await adapter.renameModFolder(from, to);
+    const configured = source === undefined ? undefined : await mEdit.changeBuildConfiguration(source, { output: to });
+    if (configured !== undefined && isRefused(configured)) {
+      await adapter.renameModFolder(to, from);
+      return { applied: false, refusal: configured.message };
+    }
   } catch (err) {
     return refuse(err);
   }
@@ -340,18 +360,18 @@ export function modSyncOver(adapter: InstanceAdapter): ModSyncRun {
 }
 
 /** The modlist's commands, bound to one instance: each takes the gesture's arguments only. */
-export function modlistCommands(adapter: InstanceAdapter) {
+export function modlistCommands(adapter: InstanceAdapter, mEdit: BuildConfigurationWriter) {
   return {
     setModsEnabled: (...args: TailOf<typeof setModsEnabled>) => setModsEnabled(adapter, ...args),
     moveMods: (...args: TailOf<typeof moveMods>) => moveMods(adapter, ...args),
     moveSeparators: (...args: TailOf<typeof moveSeparators>) => moveSeparators(adapter, ...args),
-    markFiles: (...args: TailOf<typeof markFiles>) => markFiles(adapter, ...args),
+    markFiles: (...args: TailOf<typeof markFiles>) => markFiles({ adapter, mEdit }, ...args),
     insertSeparator: (...args: TailOf<typeof insertSeparator>) => insertSeparator(adapter, ...args),
     renameSeparator: (...args: TailOf<typeof renameSeparator>) => renameSeparator(adapter, ...args),
     deleteSeparators: (...args: TailOf<typeof deleteSeparators>) => deleteSeparators(adapter, ...args),
     uninstallMods: (...args: TailOf<typeof uninstallMods>) => uninstallMods(adapter, ...args),
     createEmptyMod: (...args: TailOf<typeof createEmptyMod>) => createEmptyMod(adapter, ...args),
-    renameMod: (...args: TailOf<typeof renameMod>) => renameMod(adapter, ...args),
+    renameMod: (...args: TailOf<typeof renameMod>) => renameMod({ adapter, mEdit }, ...args),
     separatorNameRefusal: (...args: TailOf<typeof separatorNameRefusal>) => separatorNameRefusal(adapter, ...args),
     renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(adapter, ...args),
     newModNameRefusal: (name: string) => newModNameRefusal(adapter, name),

@@ -43,6 +43,11 @@ function countingSettings(adapter: InstanceAdapter, reads: { count: number }): I
   return { ...adapter, settings: () => { reads.count++; return adapter.settings(); } };
 }
 
+async function repository(root: string, folder: string, output: string): Promise<void> {
+  await mkdir(join(root, 'source', folder, '.git'), { recursive: true });
+  await writeFile(join(root, 'source', folder, 'build.json'), JSON.stringify({ output }));
+}
+
 function realInstance(hooks: Hooks = {}): {
   root: string;
   instance: Instance;
@@ -250,24 +255,20 @@ describe('Instance — the value', () => {
       .toEqual({ kind: 'separator', name: 'Unassigned (Modlist Development)', enabled: false });
   });
 
-  it('carries each mod whose source folder holds a repository as tracked, and no other, the source folder alone saying whether init is offered', async () => {
-    const { root, instance } = realInstance();
-    await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
+  it('carries each mod a repository builds as tracked, with that repository as its source folder, wherever the repository is, and says which repositories build no mod', async () => {
+    const { root, instance, logs } = realInstance();
+    await repository(root, 'Harder VATS', 'Harder VATS');
+    await repository(root, 'Renamed From', '[NODELETE] Radfall');
+    await repository(root, 'Cloned And Unlisted', 'Cloned And Unlisted');
+    await mkdir(join(root, 'source', 'No Configuration', '.git'), { recursive: true });
 
     await instance.refresh();
 
-    expect([...instance.value.trackedMods]).toEqual(['Harder VATS']);
-  });
-
-  it('carries every repository under the source folder as a source mod, listed in the mod order or not, with its source folder', async () => {
-    const { root, instance } = realInstance();
-    await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
-    await mkdir(join(root, 'source', 'Cloned And Unlisted', '.git'), { recursive: true });
-
-    await instance.refresh();
-
-    expect([...instance.value.sourceMods].sort()).toEqual(['Cloned And Unlisted', 'Harder VATS']);
+    expect([...instance.value.trackedMods].sort()).toEqual(['Harder VATS', '[NODELETE] Radfall']);
+    expect([...instance.value.sourceMods].sort()).toEqual(['Cloned And Unlisted', 'Harder VATS', '[NODELETE] Radfall']);
+    expect(instance.value.paths.sourceDirs.get('[NODELETE] Radfall')).toBe(join(root, 'source', 'Renamed From'));
     expect(instance.value.paths.sourceDirs.get('Cloned And Unlisted')).toBe(join(root, 'source', 'Cloned And Unlisted'));
+    expect(logs).toContainEqual(expect.stringContaining(join(root, 'source', 'No Configuration')));
   });
 
   it('carries a folder under mods with no line for the active profile as a mod folder, never as a mod, so mod sync hears of it though the Mods tree renders `mods` alone', async () => {

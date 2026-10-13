@@ -9,7 +9,7 @@ import { viewCopyValueText } from '../drivingLib/copyValue';
 import {
   pluralArgument, registerGesture, singularArgument, type GestureEntry, type RowOf,
 } from '../drivingLib/gestureEntry';
-import type { Instance } from '../instanceLoader/instance';
+import type { Instance, InstanceValue } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
@@ -19,6 +19,9 @@ import { endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, s
 import { errorMessage } from '../ports/errorMessage';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { reportFailure } from '../drivingLib/reportFailure';
+
+const sourceFoldersOf = ({ trackedMods, paths }: Pick<InstanceValue, 'trackedMods' | 'paths'>): ReadonlyMap<string, string> =>
+  new Map([...trackedMods].flatMap((mod) => { const folder = paths.sourceDirs.get(mod); return folder === undefined ? [] : [[mod, folder] as const]; }));
 
 // modbench.mod.enable / modbench.mod.disable: the whole selection through the entry (mods.md,
 // Menus and keys, story 3). Each mod lands on its own (commands.md, "A selection is one gesture").
@@ -51,7 +54,7 @@ export function registerModEnableCommands(
 // modbench.mod.excludeFile / modbench.mod.includeFile: the direction is the command's, so a mixed
 // selection takes the right-clicked row's (mods.md, Menus and keys, story 7).
 export function registerFileExclusionCommands(
-  commands: ModlistCommands, instance: Pick<Instance, 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
+  commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
   const run = (mark: OriginFileMark) => (entry: GestureEntry<ModlistNode>) => {
     const rows = pluralArgument(entry, 'file');
@@ -59,7 +62,7 @@ export function registerFileExclusionCommands(
     const { verb } = FILE_MARKS[mark];
     const refs = rows.map((row) => row.ref);
     return runModsWriting(instance, async () => {
-      const outcome = await commands.markFiles(refs, mark);
+      const outcome = await commands.markFiles(refs, mark, sourceFoldersOf(instance.value));
       reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${refs.length} files.`, outcome, fileLabel);
     });
   };
@@ -153,7 +156,7 @@ export function registerModContextCommands(
         if (newName === undefined) return;
         await runModsWriting(instance, async () => {
           const { activeProfile, profiles, managerNames } = instance.value;
-          const result = await commands.renameMod(activeProfile, profiles, oldName, newName);
+          const result = await commands.renameMod(activeProfile, profiles, oldName, newName, sourceFoldersOf(instance.value).get(oldName));
           if (!result.applied) {
             reporter.report('error', 'Failed to rename mod.', result.refusal);
             return;
@@ -325,9 +328,8 @@ export function registerOpenSourceCommand(
   return registerGesture('modbench.mod.openSource', viewSelection, async (entry) => {
     const node = singularArgument(entry, 'mod');
     if (node === undefined) return;
-    const { trackedMods, paths } = instance.value;
     await reportFailure(reporter, `Failed to open the source of "${node.mod.name}".`, async () => {
-      const folder = trackedMods.has(node.mod.name) ? paths.sourceDirs.get(node.mod.name) : undefined;
+      const folder = sourceFoldersOf(instance.value).get(node.mod.name);
       if (folder === undefined) throw new Error('It is not a source mod.');
       await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
     });
