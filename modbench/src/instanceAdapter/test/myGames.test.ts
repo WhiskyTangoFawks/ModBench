@@ -43,6 +43,16 @@ describe('the My Games folder of a release', () => {
       expect(resolved).toEqual({ kind: 'notFound', looked: [`the Documents folder, ${documents}: no My Games/Fallout4 folder in it`] });
     });
 
+    it('asks the known folder once, however many times it resolves', async () => {
+      let asked = 0;
+      const resolve = myGamesResolver(base, detectors({ documents: () => { asked++; return Promise.resolve(base); } }), 'win32');
+
+      await resolve('Fallout4');
+      await resolve('Fallout4');
+
+      expect(asked).toBe(1);
+    });
+
     it('says why the known folder could not be asked', async () => {
       const resolved = await myGamesResolver(base, detectors(), 'win32')('Fallout4');
 

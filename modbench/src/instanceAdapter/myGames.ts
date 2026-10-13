@@ -41,11 +41,11 @@ function prefixHolding(instanceRoot: string): string | undefined {
   return drive === -1 ? undefined : segments.slice(0, drive).join('/') || '/';
 }
 
-async function windowsResolution(detectors: GameDetectors, folderName: string): Promise<MyGamesResolution> {
+async function windowsResolution(documentsFolder: () => Promise<string>, folderName: string): Promise<MyGamesResolution> {
   const place = 'the Documents folder';
   let documents: string;
   try {
-    documents = await detectors.documents();
+    documents = await documentsFolder();
   } catch (err) {
     return { kind: 'notFound', looked: [`${place}: ${errorMessage(err)}`] };
   }
@@ -81,9 +81,11 @@ async function linuxResolution(instanceRoot: string, detectors: GameDetectors, r
 }
 
 export function myGamesResolver(instanceRoot: string, detectors: GameDetectors, platform: NodeJS.Platform = process.platform): MyGamesResolver {
+  let documentsFolder: Promise<string> | undefined;
+  const askDocumentsOnce = (): Promise<string> => (documentsFolder ??= detectors.documents());
   return async (release) => {
     const folderName = archiveListsOf(release)?.myGamesFolder;
     if (release === undefined || folderName === undefined) return { kind: 'notFound', looked: [] };
-    return platform === 'win32' ? windowsResolution(detectors, folderName) : linuxResolution(instanceRoot, detectors, release, folderName);
+    return platform === 'win32' ? windowsResolution(askDocumentsOnce, folderName) : linuxResolution(instanceRoot, detectors, release, folderName);
   };
 }

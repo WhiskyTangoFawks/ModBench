@@ -825,12 +825,24 @@ describe('Instance — downloads, profile and game directory', () => {
 
   it('hands the snapshot the archives the game\u2019s default INI lists, from the game folder, and tells that the profile keeps no INIs of its own', async () => {
     const { gameFolder, dataFolder } = await gameListing('Fallout4 - Interface.ba2');
-    const { instance, logs } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
+    const { instance, warnings } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
 
     await instance.refresh();
 
     expect(instance.value.loadOrderSnapshot).toMatchObject({ archives: [join(dataFolder, 'Fallout4 - Interface.ba2')] });
-    expect(logs).toContainEqual(expect.stringMatching(/^\[instance\] The profile Default keeps no game INIs of its own/));
+    expect(warnings).toContainEqual(expect.stringMatching(/^\[instance\] The profile Default keeps no game INIs of its own/));
+  });
+
+  it('warns once, until it changes, that the game\u2019s own INIs were not found', async () => {
+    const { gameFolder } = await gameListing('Fallout4 - Interface.ba2');
+    const { instance, logs, warnings } = realInstance({ resolveGameFolder: () => Promise.resolve(gameFolder) });
+
+    await instance.refresh();
+    await instance.refresh();
+
+    const mine = (lines: string[]): string[] => lines.filter((line) => line.includes('keeps no game INIs of its own'));
+    expect(mine(warnings)).toHaveLength(1);
+    expect(mine(logs)).toEqual([]);
   });
 
   it('hands a mod\u2019s plugin a strings file added beside it, at the next read', async () => {

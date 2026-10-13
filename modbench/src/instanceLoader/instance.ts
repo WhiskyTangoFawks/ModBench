@@ -227,6 +227,9 @@ export class Instance implements Subscription {
   // The listed archives nothing holds already told, so each is one Output line until it changes.
   private archivesTold: ReadonlySet<string> = new Set();
 
+  // The archive list notes already warned, so each is one Output line until it changes or clears.
+  private archiveNotesTold: ReadonlySet<string> = new Set();
+
   private readonly copies: SameCopies;
 
   constructor(private readonly options: InstanceOptions) {
@@ -324,7 +327,8 @@ export class Instance implements Subscription {
     const { log } = this.options;
     for (const note of [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes]) log.info(`[instance] ${note}`);
     this.tellSkippedLinks(skippedLinks);
-    for (const note of archiveListNotes) log.info(`[instance] ${note}`);
+    for (const note of archiveListNotes.filter((n) => !this.archiveNotesTold.has(n))) log.warn(`[instance] ${note}`);
+    this.archiveNotesTold = new Set(archiveListNotes);
     // An unreadable Data folder or its archives is an answer, never a failed read: the whole value
     // would otherwise go stale over a folder outside the instance.
     if (dataFolderPlugins.kind === 'unreadable') log.warn(`[instance] the game's Data folder could not be listed: ${dataFolderPlugins.reason}`);
