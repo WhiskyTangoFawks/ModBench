@@ -25,11 +25,16 @@ internal static class ProblemsPanel
             .. snapshot.Plugins
                 .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsTracked() || stopped.Contains(plugin.Key))
                 .Select(plugin => ProblemsOf(
-                    plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key), [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt)],
+                    plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
+                    [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. MisplacedFiles(source, plugin, snapshot.GameRelease)],
                     // A binary's links are not its tree's, whose files the panel shows them on.
                     derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom == DerivedFrom.SourceTree ? [.. missing[plugin.Key]] : [])),
         ];
     }
+
+    private static IEnumerable<SourceProblem> MisplacedFiles(ISourceAdapter source, RegisteredPlugin plugin, GameRelease release) =>
+        source.Over(plugin, release)?.StampsOf(plugin.Key).Misplaced
+            .Select(file => new SourceProblem(file.FormKey, null, null, file.HeldPath, file.Message)) ?? [];
 
     private static PluginProblems ProblemsOf(
         PluginAddress plugin, GameRelease release, IReadOnlyList<SourceFileFailure>? laterReadFailure, List<SourceProblem> stoppedAt,

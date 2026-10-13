@@ -1,4 +1,5 @@
 using MEditService.Index.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests.Plugins;
 
@@ -23,5 +24,20 @@ public sealed class SourceContentProblemTests : IDisposable
         var problem = Assert.Single(index.SourceProblems());
         Assert.Equal((Relative(file), _fixture.Npc.ToString()), (problem.SourceRelativePath, problem.FormKey));
         Assert.Contains("NoSuchField", problem.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFlatRecordFiledUnderAnotherLeafName_IsAProblemOnItsFile_NamingWhereItBelongs()
+    {
+        var file = NpcFile;
+        var misplaced = Path.Combine(Path.GetDirectoryName(file).Require(), "Renamed.json");
+        File.Move(file, misplaced);
+
+        using var index = Indexes.Reconciled(_fixture.GameDirectory, [_fixture.Entry]);
+
+        var problem = Assert.Single(index.SourceProblems());
+        Assert.Equal((Relative(misplaced), _fixture.Npc.ToString()), (problem.SourceRelativePath, problem.FormKey));
+        Assert.Contains($"belongs at {Relative(file)}", problem.Message, StringComparison.Ordinal);
+        Assert.NotNull(index.CopyIn(_fixture.Npc.ToString(), _fixture.Plugin));
     }
 }

@@ -231,6 +231,5 @@ internal sealed class PluginCompileService(
     }
 
     private static CompileDiagnostic MisplacedDiagnostic(MisplacedFile file) =>
-        new(file.FormKey, file.HeldPath,
-            $"{file.HeldPath} belongs at {file.BelongsAt}. Modbench moves it there the next time it writes this record.");
+        new(file.FormKey, file.HeldPath, file.Message);
 }

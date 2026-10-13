@@ -23,7 +23,10 @@ public sealed record SourceDivergence(SourceDivergenceKind Kind, string Path, st
 
 /// <summary>A record's file held at HeldPath, where the layout puts it at BelongsAt, both as the mod
 /// folder spells them.</summary>
-public sealed record MisplacedFile(string FormKey, string HeldPath, string BelongsAt);
+public sealed record MisplacedFile(string FormKey, string HeldPath, string BelongsAt)
+{
+    public string Message => $"{HeldPath} belongs at {BelongsAt}. Modbench moves it there the next time it writes this record.";
+}
 
 /// <summary>Every file where a plugin's source and what the door writes part ways, changes before files the
 /// door writes nowhere, and the files that differ only in where they sit, which compile.</summary>

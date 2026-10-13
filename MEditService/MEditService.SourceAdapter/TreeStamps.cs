@@ -33,10 +33,11 @@ public sealed record ClaimedFormKey(string FormKey, IReadOnlyList<string> Docume
 }
 
 /// <summary>Every document of a plugin's tree by the FormKey it declares, with its content stamp; each
-/// file that is no document; each FormKey declared twice; each file read as unsaved text.</summary>
+/// file that is no document; each FormKey declared twice; each file read as unsaved text; each file the
+/// layout places elsewhere.</summary>
 public sealed record RecordStamps(
     IReadOnlyDictionary<string, string> ByFormKey, IReadOnlyList<UnreadableFile> Unreadable,
-    IReadOnlyList<ClaimedFormKey> Claimed, IReadOnlySet<string> Unsaved)
+    IReadOnlyList<ClaimedFormKey> Claimed, IReadOnlySet<string> Unsaved, IReadOnlyList<MisplacedFile> Misplaced)
 {
     /// <summary>Equal when the same documents carry the same stamps, and the same files could not be
     /// read, claim one FormKey or were read unsaved.</summary>
@@ -70,7 +71,7 @@ internal static class TreeStamps
         new(StringComparer.Ordinal);
 
     private sealed record KnownDocument(
-        string FormKey, string Content, IReadOnlyList<string> FormKeys, string? Refusal, FormIdLimit? Limit);
+        string FormKey, string Content, IReadOnlyList<string> FormKeys, string? Refusal, FormIdLimit? Limit, string? BelongsAt);
 
     internal static string ContentStamp(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
@@ -85,6 +86,7 @@ internal static class TreeStamps
         foreach (var gone in Known.Keys.Where(tree => !Directory.Exists(tree))) Known.TryRemove(gone, out _);
         var known = Known.GetOrAdd(root, _ => new StampGatedMemo<KnownDocument>(TimeProvider.System));
         var listed = new HashSet<string>(StringComparer.Ordinal);
+        var misplaced = new List<MisplacedFile>();
         var keysByFile = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         FormIdLimit? limit = null;
         if (Directory.Exists(root))
@@ -108,13 +110,14 @@ internal static class TreeStamps
                 stamps[document.FormKey] = document.Content;
                 keysByFile[relativePath] = document.FormKeys;
                 limit ??= document.Limit;
+                if (document.BelongsAt is { } belongsAt) misplaced.Add(new MisplacedFile(document.FormKey, relativePath, belongsAt));
                 if (document.Refusal is { } refusal) unreadable.Add(new UnreadableFile(relativePath, refusal, document.FormKey));
             }
         }
 
         known.Retain(listed);
         if (limit is not null) unreadable.AddRange(OutsideTheLimit(limit, plugin, keysByFile));
-        return new RecordStamps(stamps, unreadable, holders.Claimed, unsaved);
+        return new RecordStamps(stamps, unreadable, holders.Claimed, unsaved, misplaced);
     }
 
     private static IEnumerable<UnreadableFile> OutsideTheLimit(
@@ -161,7 +164,19 @@ internal static class TreeStamps
         var limit = refusal is null && recordType == PluginHeader.RecordType
             ? PluginFlags.LimitOf(HeaderDocument.Read(bytes, release), pluginName)
             : null;
+        var belongsAt = refusal is null && recordType is not null ? PlacementOf(relativePath, text, pluginName, formKey, recordType, release) : null;
         return new KnownDocument(
-            formKey, ContentStamp(text), [.. DocumentTokens.FormKeysIn(bytes, release).Select(key => key.FormKey)], refusal, limit);
+            formKey, ContentStamp(text), [.. DocumentTokens.FormKeysIn(bytes, release).Select(key => key.FormKey)], refusal, limit, belongsAt);
+    }
+
+    // A flat record's file is named by its FormKey and EditorID alone, so the document says where it belongs.
+    private static string? PlacementOf(
+        string relativePath, string text, string pluginName, string formKey, string recordType, GameRelease release)
+    {
+        if (recordType == PluginHeader.RecordType || GroupFolders.For(release).FlatFolderOf(recordType) is null) return null;
+        if (DocumentTokens.EditorIdIn(text) is not { WhyUnreadable: null } editorId) return null;
+
+        var belongsAt = SourceRepositoryLayout.FlatPathFor(pluginName, recordType, formKey, editorId.EditorId, release);
+        return belongsAt.Equals(relativePath, StringComparison.Ordinal) ? null : belongsAt;
     }
 }
