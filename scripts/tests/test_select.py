@@ -28,6 +28,9 @@ def medit_answering(status, body):
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
             self.rfile.read(int(self.headers['Content-Length']))
+            self.do_GET()
+
+        def do_GET(self):
             payload = json.dumps(body).encode()
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')
