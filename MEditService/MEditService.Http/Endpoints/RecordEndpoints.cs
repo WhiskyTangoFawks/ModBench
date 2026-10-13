@@ -40,6 +40,34 @@ internal static class RecordEndpoints
         .ProducesProblem(400)
         .ProducesProblem(503);
 
+        app.MapPost("/records/select", (SelectRequest request, IQueries svc) =>
+        {
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Received SelectRecords with {Sql}", request.Sql);
+            }
+            return EndpointMapping.Answered(svc.SelectRows(request.Sql), rows => Results.Ok(new SelectResponse(rows)));
+        })
+        .WithName("SelectRecords")
+        .WithTags("Records")
+        .Produces<SelectResponse>()
+        .ProducesProblem(400)
+        .ProducesProblem(503);
+
+        app.MapPost("/names/resolve", (ResolveNamesRequest request, IQueries svc) =>
+        {
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Received ResolveNames for {Count} names", request.Names.Count);
+            }
+            return EndpointMapping.Answered(svc.ResolveNames(request.Names), named => Results.Ok(new ResolveNamesResponse(named)));
+        })
+        .WithName("ResolveNames")
+        .WithTags("Records")
+        .Produces<ResolveNamesResponse>()
+        .ProducesProblem(400)
+        .ProducesProblem(503);
+
         app.MapGet("/records/{formKey}", (string formKey, IQueries svc) =>
         {
             if (logger.IsEnabled(LogLevel.Information))

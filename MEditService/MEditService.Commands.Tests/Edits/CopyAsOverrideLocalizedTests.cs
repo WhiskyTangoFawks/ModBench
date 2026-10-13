@@ -44,7 +44,7 @@ public sealed class CopyAsOverrideLocalizedTests : IDisposable
                 new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Line: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Line: 1, Enabled: true, Winning: true),
             ]);
-        TrackEveryPluginOf.ModAsync(loadOrder, DestinationOrigin).GetAwaiter().GetResult();
+        InitEveryPluginOf.ModAsync(loadOrder, DestinationOrigin).GetAwaiter().GetResult();
 
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);

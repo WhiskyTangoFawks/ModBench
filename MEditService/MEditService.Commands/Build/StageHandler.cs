@@ -49,7 +49,7 @@ public sealed class StageHandler(IModFolderRepository repository, INotificationP
                 $"'{mod.Name}' was not staged: {string.Join(", ", missing)} not in the downloads folder.");
         }
 
-        List<(string Name, InstallationFileToStage File)> installationFiles =
+        List<(string Name, InstallationFile File)> installationFiles =
             [.. mod.InstallationFiles.Select(file => (repository.InstallationFileName(file.Path), file))];
         var deltas = new DeltaMaker(repository, instance, mod.Folder, installationFiles);
         Manifest manifest;

@@ -14,11 +14,11 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 {
     private readonly Dictionary<string, FakeMod> _mods = new(StringComparer.Ordinal);
     private readonly HashSet<string> _foreignRepositories = new(StringComparer.Ordinal);
-    private readonly List<(string ModFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins)> _tracked = [];
+    private readonly List<(string SourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins, IReadOnlyList<Asset> Assets)> _inits = [];
 
     internal int SessionsOpened { get; private set; }
 
-    internal IReadOnlyList<(string ModFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins)> TrackCalls => _tracked;
+    internal IReadOnlyList<(string SourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins, IReadOnlyList<Asset> Assets)> InitCalls => _inits;
 
     internal FakeSourceAdapter HoldingAnotherRepository(string modFolder)
     {
@@ -38,12 +38,12 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         return this;
     }
 
-    public bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.SourceFolder);
+    public bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && IsTracked(sourceFolder);
 
     public bool IsTracked(string modFolder) => _mods.ContainsKey(modFolder);
 
     public bool SourceReads(RegisteredPlugin plugin) =>
-        plugin.Provider is PluginProvider.FromMod mod && _mods.TryGetValue(mod.SourceFolder, out var tracked) && tracked.SourceReads;
+        plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && _mods.TryGetValue(sourceFolder, out var tracked) && tracked.SourceReads;
 
     public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => throw Unreached();
 
@@ -52,7 +52,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     public IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held)
     {
         SessionsOpened++;
-        return new FakeWriteSession(new FakeRepository(_mods[provider.SourceFolder]));
+        return new FakeWriteSession(new FakeRepository(_mods[provider.SourceFolder ?? throw Unreached()]));
     }
 
     public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) => throw Unreached();
@@ -73,12 +73,15 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public string? InstanceRootNotFound(string? instanceRoot) => throw Unreached();
 
-    public IReadOnlyList<(string Plugin, string Reason)> Track(
-        string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins)
+    public SourceFailure? Init(
+        string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+        IReadOnlyList<Asset> assets)
     {
-        _tracked.Add((modFolder, plugins));
-        return [];
+        _inits.Add((sourceFolder, plugins, assets));
+        return null;
     }
+
+    public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) => throw Unreached();
 
     public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
         TestAdapters.Source().ReadBackOf(pluginFileName, tree, gameRelease);
@@ -205,6 +208,9 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
             throw Unreached();
 
         public Answer<IReadOnlyList<string>, SourceFailure> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys) =>
+            throw Unreached();
+
+        public Answer<IReadOnlyList<RecordFile>, SourceFailure> RecordFilesOf(PluginAddress plugin) =>
             throw Unreached();
 
         public Answer<SourceComparison, SourceFailure> Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>

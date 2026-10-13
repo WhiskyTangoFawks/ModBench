@@ -1,9 +1,11 @@
+using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 
@@ -69,6 +71,25 @@ internal sealed class RelationReads(
         using var connection = store.OpenReadConnection();
         return DuckDbSql.Scalar<bool>(
             connection, $"SELECT EXISTS (SELECT 1 FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1)", formKey);
+    }
+
+    /// <summary>The records a name can mean: the one whose FormKey it is, and every one whose winning copy's
+    /// EditorID it is, whatever the case. A record no active plugin holds is read from its first copy.</summary>
+    public IReadOnlyList<(string FormKey, string? EditorId)> RecordsNamed(string name)
+    {
+        using var connection = store.OpenReadConnection();
+        var formKey = Mutagen.Bethesda.Plugins.FormKey.TryFactory(name, out var parsed) ? parsed.ToString() : null;
+        return DuckDbSql.Rows(
+            connection,
+            $"""
+            SELECT form_key, editor_id FROM (
+                SELECT form_key, editor_id FROM {TableDdlBuilder.PluginRecordsView}
+                QUALIFY row_number() OVER (PARTITION BY form_key ORDER BY is_winner DESC, plugin, origin) = 1)
+            WHERE lower(editor_id) = lower($1) OR form_key = $2
+            ORDER BY form_key
+            """,
+            reader => (reader.GetString(0), reader.GetStringOrNull(1)),
+            name, formKey);
     }
 
     /// <summary>Every plugin's copy of <paramref name="formKey"/>, in load order. Null if the
@@ -151,6 +172,25 @@ internal sealed class RelationReads(
             conditions.Add($"h.origin = ${paramValues.Count}");
         }
         return conditions.Count == 0 ? "" : "WHERE " + string.Join(" AND ", conditions);
+    }
+
+    /// <summary>The rows of one SELECT over the record views, each a JSON object of its columns; or why the
+    /// SQL cannot be one. The filter in force does not narrow it.</summary>
+    public Answer<JsonElement[], string> Select(string statement)
+    {
+        var sql = statement.TrimEnd().TrimEnd(';');
+        using var connection = store.OpenReadConnection();
+        if (SqlDoor.RefusalOf(connection, sql) is { } refusal) return refusal;
+        try
+        {
+            // The newline keeps a trailing line comment in the SQL from swallowing the wrapper.
+            return DuckDbSql.Rows(connection, $"SELECT to_json(__row) FROM ({sql}\n) __row",
+                reader => JsonDocument.Parse(reader.GetString(0)).RootElement.Clone()).ToArray();
+        }
+        catch (DuckDBException ex)
+        {
+            return ex.Message;
+        }
     }
 
     /// <summary>Row count per record type for one plugin, narrowed by the filter as Search is
@@ -664,13 +704,17 @@ internal sealed class RelationReads(
     {
         var root = Document.Parse(body);
         var address = new PluginAddress(plugin, origin);
-        var fields = schema.FieldsOf(root, RecordLookupEntry.Resolver(resolveFormKey), store.Release, indexed());
+        var missingStrings = OpenedPlugins.GetValueOrDefault(address)?.MissingStringsFiles is { Count: > 0 } files
+            ? string.Join(", ", files)
+            : null;
+        var fields = schema.FieldsOf(root, RecordLookupEntry.Resolver(resolveFormKey), store.Release, indexed(), missingStrings);
 
         return new RecordDocument(
             formKey, address, loadOrderIndex, isWinner, editorId, schema.TableName,
             body, schema.IsHeader ? RequiredMasters.InHeader(fields, connection, address) : fields,
             IsPartialForm: schema.IsPartialForm(root),
-            ParseDiagnosis: parseDiagnosis);
+            ParseDiagnosis: parseDiagnosis,
+            MissingStringsFile: missingStrings);
     }
 
     // Callers say both "NPC_" and "npc_", and as a column value the comparison is case-sensitive.

@@ -25,7 +25,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
     private void Put(LoadOrderSnapshot snapshot, PutLoadOrderHandler? handler = null) =>
         Assert.True((handler ?? _handler.Value).Put(snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease,
-            snapshot.Plugins, [.. snapshot.Active.Select(p => p.Key)], [.. snapshot.LoadedWithNoLine.Select(p => p.Key)]).Applied);
+            snapshot.Plugins, [.. snapshot.Active.Select(p => p.Key)], [.. snapshot.LoadedWithNoLine.Select(p => p.Key)], snapshot.Archives, snapshot.StringsFiles).Applied);
 
     private string ModFolder => Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
 
@@ -43,8 +43,8 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
     private static string TrailerHash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
 
-    private void Track(params (string Plugin, byte[] Bytes)[] plugins) =>
-        TestAdapters.Source().Track(ModFolder, [.. plugins.Select(p => (
+    private void Init(params (string Plugin, byte[] Bytes)[] plugins) =>
+        TestAdapters.Source().Init(ModFolder, [.. plugins.Select(p => (
             (IReadOnlyList<TreeFile>)[new TreeFile(TreeTampering.HeaderDocumentOf(p.Plugin), "{}"u8.ToArray())],
             new DecompiledPlugin(p.Plugin, TrailerHash(p.Bytes))))]);
 
@@ -70,7 +70,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     {
         var tracked = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, tracked));
-        Track((PluginName, tracked));
+        Init((PluginName, tracked));
 
         Put(loadOrder, TestEditService.PutLoadOrderHandler(new LoadOrderHolder(), _notifications, new HashingAs("changed")));
 
@@ -89,7 +89,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     {
         var tracked = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, tracked));
-        Track((PluginName, tracked));
+        Init((PluginName, tracked));
         File.Delete(Path.Combine(ModFolder, PluginName));
 
         Put(loadOrder);
@@ -102,7 +102,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     {
         var tracked = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, tracked));
-        Track((PluginName, tracked));
+        Init((PluginName, tracked));
         LastWriteRecord.Delete(ModFolder);
 
         Put(loadOrder);
@@ -115,7 +115,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     {
         var tracked = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, tracked), ("SourceUnreadable.esp", "never tracked"u8.ToArray()));
-        Track((PluginName, tracked));
+        Init((PluginName, tracked));
 
         Put(loadOrder);
 
@@ -135,7 +135,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         var loadOrder = WithPlugins((PluginName, tracked));
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=1.0.0\n");
         File.WriteAllText(Path.Combine(ModFolder, ".gitignore"), "*.esp\n");
-        Track((PluginName, tracked));
+        Init((PluginName, tracked));
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=2.0.0\n");
         File.WriteAllText(Path.Combine(ModFolder, ".gitignore"), "*.esp\n*.esm\n");
 
@@ -159,7 +159,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     {
         var tracked = "the tracked binary"u8.ToArray();
         WithPlugins((PluginName, tracked));
-        Track((PluginName, tracked));
+        Init((PluginName, tracked));
         var loadOrder = WithPlugins((PluginName, "changed-by-xedit"u8.ToArray()));
         Put(loadOrder);
         Assert.Single(TheExternalChange().Plugins);
@@ -178,7 +178,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     {
         var tracked = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, tracked));
-        Track((PluginName, tracked));
+        Init((PluginName, tracked));
         Put(loadOrder);
         AnotherTool.Delete(Path.Combine(ModFolder, ".git"));
         Put(loadOrder);
@@ -195,7 +195,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         var tracked = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, tracked));
         Put(loadOrder);
-        Track((PluginName, tracked));
+        Init((PluginName, tracked));
         File.WriteAllBytes(Path.Combine(ModFolder, PluginName), "changed-by-xedit"u8.ToArray());
 
         Put(loadOrder);
@@ -224,7 +224,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     {
         var tracked = "the tracked binary"u8.ToArray();
         WithPlugins((PluginName, tracked));
-        Track((PluginName, tracked));
+        Init((PluginName, tracked));
         var loadOrder = WithPlugins((PluginName, "changed-by-xedit"u8.ToArray()));
         var before = FilesUnder(ModFolder);
 
@@ -239,7 +239,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     {
         var tracked = "the tracked binary"u8.ToArray();
         WithPlugins((PluginName, tracked));
-        Track((PluginName, tracked));
+        Init((PluginName, tracked));
         var loadOrder = WithPlugins((PluginName, "changed-by-xedit"u8.ToArray()));
 
         Put(loadOrder);
@@ -256,7 +256,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     {
         var old = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, old));
-        Track((PluginName, old));
+        Init((PluginName, old));
         LastWriteRecord.Interrupt(ModFolder, PluginName, TrailerHash("the compiled binary"u8.ToArray()), () => { });
 
         Put(loadOrder);
@@ -269,7 +269,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     {
         var old = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, old));
-        Track((PluginName, old));
+        Init((PluginName, old));
         LastWriteRecord.Interrupt(ModFolder, PluginName, TrailerHash("the first compile"u8.ToArray()), () => { });
         LastWriteRecord.Interrupt(ModFolder, PluginName, TrailerHash("the second compile"u8.ToArray()), () => { });
 
@@ -284,7 +284,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         var old = "the tracked binary"u8.ToArray();
         var compiled = "the compiled binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, old));
-        Track((PluginName, old));
+        Init((PluginName, old));
         LastWriteRecord.Interrupt(
             ModFolder, PluginName, TrailerHash(compiled), () => File.WriteAllBytes(Path.Combine(ModFolder, PluginName), compiled));
 

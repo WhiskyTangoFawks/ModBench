@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
+  archiveListsOf, creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
 describe('gameReleaseForGame', () => {
@@ -156,6 +156,30 @@ describe('pluginCompanionRule', () => {
     expect(rule('Starfield').inStringsFolder('Foo.esp', 'Foo_en.STRINGS')).toBe(true);
   });
 
+  it('takes as the archives the game loads with a plugin the archives it takes in the root, never the ini', () => {
+    expect(rule('Fallout4').isArchiveOf('Foo.esp', 'FOO - Main.BA2')).toBe(true);
+    expect(rule('Fallout4').isArchiveOf('Foo.esp', 'Foo.ini')).toBe(false);
+    expect(rule('Fallout4').isArchiveOf('Foo.esp', 'Foo - Main.bsa')).toBe(false);
+  });
+
+  it.each([
+    ['STRINGS/Bar_xx.ILSTRINGS', true],
+    ['strings/Bar_en.txt', false],
+    ['Bar_en.STRINGS', false],
+    ['Nested/strings/Bar_en.STRINGS', false],
+    ['strings/Nested/Bar_en.STRINGS', false],
+  ])('takes %s for a strings file of any plugin, in any language, only in the strings folder at the root: %s', (relativePath, taken) => {
+    expect(rule('Fallout4').isStringsFile(relativePath)).toBe(taken);
+  });
+
+  it.each([
+    ['Unnamed - Main.BA2', true],
+    ['Unnamed - Main.bsa', false],
+    ['Nested/Unnamed - Main.ba2', false],
+  ])('takes %s for an archive the release loads, of any plugin or of none, only at the root: %s', (relativePath, taken) => {
+    expect(rule('Fallout4').isArchive(relativePath)).toBe(taken);
+  });
+
   it('takes the ini of the plugin\'s name for a release that ties one to its plugins', () => {
     expect(rule('Fallout4').inRoot('Foo.esp', 'foo.INI')).toBe(true);
     expect(rule('Oblivion').inRoot('Foo.esp', 'Foo.ini')).toBe(false);
@@ -176,5 +200,17 @@ describe('pluginCompanionRule', () => {
   it('answers undefined for no release, or a release the table holds no row for', () => {
     expect(pluginCompanionRule(undefined)).toBeUndefined();
     expect(pluginCompanionRule('SomeRelease')).toBeUndefined();
+  });
+});
+
+describe('archiveListsOf', () => {
+  it('lists Fallout 4\'s archives under the four keys xEdit reads, in the order the game loads them', () => {
+    expect(archiveListsOf('Fallout4')?.keys)
+      .toEqual(['sResourceIndexFileList', 'sResourceStartUpArchiveList', 'sResourceArchiveList', 'sResourceArchiveList2']);
+  });
+
+  it('answers none for no release, or a release the table holds no row for', () => {
+    expect(archiveListsOf(undefined)).toBeUndefined();
+    expect(archiveListsOf('SomeRelease')).toBeUndefined();
   });
 });

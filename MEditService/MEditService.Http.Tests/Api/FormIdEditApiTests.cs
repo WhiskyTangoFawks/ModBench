@@ -29,10 +29,12 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
             plugins = fx.Plugins.Where(p => p.Origin == Origin).Select(p => p.Wire),
             active = SnapshotPlugins.Active(fx.Plugins.Where(p => p.Origin == Origin)),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins.Where(p => p.Origin == Origin)),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
             gameRelease = "Fallout4",
         });
         load.EnsureSuccessStatusCode();
-        (await _client.Track(Origin)).EnsureSuccessStatusCode();
+        (await _client.Init(Origin)).EnsureSuccessStatusCode();
         await _client.NextSnapshot(fx, Origin);
         await _client.PluginReportsTracked(Plugin);
     }

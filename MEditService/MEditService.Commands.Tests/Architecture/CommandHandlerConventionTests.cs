@@ -18,7 +18,6 @@ public sealed class CommandHandlerConventionTests
     private static readonly Type[] SelectionHandlers =
     [
         typeof(DeleteRecordChangesHandler),
-        typeof(TrackHandler),
         typeof(CompilePluginHandler),
         typeof(DecompilePluginHandler),
         typeof(CopyRecordChangesHandler),
@@ -42,8 +41,6 @@ public sealed class CommandHandlerConventionTests
         typeof(MoveLastWrittenResult),
         typeof(RenameSourceRefusal),
         typeof(RenameSourceResult),
-        typeof(TrackRefusal),
-        typeof(TrackedMod),
     ];
 
     private const string CommandsNamespace = "MEditService.Commands";

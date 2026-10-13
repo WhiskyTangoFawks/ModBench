@@ -151,6 +151,13 @@ export type DataFolderPlugins =
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
+/** The release's archives at the Data folder's root, and the strings files in its strings folder by
+ *  their paths in it, as the folder spells them; or why there is no answer, as for its plugins. */
+export type DataFolderArchives =
+  | { readonly kind: 'listed'; readonly archives: readonly string[]; readonly stringsFiles: readonly string[] }
+  | { readonly kind: 'unresolved' }
+  | { readonly kind: 'unreadable'; readonly reason: string };
+
 /** An entry directly in an extracted folder. */
 export interface ExtractedEntry {
   readonly name: string;
@@ -248,6 +255,15 @@ export type OriginFileMarked =
   | { readonly gone: false; readonly wrote: boolean; readonly relativePath: string }
   | { readonly gone: false; readonly refusal: string };
 
+/** Every repository in the source folder, listed in the mod order or not, by the mod its build configuration
+ *  names as its output (ADR-0007). A note names each repository left out, and why. */
+export interface SourceMods {
+  readonly folders: ReadonlyMap<string, string>;
+  /** The source folder that builds `mod`, its name matched as the manager matches names. */
+  folderOf(mod: string): string | undefined;
+  readonly notes: readonly string[];
+}
+
 /** Whether the game gets a file of a mod or of Overwrite. */
 export type OriginFileMark = 'Excluded' | 'Included';
 
@@ -297,6 +313,16 @@ export interface FileStamp {
 /** A read of one file that answers why it could not be read, rather than failing whatever asked. */
 export type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
 
+/** A downloaded file the mod manager records a mod as installed from, with its size, its hash and each entry's, as
+ *  the downloaded files' index keeps them (ADR-0024). */
+export interface InstallationFile {
+  readonly path: string;
+  readonly size: number;
+  readonly hash: string;
+  /** Each entry by its forward-slash path inside the file. */
+  readonly entries: readonly { readonly path: string; readonly hash: string }[];
+}
+
 /** How a message names the mod manager, the file it keeps mod order in, and the file it keeps beside a downloaded file. */
 export interface ManagerNames {
   readonly manager: string;
@@ -321,6 +347,12 @@ export interface InstanceAdapter {
   /** The plugins the game folder's Creation Club list names, in its order; none when the release
    *  has no Creation Club, the game folder is not found, or it holds no list. */
   creationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]>;
+  /** The archives the INIs list, in load order: the game folder's default INI, then the user's where the
+   *  manager keeps them, a key's last value winning. `notes` names each INI the game reads that this did not. */
+  archiveList(
+    profile: string, gameFolder: GameFolder, gameRelease: string | undefined,
+  ): Promise<{ readonly archives: readonly string[]; readonly notes: readonly string[] }>;
+  gameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined): Promise<DataFolderArchives>;
   /** The name of the downloaded file at `path`, the paths matched as the platform matches them;
    *  undefined when `path` is not in the downloads folder, or that folder cannot be resolved. */
   downloadedFileAt(path: string): Promise<string | undefined>;
@@ -333,12 +365,13 @@ export interface InstanceAdapter {
   entryFolder(entry: EntryRef): Promise<ModFolder | undefined>;
   /** An origin's files, none when its folder is not there. */
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
-  /** The mod's source folder, its repository's (ADR-0007); undefined when its name gives it none. */
+  /** The source folder init makes a mod's repository in (ADR-0007); undefined when its name gives it none. */
   sourceFolder(mod: string): string | undefined;
-  /** ADR-0007. */
-  modTracked(mod: string): Promise<boolean>;
-  /** Every repository in the source folder, by its folder's name, whether the mod order lists it or not. */
-  sourceMods(): Promise<string[]>;
+  sourceMods(): Promise<SourceMods>;
+  /** The downloaded files the mod manager records `mod` as installed from, in its order. */
+  installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
+  /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
+  readonly managerFilesInModFolder: readonly string[];
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** The content digest of an origin file, at the path it is read from: two files with one digest
@@ -371,6 +404,8 @@ export interface InstanceAdapter {
    *  include on an unmarked name a folder excludes, and a mark replacing a file. Rejects a path
    *  outside the origin. */
   markOriginFile(origin: FileOrigin, relativePath: string, mark: OriginFileMark): Promise<OriginFileMarked>;
+  /** The path a file or folder of an origin has when nothing excludes it. */
+  includedPath(relativePath: string): string;
   /** Renames plugin `from` of `origin`, its named files and its line in every profile, in one
    *  write; a failed write puts every file back. Refuses, changing nothing, a taken name or a
    *  plugin not there. */
@@ -381,7 +416,7 @@ export interface InstanceAdapter {
   ): Promise<{ applied: true } | { applied: false; refusal: string }>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
-  /** Moves a mod's source folder into the trash; false when it has none. */
+  /** Moves the source folder that builds the mod into the trash; false when none does. */
   trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
   /** Makes the folder of a mod that is new. Refuses a folder already there, whatever it holds,
    *  matched as the manager matches names. */

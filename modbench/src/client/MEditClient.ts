@@ -2,7 +2,7 @@ import type { components } from '../wire/generated/api';
 import {
   type CompiledPlugin, type CompileDiagnostic,
   type ChangedPlugin,
-  type TrackStatus, type PluginMetadata, type PluginDiagnosisReport,
+  type InitStatus, type PluginMetadata, type PluginDiagnosisReport,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellChildRecords, type CellSummary,
   type ChildRecordSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
@@ -32,6 +32,8 @@ export function isMEditGone(status: BackendStatus): status is 'disconnected' | '
 export interface WriteRefused {
   readonly refused: true;
   readonly message: string;
+  /** The request never reached mEdit, so no answer of mEdit's says anything of its items. */
+  readonly unreachable?: true;
 }
 
 /** `WriteRefused`'s one structural tag — a plain check, not `instanceof`, so a scripted client's
@@ -42,7 +44,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'external-change',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'init-progress', 'external-change',
   'plugin-source-unreadable', 'record-filter-cleared',
 ] as const;
 
@@ -54,7 +56,7 @@ export type NotificationKind = typeof NOTIFICATION_KINDS[number];
  *  `NotificationEvent`, carrying only the fields its kind uses. */
 export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
-  'track-progress': TrackStatus;
+  'init-progress': InitStatus;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
   'plugin-source-unreadable': { plugins: (PluginAddress & UnreadableSource)[] };
   'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
@@ -147,16 +149,19 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
 export type { PluginAddress };
 
-interface TrackedMod {
+interface InitializedMod {
   mod: string;
-  tracked: readonly PluginAddress[];
+  plugins: readonly PluginAddress[];
 }
 
-/** Track's answer: each mod tracked or refused, as a mod, with its reason. */
-export interface TrackOutcome {
-  landed: readonly TrackedMod[];
+/** Init's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
+export interface InitOutcome {
+  landed: readonly InitializedMod[];
   refused: readonly ItemRefusal<string>[];
 }
+
+/** A mod to init, with its installation files and the mod manager's own files in its folder (ADR-0024). */
+export type InitMod = components['schemas']['InitModRequest'];
 
 interface BuiltMod {
   mod: string;
@@ -190,6 +195,10 @@ export type ReferenceResult = components['schemas']['ReferenceResult'];
  *  (plugins.md, Record filter). */
 export type RecordFilter = components['schemas']['FilterRequest'];
 
+/** A change to a source mod's build configuration: the output folder's new name, and paths in the mod folder to
+ *  exclude or include. */
+export type BuildConfigurationChange = Omit<components['schemas']['BuildConfigurationRequest'], 'sourceFolder'>;
+
 /** target-architecture.d2's mEdit client (ADR-0002). */
 export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
@@ -201,7 +210,7 @@ export interface MEditClient {
   // Moves what Modbench last wrote, filed under `treeName`, to the plugin's new name, once the source rename is applied and saved.
   moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
-  track(mods: readonly string[], options?: { onProgress?: (status: TrackStatus) => void }): Promise<TrackOutcome | WriteRefused>;
+  init(mods: readonly InitMod[], options?: { onProgress?: (status: InitStatus) => void }): Promise<InitOutcome | WriteRefused>;
   // Over the unsaved documents mEdit holds. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
   getCreateChanges(
     plugin: PluginAddress, recordType: string,
@@ -220,6 +229,8 @@ export interface MEditClient {
   // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
   // the call itself refused, with nothing written.
   decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
+  // Rename's and exclude's half in mEdit: the build configuration in `sourceFolder`, written in its working tree.
+  changeBuildConfiguration(sourceFolder: string, change: BuildConfigurationChange): Promise<{ changed: true } | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
   build(mods: readonly string[]): Promise<BuildOutcome | WriteRefused>;
@@ -310,6 +321,8 @@ export interface MEditClient {
   // status-changed event.
   readonly status: BackendStatus;
   onStatusChanged(listener: (status: BackendStatus) => void): () => void;
+  /** The port this window's mEdit answers on, heard as soon as it is known and again if it changes. */
+  onPort(listener: (port: number) => void): () => void;
   /** The notification stream opened again while `running`. The process behind the stream may
    *  be a restarted one, holding nothing sent before. */
   onReconnected(listener: () => void): () => void;
@@ -325,7 +338,7 @@ export interface MEditClient {
 }
 
 export type {
-  TrackStatus, PluginMetadata, PluginDiagnosisReport,
+  InitStatus, PluginMetadata, PluginDiagnosisReport,
   RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary, CompileDiagnostic,
   LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsResponse,

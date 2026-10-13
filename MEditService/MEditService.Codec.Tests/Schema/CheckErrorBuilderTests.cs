@@ -13,6 +13,28 @@ public class CheckErrorBuilderTests
 
     private static ResolvedFormKey? Entry(string recordType) => new ResolvedFormKey(recordType, null);
 
+    private static readonly FieldMetadata TranslatedMeta = new(
+        "Name", "translatedString", false, [], [], AllowsNull: true);
+
+    private static string? NamedMissing(FieldMetadata meta, string? json, string? file = "Test_en.STRINGS") =>
+        CheckErrorBuilder.Build(
+            meta, json is null ? null : J(json), _ => null, GameRelease.Fallout4, indexed: true, missingStringsFile: file);
+
+    [Fact]
+    public void Build_TranslatedStringHoldingOnlyItsTargetLanguage_NamesTheStringsFile() =>
+        Assert.Equal("Test_en.STRINGS", NamedMissing(TranslatedMeta, "{\"TargetLanguage\":\"English\"}"));
+
+    [Theory]
+    [InlineData("{\"TargetLanguage\":\"English\",\"Value\":\"A Door\"}")]
+    [InlineData("{\"TargetLanguage\":\"English\",\"Values\":[{\"Language\":\"English\",\"String\":\"A Door\"}]}")]
+    [InlineData(null)]
+    public void Build_TranslatedStringThatHoldsTextOrIsAbsent_IsClean(string? json) =>
+        Assert.Null(NamedMissing(TranslatedMeta, json));
+
+    [Fact]
+    public void Build_TranslatedStringOfAPluginWithNoMissingStringsFile_IsClean() =>
+        Assert.Null(NamedMissing(TranslatedMeta, "{\"TargetLanguage\":\"English\"}", file: null));
+
     [Fact]
     public void Build_CleanScalarReference_ReturnsNull()
     {

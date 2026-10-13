@@ -12,7 +12,7 @@ internal sealed record Decompiled(PluginSource? Source, DecompileRefusal Refusal
     internal static Decompiled Refused(DecompileRefusal refusal, string message) => new(null, refusal, message);
 }
 
-/// <summary>Track and decompile both read a plugin into its plugin source through this one gate.
+/// <summary>Init and decompile both read a plugin into its plugin source through this one gate.
 /// </summary>
 internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, ISourceAdapter sourceAdapter)
 {
@@ -20,7 +20,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, string modFolder, Action onParsed, CancellationToken cancel)
     {
         // Naming where the strings are: "pass nothing" is not neutral for a Localized plugin.
-        var strings = new PluginStrings(modFolder, loadOrder.DataFolderPath);
+        var strings = new PluginStrings(modFolder);
 
         // A fresh deep parse, not the load order's own overlay, whose lifetime this gate does not control.
         if (!(await adapter.ReadSourceOfAsync(plugin, loadOrder, strings, cancel)).Holds(out var source, out var failure))
@@ -30,7 +30,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
             {
                 PluginFailure.MissingStrings missing => Decompiled.Refused(DecompileRefusal.MissingLocalizationStrings,
                     $"{plugin.Name} is a localized plugin but its strings file '{missing.File}' was not found " +
-                    $"loose or in an archive, in {string.Join(" or ", strings.Folders)}. Restore the file, then try again."),
+                    $"loose or in an archive, among the files the game loads or in {modFolder}. Restore the file, then try again."),
                 PluginFailure.HeaderFormKeyHeld or PluginFailure.NullFormIdHeld => Decompiled.Refused(DecompileRefusal.RoundTripFailed,
                     $"{plugin.Name} cannot become source: {failure.Reason}."),
                 PluginFailure.Inaccessible => Decompiled.Refused(DecompileRefusal.RoundTripFailed,

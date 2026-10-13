@@ -3,15 +3,16 @@
 import type { Log } from '../ports/log';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
-  buildLoadOrderRows, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, type DataFolderPlugins, type LoadOrderPlugin,
-  type LoadOrderPluginLine, type LoadOrderSnapshotRefusal, type LoadOrderSnapshotValue,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, type ArchiveSources,
+  type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
+  type LoadOrderSnapshotValue,
 } from './loadOrderSnapshot';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './downloadRows';
 import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
 import {
-  GAME_FOLDER_SETTING, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type ManagerNames, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type Subscription,
+  GAME_FOLDER_SETTING, type DataFolderArchives, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
+  type ManagerNames, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { SameCopies, type FileCopies } from './sameCopies';
 import { errorMessage } from '../ports/errorMessage';
@@ -41,7 +42,8 @@ interface InstancePaths {
   readonly downloadsDir: string | undefined;
   /** Each listed mod's own folder, by mod name; a mod with no folder has none. */
   readonly modDirs: ReadonlyMap<string, string>;
-  /** Each listed mod's source folder, by mod name, whether it is there or not. */
+  /** Each source mod's source folder, by mod name: the repository whose build configuration names it as its output,
+   *  listed in the mod order or not. */
   readonly sourceDirs: ReadonlyMap<string, string>;
 }
 
@@ -55,7 +57,7 @@ export interface InstanceValue {
   readonly modFolders: readonly ModFolder[] | undefined;
   /** The tracked mods (ADR-0007). */
   readonly trackedMods: ReadonlySet<string>;
-  /** Every repository in the source folder, listed in the mod order or not. */
+  /** Every mod a repository in the source folder builds, listed in the mod order or not. */
   readonly sourceMods: ReadonlySet<string>;
   /** Every profile, the switch's choices. */
   readonly profiles: readonly string[];
@@ -135,10 +137,20 @@ interface InstanceOptions {
   log: Log;
 }
 
+// A listed source mod under its name in the mod order, an unlisted one under the output its repository names.
+function sourceDirsOf(entries: readonly ModlistEntry[], sourceMods: SourceMods): Map<string, string> {
+  const listed = entries.flatMap((entry) => {
+    const folder = entry.kind === 'mod' ? sourceMods.folderOf(entry.name) : undefined;
+    return folder === undefined ? [] : [[entry.name, folder] as const];
+  });
+  const claimed = new Set(listed.map(([, folder]) => folder));
+  return new Map([...listed, ...[...sourceMods.folders].filter(([, folder]) => !claimed.has(folder))]);
+}
+
 // Each listed mod's folder is matched as the manager matches names.
 function pathsOf(
   runtimeOutput: OriginFiles, downloaded: DownloadedFiles, entries: readonly ModlistEntry[], modFolders: ModFolders | undefined,
-  sourceFolder: (mod: string) => string | undefined, sourceMods: readonly string[],
+  sourceMods: SourceMods,
 ): InstancePaths {
   return {
     overwriteDir: runtimeOutput.folder,
@@ -147,8 +159,7 @@ function pathsOf(
       const folder = entry.kind === 'mod' ? modFolders?.holding(entry) : undefined;
       return folder === undefined ? [] : [[entry.name, folder.path] as const];
     })),
-    sourceDirs: new Map([...new Set([...sourceMods, ...entries.filter((entry) => entry.kind === 'mod').map((entry) => entry.name)])]
-      .flatMap((name) => { const folder = sourceFolder(name); return folder === undefined ? [] : [[name, folder] as const]; })),
+    sourceDirs: sourceDirsOf(entries, sourceMods),
   };
 }
 
@@ -206,6 +217,9 @@ export class Instance implements Subscription {
 
   // The mod folder links already told as skipped, so each is one Output line until it changes.
   private linksTold: ReadonlySet<string> = new Set();
+
+  // The listed archives nothing holds already told, so each is one Output line until it changes.
+  private archivesTold: ReadonlySet<string> = new Set();
 
   private readonly copies: SameCopies;
 
@@ -320,6 +334,27 @@ export class Instance implements Subscription {
     return plugins;
   }
 
+  // xEdit reports a listed archive it cannot find; the game loads none, so the views stay true.
+  private tellArchivesNothingHolds(sources: ArchiveSources): void {
+    const missing = listedArchivesNothingHolds(sources);
+    for (const name of missing.filter((archive) => !this.archivesTold.has(archive))) {
+      this.options.log.info(`[instance] The game's INIs list the archive ${name}, which no mod, Overwrite or game folder holds.`);
+    }
+    this.archivesTold = new Set(missing);
+  }
+
+  private async readArchiveList(profile: string, gameFolder: GameFolder, gameRelease: string | undefined): Promise<readonly string[]> {
+    const { archives, notes } = await this.options.adapter.archiveList(profile, gameFolder, gameRelease);
+    for (const note of notes) this.options.log.info(`[instance] ${note}`);
+    return archives;
+  }
+
+  private async readGameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined): Promise<DataFolderArchives> {
+    const archives = await this.options.adapter.gameFolderArchives(gameFolder, gameRelease);
+    if (archives.kind === 'unreadable') this.options.log.warn(`[instance] the game's archives and strings files could not be listed: ${archives.reason}`);
+    return archives;
+  }
+
   private schedule(): void {
     clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.run(), SETTLE_MS);
@@ -411,7 +446,7 @@ export class Instance implements Subscription {
     const { profile, gameName, gameRelease } = settings;
     const entries = await this.readMods(profile);
     const runtimeOutputRead = adapter.originFiles({ kind: 'runtimeOutput' });
-    const [index, pluginOrder, downloadsOutcome, runtimeOutput, modFolders, profiles, game, trackedMods, sourceMods] = await Promise.all([
+    const [index, pluginOrder, downloadsOutcome, runtimeOutput, modFolders, profiles, game, sourceMods] = await Promise.all([
       runtimeOutputRead.then((output) => buildFileConflictIndex(entries, output.files, adapter, (line) => log.info(line))),
       adapter.pluginOrder(profile),
       // Both answers come from the settings read above, so a rewrite cannot land two generations
@@ -424,28 +459,31 @@ export class Instance implements Subscription {
         gameFolder,
         dataFolderPlugins: await this.readGameFolderPlugins(gameFolder),
         creationClub: await adapter.creationClubList(gameFolder, gameRelease),
+        archiveList: await this.readArchiveList(profile, gameFolder, gameRelease),
+        dataFolderArchives: await this.readGameFolderArchives(gameFolder, gameRelease),
       })),
-      Promise.all(entries.map(async (entry) => (entry.kind === 'mod' && await adapter.modTracked(entry.name) ? [entry.name] : []))),
       adapter.sourceMods(),
     ]);
-    for (const note of runtimeOutput.notes) log.info(`[instance] ${runtimeOutput.origin}: ${note}`);
-    const { gameFolder, dataFolderPlugins, creationClub } = game;
+    for (const note of [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes]) log.info(`[instance] ${note}`);
+    const { gameFolder, dataFolderPlugins, creationClub, archiveList, dataFolderArchives } = game;
     const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);
     const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins);
     const installedInto = downloadsOutcome.kind === 'listed' && downloadsOutcome.files
       ? await this.readInstalledInto(entries, modFolders?.all ?? [])
       : undefined;
     const modFolderList = modFolders?.all;
-    const paths = pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders, (mod) => adapter.sourceFolder(mod), sourceMods);
+    const paths = pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders, sourceMods);
     const syncSource = {
       activeProfile: profile, modFolders: modFolderList, files: index.files, dataFolderPlugins, pluginsLoadedWithNoLine,
       pluginOrder,
     };
+    const archiveSources: ArchiveSources = { gameRelease, listed: archiveList, inData: dataFolderArchives, files: index.files };
+    this.tellArchivesNothingHolds(archiveSources);
     return {
       mods: entries,
       modFolders: modFolderList,
-      trackedMods: new Set(trackedMods.flat()),
-      sourceMods: new Set(sourceMods),
+      trackedMods: new Set(entries.flatMap((entry) => (entry.kind === 'mod' && paths.sourceDirs.has(entry.name) ? [entry.name] : []))),
+      sourceMods: new Set(paths.sourceDirs.keys()),
       profiles,
       files: index.files,
       filesByMod: index.filesByMod,
@@ -465,7 +503,10 @@ export class Instance implements Subscription {
       gameFolder,
       dataFolderPlugins,
       pluginsLoadedWithNoLine,
-      loadOrderSnapshot: loadOrderSnapshotOf({ plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs }),
+      loadOrderSnapshot: loadOrderSnapshotOf({
+        plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs,
+        archives: archiveSources,
+      }),
       overwriteFiles: runtimeOutput.files,
       overwriteFolders: runtimeOutput.folders,
       paths,

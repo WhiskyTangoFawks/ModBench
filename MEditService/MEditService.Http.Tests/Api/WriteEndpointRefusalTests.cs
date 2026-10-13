@@ -37,13 +37,15 @@ public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture
             plugins = fx.Plugins.Select(p => p.Wire),
             active = SnapshotPlugins.Active(fx.Plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
             gameRelease = "Fallout4",
         });
         load.EnsureSuccessStatusCode();
     }
 
-    private async Task Track(string origin) =>
-        (await _client.Track(origin)).EnsureSuccessStatusCode();
+    private async Task Init(string origin) =>
+        (await _client.Init(origin)).EnsureSuccessStatusCode();
 
     private async Task<string> FirstNpcFormKey(string plugin, string origin)
     {
@@ -94,7 +96,7 @@ public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture
     {
         using var fx = BuildSourceAndDestination();
         await Load(fx);
-        await Track(DestOrigin);
+        await Init(DestOrigin);
         var formKey = await FirstNpcFormKey(Plugin, Origin);
         var destination = TreeSnapshot.Of(ModFolderOf(fx, DestOrigin));
 

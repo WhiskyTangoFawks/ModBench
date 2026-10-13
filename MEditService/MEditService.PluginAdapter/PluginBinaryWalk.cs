@@ -10,7 +10,7 @@ using Noggog;
 namespace MEditService.PluginAdapter;
 
 /// <summary>A plugin's records and subrecords as Mutagen's frame reader reads them, free of its typed
-/// parse, shared by Track's tripwire and the Repair surface (ADR-0006).</summary>
+/// parse, shared by init's tripwire and the Repair surface (ADR-0006).</summary>
 public static class PluginBinaryWalk
 {
     /// <summary>A record whose rewrite has fewer occurrences of some subrecord signatures than the

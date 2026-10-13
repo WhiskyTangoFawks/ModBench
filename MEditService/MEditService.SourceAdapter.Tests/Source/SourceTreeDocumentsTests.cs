@@ -58,7 +58,7 @@ public sealed class SourceTreeDocumentsTests : IDisposable
         _interiorCellPath = PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", Leaf(_interiorCell)));
         _worldspacePath = PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Worldspaces", Leaf(_worldspace)));
 
-        PluginBaselines.Track(
+        PluginBaselines.Init(
             _modFolder,
             [
                 new TreeFile(_interiorCellPath, Serialize(_interiorCell)),

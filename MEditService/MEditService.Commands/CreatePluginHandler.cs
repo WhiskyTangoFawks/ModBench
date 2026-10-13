@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands;
 
-/// <summary>The create gesture writes the plugin file, and in a tracked mod its source: no Track, no
+/// <summary>The create gesture writes the plugin file, and in a tracked mod its source: no init, no
 /// load order change and no plugins.txt line (create-plugin). The watch hands the new file on.</summary>
 public sealed class CreatePluginHandler
 {

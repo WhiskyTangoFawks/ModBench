@@ -23,7 +23,7 @@ public sealed class PluginSourceReadTests
         var name = Path.GetFileName(pluginPath);
         return Adapter.ReadSourceOfAsync(
             new RegisteredPlugin(name, "FixtureMod", pluginPath, new PluginProvider.FromMod("FixtureMod", folder, folder), Line: null),
-            EmptyLoadOrder.Of(release), new PluginStrings(folder, folder));
+            EmptyLoadOrder.Of(release), new PluginStrings(folder));
     }
 
     [Fact]

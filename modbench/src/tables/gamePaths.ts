@@ -22,6 +22,20 @@ export interface GamePathInfo {
   /** The folder a mod's script-extender files sit in, under the Data folder. */
   readonly scriptExtenderFolder: string;
   readonly pluginCompanions: PluginCompanions;
+  readonly archiveLists: ArchiveLists;
+}
+
+/** The INIs whose `[Archive]` keys list the archives the game loads, and those keys: xEdit's for the
+ *  release. */
+export interface ArchiveLists {
+  /** In the game folder: the INI the user's own start from. */
+  readonly defaultIni: string;
+  /** The user's INIs, in the order the game reads them. Where they are is the mod manager's. */
+  readonly userInis: readonly string[];
+  /** In the order the game loads the archives they list. */
+  readonly keys: readonly string[];
+  /** The archives the game loads after those, whatever its INIs list. */
+  readonly alwaysLoaded: readonly string[];
 }
 
 interface PluginCompanions {
@@ -57,37 +71,68 @@ const SKYRIM_COMPANIONS: PluginCompanions = {
 };
 const NO_STRINGS_COMPANIONS: PluginCompanions = { archiveExtension: '.bsa', stringsLanguages: [], pluginIni: false };
 
+const RESOURCE_ARCHIVE_KEYS = ['sResourceArchiveList', 'sResourceArchiveList2'];
+const RESOURCE_INDEX_KEYS = ['sResourceIndexFileList', 'sResourceStartUpArchiveList', ...RESOURCE_ARCHIVE_KEYS];
+const FALLOUT4_ARCHIVES: ArchiveLists = {
+  defaultIni: 'Fallout4_Default.ini', userInis: ['Fallout4.ini', 'Fallout4Custom.ini'], keys: RESOURCE_INDEX_KEYS, alwaysLoaded: [],
+};
+const SKYRIM_ARCHIVES: ArchiveLists = {
+  defaultIni: 'Skyrim_Default.ini', userInis: ['Skyrim.ini', 'SkyrimCustom.ini'], keys: RESOURCE_ARCHIVE_KEYS, alwaysLoaded: [],
+};
+const FALLOUT3_ARCHIVES: ArchiveLists = {
+  defaultIni: 'Fallout_default.ini', userInis: ['Fallout.ini', 'FalloutCustom.ini'], keys: ['sArchiveList'], alwaysLoaded: [],
+};
+
 // Only Fallout 4 carries Steam autodetection facts today — a fixture choice, not a platform lock.
 const GAME_PATHS: Record<string, GamePathInfo> = {
   Fallout4: {
     gameName: 'Fallout 4', nexusSlug: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
     masters: FALLOUT4_MASTERS, creationClubList: 'Fallout4.ccc',
-    scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS,
+    scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS, archiveLists: FALLOUT4_ARCHIVES,
   },
   Fallout4VR: {
     gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS,
+    archiveLists: { ...FALLOUT4_ARCHIVES, defaultIni: 'Fallout4.ini' },
   },
-  Fallout3: { gameName: 'Fallout 3', nexusSlug: 'fallout3', masters: ['Fallout3.esm'], scriptExtenderFolder: 'fose', pluginCompanions: NO_STRINGS_COMPANIONS },
-  FalloutNV: { gameName: 'Fallout New Vegas', nexusSlug: 'newvegas', masters: ['FalloutNV.esm'], scriptExtenderFolder: 'nvse', pluginCompanions: NO_STRINGS_COMPANIONS },
-  SkyrimLE: { gameName: 'Skyrim', nexusSlug: 'skyrim', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS },
+  Fallout3: {
+    gameName: 'Fallout 3', nexusSlug: 'fallout3', masters: ['Fallout3.esm'], scriptExtenderFolder: 'fose',
+    pluginCompanions: NO_STRINGS_COMPANIONS, archiveLists: FALLOUT3_ARCHIVES,
+  },
+  FalloutNV: {
+    gameName: 'Fallout New Vegas', nexusSlug: 'newvegas', masters: ['FalloutNV.esm'], scriptExtenderFolder: 'nvse',
+    pluginCompanions: NO_STRINGS_COMPANIONS, archiveLists: { ...FALLOUT3_ARCHIVES, alwaysLoaded: ['Update.bsa'] },
+  },
+  SkyrimLE: {
+    gameName: 'Skyrim', nexusSlug: 'skyrim', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse',
+    pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES,
+  },
   SkyrimSE: {
     gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', masters: SKYRIM_MASTERS,
     creationClubList: 'Skyrim.ccc',
-    scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS,
+    scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES,
   },
   SkyrimVR: {
     gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS,
+    archiveLists: { ...SKYRIM_ARCHIVES, defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
   },
-  EnderalLE: { gameName: 'Enderal', nexusSlug: 'enderal', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS },
+  EnderalLE: {
+    gameName: 'Enderal', nexusSlug: 'enderal', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse',
+    pluginCompanions: SKYRIM_COMPANIONS, archiveLists: { ...SKYRIM_ARCHIVES, userInis: ['Enderal.ini', 'EnderalCustom.ini'] },
+  },
   Starfield: {
     gameName: 'Starfield', nexusSlug: 'starfield', masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc',
     scriptExtenderFolder: 'sfse', pluginCompanions: FALLOUT4_COMPANIONS,
+    archiveLists: { defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS, alwaysLoaded: [] },
   },
-  Oblivion: { gameName: 'Oblivion', nexusSlug: 'oblivion', masters: ['Oblivion.esm'], scriptExtenderFolder: 'obse', pluginCompanions: NO_STRINGS_COMPANIONS },
+  Oblivion: {
+    gameName: 'Oblivion', nexusSlug: 'oblivion', masters: ['Oblivion.esm'], scriptExtenderFolder: 'obse',
+    pluginCompanions: NO_STRINGS_COMPANIONS,
+    archiveLists: { defaultIni: 'Oblivion_default.ini', userInis: ['Oblivion.ini'], keys: ['sArchiveList'], alwaysLoaded: [] },
+  },
 };
 
 /** @public Read by the game-name scan alone. */
@@ -140,10 +185,19 @@ export function creationClubListFile(root: string, release: string | undefined):
  *  the ones in its strings folder. Names match without case. */
 export interface PluginCompanionRule {
   readonly stringsFolder: string;
+  /** With its period. */
+  readonly archiveExtension: string;
   inRoot(plugin: string, name: string): boolean;
+  /** The archives in the root the game loads with the plugin. */
+  isArchiveOf(plugin: string, name: string): boolean;
   inStringsFolder(plugin: string, name: string): boolean;
+  /** An archive the release loads, of any plugin or of none, at a folder's root. */
+  readonly isArchive: (relativePath: string) => boolean;
+  /** A strings file of any plugin, in any language, in the strings folder at a folder's root. */
+  readonly isStringsFile: (relativePath: string) => boolean;
 }
 
+const STRINGS_FOLDER = 'strings';
 const STRINGS_EXTENSIONS = ['.strings', '.dlstrings', '.ilstrings'];
 const ARCHIVE_PART_DELIMITER = ' - ';
 
@@ -165,7 +219,14 @@ export function pluginCompanionRule(release: string | undefined): PluginCompanio
   if (companions === undefined) return undefined;
   const languages = companions.stringsLanguages.map((language) => language.toLowerCase());
   return {
-    stringsFolder: 'strings',
+    stringsFolder: STRINGS_FOLDER,
+    archiveExtension: companions.archiveExtension,
+    isArchiveOf: (plugin, name) => isArchiveOf(stemOf(plugin), name, companions.archiveExtension),
+    isArchive: (relativePath) => !relativePath.includes('/') && relativePath.toLowerCase().endsWith(companions.archiveExtension),
+    isStringsFile: (relativePath) => {
+      const [folder, name, ...below] = relativePath.toLowerCase().split('/');
+      return folder === STRINGS_FOLDER && below.length === 0 && STRINGS_EXTENSIONS.some((extension) => name?.endsWith(extension));
+    },
     inRoot: (plugin, name) => {
       const stem = stemOf(plugin);
       return isArchiveOf(stem, name, companions.archiveExtension) || (companions.pluginIni && name.toLowerCase() === `${stem}.ini`);
@@ -176,6 +237,12 @@ export function pluginCompanionRule(release: string | undefined): PluginCompanio
       return languages.some((language) => STRINGS_EXTENSIONS.some((extension) => key === `${stem}_${language}${extension}`));
     },
   };
+}
+
+/** Where the game's INIs list the archives it loads; none for no release, or a release the table
+ *  holds no row for. */
+export function archiveListsOf(release: string | undefined): ArchiveLists | undefined {
+  return release === undefined ? undefined : GAME_PATHS[release]?.archiveLists;
 }
 
 /** A game folder as plain data: found, with its Data folder, or not found. */

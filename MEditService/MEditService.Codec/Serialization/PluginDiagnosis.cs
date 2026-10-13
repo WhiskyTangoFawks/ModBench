@@ -19,7 +19,7 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
         ("All FNAM strings should be the same", "blocked upstream: Mutagen #687"),
     ];
 
-    /// <summary>Track's seam: the deepest <see cref="RecordException"/> in the tree anchors the diagnosis;
+    /// <summary>Init's seam: the deepest <see cref="RecordException"/> in the tree anchors the diagnosis;
     /// otherwise the plugin itself is all that can honestly be named.</summary>
     public static PluginDiagnosis FromParseException(Exception ex)
     {

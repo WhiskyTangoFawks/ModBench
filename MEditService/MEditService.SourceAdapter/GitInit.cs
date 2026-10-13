@@ -1,40 +1,40 @@
+using System.Text;
 using MEditService.Codec.Serialization;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>A plugin whose source Track writes, and the hash of the binary it was decompiled from.</summary>
+/// <summary>A plugin whose source init writes, and the hash of the binary it was decompiled from.</summary>
 public sealed record DecompiledPlugin(string Plugin, string? BinarySha256);
 
-/// <summary>Makes a mod's repository: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>. A track that
-/// refuses any plugin writes nothing, and it never deletes a repository it did not make (ADR-0003).</summary>
-internal static class GitTracking
+/// <summary>A file of the mod no installation file yields, by its forward-slash path in the mod folder.</summary>
+public sealed record Asset(string Path, Func<Stream> Open);
+
+/// <summary>Makes a mod's repository: one commit, <c>Init &lt;mod&gt;</c>, on <c>main</c>. An init that
+/// fails writes nothing, and it never deletes a repository it did not make (ADR-0003).</summary>
+internal static class GitInit
 {
-    /// <summary>Answers each plugin whose files could not be written.</summary>
-    internal static IReadOnlyList<(string Plugin, string Reason)> Track(
-        string sourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins)
+    internal static void Init(
+        string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+        IReadOnlyList<Asset> assets)
     {
         if (SourceRepositoryGit.IsTracked(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
 
         WriteJournal journal = new(sourceFolder);
-        var (written, refused) = WriteEachPlugin(sourceFolder, plugins, journal);
-        if (refused.Count > 0)
-        {
-            var unrestored = journal.UndoSince(0);
-            return [(refused[0].Plugin, journal.Describe(refused[0].Reason, unrestored)), .. refused.Skip(1)];
-        }
-
         var git = new SourceRepositoryGit(sourceFolder);
-        var gitignorePath = Path.Combine(sourceFolder, ".gitignore");
         try
         {
+            WriteEachPlugin(sourceFolder, plugins, journal);
+            foreach (var asset in assets)
+                journal.Copy(Path.Combine(sourceFolder, SourceRepositoryLayout.AssetsFolderName, asset.Path), asset.Open);
             if (!git.Exists)
                 journal.RecordUndo(() => { if (git.Exists) git.Delete(); }, path: git.GitDirectory);
             CreateRepository(git);
-            journal.Write(gitignorePath, System.Text.Encoding.UTF8.GetBytes(GitignoreContent));
+            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent));
+            journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildConfigurationFileName), BuildConfiguration.Of(output));
             git.Run("add", "-A");
-            git.Run("commit", "-q", "-m", $"Track {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
-            foreach (var plugin in written)
+            git.Run("commit", "-q", "-m", $"Init {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
+            foreach (var (_, plugin) in plugins)
             {
                 if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Plugin, binarySha256);
             }
@@ -44,39 +44,28 @@ internal static class GitTracking
             if (journal.Report(ex, journal.UndoSince(0)) is { } report) throw report;
             throw;
         }
-        return [];
     }
 
-    private static (List<DecompiledPlugin> Written, List<(string Plugin, string Reason)> Refused) WriteEachPlugin(
+    private static void WriteEachPlugin(
         string workTree, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins, WriteJournal journal)
     {
-        List<DecompiledPlugin> written = [];
-        List<(string Plugin, string Reason)> refused = [];
         foreach (var (tree, plugin) in plugins)
         {
-            var mark = journal.Mark;
             try
             {
                 journal.WriteAll(tree.Select(file => SourceRepositoryLayout.PlacedFileOf(plugin.Plugin, file)), workTree);
-                written.Add(plugin);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
-                refused.Add((plugin.Plugin, journal.Describe(ex.Message, journal.UndoSince(mark))));
-            }
-            catch (Exception ex)
-            {
-                if (journal.Report(ex, journal.UndoSince(0)) is { } report) throw report;
-                throw;
+                throw new IOException($"{plugin.Plugin}'s source could not be written: {ex.Message}", ex);
             }
         }
-        return (written, refused);
     }
 
     private static void CreateRepository(SourceRepositoryGit git)
     {
         git.Run("init", "-q", "-b", "main");
-        git.Run("config", $"{SourceRepositoryGit.TrackMarkSection}.{SourceRepositoryGit.TrackMarkKey}", "true");
+        git.Run("config", $"{SourceRepositoryGit.InitMarkSection}.{SourceRepositoryGit.InitMarkKey}", "true");
         git.Run("config", "core.autocrlf", "false");
         // Git for Windows refuses a path past 260 characters unless told otherwise, and a source folder's
         // plugin source nests deep.
@@ -98,13 +87,14 @@ internal static class GitTracking
             git.Run("config", "user.email", "modbench@localhost");
     }
 
-    // Root-anchored: a bare "plugin-source/" would also un-ignore a same-named folder nested
-    // anywhere else in the mod.
+    // Root-anchored: a bare "plugin-source/" would also un-ignore a same-named folder nested anywhere else.
+    // An un-ignore here outranks the user's global excludes, so no asset is left out of the commit.
     private static readonly string GitignoreContent =
-        "# Generated by Track — mEdit never rewrites this file after Track.\n" +
         "*\n" +
+        "!/.gitignore\n" +
+        $"!/{SourceRepositoryLayout.BuildConfigurationFileName}\n" +
         $"!/{SourceRepositoryLayout.RootFolderName}/\n" +
         $"!/{SourceRepositoryLayout.RootFolderName}/**\n" +
-        "!.gitignore\n" +
-        "meta.ini\n";
+        $"!/{SourceRepositoryLayout.AssetsFolderName}/\n" +
+        $"!/{SourceRepositoryLayout.AssetsFolderName}/**\n";
 }

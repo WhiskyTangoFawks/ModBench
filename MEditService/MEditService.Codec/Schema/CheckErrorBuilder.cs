@@ -12,9 +12,11 @@ public static class CheckErrorBuilder
     // can lose a target's bytes. `indexed` is false while `resolve` sees part of the set.
     public static string? Build(
         FieldMetadata meta, JsonElement? value, Func<string, ResolvedFormKey?> resolve, GameRelease release,
-        bool indexed, Func<string, string?>? whyUnchecked = null)
+        bool indexed, Func<string, string?>? whyUnchecked = null, string? missingStringsFile = null)
     {
         var entries = new List<string>();
+        if (missingStringsFile is not null && meta.Type == "translatedString" && HoldsNoText(value))
+            entries.Add(missingStringsFile);
         // Nothing unread, for a caller whose targets all live in one store it just read.
         Func<string, string?> unread = whyUnchecked ?? (_ => null);
         FormReferences.Walk(meta, value, "",
@@ -25,6 +27,13 @@ public static class CheckErrorBuilder
             });
         return entries.Count > 0 ? string.Join("; ", entries) : null;
     }
+
+    // Mutagen writes a translated string whose strings file is missing with its target language alone.
+    // A node the record does not hold is no such string.
+    private static bool HoldsNoText(JsonElement? value) =>
+        value is { ValueKind: JsonValueKind.Object } translated
+        && !translated.TryGetProperty("Value", out _)
+        && !(translated.TryGetProperty("Values", out var values) && values.GetArrayLength() > 0);
 
     private static string? CheckScalar(
         string? value, bool allowsNull, IReadOnlyList<string> validTypes,

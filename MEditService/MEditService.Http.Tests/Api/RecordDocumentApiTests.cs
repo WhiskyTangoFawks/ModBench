@@ -22,7 +22,7 @@ public sealed class RecordDocumentApiTests : HostedTests
     private async Task<ScatteredFixtureData> Tracked()
     {
         var fx = await Untracked();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(Plugin);
         return fx;

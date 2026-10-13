@@ -59,7 +59,7 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
     {
         using var fx = OneMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(Plugin);
 

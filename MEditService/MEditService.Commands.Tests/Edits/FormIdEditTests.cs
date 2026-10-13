@@ -226,7 +226,7 @@ public sealed class FormIdEditTests
     }
 
     [Fact]
-    public void EditingTheFormId_Refuses_WhenPluginIsUntracked_NamingTheTrackCommand()
+    public void EditingTheFormId_Refuses_WhenPluginIsUntracked_NamingTheInitCommand()
     {
         using var mod = SourceEditFixture.Untracked();
 
@@ -234,7 +234,7 @@ public sealed class FormIdEditTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-        Assert.Contains("Track its mod", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Init its mod", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]

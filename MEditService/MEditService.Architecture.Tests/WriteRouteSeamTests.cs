@@ -11,7 +11,6 @@ public sealed class WriteRouteSeamTests
         ("POST /records/delete-changes", "DeleteRecordChanges"),
         ("POST /records/copy-changes", "CopyRecordChanges"),
         ("POST /plugins/create", "CreatePlugin"),
-        ("POST /plugins/track", "Track"),
         ("POST /plugins/decompile", "Decompile"),
         ("POST /plugins/compile", "Compile"),
         ("POST /plugins/rename-source-changes", "RenameSourceChanges"),
@@ -45,7 +44,7 @@ public sealed class WriteRouteSeamTests
         """Results.Problem("Every mod needs a name.", statusCode: 400)""",
         """Results.Problem("A record type is required.", statusCode: 400)""",
         """Results.Problem("Each plugin entry must have a non-empty Name, Path, Origin and Provider.", statusCode: 400)""",
-        """Results.Problem("The snapshot must state its active plugins and those loaded with no line.", statusCode: 400)""",
+        """Results.Problem("The snapshot must state its active plugins, those loaded with no line, its archives and its strings files.", statusCode: 400)""",
     ];
 
     public static IEnumerable<object[]> EveryNamedMethodRoute =>

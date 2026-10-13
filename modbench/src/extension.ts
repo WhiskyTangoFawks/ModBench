@@ -23,7 +23,7 @@ import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import type { InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
-import { agentPort, attachPort, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
+import { agentPort, attachPort, gameDirectoryOverrides, inheritedPythonPath, onGameDirectoryChange, onTerminalEnvChange } from './workspaceConfig';
 import { createPlugins, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
@@ -41,6 +41,7 @@ import { warnIfFomod } from './install/fomodWarning';
 import { installCommands } from './install/install';
 import { downloadsCommands } from './downloadsCommands/downloads';
 import { instanceCommands } from './instanceCommands/instanceCommands';
+import { reachMEditFromTerminals } from './terminalEnvironment';
 import { instanceSyncs, loadOrderPutHandler, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
@@ -52,7 +53,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build'>;
+  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build' | 'init' | 'changeBuildConfiguration'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -122,10 +123,10 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const { modSync, pluginSync } = own(instanceSyncs({
     instance, syncMods: modSyncOver(adapter), syncPlugins: pluginSyncOver(adapter), channel: outputChannel,
   }));
-  const trackSelection = selectionInFocusedView(
-    own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
+  const sourceGestureRows = selectionInFocusedView(
+    own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.sourceGestureRowsIn');
   const plugins = own(pluginsBox.onInstance({
-    instance, instanceRoot, commands: pluginsCommands({ adapter, client }), sourceCommands: sourceCommands({ client }), pluginSync, trackSelection, modsView: MODS_KEY_ARGS.view,
+    instance, instanceRoot, commands: pluginsCommands({ adapter, client }), sourceCommands: sourceCommands({ client, adapter }), pluginSync, sourceGestureRows, modsView: MODS_KEY_ARGS.view,
     saveUnsavedPluginSource: (mod) => saveModPluginSource((origin) => sourceFiles(instance.value, origin), mod),
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
   }));
@@ -136,7 +137,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
   const mods = own(createModsView({
-    instance, install, commands: modlistCommands(adapter), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
+    instance, install, commands: modlistCommands(adapter, client), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
     downloadInstall: {
       reporter: reporterFor('downloadList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),
@@ -256,6 +257,7 @@ export function activate(context: vscode.ExtensionContext): void {
     plugins,
     editor,
     serveAgent({ port: agentPort(), instance: views.instance, reporter: reporterFor('agent'), log: outputChannel }),
+    reachMEditFromTerminals(context.environmentVariableCollection, meditClient, vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath, inheritedPythonPath, onTerminalEnvChange),
     createSourceLanguage({
       client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     }),

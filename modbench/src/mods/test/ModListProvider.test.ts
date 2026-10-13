@@ -356,7 +356,7 @@ describe('ModListProvider', () => {
     expect(disabled.contextValue).toBe('mod disabled untracked');
   });
 
-  it('a mod row states in its contextValue whether the instance value holds a plugin of it, and whether it holds a repository, which track reads on a mod with a plugin and no repository and build reads on a mod with one', async () => {
+  it('a mod row states in its contextValue whether the instance value holds a plugin of it, and whether it holds a repository, which init reads on a mod with a plugin and no repository and build reads on a mod with one', async () => {
     const value = instanceValueFixture({
       mods: [mod('Patch'), mod('Textures'), mod('Tracked')],
       trackedMods: new Set(['Tracked']),
@@ -739,7 +739,7 @@ describe('ModListProvider', () => {
     });
 
     it('shows $(repo) for a source mod, and its source folder in the tooltip as what the folder is built from', async () => {
-      const value = { ...(await contested()), trackedMods: new Set(['Loser']), paths: { ...instanceValueFixture().paths, sourceDirs: new Map([['Loser', '/instance/source/Loser'], ['Winner', '/instance/source/Winner']]) } };
+      const value = { ...(await contested()), trackedMods: new Set(['Loser']), paths: { ...instanceValueFixture().paths, sourceDirs: new Map([['Loser', '/instance/source/Loser']]) } };
       const provider = makeProvider([], { instance: new FakeInstance(value) });
       const rows = (await provider.getChildren()).filter((n): n is ModNode => n instanceof ModNode);
       const [winner, loser] = [rows.find((n) => n.mod.name === 'Winner'), rows.find((n) => n.mod.name === 'Loser')];

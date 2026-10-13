@@ -26,9 +26,8 @@ public sealed record PluginChangedNotification(PluginAddress Plugin, long Sequen
 /// Ready, the same transitions <c>GET /load-order/status</c> polling would have observed.</summary>
 public sealed record LoadOrderStatusNotification(LoadOrderStatus Status) : INotification;
 
-/// <summary>Track's own progress (<see cref="TrackProgress"/>) as it advances through parsing,
-/// serializing and committing.</summary>
-public sealed record TrackProgressNotification(TrackProgress Progress) : INotification;
+/// <summary>Init's own progress (<see cref="InitProgress"/>) as it advances through its phases.</summary>
+public sealed record InitProgressNotification(InitProgress Progress) : INotification;
 
 /// <summary>A build's own progress (<see cref="BuildProgress"/>), per mod.</summary>
 public sealed record BuildProgressNotification(BuildProgress Progress) : INotification;

@@ -8,6 +8,7 @@ import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import { SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
+import { PROFILE_SETTINGS_FILE_NAME } from './codecs/profileSettings';
 import { PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
 import type { EntryRef, FileOrigin } from './instanceAdapter';
 import { PLUGIN_EXTENSIONS } from './pluginFile';
@@ -19,7 +20,7 @@ const DOWNLOADS = 'downloads';
 
 export const profilesDir = (instanceRoot: string): string => join(instanceRoot, PROFILES);
 
-const profileDir = (instanceRoot: string, profile: string): string =>
+export const profileDir = (instanceRoot: string, profile: string): string =>
   join(profilesDir(instanceRoot), profile);
 
 export const modsDir = (instanceRoot: string): string => join(instanceRoot, MODS);
@@ -43,7 +44,8 @@ export function mo2FolderName(name: string): string {
 }
 
 // Another tool can write a mod line with a `/`; a name that reaches outside `mods/` builds no path.
-const modFolderName = (modName: string): string | undefined =>
+/** The folder a mod's name gives it; `undefined` when it gives none. */
+export const modFolderName = (modName: string): string | undefined =>
   (modName === '' || modName === '.' || modName === '..' || /[\\/]/.test(modName) ? undefined : modName);
 
 // Another tool can write a separator name MO2 never gives a folder; such a separator builds no path.
@@ -102,6 +104,9 @@ export const modMetaFileIn = (modFolder: string): string => join(modFolder, MOD_
 
 export const modMetaFile = (instanceRoot: string, modName: string): string => modMetaFileIn(modDir(instanceRoot, modName));
 
+export const profileSettingsFile = (instanceRoot: string, profile: string): string =>
+  join(profileDir(instanceRoot, profile), PROFILE_SETTINGS_FILE_NAME);
+
 export const modlistFile = (instanceRoot: string, profile: string): string =>
   join(profileDir(instanceRoot, profile), MODLIST_FILE_NAME);
 
@@ -138,6 +143,14 @@ export const modSourceDir = (instanceRoot: string, modName: string): string | un
 /** The folder beside `mods/` that holds every mod's source folder (ADR-0007). */
 export const sourceRootDir = (instanceRoot: string): string => join(instanceRoot, SOURCE);
 
+const BUILD_CONFIGURATION_FILE = 'build.json';
+
+/** The key of the build configuration that names the mod folder its build writes. */
+export const BUILD_OUTPUT_KEY = 'output';
+
+/** The file in a source folder that says what its build makes (ADR-0007). */
+export const buildConfigurationFile = (sourceFolder: string): string => join(sourceFolder, BUILD_CONFIGURATION_FILE);
+
 /** The git directory whose presence is what "tracked" means (ADR-0007). */
 export const repositoryGitDir = (sourceFolder: string): string => join(sourceFolder, GIT_DIR);
 
@@ -162,8 +175,9 @@ export const SETTINGS_WATCH_GLOB = SETTINGS_FILE_NAME;
 /** Downloads' own base is the resolved folder itself, so this glob is everything under it. */
 export const DOWNLOADS_WATCH_GLOB = '**';
 
-// A glob matches case, and a plugin's extension and its source folders are any case, so each letter is a class.
-const anyCase = (text: string): string => text.replace(/./g, (c) => `[${c.toLowerCase()}${c.toUpperCase()}]`);
+/** A glob that matches `text` as Windows matches a name. A glob matches case, and another tool spells a
+ *  plugin's extension or a game's file in any case, so each letter is a class. */
+export const anyCase = (text: string): string => text.replace(/./g, (c) => `[${c.toLowerCase()}${c.toUpperCase()}]`);
 
 /** Every file inside a mod's plugin source, as `isPluginSourcePath` takes it. */
 export const PLUGIN_SOURCE_GLOB = `**/${anyCase(SOURCE)}/*/${anyCase(PLUGIN_SOURCE_FOLDER)}/**`;
@@ -171,6 +185,12 @@ export const PLUGIN_SOURCE_GLOB = `**/${anyCase(SOURCE)}/*/${anyCase(PLUGIN_SOUR
 /** The plugin files at the root of the game folder's Data folder, the Data folder its base. */
 export const DATA_FOLDER_PLUGINS_GLOB = `*.{${[...PLUGIN_EXTENSIONS].map((ext) => anyCase(ext.slice(1))).join(',')}}`;
 
+/** A profile's own INIs: its settings, and the game INIs it keeps. */
+export const PROFILE_INIS_GLOB = `${PROFILES}/*/*.${anyCase('ini')}`;
+
+/** The archives at the root of the Data folder and the files of its strings folder, the Data folder its base. */
+export const dataFolderArchivesGlob = (archiveExtension: string, stringsFolder: string): string =>
+  `{*${anyCase(archiveExtension)},${anyCase(stringsFolder)}/*}`;
 // The one spelling of files.ts's own temp suffix, so a sibling target's temp — whose name only
 // starts the same way — can never pass a check built for one exact target.
 const TEMP_WRITE_SUFFIX = String.raw`[0-9a-f]{12}\.tmp`;

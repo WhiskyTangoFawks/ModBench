@@ -20,7 +20,7 @@ public interface ISourceAdapter
     SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin);
 
     /// <summary>The reads over the source folder of the mod providing <paramref name="plugin"/>, tree or not; null
-    /// when no mod provides it. One serves a batch, so what it learns of the tree is learned once.</summary>
+    /// when no source mod provides it. One serves a batch, so what it learns of the tree is learned once.</summary>
     ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release);
 
     /// <summary>The reads over <paramref name="plugin"/>'s source tree; null when it has none that reads.</summary>
@@ -45,7 +45,7 @@ public interface ISourceAdapter
     /// <summary>The name of the file of a record's own document where no tree has renamed it.</summary>
     string FileNameOf(RecordIdentity identity);
 
-    /// <summary>A <c>.git</c> with no <c>main</c> that Track did not mark as its own: someone else's, which Track never
+    /// <summary>A <c>.git</c> with no <c>main</c> that init did not mark as its own: someone else's, which init never
     /// writes to (ADR-0003).</summary>
     bool HoldsAnotherRepository(string sourceFolder);
 
@@ -55,10 +55,15 @@ public interface ISourceAdapter
     /// <summary>The refusal naming the instance root when it is not there; null when it is.</summary>
     string? InstanceRootNotFound(string? instanceRoot);
 
-    /// <summary>A repository for a mod that has none: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>, of
-    /// each plugin's door tree. Answers each plugin refused, every one when no repository was made.</summary>
-    IReadOnlyList<(string Plugin, string Reason)> Track(
-        string sourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins);
+    /// <summary>A repository for a mod that has none: one commit, <c>Init &lt;mod&gt;</c>, on <c>main</c>, of each
+    /// plugin's door tree, the assets and a build configuration naming <paramref name="output"/>.</summary>
+    SourceFailure? Init(
+        string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+        IReadOnlyList<Asset> assets);
+
+    /// <summary>Writes <paramref name="change"/> into the build configuration in <paramref name="sourceFolder"/>, keeping all
+    /// else it says, in the working tree.</summary>
+    SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change);
 
     /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="ISourceRepository.TreeOf"/> answers it once
     /// written: what a round-trip gate compiles, so that it compiles what is written.</summary>

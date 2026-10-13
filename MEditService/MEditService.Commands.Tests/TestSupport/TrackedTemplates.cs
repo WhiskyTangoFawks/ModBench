@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
-/// <summary>Track is the slow step of a tracked fixture, and the mod folder it leaves names no
+/// <summary>Init is the slow step of a tracked fixture, and the mod folder it leaves names no
 /// absolute path, so each distinct mod folder is tracked once per run and copied into every test's
 /// own.</summary>
 internal static class TrackedTemplates
@@ -50,7 +50,7 @@ internal static class TrackedTemplates
         });
     }
 
-    /// <summary>Tracks the one plugin <paramref name="modFolder"/> holds, in a load order of that
+    /// <summary>Inits the mod of the one plugin <paramref name="modFolder"/> holds, in a load order of that
     /// plugin alone.</summary>
     internal static void TrackAlone(string modFolder, string pluginName, GameRelease release = GameRelease.Fallout4)
     {
@@ -58,10 +58,10 @@ internal static class TrackedTemplates
         using var gameDirectory = new ScratchDirectory("medit-tracked-template-game-");
         var loadOrder = SnapshotPlugins.Snapshot(gameDirectory, instanceRoot: null, release,
             [new LoadOrderEntry(pluginName, Path.Combine(modFolder, pluginName), origin, Line: 0, Enabled: true, Winning: true)]);
-        var result = TrackEveryPluginOf.ModAsync(loadOrder, origin)
+        var result = InitEveryPluginOf.ModAsync(loadOrder, origin)
             .GetAwaiter().GetResult();
-        if (result.Landed.Sum(l => l.Outcome.Tracked.Count) != 1)
-            throw new InvalidOperationException($"Expected {pluginName} to track: {string.Join("; ", result.RefusalMessages())}");
+        if (result.Landed.Sum(l => l.Outcome.Plugins.Count) != 1)
+            throw new InvalidOperationException($"Expected {pluginName} to init: {string.Join("; ", result.RefusalMessages())}");
     }
 
     internal static void CopyDirectory(string sourceFolder, string destinationFolder)

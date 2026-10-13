@@ -4,11 +4,11 @@ import {
   foldPath, isRootLevel, type FileConflictIndex, type FileWinners,
 } from './fileConflictIndex';
 import {
-  fileInFolder, isPluginFile, OVERWRITE_ORIGIN, type DataFolderPlugins, type GameFolder, type ModFolders, type OriginFile,
-  type PluginEntry,
+  fileInFolder, isPluginFile, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type GameFolder, type ModFolders,
+  type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
-import { dataFolderFile } from '../tables/gamePaths';
+import { dataFolderFile, pluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
 import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 
@@ -34,7 +34,7 @@ export interface LoadOrderPlugin {
   winning: boolean;
 }
 
-type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string; sourceFolder: string } | { kind: 'Game' } | { kind: 'None' };
+type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string; sourceFolder?: string } | { kind: 'Game' } | { kind: 'None' };
 
 // `lineNamesIt`: the line names this copy of its filename, for Editing's judgements (ADR-0013).
 type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin' | 'line'> & { provider: SnapshotProvider; lineNamesIt: boolean };
@@ -50,6 +50,19 @@ export interface LoadOrderSnapshotValue {
   readonly plugins: SnapshotPlugin[];
   readonly active: PluginAddress[];
   readonly loadedWithNoLine: PluginAddress[];
+  /** In the order the game loads them, each at the path that wins. */
+  readonly archives: string[];
+  /** The loose strings files the game reads, each at the path that wins. */
+  readonly stringsFiles: string[];
+}
+
+/** What the snapshot's archives and strings files are resolved from. */
+export interface ArchiveSources {
+  readonly gameRelease: string | undefined;
+  /** The archives the game's INIs list, by name. */
+  readonly listed: readonly string[];
+  readonly inData: DataFolderArchives;
+  readonly files: FileWinners;
 }
 
 /** A plugins.txt line with no resolvable plugin file: no mod or overwrite/ provides it, and
@@ -175,6 +188,40 @@ export function buildLoadOrderRows(
   return [...listed, ...outside];
 }
 
+// Each file by its folded path in the Data folder: the Mod override order's winner, else the game folder's.
+function winningFiles(
+  dataFolder: string, inData: readonly string[], files: FileWinners, isOne: (relativePath: string) => boolean,
+): Map<string, { readonly relativePath: string; readonly path: string }> {
+  const winning = new Map(inData.map((relativePath) => [foldPath(relativePath), { relativePath, path: fileInFolder(dataFolder, relativePath) }]));
+  for (const { relativePath, winner } of files) if (isOne(relativePath)) winning.set(foldPath(relativePath), { relativePath, path: winner });
+  return winning;
+}
+
+// The INIs' archives load first, then each plugin's as the plugin loads. A later archive's file
+// replaces an earlier one's, and loose files replace every archive's.
+function archivesAndStringsOf(
+  { gameRelease, listed, inData, files }: ArchiveSources, dataFolder: string, active: readonly PluginAddress[],
+): Pick<LoadOrderSnapshotValue, 'archives' | 'stringsFiles'> {
+  const rule = pluginCompanionRule(gameRelease);
+  if (rule === undefined || inData.kind !== 'listed') return { archives: [], stringsFiles: [] };
+  const archives = winningFiles(dataFolder, inData.archives, files, rule.isArchive);
+  const pluginArchives = active.flatMap(({ name }) =>
+    [...archives.values()].filter((archive) => rule.isArchiveOf(name, archive.relativePath))
+      .sort((a, b) => (foldPath(a.relativePath) < foldPath(b.relativePath) ? -1 : 1)));
+  const loaded = [...listed.flatMap((name) => archives.get(foldPath(name)) ?? []), ...pluginArchives].map(({ path }) => path);
+  const strings = winningFiles(dataFolder, inData.stringsFiles, files, rule.isStringsFile);
+  return { archives: [...new Set(loaded)], stringsFiles: [...strings.values()].map(({ path }) => path) };
+}
+
+/** The archives the INIs list that no mod, no Overwrite and no game folder holds: the game loads none
+ *  of them either. */
+export function listedArchivesNothingHolds({ gameRelease, listed, inData, files }: ArchiveSources): string[] {
+  const rule = pluginCompanionRule(gameRelease);
+  if (rule === undefined || inData.kind !== 'listed') return [];
+  const held = new Set([...inData.archives, ...[...files].map(({ relativePath }) => relativePath).filter(rule.isArchive)].map(foldPath));
+  return listed.filter((name) => !held.has(foldPath(name)));
+}
+
 /** ADR-0013's snapshot: none without a listable game folder, a refusal while a mod's plugin has no mod
  *  folder. Active: the plugins the game loads with no line, then each enabled line's winner. */
 export function loadOrderSnapshotOf(value: {
@@ -182,12 +229,15 @@ export function loadOrderSnapshotOf(value: {
   readonly gameFolder: GameFolder;
   readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
   readonly modFolders: ModFolders | undefined;
-  /** Each mod's source folder, by mod name. */
+  /** Each source mod's source folder, by mod name. */
   readonly sourceDirs: ReadonlyMap<string, string>;
+  readonly archives: ArchiveSources;
 }): LoadOrderSnapshotValue | LoadOrderSnapshotRefusal | undefined {
-  // Without the game's masters the snapshot would be silently wrong (principles.md), so the index
-  // keeps what it holds until the folder can be read (common.md, States, story 5).
-  if (value.gameFolder.kind !== 'found' || value.pluginsLoadedWithNoLine === undefined) return undefined;
+  // Without the game's masters or its archives the snapshot would be silently wrong (principles.md), so
+  // the index keeps what it holds until the folder can be read (common.md, States, story 5).
+  if (value.gameFolder.kind !== 'found' || value.pluginsLoadedWithNoLine === undefined || value.archives.inData.kind !== 'listed') {
+    return undefined;
+  }
   const { dataFolder } = value.gameFolder;
   // The filter states a found game folder's own guarantee, never an unchecked cast.
   const rows = value.plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined);
@@ -197,8 +247,9 @@ export function loadOrderSnapshotOf(value: {
     data: { kind: 'Game' },
     mod: (name) => {
       const folder = value.modFolders?.holding({ kind: 'mod', name });
+      if (folder === undefined) return undefined;
       const sourceFolder = value.sourceDirs.get(name);
-      return folder === undefined || sourceFolder === undefined ? undefined : { kind: 'Mod', mod: name, folder: folder.path, sourceFolder };
+      return sourceFolder === undefined ? { kind: 'Mod', mod: name, folder: folder.path } : { kind: 'Mod', mod: name, folder: folder.path, sourceFolder };
     },
   });
   const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p) =>
@@ -225,11 +276,13 @@ export function loadOrderSnapshotOf(value: {
     if (!sent.has(key)) sent.set(key, { name, path, origin, provider, line, lineNamesIt: line !== null && winning });
   }
   if (unprovided.size > 0) return { refusal: refusalOf(unprovided) };
+  const active = [...loadedWithNoLine, ...fromLines].map(({ name, origin }) => ({ name, origin }));
   return {
     dataFolder,
     plugins: [...sent.values()],
-    active: [...loadedWithNoLine, ...fromLines].map(({ name, origin }) => ({ name, origin })),
+    active,
     loadedWithNoLine: loadedWithNoLine.map(({ name, origin }) => ({ name, origin })),
+    ...archivesAndStringsOf(value.archives, dataFolder, active),
   };
 }
 

@@ -1,0 +1,43 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using MEditService.Http.Tests.TestSupport;
+using MEditService.TestSupport;
+
+namespace MEditService.Http.Tests.Api;
+
+public sealed class ResolveNamesApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
+{
+    private readonly HttpClient _client = loaded.Client;
+
+    [Fact]
+    public async Task PostResolve_AnswersEachNameAsThePluginOrRecordItMeans()
+    {
+        var response = await _client.PostAsJsonAsync("/names/resolve", new { names = new[] { new { name = TestPluginFixture.PluginName }, new { name = "TestNPC02" } } });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var named = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("named").EnumerateArray().ToList();
+        Assert.Equal(TestPluginFixture.PluginName, named[0].GetProperty("plugin").GetProperty("name").GetString());
+        Assert.False(string.IsNullOrEmpty(named[0].GetProperty("plugin").GetProperty("origin").GetString()));
+        Assert.Equal("TestNPC02", named[1].GetProperty("editorId").GetString());
+    }
+
+    [Fact]
+    public async Task PostResolve_ANameNothingHas_Returns400NamingIt()
+    {
+        var response = await _client.PostAsJsonAsync("/names/resolve", new { names = new[] { new { name = "NoSuchThing" } } });
+
+        var problem = await response.AssertIsProblem(HttpStatusCode.BadRequest);
+        Assert.Contains("NoSuchThing", problem.GetProperty("detail").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PostResolve_WithNoLoadOrder_Returns503()
+    {
+        await using var app = new MEditHost();
+
+        var response = await app.CreateClient().PostAsJsonAsync("/names/resolve", new { names = new[] { new { name = "TestNPC01" } } });
+
+        await response.AssertIsProblem(HttpStatusCode.ServiceUnavailable);
+    }
+}

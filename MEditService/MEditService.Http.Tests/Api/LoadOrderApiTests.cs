@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using MEditService.Http.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
@@ -26,6 +28,8 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             plugins = fx.Plugins.Select(p => p.Wire),
             active = SnapshotPlugins.Active(fx.Plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
             gameRelease = "Fallout4",
         });
 
@@ -35,13 +39,61 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Equal(2, plugins.Count);
     }
 
+    [Fact]
+    public async Task PutLoadOrder_TheArchivesAndStringsFilesItNames_AreTheOnesTheLoadOrderHolds()
+    {
+        string[] archives = [Path.Combine(_fixture.DataFolder, "Fallout4 - Interface.ba2"), Path.Combine(_fixture.DataFolder, "A - Main.ba2")];
+        string[] stringsFiles = [Path.Combine(_fixture.DataFolder, "Strings", "A_en.STRINGS")];
+
+        var response = await _client.PutLoadOrderAndAwaitReady(new
+        {
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
+            plugins = _fixture.Plugins.Select(p => p.Wire),
+            active = SnapshotPlugins.Active(_fixture.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
+            archives,
+            stringsFiles,
+            gameRelease = "Fallout4",
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var held = loaded.Services.GetRequiredService<LoadOrderHolder>().Require();
+        Assert.Equal([archives, stringsFiles], [held.Archives, held.StringsFiles]);
+    }
+
+    [Theory]
+    [InlineData("active")]
+    [InlineData("loadedWithNoLine")]
+    [InlineData("archives")]
+    [InlineData("stringsFiles")]
+    public async Task PutLoadOrder_WithAListItNeverDefaultsLeftOut_Returns400(string omitted)
+    {
+        var body = new Dictionary<string, object>
+        {
+            ["gameDirectory"] = _fixture.DataFolder,
+            ["instanceRoot"] = _fixture.InstanceRoot,
+            ["plugins"] = _fixture.Plugins.Select(p => p.Wire),
+            ["active"] = SnapshotPlugins.Active(_fixture.Plugins),
+            ["loadedWithNoLine"] = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
+            ["archives"] = Array.Empty<string>(),
+            ["stringsFiles"] = Array.Empty<string>(),
+            ["gameRelease"] = "Fallout4",
+        };
+        body.Remove(omitted);
+
+        var response = await _client.PutAsJsonAsync("/load-order", body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     [Theory]
     [InlineData("Game", "ModA", null, null)]
     [InlineData("None", null, "/mods/ModA", null)]
     [InlineData("Game", null, null, "/source/ModA")]
     [InlineData("Mod", "ModA", null, "/source/ModA")]
     [InlineData("Mod", null, "/mods/ModA", "/source/ModA")]
-    [InlineData("Mod", "ModA", "/mods/ModA", null)]
+    [InlineData("Mod", "ModA", "/mods/ModA", "")]
     public async Task PutLoadOrder_AProviderWhoseModAndFoldersDisagreeWithItsKind_Returns400(string kind, string? mod, string? folder, string? sourceFolder)
     {
         var response = await _client.PutAsJsonAsync("/load-order", new
@@ -51,10 +103,30 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, Provider = new { Kind = kind, Mod = mod, Folder = folder, SourceFolder = sourceFolder } }),
             active = SnapshotPlugins.Active(_fixture.Plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
             gameRelease = "Fallout4",
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutLoadOrder_AModThatIsNoSourceMod_HasNoSourceFolder_Returns200()
+    {
+        var response = await _client.PutLoadOrderAndAwaitReady(new
+        {
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, Provider = new { Kind = "Mod", Mod = p.Origin, Folder = Path.GetDirectoryName(p.Path) } }),
+            active = SnapshotPlugins.Active(_fixture.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
+            gameRelease = "Fallout4",
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
@@ -67,35 +139,8 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(_fixture.Plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
-            gameRelease = "Fallout4",
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PutLoadOrder_WithNoActiveField_Returns400()
-    {
-        var response = await _client.PutAsJsonAsync("/load-order", new
-        {
-            gameDirectory = _fixture.DataFolder,
-            instanceRoot = _fixture.InstanceRoot,
-            plugins = _fixture.Plugins.Select(p => p.Wire),
-            gameRelease = "Fallout4",
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PutLoadOrder_WithNoLoadedWithNoLineField_Returns400()
-    {
-        var response = await _client.PutAsJsonAsync("/load-order", new
-        {
-            gameDirectory = _fixture.DataFolder,
-            instanceRoot = _fixture.InstanceRoot,
-            plugins = _fixture.Plugins.Select(p => p.Wire),
-            active = SnapshotPlugins.Active(_fixture.Plugins),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
             gameRelease = "Fallout4",
         });
 
@@ -112,6 +157,8 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             plugins = _fixture.Plugins.Select(p => p.Wire),
             active = SnapshotPlugins.Active(_fixture.Plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -128,6 +175,8 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             plugins = new[] { plugin.Wire, (plugin with { Origin = "OtherMod" }).Wire },
             active = new[] { new { name = plugin.Name, origin = plugin.Origin }, new { name = plugin.Name, origin = "OtherMod" } },
             loadedWithNoLine = Array.Empty<object>(),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
             gameRelease = "Fallout4",
         });
 

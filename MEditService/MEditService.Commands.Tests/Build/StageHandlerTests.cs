@@ -29,13 +29,13 @@ public sealed class StageHandlerTests
 
     private static InstanceToStage Instance(params GameFileToStage[] gameFiles) => new(gameFiles, DataFolder, BuildFolder, DeltaShare: 1);
 
-    private static ModToStage ModFrom(string name, params InstallationFileToStage[] installationFiles) =>
+    private static ModToStage ModFrom(string name, params InstallationFile[] installationFiles) =>
         new(name, $"mods/{name}", installationFiles, []);
 
-    private InstallationFileToStage Downloaded(string path, params (string Path, string Hash)[] entries)
+    private InstallationFile Downloaded(string path, params (string Path, string Hash)[] entries)
     {
         _folders.WithBytes(string.Empty, path, Zip(entries));
-        return new InstallationFileToStage(path, Source: null, Size: 7, Hash: $"#{path}", [.. entries.Select(e => new HashedEntry(e.Path, e.Hash))]);
+        return new InstallationFile(path, Source: null, Size: 7, Hash: $"#{path}", [.. entries.Select(e => new HashedEntry(e.Path, e.Hash))]);
     }
 
     private IEnumerable<StageProgress> Progress =>
@@ -193,7 +193,7 @@ public sealed class StageHandlerTests
     {
         _folders.WithFile(Mod, "a.txt", Edited).WithBytes(string.Empty, "dl/Mod.zip", Zip(("other.txt", Original)));
 
-        var staged = Landed(ModFrom("Mod", new InstallationFileToStage("dl/Mod.zip", null, 7, "#zip", [new HashedEntry("a.txt", Original)])));
+        var staged = Landed(ModFrom("Mod", new InstallationFile("dl/Mod.zip", null, 7, "#zip", [new HashedEntry("a.txt", Original)])));
 
         Assert.Equal(["a.txt"], staged.NoProvider);
     }
@@ -205,7 +205,7 @@ public sealed class StageHandlerTests
         var edited = copy[..4096] + "b" + copy[4097..];
         _folders.WithFile(Mod, "meshes/a.nif", edited).WithBytes(string.Empty, "dl/Mod.7z", Convert.FromBase64String(SolidSevenZipOfReadmeAndMeshes));
 
-        Landed(ModFrom("Mod", new InstallationFileToStage(
+        Landed(ModFrom("Mod", new InstallationFile(
             "dl/Mod.7z", null, 231, "#7z", [new HashedEntry("readme.txt", "abc"), new HashedEntry("meshes/a.nif", copy)])));
 
         Assert.Equal(edited, DeltaAppliedAsWabbajackApplies("meshes/a.nif", copy, edited));
@@ -216,7 +216,7 @@ public sealed class StageHandlerTests
     {
         _folders.WithFile(Mod, "meshes/a.nif", Edited).WithBytes(string.Empty, "dl/Mod.zip", Zip(("meshes\\a.nif", Original)));
 
-        Landed(ModFrom("Mod", new InstallationFileToStage("dl/Mod.zip", null, 7, "#zip", [new HashedEntry("meshes/a.nif", Original)])));
+        Landed(ModFrom("Mod", new InstallationFile("dl/Mod.zip", null, 7, "#zip", [new HashedEntry("meshes/a.nif", Original)])));
 
         Assert.Equal(Edited, DeltaAppliedAsWabbajackApplies("meshes/a.nif", Original, Edited));
     }
@@ -226,7 +226,7 @@ public sealed class StageHandlerTests
     {
         _folders.WithFile("mods/Broken", "a.txt", Edited).WithFile("mods/Fine", "a.txt", "hello");
         _folders.WithFile(string.Empty, "dl/Broken.zip", "not an archive");
-        var broken = new InstallationFileToStage("dl/Broken.zip", null, 14, "#broken", [new HashedEntry("a.txt", Original)]);
+        var broken = new InstallationFile("dl/Broken.zip", null, 14, "#broken", [new HashedEntry("a.txt", Original)]);
 
         var result = Handler.Stage([ModFrom("Broken", broken), ModFrom("Fine")], Instance());
 
@@ -244,7 +244,7 @@ public sealed class StageHandlerTests
         var edited = new string('\0', 4096) + "edited";
         _folders.WithFile(Mod, "big.bin", edited).WithStream(string.Empty, "dl/Big.zip", () => StoredZipOfZeros("big.bin", Size, CrcOfTheZeros));
 
-        Landed(ModFrom("Mod", new InstallationFileToStage("dl/Big.zip", null, Size, "#zip", [new HashedEntry("big.bin", "#zeros")])));
+        Landed(ModFrom("Mod", new InstallationFile("dl/Big.zip", null, Size, "#zip", [new HashedEntry("big.bin", "#zeros")])));
 
         Assert.Equal(new FileProvider.InstallationFileDelta("Big.zip", "big.bin", "#zeros"), FileOf(Mod, "big.bin").Provider);
     }
@@ -337,7 +337,7 @@ public sealed class StageHandlerTests
     public void AModWithAnInstallationFileMissing_IsRefusedNamingTheModAndFile_AndTheOthersLand()
     {
         _folders.WithFile("mods/Lost", "a.txt", "hello").WithFile("mods/Found", "a.txt", "hello");
-        var lost = new InstallationFileToStage("dl/Lost.zip", null, 7, "#lost", [new HashedEntry("a.txt", "hello")]);
+        var lost = new InstallationFile("dl/Lost.zip", null, 7, "#lost", [new HashedEntry("a.txt", "hello")]);
 
         var result = Handler.Stage([ModFrom("Lost", lost), ModFrom("Found", Downloaded("dl/Found.zip", ("a.txt", "hello")))], Instance());
 

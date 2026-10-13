@@ -28,7 +28,7 @@ public sealed class CreateRecordApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         if (!tracked) return fx;
 
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(Plugin);
         return fx;

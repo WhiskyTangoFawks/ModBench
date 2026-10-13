@@ -33,13 +33,13 @@ function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: bo
   if (o.isInOverwrite) {
     return {
       label: '(in Overwrite)',
-      reason: 'Overwrite is not a mod, and a plugin moved into a mod can be tracked.',
+      reason: 'Overwrite is not a mod; move the plugin into a mod and init that mod.',
     };
   }
   if (!isTracked) {
     return {
       label: '(untracked)',
-      reason: '“Track Mod…”, or “Decompile Plugin” in a tracked mod, in this header’s menu, '
+      reason: '“Init Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, '
         + 'makes it editable.',
     };
   }

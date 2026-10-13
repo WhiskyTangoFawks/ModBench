@@ -57,11 +57,21 @@ internal static class Wire
         return problem;
     }
 
-    internal static Task<HttpResponseMessage> Track(this HttpClient client, string mod) =>
-        client.Track([mod]);
+    internal static Task<HttpResponseMessage> Init(this HttpClient client, string mod) =>
+        client.Init([mod]);
 
-    internal static Task<HttpResponseMessage> Track(this HttpClient client, IEnumerable<string> mods) =>
-        client.PostAsJsonAsync("/plugins/track", new { mods });
+    /// <summary>Each mod as one with no installation file and no file of the mod manager's.</summary>
+    internal static Task<HttpResponseMessage> Init(this HttpClient client, IEnumerable<string> mods) =>
+        client.PostAsJsonAsync("/init", new
+        {
+            mods = mods.Select(name => new
+            {
+                name,
+                sourceFolder = client.SourceFolderSentFor(name),
+                installationFiles = Array.Empty<object>(),
+                modManagerFiles = Array.Empty<string>(),
+            }),
+        });
 
     internal static Task<HttpResponseMessage> Decompile(
         this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins) =>
@@ -210,13 +220,13 @@ internal static class Wire
     internal static async Task<JsonElement> Plugin(this HttpClient client, string name) =>
         (await client.Plugins()).Single(p => p.GetProperty("name").GetString() == name);
 
-    /// <summary>Track's write reaches the answers at the next snapshot (ADR-0015), whose reconcile
+    /// <summary>Init's write reaches the answers at the next snapshot (ADR-0015), whose reconcile
     /// reports the plugin tracked before it validates every plugin, so its end is awaited too.</summary>
     internal static async Task PluginReportsTracked(this HttpClient client, string name)
     {
         await Eventually(
             async () => (await client.Plugin(name)).GetProperty("isTracked").GetBoolean(),
-            $"{name} reported tracked after Track");
+            $"{name} reported tracked after init");
         var status = await client.GetFromJsonAsync<JsonElement>("/load-order/status");
         await client.AwaitTerminalLoadOrderStatus(status.GetProperty("version").GetInt64());
     }

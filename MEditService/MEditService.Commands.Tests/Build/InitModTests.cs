@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -12,29 +13,29 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
 
-namespace MEditService.Commands.Tests.Source;
+namespace MEditService.Commands.Tests.Build;
 
-public sealed class TrackModTests
+public sealed class InitModTests
 {
     [Fact]
-    public async Task TrackMod_OfAModThatProvidesNoPlugin_RefusesThatModWithoutThrowing()
+    public async Task InitMod_OfAModThatProvidesNoPlugin_RefusesThatModWithoutThrowing()
     {
-        using var gameDir = new ScratchDirectory("medit-track-noorigin-game-");
-        var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], []);
+        using var gameDir = new ScratchDirectory("medit-init-noorigin-game-");
+        var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], [], []);
 
-        var result = await TrackEveryPluginOf.ModAsync(loadOrder, "NoSuchMod");
+        var result = await InitEveryPluginOf.ModAsync(loadOrder, "NoSuchMod");
 
         Assert.Null(result.SelectionRefusal);
         var refusal = Assert.Single(result.Refused);
-        Assert.Equal(("NoSuchMod", TrackRefusal.ModProvidesNoPlugin), (refusal.Item, refusal.Refusal));
+        Assert.Equal(("NoSuchMod", InitRefusal.ModProvidesNoPlugin), (refusal.Item, refusal.Refusal));
         Assert.Contains("NoSuchMod", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task TrackMod_RefusesTheWholeMod_WhenOnePluginCannotBeRead_WritingNothing()
+    public async Task InitMod_RefusesTheWholeMod_WhenOnePluginCannotBeRead_WritingNothing()
     {
-        using var modFolder = new ScratchDirectory("medit-track-unopened-");
-        using var gameDir = new ScratchDirectory("medit-track-unopened-game-");
+        using var modFolder = new ScratchDirectory("medit-init-unopened-");
+        using var gameDir = new ScratchDirectory("medit-init-unopened-game-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("FirstNpc");
@@ -49,11 +50,11 @@ public sealed class TrackModTests
             new LoadOrderEntry("Locked.esp", existingFileTheAdapterCannotRead, "FixtureMod", 1, Enabled: true, Winning: true),
         ]);
 
-        var result = await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", new LockedPluginAdapter("Locked.esp"));
+        var result = await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", new LockedPluginAdapter("Locked.esp"));
 
         Assert.Empty(result.Landed);
         var refusal = Assert.Single(result.Refused);
-        Assert.Equal(("FixtureMod", TrackRefusal.RoundTripFailed), (refusal.Item, refusal.Refusal));
+        Assert.Equal(("FixtureMod", InitRefusal.RoundTripFailed), (refusal.Item, refusal.Refusal));
         Assert.Contains("Locked.esp", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("cannot be read", refusal.Message, StringComparison.Ordinal);
         Assert.False(TestAdapters.Source().IsTracked(modFolder));
@@ -71,10 +72,10 @@ public sealed class TrackModTests
     }
 
     [Fact]
-    public async Task TrackMod_RealLoadOrder_TracksTheModFolder_HoldingEachRecordWithoutCarriageReturns()
+    public async Task InitMod_RealLoadOrder_InitsTheMod_HoldingEachRecordWithoutCarriageReturns()
     {
-        using var modFolder = new ScratchDirectory("medit-trackservice-");
-        using var gameDir = new ScratchDirectory("medit-trackservice-game-");
+        using var modFolder = new ScratchDirectory("medit-initservice-");
+        using var gameDir = new ScratchDirectory("medit-initservice-game-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc1 = mod.Npcs.AddNew("FirstNpc");
@@ -84,7 +85,7 @@ public sealed class TrackModTests
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
-        await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
+        await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
         Assert.True(TestAdapters.Source().IsTracked(modFolder));
 
@@ -103,10 +104,10 @@ public sealed class TrackModTests
     }
 
     [Fact]
-    public async Task TrackMod_OfAPluginInAModWithARepository_RefusesBeforeParsingIt()
+    public async Task InitMod_OfAPluginInAModWithARepository_RefusesBeforeParsingIt()
     {
-        using var modFolder = new ScratchDirectory("medit-trackservice-alreadytracked-");
-        using var gameDir = new ScratchDirectory("medit-trackservice-alreadytracked-game-");
+        using var modFolder = new ScratchDirectory("medit-initservice-alreadytracked-");
+        using var gameDir = new ScratchDirectory("medit-initservice-alreadytracked-game-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("SomeNpc");
@@ -118,18 +119,18 @@ public sealed class TrackModTests
 
         byte[] notAPluginSoAnyDeepParseFails = [0x00, 0x01, 0x02, 0x03];
         File.WriteAllBytes(pluginPath, notAPluginSoAnyDeepParseFails);
-        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
-        Assert.Equal(TrackRefusal.AlreadyTracked, result.Refusal);
+        Assert.Equal(InitRefusal.AlreadyInitialized, result.Refusal);
     }
 
     [Fact]
-    public async Task TrackMod_OfAMod_TracksOnlyThePluginsItProvides_NotAnotherModsPluginOfTheSameFileName()
+    public async Task InitMod_OfAMod_TakesOnlyThePluginsItProvides_NotAnotherModsPluginOfTheSameFileName()
     {
-        using var modA = new ScratchDirectory("medit-trackservice-twomods-a-");
-        using var modB = new ScratchDirectory("medit-trackservice-twomods-b-");
-        using var gameDir = new ScratchDirectory("medit-trackservice-twomods-game-");
+        using var modA = new ScratchDirectory("medit-initservice-twomods-a-");
+        using var modB = new ScratchDirectory("medit-initservice-twomods-b-");
+        using var gameDir = new ScratchDirectory("medit-initservice-twomods-game-");
         var pathA = Path.Combine(modA, "Same.esp");
         var pathB = Path.Combine(modB, "Same.esp");
         foreach (var path in new[] { pathA, pathB })
@@ -145,18 +146,18 @@ public sealed class TrackModTests
             new LoadOrderEntry("Same.esp", pathB, "ModB", Line: 1, Enabled: true, Winning: true),
         ]);
 
-        var result = await TrackEveryPluginOf.ModAsync(loadOrder, "ModA");
+        var result = await InitEveryPluginOf.ModAsync(loadOrder, "ModA");
 
-        Assert.Equal([new PluginAddress("Same.esp", "ModA")], Assert.Single(result.Landed).Outcome.Tracked);
+        Assert.Equal([new PluginAddress("Same.esp", "ModA")], Assert.Single(result.Landed).Outcome.Plugins);
         Assert.True(TestAdapters.Source().IsTracked(modA));
         Assert.False(TestAdapters.Source().IsTracked(modB));
     }
 
     [Fact]
-    public async Task TrackMod_OverTwoPluginsOfOneOrigin_ProgressStepsBetweenThePlugins_AndEndsIdle()
+    public async Task InitMod_OverTwoPluginsOfOneOrigin_ProgressStepsBetweenThePlugins_AndEndsIdle()
     {
-        using var modFolder = new ScratchDirectory("medit-trackservice-progress-");
-        using var gameDir = new ScratchDirectory("medit-trackservice-progress-game-");
+        using var modFolder = new ScratchDirectory("medit-initservice-progress-");
+        using var gameDir = new ScratchDirectory("medit-initservice-progress-game-");
         var firstPluginPath = Path.Combine(modFolder, "First.esp");
         var firstMod = new Fallout4Mod(ModKey.FromFileName("First.esp"), Fallout4Release.Fallout4);
         firstMod.Npcs.AddNew("OnlyNpc");
@@ -175,19 +176,19 @@ public sealed class TrackModTests
             ]);
 
         var notifications = new InMemoryNotificationPublisher();
-        await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", notifications: notifications);
+        await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", notifications: notifications);
 
-        var observed = notifications.Notifications.OfType<TrackProgressNotification>().Select(n => n.Progress).ToList();
-        Assert.Contains(observed, p => p.Phase == TrackPhase.Serializing && p.PluginsDone > 0 && p.PluginsDone < p.PluginsTotal);
-        Assert.All(observed.Where(p => p.Phase != TrackPhase.Idle), p => Assert.Equal("FixtureMod", p.Mod));
-        Assert.Equal(TrackPhase.Idle, observed[^1].Phase);
+        var observed = notifications.Notifications.OfType<InitProgressNotification>().Select(n => n.Progress).ToList();
+        Assert.Contains(observed, p => p.Phase == InitPhase.Serializing && p.PluginsDone > 0 && p.PluginsDone < p.PluginsTotal);
+        Assert.All(observed.Where(p => p.Phase != InitPhase.Idle), p => Assert.Equal("FixtureMod", p.Mod));
+        Assert.Equal(InitPhase.Idle, observed[^1].Phase);
     }
 
     [Fact]
-    public async Task TrackMod_WithARecordThatFailsToRoundTrip_RefusesAndCommitsNothing()
+    public async Task InitMod_WithARecordThatFailsToRoundTrip_RefusesAndCommitsNothing()
     {
-        using var modFolder = new ScratchDirectory("medit-trackservice-badroundtrip-");
-        using var gameDir = new ScratchDirectory("medit-trackservice-badroundtrip-game-");
+        using var modFolder = new ScratchDirectory("medit-initservice-badroundtrip-");
+        using var gameDir = new ScratchDirectory("medit-initservice-badroundtrip-game-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc = mod.Npcs.AddNew("OriginalName");
@@ -206,10 +207,10 @@ public sealed class TrackModTests
 
         var adapter = new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc);
 
-        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
+        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
 
         Assert.False(result.Applied);
-        Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains(npc.FormKey.ToString(), result.Message);
         Assert.Contains("OriginalName", result.Message);
@@ -217,10 +218,10 @@ public sealed class TrackModTests
     }
 
     [Fact]
-    public async Task TrackMod_WithAFloatFieldThatFailsToRoundTrip_RefusesNamingTheRecordAndTheField()
+    public async Task InitMod_WithAFloatFieldThatFailsToRoundTrip_RefusesNamingTheRecordAndTheField()
     {
-        using var modFolder = new ScratchDirectory("medit-trackservice-floatroundtrip-");
-        using var gameDir = new ScratchDirectory("medit-trackservice-floatroundtrip-game-");
+        using var modFolder = new ScratchDirectory("medit-initservice-floatroundtrip-");
+        using var gameDir = new ScratchDirectory("medit-initservice-floatroundtrip-game-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc = mod.Npcs.AddNew("SomeNpc");
@@ -241,10 +242,10 @@ public sealed class TrackModTests
 
         var adapter = new ForgedTreeWriteAdapter(DeserializeThenMutateTheFloat);
 
-        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
+        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
 
         Assert.False(result.Applied);
-        Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains(npc.FormKey.ToString(), result.Message);
         Assert.Contains("Npc", result.Message);
@@ -253,10 +254,10 @@ public sealed class TrackModTests
     }
 
     [Fact]
-    public async Task TrackMod_WithOpaqueTes4HeaderSubrecordsSet_TracksSuccessfully()
+    public async Task InitMod_WithOpaqueTes4HeaderSubrecordsSet_Lands()
     {
-        using var modFolder = new ScratchDirectory("medit-trackservice-opaqueheader-");
-        using var gameDir = new ScratchDirectory("medit-trackservice-opaqueheader-game-");
+        using var modFolder = new ScratchDirectory("medit-initservice-opaqueheader-");
+        using var gameDir = new ScratchDirectory("medit-initservice-opaqueheader-game-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("SomeNpc");
@@ -274,7 +275,7 @@ public sealed class TrackModTests
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
 
-        await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
+        await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
         Assert.True(TestAdapters.Source().IsTracked(modFolder));
     }
@@ -294,11 +295,11 @@ public sealed class TrackModTests
 
     [Theory]
     [MemberData(nameof(HeaderFieldCorruptionsMirroringCodecsOpaqueHeaderFields))]
-    public async Task TrackMod_ForEveryAllowListedHeaderField_RefusesNamingItWhenCorruptedAlone(
+    public async Task InitMod_ForEveryAllowListedHeaderField_RefusesNamingItWhenCorruptedAlone(
         string fieldName, Action<Fallout4ModHeader> setBaseline, Action<Fallout4ModHeader> corrupt)
     {
-        using var modFolder = new ScratchDirectory($"medit-trackservice-header-{fieldName}-");
-        using var gameDir = new ScratchDirectory($"medit-trackservice-header-{fieldName}-game-");
+        using var modFolder = new ScratchDirectory($"medit-initservice-header-{fieldName}-");
+        using var gameDir = new ScratchDirectory($"medit-initservice-header-{fieldName}-game-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("SomeNpc");
@@ -318,20 +319,20 @@ public sealed class TrackModTests
 
         var adapter = new ForgedTreeWriteAdapter(DeserializeThenCorrupt);
 
-        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
+        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
 
         Assert.False(result.Applied);
-        Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains($"TES4 header field '{fieldName}'", result.Message);
         Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }
 
     [Fact]
-    public async Task TrackMod_WithARecordThatOnlyGainsSubrecordsOnRewrite_RefusesNamingTheRealFieldNotSubrecordInventory()
+    public async Task InitMod_WithARecordThatOnlyGainsSubrecordsOnRewrite_RefusesNamingTheRealFieldNotSubrecordInventory()
     {
-        using var modFolder = new ScratchDirectory("medit-trackservice-furn-insert-");
-        using var gameDir = new ScratchDirectory("medit-trackservice-furn-insert-game-");
+        using var modFolder = new ScratchDirectory("medit-initservice-furn-insert-");
+        using var gameDir = new ScratchDirectory("medit-initservice-furn-insert-game-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Furniture.AddNew("TestFurn");
@@ -341,10 +342,10 @@ public sealed class TrackModTests
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
-        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
-        Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.DoesNotContain("is missing", result.Message);
         Assert.DoesNotContain("FNAM", result.Message);
@@ -355,11 +356,11 @@ public sealed class TrackModTests
     }
 
     [Fact]
-    public async Task TrackMod_LocalizedPluginWithABsaBesideIt_ReadsItsStringsFromTheModFolder_AndMaterializesTheRealStringInTheSourceFolder()
+    public async Task InitMod_LocalizedPluginWithABsaBesideIt_ReadsItsStringsFromTheModFolder_AndMaterializesTheRealStringInTheSourceFolder()
     {
-        using var modFolder = new ScratchDirectory("medit-trackservice-localized-");
-        using var sourceFolder = new ScratchDirectory("medit-trackservice-localized-source-");
-        using var gameDir = new ScratchDirectory("medit-trackservice-localized-game-");
+        using var modFolder = new ScratchDirectory("medit-initservice-localized-");
+        using var sourceFolder = new ScratchDirectory("medit-initservice-localized-source-");
+        using var gameDir = new ScratchDirectory("medit-initservice-localized-game-");
         var (pluginPath, door) = WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(modFolder);
 
         var anyBa2MakesMutagenResolveArchivePriorityNeedingWindowsPluginListings =
@@ -370,7 +371,7 @@ public sealed class TrackModTests
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true,
                 NamedProvider: new PluginProvider.FromMod("FixtureMod", modFolder, sourceFolder))]);
-        await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
+        await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
         Assert.True(TestAdapters.Source().IsTracked(sourceFolder));
 
@@ -379,10 +380,10 @@ public sealed class TrackModTests
     }
 
     [Fact]
-    public async Task TrackMod_LocalizedPluginMissingItsStringsFile_RefusesNamingTheMissingFile_SinceMutagenLookupOfAMissingFileDoesNotThrow()
+    public async Task InitMod_LocalizedPluginMissingItsStringsFile_RefusesNamingTheMissingFile_SinceMutagenLookupOfAMissingFileDoesNotThrow()
     {
-        using var modFolder = new ScratchDirectory("medit-trackservice-localized-missing-");
-        using var gameDir = new ScratchDirectory("medit-trackservice-localized-missing-game-");
+        using var modFolder = new ScratchDirectory("medit-initservice-localized-missing-");
+        using var gameDir = new ScratchDirectory("medit-initservice-localized-missing-game-");
         var (pluginPath, _) = WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(modFolder);
 
         var stringsFolderAsIfItNeverShippedWithTheDownload = Path.Combine(modFolder, "Strings");
@@ -391,31 +392,31 @@ public sealed class TrackModTests
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
-        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
-        Assert.Equal(TrackRefusal.MissingLocalizationStrings, result.Refusal);
+        Assert.Equal(InitRefusal.MissingLocalizationStrings, result.Refusal);
 
         const string stringsFileNamedByIsoLanguageCodeNotByLanguageName = "Fixture_en.STRINGS";
         Assert.Contains(stringsFileNamedByIsoLanguageCodeNotByLanguageName, result.Message);
-        Assert.Contains(gameDir.Path, result.Message);
+        Assert.Contains(modFolder.Path, result.Message);
         Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }
 
     [Fact]
-    public async Task TrackMod_ADeletedRecordStillHoldingFields_RefusesNamingIt_SinceMutagenWritesADeletedRecordAsItsHeader()
+    public async Task InitMod_ADeletedRecordStillHoldingFields_RefusesNamingIt_SinceMutagenWritesADeletedRecordAsItsHeader()
     {
-        using var modFolder = new ScratchDirectory("medit-track-deleted-fields-");
-        using var gameDir = new ScratchDirectory("medit-track-deleted-fields-game-");
+        using var modFolder = new ScratchDirectory("medit-init-deleted-fields-");
+        using var gameDir = new ScratchDirectory("medit-init-deleted-fields-game-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var npc = new FormKey(ModKey.FromFileName("Fixture.esp"), 0x800);
         DeletedNpcPlugin.WriteHoldingEveryField(pluginPath, npc);
 
         var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
-        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
-        Assert.Equal((false, TrackRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Equal((false, InitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
         Assert.Equal(
             $"Fixture.esp does not round-trip through its own source: NPC_ {npc} is flagged Deleted " +
             "and still holds fields, which Mutagen does not write for a deleted record.",
@@ -424,10 +425,10 @@ public sealed class TrackModTests
     }
 
     [Fact]
-    public async Task TrackMod_ARecordWithANullFormId_RefusesNamingIt_SinceThePluginIsMalformed()
+    public async Task InitMod_ARecordWithANullFormId_RefusesNamingIt_SinceThePluginIsMalformed()
     {
-        using var modFolder = new ScratchDirectory("medit-track-null-formid-");
-        using var gameDir = new ScratchDirectory("medit-track-null-formid-game-");
+        using var modFolder = new ScratchDirectory("medit-init-null-formid-");
+        using var gameDir = new ScratchDirectory("medit-init-null-formid-game-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("NullGuy");
@@ -439,9 +440,9 @@ public sealed class TrackModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
-        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
-        Assert.Equal((false, TrackRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Equal((false, InitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
         Assert.Equal(
             "Fixture.esp cannot become source: NPC_ 00000000 holds the null FormID, so the plugin is malformed.",
             result.Message);
@@ -449,10 +450,10 @@ public sealed class TrackModTests
     }
 
     [Fact]
-    public async Task TrackMod_ARecordOfObjectIdZero_RefusesNamingIt_SinceItsFormKeyIsTheHeaders()
+    public async Task InitMod_ARecordOfObjectIdZero_RefusesNamingIt_SinceItsFormKeyIsTheHeaders()
     {
-        using var modFolder = new ScratchDirectory("medit-track-object-id-zero-");
-        using var gameDir = new ScratchDirectory("medit-track-object-id-zero-game-");
+        using var modFolder = new ScratchDirectory("medit-init-object-id-zero-");
+        using var gameDir = new ScratchDirectory("medit-init-object-id-zero-game-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Master.esm") });
@@ -469,9 +470,9 @@ public sealed class TrackModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
-        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
-        Assert.Equal((false, TrackRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Equal((false, InitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
         Assert.Equal(
             "Fixture.esp cannot become source: NPC_ 000000:Fixture.esp holds object ID 000000, " +
             "the FormKey its plugin header's source holds.",
