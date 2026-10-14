@@ -584,8 +584,8 @@ describe('HttpMEditClient — sendLoadOrder', () => {
   const active = [{ name: 'Foo.esp', origin: 'A' }];
   const loadedWithNoLine = [{ name: 'Foo.esp', origin: 'A' }];
   const appliedBody = { applied: true, version: 1 };
-  const archives = ['/game/Data/Foo - Main.ba2'];
-  const stringsFiles = ['/mods/A/Strings/Foo_en.STRINGS'];
+  const archives = [{ path: '/game/Data/Foo - Main.ba2', stamp: '1/2/3' }];
+  const stringsFiles = [{ path: '/mods/A/Strings/Foo_en.STRINGS', stamp: '4/5/6' }];
   const snapshot = { plugins, active, loadedWithNoLine, archives, stringsFiles, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' };
 
   it('PUTs every plugin with its line, the active plugins, the archives and strings files, the game directory and the instance root', async () => {

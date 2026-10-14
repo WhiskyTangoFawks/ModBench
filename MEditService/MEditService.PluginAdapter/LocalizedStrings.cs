@@ -145,8 +145,8 @@ internal static class LocalizedStrings
     private static IEnumerable<IReadOnlyList<StringsFile>> TheGamesPlaces(
         LoadOrderSnapshot loadOrder, ModKey plugin, GameRelease gameRelease, StringsLanguageFormat languageFormat)
     {
-        yield return [.. Loose(loadOrder.StringsFiles, plugin, languageFormat)];
-        foreach (var archive in loadOrder.Archives.Reverse()) yield return [.. InArchive(archive, plugin, gameRelease, languageFormat)];
+        yield return [.. Loose(loadOrder.StringsFiles.Select(file => file.Path), plugin, languageFormat)];
+        foreach (var archive in loadOrder.Archives.Reverse()) yield return [.. InArchive(archive.Path, plugin, gameRelease, languageFormat)];
     }
 
     // Never mixed with the game's places, whose string IDs may differ.

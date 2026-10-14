@@ -169,6 +169,22 @@ public sealed class LoadOrderLocalizedTests
         Assert.Contains("The New Door", name.Value?.ToString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ALocalizedPluginWhoseStringsTheGameReadsAreRewrittenInPlace_IsReadAgainWithThem()
+    {
+        using var data = LocalizedDoor("load-order-localized-game-rewritten", out var doorFormKey);
+        var translation = StringsMovedIntoATranslation(data);
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        index.Receive(holder, SnapshotOf(data, data.Plugins, translation));
+        StringsOfADoorNamed("The New Door", Path.GetDirectoryName(translation[0]).Require());
+
+        index.Receive(holder, SnapshotOf(data, data.Plugins, translation));
+
+        var name = Assert.Single(index.CopyIn(doorFormKey.ToString(), DataCopy).Require().Fields, f => f.Metadata.Name == "Name");
+        Assert.Contains("The New Door", name.Value?.ToString(), StringComparison.Ordinal);
+    }
+
     private static readonly PluginAddress DataCopy = new("Fixture.esp", PluginOrigin.DataDirectory);
 
     private static PluginFixtureData LocalizedDoor(string name, out FormKey doorFormKey)
@@ -210,7 +226,7 @@ public sealed class LoadOrderLocalizedTests
 
     private static LoadOrderSnapshot SnapshotOf(PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads) =>
         new(data.DataFolder, null, GameRelease.Fallout4, SnapshotPlugins.Of(plugins), SnapshotPlugins.Active(plugins),
-            SnapshotPlugins.LoadedWithNoLine(plugins), [], gameReads);
+            SnapshotPlugins.LoadedWithNoLine(plugins), [], [.. gameReads.Select(HandedStrings.Stamped)]);
 
     private static (bool NamesMissing, bool ReadsTheDoor) NameAfter(
         OpenedIndex index, LoadOrderHolder holder, PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads,

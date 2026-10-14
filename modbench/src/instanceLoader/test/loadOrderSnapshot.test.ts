@@ -384,6 +384,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
       return lookup;
     };
     const inData = (archives: string[], stringsFiles: string[] = []): ArchiveSources['inData'] => ({ kind: 'listed', archives, stringsFiles });
+    const paths = (files: readonly { path: string }[] | undefined) => files?.map(({ path }) => path);
 
     it('loads the archives the INIs list in their order, then each active plugin\'s in load order, each from the mod the Mod override order resolves it to, else the game folder', () => {
       const a = row('A.esp', 'ModA', 0);
@@ -394,7 +395,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
         files: winners({ 'Fallout4 - Interface.ba2': 'Interface Fix', 'A - Textures.ba2': 'ModA', 'A - Main.ba2': 'ModA', 'Nested/A.ba2': 'ModA' }),
       };
 
-      expect(snapshotOf([a], [inGameFolder('DLCRobot.esm')], archives)?.archives).toEqual([
+      expect(paths(snapshotOf([a], [inGameFolder('DLCRobot.esm')], archives)?.archives)).toEqual([
         join('/game/Data', 'Fallout4 - Startup.ba2'), '/mods/Interface Fix/Fallout4 - Interface.ba2', join('/game/Data', 'DLCRobot - Main.ba2'),
         '/mods/ModA/A - Main.ba2', '/mods/ModA/A - Textures.ba2',
       ]);
@@ -404,7 +405,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
       const a = row('A.esp', 'ModA', 0);
       const archives: ArchiveSources = { ...NO_ARCHIVES, listed: ['A - Main.ba2', 'Gone.ba2'], files: winners({ 'A - Main.ba2': 'ModA' }) };
 
-      expect(snapshotOf([a], [], archives)?.archives).toEqual(['/mods/ModA/A - Main.ba2']);
+      expect(paths(snapshotOf([a], [], archives)?.archives)).toEqual(['/mods/ModA/A - Main.ba2']);
     });
 
     it.each([
@@ -426,7 +427,28 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
         files: winners({ 'strings/fallout4_en.strings': 'Translation', 'Strings/Readme.txt': 'Translation', 'Nested/Strings/A_en.STRINGS': 'ModA' }),
       };
 
-      expect(snapshotOf([], [], archives)?.stringsFiles).toEqual(['/mods/Translation/strings/fallout4_en.strings', join('/game/Data', 'Strings/DLCRobot_en.STRINGS')]);
+      expect(paths(snapshotOf([], [], archives)?.stringsFiles)).toEqual(['/mods/Translation/strings/fallout4_en.strings', join('/game/Data', 'Strings/DLCRobot_en.STRINGS')]);
+    });
+
+    it('hands each archive the game loads and each loose strings file it reads with its stamp', () => {
+      const archive = join('/game/Data', 'Fallout4 - Interface.ba2');
+      const archives: ArchiveSources = {
+        ...NO_ARCHIVES,
+        listed: ['Fallout4 - Interface.ba2'],
+        inData: inData(['Fallout4 - Interface.ba2'], ['Strings/Fallout4_en.STRINGS']),
+        files: winners({ 'Strings/Fallout4_en.STRINGS': 'Translation' }),
+        stamps: new Map([
+          [archive, { kind: 'read', answer: { size: 1n, modifiedNs: 2n, changedNs: 3n } }],
+          ['/mods/Translation/Strings/Fallout4_en.STRINGS', { kind: 'read', answer: { size: 4n, modifiedNs: 5n, changedNs: 6n } }],
+        ]),
+      };
+
+      const snapshot = snapshotOf([], [], archives);
+
+      expect([snapshot?.archives, snapshot?.stringsFiles]).toEqual([
+        [{ path: archive, stamp: '1/2/3' }],
+        [{ path: '/mods/Translation/Strings/Fallout4_en.STRINGS', stamp: '4/5/6' }],
+      ]);
     });
   });
 

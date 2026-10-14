@@ -26,7 +26,7 @@ public sealed class PutLoadOrderHandler
     public PutLoadOrderResult Put(
         string dataFolder, string? instanceRoot, GameRelease gameRelease,
         IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine,
-        IReadOnlyList<string> archives, IReadOnlyList<string> stringsFiles)
+        IReadOnlyList<StampedFile> archives, IReadOnlyList<StampedFile> stringsFiles)
     {
         if (!_plugins.GameFolderExists(dataFolder))
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.GameDirectoryNotFound, $"Game directory not found: {dataFolder}");

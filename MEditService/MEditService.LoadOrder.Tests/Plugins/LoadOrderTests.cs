@@ -18,6 +18,19 @@ public sealed class LoadOrderTests
         RegisteredPlugin[] plugins, RegisteredPlugin[] loadedWithNoLine, params RegisteredPlugin[] active) =>
         new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], [.. loadedWithNoLine.Select(p => p.Key)], [], []);
 
+    private static StampedFile Stamped(string path) => new(path, "1/2/3");
+
+    [Fact]
+    public void SamePlugins_ReadingAStringsFileWhoseStampChanged_AreDifferentValues()
+    {
+        var a = Registered("A.esp", "ModA");
+        const string stringsFile = @"C:\MO2\Fallout4\mods\ModA\Strings\A_en.STRINGS";
+
+        Assert.NotEqual(
+            new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, [a], [a.Key], [], [], [new StampedFile(stringsFile, "1/2/3")]),
+            new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, [a], [a.Key], [], [], [new StampedFile(stringsFile, "1/2/4")]));
+    }
+
     [Fact]
     public void APluginTheSnapshotDoesNotListAsActive_IsNotActive_AndIsStillAPluginInTheInstance()
     {
@@ -179,7 +192,7 @@ public sealed class LoadOrderTests
     {
         var a = Registered("A.esp", "ModA");
 
-        Assert.NotEqual(Order([a], a), new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, [a], [a.Key], [], archives, stringsFiles));
+        Assert.NotEqual(Order([a], a), new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, [a], [a.Key], [], [.. archives.Select(Stamped)], [.. stringsFiles.Select(Stamped)]));
     }
 
     [Fact]

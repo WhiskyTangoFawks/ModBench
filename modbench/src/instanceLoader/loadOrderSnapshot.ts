@@ -56,9 +56,9 @@ export interface LoadOrderSnapshotValue {
   readonly active: PluginAddress[];
   readonly loadedWithNoLine: PluginAddress[];
   /** In the order the game loads them, each at the path that wins. */
-  readonly archives: string[];
+  readonly archives: StampedFile[];
   /** The loose strings files the game reads, each at the path that wins. */
-  readonly stringsFiles: string[];
+  readonly stringsFiles: StampedFile[];
 }
 
 /** What the snapshot's archives and strings files are resolved from. */
@@ -212,7 +212,7 @@ function winningFiles(
 // The INIs' archives load first, then each plugin's as the plugin loads. A later archive's file
 // replaces an earlier one's, and loose files replace every archive's.
 function archivesAndStringsOf(
-  { gameRelease, listed, inData, files }: ArchiveSources, dataFolder: string, active: readonly PluginAddress[],
+  { gameRelease, listed, inData, files, stamps }: ArchiveSources, dataFolder: string, active: readonly PluginAddress[],
 ): Pick<LoadOrderSnapshotValue, 'archives' | 'stringsFiles'> {
   const rule = pluginCompanionRule(gameRelease);
   if (rule === undefined || inData.kind !== 'listed') return { archives: [], stringsFiles: [] };
@@ -221,7 +221,10 @@ function archivesAndStringsOf(
     [...archives.values()].filter((archive) => rule.isArchiveOf(name, archive.relativePath)).sort(byFoldedPath));
   const loaded = [...listed.flatMap((name) => archives.get(foldPath(name)) ?? []), ...pluginArchives].map(({ path }) => path);
   const strings = winningFiles(dataFolder, inData.stringsFiles, files, rule.isStringsFile);
-  return { archives: [...new Set(loaded)], stringsFiles: [...strings.values()].map(({ path }) => path) };
+  return {
+    archives: [...new Set(loaded)].map((path) => stampedIn(stamps, path)),
+    stringsFiles: [...strings.values()].map(({ path }) => stampedIn(stamps, path)),
+  };
 }
 
 // Equal while the file's content is (ADR-0003); a file the reading could not stamp, by why.

@@ -17,7 +17,7 @@ internal static class LoadOrderEndpoints
                 "Reconciles the load order against this snapshot (ADR-0013): every plugin file in " +
                 "the instance, each with its origin, path and provider and the strings files and archives beside it, each with its stamp, " +
                 "the active plugins in load order, and " +
-                "the plugins loaded with no line, the archives the game loads and the loose strings files it reads, as Mod Management decided them. Plugins new to the snapshot are opened and " +
+                "the plugins loaded with no line, the archives the game loads and the loose strings files it reads, each with its stamp, as Mod Management decided them. Plugins new to the snapshot are opened and " +
                 "registered (indexed only if never seen), plugins absent from it are unregistered, " +
                 "plugins whose load index moved are re-registered SQL-only; then one winner sweep. " +
                 "Answers as soon as the snapshot is applied; the sweep runs after, reported on " +
@@ -44,7 +44,7 @@ internal static class LoadOrderEndpoints
         }
         // Never defaulted here (ADR-0013).
         if (req.Active is not { } active || req.LoadedWithNoLine is not { } loadedWithNoLine
-            || req.Archives is not { } archives || req.StringsFiles is not { } stringsFiles)
+            || req.Archives is not { } archives || req.StringsFiles is not { } stringsFiles || !AllStamped(archives, stringsFiles))
         {
             return Results.Problem("The snapshot must state its active plugins, those loaded with no line, its archives and its strings files.", statusCode: 400);
         }
@@ -55,6 +55,9 @@ internal static class LoadOrderEndpoints
         return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : EndpointMapping.Refusal(result);
     }
 
+    private static bool AllStamped(IReadOnlyList<StampedFile> archives, IReadOnlyList<StampedFile> stringsFiles) =>
+        archives.Concat(stringsFiles).All(file => !string.IsNullOrEmpty(file?.Path) && file.Stamp is not null);
+
     private static List<RegisteredPlugin>? RegisteredPluginsOf(IReadOnlyList<LoadOrderPlugin>? plugins)
     {
         if (plugins is null) return null;
@@ -63,7 +66,7 @@ internal static class LoadOrderEndpoints
         {
             if (string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path) || string.IsNullOrEmpty(p.Origin)
                 || p.Provider?.ToProvider() is not { } provider || p.Archives is not { } archives || p.StringsFiles is not { } stringsFiles
-                || archives.Concat(stringsFiles).Any(file => string.IsNullOrEmpty(file?.Path) || file.Stamp is null))
+                || !AllStamped(archives, stringsFiles))
             {
                 return null;
             }

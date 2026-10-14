@@ -854,7 +854,7 @@ internal sealed class Indexer : IDisposable
     // place could not be read (ADR-0003).
     private string StringsReadBy(OpenScope scope, RegisteredPlugin plugin) =>
         _adapter.StringsPlacesOf(ModPathOf(plugin.Path), scope.LoadOrder, plugin.Strings).Holds(out var places, out var failure)
-            ? string.Join('\n', places.Select(place => $"{place}|{plugin.Strings.StampOf(place)}"))
+            ? string.Join('\n', places.Select(place => $"{place}|{plugin.Strings.StampOf(place) ?? scope.LoadOrder.StampOf(place)}"))
             : failure.Reason;
 
     // ADR-0015.

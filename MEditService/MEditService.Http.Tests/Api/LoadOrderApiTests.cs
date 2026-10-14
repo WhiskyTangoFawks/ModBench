@@ -42,8 +42,8 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     [Fact]
     public async Task PutLoadOrder_TheArchivesAndStringsFilesItNames_AreTheOnesTheLoadOrderHolds()
     {
-        string[] archives = [Path.Combine(_fixture.DataFolder, "Fallout4 - Interface.ba2"), Path.Combine(_fixture.DataFolder, "A - Main.ba2")];
-        string[] stringsFiles = [Path.Combine(_fixture.DataFolder, "Strings", "A_en.STRINGS")];
+        StampedFile[] archives = [new(Path.Combine(_fixture.DataFolder, "Fallout4 - Interface.ba2"), "1/2/3"), new(Path.Combine(_fixture.DataFolder, "A - Main.ba2"), "4/5/6")];
+        StampedFile[] stringsFiles = [new(Path.Combine(_fixture.DataFolder, "Strings", "A_en.STRINGS"), "7/8/9")];
 
         var response = await _client.PutLoadOrderAndAwaitReady(new
         {
@@ -59,7 +59,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var held = loaded.Services.GetRequiredService<LoadOrderHolder>().Require();
-        Assert.Equal([archives, stringsFiles], [held.Archives, held.StringsFiles]);
+        Assert.Equal<IEnumerable<StampedFile>>([archives, stringsFiles], [held.Archives, held.StringsFiles]);
     }
 
     [Fact]

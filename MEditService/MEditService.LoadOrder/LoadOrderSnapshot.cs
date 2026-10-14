@@ -16,6 +16,11 @@ public sealed record RegisteredPlugin(string Name, string Origin, string Path, P
 /// does (ADR-0003, ADR-0013).</summary>
 public sealed record StampedFile(string Path, string Stamp)
 {
+    /// <summary>The stamp handed with the file at <paramref name="path"/> among <paramref name="files"/>, or null when none is
+    /// at it.</summary>
+    public static string? StampIn(IEnumerable<StampedFile> files, string path) =>
+        files.FirstOrDefault(file => string.Equals(file.Path, path, StringComparison.OrdinalIgnoreCase))?.Stamp;
+
     public bool Equals(StampedFile? other) =>
         other is not null && string.Equals(Path, other.Path, StringComparison.OrdinalIgnoreCase) && string.Equals(Stamp, other.Stamp, StringComparison.Ordinal);
 
@@ -34,8 +39,7 @@ public sealed record PluginStrings(IReadOnlyList<StampedFile> Archives, IReadOnl
     public IReadOnlyList<StampedFile> StringsFiles { get; } = [.. StringsFiles];
 
     /// <summary>The stamp handed with the file at <paramref name="path"/>, or null when none of these is at it.</summary>
-    public string? StampOf(string path) =>
-        Archives.Concat(StringsFiles).FirstOrDefault(file => string.Equals(file.Path, path, StringComparison.OrdinalIgnoreCase))?.Stamp;
+    public string? StampOf(string path) => StampedFile.StampIn(Archives.Concat(StringsFiles), path);
 
     public bool Equals(PluginStrings? other) =>
         other is not null && Archives.SequenceEqual(other.Archives) && StringsFiles.SequenceEqual(other.StringsFiles);
@@ -82,16 +86,16 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 
     /// <summary>The archive files the game loads, in the order it loads them, each at the path that wins
     /// (ADR-0013). A later archive's file replaces an earlier one's.</summary>
-    public IReadOnlyList<string> Archives { get; }
+    public IReadOnlyList<StampedFile> Archives { get; }
 
     /// <summary>The loose strings files the game reads, each at the path that wins (ADR-0013). One beats
     /// every archive's copy.</summary>
-    public IReadOnlyList<string> StringsFiles { get; }
+    public IReadOnlyList<StampedFile> StringsFiles { get; }
 
     public LoadOrderSnapshot(
         string dataFolderPath, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<RegisteredPlugin> plugins,
-        IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine, IReadOnlyList<string> archives,
-        IReadOnlyList<string> stringsFiles)
+        IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine, IReadOnlyList<StampedFile> archives,
+        IReadOnlyList<StampedFile> stringsFiles)
     {
         if (RefusalOf(plugins, active, loadedWithNoLine) is { } refusal) throw new ArgumentException(refusal);
         DataFolderPath = dataFolderPath;
@@ -177,6 +181,10 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         Plugins.FirstOrDefault(p => string.Equals(p.Path, path, StringComparison.Ordinal)) is { } copy
         && (copy.Line is { NamesIt: true } || LoadedWithNoLine.Contains(copy));
 
+    /// <summary>The stamp handed with the game's archive or loose strings file at <paramref name="path"/>, or null when the
+    /// game reads none at it.</summary>
+    public string? StampOf(string path) => StampedFile.StampIn(Archives.Concat(StringsFiles), path);
+
     /// <summary>What provides the plugin, or null for a plugin none registered here names.</summary>
     public PluginProvider? ProviderOf(PluginAddress plugin) => Plugin(plugin)?.Provider;
 
@@ -195,8 +203,8 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         && CaseOnlyCollisions.SequenceEqual(other.CaseOnlyCollisions)
         && Active.SequenceEqual(other.Active)
         && LoadedWithNoLine.SequenceEqual(other.LoadedWithNoLine)
-        && Archives.SequenceEqual(other.Archives, StringComparer.OrdinalIgnoreCase)
-        && StringsFiles.SequenceEqual(other.StringsFiles, StringComparer.OrdinalIgnoreCase);
+        && Archives.SequenceEqual(other.Archives)
+        && StringsFiles.SequenceEqual(other.StringsFiles);
 
     public override bool Equals(object? obj) => Equals(obj as LoadOrderSnapshot);
 

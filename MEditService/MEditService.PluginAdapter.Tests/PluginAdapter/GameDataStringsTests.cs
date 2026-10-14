@@ -37,7 +37,8 @@ public sealed class GameDataStringsTests : IDisposable
     private string[] _stringsFilesTheGameReads = [];
 
     private LoadOrderSnapshot LoadOrder =>
-        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], _archivesTheGameLoads, _stringsFilesTheGameReads);
+        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], [.. _archivesTheGameLoads.Select(HandedStrings.Stamped)],
+            [.. _stringsFilesTheGameReads.Select(HandedStrings.Stamped)]);
 
     private RegisteredPlugin Plugin => new(
         PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder, _modFolder), new PluginLine(0, NamesIt: true),
@@ -114,7 +115,7 @@ public sealed class GameDataStringsTests : IDisposable
         LocalizedDoorPlugin.Write(path, doorName);
         var overridden = new RegisteredPlugin(
             PluginName, "Overridden", path, new PluginProvider.FromMod("Overridden", folder, folder), new PluginLine(0, NamesIt: false), HandedStrings.Of(path));
-        return (overridden, new LoadOrderSnapshot(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, overridden], [Plugin.Key], [], [], [.. Plugin.Strings.StringsFiles.Select(file => file.Path)]));
+        return (overridden, new LoadOrderSnapshot(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, overridden], [Plugin.Key], [], [], Plugin.Strings.StringsFiles));
     }
 
     private static string DoorOf(RegisteredPlugin copy, LoadOrderSnapshot loadOrder)
@@ -398,7 +399,7 @@ public sealed class GameDataStringsTests : IDisposable
 
         using var documents = Adapter.OpenDocuments(
             new ModPath(ModKey.FromFileName(master), masterPath),
-            new LoadOrderSnapshot(_dataFolder, null, GameRelease.Fallout4, [copy], [copy.Key], [copy.Key], [Path.Combine(_dataFolder, "Fallout4 - Interface.ba2")], []),
+            new LoadOrderSnapshot(_dataFolder, null, GameRelease.Fallout4, [copy], [copy.Key], [copy.Key], [HandedStrings.Stamped(Path.Combine(_dataFolder, "Fallout4 - Interface.ba2"))], []),
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), copy.Strings).Answered();
 
         Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
