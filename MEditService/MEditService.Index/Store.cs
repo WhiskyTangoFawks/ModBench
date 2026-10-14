@@ -1,5 +1,6 @@
 using System.Data;
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -555,21 +556,27 @@ internal sealed class Store : IDisposable
         DuckDbSql.Execute(Connection, $"UPDATE {SequenceRelation} SET value = $1 WHERE value < $1", atLeast);
     }
 
-    /// <summary>The one way the rows change (ADR-0015). Once the outermost commit's writes are in,
-    /// thrown or not, a sweep included: the winner sweep they owe, the filter again, one advance,
-    /// then their announcements.</summary>
+    /// <summary>The one way the rows change (ADR-0015). The outermost commit then lands them, thrown
+    /// or not: the sweep they owe, a checkpoint, the filter again, one advance and their
+    /// announcements. The first throw reaches the caller.</summary>
     public T Commit<T>(Func<Projection, T> write)
     {
         using var held = _gate.Enter();
         using var scope = BeginProjection();
+        if (scope.Parent is not null) return write(_projection);
+
+        T written;
         try
         {
-            return write(_projection);
+            written = write(_projection);
         }
-        finally
+        catch (Exception ex)
         {
-            if (scope.Parent is null) Land(scope.SweepOwed);
+            Land(scope, ExceptionDispatchInfo.Capture(ex));
+            throw;
         }
+        Land(scope, first: null);
+        return written;
     }
 
     public void Commit(Action<Projection> write) => Commit(projection =>
@@ -578,16 +585,38 @@ internal sealed class Store : IDisposable
         return true;
     });
 
-    private void Land(bool sweepOwed)
+    // Each step runs whatever threw before it. A later throw is logged rather than rethrown, which
+    // would hide the first.
+    private void Land(ProjectionScope scope, ExceptionDispatchInfo? first)
     {
-        try
+        Action[] steps = [() => { if (scope.SweepOwed) SweepWinners(); }, Checkpoint, () => _filterInForce.Reapply(this)];
+        foreach (var step in steps)
         {
-            if (sweepOwed) SweepWinners();
+            try
+            {
+                step();
+            }
+            catch (Exception ex) when (first is null)
+            {
+                first = ExceptionDispatchInfo.Capture(ex);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                _logger.LogError(ex, "A commit failed to land after an earlier failure, which is the one rethrown");
+            }
         }
-        finally
-        {
-            _filterInForce.Reapply(this);
-        }
+        first?.Throw();
+    }
+
+    // An ingest's rows bypass the WAL, so DuckDB's own checkpoint never comes due, and the index
+    // nodes they built stay in memory it cannot evict. FORCE: a plain CHECKPOINT refuses, rather
+    // than waits, while a read ends.
+    private void Checkpoint()
+    {
+        var timer = Stopwatch.StartNew();
+        DuckDbSql.Execute(Connection, "FORCE CHECKPOINT");
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("Checkpointed the index in {ElapsedMs} ms", timer.ElapsedMilliseconds);
     }
 
     /// <summary>What one commit owes beyond its rows.</summary>
