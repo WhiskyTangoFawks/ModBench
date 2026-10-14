@@ -11,7 +11,6 @@ const AGENT_AHEAD_OF_CODE = [
   'modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges', 'modbench.modlist.clean',
   'modbench.mod.decompileAndCommit',
   'modbench.mod.build',
-  'modbench.record.open',
 ];
 
 describe('the gestures the agent runs (agent.md, Test seam)', () => {

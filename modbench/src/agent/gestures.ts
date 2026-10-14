@@ -3,17 +3,23 @@ import { z } from 'zod';
 import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { downloadsNamed, filesNamed, linesNamed, modsNamed, pluginsNamed } from './names';
+import type { MEditClient } from '../client/MEditClient';
+import { failureReason, isReadFailed } from '../wire/readFailed';
 import { Refusal } from '../drivingLib/refusal';
 import { parseOrRefuse } from './refusal';
 
 interface GestureInput {
   /** The Argument the agent gives, as the tool's description teaches it. */
   readonly takes: string;
-  readonly callOf: (value: InstanceValue, given: unknown) => AgentCall;
+  readonly callOf: (value: InstanceValue, given: unknown, mEdit: NameResolver) => AgentCall | Promise<AgentCall>;
 }
 
-function gestureInput<Given>(takes: string, input: z.ZodType<Given>, callOf: (value: InstanceValue, given: Given) => AgentCall): GestureInput {
-  return { takes, callOf: (value, given) => callOf(value, parseOrRefuse(input, given)) };
+type NameResolver = Pick<MEditClient, 'resolveNames'>;
+
+function gestureInput<Given>(
+  takes: string, input: z.ZodType<Given>, callOf: (value: InstanceValue, given: Given, mEdit: NameResolver) => AgentCall | Promise<AgentCall>,
+): GestureInput {
+  return { takes, callOf: (value, given, mEdit) => callOf(value, parseOrRefuse(input, given), mEdit) };
 }
 
 const ENTRY_NAME = z.object({ name: z.string(), kind: z.enum(['mod', 'separator']).optional() });
@@ -166,6 +172,27 @@ const RENAME_PLUGIN = gestureInput(
   (value, { argument, options }) => new AgentCall(linesCall(value, [argument]), options),
 );
 
+const OPEN_RECORD = gestureInput(
+  'argument: the records, each { name: its EditorID or FormKey, plugin?: { name, origin? } as list_plugins shows it }, a copy when it names its plugin, else the winning copy; options: { pinned?: true to keep the tab }',
+  z.object({
+    argument: z.array(z.object({ name: z.string(), plugin: PLUGIN_NAME.optional() })),
+    options: z.object({ pinned: z.boolean().optional() }).optional(),
+  }),
+  async (value, { argument, options }, mEdit) => {
+    const named = await mEdit.resolveNames(argument.map(({ name }) => ({ name })));
+    if (isReadFailed(named)) throw new Refusal(failureReason(named));
+    const records = argument.map(({ name, plugin }, at) => ({ name, plugin, formKey: named[at]?.formKey }));
+    const notRecords = records.filter(({ formKey }) => !formKey).map(({ name }) => `"${name}" is not a record.`);
+    if (notRecords.length > 0) throw new Refusal(notRecords.join(' '));
+    return new AgentCall(
+      records.flatMap(({ formKey, plugin }) => (formKey ? [{
+        kind: 'record' as const, formKey, ...(plugin && { plugin: pluginsNamed(value.plugins, [plugin])[0] }),
+      }] : [])),
+      { pinned: options?.pinned },
+    );
+  },
+);
+
 /** agent.md, Gestures, story 1: the catalog's `writes` gestures, less those it keeps from the agent, plus those it gives.
  *  @public Read by agentGestures.test, which holds it to commands.md. */
 export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
@@ -190,6 +217,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.plugin.move', MOVE_PLUGINS],
   ['modbench.plugin.create', CREATE_PLUGIN],
   ['modbench.plugin.rename', RENAME_PLUGIN],
+  ['modbench.record.open', OPEN_RECORD],
 ]);
 
 type GestureOutcome = GestureResult<unknown>;
@@ -210,10 +238,10 @@ export const RUN_GESTURE = {
     + 'It answers once the read model shows the change, with the gesture\'s outcome. A refusal answers the outcome too: what landed, and each item refused and why. Gestures: '
     + [...AGENT_GESTURES].map(([command, { takes }]) => `${command} (${takes})`).join('; '),
   input: { command: z.string(), argument: z.unknown().optional(), options: z.unknown().optional() },
-  of: async (value: InstanceValue, { command, ...given }: { command: string; argument?: unknown; options?: unknown }) => {
+  of: async (value: InstanceValue, mEdit: NameResolver, { command, ...given }: { command: string; argument?: unknown; options?: unknown }) => {
     const gesture = AGENT_GESTURES.get(command);
     if (gesture === undefined) throw new Refusal(`${command} is not a gesture your agent runs.`);
-    const outcome = await vscode.commands.executeCommand<GestureOutcome>(command, gesture.callOf(value, given));
+    const outcome = await vscode.commands.executeCommand<GestureOutcome>(command, await gesture.callOf(value, given, mEdit));
     const refusal = refusalIn(outcome);
     if (refusal !== undefined) throw new Refusal(refusal, outcome);
     return outcome;
