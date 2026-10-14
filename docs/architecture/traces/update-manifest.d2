@@ -1,7 +1,7 @@
-# Stage modlist, green: each mod's manifest from the mod as it is, and each delta a changed file needs.
+# Update manifest, green: each mod's manifest from the mod as it is.
 ...@../styles
 shape: sequence_diagram
-driving: "Toolbox · Mods · Source Control" {class: driving}
+driving: "Mods · Source Control · Toolbox" {class: driving}
 sourcecommands: @../target-architecture.modbench_core.sourcecommands
 sourcecommands.label: source commands
 instance: @../target-architecture.modbench_data.instance
@@ -13,7 +13,7 @@ http.label: HTTP endpoints
 engine: @../target-architecture.medit_core.commands.engine
 engine.label: Build engine
 modfolder: @../target-architecture.medit_data.modfolder
-modfolder.label: "Mod folders\nfiles · manifests · the build folder"
+modfolder.label: "Mod folders\nfiles · manifests · the stat cache"
 modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
 modfolderadapter.label: Mod folder adapter
 port: @../target-architecture.medit_kernel.ports
@@ -24,18 +24,18 @@ instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
-driving -> sourcecommands: "stage: the mods, or every mod, with the instance value" {class: track}
+driving -> sourcecommands: "update manifest: the mods, or every mod, with the instance value" {class: track}
 instance -> instanceadapter: "each downloaded file: bytes, when its index is stale" {class: track}
 instanceadapter -> sourcecommands: "each installation file: hash and entries · each game file a mod file overrides: hash" {class: track}
-sourcecommands -> client: "stage: each mod's folder and installation files with their hashes and entries, the game folder" {class: track}
+sourcecommands -> client: "update manifest: each mod's folder and installation files with their hashes and entries, the game folder" {class: track}
 client -> http: envelope {class: track}
 http -> engine: envelope {class: track}
-modfolder -> modfolderadapter: "each mod's files: bytes, or the manifest line's hash when its stamp matches" {class: track}
+modfolder -> modfolderadapter: "each mod's files: bytes, or the stat cache's hash when its stamp matches" {class: track}
 modfolderadapter -> engine: "hashed files" {class: track}
-engine."per mod: match, a delta for each changed file; refused when an installation file is missing; a source mod's manifest is its build's"
+engine."per mod: each file matched to its provider, or none; refused when an installation file is missing; a source mod's manifest is its build's"
 engine -> port: "progress, per mod" {class: push}
-engine -> modfolderadapter: "each manifest that changed · each delta" {class: track}
-modfolderadapter -> modfolder: "manifests · the build folder" {class: track}
+engine -> modfolderadapter: "each manifest that changed · the stat cache" {class: track}
+modfolderadapter -> modfolder: "manifests · the stat cache" {class: track}
 engine -> http: "landed or refused, per mod, and each file with no provider" {class: track}
 http -> client: "landed or refused, per mod" {class: track}
 client -> sourcecommands: the outcome {class: track}
