@@ -7,6 +7,18 @@ public interface IModFolderRepository
     /// stat cache in <paramref name="statCache"/> last read goes unread; with none, every file is read.</summary>
     ModFolderFiles Files(string modFolder, string modName, IReadOnlySet<string> leftOut, string? statCache);
 
+    /// <summary>Keeps in the stat cache what <paramref name="read"/> found, and as the hash each line's provider fixes,
+    /// the one <paramref name="provided"/> holds for its path. Why it could not, or null.</summary>
+    string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided);
+
+    /// <summary>Every file of the mod no line of <paramref name="manifest"/> names, but its manifest and those left out. A
+    /// line names a file in another case where the file system finds it by the line's name.</summary>
+    IReadOnlyList<string> NamedByNoLine(string modFolder, string modName, Manifest manifest, IReadOnlySet<string> leftOut);
+
+    /// <summary>What restore from manifest would destroy, from the manifest, each file's stamp and the stat cache in
+    /// <paramref name="statCache"/>, which it leaves as it is. Nothing for a mod restore skips for its manifest.</summary>
+    RestoreDestroys WhatRestoreDestroys(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache);
+
     Stream OpenFile(string modFolder, string path);
 
     bool InstallationFileExists(string path);

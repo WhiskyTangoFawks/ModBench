@@ -129,6 +129,16 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
+    public void AnUpdatedMod_KeepsInItsStatCache_EachFilesHash_AsTheHashItsProviderFixes()
+    {
+        _folders.WithFile(Mod, "a.txt", "hello");
+
+        Landed(ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.txt", "hello"))));
+
+        Assert.Equal(new Dictionary<string, string> { ["a.txt"] = "hello" }, _folders.KeptProviderHashes[Mod]);
+    }
+
+    [Fact]
     public void AModWhoseStatCacheCannotBeWritten_Lands_NamingWhy()
     {
         _folders.WithFile(Mod, "a.txt", "hello");

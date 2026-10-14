@@ -46,9 +46,35 @@ internal sealed class FakeModFolders : IModFolderRepository
         if (!_folders.Contains(modFolder)) throw new DirectoryNotFoundException(modFolder);
         var files = _files.Where(f => f.Key.Folder == modFolder && !leftOut.Contains(f.Key.Path)).ToList();
         if (files.FirstOrDefault(f => Unreadable.Contains(f.Key)) is { Key.Path: { } held }) throw new IOException($"{held} is held by another process");
-        return new(
-            [.. files.Select(f => new HashedFile(f.Key.Path, Encoding.ASCII.GetString(f.Value)))],
-            statCache is not null && UnwritableStatCaches.Contains(modFolder) ? $"{statCache} is read-only" : null);
+        return new([.. files.Select(f => new HashedFile(f.Key.Path, Encoding.ASCII.GetString(f.Value)))]);
+    }
+
+    /// <summary>Each mod folder's hashes kept as its providers fix them, by path.</summary>
+    public Dictionary<string, IReadOnlyDictionary<string, string>> KeptProviderHashes { get; } = [];
+
+    public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided)
+    {
+        var modFolder = Manifests.First(held => ReferenceEquals(held.Value, manifest)).Key;
+        KeptProviderHashes[modFolder] = provided;
+        return UnwritableStatCaches.Contains(modFolder) ? "stat-cache is read-only" : null;
+    }
+
+    public IReadOnlyList<string> NamedByNoLine(string modFolder, string modName, Manifest manifest, IReadOnlySet<string> leftOut)
+    {
+        var named = manifest.Files.Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
+        return [.. FilePaths(modFolder).Where(path => !named.Contains(path) && !leftOut.Contains(path))];
+    }
+
+    /// <summary>The hash a line's provider fixes is the one the last keep held for its path.</summary>
+    public RestoreDestroys WhatRestoreDestroys(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache)
+    {
+        if (UnreadableManifests.Contains(modFolder) || !Manifests.TryGetValue(modFolder, out var manifest)) return new([], []);
+        var kept = KeptProviderHashes.GetValueOrDefault(modFolder) ?? new Dictionary<string, string>();
+        List<string> differing = [.. manifest.Files
+            .Where(line => line.Provider is not FileProvider.NoProvider && _files.TryGetValue((modFolder, line.Path), out var bytes)
+                && kept.GetValueOrDefault(line.Path) != Encoding.ASCII.GetString(bytes))
+            .Select(line => line.Path)];
+        return new(differing, NamedByNoLine(modFolder, modName, manifest, leftOut));
     }
 
     public Stream OpenFile(string modFolder, string path) => Open(modFolder, path);

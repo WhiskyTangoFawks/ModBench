@@ -54,8 +54,10 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
                 UpdateManifestRefusal.NotWritten, $"'{mod.Name}' was not updated: its manifest could not be written: {e.Message}");
         }
 
+        var statCacheNotWritten = repository.KeepInStatCache(
+            read, manifest, read.Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal));
         return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Landed(new UpdatedMod(
             written, [.. manifest.Files.Where(file => file.Provider is FileProvider.NoProvider).Select(file => file.Path).Order(StringComparer.Ordinal)],
-            read.StatCacheNotWritten));
+            statCacheNotWritten));
     }
 }

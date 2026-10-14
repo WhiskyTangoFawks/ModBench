@@ -1588,6 +1588,53 @@ describe('the MO2 Instance adapter', () => {
     it('refuses a mod that has no folder', async () => {
       await expect(adapter.markOriginFile({ kind: 'mod', name: '../profiles' }, 'a.esp', 'Excluded')).rejects.toThrow(/Not a file of/);
     });
+
+    it('moves a mod\'s file to the trash', async () => {
+      await put(join(root, 'mods', 'Harder VATS', 'Textures', 'a.dds'));
+      const trashed: string[] = [];
+
+      await adapter.trashModFile('Harder VATS', 'Textures/a.dds', (file) => {
+        trashed.push(file);
+        return Promise.resolve();
+      });
+
+      expect(trashed).toEqual([join(root, 'mods', 'Harder VATS', 'Textures', 'a.dds')]);
+    });
+
+    it('takes a file already gone as trashed', async () => {
+      const trashed: string[] = [];
+
+      await adapter.trashModFile('Harder VATS', 'Textures/gone.dds', (file) => {
+        trashed.push(file);
+        return Promise.resolve();
+      });
+
+      expect(trashed).toEqual([]);
+    });
+
+    it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) refuses to trash a file a link in the mod\'s folder resolves outside it, trashing nothing', async () => {
+      await put(join(root, 'outside', 'a.txt'));
+      await symlink(join(root, 'outside'), join(root, 'mods', 'Harder VATS', 'linked'));
+      const trashed: string[] = [];
+
+      await expect(adapter.trashModFile('Harder VATS', 'linked/a.txt', (file) => {
+        trashed.push(file);
+        return Promise.resolve();
+      })).rejects.toThrow(/Not a file of/);
+
+      expect(trashed).toEqual([]);
+    });
+
+    it('refuses to trash a path that leaves the mod\'s folder, trashing nothing', async () => {
+      const trashed: string[] = [];
+
+      await expect(adapter.trashModFile('Harder VATS', '../outside.txt', (file) => {
+        trashed.push(file);
+        return Promise.resolve();
+      })).rejects.toThrow(/Not a file of/);
+
+      expect(trashed).toEqual([]);
+    });
   });
 
   describe('changes to mod order', () => {

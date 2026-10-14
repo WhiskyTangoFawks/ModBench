@@ -143,8 +143,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), and touches no other file. A mod lands, is skipped naming what it lacks, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, which names the request's gesture. */
+        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), and names each file no line names, for the extension's trash; it writes no other file. A mod lands, is skipped naming what it lacks, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, which names the request's gesture. */
         post: operations["RestoreFromManifest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/what-restore-destroys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description What restore from manifest would destroy in each mod, from its manifest, its files' stamps and the stat cache, before anything is written: each file whose bytes the stat cache cannot vouch are its provider's, and each file no line names. A mod with no manifest destroys nothing, and a mod a file of which cannot be read is skipped. */
+        post: operations["WhatRestoreDestroys"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1351,6 +1368,11 @@ export interface components {
             refusal: components["schemas"]["InitRefusal"];
             message: string;
         };
+        ModRestoreDestroys: {
+            mod: string;
+            differing: string[];
+            namedByNoLine: string[];
+        };
         ModRestoreRefusal: {
             item: string;
             refusal: components["schemas"]["RestoreRefusal"];
@@ -1674,6 +1696,7 @@ export interface components {
             name: string;
             folder: string;
             installationFiles: components["schemas"]["InstallationFileRequest"][];
+            committedFiles: string[];
         };
         RestoreFromManifestRequest: {
             mods: components["schemas"]["RestoreFromManifestModRequest"][];
@@ -1691,6 +1714,7 @@ export interface components {
         RestoredModResponse: {
             mod: string;
             written: string[];
+            namedByNoLine: string[];
             statCacheNotWritten?: string | null;
         };
         ScriptCopyRequest: {
@@ -1758,6 +1782,19 @@ export interface components {
             manifestWritten: boolean;
             noProvider: string[];
             statCacheNotWritten?: string | null;
+        };
+        WhatRestoreDestroysModRequest: {
+            name: string;
+            folder: string;
+            committedFiles: string[];
+        };
+        WhatRestoreDestroysRequest: {
+            mods: components["schemas"]["WhatRestoreDestroysModRequest"][];
+            statCache: string;
+        };
+        WhatRestoreDestroysResponse: {
+            mods: components["schemas"]["ModRestoreDestroys"][];
+            refused: components["schemas"]["ModRestoreRefusal"][];
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";
@@ -2149,6 +2186,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RestoreFromManifestResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    WhatRestoreDestroys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WhatRestoreDestroysRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhatRestoreDestroysResponse"];
                 };
             };
             /** @description Bad Request */

@@ -16,7 +16,7 @@ import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type BackendStatus, type BuildConfigurationChange, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
-  type UpdateManifestFacts, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions, type RestoreFacts, type RestoreMod, type RestoreOutcome,
+  type UpdateManifestFacts, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions, type RestoreFacts, type RestoreMod, type RestoreOutcome, type RestoreDestroysMod, type WhatRestoreDestroys,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -700,6 +700,11 @@ class HttpMEditClient implements MEditClient {
   resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed> {
     return this.read('resolveNames', (signal) => this.apiClient.POST('/names/resolve', { body: { names: [...names] }, signal }),
       (data) => (data ? data.named : NO_ANSWER));
+  }
+
+  getWhatRestoreDestroys(mods: readonly RestoreDestroysMod[], statCache: string): Promise<WhatRestoreDestroys | ReadFailed> {
+    return this.read('getWhatRestoreDestroys', (signal) => this.apiClient.POST('/what-restore-destroys', { body: { mods: [...mods], statCache }, signal }),
+      (data) => (data ? { destroys: data.mods, refused: itemRefusals(data.refused) } : NO_ANSWER));
   }
 
   selectRows(sql: string): Promise<unknown[] | ReadFailed> {

@@ -25,7 +25,7 @@ public sealed class RestoreFromManifestHandlerTests
     private static InstanceToRestore Instance(params OverriddenGameFile[] gameFiles) => new(gameFiles, DataFolder, "stat-cache");
 
     private static ModToRestore ModFrom(string folder, params InstallationFile[] installationFiles) =>
-        new(folder[(folder.LastIndexOf('/') + 1)..], folder, installationFiles);
+        new(folder[(folder.LastIndexOf('/') + 1)..], folder, installationFiles, ["meta.ini"]);
 
     private InstallationFile Downloaded(string path, params (string Path, string Text)[] entries) =>
         DownloadedBytes(path, [.. entries.Select(e => (e.Path, Encoding.ASCII.GetBytes(e.Text)))]);
@@ -77,17 +77,33 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
-    public void AFileWhoseBytesDiffer_ComesBackFromItsInstallationFile_AndEveryOtherFileIsLeftAlone()
+    public void AFileWhoseBytesDiffer_ComesBackFromItsInstallationFile_EachFileNoLineNamesIsNamed_AndEveryOtherFileIsLeftAlone()
     {
         var download = Downloaded("dl/Mod.zip", ("a.nif", "a"), ("b.nif", "b"));
-        _folders.WithFile(Mod, "a.nif", "edited").WithFile(Mod, "b.nif", "b").WithFile(Mod, "untracked.txt", "mine");
+        _folders.WithFile(Mod, "a.nif", "edited").WithFile(Mod, "b.nif", "b").WithFile(Mod, "untracked.txt", "mine").WithFile(Mod, "meta.ini", "[General]");
         Manifested(Mod, [download], Line("a.nif", new FileProvider.FirstInstallationFile()), Line("b.nif", new FileProvider.FirstInstallationFile()));
 
-        var result = Handler.Restore([ModFrom(Mod, download)], Instance());
+        var restored = Assert.Single(Handler.Restore([ModFrom(Mod, download)], Instance()).Landed).Outcome;
 
-        Assert.Equal(["a.nif"], Assert.Single(result.Landed).Outcome.Written);
+        Assert.Equal(["a.nif"], restored.Written);
+        Assert.Equal(["untracked.txt"], restored.NamedByNoLine);
         Assert.Equal([(Mod, "a.nif")], WrittenIn(Mod));
         Assert.Equal("a", WrittenText(Mod, "a.nif"));
+    }
+
+    [Fact]
+    public void ARestoredMod_KeepsInItsStatCache_TheHashEachLinesProviderFixes()
+    {
+        var download = Downloaded("dl/Mod.zip", ("a.nif", "a"));
+        var game = new OverriddenGameFile("Game.esm", 7, "vanilla");
+        _folders.WithFile(DataFolder, "Game.esm", "vanilla").WithFile(Mod, "a.nif", "edited");
+        _folders.Manifests[Mod] = new Manifest(
+            [SourceOf(download)], [new ManifestSource("Game.esm", 7, "vanilla")],
+            [Line("a.nif", new FileProvider.FirstInstallationFile()), Line("game.esm", new FileProvider.GameFile("Game.esm"))]);
+
+        Handler.Restore([ModFrom(Mod, download)], Instance(game));
+
+        Assert.Equal(new Dictionary<string, string> { ["a.nif"] = "a", ["game.esm"] = "vanilla" }, _folders.KeptProviderHashes[Mod]);
     }
 
     [Fact]

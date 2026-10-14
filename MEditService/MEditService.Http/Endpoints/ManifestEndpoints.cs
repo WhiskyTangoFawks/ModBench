@@ -22,10 +22,20 @@ internal static class ManifestEndpoints
             .WithTags("Modlist")
             .WithDescription(
                 "Writes each file a mod's manifest names whose bytes differ, from the installation files and game files " +
-                "it names (ADR-0022), and touches no other file. A mod lands, is skipped naming what it lacks, or is named " +
-                "not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, " +
+                "it names (ADR-0022), and names each file no line names, for the extension's trash; it writes no other file. A " +
+                "mod lands, is skipped naming what it lacks, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, " +
                 "which names the request's gesture.")
             .Produces<RestoreFromManifestResponse>()
+            .ProducesProblem(400);
+
+        app.MapPost("/what-restore-destroys", WhatRestoreDestroys)
+            .WithName("WhatRestoreDestroys")
+            .WithTags("Modlist")
+            .WithDescription(
+                "What restore from manifest would destroy in each mod, from its manifest, its files' stamps and the stat cache, " +
+                "before anything is written: each file whose bytes the stat cache cannot vouch are its provider's, and each " +
+                "file no line names. A mod with no manifest destroys nothing, and a mod a file of which cannot be read is skipped.")
+            .Produces<WhatRestoreDestroysResponse>()
             .ProducesProblem(400);
 
         app.MapPost("/modlist-gestures/{gesture}/cancel", (string gesture, ModlistGestureCancels cancels) =>
@@ -72,14 +82,40 @@ internal static class ManifestEndpoints
 
         using var running = cancels.Run(req.Gesture, aborted);
         var result = handler.Restore(
-            [.. mods.Select(mod => new ModToRestore(mod.Name, mod.Folder, InstallationFilesOf(mod.InstallationFiles)))],
+            [.. mods.Select(mod => new ModToRestore(mod.Name, mod.Folder, InstallationFilesOf(mod.InstallationFiles), mod.CommittedFiles ?? []))],
             new InstanceToRestore(GameFilesOf(req.GameFiles), req.DataFolder, req.StatCache), req.Gesture, running.Token);
 
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
         foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Restore from manifest", item.Refusal.Kind, item.Message, item.Item);
         return Results.Ok(new RestoreFromManifestResponse(
-            [.. result.Landed.Select(landed => new RestoredModResponse(landed.Item, landed.Outcome.Written, landed.Outcome.StatCacheNotWritten))],
+            [.. result.Landed.Select(landed => new RestoredModResponse(
+                landed.Item, landed.Outcome.Written, landed.Outcome.NamedByNoLine, landed.Outcome.StatCacheNotWritten))],
             [.. result.Refused.Select(refused => new ModRestoreRefusal(refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.GameFilesNotFound))]));
+    }
+
+    internal static IResult WhatRestoreDestroys(WhatRestoreDestroysRequest req, IModFolderRepository repository)
+    {
+        var mods = req.Mods ?? [];
+        if (mods.Count == 0 || mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.Folder)))
+            return Results.Problem("At least one mod is required, and every mod needs a name and a folder.", statusCode: 400);
+        if (string.IsNullOrWhiteSpace(req.StatCache)) return Results.Problem("The folder of the stat cache is required.", statusCode: 400);
+
+        List<ModRestoreDestroys> destroying = [];
+        List<ModRestoreRefusal> refused = [];
+        foreach (var mod in mods)
+        {
+            try
+            {
+                var destroys = repository.WhatRestoreDestroys(mod.Folder, mod.Name, (mod.CommittedFiles ?? []).ToHashSet(StringComparer.Ordinal), req.StatCache);
+                if (destroys.Differing.Count + destroys.NamedByNoLine.Count > 0)
+                    destroying.Add(new ModRestoreDestroys(mod.Name, destroys.Differing, destroys.NamedByNoLine));
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                refused.Add(new ModRestoreRefusal(mod.Name, RestoreRefusal.Unreadable, $"'{mod.Name}' was skipped: a file could not be read: {e.Message}", []));
+            }
+        }
+        return Results.Ok(new WhatRestoreDestroysResponse(destroying, refused));
     }
 
     private static IResult? Malformed(IReadOnlyList<IModRequest> mods, IReadOnlyList<OverriddenGameFileRequest>? gameFiles, string? statCache)
@@ -142,11 +178,26 @@ internal sealed record RestoreFromManifestRequest(
     IReadOnlyList<RestoreFromManifestModRequest> Mods, IReadOnlyList<OverriddenGameFileRequest> GameFiles, string DataFolder, string StatCache,
     string? Gesture);
 
-internal sealed record RestoreFromManifestModRequest(string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles) : IModRequest;
+internal sealed record RestoreFromManifestModRequest(
+    string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles) : IModRequest;
 
-/// <summary>A mod whose folder is as its manifest says. Written names each file written to make it so, and
-/// StatCacheNotWritten why the stat cache could not keep what the restore read, or null.</summary>
-internal sealed record RestoredModResponse(string Mod, IReadOnlyList<string> Written, string? StatCacheNotWritten);
+/// <summary>A mod whose files are as its manifest says: Written each file written to make it so, NamedByNoLine each file
+/// no line names, for the trash, and StatCacheNotWritten why the stat cache did not keep the read.</summary>
+internal sealed record RestoredModResponse(string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten);
+
+/// <summary>The mods to ask what restore from manifest would destroy in, each with the files the repository commits, and
+/// the stat cache's folder.</summary>
+internal sealed record WhatRestoreDestroysRequest(IReadOnlyList<WhatRestoreDestroysModRequest> Mods, string StatCache);
+
+internal sealed record WhatRestoreDestroysModRequest(string Name, string Folder, IReadOnlyList<string> CommittedFiles);
+
+/// <summary>A mod restore would destroy files in, by forward-slash path: each file whose bytes differ from what its
+/// provider fixes, and each file no line names.</summary>
+internal sealed record ModRestoreDestroys(string Mod, IReadOnlyList<string> Differing, IReadOnlyList<string> NamedByNoLine);
+
+/// <summary>Only the mods restore would destroy a file in, and each mod skipped because a file of it could not be read
+/// (ADR-0019).</summary>
+internal sealed record WhatRestoreDestroysResponse(IReadOnlyList<ModRestoreDestroys> Mods, IReadOnlyList<ModRestoreRefusal> Refused);
 
 /// <summary>A skipped mod. A NotFound mod names each game file it lacks, by its path under the data folder; a request that
 /// names them brings it back.</summary>

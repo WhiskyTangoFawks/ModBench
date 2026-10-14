@@ -98,6 +98,16 @@ export function get(path: string, ifMissing?: string): Promise<string> {
   return readOr(path, ifMissing);
 }
 
+/** `path` with every symlink along it resolved, or `undefined` when nothing is there. */
+export async function realPathIfThere(path: string): Promise<string | undefined> {
+  try {
+    return await realpath(path);
+  } catch (err) {
+    if (errnoCode(err) !== 'ENOENT') throw err;
+    return undefined;
+  }
+}
+
 // `path` itself when it names no symlink, or a missing path; its resolved real file otherwise —
 // a write must land on what a symlink points at, not replace the link with a plain file.
 async function writeTargetOf(path: string): Promise<string> {

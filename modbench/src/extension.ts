@@ -56,7 +56,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex' | 'handStringsLanguage'
-  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build' | 'init' | 'updateManifest' | 'restoreFromManifest' | 'changeBuildConfiguration'>;
+  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build' | 'init' | 'updateManifest' | 'restoreFromManifest' | 'getWhatRestoreDestroys' | 'changeBuildConfiguration'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -161,7 +161,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));
   own(publishRepository(instance, instanceRoot));
   ownAll(own, registerModlistCommands({
-    commands: modlistSourceCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(instanceRoot) }),
+    commands: modlistSourceCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(instanceRoot), trash }),
     instance, reporter: reporterFor('modlist'), ask, say: (message) => { toolboxProvider.say(message); }, focusedView: deps.focusedView, modsView: MODS_KEY_ARGS.view,
   }));
   own(deps.focusedView.follow('modbench.modList', mods.view));

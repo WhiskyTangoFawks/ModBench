@@ -66,8 +66,8 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void AFileChangedAsItWasRead_IsOpenedAgain_BecauseAWriteInTheSameTickLeavesItsStamp()
     {
         Write("a.txt", "hello");
-        new ModFolderRepository(new FakeTimeProvider(File.GetLastWriteTimeUtc(Path.Combine(_root, "a.txt"))))
-            .Files(_root, "mod", new HashSet<string>(), _statCache);
+        var unsettled = new ModFolderRepository(new FakeTimeProvider(File.GetLastWriteTimeUtc(Path.Combine(_root, "a.txt"))));
+        unsettled.KeepInStatCache(unsettled.Files(_root, "mod", new HashSet<string>(), _statCache), NoLines, NoHashes);
         using var held = HeldOpen("a.txt");
 
         Assert.Throws<IOException>(Files);
@@ -75,7 +75,8 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
     [Theory]
     [InlineData("<<<<<<< HEAD")]
-    [InlineData("{\"a.txt\":null}")]
+    [InlineData("{\"files\":{\"a.txt\":null}}")]
+    [InlineData("{\"files\":null}")]
     public void AStatCacheThatCannotBeRead_VouchesForNoFile(string text)
     {
         Write("a.txt", "hello");
@@ -95,14 +96,14 @@ public sealed class ModFolderRepositoryTests : IDisposable
         var read = _repository.Files(_root, "mod", new HashSet<string>(), taken);
 
         Assert.Equal(HashOfHello, Assert.Single(read.Files).Hash);
-        Assert.Contains(taken, read.StatCacheNotWritten, StringComparison.Ordinal);
+        Assert.Contains(taken, _repository.KeepInStatCache(read, NoLines, NoHashes), StringComparison.Ordinal);
     }
 
     [Fact]
     public void AModWhoseNameHoldsASlash_KeepsItsStatCacheByItsFolderName()
     {
         Write("a.txt", "hello");
-        _repository.Files(_root, "Mods/Mod", new HashSet<string>(), _statCache);
+        _repository.KeepInStatCache(_repository.Files(_root, "Mods/Mod", new HashSet<string>(), _statCache), NoLines, NoHashes);
         using var held = HeldOpen("a.txt");
 
         Assert.Equal(HashOfHello, Assert.Single(_repository.Files(_root, "Mods/Mod", new HashSet<string>(), _statCache).Files).Hash);
@@ -128,6 +129,120 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Files();
 
         Assert.Equal(["a.txt"], Directory.GetFileSystemEntries(_root).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public void RestoreDestroys_EachFileNoLineNames_ButTheManifestAndEachFileLeftOut()
+    {
+        Write("mine.txt", "mine");
+        Write("meta.ini", "[General]");
+        Manifested(Line("a.nif", "Mod.zip"));
+
+        var destroys = WhatRestoreDestroys();
+
+        Assert.Equal(["mine.txt"], destroys.NamedByNoLine);
+        Assert.Empty(destroys.Differing);
+    }
+
+    [Theory]
+    [InlineData(StringComparison.OrdinalIgnoreCase, false)]
+    [InlineData(StringComparison.Ordinal, true)]
+    public void AFileNamedByALineInAnotherCase_IsNamedByNoLine_OnlyWhereTheFileSystemFindsItByTheLinesName(
+        StringComparison fileSystemMatchesNames, bool namedByNoLine)
+    {
+        Write("Meshes/A.nif", "hello");
+        var manifest = Manifested(Line("meshes/a.nif", "Mod.zip"));
+        var repository = new ModFolderRepository(
+            TimeProvider.System,
+            path => Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories).Any(file => string.Equals(file, path, fileSystemMatchesNames)));
+
+        var destroys = repository.WhatRestoreDestroys(_root, "mod", new HashSet<string>(), _statCache);
+
+        Assert.Equal(namedByNoLine, repository.NamedByNoLine(_root, "mod", manifest, new HashSet<string>()).Contains("Meshes/A.nif"));
+        Assert.Equal(namedByNoLine, destroys.NamedByNoLine.Contains("Meshes/A.nif"));
+    }
+
+    [PosixFact]
+    public void OnAFileSystemThatTellsCaseApart_TwoFilesWhoseNamesDifferInCaseAlone_AreOneNamedByALineAndOneNot()
+    {
+        Write("a.nif", "hello");
+        Write("A.nif", "hello");
+        var manifest = Manifested(Line("a.nif", "Mod.zip"));
+
+        Assert.Equal(["A.nif"], _repository.NamedByNoLine(_root, "mod", manifest, new HashSet<string>()));
+    }
+
+    [Fact]
+    public void AfterAFreshClone_RestoreDestroysNothing()
+    {
+        Write("meta.ini", "[General]");
+        Manifested(Line("a.nif", "Mod.zip"));
+
+        var destroys = WhatRestoreDestroys();
+
+        Assert.Empty(destroys.NamedByNoLine.Concat(destroys.Differing));
+    }
+
+    [Fact]
+    public void AFileALineNames_AsTheLastRestoreKeptIt_IsNotDestroyed()
+    {
+        Write("a.nif", "hello");
+        KeepAsRestored(Manifested(Line("a.nif", "Mod.zip")));
+
+        Assert.Empty(WhatRestoreDestroys().Differing);
+    }
+
+    [Theory]
+    [InlineData("hello", "Mod.zip", false)]
+    [InlineData("edited", "Mod.zip", true)]
+    [InlineData("hello", "Upgraded.zip", true)]
+    public void AFileALineNames_WrittenSinceTheLastRestore_IsDestroyed_UnlessItHoldsTheBytesItsProviderFixed(
+        string written, string installationFile, bool destroyed)
+    {
+        Write("a.nif", "hello");
+        KeepAsRestored(Manifested(Line("a.nif", "Mod.zip")));
+        Write("a.nif", written);
+        Manifested(Line("a.nif", installationFile));
+
+        Assert.Equal(destroyed, WhatRestoreDestroys().Differing.Contains("a.nif"));
+    }
+
+    [Fact]
+    public void AFileALineNamesThatIsGone_IsNotDestroyed()
+    {
+        Manifested(Line("a.nif", "Mod.zip"));
+
+        Assert.Empty(WhatRestoreDestroys().Differing);
+    }
+
+    [Fact]
+    public void AFileWhoseLineNamesNoProvider_IsNotDestroyed()
+    {
+        Write("a.nif", "edited");
+        Manifested(new ManifestFile("a.nif", new FileProvider.NoProvider()));
+
+        Assert.Empty(WhatRestoreDestroys().Differing);
+    }
+
+    [Fact]
+    public void AModWithNoManifest_RestoreDestroysNothing()
+    {
+        Write("mine.txt", "mine");
+
+        var destroys = WhatRestoreDestroys();
+
+        Assert.Empty(destroys.NamedByNoLine.Concat(destroys.Differing));
+    }
+
+    [Fact]
+    public void AModWithAManifestItCannotRead_RestoreDestroysNothing()
+    {
+        Write("mine.txt", "mine");
+        Write("mod.manifest", "<<<<<<< HEAD\n");
+
+        var destroys = WhatRestoreDestroys();
+
+        Assert.Empty(destroys.NamedByNoLine.Concat(destroys.Differing));
     }
 
     [Fact]
@@ -354,7 +469,34 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Empty(Directory.GetFileSystemEntries(_root));
     }
 
-    private IReadOnlyList<HashedFile> Files() => _repository.Files(_root, "mod", new HashSet<string>(), _statCache).Files;
+    private static readonly Manifest NoLines = new([], [], []);
+
+    private static readonly Dictionary<string, string> NoHashes = [];
+
+    private IReadOnlyList<HashedFile> Files()
+    {
+        var read = _repository.Files(_root, "mod", new HashSet<string>(), _statCache);
+        _repository.KeepInStatCache(read, NoLines, NoHashes);
+        return read.Files;
+    }
+
+    private static ManifestFile Line(string path, string installationFile) =>
+        new(path, new FileProvider.InstallationFileEntry(installationFile, path));
+
+    private Manifest Manifested(ManifestFile line)
+    {
+        var manifest = new Manifest(
+            [new ManifestSource("Mod.zip", 7, "#Mod.zip"), new ManifestSource("Upgraded.zip", 7, "#Upgraded.zip")], [], [line]);
+        _repository.WriteManifest(_root, "mod", manifest);
+        return manifest;
+    }
+
+    private void KeepAsRestored(Manifest manifest) =>
+        _repository.KeepInStatCache(
+            _repository.Files(_root, "mod", new HashSet<string>(), _statCache), manifest,
+            manifest.Files.ToDictionary(line => line.Path, _ => HashOfHello));
+
+    private RestoreDestroys WhatRestoreDestroys() => _repository.WhatRestoreDestroys(_root, "mod", new HashSet<string> { "meta.ini" }, _statCache);
 
     private FileStream HeldOpen(string relative) =>
         new(Path.Combine(_root, relative), FileMode.Open, FileAccess.Read, FileShare.None);
@@ -363,10 +505,13 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
     private string StatCacheFile => Path.Combine(_statCache, Path.GetFileName(_root.Path));
 
-    private Dictionary<string, CachedEntry> StatCacheEntries() =>
-        JsonSerializer.Deserialize<Dictionary<string, CachedEntry>>(File.ReadAllText(StatCacheFile), JsonSerializerOptions.Web) ?? [];
+    private sealed record CachedFiles(Dictionary<string, CachedEntry> Files);
 
-    private void StatCacheSays(Dictionary<string, CachedEntry> entries) => StatCacheSays(JsonSerializer.Serialize(entries, JsonSerializerOptions.Web));
+    private Dictionary<string, CachedEntry> StatCacheEntries() =>
+        JsonSerializer.Deserialize<CachedFiles>(File.ReadAllText(StatCacheFile), JsonSerializerOptions.Web)?.Files ?? [];
+
+    private void StatCacheSays(Dictionary<string, CachedEntry> entries) =>
+        StatCacheSays(JsonSerializer.Serialize(new CachedFiles(entries), JsonSerializerOptions.Web));
 
     private void StatCacheSays(string text) => File.WriteAllText(StatCacheFile, text);
 

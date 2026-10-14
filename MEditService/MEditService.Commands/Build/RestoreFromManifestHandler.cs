@@ -4,8 +4,8 @@ using MEditService.Ports;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>Restore from manifest: each mod's folder back to its manifest (ADR-0022). Every file the manifest names whose
-/// bytes differ is written, and nothing else is touched. A mod that lacks a source is skipped whole.</summary>
+/// <summary>Restore from manifest (ADR-0022): every file whose bytes differ is written, and each file no line names is named
+/// for the extension's trash. A mod that lacks a source is skipped whole.</summary>
 public sealed class RestoreFromManifestHandler(IModFolderRepository repository, INotificationPublisher notifications)
 {
     public SelectionResult<string, RestoreSkip, RestoredMod> Restore(
@@ -19,8 +19,8 @@ public sealed class RestoreFromManifestHandler(IModFolderRepository repository, 
         Manifest manifest;
         try
         {
-            if (repository.ReadManifest(mod.Folder, mod.Name) is not { } read) return Skipped(mod, RestoreRefusal.NoManifest, "it has no manifest");
-            manifest = read;
+            if (repository.ReadManifest(mod.Folder, mod.Name) is not { } held) return Skipped(mod, RestoreRefusal.NoManifest, "it has no manifest");
+            manifest = held;
         }
         catch (InvalidDataException e)
         {
@@ -34,17 +34,21 @@ public sealed class RestoreFromManifestHandler(IModFolderRepository repository, 
         var resolved = new ManifestSources(repository, manifest, mod.InstallationFiles, instance.GameFiles).Resolve();
         if (resolved.Lacks.Count > 0) return Lacked(mod, resolved.Lacks);
 
-        List<ManifestSources.SourcedFile> differing;
-        string? statCacheNotWritten;
+        IReadOnlyList<string> namedByNoLine;
+        ModFolderFiles read;
         try
         {
-            (differing, statCacheNotWritten) = WithOtherBytes(mod, resolved, instance.StatCache);
+            var committed = mod.CommittedFiles.ToHashSet(StringComparer.Ordinal);
+            namedByNoLine = repository.NamedByNoLine(mod.Folder, mod.Name, manifest, committed);
+            read = repository.Files(mod.Folder, mod.Name, committed.Union(namedByNoLine).ToHashSet(StringComparer.Ordinal), instance.StatCache);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return Skipped(mod, RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
         }
 
+        var hashes = read.Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
+        List<ManifestSources.SourcedFile> differing = [.. resolved.Files.Where(file => hashes.GetValueOrDefault(file.Path) != file.Source.Hash)];
         try
         {
             new ModRebuild(repository, mod.Folder, instance.DataFolder).Write(differing);
@@ -59,17 +63,9 @@ public sealed class RestoreFromManifestHandler(IModFolderRepository repository, 
             return ItemAnswer<RestoreSkip, RestoredMod>.Refused(
                 new RestoreSkip(RestoreRefusal.NotFinished, []), $"'{mod.Name}' was not finished: {e.Message.TrimEnd('.')}. Restoring it again finishes it.");
         }
-        return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod([.. differing.Select(file => file.Path)], statCacheNotWritten));
-    }
-
-    private (List<ManifestSources.SourcedFile> Differing, string? StatCacheNotWritten) WithOtherBytes(
-        ModToRestore mod, ManifestSources.Resolved resolved, string statCache)
-    {
-        var named = resolved.Files.Select(file => file.Path).ToHashSet(StringComparer.Ordinal);
-        var untracked = repository.FilePaths(mod.Folder).Where(path => !named.Contains(path)).ToHashSet(StringComparer.Ordinal);
-        var read = repository.Files(mod.Folder, mod.Name, untracked, statCache);
-        var hashes = read.Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
-        return ([.. resolved.Files.Where(file => hashes.GetValueOrDefault(file.Path) != file.Source.Hash)], read.StatCacheNotWritten);
+        var statCacheNotWritten = repository.KeepInStatCache(
+            read, manifest, resolved.Files.ToDictionary(file => file.Path, file => file.Source.Hash, StringComparer.Ordinal));
+        return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod([.. differing.Select(file => file.Path)], namedByNoLine, statCacheNotWritten));
     }
 
     private static ItemAnswer<RestoreSkip, RestoredMod> Lacked(ModToRestore mod, IReadOnlyList<ManifestSources.Lack> lacks)

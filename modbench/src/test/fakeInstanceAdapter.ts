@@ -48,6 +48,7 @@ export type AdapterCall =
   | { readonly verb: 'markOriginFile'; readonly origin: FileOrigin; readonly relativePath: string; readonly mark: OriginFileMark }
   | { readonly verb: 'renamePlugin'; readonly origin: FileOrigin; readonly from: string; readonly to: string; readonly gameRelease: string | undefined }
   | { readonly verb: 'trashEntryFolder'; readonly entry: EntryRef }
+  | { readonly verb: 'trashModFile'; readonly mod: string; readonly relativePath: string }
   | { readonly verb: 'trashSourceFolder'; readonly mod: string }
   | { readonly verb: 'writeIgnoreList' }
   | { readonly verb: 'removeIgnoreList' }
@@ -181,6 +182,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     excludedSuffix: EXCLUDED_SUFFIX,
     renamePlugin: (origin, from, to, gameRelease) => record({ verb: 'renamePlugin', origin, from, to, gameRelease }, undefined),
     trashEntryFolder: (entry) => record({ verb: 'trashEntryFolder', entry }, !answers.foldersAbsent?.has(entry.name)),
+    trashModFile: (mod, relativePath) => record({ verb: 'trashModFile', mod, relativePath }, undefined),
     trashSourceFolder: (mod) => record({ verb: 'trashSourceFolder', mod }, true),
     install: (source, target, keys) =>
       record<InstallOutcome>({ verb: 'install', source, target, keys }, answers.installed ?? { landed: true, isFomod: false }),

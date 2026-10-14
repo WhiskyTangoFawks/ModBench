@@ -2,22 +2,88 @@ using System.Text;
 
 namespace MEditService.ModFolderAdapter;
 
-public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepository
+/// <summary><paramref name="fileExists"/> is the file system's answer to whether a file is at a path, in the case it
+/// matches names in.</summary>
+public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fileExists) : IModFolderRepository
 {
     private const string ManifestExtension = ".manifest";
 
+    public ModFolderRepository(TimeProvider time) : this(time, File.Exists)
+    {
+    }
+
     public ModFolderFiles Files(string modFolder, string modName, IReadOnlySet<string> leftOut, string? statCache)
     {
-        var paths = new DirectoryInfo(modFolder).EnumerateFiles("*", SearchOption.AllDirectories)
-            .Select(file => PathIn(modFolder, file.FullName))
-            .Where(path => path != ManifestName(modName) && !leftOut.Contains(path))
-            .ToList();
-        if (statCache is null) return new([.. paths.Select(path => new HashedFile(path, HashOf(modFolder, path)))], StatCacheNotWritten: null);
+        var paths = FilesOf(modFolder, modName).Where(path => !leftOut.Contains(path)).ToList();
+        if (statCache is null) return new([.. paths.Select(path => new HashedFile(path, HashOf(modFolder, path)))]);
 
         var cache = new StatCache(statCache, modFolder, time);
-        List<HashedFile> files = [.. paths.Select(path => new HashedFile(path, cache.HashOf(path, () => HashOf(modFolder, path))))];
-        return new(files, cache.Write(paths));
+        return new([.. paths.Select(path => new HashedFile(path, cache.HashOf(path, () => HashOf(modFolder, path))))]) { StatCache = cache };
     }
+
+    public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided)
+    {
+        if (read.StatCache is not { } cache) return null;
+        Dictionary<(string Source, string Path), string> providers = [];
+        foreach (var line in manifest.Files)
+        {
+            if (manifest.ProviderOf(line) is { } provider && provided.TryGetValue(line.Path, out var hash)) providers.TryAdd(provider, hash);
+        }
+        return cache.Write([.. read.Files.Select(file => file.Path)], providers);
+    }
+
+    public IReadOnlyList<string> NamedByNoLine(string modFolder, string modName, Manifest manifest, IReadOnlySet<string> leftOut)
+    {
+        var onDisk = FilesOf(modFolder, modName).ToHashSet(StringComparer.Ordinal);
+        var lines = manifest.Files.Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
+        var linesInAnyCase = lines.ToLookup(line => line, StringComparer.OrdinalIgnoreCase);
+        return [.. onDisk.Where(path => !leftOut.Contains(path) && !lines.Contains(path) && !linesInAnyCase[path].Any(line => FoundAt(modFolder, line, onDisk)))];
+    }
+
+    // A line names a file in another case only where the file system finds that file by the line's name: no file of its
+    // own has that name, and yet one is there.
+    private bool FoundAt(string modFolder, string line, HashSet<string> onDisk) =>
+        !onDisk.Contains(line) && fileExists(Path.Combine(modFolder, line));
+
+    public RestoreDestroys WhatRestoreDestroys(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache)
+    {
+        Manifest? manifest;
+        try
+        {
+            manifest = ReadManifest(modFolder, modName);
+        }
+        catch (InvalidDataException)
+        {
+            manifest = null;
+        }
+        if (manifest is null) return new([], []);
+
+        var cache = new StatCache(statCache, modFolder, time);
+        List<string> differing = [];
+        foreach (var line in manifest.Files.Where(line => fileExists(Path.Combine(modFolder, line.Path))))
+        {
+            if (manifest.ProviderOf(line) is { } provider && !HoldsWhatItsProviderFixes(modFolder, line.Path, cache, provider)) differing.Add(line.Path);
+        }
+        return new(differing, NamedByNoLine(modFolder, modName, manifest, leftOut));
+    }
+
+    private static bool HoldsWhatItsProviderFixes(string modFolder, string path, StatCache cache, (string Source, string Path) provider)
+    {
+        if (cache.HashFixedBy(provider) is not { } fixedHash) return false;
+        try
+        {
+            return cache.HashOf(path, () => HashOf(modFolder, path)) == fixedHash;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private IEnumerable<string> FilesOf(string modFolder, string modName) =>
+        new DirectoryInfo(modFolder).EnumerateFiles("*", SearchOption.AllDirectories)
+            .Select(file => PathIn(modFolder, file.FullName))
+            .Where(path => path != ManifestName(modName));
 
     public Stream OpenFile(string modFolder, string path) => File.OpenRead(Path.Combine(modFolder, path));
 
