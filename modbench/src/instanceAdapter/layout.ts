@@ -18,6 +18,7 @@ const MODS = 'mods';
 const SOURCE = 'source';
 const DOWNLOADS = 'downloads';
 const HASH_INDEX = 'hash-index';
+const STAT_CACHE = 'stat-cache';
 const IGNORE_LIST_FILE = '.gitignore';
 const MANIFEST_GLOB = '*.manifest';
 const PLUGIN_ORDER_FILE = 'loadorder.txt';
@@ -140,6 +141,10 @@ export const sourceRootDir = (instanceRoot: string): string => join(instanceRoot
 
 /** The folder at the instance root that holds the adapter's index of hashes, which the adapter alone writes. */
 export const hashIndexDir = (instanceRoot: string): string => join(instanceRoot, HASH_INDEX);
+
+/** The folder at the instance root, outside every mod folder and the whitelist, where mEdit keeps what it last read
+ *  of each mod's files. */
+export const statCacheDir = (instanceRoot: string): string => join(instanceRoot, STAT_CACHE);
 
 /** The instance repository's ignore list file. */
 export const ignoreListFile = (instanceRoot: string): string => join(instanceRoot, IGNORE_LIST_FILE);

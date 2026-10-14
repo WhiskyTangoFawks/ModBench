@@ -3,10 +3,10 @@ namespace MEditService.ModFolderAdapter;
 /// <summary>The one reader of a mod folder's files and the one writer of a mod's manifest.</summary>
 public interface IModFolderRepository
 {
-    /// <summary>Every file of the mod but its manifest and those left out, by forward-slash path. A file whose size and
-    /// time match its manifest line goes unread, holding the hash <paramref name="provided"/> gives its path.</summary>
-    IReadOnlyList<HashedFile> Files(
-        string modFolder, string modName, IReadOnlySet<string> leftOut, IReadOnlyDictionary<string, string> provided);
+    /// <summary>Every file of the mod but its manifest and those left out, by forward-slash path. A file whose stamp is
+    /// what the stat cache in <paramref name="statCache"/> last read of it goes unread, and the cache keeps what this
+    /// read; with no stat cache every file is read.</summary>
+    IReadOnlyList<HashedFile> Files(string modFolder, string modName, IReadOnlySet<string> leftOut, string? statCache);
 
     Stream OpenFile(string modFolder, string path);
 
@@ -38,7 +38,7 @@ public interface IModFolderRepository
     /// True when it wrote.</summary>
     bool WriteManifest(string modFolder, string modName, Manifest manifest);
 
-    /// <summary>The mod's manifest, its files without stamps; null when its folder holds none. Throws
+    /// <summary>The mod's manifest; null when its folder holds none. Throws
     /// <see cref="InvalidDataException"/> naming a line it cannot read.</summary>
     Manifest? ReadManifest(string modFolder, string modName);
 }

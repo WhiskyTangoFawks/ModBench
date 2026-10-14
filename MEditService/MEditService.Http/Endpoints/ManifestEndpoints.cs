@@ -47,12 +47,12 @@ internal static class ManifestEndpoints
         UpdateManifestRequest req, UpdateManifestHandler handler, ModlistGestureCancels cancels, ILoggerFactory loggerFactory, CancellationToken aborted)
     {
         var mods = req.Mods ?? [];
-        if (Malformed(mods, req.GameFiles) is { } malformed) return malformed;
+        if (Malformed(mods, req.GameFiles, req.StatCache) is { } malformed) return malformed;
 
         using var running = cancels.Run(req.Gesture, aborted);
         var result = handler.UpdateManifest(
             [.. mods.Select(mod => new ModToUpdate(mod.Name, mod.Folder, InstallationFilesOf(mod.InstallationFiles), mod.CommittedFiles ?? []))],
-            GameFilesOf(req.GameFiles), req.Gesture, running.Token);
+            new InstanceToUpdate(GameFilesOf(req.GameFiles), req.StatCache), req.Gesture, running.Token);
 
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
         foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Update manifest", item.Refusal, item.Message, item.Item);
@@ -66,13 +66,13 @@ internal static class ManifestEndpoints
         CancellationToken aborted)
     {
         var mods = req.Mods ?? [];
-        if (Malformed(mods, req.GameFiles) is { } malformed) return malformed;
+        if (Malformed(mods, req.GameFiles, req.StatCache) is { } malformed) return malformed;
         if (string.IsNullOrWhiteSpace(req.DataFolder)) return Results.Problem("The game's data folder is required.", statusCode: 400);
 
         using var running = cancels.Run(req.Gesture, aborted);
         var result = handler.Restore(
             [.. mods.Select(mod => new ModToRestore(mod.Name, mod.Folder, InstallationFilesOf(mod.InstallationFiles)))],
-            new InstanceToRestore(GameFilesOf(req.GameFiles), req.DataFolder), req.Gesture, running.Token);
+            new InstanceToRestore(GameFilesOf(req.GameFiles), req.DataFolder, req.StatCache), req.Gesture, running.Token);
 
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
         foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Restore from manifest", item.Refusal.Kind, item.Message, item.Item);
@@ -81,9 +81,10 @@ internal static class ManifestEndpoints
             [.. result.Refused.Select(refused => new ModRestoreRefusal(refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.GameFilesNotFound))]));
     }
 
-    private static IResult? Malformed(IReadOnlyList<IModRequest> mods, IReadOnlyList<OverriddenGameFileRequest>? gameFiles)
+    private static IResult? Malformed(IReadOnlyList<IModRequest> mods, IReadOnlyList<OverriddenGameFileRequest>? gameFiles, string? statCache)
     {
         if (mods.Count == 0) return Results.Problem("At least one mod is required.", statusCode: 400);
+        if (string.IsNullOrWhiteSpace(statCache)) return Results.Problem("The folder of the stat cache is required.", statusCode: 400);
         var installationFiles = mods.SelectMany(mod => mod.InstallationFiles ?? []).ToList();
         if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.Folder)) || installationFiles.Any(file => !file.IsWhole))
         {
@@ -106,10 +107,11 @@ internal static class ManifestEndpoints
         [.. files.Select(file => new OverriddenGameFile(file.Path, file.Size.GetValueOrDefault(), file.Hash))];
 }
 
-/// <summary>The mods to update the manifests of, with the instance's facts (ADR-0013). Gesture names it to a cancel and in its
+/// <summary>The mods to update the manifests of, with the instance's facts (ADR-0013). StatCache is the folder outside every
+/// mod folder where mEdit keeps what it last read of each mod's files. Gesture names it to a cancel and in its
 /// progress.</summary>
 internal sealed record UpdateManifestRequest(
-    IReadOnlyList<UpdateManifestModRequest> Mods, IReadOnlyList<OverriddenGameFileRequest> GameFiles, string? Gesture);
+    IReadOnlyList<UpdateManifestModRequest> Mods, IReadOnlyList<OverriddenGameFileRequest> GameFiles, string StatCache, string? Gesture);
 
 internal interface IModRequest
 {
@@ -133,10 +135,11 @@ internal sealed record ModUpdateManifestRefusal(string Item, UpdateManifestRefus
 /// <summary>Landed or refused, per mod (ADR-0019), never the status of the call.</summary>
 internal sealed record UpdateManifestResponse(IReadOnlyList<UpdatedModResponse> Applied, IReadOnlyList<ModUpdateManifestRefusal> Refused);
 
-/// <summary>The mods to restore from their manifests, with the instance's facts (ADR-0013). Gesture names it to a cancel and in
-/// its progress.</summary>
+/// <summary>The mods to restore from their manifests, with the instance's facts (ADR-0013), StatCache as update manifest's.
+/// Gesture names it to a cancel and in its progress.</summary>
 internal sealed record RestoreFromManifestRequest(
-    IReadOnlyList<RestoreFromManifestModRequest> Mods, IReadOnlyList<OverriddenGameFileRequest> GameFiles, string DataFolder, string? Gesture);
+    IReadOnlyList<RestoreFromManifestModRequest> Mods, IReadOnlyList<OverriddenGameFileRequest> GameFiles, string DataFolder, string StatCache,
+    string? Gesture);
 
 internal sealed record RestoreFromManifestModRequest(string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles) : IModRequest;
 

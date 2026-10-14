@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Http.Tests.Api;
 
@@ -18,6 +19,8 @@ public sealed class RestoreFromManifestApiTests : HostedTests
     private const string Gesture = "a-gesture";
 
     private readonly ScratchDirectory _instance = new("restore-from-manifest-");
+
+    protected override MEditHost CreateHost() => new(services => services.AddSingleton<TimeProvider>(new ADayAhead()));
 
     protected override void DisposeFixtures() => _instance.Dispose();
 
@@ -58,6 +61,7 @@ public sealed class RestoreFromManifestApiTests : HostedTests
         {
             ["mods"] = new JsonArray(new JsonObject { ["name"] = Mod, ["folder"] = ModFolder, ["installationFiles"] = new JsonArray(installationFile) }),
             ["gameFiles"] = new JsonArray(new JsonObject { ["path"] = "Game.esm", ["size"] = 7, ["hash"] = HashOfVanilla }),
+            ["statCache"] = Path.Combine(_instance, "stat-cache"),
             ["gesture"] = Gesture,
         };
         if (gesture == "restore-from-manifest") request["dataFolder"] = Path.Combine(_instance, "game", "Data");
@@ -72,10 +76,11 @@ public sealed class RestoreFromManifestApiTests : HostedTests
     }
 
     [Fact]
-    public async Task RestoringAModJustUpdated_WritesNoFile()
+    public async Task RestoringAModJustUpdated_OpensNoFileTheUpdateRead_AndWritesNoFile()
     {
         ModInstalledFromADownload();
         await Post("update-manifest");
+        using var held = new FileStream(Path.Combine(ModFolder, "kept.txt"), FileMode.Open, FileAccess.Read, FileShare.None);
 
         var body = await Post("restore-from-manifest");
 
@@ -114,6 +119,7 @@ public sealed class RestoreFromManifestApiTests : HostedTests
     [InlineData("mods", "[]")]
     [InlineData("gameFiles", null)]
     [InlineData("dataFolder", null)]
+    [InlineData("statCache", null)]
     public async Task RestoringWithAFieldMissingOrMalformed_Is400(string field, string? json)
     {
         var request = Request("restore-from-manifest", "Mod.zip");

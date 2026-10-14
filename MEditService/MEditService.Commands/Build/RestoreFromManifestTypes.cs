@@ -5,8 +5,9 @@ namespace MEditService.Commands.Build;
 /// <summary>A mod to restore from its manifest, with the installation files the mod manager records it as installed from.</summary>
 public sealed record ModToRestore(string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles);
 
-/// <summary>The instance's facts beyond its mods: the game files the mods' files override, under the game's data folder.</summary>
-public sealed record InstanceToRestore(IReadOnlyList<OverriddenGameFile> GameFiles, string DataFolder);
+/// <summary>The instance's facts beyond its mods: the game files the mods' files override, under the game's data folder,
+/// and the folder of the stat cache.</summary>
+public sealed record InstanceToRestore(IReadOnlyList<OverriddenGameFile> GameFiles, string DataFolder, string StatCache);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum RestoreRefusal

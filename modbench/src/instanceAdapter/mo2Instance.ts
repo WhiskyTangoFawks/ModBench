@@ -19,7 +19,7 @@ import { mo2Installation } from './mo2Installation';
 import { mo2Reads, readingSource, readInstance } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
 import { hashIndex } from './hashIndex';
-import { hashIndexDir, modsDir, profilesDir, settingsFile } from './layout';
+import { hashIndexDir, modsDir, profilesDir, settingsFile, statCacheDir } from './layout';
 
 interface Mo2Machine {
   gameDirectoryOverrides: () => GameDirectoryOverrides;
@@ -58,6 +58,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter
     reading: () => readInstance(source),
     ...mo2Reads(context), ...mo2Installation(context, hashes), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives), ...mo2Repository(context, hashes),
     originFileHash: hashes.originFileHash,
+    statCacheFolder: statCacheDir(instanceRoot),
     subscribe: (listener) => context.watch.subscribe(listener),
   };
 }

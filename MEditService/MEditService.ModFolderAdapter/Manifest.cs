@@ -1,5 +1,3 @@
-using MEditService.RepositoriesLib;
-
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>What a mod's manifest says: the installation files and game files its files come from, then each
@@ -13,9 +11,8 @@ public sealed record Manifest(
 /// where the mod manager says the installation file comes from.</summary>
 public sealed record ManifestSource(string Name, long Size, string Hash, string? Source = null);
 
-/// <summary>A file of the mod folder, whose bytes its provider fixes. The stamp is what the file was read at, and
-/// is null when the file system could not give one.</summary>
-public sealed record ManifestFile(string Path, FileStamp? Stamp, FileProvider Provider);
+/// <summary>A file of the mod folder, whose bytes its provider fixes.</summary>
+public sealed record ManifestFile(string Path, FileProvider Provider);
 
 public abstract record FileProvider
 {

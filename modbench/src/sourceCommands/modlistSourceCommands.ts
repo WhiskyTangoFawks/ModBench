@@ -9,7 +9,8 @@ import { refuse } from '../ports/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 
 type Adapter = Pick<InstanceAdapter,
-  'installationFiles' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'>;
+  'installationFiles' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'
+  | 'statCacheFolder'>;
 
 interface ModlistSourceCommandsDeps {
   client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest'>;
@@ -119,7 +120,7 @@ async function restoreFromManifest(
   const read = await readMods(adapter, mods, gameFolder.dataFolder, { onProgress, signal });
   if (read.sent.length === 0) return { applied: true, landed: [], refused: read.refused };
   const sent = read.sent.map(({ name, folder, installationFiles }) => ({ name, folder, installationFiles }));
-  const facts: RestoreFacts = { gameFiles: [...read.gameFiles], dataFolder: gameFolder.dataFolder };
+  const facts: RestoreFacts = { gameFiles: [...read.gameFiles], dataFolder: gameFolder.dataFolder, statCache: adapter.statCacheFolder };
   const restoring = { onProgress: (progress: ModlistProgress): void => { onProgress?.({ phase: 'Restoring', ...progress }); }, signal };
   const first = await restoreOnce(client, sent, facts, restoring);
   if (!first.applied) return first;
@@ -186,7 +187,7 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
       const { sent, gameFiles, refused, notes } = await readMods(adapter, mods, gameFolder.dataFolder, { onProgress, signal });
       if (sent.length === 0) return { applied: true, landed: [], refused, notes };
       const outcome = await client.updateManifest(
-        sent, { gameFiles: [...gameFiles] }, { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
+        sent, { gameFiles: [...gameFiles], statCache: adapter.statCacheFolder }, { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
       return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes };
     },
 

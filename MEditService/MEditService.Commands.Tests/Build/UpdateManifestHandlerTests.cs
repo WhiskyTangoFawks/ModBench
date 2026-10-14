@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using MEditService.Commands.Build;
+using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.ModFolderAdapter;
 using MEditService.Ports;
@@ -31,11 +32,15 @@ public sealed class UpdateManifestHandlerTests
 
     private ManifestFile FileOf(string folder, string path) => _folders.Manifests[folder].Files.Single(f => f.Path == path);
 
+    private SelectionResult<string, UpdateManifestRefusal, UpdatedMod> Update(
+        IReadOnlyList<ModToUpdate> mods, IReadOnlyList<OverriddenGameFile> gameFiles, string? gesture = null, CancellationToken cancel = default) =>
+        Handler.UpdateManifest(mods, new InstanceToUpdate(gameFiles, "stat-cache"), gesture, cancel);
+
     private UpdatedMod Landed(params ModToUpdate[] mods) => Landed(mods, []);
 
     private UpdatedMod Landed(IReadOnlyList<ModToUpdate> mods, IReadOnlyList<OverriddenGameFile> gameFiles)
     {
-        var result = Handler.UpdateManifest(mods, gameFiles);
+        var result = Update(mods, gameFiles);
         Assert.Empty(result.Refused);
         return result.Landed.Single().Outcome;
     }
@@ -79,61 +84,15 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public void AFileWhoseStampMatchesItsLine_IsNotReadAgain_AndKeepsTheProviderItsLineNames()
-    {
-        _folders.WithFile(Mod, "a.nif", "a", modified: 9).WithFile(Mod, "game.esm", "vanilla", modified: 9);
-        var mod = ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.nif", "a")));
-        OverriddenGameFile[] gameFiles = [new OverriddenGameFile("Game.esm", 7, "vanilla")];
-        Landed([mod], gameFiles);
-        _folders.WithFile(Mod, "a.nif", "b", modified: 9).WithFile(Mod, "game.esm", "patched", modified: 9);
-
-        var updated = Landed([mod], gameFiles);
-
-        Assert.Empty(updated.NoProvider);
-        Assert.Equal(
-            [new FileProvider.FirstInstallationFile(), new FileProvider.GameFile("Game.esm")],
-            _folders.Manifests[Mod].Files.OrderBy(file => file.Path, StringComparer.Ordinal).Select(file => file.Provider));
-    }
-
-    [Fact]
-    public void AFileWhoseInstallationFileChangedSinceItsLastUpdate_IsReadAgain()
-    {
-        _folders.WithFile(Mod, "a.nif", "a", modified: 9);
-        var download = Downloaded("dl/Mod.zip", ("a.nif", "a"));
-        Landed(ModFrom("Mod", download));
-        _folders.WithFile(Mod, "a.nif", "b", modified: 9);
-
-        var updated = Landed(ModFrom("Mod", download with { Hash = "#upgraded" }));
-
-        Assert.Equal(["a.nif"], updated.NoProvider);
-    }
-
-    [Fact]
-    public void AModWhoseManifestCannotBeRead_IsUpdatedFromItsFolder_ReadingEveryFile()
-    {
-        _folders.WithFile(Mod, "a.nif", "a", modified: 9);
-        var mod = ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.nif", "a")));
-        Landed(mod);
-        _folders.WithFile(Mod, "a.nif", "b", modified: 9);
-        _folders.UnreadableManifests.Add(Mod);
-
-        var updated = Landed(mod);
-
-        Assert.True(updated.ManifestWritten);
-        Assert.Equal(["a.nif"], updated.NoProvider);
-    }
-
-    [Fact]
     public void AFileTheFirstInstallationFileHoldsAtItsPath_IsTheShortLine_AndTheInstallationFileIsAsTheRequestSays()
     {
-        _folders.WithFile(Mod, "meshes/a.nif", "hello", modified: 7);
+        _folders.WithFile(Mod, "meshes/a.nif", "hello");
         var download = Downloaded("dl/Mod.zip", ("meshes/a.nif", "hello")) with { Source = "nexus:1" };
 
         Landed(new ModToUpdate("Mod", Mod, [download], []));
 
         var line = FileOf(Mod, "meshes/a.nif");
         Assert.IsType<FileProvider.FirstInstallationFile>(line.Provider);
-        Assert.Equal((5L, 7L), (line.Stamp?.Size, line.Stamp?.Modified));
         var installationFile = Assert.Single(_folders.Manifests[Mod].InstallationFiles);
         Assert.Equal(("Mod.zip", 7L, "#dl/Mod.zip", "nexus:1"), (installationFile.Name, installationFile.Size, installationFile.Hash, installationFile.Source));
     }
@@ -198,7 +157,7 @@ public sealed class UpdateManifestHandlerTests
         _folders.WithFile("mods/Lost", "a.txt", "hello").WithFile("mods/Found", "a.txt", "hello");
         var lost = new InstallationFile("dl/Lost.zip", null, 7, "#lost", [new HashedEntry("a.txt", "hello")]);
 
-        var result = Handler.UpdateManifest([ModFrom("Lost", lost), ModFrom("Found", Downloaded("dl/Found.zip", ("a.txt", "hello")))], []);
+        var result = Update([ModFrom("Lost", lost), ModFrom("Found", Downloaded("dl/Found.zip", ("a.txt", "hello")))], []);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Lost", UpdateManifestRefusal.InstallationFileMissing), (refused.Item, refused.Refusal));
@@ -210,7 +169,7 @@ public sealed class UpdateManifestHandlerTests
     [Fact]
     public void AModWhoseFolderIsGone_IsRefused()
     {
-        var refused = Assert.Single(Handler.UpdateManifest([ModFrom("Gone")], []).Refused);
+        var refused = Assert.Single(Update([ModFrom("Gone")], []).Refused);
 
         Assert.Equal(UpdateManifestRefusal.ModFolderMissing, refused.Refusal);
     }
@@ -233,7 +192,7 @@ public sealed class UpdateManifestHandlerTests
         _folders.WithFile("mods/Held", "held.txt", "hello").WithFile("mods/Fine", "a.txt", "hello");
         _folders.Unreadable.Add(("mods/Held", "held.txt"));
 
-        var result = Handler.UpdateManifest([ModFrom("Held"), ModFrom("Fine")], []);
+        var result = Update([ModFrom("Held"), ModFrom("Fine")], []);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Held", UpdateManifestRefusal.ModFilesUnreadable), (refused.Item, refused.Refusal));
@@ -247,7 +206,7 @@ public sealed class UpdateManifestHandlerTests
         _folders.WithFile("mods/Locked", "a.txt", "hello").WithFile("mods/Fine", "a.txt", "hello");
         _folders.UnwritableManifests.Add("mods/Locked");
 
-        var result = Handler.UpdateManifest([ModFrom("Locked"), ModFrom("Fine")], []);
+        var result = Update([ModFrom("Locked"), ModFrom("Fine")], []);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Locked", UpdateManifestRefusal.NotWritten), (refused.Item, refused.Refusal));
@@ -270,7 +229,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "a.txt", "hello");
 
-        var result = Handler.UpdateManifest([ModFrom("Mod"), ModFrom("MOD")], []);
+        var result = Update([ModFrom("Mod"), ModFrom("MOD")], []);
 
         Assert.Single(result.Landed);
     }
@@ -280,7 +239,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile("mods/A", "a.txt", "hello").WithFile("mods/B", "a.txt", "hello");
 
-        Handler.UpdateManifest([ModFrom("A"), ModFrom("B")], [], "g");
+        Update([ModFrom("A"), ModFrom("B")], [], "g");
 
         Assert.Equal(
             [new ModlistProgress("g", "A", 0, 2), new ModlistProgress("g", "B", 1, 2), new ModlistProgress("g", null, 0, 0)],
@@ -294,7 +253,7 @@ public sealed class UpdateManifestHandlerTests
         using var cancel = new CancellationTokenSource();
         _notifications.OnPublish = _ => cancel.Cancel();
 
-        var result = Handler.UpdateManifest([ModFrom("A"), ModFrom("B")], [], cancel: cancel.Token);
+        var result = Update([ModFrom("A"), ModFrom("B")], [], cancel: cancel.Token);
 
         Assert.Equal(["A"], result.Landed.Select(landed => landed.Item));
         Assert.Empty(result.Refused);
@@ -304,12 +263,11 @@ public sealed class UpdateManifestHandlerTests
     [Fact]
     public void AFileDeletedFromTheModFolder_LeavesTheManifest()
     {
-        var handler = Handler;
         _folders.WithFile(Mod, "a.txt", "hello").WithFile(Mod, "b.txt", "hello");
-        handler.UpdateManifest([ModFrom("Mod")], []);
+        Update([ModFrom("Mod")], []);
 
         _folders.Without(Mod, "b.txt");
-        handler.UpdateManifest([ModFrom("Mod")], []);
+        Update([ModFrom("Mod")], []);
 
         Assert.Equal(["a.txt"], _folders.Manifests[Mod].Files.Select(f => f.Path));
     }

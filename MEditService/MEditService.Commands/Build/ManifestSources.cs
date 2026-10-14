@@ -21,11 +21,7 @@ internal sealed class ManifestSources(
     /// <summary>A file of the mod folder, by its path, and where its line says it comes from.</summary>
     internal sealed record SourcedFile(string Path, Source Source);
 
-    internal sealed record Resolved(IReadOnlyList<SourcedFile> Files, IReadOnlyList<Lack> Lacks)
-    {
-        /// <summary>The hash each file's provider names, by the file's path.</summary>
-        public Dictionary<string, string> Hashes() => Files.ToDictionary(file => file.Path, file => file.Source.Hash, StringComparer.Ordinal);
-    }
+    internal sealed record Resolved(IReadOnlyList<SourcedFile> Files, IReadOnlyList<Lack> Lacks);
 
     private sealed record Handed(InstallationFile File, Dictionary<string, HashedEntry> Entries);
 

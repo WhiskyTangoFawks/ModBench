@@ -384,6 +384,9 @@ export interface InstanceAdapter {
   installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
   /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
   readonly managerFilesInModFolder: readonly string[];
+  /** The folder in the instance, outside every mod folder, where mEdit keeps what it last read of each mod's files
+   *  (modlist-source.md, Status, story 3). The repository never commits it. */
+  readonly statCacheFolder: string;
   /** The game files in `dataFolder` that files of a mod, by their paths in it, override, named as the game folder
    *  names them, with their hashes. */
   overriddenGameFiles(dataFolder: string, modFilePaths: readonly string[]): Promise<FileRead<readonly GameFile[]>>;
@@ -398,7 +401,7 @@ export interface InstanceAdapter {
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** An origin file's size and hash at the path it is read from, remembered for this session alone: its lasting hash
-   *  is its manifest line, mEdit's (ADR-0013). Two files with one hash hold the same bytes. */
+   *  is the stat cache, mEdit's (ADR-0013). Two files with one hash hold the same bytes. */
   originFileHash(path: string): Promise<FileRead<HashedFile>>;
 
   // Changes.

@@ -100,6 +100,12 @@ describe('the MO2 adapter\'s repository', () => {
     expect(existsSync(join(root, '.gitignore'))).toBe(false);
   });
 
+  it('keeps the stat cache in a folder at the instance root, beside the mod folders', async () => {
+    const adapter = await instance();
+
+    expect(adapter.statCacheFolder).toBe(join(root, 'stat-cache'));
+  });
+
   it('shows git exactly the whitelist: the manifests, meta.ini, each profile\'s orders and INIs, and the configuration', async () => {
     const adapter = await instance();
     runGit('init', '--quiet');
@@ -111,7 +117,7 @@ describe('the MO2 adapter\'s repository', () => {
     const ignored = [
       'mods/Mod A/Mod A.esp', 'mods/Mod A/textures/a.dds', 'mods/Mod A/readme.ini', 'mods/Mod A/.git/HEAD', 'mods/Mod A/nested/meta.ini',
       'profiles/Default/saves/save.fos', 'profiles/Default/nested/modlist.txt', 'downloads/Mod.7z', 'downloads/Mod.7z.meta',
-      'source/Mod A/build.json', 'hash-index/hashes.jsonl', 'overwrite/log.txt', 'logs/mo_interface.log', 'webcache/index', 'plugins/x.dll',
+      'source/Mod A/build.json', 'hash-index/hashes.jsonl', 'stat-cache/Mod A.json', 'overwrite/log.txt', 'logs/mo_interface.log', 'webcache/index', 'plugins/x.dll',
     ];
     await Promise.all([...listed, ...ignored].map((path) => put(path)));
 

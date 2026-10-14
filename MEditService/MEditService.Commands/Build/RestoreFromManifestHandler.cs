@@ -37,7 +37,7 @@ public sealed class RestoreFromManifestHandler(IModFolderRepository repository, 
         List<ManifestSources.SourcedFile> differing;
         try
         {
-            differing = WithOtherBytes(mod, resolved);
+            differing = WithOtherBytes(mod, resolved, instance.StatCache);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -61,11 +61,11 @@ public sealed class RestoreFromManifestHandler(IModFolderRepository repository, 
         return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod([.. differing.Select(file => file.Path)]));
     }
 
-    private List<ManifestSources.SourcedFile> WithOtherBytes(ModToRestore mod, ManifestSources.Resolved resolved)
+    private List<ManifestSources.SourcedFile> WithOtherBytes(ModToRestore mod, ManifestSources.Resolved resolved, string statCache)
     {
-        var provided = resolved.Hashes();
-        var untracked = repository.FilePaths(mod.Folder).Where(path => !provided.ContainsKey(path)).ToHashSet(StringComparer.Ordinal);
-        var hashes = repository.Files(mod.Folder, mod.Name, untracked, provided).ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
+        var named = resolved.Files.Select(file => file.Path).ToHashSet(StringComparer.Ordinal);
+        var untracked = repository.FilePaths(mod.Folder).Where(path => !named.Contains(path)).ToHashSet(StringComparer.Ordinal);
+        var hashes = repository.Files(mod.Folder, mod.Name, untracked, statCache).ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
         return [.. resolved.Files.Where(file => hashes.GetValueOrDefault(file.Path) != file.Source.Hash)];
     }
 
