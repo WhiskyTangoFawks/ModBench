@@ -32,5 +32,5 @@ export function recordOpenPlan(argument: unknown, focusedSelection: readonly unk
 /** What a menu's open hands to open: the menu's selection, else its clicked row. */
 export function pinnedArgument(row: unknown, selection: unknown) {
   const subjects = Array.isArray(selection) && selection.length > 0 ? selection : [row];
-  return subjects.flatMap((s) => addressOf(s) ?? []).map((address) => ({ argument: { kind: 'record' as const, ...address }, pinned: true as const }));
+  return subjects.flatMap((s) => addressOf(s) ?? []).map((address) => ({ argument: { kind: 'record' as const, ...address }, pinned: true }));
 }
