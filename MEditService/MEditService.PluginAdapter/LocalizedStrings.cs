@@ -95,7 +95,7 @@ internal static class LocalizedStrings
     /// <summary>The loose strings files and archives a read of localized <paramref name="plugin"/> under
     /// <paramref name="loadOrder"/> takes its strings from.</summary>
     internal static IReadOnlyList<string> PlacesOf(PluginStrings strings, LoadOrderSnapshot loadOrder, ModPath plugin, GameRelease gameRelease) =>
-        [.. Find(strings, loadOrder, plugin, gameRelease).Values.Select(file => file.Place).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
+        [.. Find(strings, loadOrder, plugin, gameRelease).Values.Select(file => file.Holder).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
 
     /// <summary>Whether a path, forward-slash and relative to the plugin's folder, is one of the strings files compile
     /// writes for <paramref name="plugin"/>: none unless it is localized.</summary>
@@ -206,8 +206,7 @@ internal static class LocalizedStrings
         };
     }
 
-    // Place: the loose file, or the archive holding it.
-    private sealed record StringsFile(StringsSource Source, Language Language, string Place, Func<byte[]> Bytes)
+    private sealed record StringsFile(StringsSource Source, Language Language, string Holder, Func<byte[]> Bytes)
     {
         public static StringsFile? Named(string fileName, ModKey plugin, StringsLanguageFormat languageFormat, string place, Func<byte[]> bytes) =>
             StringsUtility.TryRetrieveInfoFromString(languageFormat, fileName, out var source, out var language, out var modName)

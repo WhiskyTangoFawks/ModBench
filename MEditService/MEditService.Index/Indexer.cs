@@ -487,8 +487,7 @@ internal sealed class Indexer : IDisposable
         leaving.Held.InstanceRoot is { } from && snapshot.InstanceRoot is { } to
         && string.Equals(IndexFile.For(from), IndexFile.For(to), StringComparison.OrdinalIgnoreCase);
 
-    // The diff is computed first and without side effects (one stamp read and a folder probe per
-    // plugin), so a snapshot that moves nothing writes nothing and publishes no status.
+    // The diff is computed first and without side effects, so a snapshot that moves nothing writes nothing and publishes no status.
 
     // Registrations the snapshot has stopped naming are dropped before anything new is opened, so a
     // freshly opened index file's last-run rows stop answering as early as possible. False when the

@@ -15,9 +15,9 @@ internal static class LoadOrderEndpoints
             .WithTags(Tag)
             .WithDescription(
                 "Reconciles the load order against this snapshot (ADR-0013): every plugin file in " +
-                "the instance, each with its origin, path and provider and the strings files and archives beside it, each with its stamp, " +
-                "the active plugins in load order, and " +
-                "the plugins loaded with no line, the archives the game loads and the loose strings files it reads, each with its stamp, as Mod Management decided them. Plugins new to the snapshot are opened and " +
+                "the instance, each with its origin, path, provider, strings files and archives, the active plugins in load order, " +
+                "the plugins loaded with no line, the archives the game loads and the loose strings files it reads, as Mod Management decided them. " +
+                "Every archive and strings file carries its stamp. Plugins new to the snapshot are opened and " +
                 "registered (indexed only if never seen), plugins absent from it are unregistered, " +
                 "plugins whose load index moved are re-registered SQL-only; then one winner sweep. " +
                 "Answers as soon as the snapshot is applied; the sweep runs after, reported on " +
