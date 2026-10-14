@@ -4,7 +4,7 @@ import type { ModlistNode } from './ModListProvider';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
 import { promptRename } from '../drivingLib/promptRename';
-import { MODS_KEY_ARGS, fileRefOf, modNameOf, runModsWriting, openFolderArgument } from './gestureEntry';
+import { MODS_KEY_ARGS, entryRefOf, fileRefOf, modNameOf, separatorNameOf, runModsWriting, openFolderArgument } from './gestureEntry';
 import { registerAgentGesture, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { viewCopyValueText } from '../drivingLib/copyValue';
 import {
@@ -14,7 +14,7 @@ import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
-import type { ModlistCommands, MovePlace, OriginFileMark, OriginFileRef, SelectionResult } from '../modOrderCommands/modOrderCommands';
+import type { EntryRef, ModlistCommands, MovePlace, OriginFileMark, OriginFileRef, SelectionResult } from '../modOrderCommands/modOrderCommands';
 import { FILE_MARKS, fileLabel } from './modFiles';
 import {
   endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem, type MoveTarget,
@@ -134,7 +134,12 @@ export function registerModMoveCommand(
       }
       return undefined;
     },
-    fromAgent: ({ argument, options }) => ({ kind: 'mod', names: argument.map(modNameOf), target: options }),
+    fromAgent: ({ argument, options }) => {
+      const entries = argument.map(entryRefOf);
+      const kind = entries[0]?.kind ?? 'mod';
+      if (entries.some((entry) => entry.kind !== kind)) throw new Refusal('An agent call to move carries mods or separators, not both.');
+      return { kind, names: entries.map((entry) => entry.name), target: options };
+    },
     run: async ({ kind, names, target: { place, end } }) => {
       if (kind === 'mod') {
         if (place.kind === 'mod' && names.includes(place.name)) {
@@ -302,102 +307,159 @@ async function confirmSeparatorDelete(names: readonly string[], ask: AskQuestion
   return (await ask(question, { modal: true }, 'Delete')) === 'Delete';
 }
 
-export function registerSeparatorCommands(
-  commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
-  viewSelection: () => readonly ModlistNode[],
-): vscode.Disposable[] {
-  return [
-      registerGesture('modbench.separator.rename', viewSelection, async (entry) => {
-        const node = singularArgument(entry, 'separator');
-        if (!node) return;
-        const oldName = node.separator.name;
-        const newName = await promptRename('Rename separator', oldName, separatorNamePrompt(commands, instance, oldName));
-        if (newName === undefined) return;
-        const failed = 'Failed to rename separator.';
-        await runModsWriting(instance, async () => {
-          try {
-            const result = await commands.renameSeparator(instance.value.activeProfile, oldName, newName);
-            if (!result.applied) reporter.report('error', failed, result.refusal);
-          } catch (err) {
-            reporter.report('error', failed, errorMessage(err));
-          }
-        });
-      }),
-      registerGesture('modbench.separator.add', viewSelection, async (entry) => {
-        const node = singularArgument(entry, 'mod', 'separator');
-        if (!node) return;
-        const name = await vscode.window.showInputBox({
-          prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNamePrompt(commands, instance),
-        });
-        if (!name) return;
-        const anchor = node.kind === 'mod' ? node.mod : node.separator;
-        const failed = 'Failed to add separator.';
-        await runModsWriting(instance, async () => {
-          try {
-            const result = await commands.insertSeparator(instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name });
-            if (!result.applied) reporter.report('error', failed, result.refusal);
-          } catch (err) {
-            reporter.report('error', failed, errorMessage(err));
-          }
-        });
-      }),
-      registerGesture('modbench.separator.delete', viewSelection, async (entry) => {
-        const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
-        if (names.length === 0) return;
-        if (!(await confirmSeparatorDelete(names, ask))) return;
-        await runModsWriting(instance, async () => {
-          const result = await commands.deleteSeparators(instance.value.activeProfile, instance.value.mods, names, trash);
-          if (!result.applied) {
-            reporter.report('error', 'Failed to delete separators.', result.refusal);
-            return;
-          }
-          reporter.selectionOutcome(
-            `Could not delete ${result.outcome.refused.length} of ${names.length} separators.`,
-            result.outcome, (item) => item.name);
-          for (const item of result.outcome.landed) {
-            if (item.lineRefusal !== undefined) {
-              reporter.report('warning',
-                `"${item.name}" was deleted, but its ${instance.value.managerNames.modOrderFile} line could not be removed.`, item.lineRefusal);
-            }
-          }
-        });
-      }),
-  ];
+interface SeparatorAdd {
+  readonly name: string;
+  readonly anchor: EntryRef;
 }
-const createPartial = (name: string, lineRefusal: string | undefined, modOrderFile: string): PartialFailure[] =>
-  (lineRefusal === undefined ? [] : [{ message: `"${name}" was created, but its ${modOrderFile} line could not be written.`, detail: lineRefusal, severity: 'warning' }]);
 
-export function registerCreateEmptyModCommand(
+interface SeparatorRename {
+  readonly oldName: string;
+  readonly newName: string;
+}
+
+type DeletedSeparator = Extract<Awaited<ReturnType<ModlistCommands['deleteSeparators']>>, { applied: true }>['outcome']['landed'][number];
+
+function renameGesture(
   commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
-): vscode.Disposable {
-  const gesture: AgentGesture<ModlistNode, string, GestureResult<string>, { name: string }> = {
-    fromView: async () => {
-      const name = await vscode.window.showInputBox({
-        prompt: 'New mod name', placeHolder: 'My New Mod',
-        validateInput: (value) => commands.newModNameRefusal(instance.value, value),
-      });
-      return name || undefined;
+): AgentGesture<ModlistNode, SeparatorRename, GestureResult<string>, { name: string }> {
+  return {
+    fromView: async (entry) => {
+      const node = singularArgument(entry, 'separator');
+      if (!node) return undefined;
+      const oldName = node.separator.name;
+      const newName = await promptRename('Rename separator', oldName, separatorNamePrompt(commands, instance, oldName));
+      return newName === undefined ? undefined : { oldName, newName };
     },
-    fromAgent: ({ options: { name } }) => {
-      const refusal = commands.newModNameRefusal(instance.value, name);
+    fromAgent: ({ argument, options: { name } }) => {
+      const [only, ...more] = argument;
+      if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a separator carries one separator.');
+      const oldName = separatorNameOf(only);
+      const refusal = commands.separatorNameRefusal(instance.value, name, oldName);
       if (refusal !== undefined) throw new Refusal(refusal);
-      return name;
+      return { oldName, newName: name };
     },
-    run: (name) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
-      const failed = `Failed to create "${name}".`;
-      try {
-        const outcome = await commands.createEmptyMod(instance.value.activeProfile, name);
-        return outcome.applied
-          ? { applied: true, outcome: { landed: [name], refused: [] }, partial: createPartial(name, outcome.lineRefusal, instance.value.managerNames.modOrderFile) }
-          : { applied: false, refusal: failed, detail: outcome.refusal };
-      } catch (err) {
-        return { applied: false, refusal: failed, detail: errorMessage(err) };
-      }
+    run: ({ oldName, newName }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
+      const result = await commands.renameSeparator(instance.value.activeProfile, oldName, newName);
+      if (!result.applied) return { applied: false, refusal: 'Failed to rename separator.', detail: result.refusal };
+      return { applied: true, outcome: { landed: result.wrote ? [result.name] : [], refused: [] } };
     }),
     report: (result) => {
       if (!result.applied) reporter.report('error', result.refusal, result.detail);
-      else reportPartial(reporter, result.partial);
     },
+  };
+  }
+
+  function addGesture(
+    commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
+  ): AgentGesture<ModlistNode, SeparatorAdd, GestureResult<string>, { name: string }> {
+    return {
+    fromView: async (entry) => {
+      const node = singularArgument(entry, 'mod', 'separator');
+      if (!node) return undefined;
+      const name = await vscode.window.showInputBox({
+        prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNamePrompt(commands, instance),
+      });
+      if (!name) return undefined;
+      const anchor = node.kind === 'mod' ? node.mod : node.separator;
+      return { name, anchor: { kind: anchor.kind, name: anchor.name } };
+    },
+    fromAgent: ({ argument, options: { name } }) => {
+      const [only, ...more] = argument;
+      if (only === undefined || more.length > 0) throw new Refusal('An agent call to add a separator carries one mod or separator, the anchor.');
+      const refusal = commands.separatorNameRefusal(instance.value, name);
+      if (refusal !== undefined) throw new Refusal(refusal);
+      return { name, anchor: entryRefOf(only) };
+    },
+    run: ({ name, anchor }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
+      const result = await commands.insertSeparator(instance.value.activeProfile, name, anchor);
+      return result.applied
+        ? { applied: true, outcome: { landed: [result.name], refused: [] } }
+        : { applied: false, refusal: 'Failed to add separator.', detail: result.refusal };
+    }),
+    report: (result) => {
+      if (!result.applied) reporter.report('error', result.refusal, result.detail);
+    },
+  };
+  }
+
+  function deleteGesture(
+    commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  ): AgentGesture<ModlistNode, readonly string[], GestureResult<DeletedSeparator>> {
+    return {
+    fromView: async (entry) => {
+      const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
+      return names.length > 0 && await confirmSeparatorDelete(names, ask) ? names : undefined;
+    },
+    fromAgent: ({ argument }) => argument.map(separatorNameOf),
+    run: (names) => runModsWriting(instance, async (): Promise<GestureResult<DeletedSeparator>> => {
+      const { activeProfile, mods, managerNames } = instance.value;
+      const result = await commands.deleteSeparators(activeProfile, mods, names, trash);
+      if (!result.applied) return { applied: false, refusal: 'Failed to delete separators.', detail: result.refusal };
+      return {
+        applied: true,
+        outcome: result.outcome,
+        partial: result.outcome.landed.flatMap((item) => (item.lineRefusal === undefined ? [] : [{
+          message: `"${item.name}" was deleted, but its ${managerNames.modOrderFile} line could not be removed.`,
+          detail: item.lineRefusal, severity: 'warning' as const,
+        }])),
+      };
+    }),
+    report: (result, names) => {
+      if (!result.applied) {
+        reporter.report('error', result.refusal, result.detail);
+        return;
+      }
+      reporter.selectionOutcome(
+        `Could not delete ${result.outcome.refused.length} of ${names.length} separators.`, result.outcome, (item) => item.name);
+      reportPartial(reporter, result.partial);
+    },
+  };
+  }
+
+  export function registerSeparatorCommands(
+    commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+    viewSelection: () => readonly ModlistNode[],
+  ): vscode.Disposable[] {
+    return [
+      registerAgentGesture('modbench.separator.rename', viewSelection, renameGesture(commands, instance, reporter)),
+      registerAgentGesture('modbench.separator.add', viewSelection, addGesture(commands, instance, reporter)),
+      registerAgentGesture('modbench.separator.delete', viewSelection, deleteGesture(commands, instance, reporter, ask, trash)),
+    ];
+  }
+  const createPartial = (name: string, lineRefusal: string | undefined, modOrderFile: string): PartialFailure[] =>
+    (lineRefusal === undefined ? [] : [{ message: `"${name}" was created, but its ${modOrderFile} line could not be written.`, detail: lineRefusal, severity: 'warning' }]);
+
+  export function registerCreateEmptyModCommand(
+    commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
+  ): vscode.Disposable {
+    const gesture: AgentGesture<ModlistNode, string, GestureResult<string>, { name: string }> = {
+      fromView: async () => {
+        const name = await vscode.window.showInputBox({
+          prompt: 'New mod name', placeHolder: 'My New Mod',
+          validateInput: (value) => commands.newModNameRefusal(instance.value, value),
+        });
+        return name || undefined;
+      },
+      fromAgent: ({ options: { name } }) => {
+        const refusal = commands.newModNameRefusal(instance.value, name);
+        if (refusal !== undefined) throw new Refusal(refusal);
+        return name;
+      },
+      run: (name) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
+        const failed = `Failed to create "${name}".`;
+        try {
+          const outcome = await commands.createEmptyMod(instance.value.activeProfile, name);
+          return outcome.applied
+            ? { applied: true, outcome: { landed: [name], refused: [] }, partial: createPartial(name, outcome.lineRefusal, instance.value.managerNames.modOrderFile) }
+            : { applied: false, refusal: failed, detail: outcome.refusal };
+        } catch (err) {
+          return { applied: false, refusal: failed, detail: errorMessage(err) };
+        }
+      }),
+      report: (result) => {
+        if (!result.applied) reporter.report('error', result.refusal, result.detail);
+        else reportPartial(reporter, result.partial);
+      },
   };
   return registerAgentGesture('modbench.mod.createEmpty', () => [], gesture);
 }

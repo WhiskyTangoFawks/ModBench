@@ -530,6 +530,43 @@ describe('the agent server, running a gesture', () => {
     });
   });
 
+  describe('the separator gestures', () => {
+    const textures = { kind: 'separator' as const, name: 'Textures' };
+    const fire = async (args: Record<string, unknown>) => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const { client } = await served();
+      return call(client, 'run_gesture', args);
+    };
+
+    it.each([
+      ['a mod', { name: 'B' }, { kind: 'mod', name: 'B' }],
+      ['a separator', { name: 'Textures', kind: 'separator' }, textures],
+    ] as const)('fires add with %s as the anchor Argument and the name as an Option', async (_, anchor, argument) => {
+      await fire({ command: 'modbench.separator.add', argument: [anchor], options: { name: 'New' } });
+
+      expect(fired.calls).toEqual([['modbench.separator.add', new AgentCall([argument], { name: 'New' })]]);
+    });
+
+    it('fires rename with the one separator as its Argument and the new name as an Option', async () => {
+      await fire({ command: 'modbench.separator.rename', argument: [{ name: 'Textures' }], options: { name: 'Skins' } });
+
+      expect(fired.calls).toEqual([['modbench.separator.rename', new AgentCall([textures], { name: 'Skins' })]]);
+    });
+
+    it('fires delete with the separators named as its Argument', async () => {
+      await fire({ command: 'modbench.separator.delete', argument: [{ name: 'Textures' }] });
+
+      expect(fired.calls).toEqual([['modbench.separator.delete', new AgentCall([textures], {})]]);
+    });
+
+    it('refuses a name that is a mod, not a separator, firing nothing', async () => {
+      const answer = await fire({ command: 'modbench.separator.delete', argument: [{ name: 'B' }] });
+
+      expect(answer.text).toContain('Nothing is named "B" as a separator.');
+      expect(fired.calls).toEqual([]);
+    });
+  });
+
   describe('the mod gestures', () => {
     const B = { kind: 'mod' as const, name: 'B' };
     const fire = async (args: Record<string, unknown>) => {
@@ -586,6 +623,14 @@ describe('the agent server, running a gesture', () => {
       await fire({ command: 'modbench.mod.createEmpty', options: { name: 'New' } });
 
       expect(fired.calls).toEqual([['modbench.mod.createEmpty', new AgentCall([], { name: 'New' })]]);
+    });
+
+    it('fires move with separators named as separators, so they are not taken for the mods of that name', async () => {
+      const options = { place: { kind: 'modOrder' }, end: 'winning' };
+
+      await fire({ command: 'modbench.mod.move', argument: [{ name: 'Textures', kind: 'separator' }], options });
+
+      expect(fired.calls).toEqual([['modbench.mod.move', new AgentCall([{ kind: 'separator', name: 'Textures' }], options)]]);
     });
 
     it.each(['modbench.mod.excludeFile', 'modbench.mod.includeFile'])('fires %s with each file by its path in its mod, in the mod\'s own casing', async (command) => {

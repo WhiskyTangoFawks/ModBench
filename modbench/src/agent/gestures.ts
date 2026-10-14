@@ -16,18 +16,27 @@ function gestureInput<Given>(takes: string, input: z.ZodType<Given>, callOf: (va
   return { takes, callOf: (value, given) => callOf(value, parseOrRefuse(input, given)) };
 }
 
-const MOD_NAME = z.object({ name: z.string(), kind: z.enum(['mod', 'separator']).optional() });
+const ENTRY_NAME = z.object({ name: z.string(), kind: z.enum(['mod', 'separator']).optional() });
 
-const modArguments = (value: InstanceValue, argument: readonly z.infer<typeof MOD_NAME>[]) => modsNamed(value.mods, argument).map((entry) => {
-  if (entry.kind !== 'mod') throw new Refusal(`"${entry.name}" is a separator, not a mod.`);
-  return { kind: 'mod' as const, name: entry.name };
-});
+const entryArguments = (value: InstanceValue, argument: readonly z.infer<typeof ENTRY_NAME>[]) =>
+  modsNamed(value.mods, argument).map(({ kind, name }) => ({ kind, name }));
+
+const modArguments = (value: InstanceValue, argument: readonly z.infer<typeof ENTRY_NAME>[]) =>
+  entryArguments(value, argument).map((entry) => {
+    if (entry.kind !== 'mod') throw new Refusal(`"${entry.name}" is a separator, not a mod.`);
+    return { kind: 'mod' as const, name: entry.name };
+  });
+
+const SEPARATOR_NAME = z.object({ name: z.string() });
+
+const separatorArguments = (value: InstanceValue, argument: readonly z.infer<typeof SEPARATOR_NAME>[]) =>
+  entryArguments(value, argument.map(({ name }) => ({ name, kind: 'separator' as const })));
 
 const MODS_TAKES = 'argument: the mods, each { name, kind? } as list_mods names it';
 
 const MODS = gestureInput(
   MODS_TAKES,
-  z.object({ argument: z.array(MOD_NAME) }),
+  z.object({ argument: z.array(ENTRY_NAME) }),
   (value, { argument }) => new AgentCall(modArguments(value, argument), {}),
 );
 
@@ -40,18 +49,36 @@ const placeNamed = (value: InstanceValue, place: z.infer<typeof MOVE_PLACE>) =>
   ('name' in place ? { kind: place.kind, name: modsNamed(value.mods, [{ name: place.name, kind: place.kind }])[0]?.name ?? place.name } : place);
 
 const MOVE_MODS = gestureInput(
-  `${MODS_TAKES}; options: { place: { kind: 'ungrouped' | 'modOrder' } or { kind: 'separator' | 'mod', name: the one it lands in or beside }, end: 'winning' | 'losing' }`,
-  z.object({ argument: z.array(MOD_NAME), options: z.object({ place: MOVE_PLACE, end: z.enum(['winning', 'losing']) }) }),
+  `argument: the mods, or the separators, each { name, kind? } as list_mods names it; options: { place: { kind: 'ungrouped' | 'modOrder' } or { kind: 'separator' | 'mod', name: the one it lands in or beside }, end: 'winning' | 'losing' }`,
+  z.object({ argument: z.array(ENTRY_NAME), options: z.object({ place: MOVE_PLACE, end: z.enum(['winning', 'losing']) }) }),
   (value, { argument, options: { place, end } }) =>
-    new AgentCall(modArguments(value, argument), { place: placeNamed(value, place), end }),
+    new AgentCall(entryArguments(value, argument), { place: placeNamed(value, place), end }),
 );
 
 const NAME_OPTION = z.object({ options: z.object({ name: z.string() }) });
 
 const RENAME_MOD = gestureInput(
   'argument: the mod, { name } as list_mods names it; options: { name: its new name }',
-  NAME_OPTION.extend({ argument: z.array(MOD_NAME) }),
+  NAME_OPTION.extend({ argument: z.array(ENTRY_NAME) }),
   (value, { argument, options }) => new AgentCall(modArguments(value, argument), options),
+);
+
+const ADD_SEPARATOR = gestureInput(
+  'argument: the mod or separator it lands beside, { name, kind? } as list_mods names it; options: { name: the new separator\'s name }',
+  NAME_OPTION.extend({ argument: z.array(ENTRY_NAME) }),
+  (value, { argument, options }) => new AgentCall(entryArguments(value, argument), options),
+);
+
+const RENAME_SEPARATOR = gestureInput(
+  'argument: the separator, { name } as list_mods names it; options: { name: its new name }',
+  NAME_OPTION.extend({ argument: z.array(SEPARATOR_NAME) }),
+  (value, { argument, options }) => new AgentCall(separatorArguments(value, argument), options),
+);
+
+const DELETE_SEPARATORS = gestureInput(
+  'argument: the separators, each { name } as list_mods names it',
+  z.object({ argument: z.array(SEPARATOR_NAME) }),
+  (value, { argument }) => new AgentCall(separatorArguments(value, argument), {}),
 );
 
 const CREATE_EMPTY_MOD = gestureInput(
@@ -62,7 +89,7 @@ const CREATE_EMPTY_MOD = gestureInput(
 
 const FILES = gestureInput(
   'argument: the files, each { mod: { name, kind? } as list_mods names it, path: its path in the mod }',
-  z.object({ argument: z.array(z.object({ mod: MOD_NAME, path: z.string() })) }),
+  z.object({ argument: z.array(z.object({ mod: ENTRY_NAME, path: z.string() })) }),
   (value, { argument }) => new AgentCall(filesNamed(value, argument).map(({ mod, file }) =>
     ({ kind: 'file', origin: { kind: 'mod', name: mod }, relativePath: file })), {}),
 );
@@ -123,6 +150,9 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.createEmpty', CREATE_EMPTY_MOD],
   ['modbench.mod.excludeFile', FILES],
   ['modbench.mod.includeFile', FILES],
+  ['modbench.separator.add', ADD_SEPARATOR],
+  ['modbench.separator.rename', RENAME_SEPARATOR],
+  ['modbench.separator.delete', DELETE_SEPARATORS],
   ['modbench.plugin.enable', LINES],
   ['modbench.plugin.disable', LINES],
   ['modbench.plugin.decompile', PLUGINS],

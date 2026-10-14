@@ -118,7 +118,7 @@ describe('insertSeparator', () => {
 
     const outcome = await commands.insertSeparator('Default', 'New Section', anchor);
 
-    expect(outcome).toEqual({ applied: true, wrote: true });
+    expect(outcome).toEqual({ applied: true, wrote: true, name: 'New Section' });
     expect(fake.calls).toEqual([orderWrite([{ kind: 'addSeparator', separator: 'New Section', afterIndex }])]);
   });
 
@@ -154,7 +154,7 @@ describe('renameSeparator', () => {
 
     const outcome = await commands.renameSeparator('Default', UNASSIGNED, 'Renamed');
 
-    expect(outcome).toEqual({ applied: true, wrote: true });
+    expect(outcome).toEqual({ applied: true, wrote: true, name: 'Renamed' });
     expect(fake.calls).toEqual([orderWrite([{ kind: 'renameSeparator', from: UNASSIGNED, to: 'Renamed' }])]);
   });
 });

@@ -15,13 +15,30 @@ export type { SelectionResult };
 export type { InstallTarget } from '../instanceAdapter/instanceAdapter';
 export type { ModSource } from './install';
 
-async function changeModOrder(adapter: InstanceAdapter, profile: string, decide: DecideModOrder): Promise<CommandResult> {
+async function changeModOrderLanding(
+  adapter: InstanceAdapter, profile: string, decide: DecideModOrder,
+): Promise<CommandResult<Awaited<ReturnType<InstanceAdapter['changeModOrder']>>>> {
   try {
-    const { wrote } = await adapter.changeModOrder(profile, decide);
-    return { applied: true, wrote };
+    return { applied: true, ...await adapter.changeModOrder(profile, decide) };
   } catch (err) {
     return refuse(err);
   }
+}
+
+async function changeModOrder(adapter: InstanceAdapter, profile: string, decide: DecideModOrder): Promise<CommandResult> {
+  const result = await changeModOrderLanding(adapter, profile, decide);
+  return result.applied ? { applied: true, wrote: result.wrote } : result;
+}
+
+// A separator written, and the name it was written under.
+type SeparatorResult = CommandResult<{ wrote: boolean; name: string }>;
+
+async function changeSeparator(adapter: InstanceAdapter, profile: string, decide: DecideModOrder): Promise<SeparatorResult> {
+  const result = await changeModOrderLanding(adapter, profile, decide);
+  if (!result.applied) return result;
+  const name = result.landed.flatMap((change) => (change.kind === 'addSeparator' ? [change.separator] : change.kind === 'renameSeparator' ? [change.to] : []))[0];
+  if (name === undefined) throw new Error('The adapter landed no separator.');
+  return { applied: true, wrote: result.wrote, name };
 }
 
 type EntryKind = EntryRef['kind'];
@@ -54,7 +71,7 @@ function setModsEnabled(
     found.map((mod) => ({ kind: 'enable', mod, enabled })));
 }
 
-export type { MovePlace, OrderEnd, OriginFileMark, SeparatorsPlace } from '../instanceAdapter/instanceAdapter';
+export type { EntryRef, MovePlace, OrderEnd, OriginFileMark, SeparatorsPlace } from '../instanceAdapter/instanceAdapter';
 
 // `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
 // order, at the `end` of the place. A separator or mod that has gone refuses the whole move.
@@ -202,8 +219,8 @@ function groupStartOf(order: readonly ModlistEntry[], at: number): number {
 // after it; on a separator, before its own group's winning-most member.
 function insertSeparator(
   adapter: InstanceAdapter, profile: string, requested: string, anchor: EntryRef,
-): Promise<CommandResult> {
-  return changeModOrder(adapter, profile, (order) => {
+): Promise<SeparatorResult> {
+  return changeSeparator(adapter, profile, (order) => {
     const at = order.findIndex((e) => e.kind === anchor.kind && e.name === anchor.name);
     if (at === -1) throw new Error(`Entry not found in modlist: ${anchor.name}`);
     const afterIndex = anchor.kind === 'separator' ? groupStartOf(order, at) - 1 : at;
@@ -214,8 +231,8 @@ function insertSeparator(
 // Rename a separator in place, and its folder with it.
 function renameSeparator(
   adapter: InstanceAdapter, profile: string, oldName: string, requested: string,
-): Promise<CommandResult> {
-  return changeModOrder(adapter, profile, () => [{ kind: 'renameSeparator', from: oldName, to: requested }]);
+): Promise<SeparatorResult> {
+  return changeSeparator(adapter, profile, () => [{ kind: 'renameSeparator', from: oldName, to: requested }]);
 }
 
 interface TrashedEntry {

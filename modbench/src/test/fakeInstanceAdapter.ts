@@ -154,7 +154,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     changeModOrder: (profile, decide: DecideModOrder) => {
       const changes = decide(current.mods, current.modFolders);
-      return record({ verb: 'changeModOrder', profile, changes }, { wrote: changes.length > 0 });
+      return record({ verb: 'changeModOrder', profile, changes }, { wrote: changes.length > 0, landed: changes });
     },
     changePluginOrder: (profile, decide: DecidePluginOrder) => {
       const changes = decide(current.pluginOrder);
