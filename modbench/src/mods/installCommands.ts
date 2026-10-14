@@ -1,5 +1,3 @@
-// The install gesture: a downloaded file, an archive or a folder, as a new mod or over an installed one.
-
 import * as vscode from 'vscode';
 import type { DownloadFile, Instance, InstanceValue } from '../instanceLoader/instance';
 import { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, samePath } from '../instanceAdapter/instanceAdapter';
@@ -25,7 +23,6 @@ interface InstalledMod {
 
 type InstallResult = GestureResult<InstalledMod>;
 
-// Decides the reporter an install's failure goes to, and the view that shows its progress.
 type InstallVia = 'downloadedFile' | 'installFromArchive' | 'installFromFolder';
 
 interface Install {

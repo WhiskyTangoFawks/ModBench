@@ -6,7 +6,7 @@ import {
   entryNotFound, type DecideModOrder, type EntryRef, type FileOrigin, type InstanceAdapter,
   type ModFolder, type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
-import { entryNameRefusal, goneFromDisk, newModNameRefusal, type EntryKey, type TakenNames } from '../coreLib/commandRefusals';
+import { EMPTY_MOD_NAME, entryNameRefusal, goneFromDisk, newModNameRefusal, type EntryKey, type TakenNames } from '../coreLib/commandRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { isRefused, type MEditClient } from '../client';
@@ -194,7 +194,6 @@ async function markFiles(
 }
 
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
-const EMPTY_MOD_NAME = 'A mod name cannot be empty.';
 const MOD_NAME_CLASH = 'A mod with this name already exists';
 const MOD_NAME_WITH_PATH_SEPARATOR = 'A mod name cannot contain / or \\';
 
