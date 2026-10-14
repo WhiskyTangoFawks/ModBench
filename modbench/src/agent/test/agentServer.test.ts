@@ -8,6 +8,7 @@ vi.mock('vscode', () => ({
   commands: { executeCommand: (...args: unknown[]) => { fired.calls.push(args); return fired.failure ? Promise.reject(fired.failure) : Promise.resolve(fired.outcome); } },
   DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3, 0: 'Error', 1: 'Warning', 2: 'Information', 3: 'Hint' },
 }));
+import type * as vscode from 'vscode';
 import { createServer, request, type OutgoingHttpHeaders, type Server } from 'node:http';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -54,13 +55,15 @@ afterEach(async () => {
   await Promise.all(blockers.splice(0).map((blocker) => new Promise((done) => blocker.close(done))));
 });
 
-async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient()) {
+const NO_ENVIRONMENT = { forEach: () => undefined };
+
+async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: Pick<vscode.EnvironmentVariableCollection, 'forEach'> = NO_ENVIRONMENT) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const warned: string[] = [];
   const errored: string[] = [];
   const server = serveAgent({
-    port, instance, mEdit, reporter,
+    port, instance, mEdit, terminalEnvironment, reporter,
     log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => { lines.push(line); warned.push(line); }, error: (line) => { lines.push(line); errored.push(line); } },
   });
   running.push(server);
@@ -68,8 +71,8 @@ async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new I
   return { reporter, lines, warned, errored, address, bound: address?.port };
 }
 
-async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient()): Promise<Client> {
-  const { bound } = await serve(instance, 0, mEdit);
+async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: Pick<vscode.EnvironmentVariableCollection, 'forEach'>): Promise<Client> {
+  const { bound } = await serve(instance, 0, mEdit, terminalEnvironment);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
   clients.push(client);
@@ -93,13 +96,21 @@ describe('the agent server, given an instance value', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mods', 'list_plugins', 'list_profiles', 'list_references', 'list_source_problems', 'read_record', 'resolve_instance_names', 'resolve_names', 'run_gesture', 'select_rows']);
+    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mods', 'list_plugins', 'list_profiles', 'list_references', 'list_source_problems', 'read_record', 'resolve_instance_names', 'resolve_names', 'run_gesture', 'script_environment', 'select_rows']);
   });
 
   it('hands the client its instructions on initialize', async () => {
     const client = await clientOf(new FakeInstance(VALUE));
 
     expect(client.getInstructions()).toBeTruthy();
+  });
+
+  it('hands a shell the variables the terminals of its window hold, as they are now', async () => {
+    const held = new Map([['MEDIT_PORT', { value: '5172' }], ['PYTHONPATH', { value: '/ext/scripts' }]]);
+    const client = await clientOf(new FakeInstance(VALUE), undefined, { forEach: (each) => { held.forEach((mutator, name) => { each(name, mutator as vscode.EnvironmentVariableMutator, undefined as never); }); } });
+    held.set('MEDIT_PORT', { value: '6001' });
+
+    expect(await read(client, 'script_environment')).toEqual({ MEDIT_PORT: '6001', PYTHONPATH: '/ext/scripts' });
   });
 
   it('reads the profiles and the active one', async () => {

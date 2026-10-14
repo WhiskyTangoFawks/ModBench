@@ -5,6 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import type { InstanceView } from '../instanceLoader/instance';
+import type * as vscode from 'vscode';
 import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
@@ -17,6 +18,7 @@ import { Refusal } from '../drivingLib/refusal';
 import { parseOrRefuse } from './refusal';
 import { LIST_REFERENCES, READ_RECORD } from './readRecord';
 import { RESOLVE_NAMES } from './resolveNames';
+import { SCRIPT_ENVIRONMENT } from './scriptEnvironment';
 import { SELECT_ROWS } from './selectRows';
 import { SOURCE_PROBLEMS } from './sourceProblems';
 
@@ -26,6 +28,7 @@ export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence'> | undefined;
   mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences'>;
+  terminalEnvironment: Pick<vscode.EnvironmentVariableCollection, 'forEach'>;
   reporter: Reporter;
   log: Log;
 }
@@ -75,9 +78,11 @@ const NO_INPUT = {};
 
 const INSTRUCTIONS = `Name objects as Modbench's views do: a plugin by its file name, a mod or a separator by its name, a record by its EditorID or FormKey, a downloaded file by its file name, an archive or a folder outside the downloads by its path, a file in a mod by its path in the mod. A name that means more than one thing is refused with each match listed as you can name it; name the one you mean that way.
 
-A plugin with source is a text file in a repository: edit it with your file tools, and the user reviews the change in Source Control. A plugin with no source is a binary: never edit it. Mod manager files change only through run_gesture. Ask Modbench what the files cannot answer.`;
+A plugin with source is a text file in a repository: edit it with your file tools, and the user reviews the change in Source Control. A plugin with no source is a binary: never edit it. Mod manager files change only through run_gesture. A change to many records by a rule is a script: write a Python file with import medit and run it in your shell with the variables script_environment returns.
 
-function mcpServerOf({ instance, mEdit, log }: AgentServerOptions): McpServer {
+Ask Modbench what the files cannot answer.`;
+
+function mcpServerOf({ instance, mEdit, terminalEnvironment, log }: AgentServerOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
   for (const read of INSTANCE_READS) register(server, log, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance)));
   register(server, log, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), args));
@@ -87,6 +92,7 @@ function mcpServerOf({ instance, mEdit, log }: AgentServerOptions): McpServer {
   register(server, log, LIST_REFERENCES, (args) => LIST_REFERENCES.of(mEdit, args));
   register(server, log, SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
   register(server, log, RUN_GESTURE, (args) => RUN_GESTURE.of(currentValue(instance), mEdit, args));
+  register(server, log, { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
   register(server, log, { ...SOURCE_PROBLEMS, input: NO_INPUT }, SOURCE_PROBLEMS.of);
   return server;
 }
