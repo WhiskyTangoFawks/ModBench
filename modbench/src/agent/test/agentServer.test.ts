@@ -541,7 +541,7 @@ describe('the agent server, running a gesture', () => {
     it.each([
       ['a mod', { name: 'B' }, { kind: 'mod', name: 'B' }],
       ['a separator', { name: 'Textures', kind: 'separator' }, textures],
-    ])('fires add with %s as the anchor Argument and the name as an Option', async (_, anchor, argument) => {
+    ] as const)('fires add with %s as the anchor Argument and the name as an Option', async (_, anchor, argument) => {
       await fire({ command: 'modbench.separator.add', argument: [anchor], options: { name: 'New' } });
 
       expect(fired.calls).toEqual([['modbench.separator.add', new AgentCall([argument], { name: 'New' })]]);

@@ -54,7 +54,7 @@ function setModsEnabled(
     found.map((mod) => ({ kind: 'enable', mod, enabled })));
 }
 
-export type { MovePlace, OrderEnd, OriginFileMark, SeparatorsPlace } from '../instanceAdapter/instanceAdapter';
+export type { EntryRef, MovePlace, OrderEnd, OriginFileMark, SeparatorsPlace } from '../instanceAdapter/instanceAdapter';
 
 // `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
 // order, at the `end` of the place. A separator or mod that has gone refuses the whole move.

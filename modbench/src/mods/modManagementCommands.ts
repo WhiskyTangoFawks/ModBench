@@ -11,11 +11,10 @@ import {
   pluralArgument, registerGesture, singularArgument, type RowOf,
 } from '../drivingLib/gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
-import type { EntryRef } from '../instanceAdapter/instanceAdapter';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
-import type { ModlistCommands, MovePlace, OriginFileMark, OriginFileRef, SelectionResult } from '../modOrderCommands/modOrderCommands';
+import type { EntryRef, ModlistCommands, MovePlace, OriginFileMark, OriginFileRef, SelectionResult } from '../modOrderCommands/modOrderCommands';
 import { FILE_MARKS, fileLabel } from './modFiles';
 import {
   endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem, type MoveTarget,
@@ -320,6 +319,40 @@ interface SeparatorRename {
 
 type DeletedSeparator = Extract<Awaited<ReturnType<ModlistCommands['deleteSeparators']>>, { applied: true }>['outcome']['landed'][number];
 
+function deleteGesture(
+  commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+): AgentGesture<ModlistNode, readonly string[], GestureResult<DeletedSeparator>> {
+  return {
+    fromView: async (entry) => {
+      const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
+      return names.length > 0 && await confirmSeparatorDelete(names, ask) ? names : undefined;
+    },
+    fromAgent: ({ argument }) => argument.map(separatorNameOf),
+    run: (names) => runModsWriting(instance, async (): Promise<GestureResult<DeletedSeparator>> => {
+      const { activeProfile, mods, managerNames } = instance.value;
+      const result = await commands.deleteSeparators(activeProfile, mods, names, trash);
+      if (!result.applied) return { applied: false, refusal: 'Failed to delete separators.', detail: result.refusal };
+      return {
+        applied: true,
+        outcome: result.outcome,
+        partial: result.outcome.landed.flatMap((item) => (item.lineRefusal === undefined ? [] : [{
+          message: `"${item.name}" was deleted, but its ${managerNames.modOrderFile} line could not be removed.`,
+          detail: item.lineRefusal, severity: 'warning' as const,
+        }])),
+      };
+    }),
+    report: (result, names) => {
+      if (!result.applied) {
+        reporter.report('error', result.refusal, result.detail);
+        return;
+      }
+      reporter.selectionOutcome(
+        `Could not delete ${result.outcome.refused.length} of ${names.length} separators.`, result.outcome, (item) => item.name);
+      reportPartial(reporter, result.partial);
+    },
+  };
+}
+
 export function registerSeparatorCommands(
   commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   viewSelection: () => readonly ModlistNode[],
@@ -379,40 +412,10 @@ export function registerSeparatorCommands(
     },
   };
 
-  const remove: AgentGesture<ModlistNode, readonly string[], GestureResult<DeletedSeparator>> = {
-    fromView: async (entry) => {
-      const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
-      return names.length > 0 && await confirmSeparatorDelete(names, ask) ? names : undefined;
-    },
-    fromAgent: ({ argument }) => argument.map(separatorNameOf),
-    run: (names) => runModsWriting(instance, async (): Promise<GestureResult<DeletedSeparator>> => {
-      const { activeProfile, mods, managerNames } = instance.value;
-      const result = await commands.deleteSeparators(activeProfile, mods, names, trash);
-      if (!result.applied) return { applied: false, refusal: 'Failed to delete separators.', detail: result.refusal };
-      return {
-        applied: true,
-        outcome: result.outcome,
-        partial: result.outcome.landed.flatMap((item) => (item.lineRefusal === undefined ? [] : [{
-          message: `"${item.name}" was deleted, but its ${managerNames.modOrderFile} line could not be removed.`,
-          detail: item.lineRefusal, severity: 'warning' as const,
-        }])),
-      };
-    }),
-    report: (result, names) => {
-      if (!result.applied) {
-        reporter.report('error', result.refusal, result.detail);
-        return;
-      }
-      reporter.selectionOutcome(
-        `Could not delete ${result.outcome.refused.length} of ${names.length} separators.`, result.outcome, (item) => item.name);
-      reportPartial(reporter, result.partial);
-    },
-  };
-
   return [
     registerAgentGesture('modbench.separator.rename', viewSelection, rename),
     registerAgentGesture('modbench.separator.add', viewSelection, add),
-    registerAgentGesture('modbench.separator.delete', viewSelection, remove),
+    registerAgentGesture('modbench.separator.delete', viewSelection, deleteGesture(commands, instance, reporter, ask, trash)),
   ];
 }
 const createPartial = (name: string, lineRefusal: string | undefined, modOrderFile: string): PartialFailure[] =>
