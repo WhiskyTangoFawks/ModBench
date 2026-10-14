@@ -20,8 +20,9 @@ export interface AgentGesture<Row extends KindedRow, Given, Outcome, Options ext
 export function registerAgentGesture<Row extends KindedRow, Given, Outcome, Options extends object = object>(
   commandId: string, viewSelection: () => readonly Row[], gesture: AgentGesture<Row, Given, Outcome, Options>,
 ): vscode.Disposable {
+  const isCall = (value: unknown): value is AgentCall<Options> => value instanceof AgentCall;
   return vscode.commands.registerCommand(commandId, async (clicked?: unknown, selected?: readonly Row[], option?: unknown) => {
-    if (clicked instanceof AgentCall) return gesture.run(await gesture.fromAgent(clicked));
+    if (isCall(clicked)) return gesture.run(await gesture.fromAgent(clicked));
     const given = await gesture.fromView(gestureEntry(clicked, selected, viewSelection), option, clicked);
     if (given !== undefined) gesture.report(await gesture.run(given), given);
     return undefined;

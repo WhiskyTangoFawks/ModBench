@@ -421,7 +421,7 @@ describe('the agent server, running a gesture', () => {
       mods: [{ kind: 'mod', name: 'ModA', enabled: true }],
       plugins: [plugin('Solo.esp', 'ModA', 0), plugin('Same.esp', 'ModA', 1), plugin('Same.esp', 'ModB', 2)],
     });
-    const SOLO = { kind: 'plugin', plugin: { name: 'Solo.esp', origin: 'ModA' } };
+    const SOLO = { kind: 'plugin' as const, plugin: { name: 'Solo.esp', origin: 'ModA' } };
 
     it('fires enable with each plugin named as its address, the origin left out when the file name is one plugin', async () => {
       fired.outcome = { applied: true, outcome: { landed: ['Solo.esp'], refused: [] } };
@@ -429,7 +429,7 @@ describe('the agent server, running a gesture', () => {
 
       await call(client, 'run_gesture', { command: 'modbench.plugin.enable', argument: [{ name: 'solo.ESP' }, { name: 'Same.esp', origin: 'ModB' }] });
 
-      expect(fired.calls).toEqual([['modbench.plugin.enable', new AgentCall([SOLO, { kind: 'plugin', plugin: { name: 'Same.esp', origin: 'ModB' } }], {})]]);
+      expect(fired.calls).toEqual([['modbench.plugin.enable', new AgentCall([SOLO, { kind: 'plugin' as const, plugin: { name: 'Same.esp', origin: 'ModB' } }], {})]]);
     });
 
     it('refuses a file name two plugins share, listing both, and a plugin nothing holds', async () => {

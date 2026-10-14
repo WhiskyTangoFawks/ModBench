@@ -317,7 +317,7 @@ describe('modbench.plugin.create, called by the agent', () => {
     const reporter = recordingReporter();
     registerCreatePluginCommand(client, mo2.instance, reporter);
     const run = present(handlers.get('modbench.plugin.create'), "the create plugin command's registered handler");
-    return { client, reporter, answer: () => run(call) as Promise<unknown> };
+    return { client, reporter, answer: (): Promise<unknown> => Promise.resolve(run(call)) };
   }
 
   it('creates the plugin named in the place given, opening and reporting nothing, and answers the outcome', async () => {

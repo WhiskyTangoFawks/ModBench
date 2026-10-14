@@ -837,7 +837,7 @@ describe('modbench.mod.enable / modbench.mod.disable, called by the agent', () =
   it('refuses an Argument that is not a mod, writing nothing', async () => {
     registerModEnableCommands(commands, instance, () => [], recordingReporter());
 
-    await expect(invoke('modbench.mod.enable', new AgentCall([{ kind: 'plugin', plugin: { name: 'A.esp', origin: 'Mod B' } }]))).rejects.toThrow('carries mods only');
+    await expect(invoke('modbench.mod.enable', new AgentCall([{ kind: 'plugin', plugin: { name: 'A.esp', origin: 'Mod B' } }], {}))).rejects.toThrow('carries mods only');
 
     expect(setModsEnabled).not.toHaveBeenCalled();
   });

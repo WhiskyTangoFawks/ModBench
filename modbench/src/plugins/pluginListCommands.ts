@@ -93,7 +93,6 @@ interface NewPlugin {
   readonly sourceFolder?: string;
 }
 
-/** The new plugin in its place, or why that place cannot hold it. */
 function placed(value: Pick<InstanceValue, 'mods' | 'paths'>, name: string, { origin, label }: PluginPlace): NewPlugin | string {
   const where = placeFolder(value, origin);
   if ('lost' in where) return `${lostPlace(origin, where.lost)}, so "${name}" was not created.`;
