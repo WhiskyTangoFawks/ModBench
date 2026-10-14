@@ -214,7 +214,7 @@ describe('modbench.record.open for the agent', () => {
   const plugin = { name: 'A.esp', origin: 'ModA' };
   const call = (formKeys: string[], options: object = {}) =>
     commandHandlers.get('modbench.record.open')?.(new AgentCall(formKeys.map((formKey) => ({ kind: 'record' as const, formKey, plugin })), options));
-  const openingAs = (answer: unknown) => {
+  const openingAs = (answer: { kind: 'Rendered'; location: string } | null) => {
     const meditClient = new InMemoryMEditClient();
     meditClient.setQueryAnswer('getCopyDocument', answer);
     return meditClient;
