@@ -14,3 +14,4 @@ Each mod has one manifest file, and the mod is restored from it: the manifest na
 - Wabbajack's one record for the whole list. One artifact nobody diffs or merges, and a mod's history is lost inside it.
 - A manifest maintained by every gesture that writes a mod's files. Always on, with a watcher reconciling each external change; a gesture the user runs is the modlist's one door.
 - Every source mod recorded as any other mod is, so the modlist never touches source. The files its source provides then have no provider.
+- Git hooks that write the manifests before a commit and restore the folders after a checkout, so git's gestures are the only ones. A failed post-checkout hook does not fail the checkout, so the folders are left half restored with nothing shown, and a pre-commit hook commits manifests the user never reviewed.

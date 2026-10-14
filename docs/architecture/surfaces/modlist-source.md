@@ -1,6 +1,6 @@
 # Modlist source
 
-The modlist source is what git holds of an instance: each mod's manifest, the profiles and the mod manager's configuration. Update manifest writes a mod's manifest from its folder, and restore from manifest makes the folder what the manifest says ([ADR-0022](../../adr/0022-a-mod-is-restored-from-its-manifest.md)). I commit, diff, branch and merge the source in Source Control as I would any source. Its template is Wabbajack ([ADR-0023](../../adr/0023-wabbajack-is-the-reference-for-the-manifest-and-its-gestures.md)); where it departs, [wabbajack.md](../../out-of-scope/wabbajack.md) says why. Its gestures are in [commands.md](../commands.md): git init under Modlist, update manifest and restore from manifest under Mod. What every view shares is in [common.md](common.md).
+The modlist source is what git holds of an instance: each mod's manifest, the profiles and the mod manager's configuration. Update manifest writes a mod's manifest from its folder, and restore from manifest makes the folder what the manifest says ([ADR-0022](../../adr/0022-a-mod-is-restored-from-its-manifest.md)). I commit, diff, branch and merge the source in Source Control as I would any source. Its gestures are in [commands.md](../commands.md): git init under Modlist, update manifest and restore from manifest under Mod. What every view shares is in [common.md](common.md).
 
 Each story cites its source. A story with no provider is owned here.
 
@@ -10,29 +10,29 @@ As a user, I want:
 
 1. The instance folder to be the repository, so a change I make in the mod manager or in Modbench is a working-tree change in Source Control. Source: ADR-0022
 2. The ignore list to be a whitelist: every manifest, each mod's `meta.ini`, each profile's mod order, plugin order and INIs, and the mod manager's configuration. Everything else is ignored, the downloaded files' index and the source folder included.
-3. Every mod and every profile in the commit, enabled or not. A disabled mod is still mine. Source: wabbajack.md, divergence 1
-4. The mod manager's configuration committed with the paths it holds. A clone on another machine edits them. Source: wabbajack.md, divergence 9
+3. Every mod and every profile in the commit, enabled or not. A disabled mod is still mine.
+4. The mod manager's configuration committed with the paths it holds. A clone on another machine edits them.
 5. Commit, diff, history, branches and merge to be VS Code's. Modbench adds no gesture for them. Source: Existing tools
 
 ## The manifest
 
 A mod's installation files are the downloaded files the mod manager records the mod as installed from. As a user, I want:
 
-1. One manifest in each mod folder, named for the mod, so a mod installed, uninstalled or renamed reads as a file added, removed or renamed in a diff, and two branches that change two mods merge. Source: ADR-0022; wabbajack.md, divergence 2
-2. The manifest to name the mod's installation files and the game files its files come from, each with its size, its hash and where the mod manager says it comes from, and then one line for each file in the mod folder the repository does not commit, naming its provider: an installation file, the game folder or the mod's source. Source: Wabbajack's archives and directives
+1. One manifest in each mod folder, named for the mod, so a mod installed, uninstalled or renamed reads as a file added, removed or renamed in a diff, and two branches that change two mods merge. Source: ADR-0022
+2. The manifest to name the mod's installation files and the game files its files come from, each with its size, its hash and where the mod manager says it comes from, and then one line for each file in the mod folder the repository does not commit, naming its provider: an installation file, the game folder or the mod's source. Source: ADR-0022
 3. A file's line to say nothing when the first installation file holds it at the same path, so the ordinary case is the short one. Otherwise it names the path inside an installation file, or that it has no provider.
-4. A file to come only from the mod's installation files or from the game folder, with the bytes they hold. A file none of them yields with its bytes has no provider. Source: wabbajack.md, divergences 3 and 4
+4. A file to come only from the mod's installation files or from the game folder, with the bytes they hold, so the mod manager's record says why a file has no provider. A file none of them yields with its bytes has no provider. Source: ADR-0022
 5. A file's line to carry no hash, because its provider fixes its bytes, so an upgrade reads in the diff as the installation file's line and the lines of the files it added, moved or dropped.
 6. An excluded file to come back excluded: its line carries its full name, `.mohidden` included. Source: MO2
 7. A source mod's manifest to be what its last build wrote. With a remote, each file the source provides names the remote and the commit. With none, the manifest reads as any other mod's, and a file the installation files do not yield has no provider. Source: ADR-0022
-8. The manifest to hold no path from this machine, so a clone rebuilds anywhere. Source: Wabbajack
+8. The manifest to hold no path from this machine, so a clone rebuilds anywhere.
 
 ## Status
 
 As a user, I want:
 
 1. Each mod row to say, while the instance has a repository, differs when its folder differs from its manifest, or no manifest when it has none. A folder differs when a file's bytes differ from the manifest's, when it holds a file no line names, or when a file a line names is gone. Source: Never silently wrong
-2. A mod whose manifest has a file with no provider to say so, with the count, so I see what a clone cannot rebuild before I commit. Source: wabbajack.md, divergence 4
+2. A mod whose manifest has a file with no provider to say so, with the count, so I see what a clone cannot rebuild before I commit. Source: Never silently wrong
 3. Status to cost a stat of each file, and a hash only of a file whose size, modified time or change time differs from Modbench's last read. A tool can keep a file's modified time, and a write always moves its change time. Modbench keeps what it last read on this machine and never commits it, as git keeps its index, so a clone on another machine reads a file as differing only when its bytes do. Source: Existing tools; ADR-0003
 4. Each file row in a mod to say differs when its bytes differ from the manifest's or no line names it, and the mod's tooltip to say how many files its manifest names and its folder lacks.
 5. The Mods view's badge to count the mods that differ or have no manifest. Source: VS Code's view badge
@@ -61,8 +61,8 @@ As a user, I want:
 
 1. Update manifest to write only what changed, so an unchanged mod changes nothing and Source Control holds only what I did. Source: plugin-source.md, The tree, story 2
 2. No confirmation. The manifests are derived from the mods, and git holds what update manifest replaces. This is an exception to Confirm what destroys.
-3. A mod refused when one of its installation files is not in the downloads folder, naming the mod and the file, and its manifest left as it was. The other mods land. Source: wabbajack.md, divergence 6
-4. A file with no provider written as such and reported, so the gap is in the diff and the rest of the modlist commits. Source: wabbajack.md, divergence 4
+3. A mod refused when one of its installation files is not in the downloads folder, naming the mod and the file, and its manifest left as it was. The other mods land. Source: Never silently wrong
+4. A file with no provider written as such and reported, so the gap is in the diff and the rest of the modlist commits. Source: Never silently wrong
 5. A source mod's manifest left to its build, and the mod reported when its folder differs from what the build wrote. Source: ADR-0022
 6. It stages nothing and commits nothing. Source: Existing tools
 7. A file whose stat matches Modbench's last read not hashed again, so an update after an update reads nothing. Source: Status, story 3
@@ -72,10 +72,10 @@ As a user, I want:
 
 As a user, I want:
 
-1. Each mod's folder to become what its manifest says: every file whose bytes differ written, and every file no line names sent to the trash. A file whose bytes already match is left alone, so a restore after a checkout costs only what the checkout changed. Source: ADR-0022; ADR-0023
+1. Each mod's folder to become what its manifest says: every file whose bytes differ written, and every file no line names sent to the trash. A file whose bytes already match is left alone, so a restore after a checkout costs only what the checkout changed. Source: ADR-0022
 2. One confirmation, only when the restore destroys something: a file whose bytes differ from the manifest's, or a file no line names. It names the mods, or says every mod, and says that a change no manifest holds is lost. A restore after a fresh clone asks nothing. Source: Confirm what destroys
 3. A source mod with a remote rebuilt from its source at the commit the manifest names, and the source cloned when it is absent. One at another commit is skipped and named with the commit, because Modbench never moves my repository. Source: ADR-0022; ADR-0003
-4. A mod skipped, and named with what it lacks, when an installation file or a game file its manifest names is missing or has other bytes, or when a file has no provider. Every other mod lands. Nothing is downloaded. Source: wabbajack.md, divergence 7
+4. A mod skipped, and named with what it lacks, when an installation file or a game file its manifest names is missing or has other bytes, or when a file has no provider. Every other mod lands. Nothing is downloaded. Source: A selection is one gesture, and each item lands on its own
 5. A file the build makes, a compiled plugin or a packed archive, to come back as the build makes it, which can differ in bytes. Only what comes from a downloaded file is byte-checked. Source: ADR-0006
 6. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. This is an exception to A failed gesture writes nothing. Source: mods.md, What install does, story 5
 7. A mod folder with no manifest left as it is and named in the report, because it can be a mod I have not recorded yet. Uninstall removes it. Source: Never silently wrong
