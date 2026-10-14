@@ -39,13 +39,13 @@ medit_core: "MEDIT · Core — the write side; it references the kernel and the 
   class: band; grid-rows: 1
   commands: "Commands\nowns: the write side\nhides: the rules that decide a write" {
     edits: "Record edits\ncompile, decompile and every edit to plugin source" {class: core}
-    engine: "Build engine — one deep module\nowns: a mod folder from its source or its manifest,\nand a manifest from a mod folder\nhides: matching, deltas, extraction, packing" {class: core}
+    engine: "Build engine — one deep module\nowns: a mod folder from its source or its manifest,\nand a manifest from a mod folder\nhides: matching, extraction, packing" {class: core}
   }
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
   modordercommands: "mod order commands\nowns: the mod order" {class: core}
-  sourcecommands: "source commands\nowns: init, stage, discard changes, clean, track, build, decompile and commit\nhides: nothing: it hands the instance's facts to mEdit" {class: core}
+  sourcecommands: "source commands\nowns: git init, update manifest, restore from manifest, track, build, decompile and commit\nhides: nothing: it hands the instance's facts to mEdit" {class: core}
   pluginscommands: "plugins commands\nowns: changes to the plugin order\nhides: the plugin-order rules" {class: core}
   instancecommands: "instance commands\nowns: changes to the instance as a whole" {class: core}
   downloadscommands: "downloads commands\nowns: changes to the downloaded files" {class: core}
@@ -83,7 +83,7 @@ medit_repositories: "MEDIT · Repositories — the only boxes that read or write
   class: band; grid-rows: 1
   sourceadapter: "Source adapter\nowns: a source mod's folder: plugin source, assets,\nbuild configuration and repository\nhides: layout and git" {class: repositories}
   pluginadapter: "Plugin adapter\nowns: the plugin files\nhides: the binary format" {class: repositories}
-  modfolderadapter: "Mod folder adapter\nowns: a mod folder, its manifest and the build folder,\nand what it reads: downloaded files and the game folder\nhides: the manifest's text" {class: repositories}
+  modfolderadapter: "Mod folder adapter\nowns: a mod folder, its manifest and the stat cache,\nand what it reads: downloaded files and the game folder\nhides: the manifest's text" {class: repositories}
 }
 modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the one reader and writer of the mod manager's files" {
   class: band; grid-rows: 1
@@ -96,7 +96,7 @@ medit_data: "MEDIT · Systems of record" {
   class: band; grid-rows: 1
   source: "Mod source\nthe source folder beside mods/, in git" {class: sor}
   plugin: "Plugin files" {class: sor}
-  modfolder: "Mod folders\nfiles · manifests · the build folder ·\ndownloaded files and game files, read" {class: sor}
+  modfolder: "Mod folders\nfiles · manifests · the stat cache ·\ndownloaded files and game files, read" {class: sor}
   tools: "Other tools\nthe mod manager, xEdit, CK, the game — at any time" {class: other}
 }
 modbench_data: "MODBENCH · Systems of record; mEdit is the left column and always running" {
