@@ -29,9 +29,7 @@ interface ModlistGestureDeps {
 interface ModsToRun {
   readonly mods: readonly string[];
   readonly refused: readonly ItemRefusal<string>[];
-  /** No selection named the mods. */
-  readonly every: boolean;
-  /** The view whose progress bar the gesture runs under. */
+  readonly noSelection: boolean;
   readonly view: string;
 }
 
@@ -46,7 +44,7 @@ export function registerModlistCommands(deps: ModlistGestureDeps): vscode.Dispos
     // Source Control hands each selected row of its provider as an argument, and a row names a file.
     vscode.commands.registerCommand('modbench.modlist.discardChangesInModFolder', (...rows: unknown[]) => {
       const held = deps.commands.modsHolding(rows.flatMap(filePathOf), deps.instance.value);
-      return discardChanges(deps, { ...held, every: false, view: TOOLBOX_VIEW });
+      return discardChanges(deps, { ...held, noSelection: false, view: TOOLBOX_VIEW });
     }),
   ];
 }
@@ -64,8 +62,6 @@ function init({ commands, instance, reporter }: ModlistGestureDeps): Promise<voi
   });
 }
 
-// A Mods row runs on the selection; the palette, on the Mods view's while it has the focus. Source Control's title
-// bar and the Toolbox's Modlist row run on every mod.
 function rowsOf(deps: ModlistGestureDeps, clicked: unknown, selected: readonly unknown[] | undefined): readonly unknown[] {
   if (clicked === undefined) return deps.focusedView.id() === deps.modsView ? deps.focusedView.selection() : [];
   return modArgumentOf(clicked) === undefined ? [] : gestureEntry(clicked, selected, () => [], isClickedRow).selection;
@@ -74,7 +70,7 @@ function rowsOf(deps: ModlistGestureDeps, clicked: unknown, selected: readonly u
 function modsToRun(deps: ModlistGestureDeps, clicked: unknown, selected: readonly unknown[] | undefined): ModsToRun {
   const rows = rowsOf(deps, clicked, selected);
   if (rows.length === 0) {
-    return { mods: deps.instance.value.mods.flatMap((entry) => (entry.kind === 'mod' ? [entry.name] : [])), refused: [], every: true, view: TOOLBOX_VIEW };
+    return { mods: deps.instance.value.mods.flatMap((entry) => (entry.kind === 'mod' ? [entry.name] : [])), refused: [], noSelection: true, view: TOOLBOX_VIEW };
   }
   const refused: ItemRefusal<string>[] = [];
   const mods = rows.flatMap((row) => {
@@ -82,7 +78,7 @@ function modsToRun(deps: ModlistGestureDeps, clicked: unknown, selected: readonl
     if (mod === undefined) refused.push({ item: rowNameOf(row), reason: NOT_A_MOD });
     return mod === undefined ? [] : [mod.name];
   });
-  return { mods, refused, every: false, view: deps.modsView };
+  return { mods, refused, noSelection: false, view: deps.modsView };
 }
 
 async function stage(deps: ModlistGestureDeps, { mods, refused, view }: ModsToRun): Promise<void> {
@@ -119,9 +115,8 @@ function reportStaged(reporter: Reporter, total: number, outcome: Omit<Extract<S
 
 const quoted = (mods: readonly string[]): string => mods.map((mod) => `"${mod}"`).join(', ');
 
-// modlist-source.md, Discard changes, story 2: one question, as VS Code's Discard Changes asks.
-async function confirmDiscard(ask: AskQuestion, { mods, every }: ModsToRun): Promise<boolean> {
-  const question = `Are you sure you want to discard changes in ${every ? 'every mod' : quoted(mods)}?`;
+async function confirmDiscard(ask: AskQuestion, { mods, noSelection }: ModsToRun): Promise<boolean> {
+  const question = `Are you sure you want to discard changes in ${noSelection ? 'every mod' : quoted(mods)}?`;
   return (await ask(question, { modal: true, detail: 'Changes not staged and committed are lost.' }, DISCARD)) === DISCARD;
 }
 
@@ -154,8 +149,6 @@ function discardMessage(status: DiscardStatus): string {
   }
 }
 
-// modlist-source.md, Reporting: a skipped mod is named with what it lacks, and the mods that landed are not reported as
-// failed. A discard that wrote nothing says nothing (commands.md, Doing nothing is not an error).
 function reportDiscarded(reporter: Reporter, total: number, outcome: Omit<Extract<DiscardResult, { applied: true }>, 'applied'>): void {
   if (outcome.refused.length > 0) {
     reporter.selectionOutcome(

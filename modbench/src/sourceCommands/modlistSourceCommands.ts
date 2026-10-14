@@ -30,7 +30,6 @@ export interface StageInstance {
   readonly gameFolder: GameFolder;
 }
 
-/** The slice of the instance value discard reads: stage's, each mod's folder, and the downloaded files. */
 export interface DiscardInstance extends StageInstance {
   readonly paths: { readonly downloadsDir: string | undefined; readonly modDirs: ReadonlyMap<string, string> };
   readonly downloads: { readonly kind: 'listed'; readonly rows: readonly { readonly name: string; readonly path: string }[] } | { readonly kind: 'unresolved' };
@@ -42,14 +41,10 @@ export type StageResult = ({ applied: true } & StageOutcome) | { applied: false;
 /** Where stage is: the Instance adapter reading a mod's files, or mEdit staging mods. */
 export type StageStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Staging' } & ModlistProgress);
 
-/** What discard answers: each mod discarded or skipped, or the whole discard refused, naming the mods it may not have
- *  finished. */
 export type DiscardResult =
   | ({ applied: true } & Omit<DiscardOutcome, 'notFound'>)
   | { applied: false; refusal: string; unfinished: readonly string[] };
 
-/** Where discard is: the Instance adapter reading a mod's files, mEdit discarding mods, or the Instance adapter reading a
- *  downloaded file a delta may be packed in. */
 export type DiscardStatus =
   | { readonly phase: 'ReadingFiles'; readonly mod: string }
   | ({ readonly phase: 'Discarding' } & ModlistProgress)
@@ -63,7 +58,6 @@ interface ReadMods {
 
 const wireFile = (file: InstallationFile): StageMod['installationFiles'][number] => ({ ...file, entries: [...file.entries] });
 
-// The folder and the installation files first: a mod refused for either costs no hashing of game files.
 async function readMod(
   adapter: Adapter, mod: string, dataFolder: string, modFilePaths: readonly string[],
 ): Promise<{ read: StageMod; gameFiles: readonly GameFile[] } | { refusal: string }> {
@@ -95,7 +89,6 @@ async function readMods(
   return { sent, gameFiles: [...gameFiles.values()], refused };
 }
 
-// The mods mEdit did not report done before the call failed are the ones it may not have finished.
 async function discardOnce(
   client: ModlistSourceCommandsDeps['client'], mods: readonly DiscardMod[], facts: DiscardFacts, onProgress: (progress: ModlistProgress) => void,
 ): Promise<({ applied: true } & DiscardOutcome) | Extract<DiscardResult, { applied: false }>> {
@@ -111,8 +104,6 @@ async function discardOnce(
     : { applied: true, ...outcome };
 }
 
-// Every downloaded archive's entries: an index that is stale costs reading the archive, so only a mod skipped for a
-// delta alone asks for them, and goes to mEdit again with them.
 async function downloadedArchives(
   adapter: Adapter, downloads: DiscardInstance['downloads'], onReading: (file: string) => void,
 ): Promise<{ read: readonly InstallationFile[]; unread: readonly ItemRefusal<string>[] }> {
@@ -127,7 +118,6 @@ async function downloadedArchives(
   return { read, unread };
 }
 
-// The game files mEdit found its manifests name and the call did not, by their paths under the data folder.
 async function namedGameFiles(
   adapter: Adapter, dataFolder: string, notFound: readonly NotFound[],
 ): Promise<{ found: readonly GameFile[]; unread: string }> {
@@ -237,12 +227,10 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
       return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, landed: outcome.landed, refused: [...outcome.refused, ...refused] };
     },
 
-    /** A mod the Instance adapter cannot answer is refused here, naming why, and mEdit discards the rest. */
     discardChanges: (
       mods: readonly string[], instance: DiscardInstance, options: { onProgress?: (status: DiscardStatus) => void } = {},
     ): Promise<DiscardResult> => discardChanges(deps, mods, instance, (status) => options.onProgress?.(status)),
 
-    /** The mod whose folder holds each file, as Source Control names a row; a file in no mod's folder is refused. */
     modsHolding,
   };
 }

@@ -21,7 +21,7 @@ public sealed class DiscardHandler(IModFolderRepository repository, INotificatio
         {
             if (repository.ReadManifest(mod.Folder, mod.Name) is not { } read) return Skipped(mod, DiscardRefusal.NoManifest, "it has no manifest");
             manifest = read;
-            differing = Differing(mod, manifest);
+            differing = NamedFilesWithOtherBytes(mod, manifest);
         }
         catch (InvalidDataException e)
         {
@@ -34,27 +34,23 @@ public sealed class DiscardHandler(IModFolderRepository repository, INotificatio
         if (differing.Count == 0) return ItemAnswer<DiscardSkip, DiscardedMod>.Landed(new DiscardedMod([]));
 
         using var rebuild = new ModRebuild(repository, mod, instance, manifest);
-        var lacks = rebuild.Resolve(differing);
-        if (lacks.Count > 0)
-        {
-            var why = string.Join("; ", lacks.Select(lack => lack.Text));
-            if (!lacks.All(lack => lack.GameFileNotFound is not null || lack.DeltaNotFound is not null)) return Skipped(mod, DiscardRefusal.Lacking, why);
-            return Skipped(mod, new DiscardSkip(
-                DiscardRefusal.NotFound, [.. lacks.Select(lack => lack.GameFileNotFound).OfType<string>()], [.. lacks.Select(lack => lack.DeltaNotFound).OfType<string>()]), why);
-        }
+        var resolved = rebuild.Resolve(differing);
+        if (resolved.Value is not { } sourced) return Lacked(mod, resolved.Lacks);
 
+        ModRebuild.Step<ModRebuild.Applied> applying;
         try
         {
-            if (rebuild.ApplyDeltas(differing) is { } otherBytes) return Skipped(mod, DiscardRefusal.Lacking, otherBytes.Text);
+            applying = rebuild.ApplyDeltas(sourced);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return Skipped(mod, DiscardRefusal.Unreadable, $"a file could not be read: {e.Message}");
         }
+        if (applying.Value is not { } applied) return Lacked(mod, applying.Lacks);
 
         try
         {
-            rebuild.Write(differing);
+            rebuild.Write(applied);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -64,13 +60,22 @@ public sealed class DiscardHandler(IModFolderRepository repository, INotificatio
         return ItemAnswer<DiscardSkip, DiscardedMod>.Landed(new DiscardedMod([.. differing.Select(file => file.Path)]));
     }
 
-    // Only the files the manifest names are hashed: an untracked file stays as it is.
-    private List<ManifestFile> Differing(ModToDiscard mod, Manifest manifest)
+    private List<ManifestFile> NamedFilesWithOtherBytes(ModToDiscard mod, Manifest manifest)
     {
         var named = manifest.Files.Select(file => file.Path).ToHashSet(StringComparer.Ordinal);
         var untracked = repository.FilePaths(mod.Folder).Where(path => !named.Contains(path)).ToHashSet(StringComparer.Ordinal);
         var hashes = repository.Files(mod.Folder, mod.Name, untracked).ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
         return [.. manifest.Files.Where(file => hashes.GetValueOrDefault(file.Path) != file.Hash)];
+    }
+
+    private static ItemAnswer<DiscardSkip, DiscardedMod> Lacked(ModToDiscard mod, IReadOnlyList<ModRebuild.Lack> lacks)
+    {
+        var why = string.Join("; ", lacks.Select(lack => lack.Text));
+        if (!lacks.All(lack => lack is ModRebuild.Lack.GameFileMissing or ModRebuild.Lack.DeltaMissing)) return Skipped(mod, DiscardRefusal.Lacking, why);
+        return Skipped(mod, new DiscardSkip(
+            DiscardRefusal.NotFound,
+            [.. lacks.OfType<ModRebuild.Lack.GameFileMissing>().Select(lack => lack.Path)],
+            [.. lacks.OfType<ModRebuild.Lack.DeltaMissing>().Select(lack => lack.Name)]), why);
     }
 
     private static ItemAnswer<DiscardSkip, DiscardedMod> Skipped(ModToDiscard mod, DiscardRefusal refusal, string why) =>

@@ -33,7 +33,7 @@ internal static class ModlistEndpoints
     internal static IResult Stage(StageRequest req, StageHandler handler, ILoggerFactory loggerFactory, CancellationToken cancel)
     {
         var mods = req.Mods ?? [];
-        if (Malformed(mods.Select(mod => (mod.Name, mod.Folder, mod.InstallationFiles)), [], req.GameFiles) is { } malformed) return malformed;
+        if (Malformed(mods, [], req.GameFiles) is { } malformed) return malformed;
         if (string.IsNullOrWhiteSpace(req.DataFolder) || string.IsNullOrWhiteSpace(req.BuildFolder) || req.DeltaShare is not (>= 0 and <= 1))
             return Results.Problem("The game's data folder, the build folder and a delta share from 0 to 1 are required.", statusCode: 400);
 
@@ -52,8 +52,7 @@ internal static class ModlistEndpoints
     internal static IResult DiscardChanges(DiscardRequest req, DiscardHandler handler, ILoggerFactory loggerFactory, CancellationToken cancel)
     {
         var mods = req.Mods ?? [];
-        if (Malformed(mods.Select(mod => (mod.Name, mod.Folder, mod.InstallationFiles)), req.DownloadedFiles ?? [], req.GameFiles) is { } malformed)
-            return malformed;
+        if (Malformed(mods, req.DownloadedFiles ?? [], req.GameFiles) is { } malformed) return malformed;
         if (string.IsNullOrWhiteSpace(req.DataFolder) || string.IsNullOrWhiteSpace(req.BuildFolder))
             return Results.Problem("The game's data folder and the build folder are required.", statusCode: 400);
 
@@ -72,13 +71,12 @@ internal static class ModlistEndpoints
     }
 
     private static IResult? Malformed(
-        IEnumerable<(string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles)> mods,
+        IReadOnlyList<IModRequest> mods,
         IReadOnlyList<InstallationFileRequest> downloadedFiles, IReadOnlyList<OverriddenGameFileRequest>? gameFiles)
     {
-        var listed = mods.ToList();
-        if (listed.Count == 0) return Results.Problem("At least one mod is required.", statusCode: 400);
-        var installationFiles = listed.SelectMany(mod => mod.InstallationFiles ?? []).Concat(downloadedFiles).ToList();
-        if (listed.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.Folder)) || installationFiles.Any(file => !file.IsWhole))
+        if (mods.Count == 0) return Results.Problem("At least one mod is required.", statusCode: 400);
+        var installationFiles = mods.SelectMany(mod => mod.InstallationFiles ?? []).Concat(downloadedFiles).ToList();
+        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.Folder)) || installationFiles.Any(file => !file.IsWhole))
         {
             return Results.Problem(
                 "Every mod needs a name and a folder, and every installation file a path, a size, a hash and its entries, each with a path and a hash.",
@@ -104,8 +102,17 @@ internal static class ModlistEndpoints
 internal sealed record StageRequest(
     IReadOnlyList<StageModRequest> Mods, IReadOnlyList<OverriddenGameFileRequest> GameFiles, string DataFolder, string BuildFolder, double? DeltaShare);
 
+internal interface IModRequest
+{
+    string Name { get; }
+
+    string Folder { get; }
+
+    IReadOnlyList<InstallationFileRequest> InstallationFiles { get; }
+}
+
 internal sealed record StageModRequest(
-    string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles);
+    string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles) : IModRequest;
 
 /// <summary>A game file by its forward-slash path under the game's data folder.</summary>
 internal sealed record OverriddenGameFileRequest(string Path, long? Size, string Hash);
@@ -123,7 +130,7 @@ internal sealed record DiscardRequest(
     IReadOnlyList<DiscardModRequest> Mods, IReadOnlyList<OverriddenGameFileRequest> GameFiles, string DataFolder, string BuildFolder,
     string? DownloadsFolder, IReadOnlyList<InstallationFileRequest>? DownloadedFiles);
 
-internal sealed record DiscardModRequest(string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles);
+internal sealed record DiscardModRequest(string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles) : IModRequest;
 
 /// <summary>A mod whose folder is as its manifest says. Written names each file written to make it so.</summary>
 internal sealed record DiscardedModResponse(string Mod, IReadOnlyList<string> Written);
