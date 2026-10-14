@@ -25,6 +25,7 @@ vi.mock('vscode', async () => {
   };
 });
 
+import { AgentCall } from '../../drivingLib/agentGesture';
 import { oneAtATime } from '../../drivingLib/oneAtATime';
 import type { SourceEditing } from '../../drivingLib/sourceEditing';
 import { progressSteps } from '../../test/recordedProgress';
@@ -226,8 +227,9 @@ describe('modbench.plugin.rename', () => {
 
     expect(reporter.reports).toEqual([{
       severity: 'error',
-      message: 'Could not rename "Patch.esp" (ModA): its plugin source may be partly renamed. Reverting the source rename in git undoes it.',
-      detail: 'EEXIST VS Code stops at the first change it cannot make, so some changes may have landed.',
+      message: 'Could not rename "Patch.esp" (ModA): its plugin source may be partly renamed. Reverting the source rename in git undoes it. '
+        + 'EEXIST VS Code stops at the first change it cannot make, so some changes may have landed.',
+      detail: undefined,
     }]);
     expect(source.refreshSourceControlFor).toHaveBeenCalledWith(PLUGIN);
     expect(client.calls.filter((c) => c.method === 'moveLastWritten')).toEqual([]);
@@ -256,8 +258,53 @@ describe('modbench.plugin.rename', () => {
 
     expect(reporter.reports).toEqual([{
       severity: 'error',
-      message: 'Could not rename "Patch.esp" (ModA): its plugin source was renamed, its file and lines were not. Reverting the source rename in git undoes it.',
-      detail: 'disk full',
+      message: 'Could not rename "Patch.esp" (ModA): its plugin source was renamed, its file and lines were not. Reverting the source rename in git undoes it. disk full',
+      detail: undefined,
     }]);
+  });
+});
+
+describe('modbench.plugin.rename, called by the agent', () => {
+  const calling = (name: string, plugins = [PLUGIN]) => new AgentCall(plugins.map((plugin) => ({ kind: 'plugin' as const, plugin })), { name });
+
+  it('renames the plugin given, never the selection, asking and prompting nothing and reporting nothing, and answers the outcome', async () => {
+    const { client, ask, fake, reporter, run } = setup([row()]);
+    client.setQueryAnswer('getPluginDependants', { dependants: [{ name: 'Child.esp', origin: 'ModB' }], unreadable: [] });
+
+    const answered = await run(calling('Renamed.esp'));
+
+    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([{ method: 'getRenameSourceChanges', args: [PLUGIN, 'Renamed.esp'] }]);
+    expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'mod', name: 'ModA' }, from: 'Patch.esp', to: 'Renamed.esp', gameRelease: 'Fallout4' }]);
+    expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Renamed.esp', origin: 'ModA' }], refused: [] } });
+    expect(showInputBox).not.toHaveBeenCalled();
+    expect(ask.asked).toEqual([]);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('answers a refused source and the point where the file and lines failed, reporting nothing', async () => {
+    const { client, instanceAnswers, reporter, run } = setup();
+    client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename the source of "Patch.esp" — NotTracked' });
+    expect(await run(calling('Renamed.esp'))).toEqual({ applied: false, refusal: 'Could not rename the source of "Patch.esp" — NotTracked' });
+
+    client.setCommandResult('getRenameSourceChanges', CHANGES);
+    instanceAnswers.refusals = refusing('renamePlugin', 'disk full');
+    expect(await run(calling('Renamed.esp'))).toEqual({
+      applied: false,
+      refusal: 'Could not rename "Patch.esp" (ModA): its plugin source was renamed, its file and lines were not. Reverting the source rename in git undoes it. disk full',
+    });
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it.each([
+    ['a name with an extension no plugin takes', calling('Patch.txt'), 'Extension must be .esm, .esl, or .esp'],
+    ['a name its place holds', calling('Taken.esp'), '"ModA" already holds "Taken.esp".'],
+    ['more than one plugin', calling('Renamed.esp', [PLUGIN, PLUGIN]), 'carries one plugin'],
+  ])('refuses %s, renaming nothing', async (_what, call, reason) => {
+    const { client, fake, run } = setup();
+
+    await expect(run(call)).rejects.toThrow(reason);
+
+    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([]);
+    expect(fake.calls).toEqual([]);
   });
 });

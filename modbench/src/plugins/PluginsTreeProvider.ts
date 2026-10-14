@@ -465,7 +465,10 @@ export class PluginsTreeProvider
     const { plugins } = payload.value;
     const drop = this.dropFor(target, plugins.map((p) => p.name));
     if (drop === undefined) return;
-    await vscode.commands.executeCommand('modbench.plugin.move', plugins, drop);
+    const inView = this.rowsInViewOrder();
+    const rows = plugins.flatMap((plugin) => inView.filter((row): row is PluginNode =>
+      row instanceof PluginNode && samePluginAddress(plugin, addressOfRow(row))));
+    await vscode.commands.executeCommand('modbench.plugin.move', rows[0], rows, drop);
   }
 
   /** plugins.md, Move: the block lands as a drop there lands. A drop on the row of a plugin the

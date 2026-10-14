@@ -378,8 +378,8 @@ describe('the agent server, selecting records through mEdit', () => {
 describe('the agent server, running a gesture', () => {
   beforeEach(() => { fired.calls = []; fired.outcome = undefined; });
 
-  async function served() {
-    const { bound, lines, reporter } = await serve(new FakeInstance(CONFLICTED));
+  async function served(value = CONFLICTED) {
+    const { bound, lines, reporter } = await serve(new FakeInstance(value));
     const client = new Client({ name: 'test', version: '0' });
     await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
     clients.push(client);
@@ -392,7 +392,7 @@ describe('the agent server, running a gesture', () => {
 
     const answer = await call(client, 'run_gesture', { command: 'modbench.mod.disable', argument: [{ name: 'A' }, { name: 'Textures', kind: 'mod' }] });
 
-    expect(fired.calls).toEqual([['modbench.mod.disable', new AgentCall([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'Textures' }])]]);
+    expect(fired.calls).toEqual([['modbench.mod.disable', new AgentCall([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'Textures' }], {})]]);
     expect(answer).toEqual({ isError: false, text: JSON.stringify(fired.outcome) });
   });
 
@@ -413,6 +413,70 @@ describe('the agent server, running a gesture', () => {
 
     expect(await call(client, 'run_gesture', { command: 'modbench.mod.enable', argument: [{ name: 'A' }] })).toEqual({ isError: true, text: JSON.stringify(fired.outcome) });
     expect(lines.join('\n')).toContain('ENOENT: modlist.txt');
+  });
+
+  describe('the plugin gestures', () => {
+    const plugin = (name: string, origin: string, line: number) => ({ name, origin, path: `/m/${origin}/${name}`, line, enabled: true, winning: true });
+    const PLUGGED = instanceValueFixture({
+      mods: [{ kind: 'mod', name: 'ModA', enabled: true }],
+      plugins: [plugin('Solo.esp', 'ModA', 0), plugin('Same.esp', 'ModA', 1), plugin('Same.esp', 'ModB', 2)],
+    });
+    const SOLO = { kind: 'plugin', plugin: { name: 'Solo.esp', origin: 'ModA' } };
+
+    it('fires enable with each plugin named as its address, the origin left out when the file name is one plugin', async () => {
+      fired.outcome = { applied: true, outcome: { landed: ['Solo.esp'], refused: [] } };
+      const { client } = await served(PLUGGED);
+
+      await call(client, 'run_gesture', { command: 'modbench.plugin.enable', argument: [{ name: 'solo.ESP' }, { name: 'Same.esp', origin: 'ModB' }] });
+
+      expect(fired.calls).toEqual([['modbench.plugin.enable', new AgentCall([SOLO, { kind: 'plugin', plugin: { name: 'Same.esp', origin: 'ModB' } }], {})]]);
+    });
+
+    it('refuses a file name two plugins share, listing both, and a plugin nothing holds', async () => {
+      const { client } = await served(PLUGGED);
+
+      const answer = await call(client, 'run_gesture', { command: 'modbench.plugin.decompile', argument: [{ name: 'Same.esp' }, { name: 'Gone.esp' }] });
+
+      expect(answer.text).toContain('"Same.esp" means more than one plugin: Same.esp in ModA; Same.esp in ModB. Name it with its origin.');
+      expect(answer.text).toContain('No plugin is named "Gone.esp".');
+      expect(fired.calls).toEqual([]);
+    });
+
+    it('fires move with the drop as an Option', async () => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const { client } = await served(PLUGGED);
+
+      await call(client, 'run_gesture', { command: 'modbench.plugin.move', argument: [{ name: 'Solo.esp' }], options: { drop: { kind: 'before', name: 'Same.esp' } } });
+
+      expect(fired.calls).toEqual([['modbench.plugin.move', new AgentCall([SOLO], { drop: { kind: 'before', name: 'Same.esp' } })]]);
+    });
+
+    it('fires create with the name and place as Options and no Argument', async () => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const { client } = await served(PLUGGED);
+
+      await call(client, 'run_gesture', { command: 'modbench.plugin.create', options: { name: 'New.esp', place: 'ModA' } });
+
+      expect(fired.calls).toEqual([['modbench.plugin.create', new AgentCall([], { name: 'New.esp', place: 'ModA' })]]);
+    });
+
+    it('fires rename with the one plugin as its Argument and the new name as an Option', async () => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const { client } = await served(PLUGGED);
+
+      await call(client, 'run_gesture', { command: 'modbench.plugin.rename', argument: { name: 'Solo.esp' }, options: { name: 'Lone.esp' } });
+
+      expect(fired.calls).toEqual([['modbench.plugin.rename', new AgentCall([SOLO], { name: 'Lone.esp' })]]);
+    });
+
+    it('refuses a create that leaves out its place, naming it', async () => {
+      const { client } = await served(PLUGGED);
+
+      const answer = await call(client, 'run_gesture', { command: 'modbench.plugin.create', options: { name: 'New.esp' } });
+
+      expect(answer.text).toContain('place');
+      expect(fired.calls).toEqual([]);
+    });
   });
 
   it.each([

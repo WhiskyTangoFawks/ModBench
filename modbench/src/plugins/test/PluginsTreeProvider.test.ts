@@ -27,8 +27,8 @@ vi.mock('vscode', async () => {
     Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
     window: { withProgress: recordedWithProgress },
     commands: {
-      executeCommand: (id: string, plugins: PluginAddress[], drop: PluginsDrop) => {
-        if (id === 'modbench.plugin.move') moveCommands.push({ plugins, drop });
+      executeCommand: (id: string, _clicked: unknown, rows: { plugin: { name: string }; origin: string }[], drop: PluginsDrop) => {
+        if (id === 'modbench.plugin.move') moveCommands.push({ plugins: rows.map(({ plugin, origin }) => ({ name: plugin.name, origin })), drop });
         return Promise.resolve();
       },
     },

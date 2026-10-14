@@ -2,8 +2,9 @@ import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import type { PluginNode, PluginsTreeNode } from './pluginRows';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import { PLUGINS_KEY_ARGS } from './gestureEntry';
-import { pluralArgument, registerGesture, type GestureEntry } from '../drivingLib/gestureEntry';
+import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
+import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
+import { pluralArgument } from '../drivingLib/gestureEntry';
 import type { PluginParticipation, PluginsCommands, SelectionResult } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 
@@ -13,18 +14,18 @@ export function registerPluginEnableCommands(
   commands: Pick<PluginsCommands, 'setPluginsEnabled'>, instance: Pick<Instance, 'value' | 'refresh'>,
   viewSelection: () => readonly PluginsTreeNode[], reporter: Reporter,
 ): vscode.Disposable[] {
-  const run = (enabled: boolean) => async (entry: GestureEntry<PluginsTreeNode>) => {
-    const rows = pluralArgument(entry, 'plugin');
-    if (rows.length === 0) return;
-    const names = rows.map((n: PluginNode) => n.plugin.name);
-    await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, async () => {
-      const result = await commands.setPluginsEnabled(instance.value.activeProfile, names, enabled);
-      reportPluginsParticipation(result, names.map((name) => ({ name, enabled })), reporter);
-    });
-  };
+  const gesture = (enabled: boolean): AgentGesture<PluginsTreeNode, readonly string[], SelectionResult<string>> => ({
+    fromView: (entry) => {
+      const names = pluralArgument(entry, 'plugin').map((n: PluginNode) => n.plugin.name);
+      return names.length === 0 ? undefined : names;
+    },
+    fromAgent: ({ argument }) => argument.map((one) => pluginOf(one).name),
+    run: (names) => runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.setPluginsEnabled(instance.value.activeProfile, names, enabled)),
+    report: (result, names) => reportPluginsParticipation(result, names.map((name) => ({ name, enabled })), reporter),
+  });
   return [
-    registerGesture('modbench.plugin.enable', viewSelection, run(true)),
-    registerGesture('modbench.plugin.disable', viewSelection, run(false)),
+    registerAgentGesture('modbench.plugin.enable', viewSelection, gesture(true)),
+    registerAgentGesture('modbench.plugin.disable', viewSelection, gesture(false)),
   ];
 }
 

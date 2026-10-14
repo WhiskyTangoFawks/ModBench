@@ -827,7 +827,7 @@ describe('modbench.mod.enable / modbench.mod.disable, called by the agent', () =
     const reporter = recordingReporter();
     registerModEnableCommands(commands, instance, () => [selected], reporter);
 
-    const answered = await invoke(command, new AgentCall([{ kind: 'mod', name: 'Mod B' }, { kind: 'mod', name: 'Gone' }]));
+    const answered = await invoke(command, new AgentCall([{ kind: 'mod', name: 'Mod B' }, { kind: 'mod', name: 'Gone' }], {}));
 
     expect(setModsEnabled).toHaveBeenCalledWith('Default', ['Mod B', 'Gone'], enabled);
     expect(answered).toEqual(outcome);
@@ -846,7 +846,7 @@ describe('modbench.mod.enable / modbench.mod.disable, called by the agent', () =
     setModsEnabled.mockImplementation(() => { progressSteps.push('modlist.txt written'); return Promise.resolve(outcome); });
     registerModEnableCommands(commands, instance, () => [], recordingReporter());
 
-    await invoke('modbench.mod.enable', new AgentCall([{ kind: 'mod', name: 'Mod B' }]));
+    await invoke('modbench.mod.enable', new AgentCall([{ kind: 'mod', name: 'Mod B' }], {}));
 
     expect(progressSteps).toEqual([
       'progress opens on modbench.modList', 'modlist.txt written', 'Instance loader: read every file again', 'progress closes',

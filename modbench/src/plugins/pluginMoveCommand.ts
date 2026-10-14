@@ -1,16 +1,15 @@
 import * as vscode from 'vscode';
 import type { PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
+import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
+import { pluralArgument } from '../drivingLib/gestureEntry';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import type { PluginsCommands, PluginsDrop } from '../pluginsCommands/plugins';
+import type { PluginsCommands, PluginsDrop, SelectionResult } from '../pluginsCommands/plugins';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { isPluginAddress } from '../wire/messages';
-import { PLUGINS_KEY_ARGS } from './gestureEntry';
+import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import { type PluginsTreeProvider } from './PluginsTreeProvider';
-import { PluginNode, type PluginsTreeNode } from './pluginRows';
-
-const isAddresses = (value: unknown): value is PluginAddress[] => Array.isArray(value) && value.every(isPluginAddress);
+import type { PluginsTreeNode } from './pluginRows';
 
 function isDrop(value: unknown): value is PluginsDrop {
   if (typeof value !== 'object' || value === null || !('kind' in value)) return false;
@@ -22,29 +21,40 @@ interface MoveView extends Pick<PluginsTreeProvider, 'movePlaces'> {
   selection: () => readonly PluginsTreeNode[];
 }
 
-/** `modbench.plugin.move`: the plugins as `(origin, filename)` addresses, and the drop where they
- *  land. Left out, the plugins are the view's selection and the drop is picked. A tree drop is
- *  one entry point into it. */
+interface Move {
+  readonly plugins: readonly PluginAddress[];
+  readonly drop: PluginsDrop;
+}
+
+/** `modbench.plugin.move`: the plugins and the drop where they land. Left out, the plugins are the
+ *  view's selection and the drop is picked. A tree drop is one entry point into it. */
 export function registerPluginMoveCommand(
   commands: Pick<PluginsCommands, 'reorderPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
   view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.plugin.move', async (plugins?: unknown, drop?: unknown) => {
-    const moving = isAddresses(plugins)
-      ? plugins
-      : view.selection().filter((row): row is PluginNode => row instanceof PluginNode).map(({ plugin, origin }) => ({ name: plugin.name, origin }));
-    if (moving.length === 0) return;
-    const target = isDrop(drop)
-      ? drop
-      : (await vscode.window.showQuickPick(view.movePlaces(moving.map(({ name }) => name)), { placeHolder: 'Move above…' }))?.drop;
-    if (target === undefined) return;
-    try {
-      const { activeProfile, pluginsLoadedWithNoLine } = instance.value;
-      const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(
-        activeProfile, moving, target, (pluginsLoadedWithNoLine ?? []).map(({ name }) => name)));
+  const gesture: AgentGesture<PluginsTreeNode, Move, SelectionResult<PluginAddress>, { drop: PluginsDrop }> = {
+    fromView: async (entry, option) => {
+      const plugins = pluralArgument(entry, 'plugin').map(({ plugin, origin }) => ({ name: plugin.name, origin }));
+      if (plugins.length === 0) return undefined;
+      const drop = isDrop(option)
+        ? option
+        : (await vscode.window.showQuickPick(view.movePlaces(plugins.map(({ name }) => name)), { placeHolder: 'Move above…' }))?.drop;
+      return drop && { plugins, drop };
+    },
+    fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), drop: options.drop }),
+    run: async ({ plugins, drop }) => {
+      try {
+        const { activeProfile, pluginsLoadedWithNoLine } = instance.value;
+        const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(
+          activeProfile, plugins, drop, (pluginsLoadedWithNoLine ?? []).map(({ name }) => name)));
+        return result.applied ? { applied: true, outcome: { landed: plugins, refused: [] } } : result;
+      } catch (e) {
+        return { applied: false, refusal: errorMessage(e) };
+      }
+    },
+    report: (result) => {
       if (!result.applied) reporter.report('error', 'Could not move plugins.', result.refusal);
-    } catch (e) {
-      reporter.report('error', 'Failed to move plugins.', errorMessage(e));
-    }
-  });
+    },
+  };
+  return registerAgentGesture('modbench.plugin.move', view.selection, gesture);
 }

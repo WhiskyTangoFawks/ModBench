@@ -28,6 +28,7 @@ vi.mock('vscode', async () => {
 
 import type { MEditClient, PluginMetadata } from '../../client';
 import type { PluginsDrop } from '../../pluginsCommands/plugins';
+import { AgentCall } from '../../drivingLib/agentGesture';
 import { registerPluginMoveCommand } from '../pluginMoveCommand';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -46,6 +47,10 @@ const held = (name: string, masters: string[]): PluginMetadata => ({
 const LOSING_END = { kind: 'losingEnd' } as const;
 const noMasters = { getPlugins: () => Promise.reject(new Error('mEdit is indexing')) };
 
+const rowsOf = (...addresses: { name: string; origin: string }[]): [PluginNode | undefined, PluginNode[]] => {
+  const rows = addresses.map(({ name, origin }) => new PluginNode({ name, enabled: true }, origin));
+  return [rows[0], rows];
+};
 const invoke = (...args: unknown[]) => Promise.resolve(present(handlers.get(MOVE), 'the move command')(...args));
 
 const fakeOver = (...names: string[]) => fakeInstanceAdapter(readingFixture({ pluginOrder: names.map((name) => ({ name, enabled: true })) }));
@@ -80,7 +85,7 @@ describe('modbench.plugin.move', () => {
   it('hands the adapter the move to the target and ends on the read after it, under the Plugins view\'s progress', async () => {
     const { fake } = registered();
 
-    await invoke([A], { kind: 'winningEnd' });
+    await invoke(...rowsOf(A), { kind: 'winningEnd' });
 
     expect(fake.calls).toEqual(moved('A.esp', 2));
     expect(progressSteps).toEqual([
@@ -93,7 +98,7 @@ describe('modbench.plugin.move', () => {
   it('takes the focused view\'s selection when no plugin is named, leaving out a row that is not a plugin line', async () => {
     const { reporter, fake } = registered([new PluginNode({ name: 'C.esp', enabled: true }, 'ModC'), new ImplicitMasterNode('Fallout4.esm', 'Data/')]);
 
-    await invoke(undefined, LOSING_END);
+    await invoke(undefined, undefined, LOSING_END);
 
     expect(reporter.reports).toEqual([]);
     expect(fake.calls).toEqual(moved('C.esp', 0));
@@ -102,7 +107,7 @@ describe('modbench.plugin.move', () => {
   it('does nothing for no plugins', async () => {
     const { reporter, fake } = registered();
 
-    await invoke(undefined, LOSING_END);
+    await invoke(undefined, undefined, LOSING_END);
 
     expect(fake.calls).toEqual([]);
     expect(progressSteps).toEqual([]);
@@ -113,7 +118,7 @@ describe('modbench.plugin.move', () => {
     const { reporter, fake } = registered();
     picks.label = 'C.esp';
 
-    await invoke([A]);
+    await invoke(...rowsOf(A));
 
     expect(reporter.reports).toEqual([]);
     expect(fake.calls).toEqual(moved('A.esp', 1));
@@ -123,7 +128,7 @@ describe('modbench.plugin.move', () => {
     const { fake } = registered();
     picks.label = 'Bottom of the view';
 
-    await invoke([A], { kind: 'before' });
+    await invoke(...rowsOf(A), { kind: 'before' });
 
     expect(fake.calls).toEqual(moved('A.esp', 2));
   });
@@ -131,7 +136,7 @@ describe('modbench.plugin.move', () => {
   it('moves nothing and says nothing when the pick is dismissed', async () => {
     const { reporter, fake } = registered();
 
-    await invoke([A]);
+    await invoke(...rowsOf(A));
 
     expect(fake.calls).toEqual([]);
     expect(reporter.reports).toEqual([]);
@@ -141,7 +146,7 @@ describe('modbench.plugin.move', () => {
   it('says why a move is refused by the plugin-order rules, naming both plugins', async () => {
     const { reporter, fake } = registered([], { getPlugins: () => Promise.resolve([held('A.esp', []), held('B.esp', ['A.esp']), held('C.esp', [])]) });
 
-    await invoke([A], { kind: 'winningEnd' });
+    await invoke(...rowsOf(A), { kind: 'winningEnd' });
 
     expect(reporter.reports).toEqual([{
       severity: 'error', message: 'Could not move plugins.', detail: '"A.esp" is a master of "B.esp", so it must load before it.',
@@ -154,7 +159,7 @@ describe('modbench.plugin.move', () => {
     const value = instanceValueFixture({ activeProfile: 'Default', pluginsLoadedWithNoLine: [{ name: 'DLCRobot.esm', origin: 'Data/' }] });
     const { reporter, fake } = registered([], masters, undefined, fakeOver('DLCRobot.esm', 'A.esp', 'X.esp'), value);
 
-    await invoke([{ name: 'X.esp', origin: 'ModX' }], LOSING_END);
+    await invoke(...rowsOf({ name: 'X.esp', origin: 'ModX' }), LOSING_END);
 
     expect(reporter.reports).toEqual([]);
     expect(fake.calls).toEqual(moved('X.esp', 0));
@@ -163,8 +168,40 @@ describe('modbench.plugin.move', () => {
   it('reports what throws as a failure, apart from a refusal', async () => {
     const { reporter } = registered([], noMasters, () => Promise.reject(new Error('read failed')));
 
-    await invoke([A], LOSING_END);
+    await invoke(...rowsOf(A), LOSING_END);
 
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to move plugins.', detail: 'read failed' }]);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not move plugins.', detail: 'read failed' }]);
+  });
+});
+
+describe('modbench.plugin.move, called by the agent', () => {
+  const given = (...plugins: { name: string; origin: string }[]) => new AgentCall(plugins.map((plugin) => ({ kind: 'plugin' as const, plugin })), { drop: LOSING_END });
+
+  it('moves the plugins given to the drop given, never the selection, picking and reporting nothing, and answers the outcome', async () => {
+    const { reporter, fake } = registered([new PluginNode({ name: 'C.esp', enabled: true }, 'ModC')]);
+
+    const answered = await invoke(given(A));
+
+    expect(fake.calls).toEqual(moved('A.esp', 0));
+    expect(answered).toEqual({ applied: true, outcome: { landed: [A], refused: [] } });
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('answers a refusal by the plugin-order rules, reporting nothing', async () => {
+    const { reporter, fake } = registered([], { getPlugins: () => Promise.resolve([held('A.esp', []), held('B.esp', ['A.esp']), held('C.esp', [])]) });
+
+    const answered = await invoke(new AgentCall([{ kind: 'plugin', plugin: A }], { drop: { kind: 'winningEnd' } }));
+
+    expect(answered).toEqual({ applied: false, refusal: '"A.esp" is a master of "B.esp", so it must load before it.' });
+    expect(fake.calls).toEqual([]);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('refuses an Argument that is not a plugin, writing nothing', async () => {
+    const { fake } = registered();
+
+    await expect(invoke(new AgentCall([{ kind: 'mod', name: 'ModA' }], { drop: LOSING_END }))).rejects.toThrow('carries plugins only');
+
+    expect(fake.calls).toEqual([]);
   });
 });

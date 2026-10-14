@@ -11,7 +11,9 @@ import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { decompileAndCommitProgressMessage } from './decompileAndCommitProgress';
 import type { PluginsTreeNode } from './pluginRows';
-import { PLUGINS_KEY_ARGS } from './gestureEntry';
+import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
+import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
+import type { SelectionResult } from '../pluginsCommands/plugins';
 import { gestureEntry, isClickedRow, selectionArgument } from '../drivingLib/gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
@@ -155,21 +157,23 @@ export interface DecompileDeps {
 export function registerDecompileCommand(
   deps: DecompileDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  return vscode.commands.registerCommand(
-    'modbench.plugin.decompile',
-    async (clicked?: unknown, selected?: readonly PluginsTreeNode[]) => {
+  const gesture: AgentGesture<PluginsTreeNode, readonly PluginAddress[], SelectionResult<PluginAddress>> = {
+    fromView: async (entry, _option, clicked) => {
       const header = columnHeaderOf(clicked);
-      const plugins = header
-        ? [header]
-        : selectionArgument(gestureEntry(clicked, selected, viewSelection), 'plugin').map((node) => node.argument.plugin);
-      if (plugins.length === 0 || !(await confirmDecompile(deps.ask, plugins))) return;
-      await runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
-        const outcome = await deps.client.decompile(plugins);
-        if (isRefused(outcome)) { deps.reporter.report('error', outcome.message); return; }
-        reportDecompiled(deps.reporter, outcome, plugins.length);
-      });
+      const plugins = header ? [header] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
+      return plugins.length > 0 && await confirmDecompile(deps.ask, plugins) ? plugins : undefined;
     },
-  );
+    fromAgent: ({ argument }) => argument.map((one) => pluginOf(one)),
+    run: (plugins) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
+      const outcome = await deps.client.decompile(plugins);
+      return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, outcome };
+    }),
+    report: (result, plugins) => {
+      if (result.applied) reportDecompiled(deps.reporter, result.outcome, plugins.length);
+      else deps.reporter.report('error', result.refusal);
+    },
+  };
+  return registerAgentGesture('modbench.plugin.decompile', viewSelection, gesture);
 }
 
 // plugins.md, Decompile: one confirmation for the selection, naming the plugins; it replaces

@@ -8,7 +8,13 @@ import {
 } from './gestureEntry';
 import type { RowOf } from '../drivingLib/gestureEntry';
 import { viewCopyValueText } from '../drivingLib/copyValue';
-import { placeFolder, pluginPlaces } from './pluginPlaces';
+import { placeFolder, pluginPlaces, type PluginPlace } from './pluginPlaces';
+import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
+import { runWritingGesture } from '../drivingLib/writingGesture';
+import type { PluginAddress } from '../wire/pluginAddress';
+import type { SelectionResult } from '../pluginsCommands/plugins';
+import { answerOf } from '../wire/readFailed';
+import type { InstanceValue } from '../instanceLoader/instance';
 import { creatablePluginExtensionsOf, pluginNameRefusal } from './pluginName';
 import type { Reporter } from '../ports/reporter';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
@@ -80,33 +86,71 @@ function lostPlace(origin: string, lost: 'gone' | 'disabled' | 'unread'): string
   return `The mod "${origin}" ${lost === 'gone' ? 'is gone' : 'was disabled'}`;
 }
 
+interface NewPlugin {
+  readonly plugin: PluginAddress;
+  readonly label: string;
+  readonly folder: string;
+  readonly sourceFolder?: string;
+}
+
+/** The new plugin in its place, or why that place cannot hold it. */
+function placed(value: Pick<InstanceValue, 'mods' | 'paths'>, name: string, { origin, label }: PluginPlace): NewPlugin | string {
+  const where = placeFolder(value, origin);
+  if ('lost' in where) return `${lostPlace(origin, where.lost)}, so "${name}" was not created.`;
+  return { plugin: { name, origin }, label, ...where };
+}
+
+interface CreateOptions {
+  readonly name: string;
+  readonly place: string;
+}
+
 // create-plugin: the file is the whole gesture. Its plugins.txt line is plugin sync's, once the
-// watch sees the file, so nothing here writes that line or refreshes a view.
+// watch sees the file, so nothing here writes that line.
 export function registerCreatePluginCommand(
   client: Pick<MEditClient, 'createPlugin' | 'getCreatablePluginExtensions'>,
-  instance: Pick<Instance, 'value'>,
+  instance: Pick<Instance, 'value' | 'refresh'>,
   reporter: Reporter,
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.plugin.create', async () => {
-    const name = await promptPluginName(client, reporter);
-    if (!name) return;
+  const gesture: AgentGesture<PluginsTreeNode, NewPlugin, SelectionResult<PluginAddress>, CreateOptions> = {
+    fromView: async () => {
+      const name = await promptPluginName(client, reporter);
+      if (!name) return undefined;
 
-    const places = pluginPlaces(instance.value, name);
-    if (places.length === 0) {
-      reporter.report('error', `Overwrite and every enabled mod already hold "${name}".`);
-      return;
-    }
-    const picked = await vscode.window.showQuickPick(places, { placeHolder: 'Where should the new plugin live?' });
-    if (!picked) return;
+      const places = pluginPlaces(instance.value, name);
+      if (places.length === 0) {
+        reporter.report('error', `Overwrite and every enabled mod already hold "${name}".`);
+        return undefined;
+      }
+      const picked = await vscode.window.showQuickPick(places, { placeHolder: 'Where should the new plugin live?' });
+      if (!picked) return undefined;
 
-    const place = placeFolder(instance.value, picked.origin);
-    if ('lost' in place) {
-      reporter.report('error', `${lostPlace(picked.origin, place.lost)}, so "${name}" was not created.`);
-      return;
-    }
-
-    const result = await client.createPlugin({ name, origin: picked.origin }, place.folder, place.sourceFolder);
-    if (isRefused(result)) { reporter.report('error', result.message); return; }
-    reporter.landed(`Created "${result.name}" in ${picked.label}.`);
-  });
+      const made = placed(instance.value, name, picked);
+      if (typeof made === 'string') {
+        reporter.report('error', made);
+        return undefined;
+      }
+      return made;
+    },
+    fromAgent: async ({ options: { name, place } }) => {
+      const refusal = pluginNameRefusal(name, answerOf(await client.getCreatablePluginExtensions()));
+      if (refusal !== undefined) throw new Error(refusal);
+      const chosen = pluginPlaces(instance.value, name).find(({ origin }) => origin === place);
+      if (chosen === undefined) throw new Error(`"${place}" is not an enabled mod or Overwrite that lacks "${name}".`);
+      const made = placed(instance.value, name, chosen);
+      if (typeof made === 'string') throw new Error(made);
+      return made;
+    },
+    run: ({ plugin, folder, sourceFolder }) => runWritingGesture(PLUGINS_KEY_ARGS.view, instance, async () => {
+      const result = await client.createPlugin(plugin, folder, sourceFolder);
+      return isRefused(result)
+        ? { applied: false, refusal: result.message }
+        : { applied: true, outcome: { landed: [{ name: result.name, origin: plugin.origin }], refused: [] } };
+    }),
+    report: (result, { label }) => {
+      if (!result.applied) reporter.report('error', result.refusal);
+      else reporter.landed(`Created "${result.outcome.landed[0]?.name}" in ${label}.`);
+    },
+  };
+  return registerAgentGesture('modbench.plugin.create', () => [], gesture);
 }

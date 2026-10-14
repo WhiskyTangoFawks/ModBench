@@ -12,8 +12,6 @@ const AGENT_AHEAD_OF_CODE = [
   'modbench.mod.move', 'modbench.mod.uninstall', 'modbench.mod.createEmpty', 'modbench.mod.install', 'modbench.mod.decompileAndCommit',
   'modbench.mod.build', 'modbench.mod.excludeFile', 'modbench.mod.includeFile', 'modbench.mod.rename',
   'modbench.separator.add', 'modbench.separator.rename', 'modbench.separator.delete',
-  'modbench.plugin.enable', 'modbench.plugin.disable', 'modbench.plugin.move', 'modbench.plugin.create', 'modbench.plugin.decompile',
-  'modbench.plugin.rename',
   'modbench.downloadedFile.exclude', 'modbench.downloadedFile.include', 'modbench.downloadedFile.delete',
   'modbench.record.open',
 ];
