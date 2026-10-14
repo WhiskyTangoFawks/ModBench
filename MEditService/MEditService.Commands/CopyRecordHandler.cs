@@ -12,11 +12,13 @@ public sealed class CopyRecordHandler
     private readonly CopyRecordChangesHandler _changes;
     private readonly ISourceAdapter _source;
     private readonly UnsavedDocuments _unsaved;
+    private readonly LoadOrderHolder _loadOrder;
     private readonly ILogger<CopyRecordHandler> _logger;
 
     internal CopyRecordHandler(
-        CopyRecordChangesHandler changes, ISourceAdapter source, UnsavedDocuments unsaved, ILogger<CopyRecordHandler> logger) =>
-        (_changes, _source, _unsaved, _logger) = (changes, source, unsaved, logger);
+        CopyRecordChangesHandler changes, ISourceAdapter source, UnsavedDocuments unsaved, LoadOrderHolder loadOrder,
+        ILogger<CopyRecordHandler> logger) =>
+        (_changes, _source, _unsaved, _loadOrder, _logger) = (changes, source, unsaved, loadOrder, logger);
 
     public async Task<RecordEditResult> Copy(RecordAt record, CopyMode mode, PluginAddress destination, bool replace)
     {
@@ -26,6 +28,6 @@ public sealed class CopyRecordHandler
             mode == CopyMode.New
                 ? landed.Outcome.NewFormKey ?? throw new InvalidOperationException("Expected a copy as new to carry the new FormKey.")
                 : record.FormKey));
-        return sessions.Written(outcome, $"Could not write the copy of {record.FormKey} into {destination.Name}", _logger);
+        return sessions.Written(outcome, $"Could not write the copy of {record.FormKey} into {destination.Name}", _loadOrder, _logger);
     }
 }
