@@ -15,10 +15,15 @@ views: "every view" {class: driving}
 
 driving -> sourcecommands: "init, with the instance value" {class: track}
 sourcecommands."refused when the instance already holds a repository"
-sourcecommands -> git: "the instance folder, as a repository" {class: outside}
 sourcecommands -> instanceadapter: "the ignore list" {class: track}
 instanceadapter -> instance: "the ignore list" {class: track}
+sourcecommands -> git: "the instance folder, as a repository" {class: outside}
 sourcecommands -> driving: "landed, or the refusal" {class: track}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> views: value {class: loadorder}
+failed: "the repository could not be made" {
+  sourcecommands -> instanceadapter: "the ignore list, taken back" {class: track}
+  instanceadapter -> instance: "the ignore list, taken back" {class: track}
+  sourcecommands -> driving: "the refusal" {class: track}
+}
