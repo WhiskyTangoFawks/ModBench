@@ -146,9 +146,36 @@ describe('insertSeparator', () => {
     expect(outcome).toEqual({ applied: false, refusal: 'Entry not found in modlist: No Such Entry' });
     expect(fake.calls).toEqual([]);
   });
+
+  it.each(['', '   '])('refuses the blank name %j, writing nothing', async (name) => {
+    const { fake, commands } = over();
+
+    const outcome = await commands.insertSeparator('Default', name, { kind: 'mod', name: 'Gear' });
+
+    expect(outcome).toEqual({ applied: false, refusal: 'A separator name cannot be empty.' });
+    expect(fake.calls).toEqual([]);
+  });
 });
 
 describe('renameSeparator', () => {
+  it('writes nothing for the separator\'s own name', async () => {
+    const { fake, commands } = over();
+
+    const outcome = await commands.renameSeparator('Default', UNASSIGNED, UNASSIGNED);
+
+    expect(outcome).toEqual({ applied: true, wrote: false });
+    expect(fake.calls).toEqual([]);
+  });
+
+  it.each(['', '   '])('refuses the blank name %j, writing nothing', async (name) => {
+    const { fake, commands } = over();
+
+    const outcome = await commands.renameSeparator('Default', UNASSIGNED, name);
+
+    expect(outcome).toEqual({ applied: false, refusal: 'A separator name cannot be empty.' });
+    expect(fake.calls).toEqual([]);
+  });
+
   it('hands the adapter one change, which renames the line and its folder', async () => {
     const { fake, commands } = over();
 

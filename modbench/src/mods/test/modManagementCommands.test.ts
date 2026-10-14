@@ -1608,6 +1608,30 @@ describe('the mod gestures, called by the agent', () => {
       ] } });
     });
 
+    it('moves separators given as separators to a separator place, never the selection, and answers the outcome', async () => {
+      const outcome = { applied: true, outcome: { landed: ['Group'], refused: [] } };
+      moveSeparators.mockResolvedValue(outcome);
+      registerModMoveCommand(commands, instance, view, recordingReporter());
+      const above = { kind: 'separator', name: 'Group B' } as const;
+
+      const answered = await invoke('modbench.mod.move', new AgentCall([{ kind: 'separator', name: 'Group' }], { place: above, end: 'winning' }));
+
+      expect(moveSeparators).toHaveBeenCalledWith('Default', ['Group'], above, 'winning');
+      expect(moveMods).not.toHaveBeenCalled();
+      expect(answered).toEqual(outcome);
+      nothingOpened();
+    });
+
+    it('refuses an Argument that mixes mods and separators, as the view moves neither', async () => {
+      registerModMoveCommand(commands, instance, view, recordingReporter());
+
+      await expect(invoke('modbench.mod.move', new AgentCall([{ kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group' }], { place: group, end: 'winning' })))
+        .rejects.toBeInstanceOf(Refusal);
+
+      expect(moveMods).not.toHaveBeenCalled();
+      expect(moveSeparators).not.toHaveBeenCalled();
+    });
+
     it('refuses an Argument that is not a mod, writing nothing', async () => {
       registerModMoveCommand(commands, instance, view, recordingReporter());
 
@@ -1837,6 +1861,183 @@ describe('the mod gestures, called by the agent', () => {
       await expect(invoke(command, ofMods('Mod A'))).rejects.toBeInstanceOf(Refusal);
 
       expect(markFiles).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('the separator gestures, called by the agent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks(); progressSteps.length = 0;
+    separatorNameRefusal.mockReset();
+  });
+
+  const instance = {
+    ...instanceThatReads,
+    value: instanceValueFixture({
+      activeProfile: 'Default',
+      mods: [
+        { kind: 'separator', name: 'Group A', enabled: true },
+        { kind: 'mod', name: 'Mod A', enabled: true },
+        { kind: 'separator', name: 'Group B', enabled: true },
+      ],
+    }),
+  };
+  const selected = new SeparatorNode({ kind: 'separator', name: 'Selected Group', enabled: true }, []);
+  const register = (reporter = recordingReporter(), ask = scriptedDialog()) =>
+    registerSeparatorCommands(commands, instance, reporter, ask, vi.fn(), () => [selected]);
+  const group = (name: string) => ({ kind: 'separator' as const, name });
+  const nothingOpened = (ask: ReturnType<typeof scriptedDialog>) => {
+    expect(showInputBox).not.toHaveBeenCalled();
+    expect(ask.asked).toEqual([]);
+  };
+
+  describe('modbench.separator.add', () => {
+    it.each([
+      ['a mod', { kind: 'mod', name: 'Mod A' }],
+      ['a separator', group('Group A')],
+    ] as const)('adds the separator named beside %s given, never the selection, asking nothing, and answers the outcome', async (_, anchor) => {
+      insertSeparator.mockResolvedValue({ applied: true, wrote: true });
+      const reporter = recordingReporter();
+      const ask = scriptedDialog();
+      register(reporter, ask);
+
+      const answered = await invoke('modbench.separator.add', new AgentCall([anchor], { name: 'New Section' }));
+
+      expect(insertSeparator.mock.calls).toEqual([['Default', 'New Section', anchor]]);
+      expect(answered).toEqual({ applied: true, outcome: { landed: ['New Section'], refused: [] } });
+      expect(reporter.reports).toEqual([]);
+      nothingOpened(ask);
+    });
+
+    it('refuses a name the command refuses as a Refusal, adding nothing', async () => {
+      separatorNameRefusal.mockReturnValueOnce('A separator with this name already exists');
+      register();
+
+      await expect(invoke('modbench.separator.add', new AgentCall([group('Group A')], { name: 'Group B' })))
+        .rejects.toEqual(new Refusal('A separator with this name already exists'));
+
+      expect(insertSeparator).not.toHaveBeenCalled();
+    });
+
+    it('answers the command\'s refusal of a blank name as the failure the view reports', async () => {
+      insertSeparator.mockResolvedValue({ applied: false, refusal: 'A separator name cannot be empty.' });
+      const reporter = recordingReporter();
+      register(reporter);
+
+      const answered = await invoke('modbench.separator.add', new AgentCall([group('Group A')], { name: ' ' }));
+
+      expect(answered).toEqual({ applied: false, refusal: 'Failed to add separator.', detail: 'A separator name cannot be empty.' });
+      expect(reporter.reports).toEqual([]);
+    });
+
+    it('refuses an Argument that is neither a mod nor a separator, or is more than one', async () => {
+      register();
+      const plugin = { kind: 'plugin', plugin: { name: 'A.esp', origin: 'Mod A' } } as const;
+
+      await expect(invoke('modbench.separator.add', new AgentCall([plugin], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
+      await expect(invoke('modbench.separator.add', new AgentCall([group('Group A'), group('Group B')], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
+
+      expect(insertSeparator).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('modbench.separator.rename', () => {
+    const renameCall = (name: string) => new AgentCall([group('Group A')], { name });
+
+    it('renames the separator given to the name given, never the selection, asking nothing, and answers the outcome', async () => {
+      renameSeparator.mockResolvedValue({ applied: true, wrote: true });
+      const reporter = recordingReporter();
+      const ask = scriptedDialog();
+      register(reporter, ask);
+
+      const answered = await invoke('modbench.separator.rename', renameCall('Renamed'));
+
+      expect(renameSeparator.mock.calls).toEqual([['Default', 'Group A', 'Renamed']]);
+      expect(answered).toEqual({ applied: true, outcome: { landed: ['Renamed'], refused: [] } });
+      expect(reporter.reports).toEqual([]);
+      nothingOpened(ask);
+    });
+
+    it('asks the command for the refusal with the separator\'s own name, and refuses what it refuses as a Refusal', async () => {
+      separatorNameRefusal.mockReturnValueOnce('A separator with this name already exists');
+      register();
+
+      await expect(invoke('modbench.separator.rename', renameCall('Group B'))).rejects.toEqual(new Refusal('A separator with this name already exists'));
+
+      expect(separatorNameRefusal).toHaveBeenCalledWith(instance.value, 'Group B', 'Group A');
+      expect(renameSeparator).not.toHaveBeenCalled();
+    });
+
+    it('answers a rename that wrote nothing as nothing landed and nothing refused', async () => {
+      renameSeparator.mockResolvedValue({ applied: true, wrote: false });
+      register();
+
+      expect(await invoke('modbench.separator.rename', renameCall('Group A'))).toEqual({ applied: true, outcome: { landed: [], refused: [] } });
+    });
+
+    it('answers the command\'s refusal as the failure the view reports', async () => {
+      renameSeparator.mockResolvedValue({ applied: false, refusal: 'A separator name cannot be empty.' });
+      const reporter = recordingReporter();
+      register(reporter);
+
+      const answered = await invoke('modbench.separator.rename', renameCall(' '));
+
+      expect(answered).toEqual({ applied: false, refusal: 'Failed to rename separator.', detail: 'A separator name cannot be empty.' });
+      expect(reporter.reports).toEqual([]);
+    });
+
+    it('refuses an Argument that is not exactly one separator', async () => {
+      register();
+
+      await expect(invoke('modbench.separator.rename', new AgentCall([{ kind: 'mod', name: 'Mod A' }], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
+      await expect(invoke('modbench.separator.rename', new AgentCall([group('Group A'), group('Group B')], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
+
+      expect(renameSeparator).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('modbench.separator.delete', () => {
+    const deleteCall = new AgentCall([group('Group A'), group('Group B')], {});
+
+    it('deletes the separators given, never the selection, asking nothing, and answers the outcome', async () => {
+      const outcome = { applied: true, outcome: { landed: [{ name: 'Group A' }, { name: 'Group B' }], refused: [] } };
+      deleteSeparators.mockResolvedValue(outcome);
+      const reporter = recordingReporter();
+      const ask = scriptedDialog();
+      register(reporter, ask);
+
+      const answered = await invoke('modbench.separator.delete', deleteCall);
+
+      expect(deleteSeparators).toHaveBeenCalledWith('Default', instance.value.mods, ['Group A', 'Group B'], expect.any(Function));
+      expect(answered).toEqual({ ...outcome, partial: [] });
+      expect(reporter.reports).toEqual([]);
+      nothingOpened(ask);
+    });
+
+    it('answers a line that could not be removed as a partial failure, reporting nothing itself', async () => {
+      deleteSeparators.mockResolvedValue({ applied: true, outcome: { landed: [{ name: 'Group A', lineRefusal: 'disk full' }], refused: [] } });
+      const reporter = recordingReporter();
+      register(reporter);
+
+      const answered = await invoke('modbench.separator.delete', new AgentCall([group('Group A')], {}));
+
+      expect(answered).toMatchObject({ partial: [{ message: '"Group A" was deleted, but its modlist.txt line could not be removed.', detail: 'disk full', severity: 'warning' }] });
+      expect(reporter.reports).toEqual([]);
+    });
+
+    it('answers a refusal of the whole selection as the failure the view reports', async () => {
+      deleteSeparators.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
+      register();
+
+      expect(await invoke('modbench.separator.delete', deleteCall)).toEqual({ applied: false, refusal: 'Failed to delete separators.', detail: 'ENOENT: modlist.txt' });
+    });
+
+    it('refuses an Argument that is not a separator, writing nothing', async () => {
+      register();
+
+      await expect(invoke('modbench.separator.delete', new AgentCall([{ kind: 'mod', name: 'Mod A' }], {}))).rejects.toBeInstanceOf(Refusal);
+
+      expect(deleteSeparators).not.toHaveBeenCalled();
     });
   });
 });

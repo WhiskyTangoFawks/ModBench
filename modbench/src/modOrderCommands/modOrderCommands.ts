@@ -176,6 +176,7 @@ async function markFiles(
   return { applied: true, outcome: { landed, refused } };
 }
 
+const EMPTY_SEPARATOR_NAME = 'A separator name cannot be empty.';
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
 const EMPTY_MOD_NAME = 'A mod name cannot be empty.';
 const MOD_NAME_CLASH = 'A mod with this name already exists';
@@ -203,6 +204,7 @@ function groupStartOf(order: readonly ModlistEntry[], at: number): number {
 function insertSeparator(
   adapter: InstanceAdapter, profile: string, requested: string, anchor: EntryRef,
 ): Promise<CommandResult> {
+  if (requested.trim() === '') return Promise.resolve({ applied: false, refusal: EMPTY_SEPARATOR_NAME });
   return changeModOrder(adapter, profile, (order) => {
     const at = order.findIndex((e) => e.kind === anchor.kind && e.name === anchor.name);
     if (at === -1) throw new Error(`Entry not found in modlist: ${anchor.name}`);
@@ -215,6 +217,8 @@ function insertSeparator(
 function renameSeparator(
   adapter: InstanceAdapter, profile: string, oldName: string, requested: string,
 ): Promise<CommandResult> {
+  if (requested.trim() === '') return Promise.resolve({ applied: false, refusal: EMPTY_SEPARATOR_NAME });
+  if (oldName === requested) return Promise.resolve({ applied: true, wrote: false });
   return changeModOrder(adapter, profile, () => [{ kind: 'renameSeparator', from: oldName, to: requested }]);
 }
 
