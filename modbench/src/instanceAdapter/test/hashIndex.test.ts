@@ -99,7 +99,8 @@ describe('hashIndex', () => {
     await hashIndex(folder, fakeArchiveReader(ENTRIES)).originFileHash(copy);
 
     const text = await indexText();
-    expect([text.includes(download), text.includes(gameFile), text.includes(copy)]).toEqual([true, true, false]);
+    const written = (path: string): boolean => text.includes(JSON.stringify(path));
+    expect([written(download), written(gameFile), written(copy)]).toEqual([true, true, false]);
     expect([readsInSession, vi.mocked(digestOf).mock.calls.filter(([path]) => path === copy).length]).toEqual([1, 2]);
   });
 

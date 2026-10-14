@@ -1,4 +1,5 @@
 $failed = @()
+$env:NODE_OPTIONS = '--max-old-space-size=3072'
 function Gate($name, $dir, $command) {
   Write-Host "=== $name ==="
   Push-Location $dir

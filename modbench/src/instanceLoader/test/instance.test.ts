@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type {
   DataFolderArchives, DataFolderPlugins, DownloadedFile, DownloadedFiles, GameFolder, InstanceAdapter, InstanceReading, Mod,
@@ -235,7 +236,7 @@ describe('Instance — the value', () => {
 
     expect(instance.value.plugins).toEqual([
       { name: 'NonAsciiRetexture.esp', path: `/mods/${NONO}/NonAsciiRetexture.esp`, origin: NONO, line: 0, enabled: true, winning: true },
-      { name: 'Unofficial Fallout 4 Patch.esp', path: '/game/Data/Unofficial Fallout 4 Patch.esp', origin: 'Data/', line: 1, enabled: true, winning: true },
+      { name: 'Unofficial Fallout 4 Patch.esp', path: join('/game/Data', 'Unofficial Fallout 4 Patch.esp'), origin: 'Data/', line: 1, enabled: true, winning: true },
       { name: 'NonAsciiRetexture - Addon.esl', path: `/mods/${NONO}/NonAsciiRetexture - Addon.esl`, origin: NONO, line: null, enabled: false, winning: true },
       { name: 'Harder VATS.esp', path: '/mods/Harder VATS/Harder VATS.esp', origin: 'Harder VATS', line: null, enabled: false, winning: false },
     ]);
@@ -530,7 +531,7 @@ describe('Instance — downloads', () => {
 });
 
 describe('Instance — game folder and the archives the game loads', () => {
-  const SUPPLIED = '/game/Data/Fallout4 - Interface.ba2';
+  const SUPPLIED = join('/game/Data', 'Fallout4 - Interface.ba2');
 
   it('hands the snapshot the archives the INIs list, and tells once, until it changes, the INIs it did not find', async () => {
     const note = 'The profile Default keeps no game INIs of its own';
