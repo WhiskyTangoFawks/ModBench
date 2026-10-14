@@ -26,7 +26,7 @@ const actualStat = present(real.stat, 'the real stat');
 const actualReaddir = present(real.readdir, 'the real readdir');
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { dirname, join, matchesGlob } from 'node:path';
+import { join, matchesGlob } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import type { Mo2Context } from '../mo2Context';
 import { readingSource, readInstance, type ReadingSource } from '../mo2Reads';
@@ -150,30 +150,6 @@ describe('the MO2 Instance adapter', () => {
             { name: 'NonAsciiRetexture.esp', enabled: true }, { name: 'Tracked Patch Mod.esp', enabled: true },
             { name: 'Unofficial Fallout 4 Patch.esp', enabled: true }, { name: 'ccSBJFO4003-Grenade.esl', enabled: true },
           ]);
-        } finally {
-          await rm(game, { recursive: true, force: true });
-        }
-      });
-
-      it('answers each archive and strings file of the mods, Overwrite and the game folder with its stamp, and no other file\'s', async () => {
-        const game = await mkdtemp(join(tmpdir(), 'mo2-instance-stamps-'));
-        try {
-          const mod = join(root, 'mods', 'Tracked Patch Mod');
-          const archive = join(game, 'Data', 'Fallout4 - Interface.ba2');
-          const stamped = [
-            archive, join(game, 'Data', 'Strings', 'Fallout4_en.STRINGS'),
-            join(mod, 'Tracked Patch Mod - Main.ba2'), join(mod, 'Strings', 'Tracked Patch Mod_en.STRINGS'),
-            join(root, 'overwrite', 'Strings', 'Tracked Patch Mod_en.DLSTRINGS'),
-          ];
-          for (const path of [...stamped, join(game, 'Data', 'readme.txt'), join(mod, 'Strings', 'readme.txt')]) {
-            await mkdir(dirname(path), { recursive: true });
-            await writeFile(path, 'bytes');
-          }
-
-          const { archiveAndStringsStamps } = await adapterAt(root, game).reading();
-
-          expect([...archiveAndStringsStamps.keys()].sort()).toEqual([...stamped].sort());
-          expect(archiveAndStringsStamps.get(archive)).toMatchObject({ kind: 'read', answer: { size: 5n } });
         } finally {
           await rm(game, { recursive: true, force: true });
         }

@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import type { DataFolderPlugins, GameFolder, ModFolders, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
+import type { DataFolderPlugins, FileRead, FileStamp, GameFolder, ModFolders, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { buildFileConflictIndex, FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
 import {
-  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, providedPluginsOf, sourceFiles, type ArchiveSources,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, providedPluginsOf, sourceFiles, stampedSnapshot,
+  type ArchiveSources,
   type LoadOrderPlugin, type LoadOrderPluginLine,
 } from '../loadOrderSnapshot';
 import type { PluginAddress } from '../../wire/pluginAddress';
@@ -347,7 +348,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
   const address = ({ name, origin }: { name: string; origin: string }) => ({ name, origin });
   const NO_ARCHIVES: ArchiveSources = {
     gameRelease: 'Fallout4', listed: [], inData: { kind: 'listed', archives: [], stringsFiles: [] }, files: new FileConflictLookup(),
-    filesByOrigin: new Map(), stamps: new Map(),
+    filesByOrigin: new Map(),
   };
   const outcomeOf = (plugins: LoadOrderPluginRow[], folders: ModFolders = modFolders) =>
     loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: folders, sourceDirs, archives: NO_ARCHIVES });
@@ -384,7 +385,6 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
       return lookup;
     };
     const inData = (archives: string[], stringsFiles: string[] = []): ArchiveSources['inData'] => ({ kind: 'listed', archives, stringsFiles });
-    const paths = (files: readonly { path: string }[] | undefined) => files?.map(({ path }) => path);
 
     it('loads the archives the INIs list in their order, then each active plugin\'s in load order, each from the mod the Mod override order resolves it to, else the game folder', () => {
       const a = row('A.esp', 'ModA', 0);
@@ -395,7 +395,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
         files: winners({ 'Fallout4 - Interface.ba2': 'Interface Fix', 'A - Textures.ba2': 'ModA', 'A - Main.ba2': 'ModA', 'Nested/A.ba2': 'ModA' }),
       };
 
-      expect(paths(snapshotOf([a], [inGameFolder('DLCRobot.esm')], archives)?.archives)).toEqual([
+      expect(snapshotOf([a], [inGameFolder('DLCRobot.esm')], archives)?.archives).toEqual([
         join('/game/Data', 'Fallout4 - Startup.ba2'), '/mods/Interface Fix/Fallout4 - Interface.ba2', join('/game/Data', 'DLCRobot - Main.ba2'),
         '/mods/ModA/A - Main.ba2', '/mods/ModA/A - Textures.ba2',
       ]);
@@ -405,7 +405,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
       const a = row('A.esp', 'ModA', 0);
       const archives: ArchiveSources = { ...NO_ARCHIVES, listed: ['A - Main.ba2', 'Gone.ba2'], files: winners({ 'A - Main.ba2': 'ModA' }) };
 
-      expect(paths(snapshotOf([a], [], archives)?.archives)).toEqual(['/mods/ModA/A - Main.ba2']);
+      expect(snapshotOf([a], [], archives)?.archives).toEqual(['/mods/ModA/A - Main.ba2']);
     });
 
     it.each([
@@ -427,28 +427,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
         files: winners({ 'strings/fallout4_en.strings': 'Translation', 'Strings/Readme.txt': 'Translation', 'Nested/Strings/A_en.STRINGS': 'ModA' }),
       };
 
-      expect(paths(snapshotOf([], [], archives)?.stringsFiles)).toEqual(['/mods/Translation/strings/fallout4_en.strings', join('/game/Data', 'Strings/DLCRobot_en.STRINGS')]);
-    });
-
-    it('hands each archive the game loads and each loose strings file it reads with its stamp', () => {
-      const archive = join('/game/Data', 'Fallout4 - Interface.ba2');
-      const archives: ArchiveSources = {
-        ...NO_ARCHIVES,
-        listed: ['Fallout4 - Interface.ba2'],
-        inData: inData(['Fallout4 - Interface.ba2'], ['Strings/Fallout4_en.STRINGS']),
-        files: winners({ 'Strings/Fallout4_en.STRINGS': 'Translation' }),
-        stamps: new Map([
-          [archive, { kind: 'read', answer: { size: 1n, modifiedNs: 2n, changedNs: 3n } }],
-          ['/mods/Translation/Strings/Fallout4_en.STRINGS', { kind: 'read', answer: { size: 4n, modifiedNs: 5n, changedNs: 6n } }],
-        ]),
-      };
-
-      const snapshot = snapshotOf([], [], archives);
-
-      expect([snapshot?.archives, snapshot?.stringsFiles]).toEqual([
-        [{ path: archive, stamp: '1/2/3' }],
-        [{ path: '/mods/Translation/Strings/Fallout4_en.STRINGS', stamp: '4/5/6' }],
-      ]);
+      expect(snapshotOf([], [], archives)?.stringsFiles).toEqual(['/mods/Translation/strings/fallout4_en.strings', join('/game/Data', 'Strings/DLCRobot_en.STRINGS')]);
     });
   });
 
@@ -469,7 +448,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     };
 
     const handed = snapshotOf([row('A.esp', 'ModA', 0), row('A.esp', 'ModO', 0, { winning: false }), row('D.esm', 'Data/', null)], [], archives)
-      ?.plugins.map(({ origin, archives: own, stringsFiles }) => ({ origin, archives: own.map(({ path }) => path), stringsFiles: stringsFiles.map(({ path }) => path) }));
+      ?.plugins.map(({ origin, archives: own, stringsFiles }) => ({ origin, archives: own, stringsFiles }));
 
     expect(handed).toEqual([
       {
@@ -482,22 +461,37 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     ]);
   });
 
-  it('hands each strings file and archive beside a copy with its stamp, or why the reading could not stamp it', () => {
-    const archives: ArchiveSources = {
-      ...NO_ARCHIVES,
-      inData: { kind: 'listed', archives: ['D - Main.ba2'], stringsFiles: ['Strings/D_en.STRINGS'] },
-      stamps: new Map([
-        [join('/game/Data', 'D - Main.ba2'), { kind: 'read', answer: { size: 5n, modifiedNs: 6n, changedNs: 7n } }],
-        [join('/game/Data', 'Strings/D_en.STRINGS'), { kind: 'unreadable', reason: 'EACCES' }],
-      ]),
+  it('stamps every archive and strings file it hands, the game\'s and each copy\'s, by the stamp read at its own path, reading each path once', async () => {
+    const asked: string[] = [];
+    const stampOf = (path: string): Promise<FileRead<FileStamp>> => {
+      asked.push(path);
+      return Promise.resolve(path.endsWith('.STRINGS')
+        ? { kind: 'unreadable', reason: `EACCES ${path}` }
+        : { kind: 'read', answer: { size: BigInt(path.length), modifiedNs: 1n, changedNs: 2n } });
+    };
+    const value: Parameters<typeof stampedSnapshot>[0] = {
+      dataFolder: '/game/Data',
+      plugins: [{
+        name: 'A.esp', path: '/a/A.esp', origin: 'ModA', provider: { kind: 'Game' }, line: 0, lineNamesIt: true,
+        archives: ['/a/A - Main.ba2'], stringsFiles: ['/a/A_en.STRINGS'],
+      }],
+      active: [], loadedWithNoLine: [],
+      archives: ['/g/Interface.ba2', '/a/A - Main.ba2'], stringsFiles: ['/t/A_en.STRINGS'],
     };
 
-    const [handed] = snapshotOf([row('D.esm', 'Data/', null)], [], archives)?.plugins ?? [];
+    const stamped = await stampedSnapshot(value, stampOf);
 
-    expect([handed?.archives, handed?.stringsFiles]).toEqual([
-      [{ path: join('/game/Data', 'D - Main.ba2'), stamp: '5/6/7' }],
-      [{ path: join('/game/Data', 'Strings/D_en.STRINGS'), stamp: 'EACCES' }],
-    ]);
+    expect(stamped).toEqual({
+      ...value,
+      plugins: [{
+        ...value.plugins.at(0),
+        archives: [{ path: '/a/A - Main.ba2', stamp: '15/1/2' }],
+        stringsFiles: [{ path: '/a/A_en.STRINGS', stamp: 'EACCES /a/A_en.STRINGS' }],
+      }],
+      archives: [{ path: '/g/Interface.ba2', stamp: '16/1/2' }, { path: '/a/A - Main.ba2', stamp: '15/1/2' }],
+      stringsFiles: [{ path: '/t/A_en.STRINGS', stamp: 'EACCES /t/A_en.STRINGS' }],
+    });
+    expect(asked.sort()).toEqual(['/a/A - Main.ba2', '/a/A_en.STRINGS', '/g/Interface.ba2', '/t/A_en.STRINGS']);
   });
 
   it('carries the game folder\'s dataFolder, and every plugin with its origin and path', () => {

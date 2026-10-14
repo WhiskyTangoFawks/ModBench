@@ -571,20 +571,17 @@ describe('Instance — game folder and the archives the game loads', () => {
 
   it('hands a mod\'s plugin the new stamp of a strings file rewritten beside it, at the next read', async () => {
     const stringsFile = '/mods/Tracked Patch Mod/Strings/Tracked Patch Mod_en.STRINGS';
-    const stampedAt = (changedNs: bigint): Partial<InstanceReading> => ({
-      archiveAndStringsStamps: new Map([[stringsFile, { kind: 'read', answer: { size: 5n, modifiedNs: 1n, changedNs } }]]),
-    });
-    const { instance, fake } = loader({
+    let changedNs = 1n;
+    const { instance } = loader({
       ...GAME_FOUND,
       mods: [mod('Tracked Patch Mod')],
       pluginOrder: [{ name: 'Tracked Patch Mod.esp', enabled: true }],
       modFolders: modFoldersOf('Tracked Patch Mod'),
       modFiles: new Map([['Tracked Patch Mod', filesOfMod('Tracked Patch Mod', 'Tracked Patch Mod.esp', 'Strings/Tracked Patch Mod_en.STRINGS')]]),
-      ...stampedAt(1n),
-    });
+    }, (adapter) => ({ ...adapter, fileStamp: (path) => Promise.resolve({ kind: 'read', answer: { size: 5n, modifiedNs: 1n, changedNs: path === stringsFile ? changedNs : 0n } }) }));
     await instance.refresh();
 
-    fake.read(stampedAt(2n));
+    changedNs = 2n;
     await instance.refresh();
 
     expect(instance.value.loadOrderSnapshot).toMatchObject({

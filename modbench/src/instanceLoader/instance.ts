@@ -3,7 +3,7 @@
 import type { Log } from '../ports/log';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
-  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, OVERWRITE_ORIGIN, pluginsLoadedWithNoLineOf, type ArchiveSources,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, OVERWRITE_ORIGIN, pluginsLoadedWithNoLineOf, stampedSnapshot, type ArchiveSources,
   type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
   type LoadOrderSnapshotValue,
 } from './loadOrderSnapshot';
@@ -402,9 +402,12 @@ export class Instance implements Subscription {
     };
     const archiveSources: ArchiveSources = {
       gameRelease, listed: reading.archiveList, inData: dataFolderArchives, files: index.files,
-      filesByOrigin: new Map([...index.filesByMod, [OVERWRITE_ORIGIN, runtimeOutput.files]]), stamps: reading.archiveAndStringsStamps,
+      filesByOrigin: new Map([...index.filesByMod, [OVERWRITE_ORIGIN, runtimeOutput.files]]),
     };
     this.tellArchivesNothingHolds(archiveSources);
+    const loadOrderSnapshot = loadOrderSnapshotOf({
+      plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs, archives: archiveSources,
+    });
     return {
       mods: entries,
       modFolders: modFolderList,
@@ -429,10 +432,9 @@ export class Instance implements Subscription {
       gameFolder,
       dataFolderPlugins,
       pluginsLoadedWithNoLine,
-      loadOrderSnapshot: loadOrderSnapshotOf({
-        plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs,
-        archives: archiveSources,
-      }),
+      loadOrderSnapshot: loadOrderSnapshot === undefined || 'refusal' in loadOrderSnapshot
+        ? loadOrderSnapshot
+        : await stampedSnapshot(loadOrderSnapshot, (path) => adapter.fileStamp(path)),
       overwriteFiles: runtimeOutput.files,
       overwriteFolders: runtimeOutput.folders,
       paths,

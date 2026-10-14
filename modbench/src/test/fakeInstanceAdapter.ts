@@ -25,7 +25,6 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     archiveList: [],
     archiveListNotes: [],
     dataFolderArchives: { kind: 'unresolved' },
-    archiveAndStringsStamps: new Map(),
     profiles: ['Default'],
     modFolders: undefined,
     skippedLinks: new Map(),
