@@ -16,7 +16,7 @@ internal sealed class ManifestSources(
 
     internal sealed record EntrySource(InstallationFile File, string Path, string Hash) : Source(Hash);
 
-    internal sealed record GameSource(OverriddenGameFile File) : Source(File.Hash);
+    internal sealed record GameSource(OverriddenGameFile Game) : Source(Game.Hash);
 
     internal sealed record Resolved(IReadOnlyList<(ManifestFile File, Source Source)> Sourced, IReadOnlyList<Lack> Lacks);
 

@@ -991,7 +991,8 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
 });
 
 describe('HttpMEditClient — a modlist gesture the user cancels', () => {
-  const gestures: [string, string, string, (client: MEditClient, signal: AbortSignal) => Promise<unknown>][] = [
+  type ProgressKind = 'update-manifest-progress' | 'restore-from-manifest-progress';
+  const gestures: [string, string, ProgressKind, (client: MEditClient, signal: AbortSignal) => Promise<unknown>][] = [
     ['updateManifest', '/update-manifest', 'update-manifest-progress', (c, signal) => c.updateManifest([modToUpdate('ModA')], updateFacts, { signal })],
     ['restoreFromManifest', '/restore-from-manifest', 'restore-from-manifest-progress',
       (c, signal) => c.restoreFromManifest([modToRestore('ModA')], restoreFacts, { signal })],
@@ -1001,7 +1002,7 @@ describe('HttpMEditClient — a modlist gesture the user cancels', () => {
   const NOT_RUNNING = "No modlist gesture 'x' is running.";
 
   async function cancelled(
-    [route, kind, call]: [string, string, (client: MEditClient, signal: AbortSignal) => Promise<unknown>], cancelAnswer = noContent,
+    [route, kind, call]: [string, ProgressKind, (client: MEditClient, signal: AbortSignal) => Promise<unknown>], cancelAnswer = noContent,
   ) {
     const log = leveledLog();
     const seen: { gesture?: unknown; cancelPath?: string; cancelBeforeProgress?: string; aborted?: boolean } = {};
@@ -1026,7 +1027,7 @@ describe('HttpMEditClient — a modlist gesture the user cancels', () => {
     cancel.abort();
     await vi.waitFor(() => expect(seen.gesture).toBeDefined());
     const heard: unknown[] = [];
-    client.onNotification(kind as 'update-manifest-progress', (progress) => heard.push(progress.gesture));
+    client.onNotification(kind, (progress) => heard.push(progress.gesture));
     push(progressFrame(kind, 'another-gesture'));
     await vi.waitFor(() => expect(heard).toEqual(['another-gesture']));
     await new Promise((resolve) => setTimeout(resolve, 20));

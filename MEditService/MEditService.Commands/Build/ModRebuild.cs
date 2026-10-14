@@ -16,7 +16,7 @@ internal sealed class ModRebuild(IModFolderRepository repository, string modFold
                 case ManifestSources.GameSource game:
                     repository.WriteFile(modFolder, file.Path, target =>
                     {
-                        using var copy = repository.OpenGameFile(dataFolder, game.File.Path);
+                        using var copy = repository.OpenGameFile(dataFolder, game.Game.Path);
                         copy.CopyTo(target);
                     });
                     break;
