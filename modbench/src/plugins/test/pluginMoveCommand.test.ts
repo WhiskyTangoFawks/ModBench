@@ -170,7 +170,7 @@ describe('modbench.plugin.move', () => {
 
     await invoke(...rowsOf(A), LOSING_END);
 
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not move plugins.', detail: 'read failed' }]);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to move plugins.', detail: 'read failed' }]);
   });
 });
 

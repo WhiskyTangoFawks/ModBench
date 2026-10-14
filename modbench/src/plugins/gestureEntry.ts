@@ -1,4 +1,5 @@
 import { kindGuard } from '../drivingLib/gestureEntry';
+import { Refusal } from '../drivingLib/refusal';
 import type { Argument } from '../wire/argument';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { PluginsTreeNode } from './pluginRows';
@@ -9,7 +10,7 @@ export const PLUGINS_KEY_ARGS = { view: 'modbench.pluginListTree' } as const;
 
 /** The agent box hands a plugin gesture plugins only. */
 export function pluginOf(argument: Argument): PluginAddress {
-  if (argument.kind !== 'plugin') throw new Error(`An agent call to a plugin gesture carries plugins only, and this one carries a ${argument.kind}.`);
+  if (argument.kind !== 'plugin') throw new Refusal(`An agent call to a plugin gesture carries plugins only, and this one carries a ${argument.kind}.`);
   return argument.plugin;
 }
 

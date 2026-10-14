@@ -227,9 +227,8 @@ describe('modbench.plugin.rename', () => {
 
     expect(reporter.reports).toEqual([{
       severity: 'error',
-      message: 'Could not rename "Patch.esp" (ModA): its plugin source may be partly renamed. Reverting the source rename in git undoes it. '
-        + 'EEXIST VS Code stops at the first change it cannot make, so some changes may have landed.',
-      detail: undefined,
+      message: 'Could not rename "Patch.esp" (ModA): its plugin source may be partly renamed. Reverting the source rename in git undoes it.',
+      detail: 'EEXIST VS Code stops at the first change it cannot make, so some changes may have landed.',
     }]);
     expect(source.refreshSourceControlFor).toHaveBeenCalledWith(PLUGIN);
     expect(client.calls.filter((c) => c.method === 'moveLastWritten')).toEqual([]);
@@ -258,8 +257,8 @@ describe('modbench.plugin.rename', () => {
 
     expect(reporter.reports).toEqual([{
       severity: 'error',
-      message: 'Could not rename "Patch.esp" (ModA): its plugin source was renamed, its file and lines were not. Reverting the source rename in git undoes it. disk full',
-      detail: undefined,
+      message: 'Could not rename "Patch.esp" (ModA): its plugin source was renamed, its file and lines were not. Reverting the source rename in git undoes it.',
+      detail: 'disk full',
     }]);
   });
 });
@@ -284,11 +283,11 @@ describe('modbench.plugin.rename, called by the agent', () => {
   it('answers a refused source and the point where the file and lines failed, reporting nothing', async () => {
     const { client, instanceAnswers, reporter, run } = setup();
     client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename the source of "Patch.esp" — NotTracked' });
-    expect(await run(calling('Renamed.esp'))).toEqual({ applied: false, refusal: 'Could not rename the source of "Patch.esp" — NotTracked' });
+    expect(await run(calling('Renamed.esp'))).toMatchObject({ applied: false, refusal: 'Could not rename the source of "Patch.esp" — NotTracked' });
 
     client.setCommandResult('getRenameSourceChanges', CHANGES);
     instanceAnswers.refusals = refusing('renamePlugin', 'disk full');
-    expect(await run(calling('Renamed.esp'))).toEqual({
+    expect(await run(calling('Renamed.esp'))).toMatchObject({
       applied: false,
       refusal: 'Could not rename "Patch.esp" (ModA): its plugin source was renamed, its file and lines were not. Reverting the source rename in git undoes it. disk full',
     });

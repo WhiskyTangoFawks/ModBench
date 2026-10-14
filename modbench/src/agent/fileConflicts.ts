@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { fileOrderConflictOf, foldPath, goToModCandidates, originLabel } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { Refusal } from './refusal';
+import { Refusal } from '../drivingLib/refusal';
 import { modsNamed, type ModName } from './names';
 
 interface ModConflicts {

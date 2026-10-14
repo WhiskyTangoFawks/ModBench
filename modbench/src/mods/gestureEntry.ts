@@ -2,6 +2,7 @@ import type { ModlistNode, ModNode } from './ModListProvider';
 import type { Instance } from '../instanceLoader/instance';
 import { kindGuard, singularArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import { runWritingGesture } from '../drivingLib/writingGesture';
+import { Refusal } from '../drivingLib/refusal';
 import type { Argument } from '../wire/argument';
 
 /** The `args` a Mods key passes, so a command other surfaces share knows the key is the Mods
@@ -13,7 +14,7 @@ export const runModsWriting = <T>(instance: Pick<Instance, 'refresh'>, command: 
 
 /** The agent box hands a mod gesture mods only. */
 export function modNameOf(argument: Argument): string {
-  if (argument.kind !== 'mod') throw new Error(`An agent call to a mod gesture carries mods only, and this one carries a ${argument.kind}.`);
+  if (argument.kind !== 'mod') throw new Refusal(`An agent call to a mod gesture carries mods only, and this one carries a ${argument.kind}.`);
   return argument.name;
 }
 

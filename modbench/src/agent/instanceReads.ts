@@ -1,5 +1,5 @@
 import type { InstanceValue } from '../instanceLoader/instance';
-import { Refusal } from './refusal';
+import { Refusal } from '../drivingLib/refusal';
 
 export interface Read {
   readonly name: string;

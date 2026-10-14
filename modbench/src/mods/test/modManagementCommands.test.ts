@@ -49,6 +49,7 @@ import {
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import type { NexusModRow } from '../../drivingLib/inFocusedView';
+import { Refusal } from '../../drivingLib/refusal';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { MODS_KEY_ARGS } from '../gestureEntry';
 import { FileNode, FolderNode } from '../modFiles';
@@ -837,7 +838,7 @@ describe('modbench.mod.enable / modbench.mod.disable, called by the agent', () =
   it('refuses an Argument that is not a mod, writing nothing', async () => {
     registerModEnableCommands(commands, instance, () => [], recordingReporter());
 
-    await expect(invoke('modbench.mod.enable', new AgentCall([{ kind: 'plugin', plugin: { name: 'A.esp', origin: 'Mod B' } }], {}))).rejects.toThrow('carries mods only');
+    await expect(invoke('modbench.mod.enable', new AgentCall([{ kind: 'plugin', plugin: { name: 'A.esp', origin: 'Mod B' } }], {}))).rejects.toBeInstanceOf(Refusal);
 
     expect(setModsEnabled).not.toHaveBeenCalled();
   });

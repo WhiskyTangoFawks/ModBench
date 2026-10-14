@@ -1,8 +1,8 @@
 import { foldPath } from '../instanceLoader/fileConflictIndex';
 import type { OriginFile } from '../instanceAdapter/instanceAdapter';
 import type { InstanceValue } from '../instanceLoader/instance';
-import type { PluginAddress } from '../wire/pluginAddress';
-import { Refusal } from './refusal';
+import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
+import { Refusal } from '../drivingLib/refusal';
 
 export interface ModName {
   name: string;
@@ -90,4 +90,17 @@ export function pluginsNamed(plugins: InstanceValue['plugins'], given: readonly 
   const refusals = resolved.flatMap(({ one, matches }) => pluginRefusal(one, matches) ?? []);
   if (refusals.length > 0) throw new Refusal(refusals.join(' '));
   return resolved.flatMap(({ matches }) => matches);
+}
+
+/** Each plugin whose line in plugins.txt the gesture changes: the copy that line governs, as the Plugins view's rows are. */
+export function linesNamed(plugins: InstanceValue['plugins'], given: readonly PluginName[]): PluginAddress[] {
+  const named = pluginsNamed(plugins, given);
+  const refusals = named.flatMap((address) => {
+    const governing = plugins.find(({ name, winning }) => winning && name.toLowerCase() === address.name.toLowerCase());
+    return governing === undefined || samePluginAddress(governing, address)
+      ? []
+      : `${asPlugin(address)} is overridden, and the line for "${address.name}" is ${asPlugin(governing)}'s. Name that one.`;
+  });
+  if (refusals.length > 0) throw new Refusal(refusals.join(' '));
+  return named;
 }

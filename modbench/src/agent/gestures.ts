@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { AgentCall } from '../drivingLib/agentGesture';
 import type { InstanceValue } from '../instanceLoader/instance';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
-import { modsNamed, pluginsNamed } from './names';
-import { parseOrRefuse, Refusal } from './refusal';
+import { linesNamed, modsNamed, pluginsNamed } from './names';
+import { Refusal } from '../drivingLib/refusal';
+import { parseOrRefuse } from './refusal';
 
 interface GestureInput {
   /** The Argument the agent gives, as the tool's description teaches it. */
@@ -33,6 +34,15 @@ const PLUGIN_TAKES = 'each { name, origin? } as list_plugins shows it';
 const pluginsCall = (value: InstanceValue, argument: readonly z.infer<typeof PLUGIN_NAME>[]) =>
   pluginsNamed(value.plugins, argument).map((plugin) => ({ kind: 'plugin' as const, plugin }));
 
+const linesCall = (value: InstanceValue, argument: readonly z.infer<typeof PLUGIN_NAME>[]) =>
+  linesNamed(value.plugins, argument).map((plugin) => ({ kind: 'plugin' as const, plugin }));
+
+const LINES = gestureInput(
+  `argument: the plugins whose lines in plugins.txt it changes, ${PLUGIN_TAKES}`,
+  z.object({ argument: z.array(PLUGIN_NAME) }),
+  (value, { argument }) => new AgentCall(linesCall(value, argument), {}),
+);
+
 const PLUGINS = gestureInput(
   `argument: the plugins, ${PLUGIN_TAKES}`,
   z.object({ argument: z.array(PLUGIN_NAME) }),
@@ -47,7 +57,7 @@ const DROP = z.union([
 const MOVE_PLUGINS = gestureInput(
   `argument: the plugins, ${PLUGIN_TAKES}; options: { drop: { kind: 'winningEnd' | 'losingEnd' } or { kind: 'before' | 'after', name: the plugin file name it lands beside } }`,
   z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ drop: DROP }) }),
-  (value, { argument, options }) => new AgentCall(pluginsCall(value, argument), options),
+  (value, { argument, options }) => new AgentCall(linesCall(value, argument), options),
 );
 
 const CREATE_PLUGIN = gestureInput(
@@ -59,7 +69,7 @@ const CREATE_PLUGIN = gestureInput(
 const RENAME_PLUGIN = gestureInput(
   'argument: the plugin, { name, origin? } as list_plugins shows it; options: { name: its new file name }',
   z.object({ argument: PLUGIN_NAME, options: z.object({ name: z.string() }) }),
-  (value, { argument, options }) => new AgentCall(pluginsCall(value, [argument]), options),
+  (value, { argument, options }) => new AgentCall(linesCall(value, [argument]), options),
 );
 
 /** agent.md, Gestures, story 1: the catalog's `writes` gestures, less those it keeps from the agent, plus those it gives.
@@ -67,8 +77,8 @@ const RENAME_PLUGIN = gestureInput(
 export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.enable', MODS],
   ['modbench.mod.disable', MODS],
-  ['modbench.plugin.enable', PLUGINS],
-  ['modbench.plugin.disable', PLUGINS],
+  ['modbench.plugin.enable', LINES],
+  ['modbench.plugin.disable', LINES],
   ['modbench.plugin.decompile', PLUGINS],
   ['modbench.plugin.move', MOVE_PLUGINS],
   ['modbench.plugin.create', CREATE_PLUGIN],

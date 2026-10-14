@@ -15,6 +15,7 @@ import type { PluginAddress } from '../wire/pluginAddress';
 import type { SelectionResult } from '../pluginsCommands/plugins';
 import { answerOf } from '../wire/readFailed';
 import type { InstanceValue } from '../instanceLoader/instance';
+import { Refusal } from '../drivingLib/refusal';
 import { creatablePluginExtensionsOf, pluginNameRefusal } from './pluginName';
 import type { Reporter } from '../ports/reporter';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
@@ -133,11 +134,11 @@ export function registerCreatePluginCommand(
     },
     fromAgent: async ({ options: { name, place } }) => {
       const refusal = pluginNameRefusal(name, answerOf(await client.getCreatablePluginExtensions()));
-      if (refusal !== undefined) throw new Error(refusal);
+      if (refusal !== undefined) throw new Refusal(refusal);
       const chosen = pluginPlaces(instance.value, name).find(({ origin }) => origin === place);
-      if (chosen === undefined) throw new Error(`"${place}" is not an enabled mod or Overwrite that lacks "${name}".`);
+      if (chosen === undefined) throw new Refusal(`"${place}" is not an enabled mod or Overwrite that lacks "${name}".`);
       const made = placed(instance.value, name, chosen);
-      if (typeof made === 'string') throw new Error(made);
+      if (typeof made === 'string') throw new Refusal(made);
       return made;
     },
     run: ({ plugin, folder, sourceFolder }) => runWritingGesture(PLUGINS_KEY_ARGS.view, instance, async () => {

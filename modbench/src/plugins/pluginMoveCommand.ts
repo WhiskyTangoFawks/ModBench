@@ -21,6 +21,9 @@ interface MoveView extends Pick<PluginsTreeProvider, 'movePlaces'> {
   selection: () => readonly PluginsTreeNode[];
 }
 
+/** `thrown` marks a failure no command refused, which the view reports apart from a refusal. */
+type MoveOutcome = SelectionResult<PluginAddress> | { applied: false; refusal: string; thrown: true };
+
 interface Move {
   readonly plugins: readonly PluginAddress[];
   readonly drop: PluginsDrop;
@@ -32,7 +35,7 @@ export function registerPluginMoveCommand(
   commands: Pick<PluginsCommands, 'reorderPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
   view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
-  const gesture: AgentGesture<PluginsTreeNode, Move, SelectionResult<PluginAddress>, { drop: PluginsDrop }> = {
+  const gesture: AgentGesture<PluginsTreeNode, Move, MoveOutcome, { drop: PluginsDrop }> = {
     fromView: async (entry, option) => {
       const plugins = pluralArgument(entry, 'plugin').map(({ plugin, origin }) => ({ name: plugin.name, origin }));
       if (plugins.length === 0) return undefined;
@@ -49,11 +52,12 @@ export function registerPluginMoveCommand(
           activeProfile, plugins, drop, (pluginsLoadedWithNoLine ?? []).map(({ name }) => name)));
         return result.applied ? { applied: true, outcome: { landed: plugins, refused: [] } } : result;
       } catch (e) {
-        return { applied: false, refusal: errorMessage(e) };
+        return { applied: false, refusal: errorMessage(e), thrown: true };
       }
     },
     report: (result) => {
-      if (!result.applied) reporter.report('error', 'Could not move plugins.', result.refusal);
+      if (result.applied) return;
+      reporter.report('error', 'thrown' in result ? 'Failed to move plugins.' : 'Could not move plugins.', result.refusal);
     },
   };
   return registerAgentGesture('modbench.plugin.move', view.selection, gesture);
