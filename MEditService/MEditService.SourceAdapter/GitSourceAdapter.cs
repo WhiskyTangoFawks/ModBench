@@ -27,9 +27,7 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved) : ISourceAdapter
     public ISourceRepository OverFolder(PluginProvider.FromMod provider, GameRelease release) => SourceRepository.Over(provider, release);
 
     public IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held) =>
-        WriteSession.Over(provider, release, held, paths => Wrote?.Invoke(paths));
-
-    public event Action<IReadOnlyList<string>>? Wrote;
+        WriteSession.Over(provider, release, held);
 
     public bool TreeHolds(RegisteredPlugin plugin, string path) => SourceRepository.TreeHolds(plugin, Path.GetFullPath(path));
 

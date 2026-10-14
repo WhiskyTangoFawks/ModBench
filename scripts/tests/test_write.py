@@ -3,7 +3,7 @@ import subprocess
 import unittest
 
 import medit
-from tests.fixture_medit import call, fixture_medit, source_folder, track
+from tests.fixture_medit import call, fixture_medit, source_folder, track, watcher_resends_load_order
 from tests.test_select import window_of
 
 TRACKED = 'MB-DEV Conditions'
@@ -50,20 +50,30 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
         self.assertFalse(recipe_file.exists())
         self.assertIn(f' D {recipe_file.relative_to(self.source).as_posix()}', changed(self.source))
 
+    def select_after_the_watcher(self, sql):
+        watcher_resends_load_order(self.fixture)
+        return medit.select(sql)
+
     def test_a_select_after_an_edit_returns_the_edited_row(self):
         medit.edit(PLUGIN, RECIPE, 'set', 'EditorID', 'MBDevEditedRecipe')
         self.assertEqual(
-            medit.select(f"SELECT editor_id FROM records WHERE form_key = '{RECIPE}' AND plugin = '{PLUGIN}'"),
+            self.select_after_the_watcher(f"SELECT editor_id FROM records WHERE form_key = '{RECIPE}' AND plugin = '{PLUGIN}'"),
             [{'editor_id': 'MBDevEditedRecipe'}])
 
     def test_a_select_after_a_create_returns_the_created_row(self):
         form_key = medit.create(PLUGIN, 'npc_')
         self.assertEqual(
-            medit.select(f"SELECT plugin FROM records WHERE form_key = '{form_key}'"), [{'plugin': PLUGIN}])
+            self.select_after_the_watcher(f"SELECT plugin FROM records WHERE form_key = '{form_key}'"), [{'plugin': PLUGIN}])
+
+    def test_a_select_after_a_copy_returns_the_copied_row(self):
+        form_key = medit.copy('MBDevLight.esl', LIGHT_RECORD, PLUGIN, mode='new')
+        self.assertEqual(
+            self.select_after_the_watcher(f"SELECT plugin FROM records WHERE form_key = '{form_key}'"), [{'plugin': PLUGIN}])
 
     def test_a_select_after_a_delete_returns_no_row(self):
         medit.delete(PLUGIN, RECIPE)
-        self.assertEqual(medit.select(f"SELECT form_key FROM records WHERE form_key = '{RECIPE}' AND plugin = '{PLUGIN}'"), [])
+        self.assertEqual(
+            self.select_after_the_watcher(f"SELECT form_key FROM records WHERE form_key = '{RECIPE}' AND plugin = '{PLUGIN}'"), [])
 
     def test_raises_for_a_delete_of_a_file_held_unsaved_and_deletes_nothing(self):
         [recipe_file] = self.source.rglob('MBDevConditionedRecipe - *.json')

@@ -101,11 +101,12 @@ internal sealed class Indexer : IDisposable
 
     private readonly List<string> _handed = [];
     private bool _validatingHanded;
-    // The writes the Source adapter announced, guarded by _lock; how many of them are validated, guarded by
-    // _writesValidatedGate, which a read waits on.
-    private long _writesHanded;
-    private long _writesValidated;
-    private readonly object _writesValidatedGate = new();
+
+    // The arrivals the last whole reconcile read the disk after, guarded by _lock and pulsed on _reconciled, which a
+    // read after a source write waits on.
+    private long _arrivalReconciled;
+    private readonly object _reconciled = new();
+    private static readonly TimeSpan SourceWriteReadLimit = TimeSpan.FromSeconds(60);
 
     // LoadOrder: the snapshot the scope last reconciled, which holds the masters a plugin is read against.
     private sealed record OpenScope(HeldPlugins Held, Store Store, Projector Projector, FailedReads Failed, LoadOrderSnapshot LoadOrder);
@@ -126,13 +127,13 @@ internal sealed class Indexer : IDisposable
     /// the Index has opened no store to read.</summary>
     public RelationReads RequireReads()
     {
-        AwaitWritesValidated();
+        AwaitTheReconcileAfterTheLastSourceWrite();
         return RequireScope().Store.Reads;
     }
 
     public RelationReads RequireWholeSetReads()
     {
-        AwaitWritesValidated();
+        AwaitTheReconcileAfterTheLastSourceWrite();
         var status = Status;
         if (status.State == LoadOrderState.Ready) return RequireReads();
         if (_holder.Held is null) throw new NoLoadOrderException();
@@ -246,27 +247,19 @@ internal sealed class Indexer : IDisposable
 
     // ADR-0015: a handed path is validated as a change on disk is. A reconcile in flight is waited out,
     // never cancelled; paths handed meanwhile are validated together.
-    private void ValidateTreesHolding(IReadOnlyList<string> paths) => Hand(paths, written: false);
-
-    private void ValidateWritten(IReadOnlyList<string> paths) => Hand(paths, written: true);
-
-    private void Hand(IReadOnlyList<string> paths, bool written)
+    private void ValidateTreesHolding(IReadOnlyList<string> paths)
     {
         lock (_lock)
         {
             _handed.AddRange(paths);
-            if (written) _writesHanded++;
             if (_validatingHanded) return;
             _validatingHanded = true;
         }
         Task.Factory.StartNew(ValidateHanded, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    // The writes handed so far are released once their paths are validated, once validation stops, or once it fails
-    // outright, which the status then says: a read never waits on a validation that will not come.
     private void ValidateHanded()
     {
-        long writes = 0;
         try
         {
             while (true)
@@ -274,7 +267,6 @@ internal sealed class Indexer : IDisposable
                 List<string> paths;
                 lock (_lock)
                 {
-                    writes = _writesHanded;
                     if (_handed.Count == 0 || _disposed)
                     {
                         _validatingHanded = false;
@@ -285,22 +277,17 @@ internal sealed class Indexer : IDisposable
                 }
 
                 bool moved;
-                var validated = true;
                 _exclusive.Enter();
                 try
                 {
-                    var failure = ValidationFailure(() => validated = ValidatedUnlessBusy(paths), CancellationToken.None);
+                    var failure = ValidationFailure(() => ValidateTreesOf(paths), CancellationToken.None, out _);
                     lock (_lock)
                     {
                         moved = _handOverFailure != failure;
                         _handOverFailure = failure;
                     }
                 }
-                finally
-                {
-                    _exclusive.Exit();
-                    if (validated) WritesValidated(writes);
-                }
+                finally { _exclusive.Exit(); }
                 if (moved) PublishStatus();
             }
         }
@@ -311,50 +298,8 @@ internal sealed class Indexer : IDisposable
             {
                 _handOverFailure = ex.Message;
                 _validatingHanded = false;
-                writes = _writesHanded;
             }
             throw;
-        }
-        finally
-        {
-            WritesValidated(writes);
-        }
-    }
-
-    // Busy, not broken: a read waits on these paths, so they are handed again rather than left to the next snapshot.
-    // A timeout reaching here is the write gate's; a plugin's own read times out inside its validation.
-    private bool ValidatedUnlessBusy(List<string> paths)
-    {
-        try
-        {
-            ValidateTreesOf(paths);
-            return true;
-        }
-        catch (TimeoutException ex)
-        {
-            _logger.LogWarning(ex, "Could not validate the handed paths while another write held the index; validating them again");
-            lock (_lock) _handed.AddRange(paths);
-            return false;
-        }
-    }
-
-    private void WritesValidated(long through)
-    {
-        lock (_writesValidatedGate)
-        {
-            _writesValidated = Math.Max(_writesValidated, through);
-            Monitor.PulseAll(_writesValidatedGate);
-        }
-    }
-
-    // ADR-0015, read-your-writes: a read answers once every write the Source adapter announced before it is validated.
-    private void AwaitWritesValidated()
-    {
-        long handed;
-        lock (_lock) handed = _writesHanded;
-        lock (_writesValidatedGate)
-        {
-            while (_writesValidated < handed) Monitor.Wait(_writesValidatedGate);
         }
     }
 
@@ -378,12 +323,13 @@ internal sealed class Indexer : IDisposable
     private void Reconcile(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival)
     {
         long version = 0;
+        long arrivals = 0;
         bool changed;
         string? heldElsewhere = null;
         string? failure = null;
         try
         {
-            if (ReconcileOrRefuse(arrival, ref version, ref heldElsewhere, ref failure) is not { } reconciled) return;
+            if (ReconcileOrRefuse(arrival, ref version, ref arrivals, ref heldElsewhere, ref failure) is not { } reconciled) return;
             changed = reconciled;
         }
         catch (OperationCanceledException ex)
@@ -402,16 +348,45 @@ internal sealed class Indexer : IDisposable
             if (failure is not null) _failureMessage = failure;
             changed |= version > _version;
             _version = Math.Max(_version, version);
+            if (heldElsewhere is null && failure is null) _arrivalReconciled = Math.Max(_arrivalReconciled, arrivals);
             _validating = false;
             if (changed) PublishStatus();
         }
+        lock (_reconciled) Monitor.PulseAll(_reconciled);
+    }
+
+    // ADR-0015, read-your-writes: a source write reaches the index through the next snapshot, so a read after one waits
+    // for that snapshot's reconcile, and refuses rather than answer the rows from before it.
+    private void AwaitTheReconcileAfterTheLastSourceWrite()
+    {
+        var awaited = _holder.ArrivalAwaited;
+        var deadline = _timeProvider.GetUtcNow() + SourceWriteReadLimit;
+        lock (_reconciled)
+        {
+            while (ArrivalReconciled < awaited)
+            {
+                var remaining = deadline - _timeProvider.GetUtcNow();
+                if (remaining <= TimeSpan.Zero)
+                {
+                    throw new IndexNotReadyException(
+                        "mEdit's index has not read the plugin source mEdit wrote: no load order arrived after the write, " +
+                        $"or its reconcile did not finish{(Status.Message is { } reason ? $" ({reason})" : "")}.");
+                }
+                Monitor.Wait(_reconciled, remaining < SequencePollInterval ? remaining : SequencePollInterval);
+            }
+        }
+    }
+
+    private long ArrivalReconciled
+    {
+        get { lock (_lock) return _arrivalReconciled; }
     }
 
     // A superseded reconcile throws OperationCanceledException, leaving its work for its
     // successor; a second window's hold is answered in heldElsewhere. Null when the arrival
     // resolved to none, and false when the reconcile changed nothing Status reports.
     private bool? ReconcileOrRefuse(
-        Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long version,
+        Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long version, ref long arrivals,
         ref string? heldElsewhere, ref string? failure)
     {
         EnterExclusive();
@@ -421,6 +396,7 @@ internal sealed class Indexer : IDisposable
             if (arrival() is not { } resolved) return null;
             var (snapshot, arrived) = resolved;
             version = arrived;
+            arrivals = _holder.Arrivals;
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("Reconciling load order. GameDir={GameDir} Instance={Instance} Plugins={Count} Game={Game}",
@@ -445,7 +421,9 @@ internal sealed class Indexer : IDisposable
                 return true;
             }
             var reconciled = ReconcileProgressively(scope, snapshot, token) || refusalCleared;
-            failure = ValidateHeld(token);
+            failure = ValidateHeld(token, out var busy);
+            // A validation the busy gate stopped has not read the disk whole.
+            if (busy) arrivals = 0;
             return failure is not null || reconciled;
         }
         catch (Exception ex) when (!CancelledBy(ex, token))
@@ -1051,10 +1029,11 @@ internal sealed class Indexer : IDisposable
     // ADR-0003: the status answering the version is published once the plugins are validated, and a
     // reconcile that changed the status reads Reconciling until then. The message when validation
     // failed outright, which becomes status data.
-    private string? ValidateHeld(CancellationToken token) => ValidationFailure(() => ValidateIndex(token), token);
+    private string? ValidateHeld(CancellationToken token, out bool busy) => ValidationFailure(() => ValidateIndex(token), token, out busy);
 
-    private string? ValidationFailure(Action validate, CancellationToken token)
+    private string? ValidationFailure(Action validate, CancellationToken token, out bool busy)
     {
+        busy = false;
         lock (_lock)
         {
             if (_disposed || _scope is null) return null;
@@ -1068,6 +1047,7 @@ internal sealed class Indexer : IDisposable
         {
             // Busy, not broken: validation is idempotent, and the next snapshot validates again.
             _logger.LogWarning(ex, "Could not validate the index while another write held it; it is re-checked at the next snapshot");
+            busy = true;
             return null;
         }
         catch (Exception ex) when (!CancelledBy(ex, token))
@@ -1167,7 +1147,6 @@ internal sealed class Indexer : IDisposable
         _holder.Arrived += OnArrived;
         _stringsLanguage.Changed += StartReconcile;
         _unsaved.Arrived += ValidateTreesHolding;
-        _source.Wrote += ValidateWritten;
     }
 
     private void OnArrived(LoadOrderSnapshot snapshot, long version) => StartReconcile();
@@ -1203,7 +1182,6 @@ internal sealed class Indexer : IDisposable
     {
         _holder.Arrived -= OnArrived;
         _unsaved.Arrived -= ValidateTreesHolding;
-        _source.Wrote -= ValidateWritten;
 
         // Guarded because Dispose owns the scope and the reconcile's cancellation: double disposal
         // is a supported call pattern here.

@@ -4,7 +4,7 @@ import subprocess
 import unittest
 
 import medit
-from tests.fixture_medit import call, fixture_medit, source_folder, track
+from tests.fixture_medit import call, fixture_medit, source_folder, track, watcher_resends_load_order
 from tests.test_select import window_of
 
 TRACKED = 'MB-DEV Conditions'
@@ -31,6 +31,7 @@ class EditAgainstTheFixtureInstance(unittest.TestCase):
     def test_writes_an_edited_field_to_the_records_file_as_a_working_tree_change(self):
         with window_of(self.fixture.url):
             medit.edit('MBDevConditions.esp', RECIPE, 'set', 'Conditions[0].ComparisonValue', 7.5)
+        watcher_resends_load_order(self.fixture)
         self.assertEqual(json.loads(self.recipe_file.read_text())['Conditions'][0]['ComparisonValue'], 7.5)
         changed = subprocess.run(
             ['git', 'status', '--porcelain', '-z'], cwd=self.source, capture_output=True, text=True, check=True).stdout

@@ -19,7 +19,6 @@ public sealed class WriteSessionTests : IDisposable
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly ScratchDirectory _modFolder = new("medit-session-");
-    private readonly ISourceAdapter _source = TestAdapters.Source();
     private readonly Fallout4Mod _mod = new(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
     private readonly Quest _quest;
     private readonly DialogTopic _topic;
@@ -82,7 +81,7 @@ public sealed class WriteSessionTests : IDisposable
 
     private ISourceRepository Repository => TestAdapters.Source().OverFolder(TestMod.In(_modFolder), Release);
 
-    private IWriteSession Session(params DocumentChange[] held) => _source.WriteSessionOver(TestMod.In(_modFolder), Release, held);
+    private IWriteSession Session(params DocumentChange[] held) => TestAdapters.Source().WriteSessionOver(TestMod.In(_modFolder), Release, held);
 
     private static RecordIdentity Identity(IMajorRecordGetter record, string recordType) =>
         new(record.FormKey.ToString(), recordType, record.EditorID);
@@ -502,55 +501,6 @@ public sealed class WriteSessionTests : IDisposable
         SessionAfter(writes).Write().Wrote();
 
         Assert.Equal(oneAfterAnother, TreeSnapshot.Of(_modFolder));
-    }
-
-    [Fact]
-    public void TheChangesWritten_AnnounceEveryPathTheyMoveDeleteOrWrite()
-    {
-        var session = SessionAfter(
-        [
-            repository => repository.ChangesToPut(Plugin, Renamed(_quest, "qust", QuestPath, "Renamed")),
-            repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell")),
-        ]);
-        var (moves, deletions, documents) = session.Changes;
-
-        Assert.Equal(
-            [.. moves.SelectMany(move => new[] { move.From, move.To }), .. deletions, .. documents.Select(document => document.Path)],
-            WrittenBy(session, session => session.Write().Wrote()));
-        Assert.NotEmpty(moves);
-        Assert.NotEmpty(deletions);
-        Assert.NotEmpty(documents);
-    }
-
-    [Fact]
-    public void AWriteRefusedForAFileHeldUnsaved_AnnouncesNothing()
-    {
-        var session = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
-
-        Assert.Null(WrittenBy(session, session => session.Write().Failed()));
-    }
-
-    [Fact]
-    public void AWriteTheDiskStopsPartWay_AnnouncesItsPaths()
-    {
-        var session = SessionAfter(
-        [
-            repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell")),
-            repository => repository.ChangesToRemove(Plugin, Identity(_response, "info")),
-        ]);
-        File.Delete(FullPath(QuestPath));
-        Directory.CreateDirectory(FullPath(QuestPath));
-
-        Assert.Contains(FullPath(QuestPath), WrittenBy(session, session => session.Write().Failed()) ?? []);
-    }
-
-    private IReadOnlyList<string>? WrittenBy(IWriteSession session, Action<IWriteSession> write)
-    {
-        IReadOnlyList<string>? announced = null;
-        _source.Wrote += paths => announced = paths;
-        write(session);
-        return announced;
     }
 
     private string FileUnderTheRenamedCell =>

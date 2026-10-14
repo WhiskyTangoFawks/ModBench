@@ -16,8 +16,6 @@ internal sealed class OpenedIndex(ServiceProvider container, LoadOrderHolder hol
 
     internal UnsavedDocuments Unsaved { get; } = container.GetRequiredService<UnsavedDocuments>();
 
-    internal ISourceAdapter Source { get; } = container.GetRequiredService<ISourceAdapter>();
-
     internal IQueries Queries { get; } = container.GetRequiredService<IQueries>();
 
     internal LoadOrderStatus Status => Queries.GetStatus();
