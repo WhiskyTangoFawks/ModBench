@@ -36,10 +36,14 @@ const MOVE_PLACE = z.union([
   z.object({ kind: z.enum(['separator', 'mod']), name: z.string() }),
 ]);
 
+const placeNamed = (value: InstanceValue, place: z.infer<typeof MOVE_PLACE>) =>
+  ('name' in place ? { kind: place.kind, name: modsNamed(value.mods, [{ name: place.name, kind: place.kind }])[0]?.name ?? place.name } : place);
+
 const MOVE_MODS = gestureInput(
   `${MODS_TAKES}; options: { place: { kind: 'ungrouped' | 'modOrder' } or { kind: 'separator' | 'mod', name: the one it lands in or beside }, end: 'winning' | 'losing' }`,
   z.object({ argument: z.array(MOD_NAME), options: z.object({ place: MOVE_PLACE, end: z.enum(['winning', 'losing']) }) }),
-  (value, { argument, options }) => new AgentCall(modsCall(value, argument), options),
+  (value, { argument, options: { place, end } }) =>
+    new AgentCall(modsCall(value, argument), { place: placeNamed(value, place), end }),
 );
 
 const NAME_OPTION = z.object({ options: z.object({ name: z.string() }) });
@@ -132,9 +136,11 @@ type GestureOutcome = GestureResult<unknown>;
 function refusalIn(outcome: GestureOutcome): string | undefined {
   if (!outcome.applied) return outcome.detail === undefined ? outcome.refusal : `${outcome.refusal} ${outcome.detail}`;
   const { refused, landed } = outcome.outcome;
-  if (refused.length === 0) return undefined;
-  const total = refused.length + landed.length;
-  return `Refused ${refused.length} of ${total}: ${refused.map(({ item, reason }) => `${JSON.stringify(item)} (${reason})`).join(', ')}.`;
+  const refusals = refused.length === 0 ? [] : [
+    `Refused ${refused.length} of ${refused.length + landed.length}: ${refused.map(({ item, reason }) => `${JSON.stringify(item)} (${reason})`).join(', ')}.`,
+  ];
+  const partials = (outcome.partial ?? []).map(({ message, detail }) => `${message} ${detail}`);
+  return [...refusals, ...partials].join(' ') || undefined;
 }
 
 export const RUN_GESTURE = {

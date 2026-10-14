@@ -177,6 +177,7 @@ async function markFiles(
 }
 
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
+const EMPTY_MOD_NAME = 'A mod name cannot be empty.';
 const MOD_NAME_CLASH = 'A mod with this name already exists';
 const MOD_NAME_WITH_PATH_SEPARATOR = 'A mod name cannot contain / or \\';
 
@@ -326,6 +327,7 @@ export type CreateEmptyModResult =
 // A mod's folder plus a disabled line at the winning end of mod order — nothing else. A name a
 // folder already holds is refused.
 async function createEmptyMod(adapter: InstanceAdapter, profile: string, name: string): Promise<CreateEmptyModResult> {
+  if (name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
   try {
     await adapter.createModFolder(name);
   } catch (err) {
@@ -339,7 +341,7 @@ async function createEmptyMod(adapter: InstanceAdapter, profile: string, name: s
 /** `lineRefusals` names each profile whose line could not be renamed: the folder is renamed, and
  *  that profile loses the mod's place until `mod sync` adopts the folder. */
 export type RenameModResult =
-  | { applied: true; lineRefusals: { profile: string; refusal: string }[] }
+  | { applied: true; lineRefusals: { profile: string; refusal: string }[]; unchanged?: true }
   | { applied: false; refusal: string };
 
 // The folder, then a source mod's build configuration in `sourceFolder`, then the line in each of `profiles`, the
@@ -348,6 +350,8 @@ async function renameMod(
   { adapter, mEdit }: SourceModWriters,
   activeProfile: string, profiles: readonly string[], from: string, to: string, sourceFolder?: string,
 ): Promise<RenameModResult> {
+  if (to.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
+  if (from === to) return { applied: true, lineRefusals: [], unchanged: true };
   try {
     await adapter.renameModFolder(from, to);
   } catch (err) {

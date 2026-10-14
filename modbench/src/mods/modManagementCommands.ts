@@ -5,7 +5,7 @@ import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
 import { promptRename } from '../drivingLib/promptRename';
 import { MODS_KEY_ARGS, fileRefOf, modNameOf, runModsWriting, openFolderArgument } from './gestureEntry';
-import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
+import { registerAgentGesture, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { viewCopyValueText } from '../drivingLib/copyValue';
 import {
   pluralArgument, registerGesture, singularArgument, type RowOf,
@@ -62,7 +62,7 @@ export function registerModEnableCommands(
 export function registerFileExclusionCommands(
   commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
-  const gesture = (mark: OriginFileMark): AgentGesture<ModlistNode, readonly OriginFileRef[], SelectionResult<OriginFileRef>> => {
+  const gesture = (mark: OriginFileMark): AgentGesture<ModlistNode, readonly OriginFileRef[], GestureResult<OriginFileRef>> => {
     const { verb } = FILE_MARKS[mark];
     return {
       fromView: (entry) => {
@@ -70,10 +70,13 @@ export function registerFileExclusionCommands(
         return refs.length === 0 ? undefined : refs;
       },
       fromAgent: ({ argument }) => argument.map(fileRefOf),
-      run: (refs) => runModsWriting(instance, () => commands.markFiles(refs, mark, instance.value.paths.sourceDirs)),
+      run: async (refs) => {
+        const result = await runModsWriting(instance, () => commands.markFiles(refs, mark, instance.value.paths.sourceDirs));
+        return result.applied ? result : { applied: false, refusal: `Could not ${verb} ${refs.length} files.`, detail: result.refusal };
+      },
       report: (result, refs) => {
         if (!result.applied) {
-          reporter.report('error', `Could not ${verb} ${refs.length} files.`, result.refusal);
+          reporter.report('error', result.refusal, result.detail);
           return;
         }
         reporter.selectionOutcome(`Could not ${verb} ${result.outcome.refused.length} of ${refs.length} files.`, result.outcome, fileLabel);
@@ -176,27 +179,42 @@ interface ModContextDeps {
   log: (line: string) => void;
 }
 
-const EMPTY_MOD_NAME = 'A mod name cannot be empty.';
-
 interface Rename {
   readonly oldName: string;
   readonly newName: string;
 }
 
-interface RenamedMod {
-  readonly name: string;
-  readonly lineRefusals: readonly { profile: string; refusal: string }[];
-}
+const reportPartial = (reporter: Reporter, partial: readonly PartialFailure[] = [], log: (line: string) => void = () => undefined) => {
+  for (const { message, detail, severity } of partial) {
+    if (severity === 'warning') reporter.report('warning', message, detail);
+    else log(`${message}: ${detail}`);
+  }
+};
+
+type Uninstalled = Extract<Awaited<ReturnType<ModlistCommands['uninstallMods']>>, { applied: true }>['outcome']['landed'][number];
 
 interface ModToUninstall {
   readonly name: string;
   readonly archiveFilename?: string;
 }
 
+function partialsOfUninstall(item: Uninstalled, modOrderFile: string): PartialFailure[] {
+  const partial: PartialFailure[] = [];
+  if (item.sourceRefusal !== undefined) {
+    partial.push({ message: `"${item.name}" was uninstalled, but its source folder could not be moved to the trash.`, detail: item.sourceRefusal, severity: 'warning' });
+  }
+  if (item.lineRefusal !== undefined) {
+    partial.push({ message: `"${item.name}" was uninstalled, but its ${modOrderFile} line could not be removed.`, detail: item.lineRefusal, severity: 'warning' });
+  } else if (item.markRefusal !== undefined) {
+    partial.push({ message: `"${item.name}" was uninstalled, but its downloaded file could not be marked uninstalled`, detail: item.markRefusal, severity: 'log' });
+  }
+  return partial;
+}
+
 export function registerModContextCommands(
   { commands, instance, viewSelection, reporter, ask, trash, log }: ModContextDeps,
 ): vscode.Disposable[] {
-  const rename: AgentGesture<ModlistNode, Rename, GestureResult<RenamedMod>, { name: string }> = {
+  const rename: AgentGesture<ModlistNode, Rename, GestureResult<string>, { name: string }> = {
     fromView: async (entry) => {
       const node = singularArgument(entry, 'mod');
       if (!node) return undefined;
@@ -208,32 +226,31 @@ export function registerModContextCommands(
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a mod carries one mod.');
       const oldName = modNameOf(only);
-      const refusal = name === '' ? EMPTY_MOD_NAME : commands.renameModNameRefusal(instance.value, name, oldName);
+      const refusal = commands.renameModNameRefusal(instance.value, name, oldName);
       if (refusal !== undefined) throw new Refusal(refusal);
       return { oldName, newName: name };
     },
-    run: ({ oldName, newName }) => runModsWriting(instance, async () => {
-      const { activeProfile, profiles, paths } = instance.value;
+    run: ({ oldName, newName }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
+      const { activeProfile, profiles, paths, managerNames } = instance.value;
       const result = await commands.renameMod(activeProfile, profiles, oldName, newName, paths.sourceDirs.get(oldName));
-      return result.applied
-        ? { applied: true, outcome: { landed: [{ name: newName, lineRefusals: result.lineRefusals }], refused: [] } }
-        : { applied: false, refusal: 'Failed to rename mod.', detail: result.refusal };
+      if (!result.applied) return { applied: false, refusal: 'Failed to rename mod.', detail: result.refusal };
+      if (result.unchanged) return { applied: true, outcome: { landed: [], refused: [] } };
+      return {
+        applied: true,
+        outcome: { landed: [newName], refused: [] },
+        partial: result.lineRefusals.map(({ profile, refusal }) => ({
+          message: `"${oldName}" was renamed, but its ${managerNames.modOrderFile} line in profile "${profile}" could not be renamed.`,
+          detail: refusal, severity: 'warning',
+        })),
+      };
     }),
-    report: (result, { oldName }) => {
-      if (!result.applied) {
-        reporter.report('error', result.refusal, result.detail);
-        return;
-      }
-      for (const { lineRefusals } of result.outcome.landed) {
-        for (const { profile, refusal } of lineRefusals) {
-          reporter.report('warning',
-            `"${oldName}" was renamed, but its ${instance.value.managerNames.modOrderFile} line in profile "${profile}" could not be renamed.`, refusal);
-        }
-      }
+    report: (result) => {
+      if (!result.applied) reporter.report('error', result.refusal, result.detail);
+      else reportPartial(reporter, result.partial);
     },
   };
 
-  const uninstall: AgentGesture<ModlistNode, readonly ModToUninstall[], Awaited<ReturnType<ModlistCommands['uninstallMods']>>> = {
+  const uninstall: AgentGesture<ModlistNode, readonly ModToUninstall[], GestureResult<Uninstalled>> = {
     fromView: async (entry) => {
       // The download to mark comes off the row the tree already holds, so the command walks
       // nothing to find it.
@@ -246,25 +263,20 @@ export function registerModContextCommands(
     fromAgent: ({ argument }) => argument.map(modNameOf).map((name) => ({
       name, archiveFilename: instance.value.mods.flatMap((entry) => (entry.kind === 'mod' && entry.name === name ? [entry.archiveFilename] : []))[0],
     })),
-    run: (mods) => runModsWriting(instance, () => commands.uninstallMods(instance.value.activeProfile, instance.value.mods, mods, trash)),
+    run: (mods) => runModsWriting(instance, async (): Promise<GestureResult<Uninstalled>> => {
+      const { activeProfile, mods: order, managerNames } = instance.value;
+      const result = await commands.uninstallMods(activeProfile, order, mods, trash);
+      if (!result.applied) return { applied: false, refusal: 'Failed to uninstall mods.', detail: result.refusal };
+      return { applied: true, outcome: result.outcome, partial: result.outcome.landed.flatMap((item) => partialsOfUninstall(item, managerNames.modOrderFile)) };
+    }),
     report: (result, mods) => {
       if (!result.applied) {
-        reporter.report('error', 'Failed to uninstall mods.', result.refusal);
+        reporter.report('error', result.refusal, result.detail);
         return;
       }
       reporter.selectionOutcome(
         `Could not uninstall ${result.outcome.refused.length} of ${mods.length} mods.`, result.outcome, (m) => m.name);
-      for (const item of result.outcome.landed) {
-        if (item.sourceRefusal !== undefined) {
-          reporter.report('warning', `"${item.name}" was uninstalled, but its source folder could not be moved to the trash.`, item.sourceRefusal);
-        }
-        if (item.lineRefusal !== undefined) {
-          reporter.report('warning',
-            `"${item.name}" was uninstalled, but its ${instance.value.managerNames.modOrderFile} line could not be removed.`, item.lineRefusal);
-        } else if (item.markRefusal !== undefined) {
-          log(`"${item.name}" was uninstalled, but its downloaded file could not be marked uninstalled: ${item.markRefusal}`);
-        }
-      }
+      reportPartial(reporter, result.partial, log);
     },
   };
 
@@ -354,15 +366,13 @@ export function registerSeparatorCommands(
       }),
   ];
 }
-interface CreatedMod {
-  readonly name: string;
-  readonly lineRefusal?: string;
-}
+const createPartial = (name: string, lineRefusal: string | undefined, modOrderFile: string): PartialFailure[] =>
+  (lineRefusal === undefined ? [] : [{ message: `"${name}" was created, but its ${modOrderFile} line could not be written.`, detail: lineRefusal, severity: 'warning' }]);
 
 export function registerCreateEmptyModCommand(
   commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
 ): vscode.Disposable {
-  const gesture: AgentGesture<ModlistNode, string, GestureResult<CreatedMod>, { name: string }> = {
+  const gesture: AgentGesture<ModlistNode, string, GestureResult<string>, { name: string }> = {
     fromView: async () => {
       const name = await vscode.window.showInputBox({
         prompt: 'New mod name', placeHolder: 'My New Mod',
@@ -371,32 +381,24 @@ export function registerCreateEmptyModCommand(
       return name || undefined;
     },
     fromAgent: ({ options: { name } }) => {
-      const refusal = name.trim() === '' ? EMPTY_MOD_NAME : commands.newModNameRefusal(instance.value, name);
+      const refusal = commands.newModNameRefusal(instance.value, name);
       if (refusal !== undefined) throw new Refusal(refusal);
       return name;
     },
-    run: (name) => runModsWriting(instance, async (): Promise<GestureResult<CreatedMod>> => {
+    run: (name) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
       const failed = `Failed to create "${name}".`;
       try {
         const outcome = await commands.createEmptyMod(instance.value.activeProfile, name);
         return outcome.applied
-          ? { applied: true, outcome: { landed: [{ name, lineRefusal: outcome.lineRefusal }], refused: [] } }
+          ? { applied: true, outcome: { landed: [name], refused: [] }, partial: createPartial(name, outcome.lineRefusal, instance.value.managerNames.modOrderFile) }
           : { applied: false, refusal: failed, detail: outcome.refusal };
       } catch (err) {
         return { applied: false, refusal: failed, detail: errorMessage(err) };
       }
     }),
-    report: (result, name) => {
-      if (!result.applied) {
-        reporter.report('error', result.refusal, result.detail);
-        return;
-      }
-      for (const { lineRefusal } of result.outcome.landed) {
-        if (lineRefusal !== undefined) {
-          reporter.report(
-            'warning', `"${name}" was created, but its ${instance.value.managerNames.modOrderFile} line could not be written.`, lineRefusal);
-        }
-      }
+    report: (result) => {
+      if (!result.applied) reporter.report('error', result.refusal, result.detail);
+      else reportPartial(reporter, result.partial);
     },
   };
   return registerAgentGesture('modbench.mod.createEmpty', () => [], gesture);

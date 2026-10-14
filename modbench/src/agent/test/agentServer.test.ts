@@ -546,6 +546,23 @@ describe('the agent server, running a gesture', () => {
       expect(fired.calls).toEqual([['modbench.mod.move', new AgentCall([B], options)]]);
     });
 
+    it('refuses a place nothing is named, firing nothing', async () => {
+      const answer = await fire({ command: 'modbench.mod.move', argument: [{ name: 'B' }], options: { place: { kind: 'mod', name: 'Gone' }, end: 'winning' } });
+
+      expect(answer.text).toContain('Nothing is named "Gone" as a mod.');
+      expect(fired.calls).toEqual([]);
+    });
+
+    it('logs the parts of a landed gesture that failed, though it landed', async () => {
+      fired.outcome = { applied: true, outcome: { landed: ['Bee'], refused: [] }, partial: [{ message: '"B" was renamed, but a line could not be renamed.', detail: 'disk full', severity: 'warning' }] };
+      const { client, lines } = await served();
+
+      const answer = await call(client, 'run_gesture', { command: 'modbench.mod.rename', argument: [{ name: 'B' }], options: { name: 'Bee' } });
+
+      expect(answer.isError).toBe(true);
+      expect(lines.join('\n')).toContain('"B" was renamed, but a line could not be renamed. disk full');
+    });
+
     it('refuses a move of a separator, naming it, firing nothing', async () => {
       const answer = await fire({ command: 'modbench.mod.move', argument: [{ name: 'Textures', kind: 'separator' }], options: { place: { kind: 'ungrouped' }, end: 'losing' } });
 

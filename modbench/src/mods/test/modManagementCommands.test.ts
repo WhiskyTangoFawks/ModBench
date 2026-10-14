@@ -1641,21 +1641,43 @@ describe('the mod gestures, called by the agent', () => {
       const answered = await invoke('modbench.mod.rename', renameCall('Renamed'));
 
       expect(renameMod).toHaveBeenCalledWith('Default', ['Default', 'Secondary'], 'Mod A', 'Renamed', undefined);
-      expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Renamed', lineRefusals: [] }], refused: [] } });
+      expect(answered).toEqual({ applied: true, outcome: { landed: ['Renamed'], refused: [] }, partial: [] });
       expect(reporter.reports).toEqual([]);
       nothingOpened();
     });
 
-    it.each([
-      ['an empty name', '', undefined, 'A mod name cannot be empty.'],
-      ['a name the command refuses', 'Mod B', 'A mod with this name already exists', 'A mod with this name already exists'],
-    ])('refuses %s as a Refusal, renaming nothing', async (_, name, commandRefusal, text) => {
-      renameModNameRefusal.mockReturnValueOnce(commandRefusal);
+    it('refuses a name the command refuses as a Refusal, renaming nothing', async () => {
+      renameModNameRefusal.mockReturnValueOnce('A mod with this name already exists');
       register();
 
-      await expect(invoke('modbench.mod.rename', renameCall(name))).rejects.toEqual(new Refusal(text));
+      await expect(invoke('modbench.mod.rename', renameCall('Mod B'))).rejects.toEqual(new Refusal('A mod with this name already exists'));
 
       expect(renameMod).not.toHaveBeenCalled();
+    });
+
+    it('answers a rename to the mod\'s own name as nothing landed and nothing refused, reporting nothing', async () => {
+      renameMod.mockResolvedValue({ applied: true, lineRefusals: [], unchanged: true });
+      const reporter = recordingReporter();
+      register(reporter);
+
+      const answered = await invoke('modbench.mod.rename', renameCall('Mod A'));
+
+      expect(answered).toEqual({ applied: true, outcome: { landed: [], refused: [] } });
+      expect(reporter.reports).toEqual([]);
+    });
+
+    it('answers a profile whose line could not be renamed as a partial failure, reporting nothing itself', async () => {
+      renameMod.mockResolvedValue({ applied: true, lineRefusals: [{ profile: 'Secondary', refusal: 'disk full' }] });
+      const reporter = recordingReporter();
+      register(reporter);
+
+      const answered = await invoke('modbench.mod.rename', renameCall('Renamed'));
+
+      expect(answered).toEqual({
+        applied: true, outcome: { landed: ['Renamed'], refused: [] },
+        partial: [{ message: '"Mod A" was renamed, but its modlist.txt line in profile "Secondary" could not be renamed.', detail: 'disk full', severity: 'warning' }],
+      });
+      expect(reporter.reports).toEqual([]);
     });
 
     it('asks the command for the refusal with the mod\'s own name, so its own name is no clash', async () => {
@@ -1688,8 +1710,32 @@ describe('the mod gestures, called by the agent', () => {
 
       expect(uninstallMods).toHaveBeenCalledWith(
         'Default', instance.value.mods, [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }, { name: 'Mod B', archiveFilename: undefined }], trash);
-      expect(answered).toEqual(outcome);
+      expect(answered).toEqual({ ...outcome, partial: [] });
       expect(ask.asked).toEqual([]);
+    });
+
+    it('answers each part of a landed mod that failed as a partial failure, the unmarked download as a log one', async () => {
+      uninstallMods.mockResolvedValue({ applied: true, outcome: { refused: [], landed: [
+        { name: 'Mod A', sourceRefusal: 'in use', lineRefusal: 'disk full' }, { name: 'Mod B', markRefusal: 'gone' },
+      ] } });
+      registerModContextCommands({ commands, instance, viewSelection: () => [], reporter: recordingReporter(), ask: scriptedDialog(), trash: vi.fn(), log: vi.fn() });
+
+      const answered = await invoke('modbench.mod.uninstall', ofMods('Mod A', 'Mod B'));
+
+      expect(answered).toMatchObject({ partial: [
+        { message: '"Mod A" was uninstalled, but its source folder could not be moved to the trash.', detail: 'in use', severity: 'warning' },
+        { message: '"Mod A" was uninstalled, but its modlist.txt line could not be removed.', detail: 'disk full', severity: 'warning' },
+        { message: '"Mod B" was uninstalled, but its downloaded file could not be marked uninstalled', detail: 'gone', severity: 'log' },
+      ] });
+    });
+
+    it('answers a refusal of the whole selection as the failure the view reports', async () => {
+      uninstallMods.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
+      registerModContextCommands({ commands, instance, viewSelection: () => [], reporter: recordingReporter(), ask: scriptedDialog(), trash: vi.fn(), log: vi.fn() });
+
+      const answered = await invoke('modbench.mod.uninstall', ofMods('Mod A'));
+
+      expect(answered).toEqual({ applied: false, refusal: 'Failed to uninstall mods.', detail: 'ENOENT: modlist.txt' });
     });
   });
 
@@ -1704,21 +1750,43 @@ describe('the mod gestures, called by the agent', () => {
       const answered = await invoke('modbench.mod.createEmpty', createCall('New Mod'));
 
       expect(createEmptyMod).toHaveBeenCalledWith('Default', 'New Mod');
-      expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'New Mod', lineRefusal: undefined }], refused: [] } });
+      expect(answered).toEqual({ applied: true, outcome: { landed: ['New Mod'], refused: [] }, partial: [] });
       expect(reporter.reports).toEqual([]);
       nothingOpened();
     });
 
-    it.each([
-      ['a blank name', '  ', undefined, 'A mod name cannot be empty.'],
-      ['a name a folder holds', 'Mod A', '"Mod A" already exists', '"Mod A" already exists'],
-    ])('refuses %s as a Refusal, creating nothing', async (_, name, commandRefusal, text) => {
-      newModNameRefusal.mockReturnValueOnce(commandRefusal);
+    it('refuses a name a folder holds as a Refusal, creating nothing', async () => {
+      newModNameRefusal.mockReturnValueOnce('"Mod A" already exists');
       registerCreateEmptyModCommand(commands, instance, recordingReporter());
 
-      await expect(invoke('modbench.mod.createEmpty', createCall(name))).rejects.toEqual(new Refusal(text));
+      await expect(invoke('modbench.mod.createEmpty', createCall('Mod A'))).rejects.toEqual(new Refusal('"Mod A" already exists'));
 
       expect(createEmptyMod).not.toHaveBeenCalled();
+    });
+
+    it('leaves a blank name to the command, which refuses it for the view as for the agent', async () => {
+      createEmptyMod.mockResolvedValue({ applied: false, refusal: 'A mod name cannot be empty.' });
+      const reporter = recordingReporter();
+      registerCreateEmptyModCommand(commands, instance, reporter);
+
+      const answered = await invoke('modbench.mod.createEmpty', createCall('  '));
+      showInputBox.mockResolvedValueOnce('  ');
+      await invoke('modbench.mod.createEmpty');
+
+      expect(createEmptyMod.mock.calls).toEqual([['Default', '  '], ['Default', '  ']]);
+      expect(answered).toEqual({ applied: false, refusal: 'Failed to create "  ".', detail: 'A mod name cannot be empty.' });
+      expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to create "  ".', detail: 'A mod name cannot be empty.' }]);
+    });
+
+    it('answers a line that could not be written as a partial failure, reporting nothing itself', async () => {
+      createEmptyMod.mockResolvedValue({ applied: true, wrote: false, lineRefusal: 'disk full' });
+      const reporter = recordingReporter();
+      registerCreateEmptyModCommand(commands, instance, reporter);
+
+      const answered = await invoke('modbench.mod.createEmpty', createCall('New Mod'));
+
+      expect(answered).toMatchObject({ partial: [{ message: '"New Mod" was created, but its modlist.txt line could not be written.', detail: 'disk full', severity: 'warning' }] });
+      expect(reporter.reports).toEqual([]);
     });
 
     it('answers a failed create with its detail, reporting nothing', async () => {
@@ -1751,6 +1819,16 @@ describe('the mod gestures, called by the agent', () => {
       expect(markFiles).toHaveBeenCalledWith([{ origin, relativePath: 'a.dds' }], mark, instance.value.paths.sourceDirs);
       expect(answered).toEqual(outcome);
       expect(reporter.reports).toEqual([]);
+      nothingOpened();
+    });
+
+    it('answers a refusal of the whole selection as the failure the view reports', async () => {
+      markFiles.mockResolvedValue({ applied: false, refusal: 'mEdit could not be reached.' });
+      registerFileExclusionCommands(commands, instance, () => [], recordingReporter());
+
+      const answered = await invoke(command, new AgentCall([{ kind: 'file', origin, relativePath: 'a.dds' }], {}));
+
+      expect(answered).toEqual({ applied: false, refusal: `Could not ${mark === 'Excluded' ? 'exclude' : 'include'} 1 files.`, detail: 'mEdit could not be reached.' });
     });
 
     it('refuses an Argument that is not a file, writing nothing', async () => {
