@@ -13,7 +13,6 @@ import {
 import type { ModArgument } from '../drivingLib/argument';
 import { modRowUri, separatorRowUri } from './modIndicators';
 import { blankIcon } from '../drivingLib/blankIcon';
-import { filesInConflict } from './conflictTable';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
@@ -42,7 +41,6 @@ function modContextValue(mod: Pick<Mod, 'nexusId' | 'enabled'>, facts: ModFacts 
   const flags = [
     mod.nexusId !== undefined && 'hasNexus', mod.enabled ? 'enabled' : 'disabled',
     facts?.holdsPlugin === true && 'holdsPlugin', facts !== undefined && (facts.tracked ? 'tracked' : 'untracked'),
-    facts?.fileOrderConflict === true && 'fileOrderConflict',
   ];
   return ['mod', ...flags.filter((f): f is string => f !== false)].join(' ');
 }
@@ -51,7 +49,6 @@ interface ModFacts {
   readonly holdsPlugin: boolean;
   readonly tracked: boolean;
   readonly sourceFolder?: string;
-  readonly fileOrderConflict: boolean;
 }
 
 /** A separator and the mods it shows: every mod it holds, or only the matching ones when a filter
@@ -331,7 +328,6 @@ export class ModListProvider
     return new ModNode(m, {
       holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked,
       sourceFolder: tracked ? this.instanceValue.paths.sourceDirs.get(m.name) : undefined,
-      fileOrderConflict: filesInConflict(this.instanceValue, m.name).length > 0,
     }, found.files, found.folders, shown);
   }
 
