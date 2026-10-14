@@ -13,7 +13,7 @@ import { FILE_CONFLICTS } from './fileConflicts';
 import { RUN_GESTURE } from './gestures';
 import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
 import { INSTANCE_READS } from './instanceReads';
-import { Refusal } from './refusal';
+import { parseOrRefuse, Refusal } from './refusal';
 import { RESOLVE_NAMES } from './resolveNames';
 import { SELECT_ROWS } from './selectRows';
 import { SOURCE_PROBLEMS } from './sourceProblems';
@@ -65,9 +65,7 @@ function register<Shape extends z.ZodRawShape>(
   const schema = z.object(input);
   const anyObject = z.looseObject({}).meta(z.toJSONSchema(schema, { io: 'input', target: 'draft-7' }));
   server.registerTool(name, { description, inputSchema: anyObject }, (args) => answer(log, name, () => {
-    const parsed = schema.safeParse(args);
-    if (!parsed.success) throw new Refusal(z.prettifyError(parsed.error));
-    return run(parsed.data);
+    return run(parseOrRefuse(schema, args));
   }));
 }
 

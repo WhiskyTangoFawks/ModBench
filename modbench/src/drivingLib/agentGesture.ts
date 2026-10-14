@@ -2,9 +2,9 @@ import * as vscode from 'vscode';
 import type { Argument } from '../wire/argument';
 import { gestureEntry, type GestureEntry, type KindedRow } from './gestureEntry';
 
-/** The Argument and Options an agent call gives a gesture (commands.md, The surface supplies the Argument). */
+/** The Argument an agent call gives a gesture (commands.md, The surface supplies the Argument). */
 export class AgentCall {
-  constructor(readonly argument: readonly Argument[], readonly options: Readonly<Record<string, unknown>> = {}) {}
+  constructor(readonly argument: readonly Argument[]) {}
 }
 
 /** A gesture the agent runs, by the parts a view call and an agent call share and the parts only a view call has. */
