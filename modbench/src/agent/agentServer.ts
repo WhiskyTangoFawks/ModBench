@@ -55,9 +55,8 @@ interface Tool<Shape extends z.ZodRawShape> {
   readonly input: Shape;
 }
 
-// The SDK refuses an input its own schema rejects before the handler runs, with no Output line
-// (agent.md, Reporting, story 1). So the SDK holds a schema that takes any object and advertises
-// the tool's, and the handler parses the tool's.
+// The SDK refuses an input its schema rejects before the handler runs, with no Output line
+// (agent.md, Reporting, story 1), so it holds one that takes any object and advertises the tool's.
 function register<Shape extends z.ZodRawShape>(
   server: McpServer, log: Log, { name, description, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>) => unknown,
 ): void {
