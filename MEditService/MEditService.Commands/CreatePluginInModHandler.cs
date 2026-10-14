@@ -27,8 +27,9 @@ public sealed class CreatePluginInModHandler
                 $"'{origin}' is not a mod the load order holds a plugin of, so {name} was not created in it.");
         }
 
-        var result = await _create.CreatePlugin(new PluginAddress(name, mod.Name), mod.Folder, mod.SourceFolder);
+        var created = new PluginAddress(name, mod.Name);
+        var result = await _create.CreatePlugin(created, mod.Folder, mod.SourceFolder);
         if (result.Refusal is null) _holder.SourceWritten();
-        return result;
+        return result with { Created = created };
     }
 }

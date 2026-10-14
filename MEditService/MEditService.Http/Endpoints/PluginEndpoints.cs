@@ -284,7 +284,7 @@ internal static class PluginEndpoints
 
     private static IResult Created(ILogger logger, string gesture, PluginAddress plugin, PluginCreateResult result)
     {
-        if (result.Refusal is not { } refusal) return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin));
+        if (result.Refusal is not { } refusal) return Results.Ok(new PluginCreatedResponse((result.Created ?? plugin).Name, (result.Created ?? plugin).Origin));
 
         EndpointMapping.LogRefusal(logger, gesture, refusal, result.Message, plugin);
         return EndpointMapping.Refusal(refusal, result.Message);

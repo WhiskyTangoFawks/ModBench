@@ -37,9 +37,10 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     {
         var awaited = _holder.ArrivalAwaited;
 
-        var result = await Handler.CreatePluginIn(Mod, "Second.esp");
+        var result = await Handler.CreatePluginIn(Mod.ToUpperInvariant(), "Second.esp");
 
         Assert.Null(result.Refusal);
+        Assert.Equal(new PluginAddress("Second.esp", Mod), result.Created);
         Assert.True(File.Exists(Path.Combine(_folder, "Second.esp")));
         Assert.True(_holder.ArrivalAwaited > awaited);
     }
