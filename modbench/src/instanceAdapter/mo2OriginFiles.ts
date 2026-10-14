@@ -1,6 +1,7 @@
 // MO2's exclusion of a file, the file or folder renamed with MO2's suffix or restored, and a mod's file sent to the trash.
 
-import { exists, rename, withLock } from './files';
+import { isAbsolute, relative, sep } from 'node:path';
+import { exists, realPathIfThere, rename, withLock } from './files';
 import type { InstanceAdapter, OriginFileMark, OriginFileMarked } from './instanceAdapter';
 import { EXCLUDED_SUFFIX, excludedName, fileInFolder, includedName, isExcludedName, originDir } from './layout';
 import type { Mo2Context } from './mo2Context';
@@ -33,8 +34,14 @@ export function mo2OriginFiles({ instanceRoot }: Mo2Context): Mo2OriginFiles {
     },
 
     async trashModFile(mod, relativePath, trash) {
-      const file = fileUnder(originDir(instanceRoot, { kind: 'mod', name: mod }), relativePath);
-      if (file === undefined) throw new Error(`Not a file of mod "${mod}": "${relativePath}"`);
+      const folder = originDir(instanceRoot, { kind: 'mod', name: mod });
+      const file = fileUnder(folder, relativePath);
+      const notAFile = new Error(`Not a file of mod "${mod}": "${relativePath}"`);
+      if (folder === undefined || file === undefined) throw notAFile;
+      const real = await realPathIfThere(file);
+      if (real === undefined) return;
+      const inFolder = relative(await realPathIfThere(folder) ?? folder, real);
+      if (isAbsolute(inFolder) || inFolder.split(sep)[0] === '..') throw notAFile;
       await trash(file);
     },
 

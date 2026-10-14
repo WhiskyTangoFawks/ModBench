@@ -163,12 +163,20 @@ async function restoreFromManifest(deps: ModlistGestureDeps, toRun: ModsToRun): 
     reportRestored(reporter, refused.length, { landed: [], refused });
     return;
   }
-  const listing = await commands.whatRestoreDestroys(mods);
+  deps.say('Restore from manifest — reading what it would destroy…');
+  const listing = await commands.whatRestoreDestroys(mods).finally(() => { deps.say(undefined); });
   if ('refusal' in listing) { reporter.report('error', listing.refusal); return; }
+  const skipped = new Set(listing.refused.map(({ item }) => item));
+  const toRestore = mods.filter((mod) => !skipped.has(mod));
+  const notAsked = [...listing.refused, ...refused];
+  if (toRestore.length === 0) {
+    reportRestored(reporter, mods.length + refused.length, { landed: [], refused: notAsked });
+    return;
+  }
   if (listing.destroys.length > 0 && !(await confirmRestore(deps.ask, toRun))) return;
   await runWritingGesture(view, instance, async () => {
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
-      commands.restoreFromManifest(mods, instance.value, { onProgress: (status) => { show(restoreMessage(status)); }, signal }));
+      commands.restoreFromManifest(toRestore, instance.value, { onProgress: (status) => { show(restoreMessage(status)); }, signal }));
     if (!outcome.applied) {
       reporter.report('error', outcome.refusal, outcome.unfinished.length === 0
         ? undefined
@@ -176,7 +184,7 @@ async function restoreFromManifest(deps: ModlistGestureDeps, toRun: ModsToRun): 
       return;
     }
     reportCancelRefused(reporter, outcome);
-    reportRestored(reporter, mods.length + refused.length, { landed: outcome.landed, refused: [...outcome.refused, ...refused] });
+    reportRestored(reporter, mods.length + refused.length, { landed: outcome.landed, refused: [...outcome.refused, ...notAsked] });
   });
 }
 
@@ -195,8 +203,12 @@ function reportRestored(reporter: Reporter, total: number, outcome: Omit<Extract
     reporter.report('error', `Could not restore ${outcome.refused.length} of ${total} mods.`, detail);
     return;
   }
-  const [only, ...more] = outcome.landed.filter(({ written, namedByNoLine }) => written.length + namedByNoLine.length > 0);
-  const line = only !== undefined && more.length === 0 ? `Restored "${only.mod}" from its manifest.` : `Restored ${more.length + (only ? 1 : 0)} mods from their manifests.`;
-  if (warnings.length > 0) reporter.report('warning', line, warnings.join('\n'));
-  else if (only !== undefined) reporter.landed(line);
+  const changed = outcome.landed.filter(({ written, namedByNoLine }) => written.length + namedByNoLine.length > 0);
+  if (warnings.length > 0) reporter.report('warning', restoredLine(changed), warnings.join('\n'));
+  else if (changed.length > 0) reporter.landed(restoredLine(changed));
+}
+
+function restoredLine([only, ...more]: readonly { mod: string }[]): string {
+  if (only === undefined) return 'Restore from manifest: no file differed from its manifest.';
+  return more.length === 0 ? `Restored "${only.mod}" from its manifest.` : `Restored ${more.length + 1} mods from their manifests.`;
 }

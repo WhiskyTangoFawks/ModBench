@@ -239,6 +239,12 @@ export type RestoreDestroysMod = components['schemas']['WhatRestoreDestroysModRe
  *  names, by its path in the mod folder. */
 export type ModRestoreDestroys = components['schemas']['ModRestoreDestroys'];
 
+/** Each mod restore from manifest would destroy files in, and each mod skipped because a file of it could not be read. */
+export interface WhatRestoreDestroys {
+  destroys: readonly ModRestoreDestroys[];
+  refused: readonly ItemRefusal<string>[];
+}
+
 interface RestoredMod {
   mod: string;
   /** Each file written to bring the mod back, by its path in the mod folder. */
@@ -360,7 +366,7 @@ export interface MEditClient {
    *  match of an ambiguous one. A name with an origin names a plugin. */
   resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed>;
   /** Each mod restore from manifest would destroy files in, from the stat cache in `statCache`, before anything is written. */
-  getWhatRestoreDestroys(mods: readonly RestoreDestroysMod[], statCache: string): Promise<ModRestoreDestroys[] | ReadFailed>;
+  getWhatRestoreDestroys(mods: readonly RestoreDestroysMod[], statCache: string): Promise<WhatRestoreDestroys | ReadFailed>;
   /** The rows one SQL SELECT over the index selects. A statement that is not a SELECT, or cannot run, fails with the database's reason. */
   selectRows(sql: string): Promise<unknown[] | ReadFailed>;
   getReferences(formKey: string): Promise<ReferenceResult[] | ReadFailed>;

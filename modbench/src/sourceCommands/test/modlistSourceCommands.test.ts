@@ -338,7 +338,7 @@ describe('modlistSourceCommands restore from manifest', () => {
     ]);
   });
 
-  it('names the mods mEdit had not reported done when the call failed part way', async () => {
+  it('names every mod of a call that failed part way as not finished, since none had its files no line names trashed', async () => {
     const { commands, client } = commandsOver();
     client.setCommandHandler('restoreFromManifest', (_mods, _facts, options) => {
       options?.onProgress?.({ mod: 'ModA', modsDone: 0, modsTotal: 3 });
@@ -347,8 +347,22 @@ describe('modlistSourceCommands restore from manifest', () => {
     });
 
     expect(await commands.restoreFromManifest(['ModA', 'ModB', 'ModC'], instanceOf())).toEqual({
-      applied: false, refusal: 'Could not restore 3 mods — mEdit stopped.', unfinished: ['ModB', 'ModC'],
+      applied: false, refusal: 'Could not restore 3 mods — mEdit stopped.', unfinished: ['ModA', 'ModB', 'ModC'],
     });
+  });
+
+  it('trashes the files no line names of each mod the first call landed when the second call fails, and names the second call\'s mods', async () => {
+    const { commands, client, adapter } = commandsOver({ gameFiles: [VANILLA] });
+    client.setCommandHandler('restoreFromManifest', (_mods, facts) => Promise.resolve(facts.gameFiles.length === 0
+      ? { landed: [{ mod: 'ModA', written: [], namedByNoLine: ['mine.txt'] }], refused: [], notFound: [{ mod: 'ModB', gameFiles: ['Game.esm'] }] }
+      : { refused: true as const, message: 'Could not restore 1 mod — mEdit stopped.' }));
+
+    const outcome = await commands.restoreFromManifest(['ModA', 'ModB'], instanceOf());
+
+    expect([adapter.calls, outcome]).toEqual([
+      [{ verb: 'trashModFile', mod: 'ModA', relativePath: 'mine.txt' }],
+      { applied: false, refusal: 'Could not restore 1 mod — mEdit stopped.', unfinished: ['ModB'] },
+    ]);
   });
 
   it('sends each file no line names in a mod that landed to the trash, through the Instance adapter', async () => {
@@ -386,13 +400,13 @@ describe('modlistSourceCommands what restore destroys', () => {
 
   it('asks mEdit with each mod\'s folder and the files the repository commits itself, and the stat cache\'s folder, and answers its listing', async () => {
     const { commands, client } = commandsOver();
-    client.setQueryAnswer('getWhatRestoreDestroys', DESTROYS);
+    client.setQueryAnswer('getWhatRestoreDestroys', { destroys: DESTROYS, refused: [{ item: 'ModB', reason: "'ModB' was skipped: a file could not be read" }] });
 
     const listing = await commands.whatRestoreDestroys(['ModA']);
 
     expect([client.calls, listing]).toEqual([
       [{ method: 'getWhatRestoreDestroys', args: [[{ name: 'ModA', folder: '/mods/ModA', committedFiles: ['meta.ini'] }], '/instance/stat-cache'] }],
-      { destroys: DESTROYS },
+      { destroys: DESTROYS, refused: [{ item: 'ModB', reason: "'ModB' was skipped: a file could not be read" }] },
     ]);
   });
 
@@ -403,7 +417,7 @@ describe('modlistSourceCommands what restore destroys', () => {
       makeRepository: () => Promise.resolve(), trash: () => Promise.resolve(),
     });
 
-    expect([await commands.whatRestoreDestroys(['ModA']), client.calls]).toEqual([{ destroys: [] }, []]);
+    expect([await commands.whatRestoreDestroys(['ModA']), client.calls]).toEqual([{ destroys: [], refused: [] }, []]);
   });
 
   it('refuses with mEdit\'s reason when it cannot answer', async () => {

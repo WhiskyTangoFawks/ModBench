@@ -65,8 +65,17 @@ internal sealed class FakeModFolders : IModFolderRepository
         return [.. FilePaths(modFolder).Where(path => !named.Contains(path) && !leftOut.Contains(path))];
     }
 
-    public RestoreDestroys WhatRestoreDestroys(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache) =>
-        throw new NotSupportedException("No command asks what restore destroys: the HTTP endpoint asks the Mod folder adapter.");
+    /// <summary>The hash a line's provider fixes is the one the last keep held for its path.</summary>
+    public RestoreDestroys WhatRestoreDestroys(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache)
+    {
+        if (UnreadableManifests.Contains(modFolder) || !Manifests.TryGetValue(modFolder, out var manifest)) return new([], []);
+        var kept = KeptProviderHashes.GetValueOrDefault(modFolder) ?? new Dictionary<string, string>();
+        List<string> differing = [.. manifest.Files
+            .Where(line => line.Provider is not FileProvider.NoProvider && _files.TryGetValue((modFolder, line.Path), out var bytes)
+                && kept.GetValueOrDefault(line.Path) != Encoding.ASCII.GetString(bytes))
+            .Select(line => line.Path)];
+        return new(differing, NamedByNoLine(modFolder, modName, manifest, leftOut));
+    }
 
     public Stream OpenFile(string modFolder, string path) => Open(modFolder, path);
 

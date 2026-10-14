@@ -94,7 +94,7 @@ beforeEach(() => {
   gitInit.mockResolvedValue({ applied: true });
   updateManifest.mockResolvedValue({ applied: true, notes: [], landed: [], refused: [] });
   restoreFromManifest.mockResolvedValue({ applied: true, landed: [], refused: [] });
-  whatRestoreDestroys.mockResolvedValue({ destroys: [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: [] }] });
+  whatRestoreDestroys.mockResolvedValue({ destroys: [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: [] }], refused: [] });
 });
 
 describe('Git init', () => {
@@ -393,7 +393,7 @@ describe('Restore from manifest', () => {
   });
 
   it('asks nothing when restore destroys nothing, as after a fresh clone, and restores', async () => {
-    whatRestoreDestroys.mockResolvedValueOnce({ destroys: [] });
+    whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [] });
     const { ask, run } = register();
 
     await run(RESTORE, modRow('ModA'));
@@ -407,6 +407,18 @@ describe('Restore from manifest', () => {
     await run(RESTORE, modRow('ModB'), [modRow('ModA'), modRow('ModB')]);
 
     expect(whatRestoreDestroys.mock.calls).toEqual([[['ModA', 'ModB']]]);
+  });
+
+  it('restores only the mods it could ask about, naming each it skipped in its one line', async () => {
+    const skipped = "'ModB' was skipped: a file could not be read: denied";
+    whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [{ item: 'ModB', reason: skipped }] });
+    restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [] });
+    const { reporter, run } = register();
+
+    await run(RESTORE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
+
+    expect(sentMods(restoreFromManifest)).toEqual([['ModA']]);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"ModB" (${skipped})` }]);
   });
 
   it('restores nothing, and says why, when mEdit cannot say what restore destroys', async () => {
@@ -448,6 +460,7 @@ describe('Restore from manifest', () => {
     await run(RESTORE);
 
     expect(said).toEqual([
+      'Restore from manifest — reading what it would destroy…', undefined,
       'Restore from manifest — reading the files of "ModA"…', 'Restore from manifest — "ModA", 0 of 2 mods done…', undefined,
     ]);
   });
@@ -493,6 +506,19 @@ describe('Restore from manifest', () => {
     expect(reporter.landings).toEqual([]);
   });
 
+  it('says no file differed, warning in its one line, when the only thing to say is a stat cache it could not write', async () => {
+    restoreFromManifest.mockResolvedValueOnce({
+      applied: true, landed: [{ mod: 'ModA', written: [], namedByNoLine: [], statCacheNotWritten: 'read-only' }], refused: [],
+    });
+    const { reporter, run } = register();
+
+    await run(RESTORE, modRow('ModA'));
+
+    expect(reporter.reports).toEqual([{
+      severity: 'warning', message: 'Restore from manifest: no file differed from its manifest.', detail: 'ModA: the stat cache could not be written: read-only',
+    }]);
+  });
+
   it('names a skipped mod and a stat cache it could not write in its one line', async () => {
     restoreFromManifest.mockResolvedValueOnce({
       applied: true, landed: [{ mod: 'ModA', written: [], namedByNoLine: [], statCacheNotWritten: 'read-only' }],
@@ -519,12 +545,15 @@ describe('Restore from manifest', () => {
     }]);
   });
 
-  it('gives the message line back when restore throws', async () => {
-    restoreFromManifest.mockRejectedValueOnce(new Error('boom'));
+  it.each([
+    ['asking what it would destroy', () => whatRestoreDestroys.mockRejectedValueOnce(new Error('boom')), [undefined]],
+    ['restore', () => restoreFromManifest.mockRejectedValueOnce(new Error('boom')), [undefined, undefined]],
+  ])('gives the message line back when %s throws', async (_phase, throws, givenBack) => {
+    throws();
     const { said, run } = register();
 
     await expect(run(RESTORE)).rejects.toThrow('boom');
 
-    expect(said).toEqual([undefined]);
+    expect(said).toEqual(['Restore from manifest — reading what it would destroy…', ...givenBack]);
   });
 });

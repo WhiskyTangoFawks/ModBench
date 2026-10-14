@@ -176,18 +176,24 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     }
 
     [PosixFact]
-    public async Task OnAFileSystemThatTellsCaseApart_AFileRenamedInCaseAlone_IsDestroyedAsOneNoLineNames_AndRestoringItNamesItForTheTrash()
+    public async Task AModWhoseManifestCannotBeRead_IsSkippedAsUnreadable_AndEveryOtherModIsListed()
     {
         ModInstalledFromADownload();
         await Post("update-manifest");
-        File.Move(Path.Combine(ModFolder, "kept.txt"), Path.Combine(ModFolder, "KEPT.txt"));
+        ChangedSinceItsUpdate();
+        var locked = Path.Combine(_instance, "mods", "Locked");
+        Directory.CreateDirectory(locked);
+        File.WriteAllText(Path.Combine(locked, "Locked.manifest"), "");
+        FileModes.Set(Path.Combine(locked, "Locked.manifest"), "000");
+        var request = WhatRestoreDestroysRequest();
+        Assert.IsType<JsonArray>(request["mods"]).Add(new JsonObject { ["name"] = "Locked", ["folder"] = locked, ["committedFiles"] = new JsonArray() });
 
-        var destroys = Assert.Single((await WhatRestoreDestroys()).EnumerateArray());
-        var restored = Assert.Single((await Post("restore-from-manifest")).GetProperty("applied").EnumerateArray());
+        var response = await Client.PostAsJsonAsync("/what-restore-destroys", request);
 
-        Assert.Equal(["KEPT.txt"], Paths(destroys, "namedByNoLine"));
-        Assert.Equal(["KEPT.txt"], Paths(restored, "namedByNoLine"));
-        Assert.Equal("kept", FileText("kept.txt"));
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(Mod, Assert.Single(body.GetProperty("mods").EnumerateArray()).GetProperty("mod").GetString());
+        var skipped = Assert.Single(body.GetProperty("refused").EnumerateArray());
+        Assert.Equal(("Locked", "Unreadable"), (skipped.GetProperty("item").GetString(), skipped.GetProperty("refusal").GetString()));
     }
 
     [Fact]
@@ -207,15 +213,24 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     }
 
     [Theory]
-    [InlineData("mods", "[]")]
-    [InlineData("gameFiles", null)]
-    [InlineData("dataFolder", null)]
-    [InlineData("statCache", null)]
-    public async Task RestoringWithAFieldMissingOrMalformed_Is400(string field, string? json)
+    [InlineData("gameFiles")]
+    [InlineData("dataFolder")]
+    [InlineData("statCache")]
+    public async Task RestoringWithAFieldMissing_Is400(string field)
     {
         var request = Request("restore-from-manifest", "Mod.zip");
-        if (json is null) request.Remove(field);
-        else request[field] = JsonNode.Parse(json);
+        request.Remove(field);
+
+        var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RestoringNoMod_Is400()
+    {
+        var request = Request("restore-from-manifest", "Mod.zip");
+        request["mods"] = new JsonArray();
 
         var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
 
@@ -223,14 +238,23 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     }
 
     [Theory]
-    [InlineData("mods", "[]")]
-    [InlineData("mods", "[{\"name\":\"RestoredMod\"}]")]
-    [InlineData("statCache", null)]
-    public async Task AskingWhatRestoreDestroysWithAFieldMissingOrMalformed_Is400(string field, string? json)
+    [InlineData("[]")]
+    [InlineData("[{\"name\":\"RestoredMod\"}]")]
+    public async Task AskingWhatRestoreDestroysInNoModOrAModWithNoFolder_Is400(string mods)
     {
         var request = WhatRestoreDestroysRequest();
-        if (json is null) request.Remove(field);
-        else request[field] = JsonNode.Parse(json);
+        request["mods"] = JsonNode.Parse(mods);
+
+        var response = await Client.PostAsJsonAsync("/what-restore-destroys", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AskingWhatRestoreDestroysWithNoStatCache_Is400()
+    {
+        var request = WhatRestoreDestroysRequest();
+        request.Remove("statCache");
 
         var response = await Client.PostAsJsonAsync("/what-restore-destroys", request);
 

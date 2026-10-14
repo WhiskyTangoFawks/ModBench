@@ -39,8 +39,9 @@ export type RestoreResult =
   | ({ applied: true } & Omit<RestoreOutcome, 'notFound'>)
   | { applied: false; refusal: string; unfinished: readonly string[] };
 
-/** What restore from manifest would destroy, each mod with a file it would replace or trash, or why mEdit could not say. */
-export type WhatRestoreDestroys = { destroys: readonly ModRestoreDestroys[] } | { refusal: string };
+/** What restore from manifest would destroy, each mod with a file it would replace or trash and each mod it skipped, or why
+ *  mEdit could not say. */
+export type WhatRestoreDestroys = { destroys: readonly ModRestoreDestroys[]; refused: readonly ItemRefusal<string>[] } | { refusal: string };
 
 export type RestoreStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Restoring' } & ModlistProgress);
 
@@ -87,20 +88,12 @@ async function readMods(
   return { sent: signal?.aborted ? [] : sent, gameFiles: [...gameFiles.values()], refused, notes };
 }
 
+// A call that fails part way answers no mod, so none had its files no line names trashed: each is not finished.
 async function restoreOnce(
-  client: ModlistSourceCommandsDeps['client'], mods: readonly RestoreMod[], facts: RestoreFacts, { onProgress, signal }: ModlistCallOptions,
+  client: ModlistSourceCommandsDeps['client'], mods: readonly RestoreMod[], facts: RestoreFacts, options: ModlistCallOptions,
 ): Promise<({ applied: true } & RestoreOutcome) | Extract<RestoreResult, { applied: false }>> {
-  let done = 0;
-  const outcome = await client.restoreFromManifest(mods, facts, {
-    onProgress: (progress) => {
-      if (progress.mod) done = progress.modsDone;
-      onProgress?.(progress);
-    },
-    signal,
-  });
-  return isRefused(outcome)
-    ? { applied: false, refusal: outcome.message, unfinished: mods.slice(done).map((mod) => mod.name) }
-    : { applied: true, ...outcome };
+  const outcome = await client.restoreFromManifest(mods, facts, options);
+  return isRefused(outcome) ? { applied: false, refusal: outcome.message, unfinished: mods.map((mod) => mod.name) } : { applied: true, ...outcome };
 }
 
 async function namedGameFiles(
@@ -117,25 +110,32 @@ function cancelRefused(...latestFirst: (string | undefined)[]): { cancelRefusal?
   return cancelRefusal === undefined ? {} : { cancelRefusal };
 }
 
+type Restored = Extract<RestoreResult, { applied: true }>['landed'];
+
+/** A restore whose call failed part way, with the mods an earlier call landed. */
+type FoldersNotFinished = Extract<RestoreResult, { applied: false }> & { readonly landed: Restored };
+
 async function restoreFromManifest(
   deps: ModlistSourceCommandsDeps, mods: readonly string[], instance: ModlistInstance, options: ModlistCallOptions<RestoreStatus>,
 ): Promise<RestoreResult> {
   const restored = await restoreFolders(deps, mods, instance, options);
-  return restored.applied ? { ...restored, ...await withFilesNoLineNamesTrashed(deps, restored) } : restored;
+  const { finished, unfinished } = await withFilesNoLineNamesTrashed(deps, restored.landed);
+  if (restored.applied) return { ...restored, landed: finished, refused: [...restored.refused, ...unfinished] };
+  return { applied: false, refusal: restored.refusal, unfinished: [...restored.unfinished, ...unfinished.map(({ item }) => item)] };
 }
 
 // modlist-source.md, Restore from manifest, story 1: mEdit names each file no line names, and the trash is the host's.
 async function withFilesNoLineNamesTrashed(
-  { adapter, trash }: ModlistSourceCommandsDeps, { landed, refused }: Extract<RestoreResult, { applied: true }>,
-): Promise<Pick<Extract<RestoreResult, { applied: true }>, 'landed' | 'refused'>> {
-  const finished: typeof landed[number][] = [];
+  { adapter, trash }: ModlistSourceCommandsDeps, landed: Restored,
+): Promise<{ finished: Restored; unfinished: readonly ItemRefusal<string>[] }> {
+  const finished: Restored[number][] = [];
   const unfinished: ItemRefusal<string>[] = [];
   for (const mod of landed) {
     const why = await trashedOrWhy(adapter, trash, mod.mod, mod.namedByNoLine);
     if (why === undefined) finished.push(mod);
     else unfinished.push({ item: mod.mod, reason: `'${mod.mod}' was not finished: ${why}. Restoring it again finishes it.` });
   }
-  return { landed: finished, refused: [...refused, ...unfinished] };
+  return { finished, unfinished };
 }
 
 async function trashedOrWhy(adapter: Adapter, trash: MoveToTrash, mod: string, paths: readonly string[]): Promise<string | undefined> {
@@ -152,16 +152,18 @@ async function trashedOrWhy(adapter: Adapter, trash: MoveToTrash, mod: string, p
 async function restoreFolders(
   { client, adapter }: ModlistSourceCommandsDeps, mods: readonly string[], instance: ModlistInstance,
   { onProgress, signal }: ModlistCallOptions<RestoreStatus>,
-): Promise<RestoreResult> {
+): Promise<Extract<RestoreResult, { applied: true }> | FoldersNotFinished> {
   const { gameFolder } = instance;
-  if (gameFolder.kind !== 'found') return { applied: false, refusal: 'Could not restore from manifest: the game folder was not found.', unfinished: [] };
+  if (gameFolder.kind !== 'found') {
+    return { applied: false, refusal: 'Could not restore from manifest: the game folder was not found.', unfinished: [], landed: [] };
+  }
   const read = await readMods(adapter, mods, gameFolder.dataFolder, { onProgress, signal });
   if (read.sent.length === 0) return { applied: true, landed: [], refused: read.refused };
   const sent: readonly RestoreMod[] = read.sent;
   const facts: RestoreFacts = { gameFiles: [...read.gameFiles], dataFolder: gameFolder.dataFolder, statCache: adapter.statCacheFolder };
   const restoring = { onProgress: (progress: ModlistProgress): void => { onProgress?.({ phase: 'Restoring', ...progress }); }, signal };
   const first = await restoreOnce(client, sent, facts, restoring);
-  if (!first.applied) return first;
+  if (!first.applied) return { ...first, landed: [] };
   const { cancelRefusal } = first;
   if (first.notFound.length === 0 || signal?.aborted) {
     return { applied: true, landed: first.landed, refused: [...first.refused, ...read.refused], ...cancelRefused(cancelRefusal) };
@@ -171,7 +173,7 @@ async function restoreFolders(
   const named = await namedGameFiles(adapter, gameFolder.dataFolder, first.notFound);
   const gameFiles = new Map([...facts.gameFiles, ...named.found].map((file) => [file.path.toLowerCase(), file]));
   const second = await restoreOnce(client, sent.filter((mod) => retried.has(mod.name)), { ...facts, gameFiles: [...gameFiles.values()] }, restoring);
-  if (!second.applied) return second;
+  if (!second.applied) return { ...second, landed: first.landed };
   const unreadFor = new Map(second.notFound.map(({ mod }) => [mod, named.unread]));
   return {
     applied: true,
@@ -236,9 +238,9 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
         const folder = await adapter.modFolderPath(mod);
         if (folder !== undefined) asked.push({ name: mod, folder, committedFiles: [...adapter.managerFilesInModFolder] });
       }
-      if (asked.length === 0) return { destroys: [] };
-      const destroys = await client.getWhatRestoreDestroys(asked, adapter.statCacheFolder);
-      return isReadFailed(destroys) ? { refusal: `Could not ask what restore from manifest destroys: ${failureReason(destroys)}` } : { destroys };
+      if (asked.length === 0) return { destroys: [], refused: [] };
+      const listing = await client.getWhatRestoreDestroys(asked, adapter.statCacheFolder);
+      return isReadFailed(listing) ? { refusal: `Could not ask what restore from manifest destroys: ${failureReason(listing)}` } : listing;
     },
 
     restoreFromManifest: (

@@ -370,14 +370,18 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     expect(result).toEqual([{ plugin: shared }, { formKey: sharedKey, editorId: 'SharedNpc' }]);
   });
 
-  it('getWhatRestoreDestroys posts the mods and the stat cache and reads each mod restore would destroy files in', async () => {
+  it('getWhatRestoreDestroys posts the mods and the stat cache and reads each mod restore would destroy files in, and each it skipped', async () => {
     const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', committedFiles: ['meta.ini'] }];
     const destroys = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'] }];
-    const { result, request } = await exchange((c) => c.getWhatRestoreDestroys(mods, '/instance/stat-cache'), answers(200, { mods: destroys }));
+    const skipped = "'ModB' was skipped: a file could not be read: denied";
+    const { result, request } = await exchange(
+      (c) => c.getWhatRestoreDestroys(mods, '/instance/stat-cache'),
+      answers(200, { mods: destroys, refused: [{ item: 'ModB', refusal: 'Unreadable', message: skipped, gameFilesNotFound: [] }] }),
+    );
 
     expect(new URL(request.url).pathname).toBe('/what-restore-destroys');
     expect(await request.json()).toEqual({ mods, statCache: '/instance/stat-cache' });
-    expect(result).toEqual(destroys);
+    expect(result).toEqual({ destroys, refused: [{ item: 'ModB', reason: skipped }] });
   });
 
   it('selectRows posts the statement and reads the rows it selects', async () => {

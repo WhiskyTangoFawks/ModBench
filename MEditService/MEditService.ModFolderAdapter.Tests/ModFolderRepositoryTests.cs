@@ -145,20 +145,21 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Theory]
-    [InlineData("matches a name in any case", false)]
-    [InlineData("matches a name in its case alone", true)]
-    public void AFileNamedByALineInAnotherCase_IsNamedByNoLine_OnlyWhereTheFileSystemFindsItByTheLinesName(string fileSystem, bool namedByNoLine)
+    [InlineData(StringComparison.OrdinalIgnoreCase, false)]
+    [InlineData(StringComparison.Ordinal, true)]
+    public void AFileNamedByALineInAnotherCase_IsNamedByNoLine_OnlyWhereTheFileSystemFindsItByTheLinesName(
+        StringComparison fileSystemMatchesNames, bool namedByNoLine)
     {
         Write("Meshes/A.nif", "hello");
         var manifest = Manifested(Line("meshes/a.nif", "Mod.zip"));
-        var comparison = fileSystem == "matches a name in any case" ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         var repository = new ModFolderRepository(
-            TimeProvider.System, path => Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories).Any(file => string.Equals(file, path, comparison)));
+            TimeProvider.System,
+            path => Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories).Any(file => string.Equals(file, path, fileSystemMatchesNames)));
 
         var destroys = repository.WhatRestoreDestroys(_root, "mod", new HashSet<string>(), _statCache);
 
-        Assert.Equal(namedByNoLine ? ["Meshes/A.nif"] : [], repository.NamedByNoLine(_root, "mod", manifest, new HashSet<string>()));
-        Assert.Equal(namedByNoLine ? ["Meshes/A.nif"] : [], destroys.NamedByNoLine);
+        Assert.Equal(namedByNoLine, repository.NamedByNoLine(_root, "mod", manifest, new HashSet<string>()).Contains("Meshes/A.nif"));
+        Assert.Equal(namedByNoLine, destroys.NamedByNoLine.Contains("Meshes/A.nif"));
     }
 
     [PosixFact]
@@ -182,41 +183,62 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Empty(destroys.NamedByNoLine.Concat(destroys.Differing));
     }
 
-    [Theory]
-    [InlineData("as kept", "hello", "Mod.zip", false)]
-    [InlineData("rewritten with the same bytes", "hello", "Mod.zip", false)]
-    [InlineData("edited", "edited", "Mod.zip", true)]
-    [InlineData("its installation file another", "hello", "Upgraded.zip", true)]
-    public void AFileALineNames_IsDestroyed_UnlessItHoldsTheBytesItsProviderFixed_WhenTheStatCacheWasLastKept(
-        string since, string text, string installationFile, bool destroyed)
+    [Fact]
+    public void AFileALineNames_AsTheLastRestoreKeptIt_IsNotDestroyed()
     {
         Write("a.nif", "hello");
-        var kept = Manifested(Line("a.nif", "Mod.zip"));
-        KeepAsRestored(kept);
-        if (since != "as kept") Write("a.nif", text);
-        Manifested(Line("a.nif", installationFile));
-
-        Assert.Equal(destroyed ? ["a.nif"] : [], WhatRestoreDestroys().Differing);
-    }
-
-    [Theory]
-    [InlineData("gone")]
-    [InlineData("has no provider")]
-    public void AFileWhoseLineRestoreCannotWriteOver_IsNotDestroyed(string file)
-    {
-        if (file == "has no provider") Write("a.nif", "edited");
-        Manifested(file == "gone" ? Line("a.nif", "Mod.zip") : new ManifestFile("a.nif", new FileProvider.NoProvider()));
+        KeepAsRestored(Manifested(Line("a.nif", "Mod.zip")));
 
         Assert.Empty(WhatRestoreDestroys().Differing);
     }
 
     [Theory]
-    [InlineData("no manifest")]
-    [InlineData("a manifest it cannot read")]
-    public void AModWithNoManifestItCanRead_RestoreDestroysNothing(string manifest)
+    [InlineData("hello", "Mod.zip", false)]
+    [InlineData("edited", "Mod.zip", true)]
+    [InlineData("hello", "Upgraded.zip", true)]
+    public void AFileALineNames_WrittenSinceTheLastRestore_IsDestroyed_UnlessItHoldsTheBytesItsProviderFixed(
+        string written, string installationFile, bool destroyed)
+    {
+        Write("a.nif", "hello");
+        KeepAsRestored(Manifested(Line("a.nif", "Mod.zip")));
+        Write("a.nif", written);
+        Manifested(Line("a.nif", installationFile));
+
+        Assert.Equal(destroyed, WhatRestoreDestroys().Differing.Contains("a.nif"));
+    }
+
+    [Fact]
+    public void AFileALineNamesThatIsGone_IsNotDestroyed()
+    {
+        Manifested(Line("a.nif", "Mod.zip"));
+
+        Assert.Empty(WhatRestoreDestroys().Differing);
+    }
+
+    [Fact]
+    public void AFileWhoseLineNamesNoProvider_IsNotDestroyed()
+    {
+        Write("a.nif", "edited");
+        Manifested(new ManifestFile("a.nif", new FileProvider.NoProvider()));
+
+        Assert.Empty(WhatRestoreDestroys().Differing);
+    }
+
+    [Fact]
+    public void AModWithNoManifest_RestoreDestroysNothing()
     {
         Write("mine.txt", "mine");
-        if (manifest == "a manifest it cannot read") Write("mod.manifest", "<<<<<<< HEAD\n");
+
+        var destroys = WhatRestoreDestroys();
+
+        Assert.Empty(destroys.NamedByNoLine.Concat(destroys.Differing));
+    }
+
+    [Fact]
+    public void AModWithAManifestItCannotRead_RestoreDestroysNothing()
+    {
+        Write("mine.txt", "mine");
+        Write("mod.manifest", "<<<<<<< HEAD\n");
 
         var destroys = WhatRestoreDestroys();
 
