@@ -8,11 +8,11 @@ vi.mock('vscode', () => ({
   commands: { executeCommand: (...args: unknown[]) => { fired.calls.push(args); return fired.failure ? Promise.reject(fired.failure) : Promise.resolve(fired.outcome); } },
   DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3, 0: 'Error', 1: 'Warning', 2: 'Information', 3: 'Hint' },
 }));
-import type * as vscode from 'vscode';
 import { createServer, request, type OutgoingHttpHeaders, type Server } from 'node:http';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import type { TerminalEnvironment } from '../scriptEnvironment';
 import { serveAgent, type AgentServer } from '../agentServer';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
@@ -57,7 +57,7 @@ afterEach(async () => {
 
 const NO_ENVIRONMENT = { forEach: () => undefined };
 
-async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: Pick<vscode.EnvironmentVariableCollection, 'forEach'> = NO_ENVIRONMENT) {
+async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const warned: string[] = [];
@@ -71,7 +71,7 @@ async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new I
   return { reporter, lines, warned, errored, address, bound: address?.port };
 }
 
-async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: Pick<vscode.EnvironmentVariableCollection, 'forEach'>): Promise<Client> {
+async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: TerminalEnvironment): Promise<Client> {
   const { bound } = await serve(instance, 0, mEdit, terminalEnvironment);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
@@ -107,7 +107,7 @@ describe('the agent server, given an instance value', () => {
 
   it('hands a shell the variables the terminals of its window hold, as they are now', async () => {
     const held = new Map([['MEDIT_PORT', { value: '5172' }], ['PYTHONPATH', { value: '/ext/scripts' }]]);
-    const client = await clientOf(new FakeInstance(VALUE), undefined, { forEach: (each) => { held.forEach((mutator, name) => { each(name, mutator as vscode.EnvironmentVariableMutator, undefined as never); }); } });
+    const client = await clientOf(new FakeInstance(VALUE), undefined, { forEach: (each) => { held.forEach((mutator, name) => { each(name, mutator); }); } });
     held.set('MEDIT_PORT', { value: '6001' });
 
     expect(await read(client, 'script_environment')).toEqual({ MEDIT_PORT: '6001', PYTHONPATH: '/ext/scripts' });

@@ -5,7 +5,6 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import type { InstanceView } from '../instanceLoader/instance';
-import type * as vscode from 'vscode';
 import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
@@ -18,7 +17,7 @@ import { Refusal } from '../drivingLib/refusal';
 import { parseOrRefuse } from './refusal';
 import { LIST_REFERENCES, READ_RECORD } from './readRecord';
 import { RESOLVE_NAMES } from './resolveNames';
-import { SCRIPT_ENVIRONMENT } from './scriptEnvironment';
+import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironment';
 import { SELECT_ROWS } from './selectRows';
 import { SOURCE_PROBLEMS } from './sourceProblems';
 
@@ -28,7 +27,7 @@ export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence'> | undefined;
   mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences'>;
-  terminalEnvironment: Pick<vscode.EnvironmentVariableCollection, 'forEach'>;
+  terminalEnvironment: TerminalEnvironment;
   reporter: Reporter;
   log: Log;
 }
