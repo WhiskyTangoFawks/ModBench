@@ -556,7 +556,7 @@ describe('package.json command titles and categories', () => {
     expect(RETIRED_AHEAD_OF_CODE.filter((id) => !declared.has(id))).toEqual([]);
   });
 
-  const PALETTE_AHEAD_OF_CODE = ['modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges', 'modbench.modlist.clean'];
+  const PALETTE_AHEAD_OF_CODE = ['modbench.modlist.discardChanges', 'modbench.modlist.clean'];
 
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
@@ -937,6 +937,46 @@ describe('package.json build\'s palette entry', () => {
   });
 });
 
+describe('package.json init and stage follow modlist-source.md, Menus and keys', () => {
+  const HAS_REPOSITORY = 'modbench.modlist.hasRepository';
+  const menu = (name: string, command: string): MenuEntry[] =>
+    present(pkg.contributes.menus[name], `contributes.menus['${name}']`).filter((e) => e.command === command);
+  const hasRepository = { ...inInstance, [HAS_REPOSITORY]: true };
+
+  it('offers stage in the Source Control title bar\'s overflow, for the instance\'s own repository alone', () => {
+    const [entry, ...others] = menu('scm/title', 'modbench.modlist.stage');
+
+    expect(others).toEqual([]);
+    expect(requires(entry?.when, 'scmProvider == git')).toBe(true);
+    expect(requires(entry?.when, 'scmProviderRootUri in modbench.modlist.instanceRoots')).toBe(true);
+    expect((entry?.group ?? '').startsWith('navigation')).toBe(false);
+  });
+
+  it('offers stage on a mod row while the instance holds a repository, after build', () => {
+    const [entry, ...others] = menu('view/item/context', 'modbench.modlist.stage').filter((e) => requires(e.when, 'view == modbench.modList'));
+
+    expect(others).toEqual([]);
+    expect([entry?.group, requires(entry?.when, HAS_REPOSITORY)]).toEqual(['4_sourceControl@3', true]);
+  });
+
+  it('offers init on the Modlist row with no repository, and stage with one', () => {
+    const onTheRow = present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
+      .filter((e) => holds(e.when, { view: 'modbench.toolbox', viewItem: 'modlist', ...hasRepository }));
+    const withNone = present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
+      .filter((e) => holds(e.when, { view: 'modbench.toolbox', viewItem: 'modlist', ...inInstance }));
+
+    expect([onTheRow.map((e) => e.command), withNone.map((e) => e.command)]).toEqual([['modbench.modlist.stage'], ['modbench.modlist.init']]);
+  });
+
+  it('offers init in the palette until the instance holds a repository, and stage once it does', () => {
+    expect([
+      paletteOffers('modbench.modlist.init', inInstance), paletteOffers('modbench.modlist.init', hasRepository),
+      paletteOffers('modbench.modlist.stage', inInstance), paletteOffers('modbench.modlist.stage', hasRepository),
+      paletteOffers('modbench.modlist.stage', { [HAS_REPOSITORY]: true }),
+    ]).toEqual([true, false, false, true, false]);
+  });
+});
+
 function describePaletteGate(view: string, rows: readonly (readonly [string, Context])[]): void {
   const focused = { focusedView: view, ...inInstance };
 
@@ -1030,6 +1070,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       ['modbench.mod.install', '3_create'],
       ['modbench.mod.decompileAndCommit', '4_sourceControl'],
       ['modbench.mod.build', '4_sourceControl'],
+      ['modbench.modlist.stage', '4_sourceControl'],
       ['modbench.copyValue', '5_copy'],
       ['modbench.mod.uninstall', '6_destroy'],
     ]);

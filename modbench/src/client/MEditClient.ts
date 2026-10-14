@@ -44,7 +44,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'init-progress', 'external-change',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'init-progress', 'stage-progress', 'external-change',
   'plugin-source-unreadable', 'record-filter-cleared',
 ] as const;
 
@@ -57,6 +57,7 @@ export type NotificationKind = typeof NOTIFICATION_KINDS[number];
 export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
   'init-progress': InitStatus;
+  'stage-progress': StageProgress;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
   'plugin-source-unreadable': { plugins: (PluginAddress & UnreadableSource)[] };
   'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
@@ -189,6 +190,30 @@ export interface BuildOutcome {
   refused: readonly ItemRefusal<string>[];
 }
 
+/** A mod to stage: its folder, its installation files and the files in its folder the repository commits itself
+ *  (ADR-0013). */
+export type StageMod = components['schemas']['StageModRequest'];
+
+/** The instance's facts every mod's stage needs: the game files its files override, the game's data folder, the
+ *  build folder and the share of a file a delta may reach. */
+export type StageFacts = Omit<components['schemas']['StageRequest'], 'mods'>;
+
+/** Where stage is: the mod it works on, and how many mods it has done of how many. The mod is none once it ends. */
+export type StageProgress = components['schemas']['StageProgress'];
+
+interface StagedMod {
+  mod: string;
+  manifestWritten: boolean;
+  /** Each file nothing provides, by its path in the mod folder. */
+  noProvider: readonly string[];
+}
+
+/** Stage's answer: each mod staged, or refused with its reason. */
+export interface StageOutcome {
+  landed: readonly StagedMod[];
+  refused: readonly ItemRefusal<string>[];
+}
+
 export type GridPosition = components['schemas']['GridPosition'];
 /** A record and the plugin holding it (ADR-0012). */
 export type RecordAddress = components['schemas']['RecordAddress'];
@@ -249,6 +274,7 @@ export interface MEditClient {
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;
+  stage(mods: readonly StageMod[], facts: StageFacts, options?: { onProgress?: (progress: StageProgress) => void }): Promise<StageOutcome | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).

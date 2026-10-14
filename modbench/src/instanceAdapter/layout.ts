@@ -18,6 +18,10 @@ const MODS = 'mods';
 const SOURCE = 'source';
 const DOWNLOADS = 'downloads';
 const HASH_INDEX = 'hash-index';
+const BUILD = 'build';
+const IGNORE_LIST_FILE = '.gitignore';
+const MANIFEST_GLOB = '*.manifest';
+const PLUGIN_ORDER_FILE = 'loadorder.txt';
 
 export const profilesDir = (instanceRoot: string): string => join(instanceRoot, PROFILES);
 
@@ -138,6 +142,12 @@ export const sourceRootDir = (instanceRoot: string): string => join(instanceRoot
 /** The folder at the instance root that holds the adapter's index of hashes, which the adapter alone writes. */
 export const hashIndexDir = (instanceRoot: string): string => join(instanceRoot, HASH_INDEX);
 
+/** The folder at the instance root that holds the deltas stage writes (ADR-0022). */
+export const buildDir = (instanceRoot: string): string => join(instanceRoot, BUILD);
+
+/** The instance repository's ignore list file. */
+export const ignoreListFile = (instanceRoot: string): string => join(instanceRoot, IGNORE_LIST_FILE);
+
 const BUILD_CONFIGURATION_FILE = 'build.json';
 
 /** The key of the build configuration that names the mod folder its build writes. */
@@ -148,6 +158,9 @@ export const buildConfigurationFile = (sourceFolder: string): string => join(sou
 
 /** The git directory whose presence is what "tracked" means (ADR-0007). */
 export const repositoryGitDir = (sourceFolder: string): string => join(sourceFolder, GIT_DIR);
+
+/** A repository appearing at, or vanishing from, the instance root. */
+export const REPOSITORY_WATCH_GLOB = GIT_DIR;
 
 // Matched without case, as Windows matches a name, on every platform alike.
 const named = (name: string | undefined, as: string): boolean => name?.toLowerCase() === as;
@@ -182,6 +195,19 @@ export const DATA_FOLDER_PLUGINS_GLOB = `*.{${[...PLUGIN_EXTENSIONS].map((ext) =
 
 /** A profile's own INIs: its settings, and the game INIs it keeps. */
 export const PROFILE_INIS_GLOB = `${PROFILES}/*/*.${anyCase('ini')}`;
+
+// A repository does not look inside an ignored folder, so each folder is let in, its content ignored, and the files let back.
+const heldInEachFolderOf = (folder: string, files: readonly string[]): string[] => [
+  `!/${folder}/`, `/${folder}/*`, `!/${folder}/*/`, `/${folder}/*/*`, ...files.map((file) => `!/${folder}/*/${file}`),
+];
+
+/** The whitelist: the ignore list itself, the mod manager's configuration, each profile's mod order, plugin order
+ *  and INIs, and each mod's meta and manifest (modlist-source.md, The repository). */
+export const WHITELIST_IGNORE_LIST = `${[
+  '/*', `!/${IGNORE_LIST_FILE}`, `!/${SETTINGS_FILE_NAME}`,
+  ...heldInEachFolderOf(PROFILES, [MODLIST_FILE_NAME, PLUGINS_FILE_NAME, PLUGIN_ORDER_FILE, `*.${anyCase('ini')}`]),
+  ...heldInEachFolderOf(MODS, [MOD_META_FILE_NAME, MANIFEST_GLOB]),
+].join('\n')}\n`;
 
 /** The archives at the root of the Data folder and the files of its strings folder, the Data folder its base. */
 export const dataFolderArchivesGlob = (archiveExtension: string, stringsFolder: string): string =>

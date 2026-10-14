@@ -6,6 +6,7 @@
   },
   "references": [
     { "path": "../client" },
+    { "path": "../coreLib" },
     { "path": "../instanceAdapter" },
     { "path": "../ports" },
     { "path": "../tables" }
