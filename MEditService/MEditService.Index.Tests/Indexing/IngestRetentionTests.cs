@@ -43,6 +43,18 @@ public sealed class IngestRetentionTests : IDisposable
         Assert.InRange(documents.DuckDbBytesAtTheLast, 16L * MegabyteEditorId, long.MaxValue);
     }
 
+    [Fact]
+    public void APluginsIngest_LeavesNoIndexNodesInDuckDbsMemory()
+    {
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+
+        Assert.Equal(
+            ["0"],
+            Assert.Single(IndexFiles.Rows(
+                _fixture.InstanceRoot,
+                "SELECT coalesce(sum(memory_usage_bytes), 0)::BIGINT FROM duckdb_memory() WHERE tag = 'ART_INDEX'")));
+    }
+
     private sealed class StreamedAdapter(IPluginDocuments documents) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
