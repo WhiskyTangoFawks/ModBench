@@ -10,7 +10,7 @@ using Octodiff.Diagnostics;
 
 namespace MEditService.Commands.Tests.Build;
 
-public sealed class DiscardHandlerTests
+public sealed class RestoreFromManifestHandlerTests
 {
     private const string Mod = "mods/Mod";
     private const string Other = "mods/Other";
@@ -24,12 +24,12 @@ public sealed class DiscardHandlerTests
     private readonly FakeModFolders _folders = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
 
-    private DiscardHandler Handler => new(_folders, _notifications);
+    private RestoreFromManifestHandler Handler => new(_folders, _notifications);
 
-    private static InstanceToDiscard Instance(IReadOnlyList<OverriddenGameFile>? gameFiles = null, IReadOnlyList<InstallationFile>? downloadedFiles = null) =>
+    private static InstanceToRestore Instance(IReadOnlyList<OverriddenGameFile>? gameFiles = null, IReadOnlyList<InstallationFile>? downloadedFiles = null) =>
         new(gameFiles ?? [], DataFolder, BuildFolder, Downloads, downloadedFiles ?? []);
 
-    private static ModToDiscard ModFrom(string folder, params InstallationFile[] installationFiles) =>
+    private static ModToRestore ModFrom(string folder, params InstallationFile[] installationFiles) =>
         new(folder[(folder.LastIndexOf('/') + 1)..], folder, installationFiles);
 
     private InstallationFile Downloaded(string path, params (string Path, string Text)[] entries) =>
@@ -57,7 +57,7 @@ public sealed class DiscardHandlerTests
     private IEnumerable<(string Folder, string Path)> WrittenIn(string folder) => _folders.Written.Keys.Where(key => key.Folder == folder);
 
     private IEnumerable<ModlistProgress> Progress =>
-        _notifications.Notifications.OfType<DiscardProgressNotification>().Select(n => n.Progress);
+        _notifications.Notifications.OfType<RestoreFromManifestProgressNotification>().Select(n => n.Progress);
 
     private static byte[] Delta(string basis, string file)
     {
@@ -85,7 +85,7 @@ public sealed class DiscardHandlerTests
         return buffer.ToArray();
     }
 
-    private ModToDiscard AnotherModThatLands()
+    private ModToRestore AnotherModThatLands()
     {
         var download = Downloaded("dl/Other.zip", ("o.txt", "o"));
         _folders.WithFile(Other, "o.txt", "changed");
@@ -100,7 +100,7 @@ public sealed class DiscardHandlerTests
         _folders.WithFile(Mod, "a.nif", "edited").WithFile(Mod, "b.nif", "b").WithFile(Mod, "untracked.txt", "mine");
         Manifested(Mod, [download], Line("a.nif", "a", new FileProvider.FirstInstallationFile()), Line("b.nif", "b", new FileProvider.FirstInstallationFile()));
 
-        var result = Handler.Discard([ModFrom(Mod, download)], Instance());
+        var result = Handler.Restore([ModFrom(Mod, download)], Instance());
 
         Assert.Equal(["a.nif"], Assert.Single(result.Landed).Outcome.Written);
         Assert.Equal([(Mod, "a.nif")], WrittenIn(Mod));
@@ -114,7 +114,7 @@ public sealed class DiscardHandlerTests
         _folders.WithFile(Mod, "a.nif", "a");
         Manifested(Mod, [download], Line("a.nif", "a", new FileProvider.FirstInstallationFile()));
 
-        var result = Handler.Discard([ModFrom(Mod, download)], Instance());
+        var result = Handler.Restore([ModFrom(Mod, download)], Instance());
 
         Assert.Empty(Assert.Single(result.Landed).Outcome.Written);
         Assert.Equal(0, _folders.Opens);
@@ -128,7 +128,7 @@ public sealed class DiscardHandlerTests
         _folders.WithFile(Mod, "meta.ini", "[General]");
         Manifested(Mod, [first, patch], Line("meshes/a.nif", "x", new FileProvider.InstallationFileEntry("Patch.zip", "Meshes/A.nif")));
 
-        Handler.Discard([ModFrom(Mod, first, patch)], Instance());
+        Handler.Restore([ModFrom(Mod, first, patch)], Instance());
 
         Assert.Equal("x", WrittenText(Mod, "meshes/a.nif"));
     }
@@ -141,7 +141,7 @@ public sealed class DiscardHandlerTests
         Manifested(Mod, [download],
             Line("a.nif", "a", new FileProvider.FirstInstallationFile()), Line("copy/a.nif", "a", new FileProvider.InstallationFileEntry("Mod.zip", "a.nif")));
 
-        Handler.Discard([ModFrom(Mod, download)], Instance());
+        Handler.Restore([ModFrom(Mod, download)], Instance());
 
         Assert.Equal(("a", "a"), (WrittenText(Mod, "a.nif"), WrittenText(Mod, "copy/a.nif")));
     }
@@ -153,7 +153,7 @@ public sealed class DiscardHandlerTests
         _folders.WithFile(DataFolder, "Game.esm", "vanilla").WithFile(Mod, "game.esm", "dirty");
         ManifestedWithGameFile(Mod, game, Line("game.esm", "vanilla", new FileProvider.GameFile("Game.esm")));
 
-        Handler.Discard([ModFrom(Mod)], Instance([game]));
+        Handler.Restore([ModFrom(Mod)], Instance([game]));
 
         Assert.Equal("vanilla", WrittenText(Mod, "game.esm"));
     }
@@ -182,7 +182,7 @@ public sealed class DiscardHandlerTests
         _folders.WithFile(Mod, "edited.txt", Original);
         Manifested(Mod, [download], Line("edited.txt", Edited, new FileProvider.InstallationFileDelta("Mod.zip", "edited.txt", Original)));
 
-        var result = Handler.Discard([ModFrom(Mod, download)], Instance(downloadedFiles: downloadedFiles));
+        var result = Handler.Restore([ModFrom(Mod, download)], Instance(downloadedFiles: downloadedFiles));
 
         Assert.Empty(result.Refused);
         Assert.Equal(Edited, WrittenText(Mod, "edited.txt"));
@@ -196,20 +196,20 @@ public sealed class DiscardHandlerTests
         _folders.Deltas[(BuildFolder, "Game.esm", Original, Edited)] = Delta(Original, Edited);
         ManifestedWithGameFile(Mod, game, Line("Game.esm", Edited, new FileProvider.GameFileDelta("Game.esm", Original)));
 
-        Handler.Discard([ModFrom(Mod)], Instance([game]));
+        Handler.Restore([ModFrom(Mod)], Instance([game]));
 
         Assert.Equal(Edited, WrittenText(Mod, "Game.esm"));
     }
 
     [Theory]
-    [InlineData("installation file not handed", DiscardRefusal.Lacking, "installation file 'Mod.zip' is not in the downloads folder")]
-    [InlineData("installation file gone", DiscardRefusal.Lacking, "installation file 'Mod.zip' is not in the downloads folder")]
-    [InlineData("installation file changed", DiscardRefusal.Lacking, "installation file 'Mod.zip' has other bytes")]
-    [InlineData("game file not found", DiscardRefusal.NotFound, "game file 'Game.esm' is missing")]
-    [InlineData("game file changed", DiscardRefusal.Lacking, "game file 'Game.esm' has other bytes")]
-    [InlineData("no provider", DiscardRefusal.Lacking, "'mine.txt' has no provider")]
-    [InlineData("delta missing", DiscardRefusal.NotFound, "delta 'edited.txt.<Original>_<Edited>.octodiff' is missing")]
-    public void AModThatLacksASource_IsSkippedNamingIt_WritesNothing_AndTheOthersLand(string cause, DiscardRefusal refusal, string lack)
+    [InlineData("installation file not handed", RestoreRefusal.Lacking, "installation file 'Mod.zip' is not in the downloads folder")]
+    [InlineData("installation file gone", RestoreRefusal.Lacking, "installation file 'Mod.zip' is not in the downloads folder")]
+    [InlineData("installation file changed", RestoreRefusal.Lacking, "installation file 'Mod.zip' has other bytes")]
+    [InlineData("game file not found", RestoreRefusal.NotFound, "game file 'Game.esm' is missing")]
+    [InlineData("game file changed", RestoreRefusal.Lacking, "game file 'Game.esm' has other bytes")]
+    [InlineData("no provider", RestoreRefusal.Lacking, "'mine.txt' has no provider")]
+    [InlineData("delta missing", RestoreRefusal.NotFound, "delta 'edited.txt.<Original>_<Edited>.octodiff' is missing")]
+    public void AModThatLacksASource_IsSkippedNamingIt_WritesNothing_AndTheOthersLand(string cause, RestoreRefusal refusal, string lack)
     {
         var download = Downloaded("dl/Mod.zip", ("a.nif", "a"), ("edited.txt", Original));
         var game = new OverriddenGameFile("Game.esm", 7, "vanilla");
@@ -239,7 +239,7 @@ public sealed class DiscardHandlerTests
             _ => [game],
         };
 
-        var result = Handler.Discard([handed, AnotherModThatLands()], Instance(gameFiles));
+        var result = Handler.Restore([handed, AnotherModThatLands()], Instance(gameFiles));
 
         var skipped = Assert.Single(result.Refused);
         Assert.Equal(("Mod", refusal), (skipped.Item, skipped.Refusal.Kind));
@@ -261,9 +261,9 @@ public sealed class DiscardHandlerTests
                 Line("edited.txt", Edited, new FileProvider.InstallationFileDelta("Mod.zip", "edited.txt", Original)),
             ]);
 
-        var skipped = Assert.Single(Handler.Discard([ModFrom(Mod, download)], Instance()).Refused);
+        var skipped = Assert.Single(Handler.Restore([ModFrom(Mod, download)], Instance()).Refused);
 
-        Assert.Equal(DiscardRefusal.NotFound, skipped.Refusal.Kind);
+        Assert.Equal(RestoreRefusal.NotFound, skipped.Refusal.Kind);
         Assert.Equal(["Game.esm", "Other.esm"], skipped.Refusal.GameFilesNotFound);
         Assert.Equal([_folders.DeltaName("edited.txt", Original, Edited)], skipped.Refusal.DeltasNotFound);
     }
@@ -276,9 +276,9 @@ public sealed class DiscardHandlerTests
             [], [new ManifestSource("Game.esm", 7, "vanilla"), new ManifestSource("Other.esm", 5, "other")],
             [Line("Game.esm", "vanilla", new FileProvider.GameFile("Game.esm")), Line("Other.esm", "other", new FileProvider.GameFile("Other.esm"))]);
 
-        var skipped = Assert.Single(Handler.Discard([ModFrom(Mod)], Instance([new OverriddenGameFile("Game.esm", 7, "patched")])).Refused);
+        var skipped = Assert.Single(Handler.Restore([ModFrom(Mod)], Instance([new OverriddenGameFile("Game.esm", 7, "patched")])).Refused);
 
-        Assert.Equal(DiscardRefusal.Lacking, skipped.Refusal.Kind);
+        Assert.Equal(RestoreRefusal.Lacking, skipped.Refusal.Kind);
         Assert.Empty(skipped.Refusal.GameFilesNotFound);
     }
 
@@ -288,7 +288,7 @@ public sealed class DiscardHandlerTests
         _folders.WithFile(Mod, "mine.txt", "mine");
         Manifested(Mod, [], Line("mine.txt", "mine", new FileProvider.NoProvider()));
 
-        var result = Handler.Discard([ModFrom(Mod)], Instance());
+        var result = Handler.Restore([ModFrom(Mod)], Instance());
 
         Assert.Equal("Mod", Assert.Single(result.Landed).Item);
     }
@@ -301,7 +301,7 @@ public sealed class DiscardHandlerTests
             [new ManifestSource("Mod.zip", 7, "#dl/Mod.zip")], [],
             [Line("a.nif", "a", new FileProvider.FirstInstallationFile()), Line("b.nif", "b", new FileProvider.FirstInstallationFile()), Line("c.nif", "c", new FileProvider.NoProvider())]);
 
-        var skipped = Assert.Single(Handler.Discard([ModFrom(Mod)], Instance()).Refused);
+        var skipped = Assert.Single(Handler.Restore([ModFrom(Mod)], Instance()).Refused);
 
         Assert.Equal("'Mod' was skipped: installation file 'Mod.zip' is not in the downloads folder; 'c.nif' has no provider.", skipped.Message);
     }
@@ -311,9 +311,9 @@ public sealed class DiscardHandlerTests
     {
         _folders.WithFile(Mod, "a.nif", "a");
 
-        var skipped = Assert.Single(Handler.Discard([ModFrom(Mod)], Instance()).Refused);
+        var skipped = Assert.Single(Handler.Restore([ModFrom(Mod)], Instance()).Refused);
 
-        Assert.Equal((DiscardRefusal.NoManifest, "'Mod' was skipped: it has no manifest."), (skipped.Refusal.Kind, skipped.Message));
+        Assert.Equal((RestoreRefusal.NoManifest, "'Mod' was skipped: it has no manifest."), (skipped.Refusal.Kind, skipped.Message));
     }
 
     [Fact]
@@ -322,9 +322,9 @@ public sealed class DiscardHandlerTests
         _folders.WithFile(Mod, "a.nif", "a");
         _folders.UnreadableManifests.Add(Mod);
 
-        var skipped = Assert.Single(Handler.Discard([ModFrom(Mod)], Instance()).Refused);
+        var skipped = Assert.Single(Handler.Restore([ModFrom(Mod)], Instance()).Refused);
 
-        Assert.Equal((DiscardRefusal.ManifestUnreadable, "'Mod' was skipped: its manifest cannot be read at line 1."), (skipped.Refusal.Kind, skipped.Message));
+        Assert.Equal((RestoreRefusal.ManifestUnreadable, "'Mod' was skipped: its manifest cannot be read at line 1."), (skipped.Refusal.Kind, skipped.Message));
     }
 
     [Theory]
@@ -340,10 +340,10 @@ public sealed class DiscardHandlerTests
             Line("a.nif", "a", new FileProvider.FirstInstallationFile()),
             Line("edited.txt", Edited, new FileProvider.InstallationFileDelta("Mod.zip", "edited.txt", Original)));
 
-        var skipped = Assert.Single(Handler.Discard([ModFrom(Mod, download)], Instance()).Refused);
+        var skipped = Assert.Single(Handler.Restore([ModFrom(Mod, download)], Instance()).Refused);
 
         Assert.Equal(
-            (DiscardRefusal.Lacking, $"'Mod' was skipped: delta '{_folders.DeltaName("edited.txt", Original, Edited)}' has other bytes."),
+            (RestoreRefusal.Lacking, $"'Mod' was skipped: delta '{_folders.DeltaName("edited.txt", Original, Edited)}' has other bytes."),
             (skipped.Refusal.Kind, skipped.Message));
         Assert.Empty(WrittenIn(Mod));
     }
@@ -356,11 +356,11 @@ public sealed class DiscardHandlerTests
         Manifested(Mod, [download], Line("a.nif", "a", new FileProvider.FirstInstallationFile()), Line("b.nif", "b", new FileProvider.FirstInstallationFile()));
         _folders.UnwritableFiles.Add((Mod, "b.nif"));
 
-        var result = Handler.Discard([ModFrom(Mod, download), AnotherModThatLands()], Instance());
+        var result = Handler.Restore([ModFrom(Mod, download), AnotherModThatLands()], Instance());
 
         var unfinished = Assert.Single(result.Refused);
         Assert.Equal(
-            (DiscardRefusal.NotFinished, "'Mod' was not finished: b.nif is held by another process. Discarding it again finishes it."),
+            (RestoreRefusal.NotFinished, "'Mod' was not finished: b.nif is held by another process. Restoring it again finishes it."),
             (unfinished.Refusal.Kind, unfinished.Message));
         Assert.Equal("a", WrittenText(Mod, "a.nif"));
         Assert.Equal("Other", Assert.Single(result.Landed).Item);
@@ -371,7 +371,7 @@ public sealed class DiscardHandlerTests
     {
         _folders.WithFile("mods/A", "a.txt", "hello").WithFile("mods/B", "a.txt", "hello");
 
-        Handler.Discard([ModFrom("mods/A"), ModFrom("mods/B")], Instance());
+        Handler.Restore([ModFrom("mods/A"), ModFrom("mods/B")], Instance());
 
         Assert.Equal([new ModlistProgress("A", 0, 2), new ModlistProgress("B", 1, 2), new ModlistProgress(null, 0, 0)], Progress);
     }

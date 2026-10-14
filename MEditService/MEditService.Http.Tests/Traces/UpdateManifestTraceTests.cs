@@ -8,15 +8,15 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class StageModlistApiTests : HostedTests
+public sealed class UpdateManifestTraceTests : HostedTests
 {
-    private const string Mod = "StagedMod";
+    private const string Mod = "UpdatedMod";
     private const string HashOfKept = "gO3vE0ddOto=";
     private const string HashOfOriginal = "PclCUmd0Z4s=";
     private const string HashOfVanilla = "/Qk9lLVYbZs=";
     private const string HashOfTheZip = "AAECAwQFBgc=";
 
-    private readonly ScratchDirectory _instance = new("trace-stage-modlist-");
+    private readonly ScratchDirectory _instance = new("trace-update-manifest-");
 
     protected override void DisposeFixtures() => _instance.Dispose();
 
@@ -66,7 +66,7 @@ public sealed class StageModlistApiTests : HostedTests
         return (whole, installationFile, entry, gameFile);
     }
 
-    private Task<HttpResponseMessage> Stage(string downloadName) => Client.PostAsJsonAsync("/modlist/stage", Request(downloadName).Whole);
+    private Task<HttpResponseMessage> UpdateManifest(string downloadName) => Client.PostAsJsonAsync("/update-manifest", Request(downloadName).Whole);
 
     [Theory]
     [InlineData("installationFile", "size", null)]
@@ -84,7 +84,7 @@ public sealed class StageModlistApiTests : HostedTests
     [InlineData("gameFile", "size", null)]
     [InlineData("gameFile", "hash", null)]
     [InlineData("gameFile", "hash", "\"WHOLE\"")]
-    public async Task StagingWithAFieldMissingOrMalformed_Is400(string holder, string field, string? json)
+    public async Task UpdatingAManifestWithAFieldMissingOrMalformed_Is400(string holder, string field, string? json)
     {
         ModInstalledFromADownload(edited: false);
         var request = Request("Mod.zip");
@@ -98,24 +98,24 @@ public sealed class StageModlistApiTests : HostedTests
         if (json is null) held.Remove(field);
         else held[field] = JsonNode.Parse(json);
 
-        var response = await Client.PostAsJsonAsync("/modlist/stage", request.Whole);
+        var response = await Client.PostAsJsonAsync("/update-manifest", request.Whole);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task StagingAMod_AnswersItLanded_WritesItsManifestAndEachDelta_AndReportsItsProgress()
+    public async Task UpdatingTheManifestOfAMod_AnswersItLanded_WritesItsManifestAndEachDelta_AndReportsItsProgress()
     {
         ModInstalledFromADownload(edited: true);
         using var stream = await Client.NotificationStream();
 
-        var response = await Stage("Mod.zip");
+        var response = await UpdateManifest("Mod.zip");
 
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        var staged = Assert.Single(body.GetProperty("applied").EnumerateArray());
-        Assert.Equal((Mod, true), (staged.GetProperty("mod").GetString(), staged.GetProperty("manifestWritten").GetBoolean()));
-        Assert.Empty(staged.GetProperty("noProvider").EnumerateArray());
+        var updated = Assert.Single(body.GetProperty("applied").EnumerateArray());
+        Assert.Equal((Mod, true), (updated.GetProperty("mod").GetString(), updated.GetProperty("manifestWritten").GetBoolean()));
+        Assert.Empty(updated.GetProperty("noProvider").EnumerateArray());
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
         var manifest = File.ReadAllLines(Path.Combine(ModFolder, Mod + ".manifest"));
         Assert.Equal($"{{\"installationFile\":\"Mod.zip\",\"size\":7,\"hash\":\"{HashOfTheZip}\",\"source\":\"nexus:1:2\"}}", manifest[0]);
@@ -128,29 +128,29 @@ public sealed class StageModlistApiTests : HostedTests
             $"{{\"installationFile\":\"Mod.zip\",\"path\":\"edited.txt\",\"delta\":\"{Delta}\"}}",
             JsonDocument.Parse(manifest[3]).RootElement.GetProperty("from").GetRawText());
         Assert.Equal([Delta], Directory.GetFiles(BuildFolder).Select(Path.GetFileName));
-        var progress = await stream.EventsUntil("stage-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
+        var progress = await stream.EventsUntil("update-manifest-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
         Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Mod);
     }
 
     [Fact]
-    public async Task StagingAModAgain_AnswersItsManifestNotWritten()
+    public async Task UpdatingTheManifestOfAModAgain_AnswersItsManifestNotWritten()
     {
         ModInstalledFromADownload(edited: false);
-        (await Stage("Mod.zip")).EnsureSuccessStatusCode();
+        (await UpdateManifest("Mod.zip")).EnsureSuccessStatusCode();
 
-        var body = await (await Stage("Mod.zip")).Content.ReadFromJsonAsync<JsonElement>();
+        var body = await (await UpdateManifest("Mod.zip")).Content.ReadFromJsonAsync<JsonElement>();
 
-        var staged = Assert.Single(body.GetProperty("applied").EnumerateArray());
-        Assert.False(staged.GetProperty("manifestWritten").GetBoolean());
-        Assert.Empty(staged.GetProperty("noProvider").EnumerateArray());
+        var updated = Assert.Single(body.GetProperty("applied").EnumerateArray());
+        Assert.False(updated.GetProperty("manifestWritten").GetBoolean());
+        Assert.Empty(updated.GetProperty("noProvider").EnumerateArray());
     }
 
     [Fact]
-    public async Task StagingAModWhoseInstallationFileIsMissing_RefusesItNamingTheFile_AndWritesNoManifest()
+    public async Task UpdatingTheManifestOfAModWhoseInstallationFileIsMissing_RefusesItNamingTheFile_AndWritesNoManifest()
     {
         ModInstalledFromADownload(edited: false);
 
-        var body = await (await Stage("Absent.zip")).Content.ReadFromJsonAsync<JsonElement>();
+        var body = await (await UpdateManifest("Absent.zip")).Content.ReadFromJsonAsync<JsonElement>();
 
         var refused = Assert.Single(body.GetProperty("refused").EnumerateArray());
         Assert.Equal(("InstallationFileMissing", Mod), (refused.GetProperty("refusal").GetString(), refused.GetProperty("item").GetString()));
@@ -159,9 +159,9 @@ public sealed class StageModlistApiTests : HostedTests
     }
 
     [Fact]
-    public async Task StagingNoMod_Is400()
+    public async Task UpdatingTheManifestsOfNoMod_Is400()
     {
-        var response = await Client.PostAsJsonAsync("/modlist/stage", new { mods = Array.Empty<object>(), gameFiles = Array.Empty<object>() });
+        var response = await Client.PostAsJsonAsync("/update-manifest", new { mods = Array.Empty<object>(), gameFiles = Array.Empty<object>() });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

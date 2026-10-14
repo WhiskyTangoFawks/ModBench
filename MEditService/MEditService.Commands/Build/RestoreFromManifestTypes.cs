@@ -2,17 +2,17 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to discard, with the installation files the mod manager records it as installed from.</summary>
-public sealed record ModToDiscard(string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles);
+/// <summary>A mod to restore from its manifest, with the installation files the mod manager records it as installed from.</summary>
+public sealed record ModToRestore(string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles);
 
 /// <summary>The instance's facts beyond its mods: the game files the mods' files override, and where a delta is
 /// looked for. DownloadedFiles are those searched for a delta beside each mod's installation files.</summary>
-public sealed record InstanceToDiscard(
+public sealed record InstanceToRestore(
     IReadOnlyList<OverriddenGameFile> GameFiles, string DataFolder, string BuildFolder, string? DownloadsFolder,
     IReadOnlyList<InstallationFile> DownloadedFiles);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum DiscardRefusal
+public enum RestoreRefusal
 {
     None,
 
@@ -27,7 +27,7 @@ public enum DiscardRefusal
     /// <summary>Each lack is a game file the request did not name, or a delta no place it searched holds.</summary>
     NotFound,
 
-    /// <summary>A file the mod is discarded from could not be read: one of its own, an installation file or a game
+    /// <summary>A file the mod is restored from could not be read: one of its own, an installation file or a game
     /// file.</summary>
     Unreadable,
 
@@ -37,7 +37,7 @@ public enum DiscardRefusal
 
 /// <summary>Why a mod was skipped. A NotFound mod names the game files and the deltas it lacks, by the paths and names a
 /// request can bring them back with.</summary>
-public sealed record DiscardSkip(DiscardRefusal Kind, IReadOnlyList<string> GameFilesNotFound, IReadOnlyList<string> DeltasNotFound);
+public sealed record RestoreSkip(RestoreRefusal Kind, IReadOnlyList<string> GameFilesNotFound, IReadOnlyList<string> DeltasNotFound);
 
 /// <summary>A mod whose folder is as its manifest says, and the files written to make it so.</summary>
-public sealed record DiscardedMod(IReadOnlyList<string> Written);
+public sealed record RestoredMod(IReadOnlyList<string> Written);

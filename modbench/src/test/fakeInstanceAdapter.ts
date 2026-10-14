@@ -132,6 +132,11 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   const answer = <T>(found: T | undefined, path: string): Promise<FileRead<T>> =>
     Promise.resolve(found === undefined ? { kind: 'unreadable', reason: `no answer fixed for ${path}` } : { kind: 'read', answer: found });
 
+  const overridden = (modFilePaths: readonly string[]): Promise<FileRead<readonly GameFile[]>> => {
+    const paths = new Set(modFilePaths.map((path) => path.toLowerCase()));
+    return Promise.resolve({ kind: 'read', answer: (answers.gameFiles ?? []).filter((file) => paths.has(file.path.toLowerCase())) });
+  };
+
   const adapter: InstanceAdapter = {
     reading: () => {
       readings++;
@@ -143,9 +148,11 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     installationFiles: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: [] }),
     downloadedFile: (path) => answer(answers.downloadedFiles?.get(path), path),
     managerFilesInModFolder: ['meta.ini'],
-    overriddenGameFiles: (_dataFolder, modFilePaths) => {
-      const paths = new Set(modFilePaths.map((path) => path.toLowerCase()));
-      return Promise.resolve({ kind: 'read', answer: (answers.gameFiles ?? []).filter((file) => paths.has(file.path.toLowerCase())) });
+    overriddenGameFiles: (_dataFolder, modFilePaths) => overridden(modFilePaths),
+    gameFilesOverriddenBy: async (_dataFolder, mod) => {
+      const listing = current.modFiles.get(mod);
+      const found = await overridden((listing?.files ?? []).map((file) => file.relativePath));
+      return found.kind === 'read' ? { kind: 'read', answer: { gameFiles: found.answer, notes: listing?.notes ?? [] } } : found;
     },
     buildFolder: '/build',
     writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, undefined),

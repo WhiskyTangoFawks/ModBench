@@ -4,6 +4,6 @@ namespace MEditService.Ports;
 /// done.</summary>
 public sealed record ModlistProgress(string? Mod, int ModsDone, int ModsTotal);
 
-public sealed record StageProgressNotification(ModlistProgress Progress) : INotification;
+public sealed record UpdateManifestProgressNotification(ModlistProgress Progress) : INotification;
 
-public sealed record DiscardProgressNotification(ModlistProgress Progress) : INotification;
+public sealed record RestoreFromManifestProgressNotification(ModlistProgress Progress) : INotification;

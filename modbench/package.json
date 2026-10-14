@@ -186,6 +186,11 @@
         "view": "modbench.downloads",
         "contents": "All downloaded files are excluded. Show excluded, in the title bar, reveals them.",
         "when": "modbench.folder == instance && modbench.instanceRead && modbench.downloadedFile.allExcluded"
+      },
+      {
+        "view": "scm",
+        "contents": "Git init makes this instance a repository and writes its ignore list, so git never reads the mod folders' files.\n[Git Init](command:modbench.modlist.gitInit)",
+        "when": "modbench.folder == instance && !modbench.modlist.hasRepository"
       }
     ],
     "commands": [
@@ -559,23 +564,28 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.modlist.init",
-        "title": "Init Modlist",
+        "command": "modbench.modlist.gitInit",
+        "title": "Git Init Modlist",
         "category": "Modbench"
       },
       {
-        "command": "modbench.modlist.stage",
-        "title": "Stage Modlist",
+        "command": "modbench.mod.updateManifest",
+        "title": "Update Mod Manifest",
         "category": "Modbench"
       },
       {
-        "command": "modbench.modlist.discardChanges",
-        "title": "Discard Modlist Changes…",
+        "command": "modbench.mod.restoreFromManifest",
+        "title": "Restore Mod from Manifest…",
         "category": "Modbench"
       },
       {
-        "command": "modbench.modlist.discardChangesInModFolder",
-        "title": "Discard Changes in Mod Folder…",
+        "command": "modbench.modList.updateManifestHere",
+        "title": "Update Mod Manifest",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.modList.restoreFromManifestHere",
+        "title": "Restore Mod from Manifest…",
         "category": "Modbench"
       },
       {
@@ -741,19 +751,23 @@
           "when": "modbench.folder == instance && modbench.mod.anySource"
         },
         {
-          "command": "modbench.modlist.init",
+          "command": "modbench.modlist.gitInit",
           "when": "modbench.folder == instance && !modbench.modlist.hasRepository"
         },
         {
-          "command": "modbench.modlist.stage",
+          "command": "modbench.mod.updateManifest",
           "when": "modbench.folder == instance && modbench.modlist.hasRepository"
         },
         {
-          "command": "modbench.modlist.discardChanges",
+          "command": "modbench.mod.restoreFromManifest",
           "when": "modbench.folder == instance && modbench.modlist.hasRepository"
         },
         {
-          "command": "modbench.modlist.discardChangesInModFolder",
+          "command": "modbench.modList.updateManifestHere",
+          "when": "false"
+        },
+        {
+          "command": "modbench.modList.restoreFromManifestHere",
           "when": "false"
         },
         {
@@ -899,21 +913,14 @@
       ],
       "scm/title": [
         {
-          "command": "modbench.modlist.stage",
+          "command": "modbench.mod.updateManifest",
           "when": "scmProvider == git && scmProviderRootUri in modbench.modlist.instanceRoots",
           "group": "modbench@1"
         },
         {
-          "command": "modbench.modlist.discardChanges",
+          "command": "modbench.mod.restoreFromManifest",
           "when": "scmProvider == git && scmProviderRootUri in modbench.modlist.instanceRoots",
           "group": "modbench@2"
-        }
-      ],
-      "scm/resourceState/context": [
-        {
-          "command": "modbench.modlist.discardChangesInModFolder",
-          "when": "scmProvider == git && scmProviderRootUri in modbench.modlist.instanceRoots",
-          "group": "1_modification@99"
         }
       ],
       "view/title": [
@@ -993,6 +1000,16 @@
           "group": "3_create@2"
         },
         {
+          "command": "modbench.modList.updateManifestHere",
+          "when": "view == modbench.modList && modbench.folder == instance && modbench.modlist.hasRepository",
+          "group": "4_sourceControl@1"
+        },
+        {
+          "command": "modbench.modList.restoreFromManifestHere",
+          "when": "view == modbench.modList && modbench.folder == instance && modbench.modlist.hasRepository",
+          "group": "4_sourceControl@2"
+        },
+        {
           "command": "modbench.downloads.filterHere",
           "when": "view == modbench.downloads && !modbench.downloadedFile.filterActive && modbench.folder == instance",
           "group": "navigation@1"
@@ -1025,14 +1042,19 @@
           "group": "modbench@1"
         },
         {
-          "command": "modbench.modlist.init",
+          "command": "modbench.modlist.gitInit",
           "when": "view == modbench.toolbox && viewItem == modlist && !modbench.modlist.hasRepository",
           "group": "modbench@1"
         },
         {
-          "command": "modbench.modlist.stage",
+          "command": "modbench.mod.updateManifest",
           "when": "view == modbench.toolbox && viewItem == modlist && modbench.modlist.hasRepository",
           "group": "modbench@1"
+        },
+        {
+          "command": "modbench.mod.restoreFromManifest",
+          "when": "view == modbench.toolbox && viewItem == modlist && modbench.modlist.hasRepository",
+          "group": "modbench@2"
         },
         {
           "command": "modbench.record.openPinned",
@@ -1150,12 +1172,12 @@
           "group": "4_sourceControl@2"
         },
         {
-          "command": "modbench.modlist.stage",
+          "command": "modbench.mod.updateManifest",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.modlist.hasRepository",
           "group": "4_sourceControl@3"
         },
         {
-          "command": "modbench.modlist.discardChanges",
+          "command": "modbench.mod.restoreFromManifest",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.modlist.hasRepository",
           "group": "4_sourceControl@4"
         },
@@ -1173,6 +1195,16 @@
           "command": "modbench.separator.rename",
           "when": "view == modbench.modList && viewItem == separator",
           "group": "3_create@2"
+        },
+        {
+          "command": "modbench.mod.updateManifest",
+          "when": "view == modbench.modList && viewItem == separator && modbench.modlist.hasRepository",
+          "group": "4_sourceControl@1"
+        },
+        {
+          "command": "modbench.mod.restoreFromManifest",
+          "when": "view == modbench.modList && viewItem == separator && modbench.modlist.hasRepository",
+          "group": "4_sourceControl@2"
         },
         {
           "command": "modbench.separator.add",

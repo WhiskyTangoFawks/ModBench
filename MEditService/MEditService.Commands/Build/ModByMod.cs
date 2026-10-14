@@ -3,8 +3,8 @@ using MEditService.Ports;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A modlist gesture over a selection: each distinct mod lands or is refused on its own, its progress
-/// published before each mod and at rest once the gesture ends, however it ends.</summary>
+/// <summary>A modlist gesture over a selection: each distinct mod lands or is refused on its own. Progress goes before
+/// each mod, and at rest at the end. A cancel stops it after the mod in hand.</summary>
 internal static class ModByMod
 {
     public static SelectionResult<string, TRefusal, TOutcome> Over<TMod, TRefusal, TOutcome>(
@@ -18,7 +18,7 @@ internal static class ModByMod
         {
             foreach (var (done, mod) in distinct.Index())
             {
-                cancel.ThrowIfCancellationRequested();
+                if (cancel.IsCancellationRequested) break;
                 publish(new ModlistProgress(nameOf(mod), done, distinct.Count));
                 switch (each(mod))
                 {

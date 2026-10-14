@@ -100,11 +100,11 @@ describe('the Toolbox view, while a gesture says its phase', () => {
     provider.onDidChangeTreeData((e) => fired.push(e));
     instance.fail('EACCES modlist.txt');
 
-    provider.say('Staging "ModA" — reading its files…');
+    provider.say('Update manifest — reading the files of "ModA"…');
     const during = provider.viewMessage();
     provider.say(undefined);
 
-    expect([during, provider.viewMessage(), fired.length]).toEqual(['Staging "ModA" — reading its files…', 'Showing the last good read: EACCES modlist.txt', 3]);
+    expect([during, provider.viewMessage(), fired.length]).toEqual(['Update manifest — reading the files of "ModA"…', 'Showing the last good read: EACCES modlist.txt', 3]);
   });
 });
 

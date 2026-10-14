@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
@@ -56,6 +56,30 @@ describe('the MO2 adapter\'s repository', () => {
 
     const hash: unknown = expect.stringMatching(/^[A-Za-z0-9+/]{11}=$/);
     expect(answer).toEqual({ kind: 'read', answer: [{ path: 'meshes/Armor.nif', size: 4, hash }, { path: 'Game.esm', size: 6, hash }] });
+  });
+
+  it('names the game files the files in a mod\'s folder override, whether or not the active profile lists the mod', async () => {
+    const adapter = await instance();
+    await put('Data/meshes/Armor.nif', 'aaaa');
+    await put('Data/Other.esm', 'bbbbbb');
+    await put('mods/Unlisted/Meshes/armor.nif', 'mine');
+    await put('mods/Unlisted/own.txt');
+
+    const answer = await adapter.gameFilesOverriddenBy(join(root, 'Data'), 'Unlisted');
+
+    expect(answer).toEqual({
+      kind: 'read', answer: { gameFiles: [{ path: 'meshes/Armor.nif', size: 4, hash: expect.stringMatching(/^[A-Za-z0-9+/]{11}=$/) as unknown }], notes: [] },
+    });
+  });
+
+  it('names each entry of the mod\'s folder its listing skipped, such as a broken link, beside the game files', async () => {
+    const adapter = await instance();
+    await put('mods/Unlisted/own.txt');
+    await symlink(join(root, 'nowhere.nif'), join(root, 'mods', 'Unlisted', 'Broken.nif'));
+
+    const answer = await adapter.gameFilesOverriddenBy(join(root, 'Data'), 'Unlisted');
+
+    expect(answer.kind === 'read' ? answer.answer.notes.join('\n') : answer.reason).toMatch(/Broken\.nif/);
   });
 
   it('refuses to write over an ignore list already in the instance folder, naming it, and leaves it as it is', async () => {

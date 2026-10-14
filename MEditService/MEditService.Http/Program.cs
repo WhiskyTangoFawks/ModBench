@@ -82,8 +82,9 @@ try
     builder.Services.AddSingleton<UnsavedDocuments>();
     builder.Services.AddSingleton<ISourceAdapter, GitSourceAdapter>();
     builder.Services.AddSingleton<IModFolderRepository, ModFolderRepository>();
-    builder.Services.AddSingleton<StageHandler>();
-    builder.Services.AddSingleton<DiscardHandler>();
+    builder.Services.AddSingleton<UpdateManifestHandler>();
+    builder.Services.AddSingleton<RestoreFromManifestHandler>();
+    builder.Services.AddSingleton<ModlistGestureCancels>();
     builder.Services.AddSingleton<LoadOrderHolder>();
     builder.Services.AddSingleton<StringsLanguageHolder>();
     // One Index for the whole process (ADR-0014). Which file it opens comes from the
@@ -128,7 +129,7 @@ try
     app.MapRecordEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapWorldspaceEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapContainerChildEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
-    app.MapModlistEndpoints();
+    app.MapManifestEndpoints();
     app.MapNotificationEndpoints();
     app.MapIndexEndpoints();
     app.MapUnsavedDocumentEndpoints();

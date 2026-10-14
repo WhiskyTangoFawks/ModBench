@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { RecordEditEnvelope } from '../wire/messages';
 import { SILENT_LOG, type Log } from '../ports/log';
 import {
@@ -15,7 +16,7 @@ import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type BackendStatus, type BuildConfigurationChange, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
-  type StageFacts, type StageMod, type StageOutcome, type ModlistProgress, type DiscardFacts, type DiscardMod, type DiscardOutcome,
+  type UpdateManifestFacts, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions, type RestoreFacts, type RestoreMod, type RestoreOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -495,40 +496,62 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  async stage(
-    mods: readonly StageMod[], facts: StageFacts, options: { onProgress?: (progress: ModlistProgress) => void } = {},
-  ): Promise<StageOutcome | WriteRefused> {
-    const unsubscribe = options.onProgress ? this.notifications.onNotification('stage-progress', options.onProgress) : () => {};
-    try {
-      return await this.mutateEach({
-        verb: 'stage', noun: 'mod', items: mods,
-        op: (counted) => `stage(${counted})`,
-        post: () => this.apiClient.POST('/modlist/stage', { body: { mods: [...mods], ...facts } }),
-        outcome: (answer) => selectionOutcome(answer),
+  // A cancel asks mEdit to stop after the mod in hand, and the request then answers what landed, so the read that
+  // follows shows the disk. mEdit holds a gesture once begun, which its first progress shows.
+  private async modlistGesture<O extends object>(
+    kind: 'update-manifest-progress' | 'restore-from-manifest-progress', { onProgress, signal }: ModlistCallOptions,
+    call: (gesture: string) => Promise<O | WriteRefused>,
+  ): Promise<(O & { cancelRefusal?: string }) | WriteRefused> {
+    const gesture = randomUUID();
+    let begun = false;
+    let cancelling: Promise<{ cancelled: true } | WriteRefused> | undefined;
+    const cancel = (): void => {
+      cancelling ??= this.mutate({
+        op: `cancel(${gesture})`, failMsg: 'Could not cancel', noContent: { cancelled: true as const },
+        post: () => this.apiClient.POST('/modlist-gestures/{gesture}/cancel', { params: { path: { gesture } } }),
       });
+    };
+    const unsubscribe = this.notifications.onNotification(kind, (progress) => {
+      begun = true;
+      if (signal?.aborted) cancel();
+      onProgress?.(progress);
+    });
+    const cancelOnceBegun = (): void => { if (begun) cancel(); };
+    signal?.addEventListener('abort', cancelOnceBegun);
+    try {
+      const answer = await call(gesture);
+      const cancelled = await cancelling;
+      return isRefused(answer) || cancelled === undefined || !isRefused(cancelled) ? answer : { ...answer, cancelRefusal: cancelled.message };
     } finally {
       unsubscribe();
+      signal?.removeEventListener('abort', cancelOnceBegun);
     }
   }
 
-  async discardChanges(
-    mods: readonly DiscardMod[], facts: DiscardFacts, options: { onProgress?: (progress: ModlistProgress) => void } = {},
-  ): Promise<DiscardOutcome | WriteRefused> {
-    const unsubscribe = options.onProgress ? this.notifications.onNotification('discard-progress', options.onProgress) : () => {};
-    try {
-      return await this.mutateEach({
-        verb: 'discard changes in', noun: 'mod', items: mods,
-        op: (counted) => `discardChanges(${counted})`,
-        post: () => this.apiClient.POST('/modlist/discard-changes', { body: { mods: [...mods], ...facts } }),
-        outcome: (answer) => ({
-          ...selectionOutcome(answer),
-          notFound: answer.refused.filter((refused) => refused.refusal === 'NotFound')
-            .map((refused) => ({ mod: refused.item, gameFiles: refused.gameFilesNotFound, deltas: refused.deltasNotFound.length > 0 })),
-        }),
-      });
-    } finally {
-      unsubscribe();
-    }
+  updateManifest(
+    mods: readonly UpdateManifestMod[], facts: UpdateManifestFacts, options: ModlistCallOptions = {},
+  ): Promise<UpdateManifestOutcome | WriteRefused> {
+    return this.modlistGesture('update-manifest-progress', options, (gesture) => this.mutateEach({
+      verb: 'update the manifest of', noun: 'mod', items: mods,
+      op: (counted) => `updateManifest(${counted})`,
+      post: () => this.apiClient.POST('/update-manifest', { body: { mods: [...mods], ...facts, gesture } }),
+      outcome: (answer) => selectionOutcome(answer),
+    }));
+  }
+
+  restoreFromManifest(
+    mods: readonly RestoreMod[], facts: RestoreFacts, options: ModlistCallOptions = {},
+  ): Promise<RestoreOutcome | WriteRefused> {
+    return this.modlistGesture('restore-from-manifest-progress', options, (gesture) => this.mutateEach({
+      verb: 'restore', noun: 'mod', items: mods,
+      op: (counted) => `restoreFromManifest(${counted})`,
+      post: () => this.apiClient.POST('/restore-from-manifest', { body: { mods: [...mods], ...facts, gesture } }),
+      outcome: (answer) => ({
+        ...selectionOutcome(answer),
+        notFound: answer.refused.filter((refused) => refused.refusal === 'NotFound')
+          .map((refused) => ({ mod: refused.item, gameFiles: refused.gameFilesNotFound, deltas: refused.deltasNotFound.length > 0 })),
+      }),
+    }));
   }
 
   /** A refusal (untracked plugin, a link that would dangle) comes back typed (ADR-0014); only a
