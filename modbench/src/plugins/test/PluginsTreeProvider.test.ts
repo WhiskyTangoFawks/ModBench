@@ -27,8 +27,8 @@ vi.mock('vscode', async () => {
     Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
     window: { withProgress: recordedWithProgress },
     commands: {
-      executeCommand: (id: string, plugins: PluginAddress[], drop: PluginsDrop) => {
-        if (id === 'modbench.plugin.move') moveCommands.push({ plugins, drop });
+      executeCommand: (id: string, _clicked: unknown, rows: { plugin: { name: string }; origin: string }[], drop: PluginsDrop) => {
+        if (id === 'modbench.plugin.move') moveCommands.push({ plugins: rows.map(({ plugin, origin }) => ({ name: plugin.name, origin })), drop });
         return Promise.resolve();
       },
     },
@@ -638,6 +638,11 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
   it('a drop names each dragged row by its origin and file name', async () => {
     await drag(['A.esp'], 'D.esp');
     expect(moveCommands.map(({ plugins }) => plugins)).toEqual([[{ name: 'A.esp', origin: 'SomeMod' }]]);
+  });
+
+  it('a drop of rows the view does not hold moves nothing, and does not fall back to the selection', async () => {
+    await drag(['Gone.esp'], 'D.esp');
+    expect(moveCommands).toEqual([]);
   });
 
   it('a drop fires nothing before the read lands', async () => {

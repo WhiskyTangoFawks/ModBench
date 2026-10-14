@@ -19,11 +19,10 @@ interface PluginRenameAccess {
 /** `refusal` is absent when the user declined the question. */
 export type RenameConfirmed = { confirmed: true } | { confirmed: false; refusal?: string };
 
-/** `sourceRenamed` is true when the files and lines failed after the source had moved. `reported` is a failure to
- *  apply the source changes, which the apply has already told. */
+/** `sourceRenamed` is true when the files and lines failed after the source had moved. `reported` is why the source changes could not be applied. */
 export type PluginRenameResult =
   | { applied: true }
-  | { applied: false; reported: true }
+  | { applied: false; reported: string }
   | { applied: false; sourceRenamed: boolean; refusal: string };
 
 const CONFIRM = 'Rename';
@@ -56,11 +55,12 @@ async function confirmRename(access: PluginRenameAccess, ask: AskQuestion, plugi
 }
 
 async function renamePlugin(
-  access: PluginRenameAccess, source: { apply(changes: SourceChanges): Promise<boolean> }, plugin: PluginAddress, newName: string, gameRelease: string | undefined,
+  access: PluginRenameAccess, source: { apply(changes: SourceChanges): Promise<string | undefined> }, plugin: PluginAddress, newName: string, gameRelease: string | undefined,
 ): Promise<PluginRenameResult> {
   const changes = await access.client.getRenameSourceChanges(plugin, newName);
   if (isRefused(changes)) return { applied: false, sourceRenamed: false, refusal: changes.message };
-  if (!await source.apply(changes)) return { applied: false, reported: true };
+  const unapplied = await source.apply(changes);
+  if (unapplied !== undefined) return { applied: false, reported: unapplied };
 
   const moved = await access.client.moveLastWritten(plugin, changes.treeName, newName);
   if (isRefused(moved)) return { applied: false, sourceRenamed: true, refusal: moved.message };

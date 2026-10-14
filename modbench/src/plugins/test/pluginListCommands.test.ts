@@ -19,12 +19,15 @@ const {
   };
 });
 
-vi.mock('vscode', () => ({
-  commands: { registerCommand, executeCommand },
-  window: { showInputBox, showQuickPick },
-  Uri: { file: (p: string) => ({ fsPath: p }), from: uriFrom },
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter,
-}));
+vi.mock('vscode', async () => {
+  const { recordedWithProgress } = await import('../../test/recordedProgress');
+  return {
+    commands: { registerCommand, executeCommand },
+    window: { showInputBox, showQuickPick, withProgress: recordedWithProgress },
+    Uri: { file: (p: string) => ({ fsPath: p }), from: uriFrom },
+    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter,
+  };
+});
 
 import {
   pluginsCopyValueText, registerCreatePluginCommand, registerPluginSortCommands, registerRevealInExplorerCommand,
@@ -34,16 +37,16 @@ import type { RecordBrowserNode } from '../RecordBrowser';
 import { recordSummaryFixture } from '../../client/test/fixtures';
 import { cellRow, placedRow, recordGroupRow, recordRow, worldspaceRow } from './browserRows';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';
-import { pluginsTreeOver } from './pluginsTreeOver';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 import type { LoadOrderPlugin } from '../../instanceLoader/loadOrderSnapshot';
-import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { expectInstancesOf } from '../../test/expectInstanceOf';
+import { AgentCall } from '../../drivingLib/agentGesture';
+import { progressSteps } from '../../test/recordedProgress';
 
 beforeEach(() => {
+  progressSteps.length = 0;
   handlers.clear();
   vi.clearAllMocks();
   executeCommand.mockReset();
@@ -57,6 +60,7 @@ const plugin = (name: string, origin: string, path: string): LoadOrderPlugin =>
 function makeMo2() {
   return {
     instance: {
+      refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
       value: instanceValueFixture({
         mods: [
           { kind: 'mod', name: 'Winning Mod', enabled: true },
@@ -290,31 +294,78 @@ describe('registerCreatePluginCommand', () => {
     ]);
   });
 
-  it('refreshes nothing once the plugin lands, and the rows show it when the next instance value arrives', async () => {
+  it('ends on the read after the file is written, so the rows show the plugin when the gesture ends', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createPlugin', { name: 'MyPatch.esp', origin: 'overwrite/' });
     showInputBox.mockResolvedValue('MyPatch.esp');
     showQuickPick.mockResolvedValue({ label: 'Overwrite', origin: 'overwrite/' });
     const mo2 = makeMo2();
-    const instance = new FakeInstance(mo2.instance.value);
-    const tree = pluginsTreeOver(instance);
-    expect(await tree.getChildren()).toEqual([]);
-    let changes = 0;
-    tree.onDidChangeTreeData(() => { changes++; });
 
-    const { run } = invoke(client, { ...mo2, instance });
+    const { run } = invoke(client, mo2);
     await run();
 
-    expect(changes).toBe(0);
-    expect(await tree.getChildren()).toEqual([]);
+    expect(progressSteps).toEqual(['progress opens on modbench.pluginListTree', 'Instance loader: read every file again', 'progress closes']);
+  });
+});
 
-    instance.publish(instanceValueFixture({
-      ...mo2.instance.value,
-      plugins: [{ name: 'MyPatch.esp', path: '/instance/overwrite/MyPatch.esp', origin: 'overwrite/', line: 0, enabled: true, winning: true }],
-    }));
+describe('modbench.plugin.create, called by the agent', () => {
+  const place = (origin: string, name = 'MyPatch.esp') => new AgentCall([], { name, place: origin });
 
-    expect(changes).toBeGreaterThan(0);
-    expect(expectInstancesOf(await tree.getChildren(), PluginNode).map((row) => row.plugin.name)).toEqual(['MyPatch.esp']);
+  function invokeAgent(call: AgentCall<{ name: string; place: string }>, client = new InMemoryMEditClient()) {
+    client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esl', '.esp']);
+    const mo2 = makeMo2();
+    const reporter = recordingReporter();
+    registerCreatePluginCommand(client, mo2.instance, reporter);
+    const run = present(handlers.get('modbench.plugin.create'), "the create plugin command's registered handler");
+    return { client, reporter, answer: (): Promise<unknown> => Promise.resolve(run(call)) };
+  }
+
+  it('creates the plugin named in the place given, opening and reporting nothing, and answers the outcome', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('createPlugin', WROTE);
+    const { reporter, answer } = invokeAgent(place('Winning Mod'), client);
+
+    const answered = await answer();
+
+    expect(client.calls.at(-1)).toEqual(
+      { method: 'createPlugin', args: [WROTE, '/instance/mods/Winning Mod', '/instance/source/Winning Mod'] });
+    expect(answered).toEqual({ applied: true, outcome: { landed: [WROTE], refused: [] } });
+    expect(showInputBox).not.toHaveBeenCalled();
+    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([]);
+    expect(reporter.landings).toEqual([]);
+  });
+
+  it('takes the place without regard to case, as the view compares places, and creates in its own spelling', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('createPlugin', WROTE);
+    const { answer } = invokeAgent(place('winning MOD'), client);
+
+    await answer();
+
+    expect(client.calls.at(-1)).toEqual(
+      { method: 'createPlugin', args: [WROTE, '/instance/mods/Winning Mod', '/instance/source/Winning Mod'] });
+  });
+
+  it('answers the refusal mEdit answered, reporting nothing', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('createPlugin', { refused: true, message: 'A file is already there.' });
+    const { reporter, answer } = invokeAgent(place('Winning Mod'), client);
+
+    expect(await answer()).toEqual({ applied: false, refusal: 'A file is already there.' });
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it.each([
+    ['a name with an extension no plugin takes', place('Winning Mod', 'MyPatch.txt'), 'Extension must be .esm, .esl, or .esp'],
+    ['a place that is not an enabled mod', place('Disabled Mod'), '"Disabled Mod" is not an enabled mod or Overwrite that lacks "MyPatch.esp".'],
+    ['a place that already holds the name', place('Holding Mod'), '"Holding Mod" is not an enabled mod or Overwrite that lacks "MyPatch.esp".'],
+  ])('refuses %s, creating nothing', async (_what, call, reason) => {
+    const { client, answer } = invokeAgent(call);
+
+    await expect(answer()).rejects.toThrow(reason);
+
+    expect(client.calls.map(({ method }) => method)).toEqual(['getCreatablePluginExtensions']);
   });
 });
 

@@ -1,11 +1,17 @@
 import { foldPath } from '../instanceLoader/fileConflictIndex';
 import type { OriginFile } from '../instanceAdapter/instanceAdapter';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { Refusal } from './refusal';
+import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
+import { Refusal } from '../drivingLib/refusal';
 
 export interface ModName {
   name: string;
   kind?: 'mod' | 'separator';
+}
+
+export interface PluginName {
+  name: string;
+  origin?: string;
 }
 
 export interface FileName {
@@ -64,4 +70,37 @@ export function filesNamed(value: InstanceValue, given: readonly FileName[]): { 
   const refusals = resolved.filter((one) => typeof one === 'string');
   if (refusals.length > 0) throw new Refusal(refusals.join(' '));
   return resolved.filter((one) => typeof one !== 'string');
+}
+
+const asPlugin = ({ name, origin }: PluginAddress): string => `${name} in ${origin}`;
+
+function pluginRefusal({ name, origin }: PluginName, matches: readonly PluginAddress[]): string | undefined {
+  if (matches.length === 1) return undefined;
+  if (matches.length === 0) return `No plugin is named "${name}"${origin === undefined ? '' : ` in ${origin}`}.`;
+  return `"${name}" means more than one plugin: ${matches.map(asPlugin).join('; ')}. Name it with its origin.`;
+}
+
+/** Each plugin as the load order holds it. */
+export function pluginsNamed(plugins: InstanceValue['plugins'], given: readonly PluginName[]): PluginAddress[] {
+  const resolved = given.map((one) => ({
+    one,
+    matches: plugins.filter(({ name, origin }) => name.toLowerCase() === one.name.toLowerCase()
+      && (one.origin === undefined || origin.toLowerCase() === one.origin.toLowerCase())).map(({ name, origin }) => ({ name, origin })),
+  }));
+  const refusals = resolved.flatMap(({ one, matches }) => pluginRefusal(one, matches) ?? []);
+  if (refusals.length > 0) throw new Refusal(refusals.join(' '));
+  return resolved.flatMap(({ matches }) => matches);
+}
+
+/** Each plugin whose line in plugins.txt the gesture changes: the copy that line governs, as the Plugins view's rows are. */
+export function linesNamed(plugins: InstanceValue['plugins'], given: readonly PluginName[]): PluginAddress[] {
+  const named = pluginsNamed(plugins, given);
+  const refusals = named.flatMap((address) => {
+    const governing = plugins.find(({ name, winning }) => winning && name.toLowerCase() === address.name.toLowerCase());
+    return governing === undefined || samePluginAddress(governing, address)
+      ? []
+      : `${asPlugin(address)} is overridden, and the line for "${address.name}" is ${asPlugin(governing)}'s. Name that one.`;
+  });
+  if (refusals.length > 0) throw new Refusal(refusals.join(' '));
+  return named;
 }

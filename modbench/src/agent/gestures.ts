@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import { AgentCall } from '../drivingLib/agentGesture';
+import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
 import type { InstanceValue } from '../instanceLoader/instance';
-import type { SelectionOutcome } from '../ports/selectionOutcome';
-import { modsNamed } from './names';
-import { parseOrRefuse, Refusal } from './refusal';
+import { linesNamed, modsNamed, pluginsNamed } from './names';
+import { Refusal } from '../drivingLib/refusal';
+import { parseOrRefuse } from './refusal';
 
 interface GestureInput {
   /** The Argument the agent gives, as the tool's description teaches it. */
@@ -24,7 +24,52 @@ const MODS = gestureInput(
   (value, { argument }) => new AgentCall(modsNamed(value.mods, argument).map((entry) => {
     if (entry.kind !== 'mod') throw new Refusal(`"${entry.name}" is a separator, not a mod.`);
     return { kind: 'mod', name: entry.name };
-  })),
+  }), {}),
+);
+
+const PLUGIN_NAME = z.object({ name: z.string(), origin: z.string().optional() });
+const PLUGIN_TAKES = 'each { name, origin? } as list_plugins shows it';
+
+const pluginArguments = (named: typeof pluginsNamed) =>
+  (value: InstanceValue, argument: readonly z.infer<typeof PLUGIN_NAME>[]) =>
+    named(value.plugins, argument).map((plugin) => ({ kind: 'plugin' as const, plugin }));
+
+const pluginsCall = pluginArguments(pluginsNamed);
+const linesCall = pluginArguments(linesNamed);
+
+const LINES = gestureInput(
+  `argument: the plugins whose lines in plugins.txt it changes, ${PLUGIN_TAKES}`,
+  z.object({ argument: z.array(PLUGIN_NAME) }),
+  (value, { argument }) => new AgentCall(linesCall(value, argument), {}),
+);
+
+const PLUGINS = gestureInput(
+  `argument: the plugins, ${PLUGIN_TAKES}`,
+  z.object({ argument: z.array(PLUGIN_NAME) }),
+  (value, { argument }) => new AgentCall(pluginsCall(value, argument), {}),
+);
+
+const DROP = z.union([
+  z.object({ kind: z.enum(['winningEnd', 'losingEnd']) }),
+  z.object({ kind: z.enum(['before', 'after']), name: z.string() }),
+]);
+
+const MOVE_PLUGINS = gestureInput(
+  `argument: the plugins, ${PLUGIN_TAKES}; options: { drop: { kind: 'winningEnd' | 'losingEnd' } or { kind: 'before' | 'after', name: the plugin file name it lands beside } }`,
+  z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ drop: DROP }) }),
+  (value, { argument, options }) => new AgentCall(linesCall(value, argument), options),
+);
+
+const CREATE_PLUGIN = gestureInput(
+  'options: { name: the new plugin\'s file name, place: the origin that will hold it, an enabled mod\'s name or overwrite/ }',
+  z.object({ options: z.object({ name: z.string(), place: z.string() }) }),
+  (_value, { options }) => new AgentCall([], options),
+);
+
+const RENAME_PLUGIN = gestureInput(
+  'argument: the plugin, { name, origin? } as list_plugins shows it; options: { name: its new file name }',
+  z.object({ argument: PLUGIN_NAME, options: z.object({ name: z.string() }) }),
+  (value, { argument, options }) => new AgentCall(linesCall(value, [argument]), options),
 );
 
 /** agent.md, Gestures, story 1: the catalog's `writes` gestures, less those it keeps from the agent, plus those it gives.
@@ -32,14 +77,18 @@ const MODS = gestureInput(
 export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.enable', MODS],
   ['modbench.mod.disable', MODS],
+  ['modbench.plugin.enable', LINES],
+  ['modbench.plugin.disable', LINES],
+  ['modbench.plugin.decompile', PLUGINS],
+  ['modbench.plugin.move', MOVE_PLUGINS],
+  ['modbench.plugin.create', CREATE_PLUGIN],
+  ['modbench.plugin.rename', RENAME_PLUGIN],
 ]);
 
-type GestureOutcome =
-  | { applied: true; outcome: SelectionOutcome<unknown> }
-  | { applied: false; refusal: string };
+type GestureOutcome = GestureResult<unknown>;
 
 function refusalIn(outcome: GestureOutcome): string | undefined {
-  if (!outcome.applied) return outcome.refusal;
+  if (!outcome.applied) return outcome.detail === undefined ? outcome.refusal : `${outcome.refusal} ${outcome.detail}`;
   const { refused, landed } = outcome.outcome;
   if (refused.length === 0) return undefined;
   const total = refused.length + landed.length;
@@ -48,11 +97,11 @@ function refusalIn(outcome: GestureOutcome): string | undefined {
 
 export const RUN_GESTURE = {
   name: 'run_gesture',
-  description: 'Run a gesture as the user does, by its Command ID, on the Argument given: never on the selection, and with no picker, prompt or confirmation. '
+  description: 'Run a gesture as the user does, by its Command ID, on the Argument and Options given: never on the selection, and with no picker, prompt or confirmation. '
     + 'It answers once the read model shows the change, with the gesture\'s outcome. A refusal answers the outcome too: what landed, and each item refused and why. Gestures: '
     + [...AGENT_GESTURES].map(([command, { takes }]) => `${command} (${takes})`).join('; '),
-  input: { command: z.string(), argument: z.unknown().optional() },
-  of: async (value: InstanceValue, { command, ...given }: { command: string; argument?: unknown }) => {
+  input: { command: z.string(), argument: z.unknown().optional(), options: z.unknown().optional() },
+  of: async (value: InstanceValue, { command, ...given }: { command: string; argument?: unknown; options?: unknown }) => {
     const gesture = AGENT_GESTURES.get(command);
     if (gesture === undefined) throw new Refusal(`${command} is not a gesture your agent runs.`);
     const outcome = await vscode.commands.executeCommand<GestureOutcome>(command, gesture.callOf(value, given));

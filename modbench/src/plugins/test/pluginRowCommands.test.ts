@@ -50,6 +50,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type InitOutcome, type InitStatus, type PluginAddress, type WriteRefused } from '../../client';
 import { PluginNode } from '../pluginRows';
+import { AgentCall } from '../../drivingLib/agentGesture';
 import { assertAskedOnce, recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeDiagnosticCollection } from '../../test/vscodeMock';
 import { compiledPluginFixture } from '../../client/test/fixtures';
@@ -802,6 +803,43 @@ describe('modbench.plugin.decompile', () => {
       { severity: 'error', message: 'Could not decompile 1 plugin — git was not found on PATH.', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
+  });
+});
+
+describe('modbench.plugin.decompile, called by the agent', () => {
+  const FIRST = { name: 'First.esp', origin: 'ModA' };
+  const SECOND = { name: 'Second.esp', origin: 'ModA' };
+  const calling = (...plugins: { name: string; origin: string }[]) => new AgentCall(plugins.map((plugin) => ({ kind: 'plugin' as const, plugin })), {});
+
+  function registered(client: InMemoryMEditClient) {
+    const reporter = recordingReporter();
+    const ask = scriptedDialog('Decompile');
+    registerDecompileCommand({ client, instance: instanceThatReads, reporter, ask }, () => [new PluginNode({ name: 'Selected.esp', enabled: true }, 'ModA')]);
+    return { handler: present(handlers.get('modbench.plugin.decompile'), 'the decompile command'), reporter, ask };
+  }
+
+  it('decompiles the plugins given, never the selection, asking nothing and reporting nothing, and answers the outcome', async () => {
+    const client = new InMemoryMEditClient();
+    const outcome = { landed: [SECOND], refused: [{ item: FIRST, reason: 'First.esp does not round-trip through its own source.' }] };
+    client.setCommandResult('decompile', outcome);
+    const { handler, reporter, ask } = registered(client);
+
+    const answered = await handler(calling(FIRST, SECOND));
+
+    expect(client.calls.filter((c) => c.method === 'decompile').map((c) => c.args)).toEqual([[[FIRST, SECOND]]]);
+    expect(answered).toEqual({ applied: true, outcome });
+    expect(ask.asked).toEqual([]);
+    expect(reporter.reports).toEqual([]);
+    expect(reporter.landings).toEqual([]);
+  });
+
+  it('answers the refusal of the whole selection', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('decompile', { refused: true, message: 'git was not found on PATH.' });
+    const { handler, reporter } = registered(client);
+
+    expect(await handler(calling(SECOND))).toEqual({ applied: false, refusal: 'git was not found on PATH.' });
+    expect(reporter.reports).toEqual([]);
   });
 });
 
