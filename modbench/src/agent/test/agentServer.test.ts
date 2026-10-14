@@ -453,7 +453,7 @@ describe('the agent server, given an input its tool does not take', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('still advertises the input each tool takes', async () => {
+  it('still advertises the input select_rows takes', async () => {
     const { tools } = await (await clientOf(new FakeInstance(VALUE))).listTools();
 
     expect(tools.find((tool) => tool.name === 'select_rows')?.inputSchema).toMatchObject({ properties: { sql: { type: 'string' } }, required: ['sql'] });

@@ -834,6 +834,14 @@ describe('modbench.mod.enable / modbench.mod.disable, called by the agent', () =
     expect(reporter.reports).toEqual([]);
   });
 
+  it('refuses an Argument that is not a mod, writing nothing', async () => {
+    registerModEnableCommands(commands, instance, () => [], recordingReporter());
+
+    await expect(invoke('modbench.mod.enable', new AgentCall([{ kind: 'plugin', plugin: { name: 'A.esp', origin: 'Mod B' } }]))).rejects.toThrow('carries mods only');
+
+    expect(setModsEnabled).not.toHaveBeenCalled();
+  });
+
   it('answers once the instance has been read again, so the agent\'s next read sees the change', async () => {
     setModsEnabled.mockImplementation(() => { progressSteps.push('modlist.txt written'); return Promise.resolve(outcome); });
     registerModEnableCommands(commands, instance, () => [], recordingReporter());

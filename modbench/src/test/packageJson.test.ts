@@ -539,7 +539,7 @@ describe('package.json command titles and categories', () => {
   it('offers every catalog gesture in the palette, but a gesture specified ahead of its code', () => {
     const gestureIds = catalogCommandIds(GESTURES_MARKDOWN);
     const declared = new Set(commands.map((c) => c.command));
-    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id) || (!declared.has(id) && !SPECIFIED_AHEAD_OF_CODE.includes(id)));
+    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id) || (!declared.has(id) && !PALETTE_AHEAD_OF_CODE.includes(id)));
     expect(
       hidden,
       'commands.md, Entry points are not gestures: every gesture is also in the command palette.',
@@ -548,7 +548,7 @@ describe('package.json command titles and categories', () => {
 
   it('registers no gesture the catalog lists as specified ahead of its code', () => {
     const declared = new Set(commands.map((c) => c.command));
-    expect(SPECIFIED_AHEAD_OF_CODE.filter((id) => declared.has(id))).toEqual([]);
+    expect(PALETTE_AHEAD_OF_CODE.filter((id) => declared.has(id))).toEqual([]);
   });
 
   it('still registers every gesture named as retired ahead of its code, so the list expires with the code', () => {
@@ -556,7 +556,7 @@ describe('package.json command titles and categories', () => {
     expect(RETIRED_AHEAD_OF_CODE.filter((id) => !declared.has(id))).toEqual([]);
   });
 
-  const SPECIFIED_AHEAD_OF_CODE = ['modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges', 'modbench.modlist.clean'];
+  const PALETTE_AHEAD_OF_CODE = ['modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges', 'modbench.modlist.clean'];
 
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
