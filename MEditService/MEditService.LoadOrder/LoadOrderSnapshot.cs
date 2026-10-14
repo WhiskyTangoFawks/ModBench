@@ -16,15 +16,17 @@ public sealed record RegisteredPlugin(string Name, string Origin, string Path, P
 /// does (ADR-0003, ADR-0013).</summary>
 public sealed record StampedFile(string Path, string Stamp)
 {
-    /// <summary>The stamp handed with the file at <paramref name="path"/> among <paramref name="files"/>, or null when none is
-    /// at it.</summary>
-    public static string? StampIn(IEnumerable<StampedFile> files, string path) =>
-        files.FirstOrDefault(file => string.Equals(file.Path, path, StringComparison.OrdinalIgnoreCase))?.Stamp;
-
     public bool Equals(StampedFile? other) =>
         other is not null && string.Equals(Path, other.Path, StringComparison.OrdinalIgnoreCase) && string.Equals(Stamp, other.Stamp, StringComparison.Ordinal);
 
     public override int GetHashCode() => HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(Path), Stamp);
+}
+
+internal static class StampedFiles
+{
+    /// <summary>The stamp handed with the file at <paramref name="path"/>, or null when none is at it.</summary>
+    internal static string? StampIn(this IEnumerable<StampedFile> files, string path) =>
+        files.FirstOrDefault(handed => string.Equals(handed.Path, path, StringComparison.OrdinalIgnoreCase))?.Stamp;
 }
 
 /// <summary>The strings files beside one copy of a plugin, loose, and the archives named for it in its folder,
@@ -39,7 +41,7 @@ public sealed record PluginStrings(IReadOnlyList<StampedFile> Archives, IReadOnl
     public IReadOnlyList<StampedFile> StringsFiles { get; } = [.. StringsFiles];
 
     /// <summary>The stamp handed with the file at <paramref name="path"/>, or null when none of these is at it.</summary>
-    public string? StampOf(string path) => StampedFile.StampIn(Archives.Concat(StringsFiles), path);
+    public string? StampOf(string path) => Archives.Concat(StringsFiles).StampIn(path);
 
     public bool Equals(PluginStrings? other) =>
         other is not null && Archives.SequenceEqual(other.Archives) && StringsFiles.SequenceEqual(other.StringsFiles);
@@ -183,7 +185,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 
     /// <summary>The stamp handed with the game's archive or loose strings file at <paramref name="path"/>, or null when the
     /// game reads none at it.</summary>
-    public string? StampOf(string path) => StampedFile.StampIn(Archives.Concat(StringsFiles), path);
+    public string? StampOf(string path) => Archives.Concat(StringsFiles).StampIn(path);
 
     /// <summary>What provides the plugin, or null for a plugin none registered here names.</summary>
     public PluginProvider? ProviderOf(PluginAddress plugin) => Plugin(plugin)?.Provider;
