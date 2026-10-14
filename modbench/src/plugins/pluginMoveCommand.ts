@@ -17,6 +17,11 @@ function isDrop(value: unknown): value is PluginsDrop {
   return (value.kind === 'before' || value.kind === 'after') && 'name' in value && typeof value.name === 'string';
 }
 
+type DropBeside = Extract<PluginsDrop, { name: string }>;
+
+const dropsOnMoving = (plugins: readonly PluginAddress[], drop: PluginsDrop): drop is DropBeside =>
+  'name' in drop && plugins.some(({ name }) => name.toLowerCase() === drop.name.toLowerCase());
+
 interface MoveView extends Pick<PluginsTreeProvider, 'movePlaces'> {
   selection: () => readonly PluginsTreeNode[];
 }
@@ -45,6 +50,9 @@ export function registerPluginMoveCommand(
     },
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), drop: options.drop }),
     run: async ({ plugins, drop }) => {
+      if (dropsOnMoving(plugins, drop)) {
+        return { applied: true, outcome: { landed: [], refused: plugins.map((item) => ({ item, reason: `The drop is on "${drop.name}", which is moving.` })) } };
+      }
       try {
         const { activeProfile, pluginsLoadedWithNoLine } = instance.value;
         const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(

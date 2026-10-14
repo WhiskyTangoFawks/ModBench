@@ -468,6 +468,7 @@ export class PluginsTreeProvider
     const inView = this.rowsInViewOrder();
     const rows = plugins.flatMap((plugin) => inView.filter((row): row is PluginNode =>
       row instanceof PluginNode && samePluginAddress(plugin, addressOfRow(row))));
+    if (rows.length === 0) return;
     await vscode.commands.executeCommand('modbench.plugin.move', rows[0], rows, drop);
   }
 

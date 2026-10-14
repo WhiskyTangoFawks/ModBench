@@ -336,6 +336,17 @@ describe('modbench.plugin.create, called by the agent', () => {
     expect(reporter.landings).toEqual([]);
   });
 
+  it('takes the place without regard to case, as the view compares places, and creates in its own spelling', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('createPlugin', WROTE);
+    const { answer } = invokeAgent(place('winning MOD'), client);
+
+    await answer();
+
+    expect(client.calls.at(-1)).toEqual(
+      { method: 'createPlugin', args: [WROTE, '/instance/mods/Winning Mod', '/instance/source/Winning Mod'] });
+  });
+
   it('answers the refusal mEdit answered, reporting nothing', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createPlugin', { refused: true, message: 'A file is already there.' });

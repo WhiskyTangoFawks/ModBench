@@ -135,7 +135,7 @@ export function registerCreatePluginCommand(
     fromAgent: async ({ options: { name, place } }) => {
       const refusal = pluginNameRefusal(name, answerOf(await client.getCreatablePluginExtensions()));
       if (refusal !== undefined) throw new Refusal(refusal);
-      const chosen = pluginPlaces(instance.value, name).find(({ origin }) => origin === place);
+      const chosen = pluginPlaces(instance.value, name).find(({ origin }) => origin.toLowerCase() === place.toLowerCase());
       if (chosen === undefined) throw new Refusal(`"${place}" is not an enabled mod or Overwrite that lacks "${name}".`);
       const made = placed(instance.value, name, chosen);
       if (typeof made === 'string') throw new Refusal(made);
