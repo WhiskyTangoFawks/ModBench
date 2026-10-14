@@ -71,6 +71,10 @@ function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: Instan
   };
 }
 
+function handedStringsFiles(snapshot: InstanceValue['loadOrderSnapshot']): { path: string; stamp: string }[] {
+  return snapshot !== undefined && 'plugins' in snapshot ? snapshot.plugins.flatMap((plugin) => plugin.stringsFiles) : [];
+}
+
 function pastSequence(instance: Instance, sequence: number): Promise<InstanceValue> {
   if (instance.sequence > sequence) return Promise.resolve(instance.value);
   return new Promise((resolve) => {
@@ -580,12 +584,15 @@ describe('Instance — game folder and the archives the game loads', () => {
       modFiles: new Map([['Tracked Patch Mod', filesOfMod('Tracked Patch Mod', 'Tracked Patch Mod.esp', 'Strings/Tracked Patch Mod_en.STRINGS')]]),
     }, (adapter) => ({ ...adapter, fileStamp: (path) => Promise.resolve({ kind: 'read', answer: { size: 5n, modifiedNs: 1n, changedNs: path === stringsFile ? changedNs : 0n } }) }));
     await instance.refresh();
-    const snapshotBefore = instance.value.loadOrderSnapshot;
+    const before = handedStringsFiles(instance.value.loadOrderSnapshot);
 
     changedNs = 2n;
     await instance.refresh();
 
-    expect(instance.value.loadOrderSnapshot).not.toEqual(snapshotBefore);
+    const after = handedStringsFiles(instance.value.loadOrderSnapshot);
+    expect(after.map(({ path }) => path)).toEqual([stringsFile]);
+    expect(before.map(({ path }) => path)).toEqual([stringsFile]);
+    expect(after[0]?.stamp).not.toEqual(before[0]?.stamp);
   });
 
   it('lands a value carrying the game folder not found, rather than a failure, and back again when it is found', async () => {
