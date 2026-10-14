@@ -690,6 +690,31 @@ describe('the agent server, running a gesture', () => {
     });
   });
 
+  describe('the record open gesture', () => {
+    const fire = async (args: Record<string, unknown>) => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const { client } = await served({ ...CONFLICTED, plugins: VALUE.plugins });
+      return call(client, 'run_gesture', { command: 'modbench.record.open', ...args });
+    };
+
+    it('fires with each record as a record Argument, a copy when it names its plugin, and the pinned Option', async () => {
+      const { name, origin } = VALUE.plugins[1] ?? { name: '', origin: '' };
+      await fire({ argument: [{ formKey: '000800:A.esp' }, { formKey: '000801:A.esp', plugin: { name, origin } }], options: { pinned: true } });
+
+      expect(fired.calls).toEqual([['modbench.record.open', new AgentCall([
+        { kind: 'record', formKey: '000800:A.esp' },
+        { kind: 'record', formKey: '000801:A.esp', plugin: { name, origin } },
+      ], { pinned: true })]]);
+    });
+
+    it('refuses a plugin nothing is named, firing nothing', async () => {
+      const answer = await fire({ argument: [{ formKey: '000800:A.esp', plugin: { name: 'Gone.esp' } }] });
+
+      expect(answer.text).toContain('No plugin is named "Gone.esp".');
+      expect(fired.calls).toEqual([]);
+    });
+  });
+
   it.each([
     ['a gesture kept from the agent', { command: 'modbench.profile.switch', argument: [] }, 'modbench.profile.switch is not a gesture your agent runs.'],
     ['a name that means a mod and a separator', { command: 'modbench.mod.enable', argument: [{ name: 'Textures' }] }, '"Textures" means more than one thing: separator Textures; mod Textures. Name it with its kind.'],

@@ -166,6 +166,20 @@ const RENAME_PLUGIN = gestureInput(
   (value, { argument, options }) => new AgentCall(linesCall(value, [argument]), options),
 );
 
+const OPEN_RECORD = gestureInput(
+  'argument: the records, each { formKey, plugin?: { name, origin? } as list_plugins shows it } with the FormKey as resolve_names answers it, a copy when it names its plugin, else the winning copy; options: { pinned?: true to keep the tab }',
+  z.object({
+    argument: z.array(z.object({ formKey: z.string(), plugin: PLUGIN_NAME.optional() })),
+    options: z.object({ pinned: z.boolean().optional() }).optional(),
+  }),
+  (value, { argument, options }) => new AgentCall(
+    argument.map(({ formKey, plugin }) => ({
+      kind: 'record' as const, formKey, ...(plugin && { plugin: pluginsNamed(value.plugins, [plugin])[0] }),
+    })),
+    { pinned: options?.pinned },
+  ),
+);
+
 /** agent.md, Gestures, story 1: the catalog's `writes` gestures, less those it keeps from the agent, plus those it gives.
  *  @public Read by agentGestures.test, which holds it to commands.md. */
 export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
@@ -190,6 +204,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.plugin.move', MOVE_PLUGINS],
   ['modbench.plugin.create', CREATE_PLUGIN],
   ['modbench.plugin.rename', RENAME_PLUGIN],
+  ['modbench.record.open', OPEN_RECORD],
 ]);
 
 type GestureOutcome = GestureResult<unknown>;

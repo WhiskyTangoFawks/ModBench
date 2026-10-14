@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { samePluginAddress } from '../wire/pluginAddress';
-import { reportFailure } from '../drivingLib/reportFailure';
+import { argumentOfKind, registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
+import type { KindedRow } from '../drivingLib/gestureEntry';
+import { Refusal } from '../drivingLib/refusal';
+import { errorMessage } from '../ports/errorMessage';
 import { pickRecord } from './recordPicker';
 import type { SharedRecordPanelDeps } from './recordPanelMessageRouter';
 import type { RecordTabs } from './recordTabs';
@@ -24,7 +27,7 @@ import { followReportedCopies } from './recordCopy';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from './childRecordDocument';
 import { holdOneTextPerFile } from './oneTextPerFile';
-import { recordDocument, type RecordCopy } from '../drivingLib/recordDocument';
+import { copyDocument, type RecordCopy } from '../drivingLib/recordDocument';
 import type { ModFacts } from './modsByOrigin';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 
@@ -109,17 +112,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       meditClient, deps.reporterFor('recordLifecycle'), deps.ask, selections, deps.recordWrite, deps.sourceEditing),
     ...registerRecordCopyCommands(
       meditClient, deps.reporterFor('recordCopy'), deps.ask, selections, deps.recordWrite, deps.sourceEditing),
-    vscode.commands.registerCommand('modbench.record.open', async (argument?: unknown) => {
-      const plan = recordOpenPlan(argument, deps.focusedViewSelection());
-      const reporter = deps.reporterFor('recordOpen');
-      if (plan.addresses.length > 0) return openRecords(meditClient, reporter, recordEditorProvider, plan);
-      if (argument !== undefined) {
-        reporter.report('error', 'Could not open a record.', 'What was given names no record.');
-        return;
-      }
-      const formKey = await pickRecord({ meditClient, reporter }, '', []);
-      if (formKey) await openRecords(meditClient, reporter, recordEditorProvider, { addresses: [{ formKey }], pinned: false });
-    }),
+    registerAgentGesture('modbench.record.open', () => [], recordOpenGesture(meditClient, deps.reporterFor('recordOpen'), recordEditorProvider, deps.focusedViewSelection)),
     vscode.commands.registerCommand('modbench.record.openPinned', (row?: unknown, selection?: unknown) =>
       vscode.commands.executeCommand('modbench.record.open', pinnedArgument(row, selection))),
   ];
@@ -127,32 +120,61 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
 
 type OpenClient = Pick<MEditClient, 'getRecordOwner' | 'getCopyDocument'>;
 
-// Several records open one grid: the first record's document, with the others as its columns
-// (editor.md, Opening, story 4).
-async function openRecords(
-  client: OpenClient, reporter: Reporter, grid: Pick<RecordEditorProvider, 'open'>,
-  { addresses: [first, ...others], pinned }: RecordOpenPlan,
-): Promise<void> {
-  if (!first) return;
-  const failMessage = `Failed to open "${recordTitle(first.formKey, undefined)}".`;
-  await reportFailure(reporter, failMessage, async () => {
-    const tab = await recordDocument(client, first) ?? noActivePluginHolds(first.formKey);
-    if ('refused' in tab) {
-      reporter.report('error', failMessage, tab.refused);
-      return;
-    }
-    const columns: RecordCopy[] = [];
-    for (const other of others) {
-      const copy = await copyToOpen(client, other);
-      if ('refused' in copy) {
-        reporter.report('error', failMessage, copy.refused);
-        return;
+function recordOpenGesture(
+  client: OpenClient & Pick<MEditClient, 'searchRecords'>, reporter: Reporter, grid: Pick<RecordEditorProvider, 'open'>,
+  focusedViewSelection: () => readonly unknown[],
+): AgentGesture<KindedRow, RecordOpenPlan, OpenOutcome, { pinned?: boolean }> {
+  return {
+    fromView: async (_entry, _option, argument) => {
+      const plan = recordOpenPlan(argument, focusedViewSelection());
+      if (plan.addresses.length > 0) return plan;
+      if (argument !== undefined) {
+        reporter.report('error', 'Could not open a record.', 'What was given names no record.');
+        return undefined;
       }
-      columns.push(copy);
+      const formKey = await pickRecord({ meditClient: client, reporter }, '', []);
+      return formKey ? { addresses: [{ formKey }], pinned: false } : undefined;
+    },
+    fromAgent: ({ argument, options }) => {
+      if (argument.length === 0) throw new Refusal('modbench.record.open takes at least one record.');
+      return {
+        addresses: argument.map((record) => argumentOfKind(record, 'record')).map(({ formKey, plugin }) => (plugin ? { formKey, plugin } : { formKey })),
+        pinned: options.pinned === true,
+      };
+    },
+    run: (plan) => openRecords(client, grid, plan),
+    report: (outcome) => {
+      if (!outcome.applied) reporter.report('error', outcome.refusal, outcome.detail);
+    },
+  };
+}
+
+type OpenOutcome = GestureResult<RecordCopy>;
+
+// Several records open one grid: the first record's document, with the others as its columns
+// (editor.md, Opening, story 4). What lands names each record's copy.
+async function openRecords(
+  client: OpenClient, grid: Pick<RecordEditorProvider, 'open'>, { addresses, pinned }: RecordOpenPlan,
+): Promise<OpenOutcome> {
+  const first = addresses[0];
+  const failMessage = `Failed to open "${recordTitle(first?.formKey ?? '', undefined)}".`;
+  const refused = (detail: string): OpenOutcome => ({ applied: false, refusal: failMessage, detail });
+  try {
+    const copies: RecordCopy[] = [];
+    for (const address of addresses) {
+      const copy = await copyToOpen(client, address);
+      if ('refused' in copy) return refused(copy.refused);
+      copies.push(copy);
     }
-    const show = (options: vscode.TextDocumentShowOptions) => grid.open(tab.uri, columns, options);
-    await show({ viewColumn: vscode.ViewColumn.Active, preview: !pinned });
-  });
+    const [firstCopy, ...columns] = copies;
+    if (!firstCopy) return refused('Nothing was given to open.');
+    const tab = await copyDocument(client, firstCopy);
+    if ('refused' in tab) return refused(tab.refused);
+    await grid.open(tab.uri, columns, { viewColumn: vscode.ViewColumn.Active, preview: !pinned });
+    return { applied: true, outcome: { landed: copies, refused: [] } };
+  } catch (err) {
+    return refused(errorMessage(err));
+  }
 }
 
 const noActivePluginHolds = (formKey: string) => ({ refused: `No active plugin holds ${formKey}.` });
