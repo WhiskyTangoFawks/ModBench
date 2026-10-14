@@ -1,5 +1,6 @@
 import contextlib
 import subprocess
+import threading
 import unittest
 
 import medit
@@ -88,6 +89,33 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
             medit.copy(PLUGIN, RECIPE, 'MBDevLight.esl', mode='new')
         self.assertIn('MBDevLight.esl is not tracked', str(raised.exception))
         self.assertEqual(changed(self.source), [])
+
+    def test_creates_a_plugin_in_a_mod_with_its_source_and_returns_its_name_and_origin(self):
+        self.assertEqual(medit.create_plugin('MBDevNew.esp', TRACKED), ('MBDevNew.esp', TRACKED))
+        self.assertTrue((self.fixture.instance / 'mods' / TRACKED / 'MBDevNew.esp').exists())
+        self.assertTrue(any('MBDevNew' in line for line in changed(self.source)))
+
+    def test_a_write_into_the_created_plugin_lands_once_the_watchers_snapshot_holds_it(self):
+        created = medit.create_plugin('MBDevNew.esp', TRACKED)
+        watcher_resends_load_order(self.fixture, created)
+        self.assertTrue(medit.create(created, 'npc_').endswith(':MBDevNew.esp'))
+
+    def test_a_write_into_the_created_plugin_waits_for_the_watchers_snapshot_that_holds_it(self):
+        created = medit.create_plugin('MBDevNew.esp', TRACKED)
+        watcher = threading.Timer(1, watcher_resends_load_order, [self.fixture, created])
+        watcher.start()
+        self.addCleanup(watcher.join)
+        self.assertTrue(medit.create(created, 'npc_').endswith(':MBDevNew.esp'))
+
+    def test_raises_for_a_create_of_a_plugin_in_overwrite_and_writes_nothing(self):
+        with self.assertRaises(medit.MEditError) as raised:
+            medit.create_plugin('MBDevNew.esp', 'overwrite/')
+        self.assertIn('overwrite/', str(raised.exception))
+        self.assertEqual(changed(self.source), [])
+
+    def test_raises_for_a_create_of_a_plugin_the_mod_already_holds(self):
+        with self.assertRaises(medit.MEditError):
+            medit.create_plugin(PLUGIN, TRACKED)
 
     def test_raises_for_a_create_of_a_record_type_that_does_not_exist_and_writes_nothing(self):
         with self.assertRaises(medit.MEditError):

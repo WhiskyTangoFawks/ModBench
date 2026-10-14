@@ -14,6 +14,7 @@ public sealed class CommandHandlerConventionTests
         typeof(CreateRecordHandler),
         typeof(DeleteRecordHandler),
         typeof(CreatePluginHandler),
+        typeof(CreatePluginInModHandler),
         typeof(PutLoadOrderHandler),
         typeof(RenameSourceChangesHandler),
         typeof(MoveLastWrittenHandler),

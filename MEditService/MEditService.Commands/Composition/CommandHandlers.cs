@@ -149,6 +149,10 @@ public static class CommandHandlers
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<ILogger<CreatePluginHandler>>()));
 
+        services.AddSingleton(sp => new CreatePluginInModHandler(
+            sp.GetRequiredService<CreatePluginHandler>(),
+            sp.GetRequiredService<LoadOrderHolder>()));
+
         services.AddSingleton(sp => new PutLoadOrderHandler(
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<LoadOrderHolder>(),

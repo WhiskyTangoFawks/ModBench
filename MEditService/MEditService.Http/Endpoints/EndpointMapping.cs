@@ -118,7 +118,7 @@ internal static class EndpointMapping
         refusal, PluginCreateRefusal.NoLoadOrder, message,
         r => r switch
         {
-            PluginCreateRefusal.FolderGone => 404,
+            PluginCreateRefusal.FolderGone or PluginCreateRefusal.OriginNotAMod => 404,
             PluginCreateRefusal.FileExists => 409,
             PluginCreateRefusal.NotAPluginFile => 400,
             // The request is sound; the file system refused the write.
