@@ -156,22 +156,23 @@ type OpenOutcome = GestureResult<RecordCopy>;
 async function openRecords(
   client: OpenClient, grid: Pick<RecordEditorProvider, 'open'>, { addresses, pinned }: RecordOpenPlan,
 ): Promise<OpenOutcome> {
-  const first = addresses[0];
-  const failMessage = `Failed to open "${recordTitle(first?.formKey ?? '', undefined)}".`;
+  const failMessage = `Failed to open "${recordTitle(addresses[0]?.formKey ?? '', undefined)}".`;
   const refused = (detail: string): OpenOutcome => ({ applied: false, refusal: failMessage, detail });
   try {
-    const copies: RecordCopy[] = [];
-    for (const address of addresses) {
-      const copy = await copyToOpen(client, address);
-      if ('refused' in copy) return refused(copy.refused);
-      copies.push(copy);
-    }
-    const [firstCopy, ...columns] = copies;
+    const [firstCopy, ...others] = addresses;
     if (!firstCopy) return refused('Nothing was given to open.');
-    const tab = await copyDocument(client, firstCopy);
+    const head = await copyToOpen(client, firstCopy);
+    if ('refused' in head) return refused(head.refused);
+    const tab = await copyDocument(client, head);
     if ('refused' in tab) return refused(tab.refused);
+    const columns: RecordCopy[] = [];
+    for (const other of others) {
+      const copy = await copyToOpen(client, other);
+      if ('refused' in copy) return refused(copy.refused);
+      columns.push(copy);
+    }
     await grid.open(tab.uri, columns, { viewColumn: vscode.ViewColumn.Active, preview: !pinned });
-    return { applied: true, outcome: { landed: copies, refused: [] } };
+    return { applied: true, outcome: { landed: [head, ...columns], refused: [] } };
   } catch (err) {
     return refused(errorMessage(err));
   }

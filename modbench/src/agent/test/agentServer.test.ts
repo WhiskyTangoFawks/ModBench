@@ -691,24 +691,48 @@ describe('the agent server, running a gesture', () => {
   });
 
   describe('the record open gesture', () => {
-    const fire = async (args: Record<string, unknown>) => {
+    const gun = { kind: 'record' as const, formKey: '000801:A.esp' };
+    const fire = async (args: Record<string, unknown>, answer: unknown) => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
-      const { client } = await served({ ...CONFLICTED, plugins: VALUE.plugins });
-      return call(client, 'run_gesture', { command: 'modbench.record.open', ...args });
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setQueryAnswer('resolveNames', answer);
+      const client = await clientOf(new FakeInstance({ ...CONFLICTED, plugins: VALUE.plugins }), mEdit);
+      return { mEdit, answer: await call(client, 'run_gesture', { command: 'modbench.record.open', ...args }) };
     };
 
-    it('fires with each record as a record Argument, a copy when it names its plugin, and the pinned Option', async () => {
-      const { name, origin } = VALUE.plugins[1] ?? { name: '', origin: '' };
-      await fire({ argument: [{ formKey: '000800:A.esp' }, { formKey: '000801:A.esp', plugin: { name, origin } }], options: { pinned: true } });
+    it('resolves each record by EditorID or FormKey through mEdit, and fires the FormKeys as record Arguments with the pinned Option', async () => {
+      const { mEdit } = await fire(
+        { argument: [{ name: 'Gun' }, { name: '000802:A.esp' }], options: { pinned: true } },
+        [{ formKey: '000801:A.esp', editorId: 'Gun' }, { formKey: '000802:A.esp' }]);
 
-      expect(fired.calls).toEqual([['modbench.record.open', new AgentCall([
-        { kind: 'record', formKey: '000800:A.esp' },
-        { kind: 'record', formKey: '000801:A.esp', plugin: { name, origin } },
-      ], { pinned: true })]]);
+      expect(mEdit.calls).toContainEqual({ method: 'resolveNames', args: [[{ name: 'Gun' }, { name: '000802:A.esp' }]] });
+      expect(fired.calls).toEqual([['modbench.record.open', new AgentCall([gun, { kind: 'record', formKey: '000802:A.esp' }], { pinned: true })]]);
+    });
+
+    it('fires a copy when the record names its plugin, as list_plugins shows it', async () => {
+      const { name, origin } = VALUE.plugins[1] ?? { name: '', origin: '' };
+      await fire({ argument: [{ name: 'Gun', plugin: { name, origin } }] }, [{ formKey: '000801:A.esp' }]);
+
+      expect(fired.calls).toEqual([['modbench.record.open', new AgentCall([{ ...gun, plugin: { name, origin } }], { pinned: undefined })]]);
+    });
+
+    it('refuses with mEdit\'s listing of the matches a name means, firing nothing', async () => {
+      const listing = '"Gun" means more than one thing: record 000801:A.esp (Gun); record 000802:B.esp (Gun).';
+      const { answer } = await fire({ argument: [{ name: 'Gun' }] }, { failed: 'refused', refusal: listing });
+
+      expect(answer).toEqual({ isError: true, text: listing });
+      expect(fired.calls).toEqual([]);
+    });
+
+    it('refuses a name that is a plugin, not a record, firing nothing', async () => {
+      const { answer } = await fire({ argument: [{ name: 'A.esp' }] }, [{ plugin: { name: 'A.esp', origin: 'Big Rocks' } }]);
+
+      expect(answer.text).toContain('"A.esp" is not a record.');
+      expect(fired.calls).toEqual([]);
     });
 
     it('refuses a plugin nothing is named, firing nothing', async () => {
-      const answer = await fire({ argument: [{ formKey: '000800:A.esp', plugin: { name: 'Gone.esp' } }] });
+      const { answer } = await fire({ argument: [{ name: 'Gun', plugin: { name: 'Gone.esp' } }] }, [{ formKey: '000801:A.esp' }]);
 
       expect(answer.text).toContain('No plugin is named "Gone.esp".');
       expect(fired.calls).toEqual([]);

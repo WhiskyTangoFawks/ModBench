@@ -210,6 +210,23 @@ describe('modbench.record.openPinned, the menus\' entry point', () => {
   });
 });
 
+describe('modbench.record.open on records two of which cannot open', () => {
+  it('reports the first record\'s failure, not a later column\'s', async () => {
+    reporter.report.mockClear();
+    const meditClient = new InMemoryMEditClient();
+    meditClient.setQueryAnswer('getCopyDocument', null);
+    meditClient.setQueryAnswer('getRecordOwner', null);
+    await register({ meditClient });
+
+    await commandHandlers.get('modbench.record.open')?.([
+      { argument: { kind: 'record', formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } } },
+      { argument: { kind: 'record', formKey: '000802:A.esp' } },
+    ]);
+
+    expect(reporter.report.mock.calls).toEqual([['error', 'Failed to open "000801:A.esp".', expect.stringContaining('000801:A.esp')]]);
+  });
+});
+
 describe('modbench.record.open for the agent', () => {
   const plugin = { name: 'A.esp', origin: 'ModA' };
   const call = (formKeys: string[], options: object = {}) =>
