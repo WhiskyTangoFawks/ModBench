@@ -6,9 +6,13 @@ export type StringsLanguageWire = Pick<LoadOrderWire, 'status' | 'onStatusChange
   put(language: string): Promise<void>;
 };
 
+export interface StringsLanguageHandOver {
+  hand(language: string): void;
+}
+
 /** Puts each language at once and in order while mEdit runs, and the newest again whenever the
  *  process behind the wire may hold none. */
-export function createStringsLanguageHandOver(wire: StringsLanguageWire): { hand: (language: string) => void } {
+export function createStringsLanguageHandOver(wire: StringsLanguageWire): StringsLanguageHandOver {
   let newest: string | undefined;
   let sending = Promise.resolve();
   const put = (language: string): void => { sending = sending.then(() => wire.put(language)); };

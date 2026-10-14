@@ -10,7 +10,7 @@ import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } 
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import { createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
-import { createStringsLanguageHandOver } from './stringsLanguageHandOver';
+import { createStringsLanguageHandOver, type StringsLanguageHandOver } from './stringsLanguageHandOver';
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
@@ -95,7 +95,7 @@ class HttpMEditClient implements MEditClient {
   private readonly loadOrder: LoadOrderSender;
   private readonly loadOrderStatusKept: LoadOrderStatusKeeper;
   private readonly handOver: UnsavedHandOver;
-  private readonly stringsLanguageHandOver: ReturnType<typeof createStringsLanguageHandOver>;
+  private readonly stringsLanguageHandOver: StringsLanguageHandOver;
   constructor(deps: HttpMEditClientDeps) {
     this.log = deps.log ?? SILENT_LOG;
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
