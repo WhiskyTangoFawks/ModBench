@@ -17,13 +17,16 @@ function addressOf(node: unknown): RecordToOpen | undefined {
 const isPinned = (argument: unknown): boolean =>
   typeof argument === 'object' && argument !== null && 'pinned' in argument && argument.pinned === true;
 
-/** A palette entry or key hands over no Argument, so it takes the focused view's selection
+const isOptionsOnly = (argument: unknown): boolean => isPinned(argument) && !(typeof argument === 'object' && argument !== null && 'argument' in argument);
+
+/** A palette entry or key hands over no Argument, or only Options, so it takes the focused view's selection
  *  (commands.md, Principles). */
 export function recordOpenPlan(argument: unknown, focusedSelection: readonly unknown[]): RecordOpenPlan {
-  const subjects: readonly unknown[] = argument === undefined ? focusedSelection
-    : Array.isArray(argument) ? argument : [argument];
+  const given: readonly unknown[] = Array.isArray(argument) ? argument : [argument];
+  const optionsOnly = argument !== undefined && given.every(isOptionsOnly);
+  const subjects = argument === undefined || optionsOnly ? focusedSelection : given;
   const addresses = subjects.flatMap((s) => addressOf(s) ?? []);
-  return { addresses, pinned: subjects.some(isPinned) };
+  return { addresses, pinned: optionsOnly || subjects.some(isPinned) };
 }
 
 /** What a menu's open hands to open: the menu's selection, else its clicked row. */

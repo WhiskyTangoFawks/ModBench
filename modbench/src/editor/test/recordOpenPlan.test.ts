@@ -44,6 +44,11 @@ describe('recordOpenPlan', () => {
       .toEqual({ addresses: [{ ...A, plugin: COPY }, B], pinned: false });
   });
 
+  it('an Argument that carries only pinned opens the focused view\'s selection, pinned', () => {
+    expect(recordOpenPlan({ pinned: true }, [ofRecord(A, COPY), ofRecord(B)]))
+      .toEqual({ addresses: [{ ...A, plugin: COPY }, B], pinned: true });
+  });
+
   it('with no Argument and no record selected, opens nothing', () => {
     expect(recordOpenPlan(undefined, [{ label: 'Types' }]).addresses).toEqual([]);
   });
