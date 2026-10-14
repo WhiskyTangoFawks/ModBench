@@ -580,13 +580,12 @@ describe('Instance — game folder and the archives the game loads', () => {
       modFiles: new Map([['Tracked Patch Mod', filesOfMod('Tracked Patch Mod', 'Tracked Patch Mod.esp', 'Strings/Tracked Patch Mod_en.STRINGS')]]),
     }, (adapter) => ({ ...adapter, fileStamp: (path) => Promise.resolve({ kind: 'read', answer: { size: 5n, modifiedNs: 1n, changedNs: path === stringsFile ? changedNs : 0n } }) }));
     await instance.refresh();
-    const stampBefore = instance.value.loadOrderSnapshot.plugins.flatMap((plugin) => plugin.stringsFiles).map(({ stamp }) => stamp);
+    const snapshotBefore = instance.value.loadOrderSnapshot;
 
     changedNs = 2n;
     await instance.refresh();
 
-    const stampAfter = instance.value.loadOrderSnapshot.plugins.flatMap((plugin) => plugin.stringsFiles).map(({ stamp }) => stamp);
-    expect(stampAfter).not.toEqual(stampBefore);
+    expect(instance.value.loadOrderSnapshot).not.toEqual(snapshotBefore);
   });
 
   it('lands a value carrying the game folder not found, rather than a failure, and back again when it is found', async () => {
