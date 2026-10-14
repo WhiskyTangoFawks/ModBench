@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { MEditClient, NameQuery } from '../client/MEditClient';
 import { failureReason, isReadFailed } from '../wire/readFailed';
-import { Refusal } from './refusal';
+import { Refusal } from '../drivingLib/refusal';
 
 export const RESOLVE_NAMES = {
   name: 'resolve_names',
