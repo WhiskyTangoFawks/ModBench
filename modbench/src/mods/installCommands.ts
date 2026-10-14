@@ -1,13 +1,14 @@
 // The install gesture: a downloaded file, an archive or a folder, as a new mod or over an installed one.
 
 import * as vscode from 'vscode';
-import type { DownloadFile, Instance } from '../instanceLoader/instance';
+import type { DownloadFile, Instance, InstanceValue } from '../instanceLoader/instance';
 import { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, samePath } from '../instanceAdapter/instanceAdapter';
 import type { InstallTarget, ModlistCommands, ModSource } from '../modOrderCommands/modOrderCommands';
-import { downloadArgumentOf } from '../drivingLib/argument';
+import { downloadArgumentOf, downloadedFileNamed } from '../drivingLib/argument';
 import {
-  argumentOfKind, registerAgentGesture, reportPartial, type AgentCall, type AgentGesture, type GestureResult, type PartialFailure,
+  argumentOfKind, registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure,
 } from '../drivingLib/agentGesture';
+import type { Argument } from '../wire/argument';
 import type { KindedRow } from '../drivingLib/gestureEntry';
 import { Refusal } from '../drivingLib/refusal';
 import { errorMessage } from '../ports/errorMessage';
@@ -58,24 +59,57 @@ const unmarked = (source: ModSource, downloadRefusal: string | undefined): Parti
     ? [{ message: `"${source.name}" was installed, but its Downloads status could not be updated`, detail: downloadRefusal, severity: 'log' }]
     : [];
 
+type Downloads = InstanceValue['downloads'];
+
+// An archive that is one of the instance's downloaded files installs as that file, so the
+// mod manager's own Downloads view sees it installed.
+const archiveSource = (downloads: Downloads, path: string): ModSource => {
+  const downloaded = downloads.kind === 'listed' ? downloads.rows.find((row) => samePath(row.path, path)) : undefined;
+  return downloaded ? downloadedFileSource(downloaded) : { kind: 'archive', path };
+};
+
+const sourceOf = (downloads: Downloads, argument: readonly Argument[]): Pick<Install, 'source' | 'via'> => {
+  const [only, ...more] = argument;
+  if (only === undefined || more.length > 0) throw new Refusal('An agent call to install carries one source: a downloaded file, an archive or a folder.');
+  const given = argumentOfKind(only, 'downloadedFile', 'archive', 'folder');
+  if (given.kind === 'downloadedFile') return { source: downloadedFileSource(downloadedFileNamed(downloads, given.name)), via: 'downloadedFile' };
+  return given.kind === 'archive'
+    ? { source: archiveSource(downloads, given.path), via: 'installFromArchive' }
+    : { source: { kind: 'folder', path: given.path }, via: 'installFromFolder' };
+};
+
+const targetOf = ({ name, target }: InstallOptions, newModNameRefusal: (name: string) => string | undefined): InstallTarget => {
+  if (name !== undefined && target === undefined) {
+    const refusal = newModNameRefusal(name);
+    if (refusal !== undefined) throw new Refusal(refusal);
+    return { kind: 'new', name };
+  }
+  if (target !== undefined && name === undefined) return { kind: 'upgrade', name: target };
+  throw new Refusal('An agent call to install carries the name of a new mod, or the target mod to upgrade, and not both.');
+};
+
+async function pickSourcePath(): Promise<{ kind: 'archive' | 'folder'; path: string } | undefined> {
+  const picked = await vscode.window.showQuickPick<SourceKindItem>(
+    [
+      { label: 'Archive…', description: 'A .zip, .7z or .rar file', sourceKind: 'archive' },
+      { label: 'Folder…', description: 'An already-extracted mod folder', sourceKind: 'folder' },
+    ],
+    { placeHolder: 'Install a mod from an archive or a folder' },
+  );
+  if (!picked) return undefined;
+  const dialog = picked.sourceKind === 'archive'
+    ? { canSelectMany: false, filters: { 'Mod archives': [...ARCHIVE_EXTENSIONS] }, openLabel: 'Install' }
+    : { canSelectFiles: false, canSelectFolders: true, canSelectMany: false, openLabel: 'Install' };
+  const path = (await vscode.window.showOpenDialog(dialog))?.[0]?.fsPath;
+  return path ? { kind: picked.sourceKind, path } : undefined;
+}
+
 // modbench.mod.install: with no source, as from the Mods menu, it asks archive-or-folder first,
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
   const { commands, instance, reporterFor, warnIfFomod, downloadInstall } = deps;
-  const downloadedFileNamed = (name: string): DownloadFile => {
-    const { downloads } = instance.value;
-    const row = downloads.kind === 'listed' ? downloads.rows.find((listed) => listed.name === name) : undefined;
-    if (!row) throw new Refusal(`"${name}" is gone from Downloads.`);
-    return row;
-  };
-  // An archive that is one of the instance's downloaded files installs as that file, so the
-  // mod manager's own Downloads view sees it installed.
-  const archiveSource = (path: string): ModSource => {
-    const { downloads } = instance.value;
-    const downloaded = downloads.kind === 'listed' ? downloads.rows.find((row) => samePath(row.path, path)) : undefined;
-    return downloaded ? downloadedFileSource(downloaded) : { kind: 'archive', path };
-  };
   const reporterOf = (via: InstallVia): Reporter => (via === 'downloadedFile' ? downloadInstall.reporter : reporterFor(via));
+  const newModNameRefusal = (name: string) => commands.newModNameRefusal(instance.value, name);
   const failedMessage = ({ source, target, via }: Install): string =>
     `Failed to install "${source.kind === 'downloadedFile' && via === 'downloadedFile' ? source.name : target.name}".`;
 
@@ -94,63 +128,22 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
   };
 
   const newMod = async (source: ModSource, defaultName: string, via: InstallVia): Promise<Install | undefined> => {
-    const name = await promptModName(defaultName, (value) => commands.newModNameRefusal(instance.value, value));
+    const name = await promptModName(defaultName, newModNameRefusal);
     return name ? { source, target: { kind: 'new', name }, via } : undefined;
   };
 
   const pickedSource = async (): Promise<Install | undefined> => {
-    const picked = await vscode.window.showQuickPick<SourceKindItem>(
-      [
-        { label: 'Archive…', description: 'A .zip, .7z or .rar file', sourceKind: 'archive' },
-        { label: 'Folder…', description: 'An already-extracted mod folder', sourceKind: 'folder' },
-      ],
-      { placeHolder: 'Install a mod from an archive or a folder' },
-    );
+    const picked = await pickSourcePath();
     if (!picked) return undefined;
-    if (picked.sourceKind === 'archive') {
-      const archivePicked = await vscode.window.showOpenDialog({
-        canSelectMany: false,
-        filters: { 'Mod archives': [...ARCHIVE_EXTENSIONS] },
-        openLabel: 'Install',
-      });
-      const archive = archivePicked?.[0]?.fsPath;
-      return archive ? newMod(archiveSource(archive), defaultModName(archive), 'installFromArchive') : undefined;
-    }
-    const folderPicked = await vscode.window.showOpenDialog({
-      canSelectFiles: false,
-      canSelectFolders: true,
-      canSelectMany: false,
-      openLabel: 'Install',
-    });
-    const folder = folderPicked?.[0]?.fsPath;
-    return folder ? newMod({ kind: 'folder', path: folder }, defaultModNameForFolder(folder), 'installFromFolder') : undefined;
+    return picked.kind === 'archive'
+      ? newMod(archiveSource(instance.value.downloads, picked.path), defaultModName(picked.path), 'installFromArchive')
+      : newMod({ kind: 'folder', path: picked.path }, defaultModNameForFolder(picked.path), 'installFromFolder');
   };
 
   const downloadedFileInstall = async (name: string): Promise<Install | undefined> => {
-    const row = downloadedFileNamed(name);
-    const target = await chooseInstallTarget(
-      row, (defaultName) => promptModName(defaultName, (value) => commands.newModNameRefusal(instance.value, value)));
+    const row = downloadedFileNamed(instance.value.downloads, name);
+    const target = await chooseInstallTarget(row, (defaultName) => promptModName(defaultName, newModNameRefusal));
     return target ? { source: downloadedFileSource(row), target, via: 'downloadedFile' } : undefined;
-  };
-
-  const targetOf = ({ name, target }: InstallOptions): InstallTarget => {
-    if (name !== undefined && target === undefined) {
-      const refusal = commands.newModNameRefusal(instance.value, name);
-      if (refusal !== undefined) throw new Refusal(refusal);
-      return { kind: 'new', name };
-    }
-    if (target !== undefined && name === undefined) return { kind: 'upgrade', name: target };
-    throw new Refusal('An agent call to install carries the name of a new mod, or the target mod to upgrade, and not both.');
-  };
-
-  const sourceOf = ({ argument }: AgentCall<InstallOptions>): Pick<Install, 'source' | 'via'> => {
-    const [only, ...more] = argument;
-    if (only === undefined || more.length > 0) throw new Refusal('An agent call to install carries one source: a downloaded file, an archive or a folder.');
-    const given = argumentOfKind(only, 'downloadedFile', 'archive', 'folder');
-    if (given.kind === 'downloadedFile') return { source: downloadedFileSource(downloadedFileNamed(given.name)), via: 'downloadedFile' };
-    return given.kind === 'archive'
-      ? { source: archiveSource(given.path), via: 'installFromArchive' }
-      : { source: { kind: 'folder', path: given.path }, via: 'installFromFolder' };
   };
 
   const gesture: AgentGesture<KindedRow, Install, InstallResult, InstallOptions> = {
@@ -164,7 +157,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         return undefined;
       }
     },
-    fromAgent: (call) => ({ ...sourceOf(call), target: targetOf(call.options) }),
+    fromAgent: ({ argument, options }) => ({ ...sourceOf(instance.value.downloads, argument), target: targetOf(options, newModNameRefusal) }),
     run: (install) => runWritingGesture(
       install.via === 'downloadedFile' ? downloadInstall.progressViewId : MODS_KEY_ARGS.view, instance, () => installedMod(install)),
     report: (result, install) => {
