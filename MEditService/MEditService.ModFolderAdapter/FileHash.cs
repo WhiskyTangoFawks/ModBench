@@ -21,8 +21,4 @@ public static class FileHash
         Span<byte> bytes = stackalloc byte[sizeof(ulong)];
         return Convert.TryFromBase64String(text, bytes, out var written) && written == sizeof(ulong);
     }
-
-    /// <summary>The hash's bytes in lowercase hex, as Wabbajack names a patch: one name on a file system that
-    /// ignores case.</summary>
-    internal static string Hex(string hash) => Convert.ToHexStringLower(Convert.FromBase64String(hash));
 }

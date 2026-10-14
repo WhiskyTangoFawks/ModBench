@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { exists, listDir, remove, write } from './files';
 import type { HashIndex } from './hashIndex';
 import type { GameFile, InstanceAdapter } from './instanceAdapter';
-import { buildDir, ignoreListFile, WHITELIST_IGNORE_LIST } from './layout';
+import { ignoreListFile, WHITELIST_IGNORE_LIST } from './layout';
 import type { Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
 
-type Mo2Repository = Pick<InstanceAdapter, 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'buildFolder' | 'writeIgnoreList' | 'removeIgnoreList'>;
+type Mo2Repository = Pick<InstanceAdapter, 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'>;
 
 const lowerCased = (names: readonly Dirent[]): Map<string, Dirent> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
@@ -50,7 +50,6 @@ export function mo2Repository(
   };
 
   return {
-    buildFolder: buildDir(instanceRoot),
 
     async writeIgnoreList() {
       const file = ignoreListFile(instanceRoot);

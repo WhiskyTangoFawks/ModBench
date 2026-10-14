@@ -126,7 +126,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each mod's manifest from the mod as it is (ADR-0022), and into the build folder each delta a changed file needs. A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification. */
+        /** @description Writes each mod's manifest from the mod as it is (ADR-0022). A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification, which names the request's gesture. */
         post: operations["UpdateManifest"];
         delete?: never;
         options?: never;
@@ -143,7 +143,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files, game files and deltas it names (ADR-0022), and touches no other file. A mod lands, is skipped naming what it lacks, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification. */
+        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), and touches no other file. A mod lands, is skipped naming what it lacks, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, which names the request's gesture. */
         post: operations["RestoreFromManifest"];
         delete?: never;
         options?: never;
@@ -1356,7 +1356,6 @@ export interface components {
             refusal: components["schemas"]["RestoreRefusal"];
             message: string;
             gameFilesNotFound: string[];
-            deltasNotFound: string[];
         };
         ModUpdateManifestRefusal: {
             item: string;
@@ -1364,6 +1363,7 @@ export interface components {
             message: string;
         };
         ModlistProgress: {
+            gesture?: string | null;
             mod?: string | null;
             /** Format: int32 */
             modsDone: number;
@@ -1679,9 +1679,6 @@ export interface components {
             mods: components["schemas"]["RestoreFromManifestModRequest"][];
             gameFiles: components["schemas"]["OverriddenGameFileRequest"][];
             dataFolder: string;
-            buildFolder: string;
-            downloadsFolder?: string | null;
-            downloadedFiles?: components["schemas"]["InstallationFileRequest"][] | null;
             gesture?: string | null;
         };
         RestoreFromManifestResponse: {
@@ -1747,10 +1744,6 @@ export interface components {
         UpdateManifestRequest: {
             mods: components["schemas"]["UpdateManifestModRequest"][];
             gameFiles: components["schemas"]["OverriddenGameFileRequest"][];
-            dataFolder: string;
-            buildFolder: string;
-            /** Format: double */
-            deltaShare?: number | null;
             gesture?: string | null;
         };
         UpdateManifestResponse: {

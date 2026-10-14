@@ -497,7 +497,7 @@ class HttpMEditClient implements MEditClient {
   }
 
   // A cancel asks mEdit to stop after the mod in hand, and the request then answers what landed, so the read that
-  // follows shows the disk. mEdit holds a gesture once begun, which its first progress shows.
+  // follows shows the disk. mEdit holds a gesture once begun, which its first progress naming it shows.
   private async modlistGesture<O extends object>(
     kind: 'update-manifest-progress' | 'restore-from-manifest-progress', { onProgress, signal }: ModlistCallOptions,
     call: (gesture: string) => Promise<O | WriteRefused>,
@@ -512,6 +512,7 @@ class HttpMEditClient implements MEditClient {
       });
     };
     const unsubscribe = this.notifications.onNotification(kind, (progress) => {
+      if (progress.gesture !== gesture) return;
       begun = true;
       if (signal?.aborted) cancel();
       onProgress?.(progress);
@@ -549,7 +550,7 @@ class HttpMEditClient implements MEditClient {
       outcome: (answer) => ({
         ...selectionOutcome(answer),
         notFound: answer.refused.filter((refused) => refused.refusal === 'NotFound')
-          .map((refused) => ({ mod: refused.item, gameFiles: refused.gameFilesNotFound, deltas: refused.deltasNotFound.length > 0 })),
+          .map((refused) => ({ mod: refused.item, gameFiles: refused.gameFilesNotFound })),
       }),
     }));
   }

@@ -5,11 +5,8 @@ namespace MEditService.Commands.Build;
 /// <summary>A mod to restore from its manifest, with the installation files the mod manager records it as installed from.</summary>
 public sealed record ModToRestore(string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles);
 
-/// <summary>The instance's facts beyond its mods: the game files the mods' files override, and where a delta is
-/// looked for. DownloadedFiles are those searched for a delta beside each mod's installation files.</summary>
-public sealed record InstanceToRestore(
-    IReadOnlyList<OverriddenGameFile> GameFiles, string DataFolder, string BuildFolder, string? DownloadsFolder,
-    IReadOnlyList<InstallationFile> DownloadedFiles);
+/// <summary>The instance's facts beyond its mods: the game files the mods' files override, under the game's data folder.</summary>
+public sealed record InstanceToRestore(IReadOnlyList<OverriddenGameFile> GameFiles, string DataFolder);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum RestoreRefusal
@@ -21,10 +18,10 @@ public enum RestoreRefusal
     ManifestUnreadable,
 
     /// <summary>A file its manifest names has no provider, or one whose installation file or game file is missing or
-    /// has other bytes, or whose delta has other bytes.</summary>
+    /// has other bytes.</summary>
     Lacking,
 
-    /// <summary>Each lack is a game file the request did not name, or a delta no place it searched holds.</summary>
+    /// <summary>Each lack is a game file the request did not name.</summary>
     NotFound,
 
     /// <summary>A file the mod is restored from could not be read: one of its own, an installation file or a game
@@ -35,9 +32,9 @@ public enum RestoreRefusal
     NotFinished,
 }
 
-/// <summary>Why a mod was skipped. A NotFound mod names the game files and the deltas it lacks, by the paths and names a
-/// request can bring them back with.</summary>
-public sealed record RestoreSkip(RestoreRefusal Kind, IReadOnlyList<string> GameFilesNotFound, IReadOnlyList<string> DeltasNotFound);
+/// <summary>Why a mod was skipped. A NotFound mod names the game files it lacks, by the paths a request can bring them
+/// back with.</summary>
+public sealed record RestoreSkip(RestoreRefusal Kind, IReadOnlyList<string> GameFilesNotFound);
 
 /// <summary>A mod whose folder is as its manifest says, and the files written to make it so.</summary>
 public sealed record RestoredMod(IReadOnlyList<string> Written);

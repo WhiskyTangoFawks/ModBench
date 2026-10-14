@@ -177,7 +177,6 @@ function restoreMessage(status: RestoreStatus): string {
   switch (status.phase) {
     case 'ReadingFiles': return `Restore from manifest — reading the files of "${status.mod}"…`;
     case 'Restoring': return `Restore from manifest — "${status.mod ?? ''}", ${status.modsDone} of ${status.modsTotal} mods done…`;
-    case 'ReadingDownloadedFile': return `Restore from manifest — searching "${status.file}" for deltas…`;
   }
 }
 

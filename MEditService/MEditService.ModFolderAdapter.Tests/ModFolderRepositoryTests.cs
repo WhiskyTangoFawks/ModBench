@@ -8,7 +8,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
 {
     private const string HashOfHello = "o22fiH2CxyY=";
     private const string HashOfHelloWithACapitalO = "0RePZfC1RR4=";
-    private const string DeltaFromHelloToHelloWithACapitalO = "a36d9f887d82c726_d1178f65f0b5451e.octodiff";
 
     private readonly ScratchDirectory _root = new("modfolder-adapter-");
     private readonly ModFolderRepository _repository = new(new FakeTimeProvider(TimeProvider.System.GetUtcNow().AddDays(1)));
@@ -21,28 +20,28 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Write("readme.txt", "abc");
         Write(Path.Combine("meshes", "deep", "a.nif"), "hello");
 
-        var files = _repository.Files(_root, "mod", new HashSet<string>()).OrderBy(f => f.Path, StringComparer.Ordinal).ToList();
+        var files = _repository.Files(_root, "mod", new HashSet<string>(), NoHashes).OrderBy(f => f.Path, StringComparer.Ordinal).ToList();
 
         Assert.Equal(["meshes/deep/a.nif", "readme.txt"], files.Select(f => f.Path));
         Assert.Equal(HashOfHello, files[0].Hash);
     }
 
     [Fact]
-    public void AFileWhoseSizeAndTimeMatchItsManifestLine_KeepsTheLinesHash()
+    public void AFileWhoseSizeAndTimeMatchItsManifestLine_TakesTheHashItsProviderNames()
     {
         var stamp = Stamped("a.txt", "hello");
-        _repository.WriteManifest(_root, "mod", Manifest(new ManifestFile("a.txt", HashOfHelloWithACapitalO, stamp, new FileProvider.NoProvider())));
+        _repository.WriteManifest(_root, "mod", Manifest(new ManifestFile("a.txt", stamp, new FileProvider.FirstInstallationFile())));
 
-        Assert.Equal(HashOfHelloWithACapitalO, OnlyFile().Hash);
+        Assert.Equal(HashOfHelloWithACapitalO, OnlyFile(("a.txt", HashOfHelloWithACapitalO)).Hash);
     }
 
     [Fact]
-    public void AFileWhoseManifestLineHashIsNoHash_IsHashed()
+    public void AFileWhoseSizeAndTimeMatchItsManifestLine_WhoseProviderNamesNoHash_IsHashed()
     {
         var stamp = Stamped("a.txt", "hello");
-        _repository.WriteManifest(_root, "mod", Manifest(new ManifestFile("a.txt", "LINE", stamp, new FileProvider.NoProvider())));
+        _repository.WriteManifest(_root, "mod", Manifest(new ManifestFile("a.txt", stamp, new FileProvider.NoProvider())));
 
-        Assert.Equal(HashOfHello, OnlyFile().Hash);
+        Assert.Equal(HashOfHello, OnlyFile(("b.txt", HashOfHelloWithACapitalO)).Hash);
     }
 
     [Theory]
@@ -52,27 +51,27 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         var stamp = Stamped("a.txt", "hello");
         var line = stamp with { Size = stamp.Size + sizeApart, Modified = stamp.Modified + modifiedApart };
-        _repository.WriteManifest(_root, "mod", Manifest(new ManifestFile("a.txt", "LINE", line, new FileProvider.NoProvider())));
+        _repository.WriteManifest(_root, "mod", Manifest(new ManifestFile("a.txt", line, new FileProvider.FirstInstallationFile())));
 
-        Assert.Equal(HashOfHello, OnlyFile().Hash);
+        Assert.Equal(HashOfHello, OnlyFile(("a.txt", HashOfHelloWithACapitalO)).Hash);
     }
 
     [Fact]
     public void AFileWhoseManifestLineHasNoStamp_IsHashed()
     {
         Write("a.txt", "hello");
-        _repository.WriteManifest(_root, "mod", Manifest(new ManifestFile("a.txt", "LINE", null, new FileProvider.NoProvider())));
+        _repository.WriteManifest(_root, "mod", Manifest(new ManifestFile("a.txt", null, new FileProvider.FirstInstallationFile())));
 
-        Assert.Equal(HashOfHello, OnlyFile().Hash);
+        Assert.Equal(HashOfHello, OnlyFile(("a.txt", HashOfHelloWithACapitalO)).Hash);
     }
 
     [Fact]
     public void AManifestWithLinesThatAreNotJson_StillLetsEachFileBeHashed()
     {
         Write("a.txt", "hello");
-        Write("mod.manifest", "<<<<<<< HEAD\n{\"path\":\"a.txt\",\"hash\":\"LINE\"\n=======\n>>>>>>> theirs\n");
+        Write("mod.manifest", "<<<<<<< HEAD\n{\"path\":\"a.txt\",\"size\":5\n=======\n>>>>>>> theirs\n");
 
-        Assert.Equal(HashOfHello, OnlyFile().Hash);
+        Assert.Equal(HashOfHello, OnlyFile(("a.txt", HashOfHelloWithACapitalO)).Hash);
     }
 
     [Fact]
@@ -89,7 +88,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         var stamp = Stamped("a.txt", "hello");
         var readAtTheChange = new ModFolderRepository(new FakeTimeProvider(DateTimeOffset.UnixEpoch.AddTicks(stamp.Changed / 100)));
 
-        Assert.Null(Assert.Single(readAtTheChange.Files(_root, "mod", new HashSet<string>())).Stamp);
+        Assert.Null(Assert.Single(readAtTheChange.Files(_root, "mod", new HashSet<string>(), NoHashes)).Stamp);
     }
 
     [Fact]
@@ -118,23 +117,21 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Write("meta.ini", "abc");
         Write("mod.manifest", "{}\n");
 
-        Assert.Equal(["a.txt"], _repository.Files(_root, "mod", new HashSet<string> { "meta.ini" }).Select(f => f.Path));
+        Assert.Equal(["a.txt"], _repository.Files(_root, "mod", new HashSet<string> { "meta.ini" }, NoHashes).Select(f => f.Path));
     }
 
     [Fact]
-    public void WriteManifest_WritesOneLinePerSourceAndFile_InPathOrder()
+    public void WriteManifest_WritesOneLinePerSourceAndFile_InPathOrder_AFileLineCarryingNoHash()
     {
         var stamp = new FileStamp(5, 1234, 99);
         var manifest = new Manifest(
             [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
             [new ManifestSource("Data/Game.esm", 9, "CCCC")],
             [
-                new ManifestFile("z.txt", "H3", stamp, new FileProvider.NoProvider()),
-                new ManifestFile("b.nif", "H2", stamp, new FileProvider.InstallationFileEntry("Patch.zip", "Data/b.nif")),
-                new ManifestFile("a.nif", "H1", stamp, new FileProvider.FirstInstallationFile()),
-                new ManifestFile("c.esm", "H4", null, new FileProvider.GameFile("Data/Game.esm")),
-                new ManifestFile("d/d.nif", HashOfHelloWithACapitalO, stamp, new FileProvider.InstallationFileDelta("Patch.zip", "Data/d.nif", HashOfHello)),
-                new ManifestFile("e.esm", HashOfHelloWithACapitalO, null, new FileProvider.GameFileDelta("Data/Game.esm", HashOfHello)),
+                new ManifestFile("z.txt", stamp, new FileProvider.NoProvider()),
+                new ManifestFile("b.nif", stamp, new FileProvider.InstallationFileEntry("Patch.zip", "Data/b.nif")),
+                new ManifestFile("a.nif", stamp, new FileProvider.FirstInstallationFile()),
+                new ManifestFile("c.esm", null, new FileProvider.GameFile("Data/Game.esm")),
             ]);
 
         Assert.True(_repository.WriteManifest(_root, "mod", manifest));
@@ -143,20 +140,17 @@ public sealed class ModFolderRepositoryTests : IDisposable
             "{\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"source\":\"nexus:1:2\"}\n"
             + "{\"installationFile\":\"Patch.zip\",\"size\":7,\"hash\":\"BBBB\"}\n"
             + "{\"gameFile\":\"Data/Game.esm\",\"size\":9,\"hash\":\"CCCC\"}\n"
-            + "{\"path\":\"a.nif\",\"hash\":\"H1\",\"size\":5,\"modified\":1234}\n"
-            + "{\"path\":\"b.nif\",\"hash\":\"H2\",\"size\":5,\"modified\":1234,\"from\":{\"installationFile\":\"Patch.zip\",\"path\":\"Data/b.nif\"}}\n"
-            + "{\"path\":\"c.esm\",\"hash\":\"H4\",\"from\":{\"gameFile\":\"Data/Game.esm\"}}\n"
-            + $"{{\"path\":\"d/d.nif\",\"hash\":\"{HashOfHelloWithACapitalO}\",\"size\":5,\"modified\":1234,"
-            + $"\"from\":{{\"installationFile\":\"Patch.zip\",\"path\":\"Data/d.nif\",\"delta\":\"d.nif.{DeltaFromHelloToHelloWithACapitalO}\"}}}}\n"
-            + $"{{\"path\":\"e.esm\",\"hash\":\"{HashOfHelloWithACapitalO}\",\"from\":{{\"gameFile\":\"Data/Game.esm\",\"delta\":\"e.esm.{DeltaFromHelloToHelloWithACapitalO}\"}}}}\n"
-            + "{\"path\":\"z.txt\",\"hash\":\"H3\",\"size\":5,\"modified\":1234,\"from\":null}\n",
+            + "{\"path\":\"a.nif\",\"size\":5,\"modified\":1234}\n"
+            + "{\"path\":\"b.nif\",\"size\":5,\"modified\":1234,\"from\":{\"installationFile\":\"Patch.zip\",\"path\":\"Data/b.nif\"}}\n"
+            + "{\"path\":\"c.esm\",\"from\":{\"gameFile\":\"Data/Game.esm\"}}\n"
+            + "{\"path\":\"z.txt\",\"size\":5,\"modified\":1234,\"from\":null}\n",
             File.ReadAllText(Path.Combine(_root, "mod.manifest")));
     }
 
     [Fact]
     public void WriteManifest_OfTheTextAlreadyThere_WritesNothing()
     {
-        var manifest = new Manifest([], [], [new ManifestFile("a.txt", "H", null, new FileProvider.NoProvider())]);
+        var manifest = new Manifest([], [], [new ManifestFile("a.txt", null, new FileProvider.NoProvider())]);
         _repository.WriteManifest(_root, "mod", manifest);
         var path = Path.Combine(_root, "mod.manifest");
         var longAgo = new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -170,7 +164,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void WriteManifest_WritesNoByteOrderMark_AndKeepsANonAsciiNameReadable()
     {
-        var manifest = new Manifest([], [], [new ManifestFile("meshes/café.nif", "H", null, new FileProvider.NoProvider())]);
+        var manifest = new Manifest([], [], [new ManifestFile("meshes/café.nif", null, new FileProvider.NoProvider())]);
 
         _repository.WriteManifest(_root, "mod", manifest);
 
@@ -187,12 +181,10 @@ public sealed class ModFolderRepositoryTests : IDisposable
             [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
             [new ManifestSource("Data/Game.esm", 9, "CCCC")],
             [
-                new ManifestFile("a.nif", "H1", stamp, new FileProvider.FirstInstallationFile()),
-                new ManifestFile("b.nif", "H2", stamp, new FileProvider.InstallationFileEntry("Patch.zip", "Data/b.nif")),
-                new ManifestFile("c.esm", "H4", null, new FileProvider.GameFile("Data/Game.esm")),
-                new ManifestFile("d/d.nif", HashOfHelloWithACapitalO, stamp, new FileProvider.InstallationFileDelta("Patch.zip", "Data/d.nif", HashOfHello)),
-                new ManifestFile("e.esm", HashOfHelloWithACapitalO, null, new FileProvider.GameFileDelta("Data/Game.esm", HashOfHello)),
-                new ManifestFile("z.txt", "H3", stamp, new FileProvider.NoProvider()),
+                new ManifestFile("a.nif", stamp, new FileProvider.FirstInstallationFile()),
+                new ManifestFile("b.nif", stamp, new FileProvider.InstallationFileEntry("Patch.zip", "Data/b.nif")),
+                new ManifestFile("c.esm", null, new FileProvider.GameFile("Data/Game.esm")),
+                new ManifestFile("z.txt", stamp, new FileProvider.NoProvider()),
             ]);
         _repository.WriteManifest(_root, "mod", manifest);
 
@@ -215,40 +207,15 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
     [Theory]
     [InlineData("<<<<<<< HEAD")]
-    [InlineData("{\"path\":\"a.txt\"}")]
-    [InlineData("{\"path\":\"a.txt\",\"hash\":\"H\",\"from\":{\"gameFile\":\"Game.esm\",\"delta\":\"a.txt.0000000000000000_0000000000000000.octodiff\"}}")]
+    [InlineData("{\"path\":7}")]
+    [InlineData("{\"path\":\"a.txt\",\"from\":{\"installationFile\":\"A.zip\"}}")]
     public void ReadManifest_WithALineItCannotRead_RefusesNamingTheLine(string line)
     {
-        Write("mod.manifest", "{\"path\":\"b.txt\",\"hash\":\"H\"}\n" + line + "\n");
+        Write("mod.manifest", "{\"path\":\"b.txt\"}\n" + line + "\n");
 
         var refused = Assert.Throws<InvalidDataException>(() => _repository.ReadManifest(_root, "mod"));
 
         Assert.Contains("line 2", refused.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ADelta_IsOpenedFromTheBuildFolder_ElseLooseInTheDownloadsFolder_ElseNot()
-    {
-        var build = Path.Combine(_root, "build");
-        var downloads = Path.Combine(_root, "downloads");
-        _repository.WriteDelta(build, "a.nif", HashOfHello, HashOfHelloWithACapitalO, Writing([1], keep: true));
-        Write(Path.Combine("downloads", $"a.nif.{DeltaFromHelloToHelloWithACapitalO}"), "\u0002");
-        Write(Path.Combine("downloads", $"b.nif.{DeltaFromHelloToHelloWithACapitalO}"), "\u0003");
-
-        int? FirstByte(string path)
-        {
-            using var delta = _repository.OpenDelta(build, downloads, path, HashOfHello, HashOfHelloWithACapitalO);
-            return delta?.ReadByte();
-        }
-
-        Assert.Equal([1, 3, null], new[] { FirstByte("a.nif"), FirstByte("meshes/b.nif"), FirstByte("c.nif") });
-        Assert.Null(_repository.OpenDelta(build, null, "b.nif", HashOfHello, HashOfHelloWithACapitalO));
-    }
-
-    [Fact]
-    public void ADeltasName_CarriesTheFileItMakesAndTheHashesOfBothEnds()
-    {
-        Assert.Equal($"a.nif.{DeltaFromHelloToHelloWithACapitalO}", _repository.DeltaName("meshes/a.nif", HashOfHello, HashOfHelloWithACapitalO));
     }
 
     [Fact]
@@ -350,75 +317,12 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Empty(Directory.GetFileSystemEntries(_root));
     }
 
-    [Fact]
-    public void ADelta_IsWrittenIntoTheBuildFolder_NamedForTheFileItMakesAndTheHashesOfBothEnds()
-    {
-        var build = Path.Combine(_root, "build");
-
-        Assert.True(_repository.WriteDelta(build, "meshes/a.nif", HashOfHello, HashOfHelloWithACapitalO, Writing([1, 2, 3], keep: true)));
-
-        Assert.Equal([$"a.nif.{DeltaFromHelloToHelloWithACapitalO}"], Directory.GetFiles(build).Select(Path.GetFileName));
-        Assert.Equal(3, _repository.DeltaSize(build, "meshes/a.nif", HashOfHello, HashOfHelloWithACapitalO));
-    }
-
-    [Fact]
-    public void ADeltaTheBuildFolderDoesNotHold_HasNoSize()
-    {
-        var build = Path.Combine(_root, "build");
-        _repository.WriteDelta(build, "a.nif", HashOfHello, HashOfHelloWithACapitalO, Writing([1], keep: true));
-
-        Assert.Null(_repository.DeltaSize(build, "a.nif", HashOfHelloWithACapitalO, HashOfHello));
-    }
-
-    [Fact]
-    public void ADeltaNotKept_LeavesNothingInTheBuildFolder()
-    {
-        var build = Path.Combine(_root, "build");
-
-        Assert.False(_repository.WriteDelta(build, "a.nif", HashOfHello, HashOfHelloWithACapitalO, Writing([1], keep: false)));
-
-        Assert.Empty(Directory.GetFiles(build));
-    }
-
-    [Fact]
-    public void ADeltaWhoseWritingFails_LeavesNothingInTheBuildFolder()
-    {
-        var build = Path.Combine(_root, "build");
-
-        Assert.Throws<IOException>(() => _repository.WriteDelta(build, "a.nif", HashOfHello, HashOfHelloWithACapitalO, delta =>
-        {
-            delta.WriteByte(1);
-            throw new IOException("the base went away");
-        }));
-
-        Assert.Empty(Directory.GetFiles(build));
-    }
-
-    [Fact]
-    public void AScratchFile_IsASeekableFileInTheBuildFolder_GoneOnceClosed()
-    {
-        var build = Path.Combine(_root, "build");
-
-        using (var scratch = _repository.CreateScratchFile(build))
-        {
-            scratch.Write([1, 2, 3]);
-            scratch.Position = 1;
-            Assert.Equal(2, scratch.ReadByte());
-            Assert.Single(Directory.GetFiles(build));
-        }
-
-        Assert.Empty(Directory.GetFiles(build));
-    }
-
-    private static Func<Stream, bool> Writing(byte[] delta, bool keep) => stream =>
-    {
-        stream.Write(delta);
-        return keep;
-    };
-
     private static Manifest Manifest(params ManifestFile[] files) => new([], [], files);
 
-    private HashedFile OnlyFile() => Assert.Single(_repository.Files(_root, "mod", new HashSet<string>()));
+    private static readonly Dictionary<string, string> NoHashes = [];
+
+    private HashedFile OnlyFile(params (string Path, string Hash)[] provided) =>
+        Assert.Single(_repository.Files(_root, "mod", new HashSet<string>(), provided.ToDictionary(p => p.Path, p => p.Hash)));
 
     private FileStamp Stamped(string relative, string text)
     {

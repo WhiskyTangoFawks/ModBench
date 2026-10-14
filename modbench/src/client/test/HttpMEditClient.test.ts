@@ -170,11 +170,9 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
 const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, installationFiles: [], modManagerFiles: ['meta.ini'] });
 const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, installationFiles: [] });
 const modToUpdate = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], committedFiles: ['meta.ini'] });
-const updateFacts = { gameFiles: [{ path: 'Game.esm', size: 7, hash: 'AAECAwQFBgc=' }], dataFolder: '/game/Data', buildFolder: '/instance/build', deltaShare: 0.5 };
+const updateFacts = { gameFiles: [{ path: 'Game.esm', size: 7, hash: 'AAECAwQFBgc=' }] };
 const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [] });
-const restoreFacts = {
-  gameFiles: [], dataFolder: '/game/Data', buildFolder: '/instance/build', downloadsFolder: '/instance/downloads', downloadedFiles: [],
-};
+const restoreFacts = { gameFiles: [], dataFolder: '/game/Data' };
 const buildFacts = { excludedSuffix: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } } };
 
 describe('HttpMEditClient — what each verb sends and reads', () => {
@@ -279,19 +277,18 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         applied: [{ mod: 'ModA', written: ['a.nif'] }],
         refused: [
           {
-            item: 'ModB', refusal: 'NotFound', message: "'ModB' was skipped: game file 'B.esm' is missing; delta 'b.nif.0_1.octodiff' is missing.",
-            gameFilesNotFound: ['B.esm'], deltasNotFound: ['b.nif.0_1.octodiff'],
+            item: 'ModB', refusal: 'NotFound', message: "'ModB' was skipped: game file 'B.esm' is missing.", gameFilesNotFound: ['B.esm'],
           },
-          { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: 'c.nif' has no provider.", gameFilesNotFound: [], deltasNotFound: [] },
+          { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: 'c.nif' has no provider.", gameFilesNotFound: [] },
         ],
       },
       reads: {
         landed: [{ mod: 'ModA', written: ['a.nif'] }],
         refused: [
-          { item: 'ModB', reason: "'ModB' was skipped: game file 'B.esm' is missing; delta 'b.nif.0_1.octodiff' is missing." },
+          { item: 'ModB', reason: "'ModB' was skipped: game file 'B.esm' is missing." },
           { item: 'ModC', reason: "'ModC' was skipped: 'c.nif' has no provider." },
         ],
-        notFound: [{ mod: 'ModB', gameFiles: ['B.esm'], deltas: true }],
+        notFound: [{ mod: 'ModB', gameFiles: ['B.esm'] }],
       },
       path: '/restore-from-manifest', body: { mods: [modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], ...restoreFacts, gesture: expect.any(String) as unknown } },
     { name: 'decompile', verb: (c) => c.decompile([first, second]),
@@ -994,20 +991,22 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
 });
 
 describe('HttpMEditClient — a modlist gesture the user cancels', () => {
-  const gestures: [string, string, string, (client: MEditClient, signal: AbortSignal) => Promise<unknown>][] = [
+  type ProgressKind = 'update-manifest-progress' | 'restore-from-manifest-progress';
+  const gestures: [string, string, ProgressKind, (client: MEditClient, signal: AbortSignal) => Promise<unknown>][] = [
     ['updateManifest', '/update-manifest', 'update-manifest-progress', (c, signal) => c.updateManifest([modToUpdate('ModA')], updateFacts, { signal })],
     ['restoreFromManifest', '/restore-from-manifest', 'restore-from-manifest-progress',
       (c, signal) => c.restoreFromManifest([modToRestore('ModA')], restoreFacts, { signal })],
   ];
-  const progressFrame = (kind: string) =>
-    new TextEncoder().encode(`data: ${JSON.stringify({ kind, plugin: '', origin: '', keys: [], sequence: 0, modlistProgress: { mod: 'ModA', modsDone: 0, modsTotal: 2 } })}\n\n`);
+  const progressFrame = (kind: string, gesture: unknown) => new TextEncoder().encode(
+    `data: ${JSON.stringify({ kind, plugin: '', origin: '', keys: [], sequence: 0, modlistProgress: { gesture, mod: 'ModA', modsDone: 0, modsTotal: 2 } })}\n\n`);
   const NOT_RUNNING = "No modlist gesture 'x' is running.";
 
   async function cancelled(
-    [route, kind, call]: [string, string, (client: MEditClient, signal: AbortSignal) => Promise<unknown>], cancelAnswer = noContent,
+    [route, kind, call]: [string, ProgressKind, (client: MEditClient, signal: AbortSignal) => Promise<unknown>], cancelAnswer = noContent,
+    { ownProgress = true } = {},
   ) {
     const log = leveledLog();
-    const seen: { gesture?: unknown; cancelPath?: string; cancelBeforeProgress?: string; aborted?: boolean } = {};
+    const seen: { gesture?: unknown; cancelPath?: string; aborted?: boolean } = {};
     let answer = (): void => {};
     const answered = new Promise<void>((resolve) => { answer = resolve; });
     const { response, push } = pushableStreamResponse();
@@ -1028,17 +1027,28 @@ describe('HttpMEditClient — a modlist gesture the user cancels', () => {
     const outcome = call(client, cancel.signal);
     cancel.abort();
     await vi.waitFor(() => expect(seen.gesture).toBeDefined());
-    seen.cancelBeforeProgress = seen.cancelPath;
-    push(progressFrame(kind));
+    const heard: unknown[] = [];
+    client.onNotification(kind, (progress) => heard.push(progress.gesture));
+    push(progressFrame(kind, 'another-gesture'));
+    await vi.waitFor(() => expect(heard).toEqual(['another-gesture']));
+    if (ownProgress) push(progressFrame(kind, seen.gesture));
+    else answer();
     return { client, log, seen, outcome: await outcome };
   }
 
-  it.each(gestures)('%s asks mEdit to stop that gesture once mEdit has begun it, and answers with what mEdit answers once it has', async (_name, ...gesture) => {
+  it.each(gestures)('%s asks mEdit to stop that gesture once its own progress shows mEdit has begun it, and answers with what mEdit answers once it has', async (_name, ...gesture) => {
     const { client, seen, outcome } = await cancelled(gesture);
 
-    expect([seen.cancelBeforeProgress, seen.cancelPath, seen.aborted]).toEqual([undefined, `/modlist-gestures/${String(seen.gesture)}/cancel`, false]);
+    expect([seen.cancelPath, seen.aborted]).toEqual([`/modlist-gestures/${String(seen.gesture)}/cancel`, false]);
     expect(outcome).toMatchObject({ landed: [{ mod: 'ModA' }], refused: [] });
     expect(outcome).not.toHaveProperty('cancelRefusal');
+    await client.stop();
+  });
+
+  it.each(gestures)('%s sends no cancel on another gesture\'s progress: none lands before its answer, which waits on any cancel it sent', async (_name, ...gesture) => {
+    const { client, seen, outcome } = await cancelled(gesture, noContent, { ownProgress: false });
+
+    expect([seen.cancelPath, outcome]).toMatchObject([undefined, { landed: [{ mod: 'ModA' }] }]);
     await client.stop();
   });
 
