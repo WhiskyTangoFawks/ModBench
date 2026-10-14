@@ -212,10 +212,11 @@ public sealed class PublicMemberScanTests
                 if (visibleAccessors.Count == 0)
                     continue;
                 var keys = visibleAccessors.Select(h => MethodKey(owner, h)).ToList();
+                var held = visibleAccessors.Any(h => IsDispatchedTo(reader.GetMethodDefinition(h).Attributes));
                 yield return new VisibleMember(
                     $"{owner.Type}.{reader.GetString(@event.Name)}", owner, false,
                     [.. keys.Select(k => k.Key)], [.. keys.SelectMany(k => k.Exposes)],
-                    world => isInterface && ImplementedElsewhere(world));
+                    world => held || (isInterface && ImplementedElsewhere(world)));
             }
 
             foreach (var field in type.GetFields().Select(reader.GetFieldDefinition))
