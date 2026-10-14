@@ -356,6 +356,24 @@ describe('renameMod', () => {
     expect(verbs(fake.calls)).toEqual(['renameModFolder', 'changeModOrder', 'changeModOrder']);
   });
 
+  it('writes nothing for the name it already has, saying nothing changed', async () => {
+    const { fake, commands } = over();
+
+    const outcome = await commands.renameMod('Default', ['Default'], 'Harder VATS', 'Harder VATS', '/instance/source/Harder VATS');
+
+    expect(outcome).toEqual({ applied: true, lineRefusals: [], unchanged: true });
+    expect(fake.calls).toEqual([]);
+  });
+
+  it('refuses a blank name, writing nothing', async () => {
+    const { fake, commands } = over();
+
+    const outcome = await commands.renameMod('Default', ['Default'], 'Harder VATS', '  ');
+
+    expect(outcome).toEqual({ applied: false, refusal: 'A mod name cannot be empty.' });
+    expect(fake.calls).toEqual([]);
+  });
+
   it('writes no line when the folder did not move', async () => {
     const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('renameModFolder', 'The folder is in the way') });
 
@@ -554,6 +572,15 @@ describe('createEmptyMod', () => {
       { verb: 'createModFolder', mod: 'My New Mod' },
       orderWrite([{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'My New Mod' } }]),
     ]);
+  });
+
+  it('refuses a blank name, writing nothing', async () => {
+    const { fake, commands } = over();
+
+    const outcome = await commands.createEmptyMod('Default', '  ');
+
+    expect(outcome).toEqual({ applied: false, refusal: 'A mod name cannot be empty.' });
+    expect(fake.calls).toEqual([]);
   });
 
   it('writes no line when the folder cannot be made, refusing with why', async () => {

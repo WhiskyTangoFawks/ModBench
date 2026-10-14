@@ -530,6 +530,74 @@ describe('the agent server, running a gesture', () => {
     });
   });
 
+  describe('the mod gestures', () => {
+    const B = { kind: 'mod' as const, name: 'B' };
+    const fire = async (args: Record<string, unknown>) => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const { client } = await served();
+      return call(client, 'run_gesture', args);
+    };
+
+    it('fires move with the mods named as its Argument and the place and end as Options', async () => {
+      const options = { place: { kind: 'separator', name: 'Textures' }, end: 'winning' };
+
+      await fire({ command: 'modbench.mod.move', argument: [{ name: 'B' }], options });
+
+      expect(fired.calls).toEqual([['modbench.mod.move', new AgentCall([B], options)]]);
+    });
+
+    it('refuses a place nothing is named, firing nothing', async () => {
+      const answer = await fire({ command: 'modbench.mod.move', argument: [{ name: 'B' }], options: { place: { kind: 'mod', name: 'Gone' }, end: 'winning' } });
+
+      expect(answer.text).toContain('Nothing is named "Gone" as a mod.');
+      expect(fired.calls).toEqual([]);
+    });
+
+    it('logs the parts of a landed gesture that failed, though it landed', async () => {
+      fired.outcome = { applied: true, outcome: { landed: ['Bee'], refused: [] }, partial: [{ message: '"B" was renamed, but a line could not be renamed.', detail: 'disk full', severity: 'warning' }] };
+      const { client, lines } = await served();
+
+      const answer = await call(client, 'run_gesture', { command: 'modbench.mod.rename', argument: [{ name: 'B' }], options: { name: 'Bee' } });
+
+      expect(answer.isError).toBe(true);
+      expect(lines.join('\n')).toContain('"B" was renamed, but a line could not be renamed. disk full');
+    });
+
+    it('refuses a move that leaves out its place, naming it', async () => {
+      const answer = await fire({ command: 'modbench.mod.move', argument: [{ name: 'B' }], options: { end: 'losing' } });
+
+      expect(answer.text).toContain('place');
+      expect(fired.calls).toEqual([]);
+    });
+
+    it('fires uninstall with the mods named as its Argument', async () => {
+      await fire({ command: 'modbench.mod.uninstall', argument: [{ name: 'B' }, { name: 'C' }] });
+
+      expect(fired.calls).toEqual([['modbench.mod.uninstall', new AgentCall([B, { kind: 'mod', name: 'C' }], {})]]);
+    });
+
+    it('fires rename with the one mod as its Argument and the new name as an Option', async () => {
+      await fire({ command: 'modbench.mod.rename', argument: [{ name: 'B' }], options: { name: 'Bee' } });
+
+      expect(fired.calls).toEqual([['modbench.mod.rename', new AgentCall([B], { name: 'Bee' })]]);
+    });
+
+    it('fires create empty mod with the name as an Option and no Argument', async () => {
+      await fire({ command: 'modbench.mod.createEmpty', options: { name: 'New' } });
+
+      expect(fired.calls).toEqual([['modbench.mod.createEmpty', new AgentCall([], { name: 'New' })]]);
+    });
+
+    it.each(['modbench.mod.excludeFile', 'modbench.mod.includeFile'])('fires %s with each file by its path in its mod, in the mod\'s own casing', async (command) => {
+      await fire({ command, argument: [{ mod: { name: 'C' }, path: 'meshes/X.NIF' }, { mod: { name: 'B' }, path: 'textures/rock.dds' }] });
+
+      expect(fired.calls).toEqual([[command, new AgentCall([
+        { kind: 'file', origin: { kind: 'mod', name: 'C' }, relativePath: 'MESHES/x.nif' },
+        { kind: 'file', origin: { kind: 'mod', name: 'B' }, relativePath: 'Textures/Rock.DDS' },
+      ], {})]]);
+    });
+  });
+
   it.each([
     ['a gesture kept from the agent', { command: 'modbench.profile.switch', argument: [] }, 'modbench.profile.switch is not a gesture your agent runs.'],
     ['a name that means a mod and a separator', { command: 'modbench.mod.enable', argument: [{ name: 'Textures' }] }, '"Textures" means more than one thing: separator Textures; mod Textures. Name it with its kind.'],

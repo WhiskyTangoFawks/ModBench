@@ -9,8 +9,8 @@ const KEPT_FROM_THE_AGENT = ['modbench.profile.switch', 'modbench.instance.refre
 const GIVEN_TO_THE_AGENT = ['modbench.record.open'];
 const AGENT_AHEAD_OF_CODE = [
   'modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges', 'modbench.modlist.clean',
-  'modbench.mod.move', 'modbench.mod.uninstall', 'modbench.mod.createEmpty', 'modbench.mod.install', 'modbench.mod.decompileAndCommit',
-  'modbench.mod.build', 'modbench.mod.excludeFile', 'modbench.mod.includeFile', 'modbench.mod.rename',
+  'modbench.mod.install', 'modbench.mod.decompileAndCommit',
+  'modbench.mod.build',
   'modbench.separator.add', 'modbench.separator.rename', 'modbench.separator.delete',
   'modbench.downloadedFile.exclude', 'modbench.downloadedFile.include', 'modbench.downloadedFile.delete',
   'modbench.record.open',

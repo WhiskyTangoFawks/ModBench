@@ -9,10 +9,18 @@ export class AgentCall<Options extends object = object> {
   constructor(readonly argument: readonly Argument[], readonly options: Options) {}
 }
 
+/** A part of a landed gesture that failed: a view warns of it, or logs it when its severity is `log`, and an agent
+ *  is answered it with the Output line the server writes. */
+export interface PartialFailure {
+  readonly message: string;
+  readonly detail: string;
+  readonly severity: 'warning' | 'log';
+}
+
 /** What a gesture over a selection answers: the outcome, or a refusal that a view reports with its `detail`
  *  and an agent reads with the detail joined on. */
 export type GestureResult<T> =
-  | { applied: true; outcome: SelectionOutcome<T> }
+  | { applied: true; outcome: SelectionOutcome<T>; partial?: readonly PartialFailure[] }
   | { applied: false; refusal: string; detail?: string };
 
 const isKind = <K extends Argument['kind']>(argument: Argument, kind: K): argument is ArgumentOf<K> => argument.kind === kind;
