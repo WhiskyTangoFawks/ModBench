@@ -1,4 +1,5 @@
-import type { DownloadFile } from '../instanceLoader/instance';
+import type { DownloadFile, InstanceValue } from '../instanceLoader/instance';
+import { Refusal } from './refusal';
 import type { ArgumentOf } from '../wire/argument';
 import { isPluginAddress, isString } from '../wire/messages';
 
@@ -45,4 +46,10 @@ export function downloadArgumentOf(carrier: unknown): DownloadArgument | undefin
   const isDownload = (value: object): value is DownloadArgument =>
     Reflect.get(value, 'kind') === 'download' && typeof Reflect.get(value, 'row') === 'object';
   return argument && isDownload(argument) ? argument : undefined;
+}
+
+export function downloadedFileNamed(downloads: InstanceValue['downloads'], name: string): DownloadFile {
+  const row = downloads.kind === 'listed' ? downloads.rows.find((listed) => listed.name === name) : undefined;
+  if (!row) throw new Refusal(`"${name}" is gone from Downloads.`);
+  return row;
 }

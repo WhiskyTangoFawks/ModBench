@@ -643,6 +643,53 @@ describe('the agent server, running a gesture', () => {
     });
   });
 
+  describe('the downloaded file gestures and install', () => {
+    const rocks = { kind: 'downloadedFile' as const, name: 'rocks.7z' };
+    const outside = { kind: 'archive' as const, path: '/elsewhere/a.7z' };
+    const fire = async (args: Record<string, unknown>) => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const { client } = await served(CONFLICTED_WITH_DOWNLOADS);
+      return call(client, 'run_gesture', args);
+    };
+
+    it.each(['modbench.downloadedFile.exclude', 'modbench.downloadedFile.include', 'modbench.downloadedFile.delete'])(
+      'fires %s with the downloaded files named as its Argument', async (command) => {
+        await fire({ command, argument: [{ name: 'rocks.7z' }] });
+
+        expect(fired.calls).toEqual([[command, new AgentCall([rocks], {})]]);
+      });
+
+    it('refuses a downloaded file nothing is named, firing nothing', async () => {
+      const answer = await fire({ command: 'modbench.downloadedFile.delete', argument: [{ name: 'gone.7z' }] });
+
+      expect(answer.text).toContain('Nothing is named "gone.7z" among the downloaded files.');
+      expect(fired.calls).toEqual([]);
+    });
+
+    it.each([
+      ['a downloaded file', rocks],
+      ['an archive outside the downloads', outside],
+      ['a folder outside the downloads', { kind: 'folder' as const, path: '/elsewhere/a' }],
+    ])('fires install with %s as the source and the new mod\'s name as an Option', async (_, source) => {
+      await fire({ command: 'modbench.mod.install', argument: [source], options: { name: 'New' } });
+
+      expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([source], { name: 'New' })]]);
+    });
+
+    it('fires install with the target mod named as list_mods names it, to upgrade it', async () => {
+      await fire({ command: 'modbench.mod.install', argument: [outside], options: { target: 'B' } });
+
+      expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([outside], { target: 'B' })]]);
+    });
+
+    it('refuses an install over a mod nothing is named, firing nothing', async () => {
+      const answer = await fire({ command: 'modbench.mod.install', argument: [outside], options: { target: 'Gone' } });
+
+      expect(answer.text).toContain('Nothing is named "Gone" as a mod.');
+      expect(fired.calls).toEqual([]);
+    });
+  });
+
   it.each([
     ['a gesture kept from the agent', { command: 'modbench.profile.switch', argument: [] }, 'modbench.profile.switch is not a gesture your agent runs.'],
     ['a name that means a mod and a separator', { command: 'modbench.mod.enable', argument: [{ name: 'Textures' }] }, '"Textures" means more than one thing: separator Textures; mod Textures. Name it with its kind.'],

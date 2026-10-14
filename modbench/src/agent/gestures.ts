@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { filesNamed, linesNamed, modsNamed, pluginsNamed } from './names';
+import { downloadsNamed, filesNamed, linesNamed, modsNamed, pluginsNamed } from './names';
 import { Refusal } from '../drivingLib/refusal';
 import { parseOrRefuse } from './refusal';
 
@@ -94,6 +94,33 @@ const FILES = gestureInput(
     ({ kind: 'file', origin: { kind: 'mod', name: mod }, relativePath: file })), {}),
 );
 
+const DOWNLOADS = gestureInput(
+  'argument: the downloaded files, each { name } as list_downloads names it',
+  z.object({ argument: z.array(z.object({ name: z.string() })) }),
+  (value, { argument }) => new AgentCall(
+    downloadsNamed(value.downloads, argument.map(({ name }) => name)).map((name) => ({ kind: 'downloadedFile' as const, name })), {}),
+);
+
+const INSTALL_SOURCE = z.union([
+  z.object({ kind: z.literal('downloadedFile'), name: z.string() }),
+  z.object({ kind: z.enum(['archive', 'folder']), path: z.string() }),
+]);
+
+const INSTALL = gestureInput(
+  'argument: the one source, { kind: \'downloadedFile\', name } as list_downloads names it, or { kind: \'archive\' | \'folder\', path } for one outside the downloads; '
+    + 'options: { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, not both',
+  z.object({
+    argument: z.array(INSTALL_SOURCE),
+    options: z.object({ name: z.string().optional(), target: z.string().optional() }),
+  }),
+  (value, { argument, options: { name, target } }) => new AgentCall(
+    argument.map((source) => (source.kind === 'downloadedFile'
+      ? { kind: source.kind, name: downloadsNamed(value.downloads, [source.name])[0] ?? source.name }
+      : source)),
+    { name, target: target === undefined ? undefined : modsNamed(value.mods, [{ name: target, kind: 'mod' }])[0]?.name },
+  ),
+);
+
 const PLUGIN_NAME = z.object({ name: z.string(), origin: z.string().optional() });
 const PLUGIN_TAKES = 'each { name, origin? } as list_plugins shows it';
 
@@ -150,6 +177,10 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.createEmpty', CREATE_EMPTY_MOD],
   ['modbench.mod.excludeFile', FILES],
   ['modbench.mod.includeFile', FILES],
+  ['modbench.mod.install', INSTALL],
+  ['modbench.downloadedFile.exclude', DOWNLOADS],
+  ['modbench.downloadedFile.include', DOWNLOADS],
+  ['modbench.downloadedFile.delete', DOWNLOADS],
   ['modbench.separator.add', ADD_SEPARATOR],
   ['modbench.separator.rename', RENAME_SEPARATOR],
   ['modbench.separator.delete', DELETE_SEPARATORS],

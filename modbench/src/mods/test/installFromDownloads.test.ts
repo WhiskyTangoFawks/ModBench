@@ -21,7 +21,7 @@ vi.mock('vscode', () => ({
 
 const { installMod } = vi.hoisted(() => ({ installMod: vi.fn() }));
 
-import { installDownloadedFile, type DownloadInstallDeps } from '../installDownloaded';
+import { registerModInstallCommands } from '../installCommands';
 import type { DownloadFile, DownloadRow, Instance } from '../../instanceLoader/instance';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
@@ -40,6 +40,13 @@ const fakeInstance = (rows: readonly DownloadFile[] = []): Pick<Instance, 'value
   refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
 });
 
+interface DownloadInstallDeps {
+  reporter: ReturnType<typeof recordingReporter>;
+  warnIfFomod: (name: string, isFomod: boolean) => void;
+  log: (line: string) => void;
+  progressViewId: string;
+}
+
 const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDeps => ({
   reporter: recordingReporter(),
   warnIfFomod: vi.fn(),
@@ -48,9 +55,18 @@ const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDe
   ...over,
 });
 
-const installRow = (deps: DownloadInstallDeps, row: Partial<DownloadRow> = {}): Promise<boolean> => {
+const installDownloaded = async (file: DownloadFile, listed: readonly DownloadFile[], deps: DownloadInstallDeps): Promise<void> => {
+  registerModInstallCommands({
+    commands: installOver(), instance: fakeInstance(listed), reporterFor: () => recordingReporter(),
+    warnIfFomod: deps.warnIfFomod, downloadInstall: deps,
+  });
+  const handler = registerCommand.mock.calls.findLast((call) => call[0] === 'modbench.mod.install')?.[1];
+  await handler?.({ argument: { kind: 'download', row: file } });
+};
+
+const installRow = (deps: DownloadInstallDeps, row: Partial<DownloadRow> = {}): Promise<void> => {
   const file = downloadRowFixture('foo.7z', row);
-  return installDownloadedFile({ kind: 'download', row: file }, installOver(), fakeInstance([file]), deps);
+  return installDownloaded(file, [file], deps);
 };
 
 const afterAMacrotaskNotAMicrotask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -61,7 +77,7 @@ afterEach(() => {
   downloadsLogLines = [];
 });
 
-describe('installDownloadedFile', () => {
+describe('modbench.mod.install over a downloaded file', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('installs the row\'s archive as a new mod named after it', async () => {
@@ -141,7 +157,7 @@ interface FakeUpgradeItem { label: string; description?: string; choice: unknown
 
 const NEW_MOD_ITEM = { label: 'Install as a new mod…', choice: { kind: 'new' } };
 
-describe('installDownloadedFile: the pick among the upgrades the Instance value lists', () => {
+describe('modbench.mod.install over a downloaded file: the pick among the upgrades the Instance value lists', () => {
   beforeEach(() => vi.clearAllMocks());
 
   async function pickAmong(upgrades: readonly UpgradeCandidate[], act: (double: ReturnType<typeof fakeQuickPick<FakeUpgradeItem>>) => void) {
@@ -218,10 +234,8 @@ describe('installDownloadedFile: the pick among the upgrades the Instance value 
   it('refuses a file the Instance value does not list, naming it', async () => {
     const report = recordingReporter();
 
-    const installed = await installDownloadedFile(
-      { kind: 'download', row: downloadRowFixture('foo.7z') }, installOver(), fakeInstance(), installDeps({ reporter: report }));
+    await installDownloaded(downloadRowFixture('foo.7z'), [], installDeps({ reporter: report }));
 
-    expect(installed).toBe(false);
     expect(installMod).not.toHaveBeenCalled();
     expect(report.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: '"foo.7z" is gone from Downloads.' }]);
   });
@@ -238,7 +252,7 @@ describe('installDownloadedFile: the pick among the upgrades the Instance value 
   });
 });
 
-describe('installDownloadedFile: the progress bar and the read', () => {
+describe('modbench.mod.install over a downloaded file: the progress bar and the read', () => {
   beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
   const opens = 'progress opens on modbench.downloads';
   const reads = 'Instance loader: read every file again';
