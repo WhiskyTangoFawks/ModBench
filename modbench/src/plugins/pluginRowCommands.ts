@@ -358,7 +358,6 @@ function overwritten(outcome: BuildOutcome): PartialFailure[] {
   }];
 }
 
-// A view names these in its one notification of what the build refused.
 function refusedInMods(outcome: BuildOutcome): PartialFailure[] {
   return outcome.landed.flatMap(({ mod, refused, archivesRefused }) => [
     ...refused.map(({ item, reason }) => ({ message: `Could not build "${rowName(item)}" in "${mod}".`, detail: reason, severity: 'log' as const })),
