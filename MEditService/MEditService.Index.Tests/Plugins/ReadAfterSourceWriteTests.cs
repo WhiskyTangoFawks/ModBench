@@ -68,4 +68,17 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
         Assert.Contains("no load order arrived after the write", refused.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task ANameResolvedAfterASourceWrite_IsResolvedAgainstTheNextSnapshot()
+    {
+        var resolved = Task.Run(() => _index.Queries.ResolveNames([new NameQuery(Tracked, null)]));
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+
+        _holder.Apply(SnapshotPlugins.Snapshot(_fixture.GameDirectory, _fixture.InstanceRoot, GameRelease.Fallout4, []));
+
+        var refused = (await resolved.WaitAsync(Generous)).Refused();
+        Assert.Equal(IndexRefusal.NameRefused, refused.Refusal);
+        Assert.Contains("Nothing is named", refused.Message, StringComparison.Ordinal);
+    }
 }

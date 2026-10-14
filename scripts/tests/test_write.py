@@ -1,5 +1,6 @@
 import contextlib
 import subprocess
+import threading
 import unittest
 
 import medit
@@ -99,10 +100,12 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
         watcher_resends_load_order(self.fixture, created)
         self.assertTrue(medit.create(created, 'npc_').endswith(':MBDevNew.esp'))
 
-    def test_raises_for_a_write_into_the_created_plugin_before_the_watchers_snapshot_holds_it(self):
+    def test_a_write_into_the_created_plugin_waits_for_the_watchers_snapshot_that_holds_it(self):
         created = medit.create_plugin('MBDevNew.esp', TRACKED)
-        with self.assertRaises(medit.MEditError):
-            medit.create(created, 'npc_')
+        watcher = threading.Timer(1, watcher_resends_load_order, [self.fixture, created])
+        watcher.start()
+        self.addCleanup(watcher.join)
+        self.assertTrue(medit.create(created, 'npc_').endswith(':MBDevNew.esp'))
 
     def test_raises_for_a_create_of_a_plugin_in_overwrite_and_writes_nothing(self):
         with self.assertRaises(medit.MEditError) as raised:
