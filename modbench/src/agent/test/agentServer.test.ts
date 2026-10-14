@@ -409,6 +409,30 @@ describe('the agent server, reading a record through mEdit', () => {
     expect(answered).toEqual({ kind: 'OwnFile', location: '/s/A.esp/000800.json' });
   });
 
+  it('answers the text of an untracked plugin\'s copy, which has no file to open', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'SharedNpc.txt' });
+    mEdit.setQueryAnswer('getRenderedDocument', { fileName: 'SharedNpc.txt', text: 'Name: Shared' });
+    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    const answered = await read(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } });
+
+    expect(mEdit.calls).toContainEqual({ method: 'getRenderedDocument', args: [{ name: 'A.esp', origin: 'Big Rocks' }, '000800:A.esp'] });
+    expect(answered).toEqual({ kind: 'Rendered', text: 'Name: Shared' });
+  });
+
+  it('refuses when the rendering finds no copy', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'SharedNpc.txt' });
+    mEdit.setQueryAnswer('getRenderedDocument', null);
+    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    expect(await call(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } }))
+      .toEqual({ isError: true, text: 'A.esp in Big Rocks holds no 000800:A.esp.' });
+  });
+
   it('refuses a name that is not a record', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', [{ plugin: { name: 'A.esp', origin: 'Big Rocks' } }]);

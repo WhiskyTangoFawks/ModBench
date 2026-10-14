@@ -14,21 +14,31 @@ const RECORD = {
 export const READ_RECORD = {
   name: 'read_record',
   description: 'A record in the load order, by its EditorID or FormKey: every active plugin\'s copy and the copy that wins. '
-    + 'With plugin { name, origin? } as list_plugins shows it, that plugin\'s copy alone, whether the plugin is active or not.',
+    + 'With plugin { name, origin? } as list_plugins shows it, that plugin\'s copy alone, whether the plugin is active or not: '
+    + '{ kind: \'OwnFile\' | \'ContainersFile\', location } the path of the source file that holds it, or { kind: \'Rendered\', text } the copy\'s text, for a plugin with no source.',
   input: RECORD,
   of: async (
-    mEdit: Pick<MEditClient, 'resolveNames' | 'getComparison' | 'getCopyDocument'>,
+    mEdit: Pick<MEditClient, 'resolveNames' | 'getComparison' | 'getCopyDocument' | 'getRenderedDocument'>,
     value: InstanceValue,
     { name, plugin }: { name: string; plugin?: { name: string; origin?: string } },
   ) => {
     const [formKey = ''] = await formKeysNamed(mEdit, [name]);
     const [address] = plugin === undefined ? [] : pluginsNamed(value.plugins, [plugin]);
-    const copies = address === undefined ? await mEdit.getComparison(formKey) : await mEdit.getCopyDocument(address, formKey);
-    if (isReadFailed(copies)) throw new Refusal(failureReason(copies));
-    if (copies === null) {
-      throw new Refusal(address === undefined ? `No active plugin holds ${formKey}.` : `${address.name} in ${address.origin} holds no ${formKey}.`);
+    if (address === undefined) {
+      const copies = await mEdit.getComparison(formKey);
+      if (isReadFailed(copies)) throw new Refusal(failureReason(copies));
+      if (copies === null) throw new Refusal(`No active plugin holds ${formKey}.`);
+      return copies;
     }
-    return copies;
+    const holdsNone = new Refusal(`${address.name} in ${address.origin} holds no ${formKey}.`);
+    const document = await mEdit.getCopyDocument(address, formKey);
+    if (isReadFailed(document)) throw new Refusal(failureReason(document));
+    if (document === null) throw holdsNone;
+    if (document.kind !== 'Rendered') return document;
+    const rendered = await mEdit.getRenderedDocument(address, formKey);
+    if (isReadFailed(rendered)) throw new Refusal(failureReason(rendered));
+    if (rendered === null) throw holdsNone;
+    return { kind: document.kind, text: rendered.text };
   },
 };
 
