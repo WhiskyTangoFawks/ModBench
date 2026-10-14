@@ -26,7 +26,7 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
 
     internal sealed record GameSource(OverriddenGameFile File) : ISource;
 
-    internal sealed record DeltaSource(ISource Basis, string BaseHash, Stream? Loose, (InstallationFile File, string Entry)? PackedIn) : ISource;
+    internal sealed record DeltaSource(ISource Basis, string BaseHash, Func<Stream> OpenDelta) : ISource;
 
     internal sealed record Sourced(IReadOnlyList<(ManifestFile File, ISource Source)> Files);
 
@@ -179,9 +179,9 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
         var name = repository.DeltaName(file.Path, baseHash, file.Hash);
         var loose = repository.OpenDelta(instance.BuildFolder, instance.DownloadsFolder, file.Path, baseHash, file.Hash);
         if (loose is not null) _scratch.Add(loose);
-        var packedIn = loose is null ? PackedIn(name) : null;
-        if (loose is null && packedIn is null) return (null, [.. basis.Lacks, new Lack.DeltaMissing(name)]);
-        return basis.Source is null ? (null, basis.Lacks) : (new DeltaSource(basis.Source, baseHash, loose, packedIn), []);
+        Func<Stream>? open = loose is not null ? () => Rewound(loose) : PackedIn(name) is { } packed ? () => Extracted(packed) : null;
+        if (open is null) return (null, [.. basis.Lacks, new Lack.DeltaMissing(name)]);
+        return basis.Source is null ? (null, basis.Lacks) : (new DeltaSource(basis.Source, baseHash, open), []);
     }
 
     private (InstallationFile File, string Entry)? PackedIn(string deltaName) =>
@@ -191,9 +191,9 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
             .Select(packed => ((InstallationFile, string)?)packed)
             .FirstOrDefault();
 
-    private Lack? Apply(ManifestFile file, DeltaSource source, Stream basis, Dictionary<string, Stream> appliedByPath)
+    private Lack.Other? Apply(ManifestFile file, DeltaSource source, Stream basis, Dictionary<string, Stream> appliedByPath)
     {
-        var delta = Opened(source);
+        var delta = source.OpenDelta();
         var applied = Scratch();
         basis.Position = 0;
         var otherBytes = new Lack.Other($"delta '{repository.DeltaName(file.Path, source.BaseHash, file.Hash)}' has other bytes");
@@ -211,16 +211,16 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
         return null;
     }
 
-    private Stream Opened(DeltaSource source)
+    private static Stream Rewound(Stream loose)
     {
-        if (source.Loose is { } loose)
-        {
-            loose.Position = 0;
-            return loose;
-        }
-        var (file, entry) = source.PackedIn!.Value;
+        loose.Position = 0;
+        return loose;
+    }
+
+    private Stream Extracted((InstallationFile File, string Entry) packed)
+    {
         var delta = Scratch();
-        Extract(file, [entry], (_, content) => content.CopyTo(delta));
+        Extract(packed.File, [packed.Entry], (_, content) => content.CopyTo(delta));
         delta.Position = 0;
         return delta;
     }
