@@ -1,10 +1,26 @@
 import * as vscode from 'vscode';
-import type { Argument } from '../wire/argument';
+import type { Argument, ArgumentOf } from '../wire/argument';
+import type { SelectionOutcome } from '../ports/selectionOutcome';
+import { Refusal } from './refusal';
 import { gestureEntry, type GestureEntry, type KindedRow } from './gestureEntry';
 
 /** The Argument and the Options an agent call gives a gesture (commands.md, The surface supplies the Argument). */
 export class AgentCall<Options extends object = object> {
   constructor(readonly argument: readonly Argument[], readonly options: Options) {}
+}
+
+/** What a gesture over a selection answers: the outcome, or a refusal that a view reports with its `detail`
+ *  and an agent reads with the detail joined on. */
+export type GestureResult<T> =
+  | { applied: true; outcome: SelectionOutcome<T> }
+  | { applied: false; refusal: string; detail?: string };
+
+const isKind = <K extends Argument['kind']>(argument: Argument, kind: K): argument is ArgumentOf<K> => argument.kind === kind;
+
+/** The agent box hands a gesture arguments of its one kind. */
+export function argumentOfKind<K extends Argument['kind']>(argument: Argument, kind: K): ArgumentOf<K> {
+  if (!isKind(argument, kind)) throw new Refusal(`An agent call to a ${kind} gesture carries ${kind}s only, and this one carries a ${argument.kind}.`);
+  return argument;
 }
 
 /** A gesture the agent runs, by the parts a view call and an agent call share and the parts only a view call has. */

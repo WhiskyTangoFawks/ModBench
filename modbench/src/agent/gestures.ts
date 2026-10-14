@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import { AgentCall } from '../drivingLib/agentGesture';
+import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
 import type { InstanceValue } from '../instanceLoader/instance';
-import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { linesNamed, modsNamed, pluginsNamed } from './names';
 import { Refusal } from '../drivingLib/refusal';
 import { parseOrRefuse } from './refusal';
@@ -86,12 +85,10 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.plugin.rename', RENAME_PLUGIN],
 ]);
 
-type GestureOutcome =
-  | { applied: true; outcome: SelectionOutcome<unknown> }
-  | { applied: false; refusal: string };
+type GestureOutcome = GestureResult<unknown>;
 
 function refusalIn(outcome: GestureOutcome): string | undefined {
-  if (!outcome.applied) return outcome.refusal;
+  if (!outcome.applied) return outcome.detail === undefined ? outcome.refusal : `${outcome.refusal} ${outcome.detail}`;
   const { refused, landed } = outcome.outcome;
   if (refused.length === 0) return undefined;
   const total = refused.length + landed.length;

@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import type { PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
-import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
+import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { pluralArgument } from '../drivingLib/gestureEntry';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import type { PluginsCommands, PluginsDrop, SelectionResult } from '../pluginsCommands/plugins';
+import type { PluginsCommands, PluginsDrop } from '../pluginsCommands/plugins';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
@@ -26,8 +26,6 @@ interface MoveView extends Pick<PluginsTreeProvider, 'movePlaces'> {
   selection: () => readonly PluginsTreeNode[];
 }
 
-type MoveOutcome = SelectionResult<PluginAddress> | { applied: false; refusal: string; thrown: true };
-
 interface Move {
   readonly plugins: readonly PluginAddress[];
   readonly drop: PluginsDrop;
@@ -39,7 +37,7 @@ export function registerPluginMoveCommand(
   commands: Pick<PluginsCommands, 'reorderPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
   view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
-  const gesture: AgentGesture<PluginsTreeNode, Move, MoveOutcome, { drop: PluginsDrop }> = {
+  const gesture: AgentGesture<PluginsTreeNode, Move, GestureResult<PluginAddress>, { drop: PluginsDrop }> = {
     fromView: async (entry, option) => {
       const plugins = pluralArgument(entry, 'plugin').map(({ plugin, origin }) => ({ name: plugin.name, origin }));
       if (plugins.length === 0) return undefined;
@@ -57,14 +55,15 @@ export function registerPluginMoveCommand(
         const { activeProfile, pluginsLoadedWithNoLine } = instance.value;
         const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(
           activeProfile, plugins, drop, (pluginsLoadedWithNoLine ?? []).map(({ name }) => name)));
-        return result.applied ? { applied: true, outcome: { landed: plugins, refused: [] } } : result;
+        return result.applied
+          ? { applied: true, outcome: { landed: plugins, refused: [] } }
+          : { applied: false, refusal: 'Could not move plugins.', detail: result.refusal };
       } catch (e) {
-        return { applied: false, refusal: errorMessage(e), thrown: true };
+        return { applied: false, refusal: 'Failed to move plugins.', detail: errorMessage(e) };
       }
     },
     report: (result) => {
-      if (result.applied) return;
-      reporter.report('error', 'thrown' in result ? 'Failed to move plugins.' : 'Could not move plugins.', result.refusal);
+      if (!result.applied) reporter.report('error', result.refusal, result.detail);
     },
   };
   return registerAgentGesture('modbench.plugin.move', view.selection, gesture);

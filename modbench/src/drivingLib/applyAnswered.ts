@@ -22,7 +22,6 @@ export async function applyUnreported(
   return failure;
 }
 
-/** `applyUnreported`, and the failure reported, resolving whether VS Code applied them. */
 export async function applyAnswered(
   source: ApplyingSource, reporter: Reporter, items: readonly WorkspaceChanges[], plugins: readonly PluginAddress[],
   notApplied: string,
