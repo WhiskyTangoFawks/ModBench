@@ -8,7 +8,7 @@ import { catalogCommandIds, GESTURES_MARKDOWN } from './commandsCatalog';
 const KEPT_FROM_THE_AGENT = ['modbench.profile.switch', 'modbench.instance.refresh'];
 const GIVEN_TO_THE_AGENT = ['modbench.record.open'];
 const AGENT_AHEAD_OF_CODE = [
-  'modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges', 'modbench.modlist.clean',
+  'modbench.modlist.gitInit', 'modbench.mod.updateManifest', 'modbench.mod.restoreFromManifest',
 ];
 
 describe('the gestures the agent runs (agent.md, Test seam)', () => {
