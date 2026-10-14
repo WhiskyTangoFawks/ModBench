@@ -194,8 +194,8 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.record.openToSide",
-        "title": "Open to the Side",
+        "command": "modbench.record.openPinned",
+        "title": "Open",
         "category": "Modbench"
       },
       {
@@ -571,7 +571,7 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "modbench.record.openToSide",
+          "command": "modbench.record.openPinned",
           "when": "false"
         },
         {
@@ -964,7 +964,7 @@
           "group": "modbench@1"
         },
         {
-          "command": "modbench.record.openToSide",
+          "command": "modbench.record.openPinned",
           "when": "view == references-view.tree && reference-list.source == modbench.referencedBy && viewItem == referencedByReferrer",
           "group": "1_open@1"
         },
@@ -979,7 +979,7 @@
           "group": "5_copy@1"
         },
         {
-          "command": "modbench.record.openToSide",
+          "command": "modbench.record.openPinned",
           "when": "view == references-view.tree && reference-list.source == modbench.referencedBy && viewItem =~ /^referencedByHolder\\b/",
           "group": "1_open@1"
         },
@@ -1244,7 +1244,7 @@
           "group": "3_create@1"
         },
         {
-          "command": "modbench.record.openToSide",
+          "command": "modbench.record.openPinned",
           "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
           "group": "1_open@1"
         },

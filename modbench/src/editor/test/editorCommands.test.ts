@@ -106,6 +106,15 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     ]);
   });
 
+  it('opens a record given as pinned in the active group, not as a preview', async () => {
+    await registerAnswering(rendered('Gun.json'));
+
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin }, pinned: true });
+
+    expect(executed().filter(([id]) => id === 'vscode.openWith').map(([, , , options]) => options))
+      .toEqual([{ viewColumn: -1, preview: false }]);
+  });
+
   it('opens an untracked copy, which has no file, as the document mEdit renders it as, in the record grid', async () => {
     await registerAnswering(rendered('Gun.json'));
 
@@ -187,15 +196,15 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   });
 });
 
-describe('modbench.record.openToSide, the menus\' entry point', () => {
-  it('fires open with the menu selection, each record placed beside', async () => {
+describe('modbench.record.openPinned, the menus\' entry point', () => {
+  it('fires open with the menu selection, each record pinned', async () => {
     await register();
     const [a, b] = [{ argument: { kind: 'record', formKey: '000801:A.esp' } }, { argument: { kind: 'record', formKey: '000802:A.esp' } }];
 
-    await commandHandlers.get('modbench.record.openToSide')?.(a, [a, b]);
+    await commandHandlers.get('modbench.record.openPinned')?.(a, [a, b]);
 
     expect(executeCommand).toHaveBeenCalledWith('modbench.record.open', [
-      { ...a, placement: 'beside' }, { ...b, placement: 'beside' },
+      { ...a, pinned: true }, { ...b, pinned: true },
     ]);
   });
 });

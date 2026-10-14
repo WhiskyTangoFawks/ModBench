@@ -18,7 +18,7 @@ import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { SourceEditing } from '../drivingLib/sourceEditing';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
+import { pinnedArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
 import { followReportedCopies } from './recordCopy';
 import { RenderedDocuments } from './renderedDocument';
@@ -118,10 +118,10 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
         return;
       }
       const formKey = await pickRecord({ meditClient, reporter }, '', []);
-      if (formKey) await openRecords(meditClient, reporter, recordEditorProvider, { addresses: [{ formKey }], placement: 'active', preview: true });
+      if (formKey) await openRecords(meditClient, reporter, recordEditorProvider, { addresses: [{ formKey }], pinned: false });
     }),
-    vscode.commands.registerCommand('modbench.record.openToSide', (row?: unknown, selection?: unknown) =>
-      vscode.commands.executeCommand('modbench.record.open', besideArgument(row, selection))),
+    vscode.commands.registerCommand('modbench.record.openPinned', (row?: unknown, selection?: unknown) =>
+      vscode.commands.executeCommand('modbench.record.open', pinnedArgument(row, selection))),
   ];
 }
 
@@ -131,7 +131,7 @@ type OpenClient = Pick<MEditClient, 'getRecordOwner' | 'getCopyDocument'>;
 // (editor.md, Opening, story 4).
 async function openRecords(
   client: OpenClient, reporter: Reporter, grid: Pick<RecordEditorProvider, 'open'>,
-  { addresses: [first, ...others], placement, preview }: RecordOpenPlan,
+  { addresses: [first, ...others], pinned }: RecordOpenPlan,
 ): Promise<void> {
   if (!first) return;
   const failMessage = `Failed to open "${recordTitle(first.formKey, undefined)}".`;
@@ -151,7 +151,7 @@ async function openRecords(
       columns.push(copy);
     }
     const show = (options: vscode.TextDocumentShowOptions) => grid.open(tab.uri, columns, options);
-    await show({ viewColumn: placement === 'beside' ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, preview });
+    await show({ viewColumn: vscode.ViewColumn.Active, preview: !pinned });
   });
 }
 

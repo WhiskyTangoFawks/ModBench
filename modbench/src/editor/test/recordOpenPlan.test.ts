@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { recordOpenPlan, besideArgument } from '../recordOpenPlan';
+import { recordOpenPlan, pinnedArgument } from '../recordOpenPlan';
 
 const A = { formKey: '000801:A.esp' };
 const B = { formKey: '000802:A.esp' };
@@ -9,21 +9,21 @@ const COPY = { name: 'A.esp', origin: 'ModA' };
 
 describe('recordOpenPlan', () => {
   it('a click on one record opens it as a preview', () => {
-    expect(recordOpenPlan(ofRecord(A), [])).toEqual({ addresses: [{ ...A }], placement: 'active', preview: true });
+    expect(recordOpenPlan(ofRecord(A), [])).toEqual({ addresses: [{ ...A }], pinned: false });
   });
 
-  it('placement: beside opens pinned and beside', () => {
-    expect(recordOpenPlan({ ...ofRecord(A), placement: 'beside' }, []))
-      .toEqual({ addresses: [A], placement: 'beside', preview: false });
+  it('pinned: true opens pinned', () => {
+    expect(recordOpenPlan({ ...ofRecord(A), pinned: true }, []))
+      .toEqual({ addresses: [A], pinned: true });
   });
 
-  it('records that each ask beside open beside, each record on its own', () => {
-    expect(recordOpenPlan([{ ...ofRecord(A), placement: 'beside' }, { ...ofRecord(B), placement: 'beside' }], []))
-      .toEqual({ addresses: [A, B], placement: 'beside', preview: false });
+  it('records that each ask pinned open pinned, as one grid', () => {
+    expect(recordOpenPlan([{ ...ofRecord(A), pinned: true }, { ...ofRecord(B), pinned: true }], []))
+      .toEqual({ addresses: [A, B], pinned: true });
   });
 
-  it('several records without a placement open one grid as a preview', () => {
-    expect(recordOpenPlan([ofRecord(A), ofRecord(B)], [])).toEqual({ addresses: [A, B], placement: 'active', preview: true });
+  it('several records without pinned open one grid as a preview', () => {
+    expect(recordOpenPlan([ofRecord(A), ofRecord(B)], [])).toEqual({ addresses: [A, B], pinned: false });
   });
 
   it('reads a row as its own copy: the plugin and origin its Argument names', () => {
@@ -41,7 +41,12 @@ describe('recordOpenPlan', () => {
 
   it('with no Argument, opens the records selected in the focused view, as one grid, a preview', () => {
     expect(recordOpenPlan(undefined, [ofRecord(A, COPY), ofRecord(B)]))
-      .toEqual({ addresses: [{ ...A, plugin: COPY }, B], placement: 'active', preview: true });
+      .toEqual({ addresses: [{ ...A, plugin: COPY }, B], pinned: false });
+  });
+
+  it('an Argument that carries only pinned opens the focused view\'s selection, pinned', () => {
+    expect(recordOpenPlan({ pinned: true }, [ofRecord(A, COPY), ofRecord(B)]))
+      .toEqual({ addresses: [{ ...A, plugin: COPY }, B], pinned: true });
   });
 
   it('with no Argument and no record selected, opens nothing', () => {
@@ -53,21 +58,21 @@ describe('recordOpenPlan', () => {
   });
 });
 
-describe('besideArgument', () => {
-  it('asks to open the whole menu selection beside', () => {
-    expect(besideArgument(ofRecord(A), [ofRecord(A), ofRecord(B)])).toEqual([
-      { argument: { kind: 'record', ...A }, placement: 'beside' }, { argument: { kind: 'record', ...B }, placement: 'beside' },
+describe('pinnedArgument', () => {
+  it('asks to open the whole menu selection pinned', () => {
+    expect(pinnedArgument(ofRecord(A), [ofRecord(A), ofRecord(B)])).toEqual([
+      { argument: { kind: 'record', ...A }, pinned: true }, { argument: { kind: 'record', ...B }, pinned: true },
     ]);
   });
 
   it('falls back to the clicked row when the selection is empty', () => {
-    expect(besideArgument(ofRecord(A), [])).toEqual([{ argument: { kind: 'record', ...A }, placement: 'beside' }]);
+    expect(pinnedArgument(ofRecord(A), [])).toEqual([{ argument: { kind: 'record', ...A }, pinned: true }]);
   });
 
   it('reads a tree row by the Argument it carries and skips a row that carries none', () => {
     const row = ofRecord(A, COPY);
-    expect(besideArgument(row, [row, { label: 'Types' }])).toEqual([
-      { argument: { kind: 'record', ...A, plugin: COPY }, placement: 'beside' },
+    expect(pinnedArgument(row, [row, { label: 'Types' }])).toEqual([
+      { argument: { kind: 'record', ...A, plugin: COPY }, pinned: true },
     ]);
   });
 });
