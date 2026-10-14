@@ -24,6 +24,7 @@ export type GestureResult<T> =
   | { applied: true; outcome: SelectionOutcome<T>; partial?: readonly PartialFailure[] }
   | { applied: false; refusal: string; detail?: string };
 
+/** What a view does with the parts of a landed gesture that failed: warns of those that warn, logs the rest. */
 export function reportPartial(reporter: Reporter, partial: readonly PartialFailure[] = [], log: (line: string) => void = () => undefined): void {
   for (const { message, detail, severity } of partial) {
     if (severity === 'warning') reporter.report('warning', message, detail);
