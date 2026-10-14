@@ -163,7 +163,7 @@ export function registerDecompileCommand(
       const plugins = header ? [header] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
       return plugins.length > 0 && await confirmDecompile(deps.ask, plugins) ? plugins : undefined;
     },
-    fromAgent: ({ argument }) => argument.map((one) => pluginOf(one)),
+    fromAgent: ({ argument }) => argument.map(pluginOf),
     run: (plugins) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
       const outcome = await deps.client.decompile(plugins);
       return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, outcome };

@@ -31,11 +31,12 @@ const MODS = gestureInput(
 const PLUGIN_NAME = z.object({ name: z.string(), origin: z.string().optional() });
 const PLUGIN_TAKES = 'each { name, origin? } as list_plugins shows it';
 
-const pluginsCall = (value: InstanceValue, argument: readonly z.infer<typeof PLUGIN_NAME>[]) =>
-  pluginsNamed(value.plugins, argument).map((plugin) => ({ kind: 'plugin' as const, plugin }));
+const pluginArguments = (named: typeof pluginsNamed) =>
+  (value: InstanceValue, argument: readonly z.infer<typeof PLUGIN_NAME>[]) =>
+    named(value.plugins, argument).map((plugin) => ({ kind: 'plugin' as const, plugin }));
 
-const linesCall = (value: InstanceValue, argument: readonly z.infer<typeof PLUGIN_NAME>[]) =>
-  linesNamed(value.plugins, argument).map((plugin) => ({ kind: 'plugin' as const, plugin }));
+const pluginsCall = pluginArguments(pluginsNamed);
+const linesCall = pluginArguments(linesNamed);
 
 const LINES = gestureInput(
   `argument: the plugins whose lines in plugins.txt it changes, ${PLUGIN_TAKES}`,
