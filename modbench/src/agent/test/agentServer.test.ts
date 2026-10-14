@@ -532,7 +532,7 @@ describe('the agent server, running a gesture', () => {
 
   describe('the mod gestures', () => {
     const B = { kind: 'mod' as const, name: 'B' };
-    const fire = async (args: object) => {
+    const fire = async (args: Record<string, unknown>) => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const { client } = await served();
       return call(client, 'run_gesture', args);
