@@ -1,6 +1,11 @@
+using System.Collections.Concurrent;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -250,6 +255,53 @@ public sealed class LoadOrderLocalizedTests
         Assert.Equal(
             (null, "Fixture_de.STRINGS, Fixture_de.ILSTRINGS, Fixture_de.DLSTRINGS", null),
             (first, second, third));
+    }
+
+    [Fact]
+    public void AChangeOfTheStringsLanguage_NeverShowsReadyOnceTheSequenceHasMovedAndTheReconcileHasNotCaughtUp()
+    {
+        using var data = LocalizedDoor("load-order-language-status", out _);
+        var holder = new LoadOrderHolder();
+        var watching = new StatusWatchingAdapter();
+        using var index = Indexes.Open(holder, watching);
+        watching.Index = index;
+        index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: []));
+        var settled = watching.Settled = index.Sequence;
+        watching.Seen.Clear();
+
+        index.StringsLanguage.Set(Language.German);
+        Waits.Reached(() => index.Sequence > settled && index.Status.State == LoadOrderState.Ready, "the reconcile");
+
+        Assert.DoesNotContain((true, LoadOrderState.Ready), watching.Seen.Select(seen => (seen.SequenceMoved, seen.State)));
+        Assert.Contains(watching.Seen, seen => seen.SequenceMoved);
+    }
+
+    private sealed class StatusWatchingAdapter : DelegatingPluginAdapter
+    {
+        public StatusWatchingAdapter() : base(TestAdapters.Mutagen()) { }
+
+        public OpenedIndex? Index { get; set; }
+        public ConcurrentQueue<(bool SequenceMoved, LoadOrderState State)> Seen { get; } = new();
+        public long Settled { get; set; }
+
+        public override void KeepHashesOf(IReadOnlySet<string> pluginPaths)
+        {
+            Watch();
+            base.KeepHashesOf(pluginPaths);
+        }
+
+        public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
+            ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas, PluginStrings? strings = null)
+        {
+            Watch();
+            return base.OpenDocuments(modPath, loadOrder, schemas, strings);
+        }
+
+        private void Watch()
+        {
+            var index = Index ?? throw new InvalidOperationException("Expected the adapter's Index to be set before any reconcile.");
+            Seen.Enqueue((index.Sequence > Settled, index.Status.State));
+        }
     }
 
     [Fact]

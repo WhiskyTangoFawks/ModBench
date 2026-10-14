@@ -546,7 +546,6 @@ internal sealed class Indexer : IDisposable
         var (held, store) = (scope.Held, scope.Store);
         FailCollisions(snapshot.CaseOnlyCollisions);
         _readLanguage = _stringsLanguage.Current;
-        store.Commit(_ => store.SetStringsLanguage(_readLanguage));
         var resolved = snapshot.Plugins;
         // A hash is kept only for a file the load order names, or the kept hashes grow by every path
         // a session ever read.
@@ -589,6 +588,7 @@ internal sealed class Indexer : IDisposable
             && conflictsComputed)
         {
             _logger.LogDebug("Load order snapshot is identical to what is held; nothing to reconcile");
+            store.Commit(_ => store.SetStringsLanguage(_readLanguage));
             return false;
         }
 
@@ -603,6 +603,8 @@ internal sealed class Indexer : IDisposable
         // this reconcile.
         PublishStatus();
 
+        // After Reconciling shows: the sequence moves here, and a reader that sees it move must not find Ready.
+        store.Commit(_ => store.SetStringsLanguage(_readLanguage));
         if (leaving.Count > 0) store.Commit(_ => leaving.ForEach(store.Unregister));
         foreach (var key in leaving)
         {
