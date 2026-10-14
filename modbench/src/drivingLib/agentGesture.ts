@@ -20,8 +20,8 @@ export interface PartialFailure {
 
 /** What a gesture over a selection answers: the outcome, or a refusal that a view reports with its `detail`
  *  and an agent reads with the detail joined on. */
-export type GestureResult<T> =
-  | { applied: true; outcome: SelectionOutcome<T>; partial?: readonly PartialFailure[] }
+export type GestureResult<T, Refused = T> =
+  | { applied: true; outcome: { landed: SelectionOutcome<T>['landed']; refused: SelectionOutcome<Refused>['refused'] }; partial?: readonly PartialFailure[] }
   | { applied: false; refusal: string; detail?: string };
 
 export function reportPartial(reporter: Reporter, partial: readonly PartialFailure[] = [], log: (line: string) => void = () => undefined): void {
@@ -43,7 +43,7 @@ export function argumentOfKind<K extends Argument['kind']>(argument: Argument, .
 }
 
 /** A gesture the agent runs, by the parts a view call and an agent call share and the parts only a view call has. */
-export interface AgentGesture<Row extends KindedRow, Given, Outcome, Options extends object = object> {
+export interface AgentGesture<Row, Given, Outcome, Options extends object = object> {
   /** What a view call acts on: its entry, and what a picker, a prompt or a confirmation adds. Nothing ends it with no write. */
   readonly fromView: (entry: GestureEntry<Row>, option: unknown, clicked: unknown) => Given | undefined | Promise<Given | undefined>;
   readonly fromAgent: (call: AgentCall<Options>) => Given | Promise<Given>;
@@ -54,11 +54,20 @@ export interface AgentGesture<Row extends KindedRow, Given, Outcome, Options ext
 
 export function registerAgentGesture<Row extends KindedRow, Given, Outcome, Options extends object = object>(
   commandId: string, viewSelection: () => readonly Row[], gesture: AgentGesture<Row, Given, Outcome, Options>,
+): vscode.Disposable;
+/** A gesture whose rows are not all tree rows says which values are rows. */
+export function registerAgentGesture<Row, Given, Outcome, Options extends object = object>(
+  commandId: string, viewSelection: () => readonly Row[], gesture: AgentGesture<Row, Given, Outcome, Options>,
+  isRow: (value: unknown) => value is Row,
+): vscode.Disposable;
+export function registerAgentGesture<Row, Given, Outcome, Options extends object = object>(
+  commandId: string, viewSelection: () => readonly Row[], gesture: AgentGesture<Row, Given, Outcome, Options>,
+  isRow: (value: unknown) => value is Row = (value): value is Row => value instanceof vscode.TreeItem,
 ): vscode.Disposable {
   const isCall = (value: unknown): value is AgentCall<Options> => value instanceof AgentCall;
   return vscode.commands.registerCommand(commandId, async (clicked?: unknown, selected?: readonly Row[], option?: unknown) => {
     if (isCall(clicked)) return gesture.run(await gesture.fromAgent(clicked));
-    const given = await gesture.fromView(gestureEntry(clicked, selected, viewSelection), option, clicked);
+    const given = await gesture.fromView(gestureEntry(clicked, selected, viewSelection, isRow), option, clicked);
     if (given !== undefined) gesture.report(await gesture.run(given), given);
     return undefined;
   });

@@ -292,6 +292,34 @@ describe('modbench.mod.decompileAndCommit', () => {
 
     expect(said).toEqual(['Decompiling and committing "ModB" — committing to git…']);
   });
+
+  describe('called by the agent', () => {
+    const calling = (...mods: string[]) => new AgentCall(mods.map((name) => ({ kind: 'mod' as const, name })), {});
+
+    it('decompiles and commits the mods given, never the selection, reporting nothing, and answers the outcome', async () => {
+      const commands = decompileAndCommitCommands();
+      const outcome = { landed: [modB([OTHER])], refused: [{ item: 'ModC', reason: 'its name gives it no source folder' }] };
+      commands.answers(outcome);
+      const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands, undefined, () => [row(FIRST)]);
+
+      const answered = await handler(calling('ModB', 'ModC'));
+
+      expect(commands.sent()).toEqual([['ModB', 'ModC']]);
+      expect(answered).toEqual({ applied: true, outcome });
+      expect(onCommitted).toHaveBeenCalledOnce();
+      expect(reporter.reports).toEqual([]);
+      expect(reporter.landings).toEqual([]);
+    });
+
+    it('answers the refusal of the whole call', async () => {
+      const commands = decompileAndCommitCommands();
+      commands.answers({ refused: true, message: 'the executable was not found on PATH.' });
+      const { handler, onCommitted } = invokeDecompileAndCommit(commands);
+
+      expect(await handler(calling('ModA'))).toEqual({ applied: false, refusal: 'the executable was not found on PATH.' });
+      expect(onCommitted).not.toHaveBeenCalled();
+    });
+  });
 });
 
 
@@ -491,6 +519,17 @@ describe('modbench.mod.build', () => {
     ]);
   });
 
+  it('names a plugin no mod provides before a mod that is not a source mod', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('build', { landed: [built('ModA')], refused: [] });
+    const { handler, reporter } = registered(client);
+    const rows = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModC'), row({ name: 'Loose.esp', origin: 'Overwrite' })];
+
+    await handler(rows[0], rows);
+
+    expect(reporter.reports.map((r) => r.detail)).toEqual(['"Loose.esp (Overwrite)" (it is not in a mod), "ModC" (it is not a source mod)']);
+  });
+
   it('points at the Problems panel when the build left diagnostics, and puts them on the source files', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', {
@@ -675,6 +714,77 @@ describe('modbench.mod.build', () => {
 
     expect(buildCalls()).toEqual([]);
     expect(reporter.reports).toEqual([]);
+  });
+
+  describe('called by the agent', () => {
+    const calling = (...mods: string[]) => new AgentCall(mods.map((name) => ({ kind: 'mod' as const, name })), {});
+
+    it('builds the mods given, never the selection, asking and reporting nothing, and answers the outcome', async () => {
+      const client = new InMemoryMEditClient();
+      const outcome = { landed: [built('ModA', [PATCH])], refused: [] };
+      client.setCommandResult('build', outcome);
+      const { handler, reporter, diagnostics } = registered(client, { selection: [row(OTHER)] });
+
+      const answered = await handler(calling('ModA'));
+
+      expect(builds).toEqual([[['ModA'], 'Fallout4']]);
+      expect(answered).toEqual({ applied: true, outcome, partial: [] });
+      expect(progressSteps).toContain('progress opens on modbench.modList');
+      expect(showQuickPick).not.toHaveBeenCalled();
+      expect(reporter.reports).toEqual([]);
+      expect(reporter.landings).toEqual([]);
+      expect([...diagnostics]).toEqual([]);
+    });
+
+    it('refuses a mod no repository in the source folder holds, naming why, and builds the rest', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('build', { landed: [built('ModA')], refused: [] });
+      const { handler } = registered(client);
+
+      const answered = await handler(calling('ModA', 'ModC'));
+
+      expect(builds).toEqual([[['ModA'], 'Fallout4']]);
+      expect(answered).toMatchObject({ applied: true, outcome: { refused: [{ item: 'ModC', reason: 'it is not a source mod' }] } });
+    });
+
+    it('answers a plugin and an archive refused inside a built mod as partial failures', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('build', { landed: [{
+        ...built('ModA', [], [{ item: PATCH, reason: 'it does not compile' }]), archivesRefused: [{ item: 'ModA - Main.ba2', reason: 'it is too large' }],
+      }], refused: [] });
+      const { handler, reporter } = registered(client);
+
+      const answered = await handler(calling('ModA'));
+
+      expect(answered).toMatchObject({ applied: true, partial: [
+        { message: 'Could not build "MyPatch.esp (ModA)" in "ModA".', detail: 'it does not compile', severity: 'log' },
+        { message: 'Could not pack "ModA - Main.ba2" in "ModA".', detail: 'it is too large', severity: 'log' },
+      ] });
+      expect(reporter.reports).toEqual([]);
+    });
+
+    it('answers a mod built in part and a file it overwrote as partial failures', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('build', { landed: [{ ...built('ModA'), failure: 'the archive step failed', overwritten: ['Data/A.esp'] }], refused: [] });
+      const { handler } = registered(client);
+
+      const answered = await handler(calling('ModA'));
+
+      expect(answered).toMatchObject({ applied: true, partial: [
+        { message: 'Built 1 mod only in part.', detail: '"ModA" (the archive step failed)', severity: 'warning' },
+        { message: 'Build overwrote 1 file that differed.', detail: '"Data/A.esp (ModA)"', severity: 'warning' },
+      ] });
+    });
+
+    it('answers the refusal when VS Code leaves a plugin source unsaved, and builds nothing', async () => {
+      const client = new InMemoryMEditClient();
+      const unsaved = normalize('/instance/source/ModA/plugin-source/A.json');
+      const { handler, reporter } = registered(client, { unsaved: { [normalize('/instance/source/ModA')]: [unsaved] } });
+
+      expect(await handler(calling('ModA'))).toEqual({ applied: false, refusal: 'Could not build: VS Code did not save its plugin source.', detail: unsaved });
+      expect(builds).toEqual([]);
+      expect(reporter.reports).toEqual([]);
+    });
   });
 });
 
