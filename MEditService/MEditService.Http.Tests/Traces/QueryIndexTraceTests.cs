@@ -86,6 +86,22 @@ public sealed class QueryIndexTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task ANumberThatNamesNoStringsLanguage_IsRefused()
+    {
+        var response = await Client.PutStringsLanguage("99");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ABodyWithNoStringsLanguage_IsRefused()
+    {
+        var response = await Client.PutAsJsonAsync("/strings-language", new { });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task AStringsLanguageNoGameHas_IsRefused()
     {
         var response = await Client.PutStringsLanguage("Klingon");

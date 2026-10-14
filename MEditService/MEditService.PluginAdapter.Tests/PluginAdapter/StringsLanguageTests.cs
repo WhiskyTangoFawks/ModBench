@@ -67,4 +67,21 @@ public sealed class StringsLanguageTests : IDisposable
 
         Assert.Equal("Update_French.STRINGS", Assert.IsType<PluginFailure.MissingStrings>(source.Failure()).File);
     }
+
+    [Fact]
+    public async Task Save_OfAPluginLocalizedInOnlyTheStringsLanguage_DropsNothing()
+    {
+        var germanOnly = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "German")).FullName, PluginName);
+        LocalizedDoorPlugin.WriteNamedIn(germanOnly, (Language.German, "Das Grosse Tor"));
+        var plugin = new RegisteredPlugin(
+            PluginName, PluginOrigin.DataDirectory, germanOnly, PluginProvider.Game, Line: null, HandedStrings.Of(germanOnly));
+        var loadOrder = new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], []);
+        var adapter = AdapterIn(Language.German);
+        var source = (await adapter.ReadSourceOfAsync(plugin, loadOrder)).Answered();
+        var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();
+
+        var drops = (await tree.SaveAsync(Path.Combine(_root, "Out", PluginName), source.Masters, [], tree.DropsIn)).Answered();
+
+        Assert.Empty(drops);
+    }
 }
