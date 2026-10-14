@@ -5,7 +5,7 @@ import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
 import { promptRename } from '../drivingLib/promptRename';
 import { MODS_KEY_ARGS, entryRefOf, fileRefOf, modNameOf, separatorNameOf, runModsWriting, openFolderArgument } from './gestureEntry';
-import { registerAgentGesture, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
+import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { viewCopyValueText } from '../drivingLib/copyValue';
 import {
   pluralArgument, registerGesture, singularArgument, type RowOf,
@@ -188,13 +188,6 @@ interface Rename {
   readonly oldName: string;
   readonly newName: string;
 }
-
-const reportPartial = (reporter: Reporter, partial: readonly PartialFailure[] = [], log: (line: string) => void = () => undefined) => {
-  for (const { message, detail, severity } of partial) {
-    if (severity === 'warning') reporter.report('warning', message, detail);
-    else log(`${message}: ${detail}`);
-  }
-};
 
 type Uninstalled = Extract<Awaited<ReturnType<ModlistCommands['uninstallMods']>>, { applied: true }>['outcome']['landed'][number];
 
