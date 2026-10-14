@@ -26,12 +26,12 @@ function commandsOver(answers: InstanceAnswers = {}, client = new InMemoryMEditC
 }
 
 describe('modlistSourceCommands init', () => {
-  it('makes the instance folder a repository, then writes its ignore list', async () => {
+  it('writes the ignore list, then makes the instance folder a repository', async () => {
     const { commands, adapter, repositories } = commandsOver();
 
     const result = await commands.init({ holdsRepository: false });
 
-    expect([result.applied, repositories, adapter.calls]).toEqual([true, ['made'], [{ verb: 'writeIgnoreList' }]]);
+    expect([result.applied, adapter.calls, repositories]).toEqual([true, [{ verb: 'writeIgnoreList' }], ['made']]);
   });
 
   it('refuses an instance folder that already holds a repository, naming it, and changes nothing', async () => {
@@ -42,7 +42,13 @@ describe('modlistSourceCommands init', () => {
     expect([result, repositories, adapter.calls]).toEqual([{ applied: false, refusal: '/instance already holds a repository.' }, [], []]);
   });
 
-  it('writes no ignore list when the repository could not be made', async () => {
+  it('makes no repository when the ignore list could not be written, and says why', async () => {
+    const { commands, repositories } = commandsOver({ refusals: refusing('writeIgnoreList', '/instance/.gitignore already exists') });
+
+    expect([await commands.init({ holdsRepository: false }), repositories]).toEqual([{ applied: false, refusal: '/instance/.gitignore already exists' }, []]);
+  });
+
+  it('takes back the ignore list it wrote when the repository could not be made, leaving nothing behind', async () => {
     const adapter = fakeInstanceAdapter();
     const commands = modlistSourceCommands({
       client: new InMemoryMEditClient(), adapter: adapter.adapter, instanceRoot: '/instance',
@@ -51,13 +57,21 @@ describe('modlistSourceCommands init', () => {
 
     const result = await commands.init({ holdsRepository: false });
 
-    expect([result, adapter.calls]).toEqual([{ applied: false, refusal: 'git is not available' }, []]);
+    expect([result, adapter.calls]).toEqual([
+      { applied: false, refusal: 'git is not available' }, [{ verb: 'writeIgnoreList' }, { verb: 'removeIgnoreList' }],
+    ]);
   });
 
-  it('says so when the ignore list could not be written', async () => {
-    const { commands } = commandsOver({ refusals: refusing('writeIgnoreList', 'read-only folder') });
+  it('names the ignore list that remains when it could not be taken back', async () => {
+    const adapter = fakeInstanceAdapter(readingFixture(), { refusals: refusing('removeIgnoreList', 'read-only folder') });
+    const commands = modlistSourceCommands({
+      client: new InMemoryMEditClient(), adapter: adapter.adapter, instanceRoot: '/instance',
+      makeRepository: () => Promise.reject(new Error('git is not available')),
+    });
 
-    expect(await commands.init({ holdsRepository: false })).toEqual({ applied: false, refusal: 'read-only folder' });
+    expect(await commands.init({ holdsRepository: false })).toEqual({
+      applied: false, refusal: 'git is not available; the ignore list it wrote remains: read-only folder',
+    });
   });
 });
 
@@ -105,6 +119,19 @@ describe('modlistSourceCommands stage', () => {
 
     expect(client.calls.map((call) => stagedNames(call.args[0]))).toEqual([['ModB']]);
     expect(outcome).toEqual({ applied: true, ...STAGED, refused: [{ item: 'ModA', reason: 'its installation file is not indexed' }] });
+  });
+
+  it('hashes no game file for a mod refused for its folder or its installation files', async () => {
+    const adapter = fakeInstanceAdapter(readingFixture(), { installations: new Map([['ModA', { kind: 'unreadable', reason: 'not indexed' }]]) });
+    const hashed: string[] = [];
+    const commands = modlistSourceCommands({
+      client: new InMemoryMEditClient(), adapter: { ...adapter.adapter, overriddenGameFiles: (...args) => { hashed.push(args[1].join()); return adapter.adapter.overriddenGameFiles(...args); } },
+      instanceRoot: '/instance', makeRepository: () => Promise.resolve(),
+    });
+
+    await commands.stage(['ModA'], instanceOf({ ModA: [fileIn('/mods/ModA', 'a.esm')] }));
+
+    expect(hashed).toEqual([]);
   });
 
   it('calls mEdit with nothing when no mod can be sent', async () => {

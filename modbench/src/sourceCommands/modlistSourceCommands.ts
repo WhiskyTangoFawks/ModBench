@@ -1,6 +1,7 @@
 import { isRefused, type MEditClient, type StageMod, type StageOutcome, type StageProgress } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { GameFile, GameFolder, InstanceAdapter, OriginFile } from '../instanceAdapter/instanceAdapter';
+import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 
@@ -9,7 +10,7 @@ const DELTA_SHARE = 0.5;
 interface ModlistSourceCommandsDeps {
   client: Pick<MEditClient, 'stage'>;
   adapter: Pick<InstanceAdapter,
-    'installationFiles' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'buildFolder' | 'writeIgnoreList'>;
+    'installationFiles' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'buildFolder' | 'writeIgnoreList' | 'removeIgnoreList'>;
   instanceRoot: string;
   /** VS Code's git makes the instance folder a repository. */
   makeRepository: () => Promise<void>;
@@ -29,16 +30,49 @@ export type StageStatus = { readonly phase: 'ReadingFiles'; readonly mod: string
 
 /** The modlist gestures, bound to the mEdit client and handing it the instance's facts. */
 export function modlistSourceCommands({ client, adapter, instanceRoot, makeRepository }: ModlistSourceCommandsDeps) {
+  // A failed init leaves nothing behind: the ignore list it wrote goes, and what stays is named.
+  async function refusalWithIgnoreListTakenBack(failure: unknown): Promise<string> {
+    try {
+      await adapter.removeIgnoreList();
+      return errorMessage(failure);
+    } catch (err) {
+      return `${errorMessage(failure)}; the ignore list it wrote remains: ${errorMessage(err)}`;
+    }
+  }
+
+  // The folder and the installation files first: a mod refused for either costs no hashing of game files.
+  async function readForStage(
+    mod: string, dataFolder: string, modFilePaths: readonly string[],
+  ): Promise<{ staged: StageMod; gameFiles: readonly GameFile[] } | { refusal: string }> {
+    const folder = await adapter.modFolderPath(mod);
+    if (folder === undefined) return { refusal: 'its name gives it no folder' };
+    const installed = await adapter.installationFiles(mod);
+    if (installed.kind === 'unreadable') return { refusal: installed.reason };
+    const overridden = await adapter.overriddenGameFiles(dataFolder, modFilePaths);
+    if (overridden.kind === 'unreadable') return { refusal: overridden.reason };
+    return {
+      staged: {
+        name: mod, folder, installationFiles: installed.answer.map((file) => ({ ...file, entries: [...file.entries] })),
+        committedFiles: [...adapter.managerFilesInModFolder],
+      },
+      gameFiles: overridden.answer,
+    };
+  }
+
   return {
     /** Makes the repository and its ignore list, and stages nothing. Refused when the instance folder holds one already. */
     init: async ({ holdsRepository }: { readonly holdsRepository: boolean }): Promise<CommandResult<object>> => {
       if (holdsRepository) return { applied: false, refusal: `${instanceRoot} already holds a repository.` };
       try {
-        await makeRepository();
         await adapter.writeIgnoreList();
-        return { applied: true };
       } catch (err) {
         return refuse(err);
+      }
+      try {
+        await makeRepository();
+        return { applied: true };
+      } catch (err) {
+        return { applied: false, refusal: await refusalWithIgnoreListTakenBack(err) };
       }
     },
 
@@ -53,19 +87,10 @@ export function modlistSourceCommands({ client, adapter, instanceRoot, makeRepos
       const refused: ItemRefusal<string>[] = [];
       for (const mod of mods) {
         options.onProgress?.({ phase: 'ReadingFiles', mod });
-        const folder = await adapter.modFolderPath(mod);
-        const installed = await adapter.installationFiles(mod);
-        const overridden = await adapter.overriddenGameFiles(gameFolder.dataFolder, (filesByMod.get(mod) ?? []).map((file) => file.relativePath));
-        if (folder === undefined) refused.push({ item: mod, reason: 'its name gives it no folder' });
-        else if (installed.kind === 'unreadable') refused.push({ item: mod, reason: installed.reason });
-        else if (overridden.kind === 'unreadable') refused.push({ item: mod, reason: overridden.reason });
-        else {
-          sent.push({
-            name: mod, folder, installationFiles: installed.answer.map((file) => ({ ...file, entries: [...file.entries] })),
-            committedFiles: [...adapter.managerFilesInModFolder],
-          });
-          for (const file of overridden.answer) gameFiles.set(file.path.toLowerCase(), file);
-        }
+        const read = await readForStage(mod, gameFolder.dataFolder, (filesByMod.get(mod) ?? []).map((file) => file.relativePath));
+        if ('refusal' in read) { refused.push({ item: mod, reason: read.refusal }); continue; }
+        sent.push(read.staged);
+        for (const file of read.gameFiles) gameFiles.set(file.path.toLowerCase(), file);
       }
       if (sent.length === 0) return { applied: true, landed: [], refused };
       const outcome = await client.stage(sent, {

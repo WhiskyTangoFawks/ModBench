@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { modArgumentOf, rowNameOf } from '../drivingLib/argument';
 import { gestureEntry, isClickedRow } from '../drivingLib/gestureEntry';
+import type { FocusedView } from '../drivingLib/focusedView';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Instance } from '../instanceLoader/instance';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -16,6 +17,8 @@ interface ModlistGestureDeps {
   reporter: Reporter;
   /** The Toolbox's message line: `undefined` gives it back to whatever else had something to say. */
   say: (message: string | undefined) => void;
+  /** The palette has no clicked row, so it takes the focused view's selection. */
+  focusedView: Pick<FocusedView, 'id' | 'selection'>;
   /** The Mods view's id, whose bar a gesture from a Mods row runs under. */
   modsView: string;
 }
@@ -36,11 +39,16 @@ function init({ commands, instance, reporter }: ModlistGestureDeps): Promise<voi
   });
 }
 
-// A Mods row stages its mod, and the selection its mods. Source Control's title bar and the palette pass no row:
-// every mod is staged.
+// A Mods row stages its mod, and the selection its mods. The palette stages the Mods view's selection while it has the
+// focus. Anything else, Source Control's title bar or a click on the Toolbox's Modlist row, stages every mod.
+function rowsToStage(deps: ModlistGestureDeps, clicked: unknown, selected: readonly unknown[] | undefined): readonly unknown[] {
+  if (clicked === undefined) return deps.focusedView.id() === deps.modsView ? deps.focusedView.selection() : [];
+  return modArgumentOf(clicked) === undefined ? [] : gestureEntry(clicked, selected, () => [], isClickedRow).selection;
+}
+
 async function stage(deps: ModlistGestureDeps, clicked: unknown, selected: readonly unknown[] | undefined): Promise<void> {
   const { commands, instance, reporter } = deps;
-  const rows = gestureEntry(clicked, selected, () => [], isClickedRow).selection;
+  const rows = rowsToStage(deps, clicked, selected);
   const refusedRows: ItemRefusal<string>[] = [];
   const mods = rows.length === 0
     ? instance.value.mods.flatMap((entry) => (entry.kind === 'mod' ? [entry.name] : []))

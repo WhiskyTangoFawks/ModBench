@@ -2,13 +2,13 @@
 
 import type { Dirent } from 'node:fs';
 import { join } from 'node:path';
-import { listDir, write } from './files';
+import { exists, listDir, remove, write } from './files';
 import type { HashIndex } from './hashIndex';
 import type { GameFile, InstanceAdapter } from './instanceAdapter';
 import { buildDir, ignoreListFile, WHITELIST_IGNORE_LIST } from './layout';
 import type { Mo2Context } from './mo2Context';
 
-type Mo2Repository = Pick<InstanceAdapter, 'overriddenGameFiles' | 'buildFolder' | 'writeIgnoreList'>;
+type Mo2Repository = Pick<InstanceAdapter, 'overriddenGameFiles' | 'buildFolder' | 'writeIgnoreList' | 'removeIgnoreList'>;
 
 const lowerCased = (names: readonly Dirent[]): Map<string, Dirent> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
@@ -38,7 +38,13 @@ export function mo2Repository(
   return {
     buildFolder: buildDir(instanceRoot),
 
-    writeIgnoreList: () => write(ignoreListFile(instanceRoot), WHITELIST_IGNORE_LIST),
+    async writeIgnoreList() {
+      const file = ignoreListFile(instanceRoot);
+      if (await exists(file)) throw new Error(`${file} already exists; init does not write over it.`);
+      await write(file, WHITELIST_IGNORE_LIST);
+    },
+
+    removeIgnoreList: () => remove(ignoreListFile(instanceRoot)),
 
     async overriddenGameFiles(dataFolder, modFilePaths) {
       const find = caseBlindFinder(dataFolder);

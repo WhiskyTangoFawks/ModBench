@@ -50,6 +50,7 @@ export type AdapterCall =
   | { readonly verb: 'trashEntryFolder'; readonly entry: EntryRef }
   | { readonly verb: 'trashSourceFolder'; readonly mod: string }
   | { readonly verb: 'writeIgnoreList' }
+  | { readonly verb: 'removeIgnoreList' }
   | { readonly verb: 'install'; readonly source: InstallSource; readonly target: InstallTarget; readonly keys: OwnedMetaKeys };
 
 export type WriteVerb = AdapterCall['verb'];
@@ -145,6 +146,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     buildFolder: '/build',
     writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, undefined),
+    removeIgnoreList: () => record({ verb: 'removeIgnoreList' }, undefined),
     fileStamp: (path) => answer(answers.stamps?.get(path), path),
     originFileHash: (path) => {
       hashed.push(path);

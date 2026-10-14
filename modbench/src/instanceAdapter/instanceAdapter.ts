@@ -378,8 +378,11 @@ export interface InstanceAdapter {
   overriddenGameFiles(dataFolder: string, modFilePaths: readonly string[]): Promise<FileRead<readonly GameFile[]>>;
   /** The folder stage writes deltas into. */
   readonly buildFolder: string;
-  /** Writes the instance repository's ignore list: a whitelist of what the repository holds. */
+  /** Writes the instance repository's ignore list: a whitelist of what the repository holds. Rejects, writing nothing,
+   *  when an ignore list is already there. */
   writeIgnoreList(): Promise<void>;
+  /** Takes back the ignore list `writeIgnoreList` wrote. */
+  removeIgnoreList(): Promise<void>;
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** An origin file's size and hash at the path it is read from, remembered for this session alone: its lasting hash

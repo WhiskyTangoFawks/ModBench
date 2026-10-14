@@ -16,10 +16,11 @@ vi.mock('vscode', async () => {
   return {
     commands: { registerCommand },
     window: { withProgress: recordedWithProgress },
-    TreeItem: class { readonly label = ''; },
+    TreeItem: class { constructor(readonly label: string) {} },
   };
 });
 
+import { TreeItem } from 'vscode';
 import { progressSteps } from '../../test/recordedProgress';
 import { registerModlistCommands } from '../modlistGestures';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -40,13 +41,14 @@ const value = instanceValueFixture({
 
 const modRow = (name: string) => ({ argument: { kind: 'mod', name }, name });
 
-function register() {
+function register(over: Partial<Parameters<typeof registerModlistCommands>[0]> = {}) {
   const reporter = recordingReporter();
   const said: (string | undefined)[] = [];
   registerModlistCommands({
     commands: { init, stage },
     instance: { value, refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(undefined); } },
     reporter, say: (message) => { said.push(message); }, modsView: 'modbench.modList',
+    focusedView: { id: () => undefined, selection: () => [] }, ...over,
   });
   return { reporter, said, run: (id: string, ...args: unknown[]) => present(handlers.get(id), `the handler for "${id}"`)(...args) };
 }
@@ -103,13 +105,39 @@ describe('Stage', () => {
     expect(said).toEqual([undefined]);
   });
 
-  it('stages every mod, no separator, from the palette or the Source Control title bar, whatever that hands it', async () => {
+  it('stages every mod, no separator, disabled or not, from the palette with no Mods selection', async () => {
     const { run } = register();
 
     await run('modbench.modlist.stage');
-    await run('modbench.modlist.stage', { rootUri: undefined });
 
-    expect(stage.mock.calls.map(([mods]) => mods)).toEqual([['ModA', 'ModB'], ['ModA', 'ModB']]);
+    expect(stage.mock.calls.map(([mods]) => mods)).toEqual([['ModA', 'ModB']]);
+  });
+
+  it('stages the Mods selection from the palette, under the Mods view\'s progress', async () => {
+    const { run } = register({ focusedView: { id: () => 'modbench.modList', selection: () => [modRow('ModB')] } });
+
+    await run('modbench.modlist.stage');
+
+    expect([stage.mock.calls.map(([mods]) => mods), progressSteps[0]]).toEqual([[['ModB']], 'progress opens on modbench.modList']);
+  });
+
+  it('stages every mod from the palette while another view has the focus', async () => {
+    const { run } = register({ focusedView: { id: () => 'modbench.pluginListTree', selection: () => [modRow('ModB')] } });
+
+    await run('modbench.modlist.stage');
+
+    expect(stage.mock.calls.map(([mods]) => mods)).toEqual([['ModA', 'ModB']]);
+  });
+
+  it.each([
+    ['the Source Control title bar, which passes its source control', { rootUri: undefined }],
+    ['a click on the Toolbox\'s Modlist row', new TreeItem('Modlist')],
+  ])('stages every mod from %s, whatever the Mods view has selected', async (_where, clicked) => {
+    const { run } = register({ focusedView: { id: () => 'modbench.modList', selection: () => [modRow('ModB')] } });
+
+    await run('modbench.modlist.stage', clicked);
+
+    expect(stage.mock.calls.map(([mods]) => mods)).toEqual([['ModA', 'ModB']]);
   });
 
   it('stages the selected mods from the Mod menu', async () => {

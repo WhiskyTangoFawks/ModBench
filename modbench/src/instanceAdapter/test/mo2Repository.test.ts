@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
@@ -56,6 +57,24 @@ describe('the MO2 adapter\'s repository', () => {
     const files = answer.kind === 'read' ? answer.answer : [];
     expect(files.map(({ path, size }) => ({ path, size }))).toEqual([{ path: 'meshes/Armor.nif', size: 4 }, { path: 'Game.esm', size: 6 }]);
     expect(files.map(({ hash }) => /^[A-Za-z0-9+/]{11}=$/.test(hash))).toEqual([true, true]);
+  });
+
+  it('refuses to write over an ignore list already in the instance folder, naming it, and leaves it as it is', async () => {
+    const adapter = await instance();
+    await put('.gitignore', 'mine\n');
+
+    await expect(adapter.writeIgnoreList()).rejects.toThrow(join(root, '.gitignore'));
+
+    expect(await readFile(join(root, '.gitignore'), 'utf8')).toBe('mine\n');
+  });
+
+  it('takes back the ignore list it wrote', async () => {
+    const adapter = await instance();
+    await adapter.writeIgnoreList();
+
+    await adapter.removeIgnoreList();
+
+    expect(existsSync(join(root, '.gitignore'))).toBe(false);
   });
 
   it('shows git exactly the whitelist: the manifests, meta.ini, each profile\'s orders and INIs, and the configuration', async () => {
