@@ -4,50 +4,64 @@ using Octodiff.Diagnostics;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>What a mod lacks to come back as its manifest says, and the writes that bring it back. Every delta is
-/// applied before any file is written.</summary>
+/// <summary>What a mod lacks to come back as its manifest says, and the writes that bring it back. Each step hands the
+/// next what it needs, and every delta is applied before any file is written.</summary>
 internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard mod, InstanceToDiscard instance, Manifest manifest) : IDisposable
 {
-    internal sealed record Lack(string Text, string? GameFileNotFound = null, string? DeltaNotFound = null);
+    internal abstract record Lack(string Text)
+    {
+        internal sealed record Other(string Why) : Lack(Why);
 
-    private interface ISource;
+        internal sealed record GameFileMissing(string Path) : Lack($"game file '{Path}' is missing");
 
-    private sealed record EntrySource(InstallationFile File, string Path) : ISource;
+        internal sealed record DeltaMissing(string Name) : Lack($"delta '{Name}' is missing");
+    }
 
-    private sealed record GameSource(OverriddenGameFile File) : ISource;
+    /// <summary>What a step hands the next, or else what it lacks.</summary>
+    internal sealed record Step<T>(T? Value, IReadOnlyList<Lack> Lacks) where T : class;
 
-    private sealed record DeltaSource(ISource Basis, string BaseHash, (InstallationFile File, string Entry)? PackedIn) : ISource;
+    internal interface ISource;
 
-    private readonly Dictionary<string, ISource> _sources = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, Stream> _applied = new(StringComparer.Ordinal);
+    internal sealed record EntrySource(InstallationFile File, string Path) : ISource;
+
+    internal sealed record GameSource(OverriddenGameFile File) : ISource;
+
+    internal sealed record DeltaSource(ISource Basis, string BaseHash, Stream? Loose, (InstallationFile File, string Entry)? PackedIn) : ISource;
+
+    internal sealed record Sourced(IReadOnlyList<(ManifestFile File, ISource Source)> Files);
+
+    internal sealed record Applied(Sourced Sourced, IReadOnlyDictionary<string, Stream> Streams);
+
     private readonly List<Stream> _scratch = [];
 
     /// <summary>Finds where each file comes from, and names each source it lacks once.</summary>
-    public IReadOnlyList<Lack> Resolve(IReadOnlyList<ManifestFile> files)
+    public Step<Sourced> Resolve(IReadOnlyList<ManifestFile> files)
     {
+        List<(ManifestFile, ISource)> sourced = [];
         List<Lack> lacks = [];
         foreach (var file in files)
         {
             var (source, lacking) = SourceOf(file);
-            if (source is not null) _sources[file.Path] = source;
+            if (source is not null) sourced.Add((file, source));
             lacks.AddRange(lacking);
         }
-        return [.. lacks.Distinct()];
+        return lacks.Count > 0 ? new Step<Sourced>(null, [.. lacks.Distinct()]) : new Step<Sourced>(new Sourced(sourced), []);
     }
 
     /// <summary>Applies each delta into a scratch file. The first whose result is not the file its name says is the
     /// lack.</summary>
-    public Lack? ApplyDeltas(IReadOnlyList<ManifestFile> files)
+    public Step<Applied> ApplyDeltas(Sourced sourced)
     {
+        Dictionary<string, Stream> applied = new(StringComparer.Ordinal);
         List<(ManifestFile File, DeltaSource Delta, EntrySource Entry)> onEntries = [];
-        foreach (var file in files)
+        foreach (var (file, source) in sourced.Files)
         {
-            switch (_sources[file.Path])
+            switch (source)
             {
                 case DeltaSource { Basis: GameSource game } delta:
                     using (var basis = repository.OpenGameFile(instance.DataFolder, game.File.Path))
                     {
-                        if (Apply(file, delta, basis) is { } lack) return lack;
+                        if (Apply(file, delta, basis, applied) is { } lack) return Lacking(lack);
                     }
                     break;
                 case DeltaSource { Basis: EntrySource entry } delta:
@@ -63,20 +77,21 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
             {
                 var basis = Scratch();
                 content.CopyTo(basis);
-                foreach (var (file, delta, _) in wanted[entry]) lack ??= Apply(file, delta, basis);
+                foreach (var (file, delta, _) in wanted[entry]) lack ??= Apply(file, delta, basis, applied);
             });
-            if (lack is not null) return lack;
+            if (lack is not null) return Lacking(lack);
         }
-        return null;
+        return new Step<Applied>(new Applied(sourced, applied), []);
     }
 
     /// <summary>Writes each file from its source. A write that fails leaves the files before it written.</summary>
-    public void Write(IReadOnlyList<ManifestFile> files)
+    public void Write(Applied applied)
     {
         List<(string Path, EntrySource Entry)> fromEntries = [];
-        foreach (var path in files.Select(file => file.Path))
+        foreach (var (file, source) in applied.Sourced.Files)
         {
-            switch (_sources[path])
+            var path = file.Path;
+            switch (source)
             {
                 case GameSource game:
                     repository.WriteFile(mod.Folder, path, target =>
@@ -88,9 +103,9 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
                 case DeltaSource:
                     repository.WriteFile(mod.Folder, path, target =>
                     {
-                        var applied = _applied[path];
-                        applied.Position = 0;
-                        applied.CopyTo(target);
+                        var stream = applied.Streams[path];
+                        stream.Position = 0;
+                        stream.CopyTo(target);
                     });
                     break;
                 case EntrySource entry:
@@ -122,12 +137,14 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
         foreach (var stream in _scratch) stream.Dispose();
     }
 
+    private static Step<Applied> Lacking(Lack lack) => new(null, [lack]);
+
     private (ISource? Source, IEnumerable<Lack> Lacks) SourceOf(ManifestFile file) => file.Provider switch
     {
-        FileProvider.NoProvider => (null, [new($"'{file.Path}' has no provider")]),
+        FileProvider.NoProvider => (null, [new Lack.Other($"'{file.Path}' has no provider")]),
         FileProvider.FirstInstallationFile => manifest.InstallationFiles is [var first, ..]
             ? EntryOf(first.Name, file.Path, file.Hash)
-            : (null, [new($"'{file.Path}' names no installation file")]),
+            : (null, [new Lack.Other($"'{file.Path}' names no installation file")]),
         FileProvider.InstallationFileEntry entry => EntryOf(entry.InstallationFile, entry.Path, file.Hash),
         FileProvider.InstallationFileDelta delta => DeltaOf(EntryOf(delta.InstallationFile, delta.Path, delta.BaseHash), file, delta.BaseHash),
         FileProvider.GameFile game => GameFileOf(game.Path, file.Hash),
@@ -139,29 +156,32 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
     {
         var handed = mod.InstallationFiles.FirstOrDefault(file => repository.InstallationFileName(file.Path) == name);
         if (handed is null || !repository.InstallationFileExists(handed.Path))
-            return (null, [new($"installation file '{name}' is not in the downloads folder")]);
+            return (null, [new Lack.Other($"installation file '{name}' is not in the downloads folder")]);
         if (manifest.InstallationFiles.FirstOrDefault(source => source.Name == name)?.Hash != handed.Hash)
-            return (null, [new($"installation file '{name}' has other bytes")]);
+            return (null, [new Lack.Other($"installation file '{name}' has other bytes")]);
         return handed.Entries.Any(entry => string.Equals(entry.Path, entryPath, StringComparison.OrdinalIgnoreCase) && entry.Hash == hash)
             ? (new EntrySource(handed, entryPath), [])
-            : (null, [new($"installation file '{name}' holds no '{entryPath}' with the bytes its manifest names")]);
+            : (null, [new Lack.Other($"installation file '{name}' holds no '{entryPath}' with the bytes its manifest names")]);
     }
 
     private (ISource?, IEnumerable<Lack>) GameFileOf(string path, string hash)
     {
         var handed = instance.GameFiles.FirstOrDefault(game => string.Equals(game.Path, path, StringComparison.OrdinalIgnoreCase));
-        if (handed is null) return (null, [new($"game file '{path}' is missing", GameFileNotFound: path)]);
+        if (handed is null) return (null, [new Lack.GameFileMissing(path)]);
         var named = manifest.GameFiles.FirstOrDefault(source => string.Equals(source.Name, path, StringComparison.OrdinalIgnoreCase));
-        return named?.Hash == handed.Hash && handed.Hash == hash ? (new GameSource(handed), []) : (null, [new($"game file '{path}' has other bytes")]);
+        return named?.Hash == handed.Hash && handed.Hash == hash
+            ? (new GameSource(handed), [])
+            : (null, [new Lack.Other($"game file '{path}' has other bytes")]);
     }
 
     private (ISource?, IEnumerable<Lack>) DeltaOf((ISource? Source, IEnumerable<Lack> Lacks) basis, ManifestFile file, string baseHash)
     {
         var name = repository.DeltaName(file.Path, baseHash, file.Hash);
-        using var loose = repository.OpenDelta(instance.BuildFolder, instance.DownloadsFolder, file.Path, baseHash, file.Hash);
+        var loose = repository.OpenDelta(instance.BuildFolder, instance.DownloadsFolder, file.Path, baseHash, file.Hash);
+        if (loose is not null) _scratch.Add(loose);
         var packedIn = loose is null ? PackedIn(name) : null;
-        if (loose is null && packedIn is null) return (null, [.. basis.Lacks, new($"delta '{name}' is missing", DeltaNotFound: name)]);
-        return basis.Source is null ? (null, basis.Lacks) : (new DeltaSource(basis.Source, baseHash, packedIn), []);
+        if (loose is null && packedIn is null) return (null, [.. basis.Lacks, new Lack.DeltaMissing(name)]);
+        return basis.Source is null ? (null, basis.Lacks) : (new DeltaSource(basis.Source, baseHash, loose, packedIn), []);
     }
 
     private (InstallationFile File, string Entry)? PackedIn(string deltaName) =>
@@ -171,12 +191,12 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
             .Select(packed => ((InstallationFile, string)?)packed)
             .FirstOrDefault();
 
-    private Lack? Apply(ManifestFile file, DeltaSource source, Stream basis)
+    private Lack? Apply(ManifestFile file, DeltaSource source, Stream basis, Dictionary<string, Stream> appliedByPath)
     {
-        using var delta = Opened(file, source);
+        var delta = Opened(source);
         var applied = Scratch();
         basis.Position = 0;
-        var otherBytes = new Lack($"delta '{repository.DeltaName(file.Path, source.BaseHash, file.Hash)}' has other bytes");
+        var otherBytes = new Lack.Other($"delta '{repository.DeltaName(file.Path, source.BaseHash, file.Hash)}' has other bytes");
         try
         {
             new DeltaApplier().Apply(basis, new BinaryDeltaReader(delta, new NullProgressReporter()), applied);
@@ -187,19 +207,20 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
         }
         applied.Position = 0;
         if (repository.Hash(applied) != file.Hash) return otherBytes;
-        _applied[file.Path] = applied;
+        appliedByPath[file.Path] = applied;
         return null;
     }
 
-    private Stream Opened(ManifestFile file, DeltaSource source)
+    private Stream Opened(DeltaSource source)
     {
-        if (source.PackedIn is not { } packed)
+        if (source.Loose is { } loose)
         {
-            return repository.OpenDelta(instance.BuildFolder, instance.DownloadsFolder, file.Path, source.BaseHash, file.Hash)
-                ?? throw new FileNotFoundException($"delta '{repository.DeltaName(file.Path, source.BaseHash, file.Hash)}' is gone");
+            loose.Position = 0;
+            return loose;
         }
+        var (file, entry) = source.PackedIn!.Value;
         var delta = Scratch();
-        Extract(packed.File, [packed.Entry], (_, content) => content.CopyTo(delta));
+        Extract(file, [entry], (_, content) => content.CopyTo(delta));
         delta.Position = 0;
         return delta;
     }
