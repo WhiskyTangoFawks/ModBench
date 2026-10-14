@@ -7,10 +7,10 @@ namespace MEditService.Commands.Build;
 internal sealed class ManifestBuilder
 {
     private readonly List<(string Name, InstallationFile File)> _installationFiles;
-    private readonly Dictionary<string, GameFileToStage> _gameFiles = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, OverriddenGameFile> _gameFiles = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<(string Name, ILookup<string, HashedEntry> ByHash, Dictionary<string, HashedEntry> ByPath)> _indexes;
 
-    public ManifestBuilder(IEnumerable<(string Name, InstallationFile File)> installationFiles, IEnumerable<GameFileToStage> gameFiles)
+    public ManifestBuilder(IEnumerable<(string Name, InstallationFile File)> installationFiles, IEnumerable<OverriddenGameFile> gameFiles)
     {
         _installationFiles = [.. installationFiles];
         foreach (var gameFile in gameFiles) _gameFiles.TryAdd(gameFile.Path, gameFile);
