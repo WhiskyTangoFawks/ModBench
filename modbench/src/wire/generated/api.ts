@@ -134,6 +134,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/modlist/discard-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files, game files and deltas it names (ADR-0022), and touches no other file. A mod lands, is skipped naming what it lacks, or is named not finished when a write failed part way. Progress is the discard-progress notification. */
+        post: operations["DiscardChanges"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/build": {
         parameters: {
             query?: never;
@@ -1005,6 +1022,29 @@ export interface components {
             applied: components["schemas"]["PluginAddress"][];
             refused: components["schemas"]["PluginDecompileRefusal"][];
         };
+        DiscardModRequest: {
+            name: string;
+            folder: string;
+            installationFiles: components["schemas"]["InstallationFileRequest"][];
+        };
+        /** @enum {string} */
+        DiscardRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "NotFound" | "Unreadable" | "NotFinished";
+        DiscardRequest: {
+            mods: components["schemas"]["DiscardModRequest"][];
+            gameFiles: components["schemas"]["OverriddenGameFileRequest"][];
+            dataFolder: string;
+            buildFolder: string;
+            downloadsFolder?: string | null;
+            downloadedFiles?: components["schemas"]["InstallationFileRequest"][] | null;
+        };
+        DiscardResponse: {
+            applied: components["schemas"]["DiscardedModResponse"][];
+            refused: components["schemas"]["ModDiscardRefusal"][];
+        };
+        DiscardedModResponse: {
+            mod: string;
+            written: string[];
+        };
         DocumentChange: {
             path: string;
             text: string;
@@ -1194,6 +1234,13 @@ export interface components {
             refusal: components["schemas"]["BuildRefusal"];
             message: string;
         };
+        ModDiscardRefusal: {
+            item: string;
+            refusal: components["schemas"]["DiscardRefusal"];
+            message: string;
+            gameFilesNotFound: string[];
+            deltasNotFound: string[];
+        };
         ModInitRefusal: {
             item: string;
             refusal: components["schemas"]["InitRefusal"];
@@ -1203,6 +1250,13 @@ export interface components {
             item: string;
             refusal: components["schemas"]["StageRefusal"];
             message: string;
+        };
+        ModlistProgress: {
+            mod?: string | null;
+            /** Format: int32 */
+            modsDone: number;
+            /** Format: int32 */
+            modsTotal: number;
         };
         MoveLastWrittenRequest: {
             origin: string;
@@ -1232,7 +1286,13 @@ export interface components {
             changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
             pluginWithUnreadableSources?: components["schemas"]["PluginWithUnreadableSource"][] | null;
             recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;
-            stageProgress?: components["schemas"]["StageProgress"] | null;
+            modlistProgress?: components["schemas"]["ModlistProgress"] | null;
+        };
+        OverriddenGameFileRequest: {
+            path: string;
+            /** Format: int64 */
+            size?: number | null;
+            hash: string;
         };
         PathHop: {
             kind: string;
@@ -1517,30 +1577,17 @@ export interface components {
             sourceRelativePath: string;
             message: string;
         };
-        StageGameFileRequest: {
-            path: string;
-            /** Format: int64 */
-            size?: number | null;
-            hash: string;
-        };
         StageModRequest: {
             name: string;
             folder: string;
             installationFiles: components["schemas"]["InstallationFileRequest"][];
             committedFiles: string[];
         };
-        StageProgress: {
-            mod?: string | null;
-            /** Format: int32 */
-            modsDone: number;
-            /** Format: int32 */
-            modsTotal: number;
-        };
         /** @enum {string} */
         StageRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "NotWritten";
         StageRequest: {
             mods: components["schemas"]["StageModRequest"][];
-            gameFiles: components["schemas"]["StageGameFileRequest"][];
+            gameFiles: components["schemas"]["OverriddenGameFileRequest"][];
             dataFolder: string;
             buildFolder: string;
             /** Format: double */
@@ -1923,6 +1970,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StageResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    DiscardChanges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscardRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscardResponse"];
                 };
             };
             /** @description Bad Request */

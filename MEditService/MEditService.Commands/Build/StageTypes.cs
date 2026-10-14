@@ -9,11 +9,11 @@ public sealed record ModToStage(
 
 /// <summary>A game file a mod file overrides, by its forward-slash path under the game's data folder, as the
 /// Instance adapter knows it (ADR-0013).</summary>
-public sealed record GameFileToStage(string Path, long Size, string Hash);
+public sealed record OverriddenGameFile(string Path, long Size, string Hash);
 
 /// <summary>The instance's facts beyond its mods. DeltaShare is the share of its file a delta may reach before
 /// the file counts as no provider.</summary>
-public sealed record InstanceToStage(IReadOnlyList<GameFileToStage> GameFiles, string DataFolder, string BuildFolder, double DeltaShare);
+public sealed record InstanceToStage(IReadOnlyList<OverriddenGameFile> GameFiles, string DataFolder, string BuildFolder, double DeltaShare);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum StageRefusal

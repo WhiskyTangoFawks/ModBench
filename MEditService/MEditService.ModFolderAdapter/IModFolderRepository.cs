@@ -38,6 +38,21 @@ public interface IModFolderRepository
     /// True when it wrote.</summary>
     bool WriteManifest(string modFolder, string modName, Manifest manifest);
 
+    /// <summary>The hash a manifest line carries for <paramref name="content"/>.</summary>
+    string Hash(Stream content);
+
+    /// <summary>The mod's manifest, its files without stamps; null when its folder holds none. Throws
+    /// <see cref="InvalidDataException"/> naming a line it cannot read.</summary>
+    Manifest? ReadManifest(string modFolder, string modName);
+
+    /// <summary>The name of the delta that makes the file at <paramref name="path"/> with <paramref name="fileHash"/>
+    /// from a base with <paramref name="baseHash"/>.</summary>
+    string DeltaName(string path, string baseHash, string fileHash);
+
+    /// <summary>That delta from <paramref name="buildFolder"/>, else loose in <paramref name="downloadsFolder"/>; null
+    /// when neither holds it.</summary>
+    Stream? OpenDelta(string buildFolder, string? downloadsFolder, string path, string baseHash, string fileHash);
+
     /// <summary>The size of the delta in <paramref name="buildFolder"/> that makes the file at
     /// <paramref name="path"/> with <paramref name="fileHash"/> from a base with <paramref name="baseHash"/>, or
     /// null when there is none.</summary>
