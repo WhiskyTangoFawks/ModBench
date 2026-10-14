@@ -142,6 +142,22 @@ public sealed class UpdateManifestTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task UpdatingTheManifestOfAModWhoseStatCacheCannotBeWritten_LandsNamingWhy()
+    {
+        ModInstalledFromADownload(edited: false);
+        var taken = Path.Combine(_instance, "taken");
+        File.WriteAllText(taken, "a file where the stat cache's folder would be");
+        var request = Request("Mod.zip").Whole;
+        request["statCache"] = taken;
+
+        var response = await Client.PostAsJsonAsync("/update-manifest", request);
+
+        var updated = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").EnumerateArray());
+        Assert.True(updated.GetProperty("manifestWritten").GetBoolean());
+        Assert.Contains(taken, updated.GetProperty("statCacheNotWritten").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task UpdatingTheManifestOfAModWhoseInstallationFileIsMissing_RefusesItNamingTheFile_AndWritesNoManifest()
     {
         ModInstalledFromADownload(edited: false);

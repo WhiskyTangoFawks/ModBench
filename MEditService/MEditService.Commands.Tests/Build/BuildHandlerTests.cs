@@ -237,7 +237,7 @@ public sealed class BuildHandlerTests : IDisposable
         foreach (var (path, text) in entries) Write(extracted, path, Encoding.UTF8.GetBytes(text));
         Directory.CreateDirectory(Path.GetDirectoryName(Downloaded).Require());
         ZipFile.CreateFromDirectory(extracted, Downloaded);
-        var hashedAsAModsFiles = new ModFolderRepository(TimeProvider.System).Files(extracted, "installed", new HashSet<string>(), statCache: null);
+        var hashedAsAModsFiles = new ModFolderRepository(TimeProvider.System).Files(extracted, "installed", new HashSet<string>(), statCache: null).Files;
         return new InstallationFile(
             Downloaded, Source: null, Size: new FileInfo(Downloaded).Length, Hash: "AAAAAAAAAAA=",
             [.. hashedAsAModsFiles.Select(entry => new HashedEntry(entry.Path, entry.Hash))]);

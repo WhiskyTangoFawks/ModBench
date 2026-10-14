@@ -129,6 +129,18 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
+    public void AModWhoseStatCacheCannotBeWritten_Lands_NamingWhy()
+    {
+        _folders.WithFile(Mod, "a.txt", "hello");
+        _folders.UnwritableStatCaches.Add(Mod);
+
+        var updated = Landed(ModFrom("Mod"));
+
+        Assert.True(updated.ManifestWritten);
+        Assert.Equal("stat-cache is read-only", updated.StatCacheNotWritten);
+    }
+
+    [Fact]
     public void AFileNothingHolds_WithNoCopyAtItsPath_HasNoProvider_AndIsReported()
     {
         _folders.WithFile(Mod, "a.txt", "hellO").WithFile(Mod, "b.txt", "hello");

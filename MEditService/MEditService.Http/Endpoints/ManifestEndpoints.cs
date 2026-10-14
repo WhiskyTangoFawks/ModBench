@@ -57,7 +57,8 @@ internal static class ManifestEndpoints
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
         foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Update manifest", item.Refusal, item.Message, item.Item);
         return Results.Ok(new UpdateManifestResponse(
-            [.. result.Landed.Select(landed => new UpdatedModResponse(landed.Item, landed.Outcome.ManifestWritten, landed.Outcome.NoProvider))],
+            [.. result.Landed.Select(landed => new UpdatedModResponse(
+                landed.Item, landed.Outcome.ManifestWritten, landed.Outcome.NoProvider, landed.Outcome.StatCacheNotWritten))],
             [.. result.Refused.Select(refused => new ModUpdateManifestRefusal(refused.Item, refused.Refusal, refused.Message))]));
     }
 
@@ -77,7 +78,7 @@ internal static class ManifestEndpoints
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
         foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Restore from manifest", item.Refusal.Kind, item.Message, item.Item);
         return Results.Ok(new RestoreFromManifestResponse(
-            [.. result.Landed.Select(landed => new RestoredModResponse(landed.Item, landed.Outcome.Written))],
+            [.. result.Landed.Select(landed => new RestoredModResponse(landed.Item, landed.Outcome.Written, landed.Outcome.StatCacheNotWritten))],
             [.. result.Refused.Select(refused => new ModRestoreRefusal(refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.GameFilesNotFound))]));
     }
 
@@ -127,7 +128,8 @@ internal sealed record UpdateManifestModRequest(
 /// <summary>A game file by its forward-slash path under the game's data folder.</summary>
 internal sealed record OverriddenGameFileRequest(string Path, long? Size, string Hash);
 
-internal sealed record UpdatedModResponse(string Mod, bool ManifestWritten, IReadOnlyList<string> NoProvider);
+/// <summary>A landed mod. StatCacheNotWritten is why the stat cache could not keep what the update read, or null.</summary>
+internal sealed record UpdatedModResponse(string Mod, bool ManifestWritten, IReadOnlyList<string> NoProvider, string? StatCacheNotWritten);
 
 internal sealed record ModUpdateManifestRefusal(string Item, UpdateManifestRefusal Refusal, string Message);
 
@@ -142,8 +144,9 @@ internal sealed record RestoreFromManifestRequest(
 
 internal sealed record RestoreFromManifestModRequest(string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles) : IModRequest;
 
-/// <summary>A mod whose folder is as its manifest says. Written names each file written to make it so.</summary>
-internal sealed record RestoredModResponse(string Mod, IReadOnlyList<string> Written);
+/// <summary>A mod whose folder is as its manifest says. Written names each file written to make it so, and
+/// StatCacheNotWritten why the stat cache could not keep what the restore read, or null.</summary>
+internal sealed record RestoredModResponse(string Mod, IReadOnlyList<string> Written, string? StatCacheNotWritten);
 
 /// <summary>A skipped mod. A NotFound mod names each game file it lacks, by its path under the data folder; a request that
 /// names them brings it back.</summary>

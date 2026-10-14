@@ -91,6 +91,22 @@ public sealed class RestoreFromManifestApiTests : HostedTests
     }
 
     [Fact]
+    public async Task RestoringAModWhoseStatCacheCannotBeWritten_LandsNamingWhy()
+    {
+        ModInstalledFromADownload();
+        await Post("update-manifest");
+        var taken = Path.Combine(_instance, "taken");
+        File.WriteAllText(taken, "a file where the stat cache's folder would be");
+        var request = Request("restore-from-manifest", "Mod.zip");
+        request["statCache"] = taken;
+
+        var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
+
+        var restored = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").EnumerateArray());
+        Assert.Contains(taken, restored.GetProperty("statCacheNotWritten").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RestoringAModChangedSinceItsUpdate_BringsEveryFileBack_AGameFilesFromTheGame_LeavesAnUntrackedFile_AndReportsItsProgressUnderItsGesture()
     {
         ModInstalledFromADownload();

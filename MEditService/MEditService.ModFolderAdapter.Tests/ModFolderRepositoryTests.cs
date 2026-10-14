@@ -8,7 +8,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
 {
     private const string HashOfHello = "o22fiH2CxyY=";
     private const string HashOfHelloWithACapitalO = "0RePZfC1RR4=";
-    private const string HashOfHelloWithAnExclamationMark = "e/Lf/Byf4vw=";
 
     private readonly ScratchDirectory _root = new("modfolder-adapter-");
     private readonly ScratchDirectory _statCache = new("stat-cache-");
@@ -26,7 +25,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Write("readme.txt", "abc");
         Write(Path.Combine("meshes", "deep", "a.nif"), "hello");
 
-        var files = _repository.Files(_root, "mod", new HashSet<string>(), statCache: null).OrderBy(f => f.Path, StringComparer.Ordinal).ToList();
+        var files = _repository.Files(_root, "mod", new HashSet<string>(), statCache: null).Files.OrderBy(f => f.Path, StringComparer.Ordinal).ToList();
 
         Assert.Equal(["meshes/deep/a.nif", "readme.txt"], files.Select(f => f.Path));
         Assert.Equal(HashOfHello, files[0].Hash);
@@ -43,17 +42,17 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Theory]
-    [InlineData("hello!", 0, HashOfHelloWithAnExclamationMark)]
-    [InlineData("hellO", 1, HashOfHelloWithACapitalO)]
-    [InlineData("hellO", 0, HashOfHelloWithACapitalO)]
-    public void AFileRewrittenSinceTheLastRead_IsHashedAgain(string text, int secondsLater, string hash)
+    [InlineData(0, 0, 0, HashOfHelloWithACapitalO)]
+    [InlineData(1, 0, 0, HashOfHello)]
+    [InlineData(0, 1, 0, HashOfHello)]
+    [InlineData(0, 0, 1, HashOfHello)]
+    public void AFile_TakesTheStatCachesHash_OnlyWhileItsSizeModifiedTimeAndChangeTimeAreAsLastRead(
+        long sizeApart, long modifiedApart, long changedApart, string hash)
     {
-        var modified = new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        Write("a.txt", "hello");
-        File.SetLastWriteTimeUtc(Path.Combine(_root, "a.txt"), modified);
-        Files();
-
-        RewrittenUntilItsChangeTimeMoves("a.txt", text, modified.AddSeconds(secondsLater));
+        var stamp = Stamped("a.txt", "hello");
+        StatCacheSays(
+            $"{{\"a.txt\":{{\"size\":{stamp.Size + sizeApart},\"modified\":{stamp.Modified + modifiedApart},"
+            + $"\"changed\":{stamp.Changed + changedApart},\"hash\":\"{HashOfHelloWithACapitalO}\"}}}}");
 
         Assert.Equal(hash, Assert.Single(Files()).Hash);
     }
@@ -69,15 +68,39 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Throws<IOException>(Files);
     }
 
-    [Fact]
-    public void AStatCacheThatCannotBeRead_VouchesForNoFile()
+    [Theory]
+    [InlineData("<<<<<<< HEAD")]
+    [InlineData("{\"a.txt\":null}")]
+    public void AStatCacheThatCannotBeRead_VouchesForNoFile(string text)
     {
         Write("a.txt", "hello");
-        Files();
-        File.WriteAllText(Assert.Single(Directory.GetFiles(_statCache)), "<<<<<<< HEAD");
+        StatCacheSays(text);
         using var held = HeldOpen("a.txt");
 
         Assert.Throws<IOException>(Files);
+    }
+
+    [Fact]
+    public void AStatCacheThatCannotBeWritten_SaysWhy_AndEveryFileIsReadAllTheSame()
+    {
+        Write("a.txt", "hello");
+        var taken = Path.Combine(_statCache, "taken");
+        File.WriteAllText(taken, "a file where the stat cache's folder would be");
+
+        var read = _repository.Files(_root, "mod", new HashSet<string>(), taken);
+
+        Assert.Equal(HashOfHello, Assert.Single(read.Files).Hash);
+        Assert.Contains(taken, read.StatCacheNotWritten, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AModWhoseNameHoldsASlash_KeepsItsStatCacheByItsFolderName()
+    {
+        Write("a.txt", "hello");
+        _repository.Files(_root, "Mods/Mod", new HashSet<string>(), _statCache);
+        using var held = HeldOpen("a.txt");
+
+        Assert.Equal(HashOfHello, Assert.Single(_repository.Files(_root, "Mods/Mod", new HashSet<string>(), _statCache).Files).Hash);
     }
 
     [Fact]
@@ -129,7 +152,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Write("meta.ini", "abc");
         Write("mod.manifest", "{}\n");
 
-        Assert.Equal(["a.txt"], _repository.Files(_root, "mod", new HashSet<string> { "meta.ini" }, statCache: null).Select(f => f.Path));
+        Assert.Equal(["a.txt"], _repository.Files(_root, "mod", new HashSet<string> { "meta.ini" }, statCache: null).Files.Select(f => f.Path));
     }
 
     [Fact]
@@ -327,22 +350,12 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Empty(Directory.GetFileSystemEntries(_root));
     }
 
-    private IReadOnlyList<HashedFile> Files() => _repository.Files(_root, "mod", new HashSet<string>(), _statCache);
+    private IReadOnlyList<HashedFile> Files() => _repository.Files(_root, "mod", new HashSet<string>(), _statCache).Files;
 
     private FileStream HeldOpen(string relative) =>
         new(Path.Combine(_root, relative), FileMode.Open, FileAccess.Read, FileShare.None);
 
-    private void RewrittenUntilItsChangeTimeMoves(string relative, string text, DateTime modified)
-    {
-        var path = Path.Combine(_root, relative);
-        var before = FileStamp.Of(path);
-        do
-        {
-            File.WriteAllText(path, text);
-            File.SetLastWriteTimeUtc(path, modified);
-        }
-        while (FileStamp.Of(path)?.Changed == before?.Changed);
-    }
+    private void StatCacheSays(string text) => File.WriteAllText(Path.Combine(_statCache, Path.GetFileName(_root.Path)), text);
 
     private FileStamp Stamped(string relative, string text)
     {

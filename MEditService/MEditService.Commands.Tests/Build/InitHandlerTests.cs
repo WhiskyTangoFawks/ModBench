@@ -152,7 +152,7 @@ public sealed class InitHandlerTests : IDisposable
             Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
             File.WriteAllText(file, text);
         }
-        var hashedAsAModsFiles = new ModFolderRepository(TimeProvider.System).Files(extracted, "installed", new HashSet<string>(), statCache: null);
+        var hashedAsAModsFiles = new ModFolderRepository(TimeProvider.System).Files(extracted, "installed", new HashSet<string>(), statCache: null).Files;
         return new InstallationFile(
             Path.Combine(_instanceRoot, "downloads", "installed.7z"), Source: null, Size: 1, Hash: "AAAAAAAAAAA=",
             [.. hashedAsAModsFiles.Select(entry => new HashedEntry(entry.Path, entry.Hash))]);

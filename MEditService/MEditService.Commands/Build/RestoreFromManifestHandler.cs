@@ -35,9 +35,10 @@ public sealed class RestoreFromManifestHandler(IModFolderRepository repository, 
         if (resolved.Lacks.Count > 0) return Lacked(mod, resolved.Lacks);
 
         List<ManifestSources.SourcedFile> differing;
+        string? statCacheNotWritten;
         try
         {
-            differing = WithOtherBytes(mod, resolved, instance.StatCache);
+            (differing, statCacheNotWritten) = WithOtherBytes(mod, resolved, instance.StatCache);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -58,15 +59,17 @@ public sealed class RestoreFromManifestHandler(IModFolderRepository repository, 
             return ItemAnswer<RestoreSkip, RestoredMod>.Refused(
                 new RestoreSkip(RestoreRefusal.NotFinished, []), $"'{mod.Name}' was not finished: {e.Message.TrimEnd('.')}. Restoring it again finishes it.");
         }
-        return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod([.. differing.Select(file => file.Path)]));
+        return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod([.. differing.Select(file => file.Path)], statCacheNotWritten));
     }
 
-    private List<ManifestSources.SourcedFile> WithOtherBytes(ModToRestore mod, ManifestSources.Resolved resolved, string statCache)
+    private (List<ManifestSources.SourcedFile> Differing, string? StatCacheNotWritten) WithOtherBytes(
+        ModToRestore mod, ManifestSources.Resolved resolved, string statCache)
     {
         var named = resolved.Files.Select(file => file.Path).ToHashSet(StringComparer.Ordinal);
         var untracked = repository.FilePaths(mod.Folder).Where(path => !named.Contains(path)).ToHashSet(StringComparer.Ordinal);
-        var hashes = repository.Files(mod.Folder, mod.Name, untracked, statCache).ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
-        return [.. resolved.Files.Where(file => hashes.GetValueOrDefault(file.Path) != file.Source.Hash)];
+        var read = repository.Files(mod.Folder, mod.Name, untracked, statCache);
+        var hashes = read.Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
+        return ([.. resolved.Files.Where(file => hashes.GetValueOrDefault(file.Path) != file.Source.Hash)], read.StatCacheNotWritten);
     }
 
     private static ItemAnswer<RestoreSkip, RestoredMod> Lacked(ModToRestore mod, IReadOnlyList<ManifestSources.Lack> lacks)

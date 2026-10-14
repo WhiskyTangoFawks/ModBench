@@ -26,11 +26,12 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
         }
 
         Manifest manifest;
+        ModFolderFiles read;
         try
         {
-            var files = repository.Files(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
+            read = repository.Files(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
             var builder = new ManifestBuilder(mod.InstallationFiles.Select(file => (repository.InstallationFileName(file.Path), file)), instance.GameFiles);
-            manifest = builder.Manifest([.. files.Select(file => new ManifestFile(file.Path, builder.ProviderOf(file)))]);
+            manifest = builder.Manifest([.. read.Files.Select(file => new ManifestFile(file.Path, builder.ProviderOf(file)))]);
         }
         catch (DirectoryNotFoundException)
         {
@@ -54,6 +55,7 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
         }
 
         return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Landed(new UpdatedMod(
-            written, [.. manifest.Files.Where(file => file.Provider is FileProvider.NoProvider).Select(file => file.Path).Order(StringComparer.Ordinal)]));
+            written, [.. manifest.Files.Where(file => file.Provider is FileProvider.NoProvider).Select(file => file.Path).Order(StringComparer.Ordinal)],
+            read.StatCacheNotWritten));
     }
 }

@@ -213,6 +213,8 @@ interface UpdatedMod {
   manifestWritten: boolean;
   /** Each file nothing provides, by its path in the mod folder. */
   noProvider: readonly string[];
+  /** Why the stat cache could not keep what the update read. */
+  statCacheNotWritten?: string | null;
 }
 
 /** Update manifest's answer: each mod updated, or refused with its reason. */
@@ -234,6 +236,8 @@ interface RestoredMod {
   mod: string;
   /** Each file written to bring the mod back, by its path in the mod folder. */
   written: readonly string[];
+  /** Why the stat cache could not keep what the restore read. */
+  statCacheNotWritten?: string | null;
 }
 
 /** A skipped mod whose only lacks are game files the call did not name, by their paths under the data folder: a call

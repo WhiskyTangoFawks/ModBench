@@ -37,5 +37,6 @@ public enum RestoreRefusal
 /// back with.</summary>
 public sealed record RestoreSkip(RestoreRefusal Kind, IReadOnlyList<string> GameFilesNotFound);
 
-/// <summary>A mod whose folder is as its manifest says, and the files written to make it so.</summary>
-public sealed record RestoredMod(IReadOnlyList<string> Written);
+/// <summary>A mod whose folder is as its manifest says, the files written to make it so, and why the stat cache could not keep
+/// what the restore read, or null.</summary>
+public sealed record RestoredMod(IReadOnlyList<string> Written, string? StatCacheNotWritten);

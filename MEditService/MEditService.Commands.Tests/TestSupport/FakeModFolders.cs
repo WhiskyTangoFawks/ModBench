@@ -18,6 +18,9 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public HashSet<string> UnwritableManifests { get; } = [];
 
+    /// <summary>The mod folders whose stat cache cannot be written.</summary>
+    public HashSet<string> UnwritableStatCaches { get; } = [];
+
     public Dictionary<string, Manifest> Manifests { get; } = [];
 
     public FakeModFolders WithFile(string folder, string path, string text) => WithBytes(folder, path, Encoding.ASCII.GetBytes(text));
@@ -38,12 +41,14 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public void Without(string folder, string path) => _files.Remove((folder, path));
 
-    public IReadOnlyList<HashedFile> Files(string modFolder, string modName, IReadOnlySet<string> leftOut, string? statCache)
+    public ModFolderFiles Files(string modFolder, string modName, IReadOnlySet<string> leftOut, string? statCache)
     {
         if (!_folders.Contains(modFolder)) throw new DirectoryNotFoundException(modFolder);
         var files = _files.Where(f => f.Key.Folder == modFolder && !leftOut.Contains(f.Key.Path)).ToList();
         if (files.FirstOrDefault(f => Unreadable.Contains(f.Key)) is { Key.Path: { } held }) throw new IOException($"{held} is held by another process");
-        return [.. files.Select(f => new HashedFile(f.Key.Path, Encoding.ASCII.GetString(f.Value)))];
+        return new(
+            [.. files.Select(f => new HashedFile(f.Key.Path, Encoding.ASCII.GetString(f.Value)))],
+            statCache is not null && UnwritableStatCaches.Contains(modFolder) ? $"{statCache} is read-only" : null);
     }
 
     public Stream OpenFile(string modFolder, string path) => Open(modFolder, path);

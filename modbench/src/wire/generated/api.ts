@@ -1691,6 +1691,7 @@ export interface components {
         RestoredModResponse: {
             mod: string;
             written: string[];
+            statCacheNotWritten?: string | null;
         };
         ScriptCopyRequest: {
             record: components["schemas"]["RecordAddress"];
@@ -1756,6 +1757,7 @@ export interface components {
             mod: string;
             manifestWritten: boolean;
             noProvider: string[];
+            statCacheNotWritten?: string | null;
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";

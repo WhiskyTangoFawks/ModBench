@@ -91,6 +91,19 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
+    public void AModWhoseStatCacheCannotBeWritten_Lands_NamingWhy()
+    {
+        var download = Downloaded("dl/Mod.zip", ("a.nif", "a"));
+        _folders.WithFile(Mod, "a.nif", "a");
+        Manifested(Mod, [download], Line("a.nif", new FileProvider.FirstInstallationFile()));
+        _folders.UnwritableStatCaches.Add(Mod);
+
+        var result = Handler.Restore([ModFrom(Mod, download)], Instance());
+
+        Assert.Equal("stat-cache is read-only", Assert.Single(result.Landed).Outcome.StatCacheNotWritten);
+    }
+
+    [Fact]
     public void AModWhoseFilesAllMatch_LandsHavingWrittenNothing_AndOpensNoInstallationFile()
     {
         var download = Downloaded("dl/Mod.zip", ("a.nif", "a"));

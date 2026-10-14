@@ -117,7 +117,7 @@ describe('the MO2 adapter\'s repository', () => {
     const ignored = [
       'mods/Mod A/Mod A.esp', 'mods/Mod A/textures/a.dds', 'mods/Mod A/readme.ini', 'mods/Mod A/.git/HEAD', 'mods/Mod A/nested/meta.ini',
       'profiles/Default/saves/save.fos', 'profiles/Default/nested/modlist.txt', 'downloads/Mod.7z', 'downloads/Mod.7z.meta',
-      'source/Mod A/build.json', 'hash-index/hashes.jsonl', 'stat-cache/Mod A.json', 'overwrite/log.txt', 'logs/mo_interface.log', 'webcache/index', 'plugins/x.dll',
+      'source/Mod A/build.json', 'hash-index/hashes.jsonl', 'stat-cache/Mod A', 'overwrite/log.txt', 'logs/mo_interface.log', 'webcache/index', 'plugins/x.dll',
     ];
     await Promise.all([...listed, ...ignored].map((path) => put(path)));
 
