@@ -199,8 +199,8 @@ function archivesAndStringsFiles(
   gameRelease: string | undefined, gameFolder: GameFolder, inData: DataFolderArchives, origins: readonly OriginFiles[],
 ): string[] {
   const rule = pluginCompanionRule(gameRelease);
-  const dataFolder = dataFolderOf(gameFolder);
   if (rule === undefined) return [];
+  const dataFolder = dataFolderOf(gameFolder);
   const inGameFolder = inData.kind === 'listed' && dataFolder !== undefined
     ? [...inData.archives, ...inData.stringsFiles].map((relativePath) => fileInFolder(dataFolder, relativePath))
     : [];
