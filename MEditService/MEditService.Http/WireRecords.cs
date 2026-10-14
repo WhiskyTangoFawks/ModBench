@@ -143,6 +143,13 @@ internal sealed record RecordDeleteChanges(
 /// Made in the order answered, the items leave the records deleted one after another.</summary>
 internal sealed record RecordDeleteChangesResponse(IReadOnlyList<RecordDeleteChanges> Applied, IReadOnlyList<RecordAddressRefusal> Refused);
 
+/// <summary>A script's copy of one record into one destination.</summary>
+internal sealed record ScriptCopyRequest(RecordAddress Record, CopyMode Mode, PluginAddress Destination, bool Replace = false);
+
+/// <summary>The record a script's write made or left: the new FormKey of a copy as new or a create, otherwise the
+/// FormKey the copy keeps.</summary>
+internal sealed record RecordWrittenResponse(string FormKey);
+
 /// <summary>Copy's Argument and Options (commands.md, Record, `copy`). <see cref="Replace"/> lets an override copy over the one a destination holds.</summary>
 internal sealed record RecordCopyRequest(
     IReadOnlyList<RecordAddress> Records, CopyMode Mode, IReadOnlyList<PluginAddress> Destinations, bool Replace = false);
