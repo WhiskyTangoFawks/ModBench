@@ -279,20 +279,19 @@ internal static class PluginEndpoints
     }
 
     internal static async Task<IResult> CreatePluginInMod(
-        CreatePluginInModRequest req, CreatePluginHandler create, ILoggerFactory loggerFactory)
+        CreatePluginInModRequest req, CreatePluginInModHandler create, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("The plugin name and the origin are required.", statusCode: 400);
+        if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return Results.Problem("Plugin name and origin are required.", statusCode: 400);
 
-        var result = await create.CreatePluginIn(req.Origin, req.Name);
+        var result = await create.CreatePluginIn(plugin.Origin, plugin.Name);
         if (result.Refusal is { } refusal)
         {
-            EndpointMapping.LogRefusal(logger, "Create plugin in mod", refusal, result.Message, new PluginAddress(req.Name, req.Origin));
+            EndpointMapping.LogRefusal(logger, "Create plugin in mod", refusal, result.Message, plugin);
             return EndpointMapping.Refusal(refusal, result.Message);
         }
 
-        return Results.Ok(new PluginCreatedResponse(req.Name, req.Origin));
+        return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin));
     }
 
     // The refusals a malformed request earns, taken before the door so a name that could never be

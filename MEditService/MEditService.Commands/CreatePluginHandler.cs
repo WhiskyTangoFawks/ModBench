@@ -54,30 +54,6 @@ public sealed class CreatePluginHandler
         };
     }
 
-    private PluginCreateResult Marked(PluginCreateResult result)
-    {
-        if (result.Refusal is null) _holder.SourceWritten();
-        return result;
-    }
-
-    /// <summary>Creates <paramref name="name"/> in the mod <paramref name="origin"/>, whose folder and source folder are
-    /// those of a plugin the load order holds of it. Refuses with <see cref="PluginCreateRefusal.OriginNotAMod"/> for
-    /// Overwrite, the game folder and a mod the load order holds no plugin of.</summary>
-    public Task<PluginCreateResult> CreatePluginIn(string origin, string name)
-    {
-        if (_holder.Held is not { Snapshot: var loadOrder })
-            return Task.FromResult(new PluginCreateResult(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage));
-
-        var mod = loadOrder.Plugins
-            .Select(held => held.Provider)
-            .OfType<PluginProvider.FromMod>()
-            .FirstOrDefault(provider => string.Equals(provider.Name, origin, StringComparison.OrdinalIgnoreCase));
-        return mod is null
-            ? Task.FromResult(new PluginCreateResult(PluginCreateRefusal.OriginNotAMod,
-                $"'{origin}' is not a mod the load order holds a plugin of, so {name} was not created in it."))
-            : CreatePlugin(new PluginAddress(name, mod.Name), mod.Folder, mod.SourceFolder);
-    }
-
     /// <summary>Refuses with <see cref="PluginCreateRefusal.NoLoadOrder"/>, writing nothing, when no load order
     /// is held, since the release comes from it. <paramref name="sourceFolder"/> is the mod's, null for Overwrite.</summary>
     public async Task<PluginCreateResult> CreatePlugin(PluginAddress plugin, string folder, string? sourceFolder)
@@ -102,7 +78,7 @@ public sealed class CreatePluginHandler
 
         return created.Outcome switch
         {
-            EmptyPluginWrite.Written => Marked(await LandSourceIfTracked(loadOrder, plugin, folder, sourceFolder, created.Written)),
+            EmptyPluginWrite.Written => await LandSourceIfTracked(loadOrder, plugin, folder, sourceFolder, created.Written),
             EmptyPluginWrite.FolderGone => new PluginCreateResult(PluginCreateRefusal.FolderGone,
                 $"The folder {folder} has gone, so {plugin.Name} was not created."),
             EmptyPluginWrite.FileExists => new PluginCreateResult(PluginCreateRefusal.FileExists,

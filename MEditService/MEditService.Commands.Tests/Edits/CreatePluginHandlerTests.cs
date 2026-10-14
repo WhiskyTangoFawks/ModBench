@@ -60,52 +60,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
             _data.InstanceRoot, "plugins.txt", new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, RecurseSubdirectories = true }));
     }
 
-    [Fact]
-    public async Task CreatePlugin_MarksTheWriteForTheNextReadToWaitOn()
-    {
-        var folder = ModFolder("MarkedMod");
-        var awaited = _holder.ArrivalAwaited;
-
-        await Create("NewPlugin.esp", folder, "MarkedMod");
-
-        Assert.True(_holder.ArrivalAwaited > awaited);
-    }
-
-    [Fact]
-    public async Task CreatePlugin_ThatRefuses_MarksNothing()
-    {
-        var awaited = _holder.ArrivalAwaited;
-
-        await Create("NewPlugin.esp", Path.Combine(_data.DataFolder, "GoneMod"), "GoneMod");
-
-        Assert.Equal(awaited, _holder.ArrivalAwaited);
-    }
-
-    [Fact]
-    public async Task CreatePluginIn_AModTheLoadOrderHoldsAPluginOf_WritesItInThatModsFolderAndSource()
-    {
-        var folder = await TrackedModWith("OriginMod", "First.esp");
-
-        var result = await Handler.CreatePluginIn("OriginMod", "Second.esp");
-
-        Assert.Null(result.Refusal);
-        Assert.True(File.Exists(Path.Combine(folder, "Second.esp")));
-        Assert.True(TestAdapters.Source().SourceReads(Registered("Second.esp", "OriginMod", folder)));
-    }
-
-    [Theory]
-    [InlineData("NoSuchMod")]
-    [InlineData(PluginOrigin.Overwrite)]
-    [InlineData(PluginOrigin.DataDirectory)]
-    public async Task CreatePluginIn_AnOriginThatIsNotAModTheLoadOrderHoldsAPluginOf_RefusesNamingItAndWritesNothing(string origin)
-    {
-        var result = await Handler.CreatePluginIn(origin, "Second.esp");
-
-        Assert.Equal(PluginCreateRefusal.OriginNotAMod, result.Refusal);
-        Assert.Contains(origin, result.Message, StringComparison.Ordinal);
-        Assert.False(File.Exists(Path.Combine(_data.DataFolder, "Second.esp")));
-    }
-
     private async Task<string> TrackedModWith(string name, string existing)
     {
         var folder = ModFolder(name);
