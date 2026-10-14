@@ -591,11 +591,9 @@ internal sealed class Store : IDisposable
         }
     }
 
-    // DuckDB checkpoints by itself only once its WAL outgrows a threshold, and an ingest's rows reach
-    // the file without passing through the WAL. Until a checkpoint, the index nodes the rows built
-    // stay in memory DuckDB cannot evict, and the reads after them run short of it. FORCE because a
-    // read ending beside it holds the checkpoint lock for a moment, which a plain CHECKPOINT refuses
-    // rather than waits out.
+    // An ingest's rows bypass the WAL, so DuckDB's own checkpoint never comes due, and the index
+    // nodes they built stay in memory it cannot evict. FORCE: a plain CHECKPOINT refuses, rather
+    // than waits, while a read ends.
     private void Checkpoint()
     {
         var timer = Stopwatch.StartNew();
