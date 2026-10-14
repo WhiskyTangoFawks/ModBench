@@ -15,6 +15,7 @@ import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
 import { INSTANCE_READS } from './instanceReads';
 import { Refusal } from '../drivingLib/refusal';
 import { parseOrRefuse } from './refusal';
+import { LIST_REFERENCES, READ_RECORD } from './readRecord';
 import { RESOLVE_NAMES } from './resolveNames';
 import { SELECT_ROWS } from './selectRows';
 import { SOURCE_PROBLEMS } from './sourceProblems';
@@ -24,7 +25,7 @@ const AGENT_PORT_SETTING = 'modbench.agent.port';
 export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence'> | undefined;
-  mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows'>;
+  mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getCopyDocument' | 'getReferences'>;
   reporter: Reporter;
   log: Log;
 }
@@ -78,6 +79,8 @@ function mcpServerOf({ instance, mEdit, log }: AgentServerOptions): McpServer {
   register(server, log, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), args));
   register(server, log, RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
   register(server, log, RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
+  register(server, log, READ_RECORD, (args) => READ_RECORD.of(mEdit, currentValue(instance), args));
+  register(server, log, LIST_REFERENCES, (args) => LIST_REFERENCES.of(mEdit, args));
   register(server, log, SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
   register(server, log, RUN_GESTURE, (args) => RUN_GESTURE.of(currentValue(instance), mEdit, args));
   register(server, log, { ...SOURCE_PROBLEMS, input: NO_INPUT }, SOURCE_PROBLEMS.of);

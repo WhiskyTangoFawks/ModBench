@@ -17,6 +17,7 @@ import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { FileConflictLookup, modOrigin, RUNTIME_OUTPUT, type ConflictEntry } from '../../instanceLoader/fileConflictIndex';
 import type { MEditClient } from '../../client/MEditClient';
+import type { CompareResult } from '../../client/apiClient';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -92,7 +93,7 @@ describe('the agent server, given an instance value', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mods', 'list_plugins', 'list_profiles', 'list_source_problems', 'resolve_instance_names', 'resolve_names', 'run_gesture', 'select_rows']);
+    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mods', 'list_plugins', 'list_profiles', 'list_references', 'list_source_problems', 'read_record', 'resolve_instance_names', 'resolve_names', 'run_gesture', 'select_rows']);
   });
 
   it('reads the profiles and the active one', async () => {
@@ -377,6 +378,84 @@ describe('the agent server, selecting records through mEdit', () => {
     const client = await clientOf(new FakeInstance(VALUE), mEdit);
 
     expect(await call(client, 'select_rows', { sql: 'DROP TABLE records' })).toEqual({ isError: true, text: 'Only a SELECT runs.' });
+  });
+});
+
+describe('the agent server, reading a record through mEdit', () => {
+  const NPC = [{ formKey: '000800:A.esp', editorId: 'SharedNpc' }];
+  const comparison = { overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Npc' } as unknown as CompareResult;
+
+  it('answers every active copy and the winner when it names no plugin', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getComparison', comparison);
+    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    const answered = await read(client, 'read_record', { name: 'SharedNpc' });
+
+    expect(mEdit.calls).toContainEqual({ method: 'getComparison', args: ['000800:A.esp'] });
+    expect(answered).toEqual(comparison);
+  });
+
+  it('answers the one plugin\'s copy when it names the plugin', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/A.esp/000800.json' });
+    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    const answered = await read(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'b.esp' } });
+
+    expect(mEdit.calls).toContainEqual({ method: 'getCopyDocument', args: [{ name: 'B.esp', origin: 'Big Rocks' }, '000800:A.esp'] });
+    expect(answered).toEqual({ kind: 'OwnFile', location: '/s/A.esp/000800.json' });
+  });
+
+  it('refuses a name that is not a record', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', [{ plugin: { name: 'A.esp', origin: 'Big Rocks' } }]);
+    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    expect(await call(client, 'read_record', { name: 'A.esp' })).toEqual({ isError: true, text: '"A.esp" is not a record.' });
+  });
+
+  it('refuses a record no active plugin holds', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getComparison', null);
+    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    expect(await call(client, 'read_record', { name: 'SharedNpc' })).toEqual({ isError: true, text: 'No active plugin holds 000800:A.esp.' });
+  });
+
+  it('refuses a plugin that holds no copy', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getCopyDocument', null);
+    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    expect(await call(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } }))
+      .toEqual({ isError: true, text: 'A.esp in Big Rocks holds no 000800:A.esp.' });
+  });
+
+  it('lists the records that reference the record named', async () => {
+    const mEdit = new InMemoryMEditClient();
+    const referrers = [{ formKey: '000900:B.esp', plugin: 'B.esp', origin: 'Big Rocks', fieldPath: 'Race', recordType: 'NPC_', recordTypeName: 'Npc' }];
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getReferences', referrers);
+    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    const answered = await read(client, 'list_references', { name: 'SharedNpc' });
+
+    expect(mEdit.calls).toContainEqual({ method: 'getReferences', args: ['000800:A.esp'] });
+    expect(answered).toEqual(referrers);
+  });
+
+  it('refuses with mEdit\'s listing of an ambiguous name, reading no references', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', { failed: 'refused', refusal: 'Ambiguous.' });
+    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    expect(await call(client, 'list_references', { name: 'Dup' })).toEqual({ isError: true, text: 'Ambiguous.' });
+    expect(mEdit.calls.map(({ method }) => method)).not.toContain('getReferences');
   });
 });
 
