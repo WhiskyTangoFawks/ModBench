@@ -54,9 +54,8 @@ describe('the MO2 adapter\'s repository', () => {
 
     const answer = await adapter.overriddenGameFiles(join(root, 'Data'), ['Meshes/armor.NIF', 'game.esm', 'Game.esm', 'meshes/none.nif', 'textures/a.dds', 'Meshes']);
 
-    const files = answer.kind === 'read' ? answer.answer : [];
-    expect(files.map(({ path, size }) => ({ path, size }))).toEqual([{ path: 'meshes/Armor.nif', size: 4 }, { path: 'Game.esm', size: 6 }]);
-    expect(files.map(({ hash }) => /^[A-Za-z0-9+/]{11}=$/.test(hash))).toEqual([true, true]);
+    const hash = expect.stringMatching(/^[A-Za-z0-9+/]{11}=$/) as string;
+    expect(answer).toEqual({ kind: 'read', answer: [{ path: 'meshes/Armor.nif', size: 4, hash }, { path: 'Game.esm', size: 6, hash }] });
   });
 
   it('refuses to write over an ignore list already in the instance folder, naming it, and leaves it as it is', async () => {
@@ -90,7 +89,7 @@ describe('the MO2 adapter\'s repository', () => {
       'profiles/Default/saves/save.fos', 'profiles/Default/nested/modlist.txt', 'downloads/Mod.7z', 'downloads/Mod.7z.meta', 'build/delta.octodiff',
       'source/Mod A/build.json', 'hash-index/hashes.jsonl', 'overwrite/log.txt', 'logs/mo_interface.log', 'webcache/index', 'plugins/x.dll',
     ];
-    for (const path of [...listed, ...ignored]) await put(path);
+    await Promise.all([...listed, ...ignored].map((path) => put(path)));
 
     await adapter.writeIgnoreList();
 

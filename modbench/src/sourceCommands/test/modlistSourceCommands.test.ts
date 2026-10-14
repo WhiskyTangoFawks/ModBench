@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { FileRead, GameFile, GameFolder, InstallationFile, OriginFile } from '../../instanceAdapter/instanceAdapter';
+import type { FileRead, GameFile, GameFolder, InstallationFile, InstanceAdapter, OriginFile } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { fakeInstanceAdapter, fileIn, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { modlistSourceCommands } from '../modlistSourceCommands';
@@ -101,24 +101,45 @@ describe('modlistSourceCommands stage', () => {
 
   it('reports the phase of reading each mod\'s files, then mEdit\'s progress staging them', async () => {
     const { commands, client } = commandsOver();
-    client.setCommandResult('stage', STAGED);
+    client.setCommandHandler('stage', (_mods, _facts, options) => {
+      options?.onProgress?.({ mod: 'ModA', modsDone: 1, modsTotal: 2 });
+      return Promise.resolve(STAGED);
+    });
     const heard: unknown[] = [];
 
     await commands.stage(['ModA', 'ModB'], instanceOf({}), { onProgress: (status) => heard.push(status) });
 
-    expect(heard).toEqual([{ phase: 'ReadingFiles', mod: 'ModA' }, { phase: 'ReadingFiles', mod: 'ModB' }]);
+    expect(heard).toEqual([
+      { phase: 'ReadingFiles', mod: 'ModA' }, { phase: 'ReadingFiles', mod: 'ModB' }, { phase: 'Staging', mod: 'ModA', modsDone: 1, modsTotal: 2 },
+    ]);
   });
 
-  it('refuses a mod whose installation files or overridden game files cannot be read, naming why, and stages the rest', async () => {
-    const { commands, client } = commandsOver({
-      installations: new Map([['ModA', { kind: 'unreadable', reason: 'its installation file is not indexed' }]]),
+  describe('refuses a mod, naming why, and stages the rest', () => {
+    const adapterOf = fakeInstanceAdapter().adapter;
+    const refusedFor: [string, Partial<InstanceAdapter>, string][] = [
+      ['its name gives it no folder', { modFolderPath: (mod) => Promise.resolve(mod === 'ModA' ? undefined : `/mods/${mod}`) }, 'its name gives it no folder'],
+      ['its installation files cannot be read', {
+        installationFiles: (mod) => Promise.resolve(mod === 'ModA' ? { kind: 'unreadable', reason: 'its installation file is not indexed' } : { kind: 'read', answer: [] }),
+      }, 'its installation file is not indexed'],
+      ['the game files its files override cannot be read', {
+        overriddenGameFiles: (dataFolder, paths) => (paths.includes('a.esm')
+          ? Promise.resolve({ kind: 'unreadable', reason: 'Game.esm is locked' })
+          : adapterOf.overriddenGameFiles(dataFolder, paths)),
+      }, 'Game.esm is locked'],
+    ];
+
+    it.each(refusedFor)('when %s', async (_cause, override, reason) => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('stage', STAGED);
+      const commands = modlistSourceCommands({
+        client, adapter: { ...adapterOf, ...override }, instanceRoot: '/instance', makeRepository: () => Promise.resolve(),
+      });
+
+      const outcome = await commands.stage(['ModA', 'ModB'], instanceOf({ ModA: [fileIn('/mods/ModA', 'a.esm')], ModB: [fileIn('/mods/ModB', 'b.nif')] }));
+
+      expect(client.calls.map((call) => stagedNames(call.args[0]))).toEqual([['ModB']]);
+      expect(outcome).toEqual({ applied: true, ...STAGED, refused: [{ item: 'ModA', reason }] });
     });
-    client.setCommandResult('stage', STAGED);
-
-    const outcome = await commands.stage(['ModA', 'ModB'], instanceOf({}));
-
-    expect(client.calls.map((call) => stagedNames(call.args[0]))).toEqual([['ModB']]);
-    expect(outcome).toEqual({ applied: true, ...STAGED, refused: [{ item: 'ModA', reason: 'its installation file is not indexed' }] });
   });
 
   it('hashes no game file for a mod refused for its folder or its installation files', async () => {
@@ -134,7 +155,7 @@ describe('modlistSourceCommands stage', () => {
     expect(hashed).toEqual([]);
   });
 
-  it('calls mEdit with nothing when no mod can be sent', async () => {
+  it('does not call mEdit when no mod can be sent', async () => {
     const { commands, client } = commandsOver({ installations: new Map([['ModA', { kind: 'unreadable', reason: 'not indexed' }]]) });
 
     const outcome = await commands.stage(['ModA'], instanceOf({}));
