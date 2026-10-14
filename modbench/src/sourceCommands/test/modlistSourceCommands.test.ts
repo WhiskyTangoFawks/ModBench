@@ -3,7 +3,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { FileRead, GameFile, GameFolder, InstallationFile, InstanceAdapter, OriginFile } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { fakeInstanceAdapter, fileIn, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { modlistSourceCommands } from '../modlistSourceCommands';
+import { modlistSourceCommands, type DiscardStatus } from '../modlistSourceCommands';
 
 const INSTALLED: InstallationFile = { path: '/downloads/ModA-1.0.7z', size: 10, hash: 'H', entries: [{ path: 'textures/a.dds', hash: 'E' }] };
 const VANILLA: GameFile = { path: 'Game.esm', size: 7, hash: 'V' };
@@ -176,5 +176,131 @@ describe('modlistSourceCommands stage', () => {
     const outcome = await commands.stage(['ModA'], instanceOf({}, GAME_FOLDER_NOT_FOUND));
 
     expect([client.calls, outcome]).toEqual([[], { applied: false, refusal: 'Could not stage: the game folder was not found.' }]);
+  });
+});
+
+describe('modlistSourceCommands discard changes', () => {
+  const DISCARDED = { landed: [{ mod: 'ModA', written: ['a.nif'] }], refused: [], deltaMissing: [] };
+  const DELTAS: InstallationFile = { path: '/downloads/Deltas.7z', size: 3, hash: 'D', entries: [{ path: 'a.nif.0_1.octodiff', hash: 'P' }] };
+  const discardInstance = (
+    filesByMod: Record<string, readonly OriginFile[]> = {}, rows: readonly { name: string; path: string }[] = [], gameFolder: GameFolder = FOUND,
+  ) => ({
+    ...instanceOf(filesByMod, gameFolder),
+    paths: { downloadsDir: '/downloads', modDirs: new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB']]) },
+    downloads: { kind: 'listed' as const, rows },
+  });
+  const sentNames = (client: InMemoryMEditClient): string[][] => client.calls.map((call) => stagedNames(call.args[0]));
+
+  it('hands mEdit each mod with its folder and installation files, the game files its files override, and the downloads folder', async () => {
+    const { commands, client } = commandsOver({ installations: new Map([['ModA', recording([INSTALLED])]]), gameFiles: [VANILLA] });
+    client.setCommandResult('discardChanges', DISCARDED);
+
+    await commands.discardChanges(['ModA'], discardInstance({ ModA: [fileIn('/mods/ModA', 'game.esm')] }, [{ name: 'Deltas.7z', path: DELTAS.path }]));
+
+    expect(client.calls).toEqual([{
+      method: 'discardChanges',
+      args: [
+        [{ name: 'ModA', folder: '/mods/ModA', installationFiles: [INSTALLED] }],
+        { gameFiles: [VANILLA], dataFolder: '/game/Data', buildFolder: '/build', downloadsFolder: '/downloads', downloadedFiles: [] },
+        { onProgress: expect.any(Function) as unknown },
+      ],
+    }]);
+  });
+
+  it('reports the phase of reading each mod\'s files, then mEdit\'s progress discarding them', async () => {
+    const { commands, client } = commandsOver();
+    client.setCommandHandler('discardChanges', (_mods, _facts, options) => {
+      options?.onProgress?.({ mod: 'ModA', modsDone: 0, modsTotal: 1 });
+      return Promise.resolve(DISCARDED);
+    });
+    const heard: unknown[] = [];
+
+    await commands.discardChanges(['ModA'], discardInstance(), { onProgress: (status) => heard.push(status) });
+
+    expect(heard).toEqual([{ phase: 'ReadingFiles', mod: 'ModA' }, { phase: 'Discarding', mod: 'ModA', modsDone: 0, modsTotal: 1 }]);
+  });
+
+  it('sends a mod skipped for a delta alone again, with every downloaded archive\'s entries, and answers both sends as one', async () => {
+    const { commands, client } = commandsOver({ downloadedFiles: new Map([[DELTAS.path, DELTAS]]) });
+    const deltaMissing = "'ModB' was skipped: delta 'a.nif.0_1.octodiff' is missing.";
+    client.setCommandHandler('discardChanges', (mods) => Promise.resolve(mods.length === 2
+      ? { landed: [{ mod: 'ModA', written: [] }], refused: [{ item: 'ModB', reason: deltaMissing }], deltaMissing: ['ModB'] }
+      : { landed: [{ mod: 'ModB', written: ['a.nif'] }], refused: [], deltaMissing: [] }));
+    const heard: unknown[] = [];
+
+    const outcome = await commands.discardChanges(['ModA', 'ModB'], discardInstance({}, [
+      { name: 'Deltas.7z', path: DELTAS.path }, { name: 'readme.txt', path: '/downloads/readme.txt' },
+    ]), { onProgress: (status) => heard.push(status) });
+
+    expect(sentNames(client)).toEqual([['ModA', 'ModB'], ['ModB']]);
+    expect(client.calls[1]?.args[1]).toMatchObject({ downloadedFiles: [DELTAS] });
+    expect(heard).toContainEqual({ phase: 'ReadingDownloadedFile', file: 'Deltas.7z' });
+    expect(heard).not.toContainEqual({ phase: 'ReadingDownloadedFile', file: 'readme.txt' });
+    expect(outcome).toEqual({ applied: true, landed: [{ mod: 'ModA', written: [] }, { mod: 'ModB', written: ['a.nif'] }], refused: [] });
+  });
+
+  it('names each downloaded archive it could not search beside a mod still skipped for its delta', async () => {
+    const { commands, client } = commandsOver();
+    const deltaMissing = "'ModA' was skipped: delta 'a.nif.0_1.octodiff' is missing.";
+    client.setCommandResult('discardChanges', { landed: [], refused: [{ item: 'ModA', reason: deltaMissing }], deltaMissing: ['ModA'] });
+
+    const outcome = await commands.discardChanges(['ModA'], discardInstance({}, [{ name: 'Locked.7z', path: '/downloads/Locked.7z' }]));
+
+    expect(outcome).toEqual({
+      applied: true, landed: [],
+      refused: [{ item: 'ModA', reason: `${deltaMissing} Not searched for it: "Locked.7z" (no answer fixed for /downloads/Locked.7z).` }],
+    });
+  });
+
+  it('reads no downloaded file when no mod lacks a delta alone', async () => {
+    const { commands, client } = commandsOver();
+    client.setCommandResult('discardChanges', DISCARDED);
+    const heard: DiscardStatus[] = [];
+
+    await commands.discardChanges(['ModA'], discardInstance({}, [{ name: 'Deltas.7z', path: DELTAS.path }]), { onProgress: (status) => heard.push(status) });
+
+    expect([client.calls.length, heard.filter((status) => status.phase === 'ReadingDownloadedFile')]).toEqual([1, []]);
+  });
+
+  it('refuses a mod the Instance adapter cannot answer, naming why, and discards the rest', async () => {
+    const { commands, client } = commandsOver({ installations: new Map([['ModA', { kind: 'unreadable', reason: 'not indexed' }]]) });
+    client.setCommandResult('discardChanges', { landed: [{ mod: 'ModB', written: [] }], refused: [], deltaMissing: [] });
+
+    const outcome = await commands.discardChanges(['ModA', 'ModB'], discardInstance());
+
+    expect([sentNames(client), outcome]).toEqual([
+      [['ModB']], { applied: true, landed: [{ mod: 'ModB', written: [] }], refused: [{ item: 'ModA', reason: 'not indexed' }] },
+    ]);
+  });
+
+  it('names the mods mEdit had not reported done when the call failed part way', async () => {
+    const { commands, client } = commandsOver();
+    client.setCommandHandler('discardChanges', (_mods, _facts, options) => {
+      options?.onProgress?.({ mod: 'ModA', modsDone: 0, modsTotal: 3 });
+      options?.onProgress?.({ mod: 'ModB', modsDone: 1, modsTotal: 3 });
+      return Promise.resolve({ refused: true, message: 'Could not discard changes in 3 mods — mEdit stopped.' });
+    });
+
+    expect(await commands.discardChanges(['ModA', 'ModB', 'ModC'], discardInstance())).toEqual({
+      applied: false, refusal: 'Could not discard changes in 3 mods — mEdit stopped.', unfinished: ['ModB', 'ModC'],
+    });
+  });
+
+  it('refuses the whole discard when the game folder is not found, because a game file cannot be matched', async () => {
+    const { commands, client } = commandsOver();
+
+    const outcome = await commands.discardChanges(['ModA'], discardInstance({}, [], GAME_FOLDER_NOT_FOUND));
+
+    expect([client.calls, outcome]).toEqual([[], { applied: false, refusal: 'Could not discard changes: the game folder was not found.', unfinished: [] }]);
+  });
+});
+
+describe('modlistSourceCommands modsHolding', () => {
+  it('answers the mod whose folder holds each file once, and refuses a file in no mod\'s folder, naming it', () => {
+    const { commands } = commandsOver();
+    const paths = { downloadsDir: undefined, modDirs: new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB']]) };
+
+    expect(commands.modsHolding(['/mods/ModA/ModA.manifest', '/mods/ModA/meta.ini', '/mods/ModB/ModB.manifest', '/profiles/Default/modlist.txt'], { paths }))
+      .toEqual({ mods: ['ModA', 'ModB'], refused: [{ item: '/profiles/Default/modlist.txt', reason: 'it is not in a mod folder' }] });
   });
 });

@@ -563,6 +563,16 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.modlist.discardChanges",
+        "title": "Discard Modlist Changes…",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.modlist.discardChangesInModFolder",
+        "title": "Discard Changes in Mod Folder…",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.record.create",
         "title": "Create Record…",
         "category": "Modbench"
@@ -733,6 +743,14 @@
           "when": "modbench.folder == instance && modbench.modlist.hasRepository"
         },
         {
+          "command": "modbench.modlist.discardChanges",
+          "when": "modbench.folder == instance && modbench.modlist.hasRepository"
+        },
+        {
+          "command": "modbench.modlist.discardChangesInModFolder",
+          "when": "false"
+        },
+        {
           "command": "modbench.record.create",
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleCreatable"
         },
@@ -878,6 +896,18 @@
           "command": "modbench.modlist.stage",
           "when": "scmProvider == git && scmProviderRootUri in modbench.modlist.instanceRoots",
           "group": "modbench@1"
+        },
+        {
+          "command": "modbench.modlist.discardChanges",
+          "when": "scmProvider == git && scmProviderRootUri in modbench.modlist.instanceRoots",
+          "group": "modbench@2"
+        }
+      ],
+      "scm/resourceState/context": [
+        {
+          "command": "modbench.modlist.discardChangesInModFolder",
+          "when": "scmProvider == git && scmProviderRootUri in modbench.modlist.instanceRoots",
+          "group": "1_modification@99"
         }
       ],
       "view/title": [
@@ -1117,6 +1147,11 @@
           "command": "modbench.modlist.stage",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.modlist.hasRepository",
           "group": "4_sourceControl@3"
+        },
+        {
+          "command": "modbench.modlist.discardChanges",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.modlist.hasRepository",
+          "group": "4_sourceControl@4"
         },
         {
           "command": "modbench.copyValue",

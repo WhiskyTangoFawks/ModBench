@@ -556,7 +556,7 @@ describe('package.json command titles and categories', () => {
     expect(RETIRED_AHEAD_OF_CODE.filter((id) => !declared.has(id))).toEqual([]);
   });
 
-  const PALETTE_AHEAD_OF_CODE = ['modbench.modlist.discardChanges', 'modbench.modlist.clean'];
+  const PALETTE_AHEAD_OF_CODE = ['modbench.modlist.clean'];
 
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
@@ -937,19 +937,35 @@ describe('package.json build\'s palette entry', () => {
   });
 });
 
-describe('package.json init and stage follow modlist-source.md, Menus and keys', () => {
+describe('package.json init, stage and discard changes follow modlist-source.md, Menus and keys', () => {
   const HAS_REPOSITORY = 'modbench.modlist.hasRepository';
   const menu = (name: string, command: string): MenuEntry[] =>
     present(pkg.contributes.menus[name], `contributes.menus['${name}']`).filter((e) => e.command === command);
   const hasRepository = { ...inInstance, [HAS_REPOSITORY]: true };
 
-  it('offers stage in the Source Control title bar\'s overflow, for the instance\'s own repository alone', () => {
-    const [entry, ...others] = menu('scm/title', 'modbench.modlist.stage');
+  it('offers stage, then discard changes, in the Source Control title bar\'s overflow, for the instance\'s own repository alone', () => {
+    const entries = present(pkg.contributes.menus['scm/title'], "contributes.menus['scm/title']");
+
+    expect(entries.map((e) => e.command)).toEqual(['modbench.modlist.stage', 'modbench.modlist.discardChanges']);
+    expect(entries.every((e) => requires(e.when, 'scmProvider == git') && requires(e.when, 'scmProviderRootUri in modbench.modlist.instanceRoots'))).toBe(true);
+    expect(entries.map((e) => e.group)).toEqual(['modbench@1', 'modbench@2']);
+  });
+
+  it('offers discard changes in mod folder on a row of the instance\'s own repository, beside git\'s own discard, and nowhere else', () => {
+    const [entry, ...others] = menu('scm/resourceState/context', DISCARD_IN_MOD_FOLDER);
+    const title = pkg.contributes.commands.find((c) => c.command === DISCARD_IN_MOD_FOLDER)?.title;
 
     expect(others).toEqual([]);
     expect(requires(entry?.when, 'scmProvider == git')).toBe(true);
     expect(requires(entry?.when, 'scmProviderRootUri in modbench.modlist.instanceRoots')).toBe(true);
-    expect((entry?.group ?? '').startsWith('navigation')).toBe(false);
+    expect([(entry?.group ?? '').startsWith('1_modification'), title]).toEqual([true, 'Discard Changes in Mod Folder…']);
+  });
+
+  it('offers discard changes on a mod row while the instance holds a repository, after stage', () => {
+    const [entry, ...others] = menu('view/item/context', 'modbench.modlist.discardChanges').filter((e) => requires(e.when, 'view == modbench.modList'));
+
+    expect(others).toEqual([]);
+    expect([entry?.group, requires(entry?.when, HAS_REPOSITORY)]).toEqual(['4_sourceControl@4', true]);
   });
 
   it('offers stage on a mod row while the instance holds a repository, after build', () => {
@@ -973,7 +989,8 @@ describe('package.json init and stage follow modlist-source.md, Menus and keys',
       paletteOffers('modbench.modlist.init', inInstance), paletteOffers('modbench.modlist.init', hasRepository),
       paletteOffers('modbench.modlist.stage', inInstance), paletteOffers('modbench.modlist.stage', hasRepository),
       paletteOffers('modbench.modlist.stage', { [HAS_REPOSITORY]: true }),
-    ]).toEqual([true, false, false, true, false]);
+      paletteOffers('modbench.modlist.discardChanges', inInstance), paletteOffers('modbench.modlist.discardChanges', hasRepository),
+    ]).toEqual([true, false, false, true, false, false, true]);
   });
 });
 
@@ -1071,6 +1088,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       ['modbench.mod.decompileAndCommit', '4_sourceControl'],
       ['modbench.mod.build', '4_sourceControl'],
       ['modbench.modlist.stage', '4_sourceControl'],
+      ['modbench.modlist.discardChanges', '4_sourceControl'],
       ['modbench.copyValue', '5_copy'],
       ['modbench.mod.uninstall', '6_destroy'],
     ]);
@@ -1207,7 +1225,8 @@ const OPEN_REFERENCE = 'modbench.record.openReference';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
-const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE];
+const DISCARD_IN_MOD_FOLDER = 'modbench.modlist.discardChangesInModFolder';
+const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, DISCARD_IN_MOD_FOLDER];
 const RETIRED_AHEAD_OF_CODE: string[] = [];
 
 describe('package.json registers every command under its catalog Command ID', () => {

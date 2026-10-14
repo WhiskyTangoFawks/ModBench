@@ -371,6 +371,8 @@ export interface InstanceAdapter {
   sourceFolder(mod: string): string | undefined;
   /** The downloaded files the mod manager records `mod` as installed from, in its order. */
   installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
+  /** The downloaded file at `path`, with its hashes. */
+  downloadedFile(path: string): Promise<FileRead<InstallationFile>>;
   /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
   readonly managerFilesInModFolder: readonly string[];
   /** The game files in `dataFolder` that files of a mod, by their paths in it, override, named as the game folder

@@ -1,16 +1,24 @@
-import { isRefused, type MEditClient, type StageMod, type StageOutcome, type StageProgress } from '../client';
+import { dirname } from 'node:path';
+import {
+  isRefused, type DiscardFacts, type DiscardMod, type DiscardOutcome, type MEditClient, type ModlistProgress, type StageMod, type StageOutcome,
+} from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
-import type { GameFile, GameFolder, InstanceAdapter, OriginFile } from '../instanceAdapter/instanceAdapter';
+import {
+  isArchiveName, samePath, type GameFile, type GameFolder, type InstallationFile, type InstanceAdapter, type OriginFile,
+} from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 
 const DELTA_SHARE = 0.5;
 
+type Adapter = Pick<InstanceAdapter,
+  'installationFiles' | 'downloadedFile' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'buildFolder'
+  | 'writeIgnoreList' | 'removeIgnoreList'>;
+
 interface ModlistSourceCommandsDeps {
-  client: Pick<MEditClient, 'stage'>;
-  adapter: Pick<InstanceAdapter,
-    'installationFiles' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'buildFolder' | 'writeIgnoreList' | 'removeIgnoreList'>;
+  client: Pick<MEditClient, 'stage' | 'discardChanges'>;
+  adapter: Adapter;
   instanceRoot: string;
   /** VS Code's git makes the instance folder a repository. */
   makeRepository: () => Promise<void>;
@@ -22,14 +30,150 @@ export interface StageInstance {
   readonly gameFolder: GameFolder;
 }
 
+/** The slice of the instance value discard reads: stage's, each mod's folder, and the downloaded files. */
+export interface DiscardInstance extends StageInstance {
+  readonly paths: { readonly downloadsDir: string | undefined; readonly modDirs: ReadonlyMap<string, string> };
+  readonly downloads: { readonly kind: 'listed'; readonly rows: readonly { readonly name: string; readonly path: string }[] } | { readonly kind: 'unresolved' };
+}
+
 /** What stage answers: each mod staged or refused, or the whole stage refused, as a message to show. */
 export type StageResult = ({ applied: true } & StageOutcome) | { applied: false; refusal: string };
 
 /** Where stage is: the Instance adapter reading a mod's files, or mEdit staging mods. */
-export type StageStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Staging' } & StageProgress);
+export type StageStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Staging' } & ModlistProgress);
+
+/** What discard answers: each mod discarded or skipped, or the whole discard refused, naming the mods it may not have
+ *  finished. */
+export type DiscardResult =
+  | ({ applied: true } & Omit<DiscardOutcome, 'deltaMissing'>)
+  | { applied: false; refusal: string; unfinished: readonly string[] };
+
+/** Where discard is: the Instance adapter reading a mod's files, mEdit discarding mods, or the Instance adapter reading a
+ *  downloaded file a delta may be packed in. */
+export type DiscardStatus =
+  | { readonly phase: 'ReadingFiles'; readonly mod: string }
+  | ({ readonly phase: 'Discarding' } & ModlistProgress)
+  | { readonly phase: 'ReadingDownloadedFile'; readonly file: string };
+
+interface ReadMods {
+  readonly sent: readonly StageMod[];
+  readonly gameFiles: readonly GameFile[];
+  readonly refused: readonly ItemRefusal<string>[];
+}
+
+const wireFile = (file: InstallationFile): StageMod['installationFiles'][number] => ({ ...file, entries: [...file.entries] });
+
+// The folder and the installation files first: a mod refused for either costs no hashing of game files.
+async function readMod(
+  adapter: Adapter, mod: string, dataFolder: string, modFilePaths: readonly string[],
+): Promise<{ read: StageMod; gameFiles: readonly GameFile[] } | { refusal: string }> {
+  const folder = await adapter.modFolderPath(mod);
+  if (folder === undefined) return { refusal: 'its name gives it no folder' };
+  const installed = await adapter.installationFiles(mod);
+  if (installed.kind === 'unreadable') return { refusal: installed.reason };
+  const overridden = await adapter.overriddenGameFiles(dataFolder, modFilePaths);
+  if (overridden.kind === 'unreadable') return { refusal: overridden.reason };
+  return {
+    read: { name: mod, folder, installationFiles: installed.answer.map(wireFile), committedFiles: [...adapter.managerFilesInModFolder] },
+    gameFiles: overridden.answer,
+  };
+}
+
+async function readMods(
+  adapter: Adapter, mods: readonly string[], dataFolder: string, { filesByMod }: StageInstance, onReading: (mod: string) => void,
+): Promise<ReadMods> {
+  const sent: StageMod[] = [];
+  const gameFiles = new Map<string, GameFile>();
+  const refused: ItemRefusal<string>[] = [];
+  for (const mod of mods) {
+    onReading(mod);
+    const read = await readMod(adapter, mod, dataFolder, (filesByMod.get(mod) ?? []).map((file) => file.relativePath));
+    if ('refusal' in read) { refused.push({ item: mod, reason: read.refusal }); continue; }
+    sent.push(read.read);
+    for (const file of read.gameFiles) gameFiles.set(file.path.toLowerCase(), file);
+  }
+  return { sent, gameFiles: [...gameFiles.values()], refused };
+}
+
+// The mods mEdit did not report done before the call failed are the ones it may not have finished.
+async function discardOnce(
+  client: ModlistSourceCommandsDeps['client'], mods: readonly DiscardMod[], facts: DiscardFacts, onProgress: (progress: ModlistProgress) => void,
+): Promise<({ applied: true } & DiscardOutcome) | Extract<DiscardResult, { applied: false }>> {
+  let done = 0;
+  const outcome = await client.discardChanges(mods, facts, {
+    onProgress: (progress) => {
+      if (progress.mod) done = progress.modsDone;
+      onProgress(progress);
+    },
+  });
+  return isRefused(outcome)
+    ? { applied: false, refusal: outcome.message, unfinished: mods.slice(done).map((mod) => mod.name) }
+    : { applied: true, ...outcome };
+}
+
+// Every downloaded archive's entries: an index that is stale costs reading the archive, so only a mod skipped for a
+// delta alone asks for them, and goes to mEdit again with them.
+async function downloadedArchives(
+  adapter: Adapter, downloads: DiscardInstance['downloads'], onReading: (file: string) => void,
+): Promise<{ read: readonly InstallationFile[]; unread: readonly ItemRefusal<string>[] }> {
+  const read: InstallationFile[] = [];
+  const unread: ItemRefusal<string>[] = [];
+  for (const row of downloads.kind === 'listed' ? downloads.rows.filter((file) => isArchiveName(file.name)) : []) {
+    onReading(row.name);
+    const hashed = await adapter.downloadedFile(row.path);
+    if (hashed.kind === 'read') read.push(hashed.answer);
+    else unread.push({ item: row.name, reason: hashed.reason });
+  }
+  return { read, unread };
+}
+
+const notSearched = (unread: readonly ItemRefusal<string>[]): string =>
+  (unread.length === 0 ? '' : ` Not searched for it: ${unread.map(({ item, reason }) => `"${item}" (${reason})`).join(', ')}.`);
+
+async function discardChanges(
+  { client, adapter }: ModlistSourceCommandsDeps, mods: readonly string[], instance: DiscardInstance,
+  onProgress: (status: DiscardStatus) => void,
+): Promise<DiscardResult> {
+  const { gameFolder } = instance;
+  if (gameFolder.kind !== 'found') return { applied: false, refusal: 'Could not discard changes: the game folder was not found.', unfinished: [] };
+  const read = await readMods(adapter, mods, gameFolder.dataFolder, instance, (mod) => { onProgress({ phase: 'ReadingFiles', mod }); });
+  if (read.sent.length === 0) return { applied: true, landed: [], refused: read.refused };
+  const sent = read.sent.map(({ name, folder, installationFiles }) => ({ name, folder, installationFiles }));
+  const facts: DiscardFacts = {
+    gameFiles: [...read.gameFiles], dataFolder: gameFolder.dataFolder, buildFolder: adapter.buildFolder,
+    downloadsFolder: instance.paths.downloadsDir ?? null, downloadedFiles: [],
+  };
+  const discarding = (progress: ModlistProgress): void => { onProgress({ phase: 'Discarding', ...progress }); };
+  const first = await discardOnce(client, sent, facts, discarding);
+  if (!first.applied) return first;
+  if (first.deltaMissing.length === 0) return { applied: true, landed: first.landed, refused: [...first.refused, ...read.refused] };
+
+  const archives = await downloadedArchives(adapter, instance.downloads, (file) => { onProgress({ phase: 'ReadingDownloadedFile', file }); });
+  const again = sent.filter((mod) => first.deltaMissing.includes(mod.name));
+  const second = await discardOnce(client, again, { ...facts, downloadedFiles: archives.read.map(wireFile) }, discarding);
+  if (!second.applied) return second;
+  return {
+    applied: true,
+    landed: [...first.landed, ...second.landed],
+    refused: [
+      ...first.refused.filter((refused) => !first.deltaMissing.includes(refused.item)),
+      ...second.refused.map((refused) => (second.deltaMissing.includes(refused.item) ? { ...refused, reason: refused.reason + notSearched(archives.unread) } : refused)),
+      ...read.refused,
+    ],
+  };
+}
+
+function modsHolding(files: readonly string[], { paths }: Pick<DiscardInstance, 'paths'>): { mods: readonly string[]; refused: readonly ItemRefusal<string>[] } {
+  const held = files.map((file) => ({ file, mod: [...paths.modDirs].find(([, folder]) => samePath(dirname(file), folder))?.[0] }));
+  return {
+    mods: [...new Set(held.flatMap(({ mod }) => (mod === undefined ? [] : [mod])))],
+    refused: held.flatMap(({ file, mod }) => (mod === undefined ? [{ item: file, reason: 'it is not in a mod folder' }] : [])),
+  };
+}
 
 /** The modlist gestures, bound to the mEdit client and handing it the instance's facts. */
-export function modlistSourceCommands({ client, adapter, instanceRoot, makeRepository }: ModlistSourceCommandsDeps) {
+export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
+  const { client, adapter, instanceRoot, makeRepository } = deps;
   // A failed init leaves nothing behind: the ignore list it wrote goes, and what stays is named.
   async function refusalWithIgnoreListTakenBack(failure: unknown): Promise<string> {
     try {
@@ -38,25 +182,6 @@ export function modlistSourceCommands({ client, adapter, instanceRoot, makeRepos
     } catch (err) {
       return `${errorMessage(failure)}; the ignore list it wrote remains: ${errorMessage(err)}`;
     }
-  }
-
-  // The folder and the installation files first: a mod refused for either costs no hashing of game files.
-  async function readForStage(
-    mod: string, dataFolder: string, modFilePaths: readonly string[],
-  ): Promise<{ staged: StageMod; gameFiles: readonly GameFile[] } | { refusal: string }> {
-    const folder = await adapter.modFolderPath(mod);
-    if (folder === undefined) return { refusal: 'its name gives it no folder' };
-    const installed = await adapter.installationFiles(mod);
-    if (installed.kind === 'unreadable') return { refusal: installed.reason };
-    const overridden = await adapter.overriddenGameFiles(dataFolder, modFilePaths);
-    if (overridden.kind === 'unreadable') return { refusal: overridden.reason };
-    return {
-      staged: {
-        name: mod, folder, installationFiles: installed.answer.map((file) => ({ ...file, entries: [...file.entries] })),
-        committedFiles: [...adapter.managerFilesInModFolder],
-      },
-      gameFiles: overridden.answer,
-    };
   }
 
   return {
@@ -79,25 +204,26 @@ export function modlistSourceCommands({ client, adapter, instanceRoot, makeRepos
     /** A mod whose folder, installation files or overridden game files the Instance adapter cannot answer is refused
      *  here, naming why, and mEdit stages the rest. */
     stage: async (
-      mods: readonly string[], { filesByMod, gameFolder }: StageInstance, options: { onProgress?: (status: StageStatus) => void } = {},
+      mods: readonly string[], instance: StageInstance, options: { onProgress?: (status: StageStatus) => void } = {},
     ): Promise<StageResult> => {
+      const { gameFolder } = instance;
       if (gameFolder.kind !== 'found') return { applied: false, refusal: 'Could not stage: the game folder was not found.' };
-      const sent: StageMod[] = [];
-      const gameFiles = new Map<string, GameFile>();
-      const refused: ItemRefusal<string>[] = [];
-      for (const mod of mods) {
-        options.onProgress?.({ phase: 'ReadingFiles', mod });
-        const read = await readForStage(mod, gameFolder.dataFolder, (filesByMod.get(mod) ?? []).map((file) => file.relativePath));
-        if ('refusal' in read) { refused.push({ item: mod, reason: read.refusal }); continue; }
-        sent.push(read.staged);
-        for (const file of read.gameFiles) gameFiles.set(file.path.toLowerCase(), file);
-      }
+      const { sent, gameFiles, refused } = await readMods(
+        adapter, mods, gameFolder.dataFolder, instance, (mod) => options.onProgress?.({ phase: 'ReadingFiles', mod }));
       if (sent.length === 0) return { applied: true, landed: [], refused };
       const outcome = await client.stage(sent, {
-        gameFiles: [...gameFiles.values()], dataFolder: gameFolder.dataFolder, buildFolder: adapter.buildFolder, deltaShare: DELTA_SHARE,
+        gameFiles: [...gameFiles], dataFolder: gameFolder.dataFolder, buildFolder: adapter.buildFolder, deltaShare: DELTA_SHARE,
       }, { onProgress: (progress) => options.onProgress?.({ phase: 'Staging', ...progress }) });
       return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, landed: outcome.landed, refused: [...outcome.refused, ...refused] };
     },
+
+    /** A mod the Instance adapter cannot answer is refused here, naming why, and mEdit discards the rest. */
+    discardChanges: (
+      mods: readonly string[], instance: DiscardInstance, options: { onProgress?: (status: DiscardStatus) => void } = {},
+    ): Promise<DiscardResult> => discardChanges(deps, mods, instance, (status) => options.onProgress?.(status)),
+
+    /** The mod whose folder holds each file, as Source Control names a row; a file in no mod's folder is refused. */
+    modsHolding,
   };
 }
 
