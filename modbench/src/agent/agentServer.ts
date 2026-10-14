@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { AddressInfo } from 'node:net';
 import { text } from 'node:stream/consumers';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { InstanceView } from '../instanceLoader/instance';
 import type { Log } from '../ports/log';
@@ -48,22 +49,38 @@ async function answer(log: Log, name: string, work: () => unknown) {
   }
 }
 
+interface Tool<Shape extends z.ZodRawShape> {
+  readonly name: string;
+  readonly description: string;
+  readonly input: Shape;
+}
+
+// The SDK refuses an input its own schema rejects before the handler runs, with no Output line
+// (agent.md, Reporting, story 1). So the SDK holds a schema that takes any object and advertises
+// the tool's, and the handler parses the tool's.
+function register<Shape extends z.ZodRawShape>(
+  server: McpServer, log: Log, { name, description, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>) => unknown,
+): void {
+  const schema = z.object(input);
+  const anyObject = z.looseObject({}).meta(z.toJSONSchema(schema, { io: 'input', target: 'draft-7' }));
+  server.registerTool(name, { description, inputSchema: anyObject }, (args) => answer(log, name, () => {
+    const parsed = schema.safeParse(args);
+    if (!parsed.success) throw new Refusal(z.prettifyError(parsed.error));
+    return run(parsed.data);
+  }));
+}
+
+const NO_INPUT = {};
+
 function mcpServerOf({ instance, mEdit, log }: AgentServerOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' });
-  for (const read of INSTANCE_READS) {
-    server.registerTool(read.name, { description: read.description }, () => answer(log, read.name, () => read.of(currentValue(instance))));
-  }
-  server.registerTool(FILE_CONFLICTS.name, { description: FILE_CONFLICTS.description, inputSchema: FILE_CONFLICTS.input },
-    (args) => answer(log, FILE_CONFLICTS.name, () => FILE_CONFLICTS.of(currentValue(instance), args)));
-  server.registerTool(RESOLVE_INSTANCE_NAMES.name, { description: RESOLVE_INSTANCE_NAMES.description, inputSchema: RESOLVE_INSTANCE_NAMES.input },
-    (args) => answer(log, RESOLVE_INSTANCE_NAMES.name, () => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args)));
-  server.registerTool(RESOLVE_NAMES.name, { description: RESOLVE_NAMES.description, inputSchema: RESOLVE_NAMES.input },
-    (args) => answer(log, RESOLVE_NAMES.name, () => RESOLVE_NAMES.of(mEdit, args)));
-  server.registerTool(SELECT_ROWS.name, { description: SELECT_ROWS.description, inputSchema: SELECT_ROWS.input },
-    (args) => answer(log, SELECT_ROWS.name, () => SELECT_ROWS.of(mEdit, args)));
-  server.registerTool(RUN_GESTURE.name, { description: RUN_GESTURE.description, inputSchema: RUN_GESTURE.input },
-    (args) => answer(log, RUN_GESTURE.name, () => RUN_GESTURE.of(currentValue(instance), args)));
-  server.registerTool(SOURCE_PROBLEMS.name, { description: SOURCE_PROBLEMS.description }, () => answer(log, SOURCE_PROBLEMS.name, SOURCE_PROBLEMS.of));
+  for (const read of INSTANCE_READS) register(server, log, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance)));
+  register(server, log, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), args));
+  register(server, log, RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
+  register(server, log, RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
+  register(server, log, SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
+  register(server, log, RUN_GESTURE, (args) => RUN_GESTURE.of(currentValue(instance), args));
+  register(server, log, { ...SOURCE_PROBLEMS, input: NO_INPUT }, SOURCE_PROBLEMS.of);
   return server;
 }
 

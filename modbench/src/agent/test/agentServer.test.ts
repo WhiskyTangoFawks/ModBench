@@ -417,6 +417,34 @@ describe('the agent server, running a gesture', () => {
   });
 });
 
+describe('the agent server, given an input its tool does not take', () => {
+  it.each([
+    ['list_file_conflicts', { mods: 'A' }, 'mods'],
+    ['resolve_instance_names', { downloads: 'rocks.7z' }, 'downloads'],
+    ['resolve_names', {}, 'names'],
+    ['select_rows', { sql: 5 }, 'sql'],
+    ['run_gesture', { argument: [] }, 'command'],
+  ])('%s refuses it, naming the input, in the Output and in no notification', async (name, args, input) => {
+    const { bound, lines, reporter } = await serve(new FakeInstance(CONFLICTED_WITH_DOWNLOADS));
+    const client = new Client({ name: 'test', version: '0' });
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
+    clients.push(client);
+
+    const refusal = await call(client, name, args);
+
+    expect(refusal.isError).toBe(true);
+    expect(refusal.text).toContain(input);
+    expect(lines).toEqual([`[agent] ${name}: ${refusal.text}`]);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('still advertises the input each tool takes', async () => {
+    const { tools } = await (await clientOf(new FakeInstance(VALUE))).listTools();
+
+    expect(tools.find((tool) => tool.name === 'select_rows')?.inputSchema).toMatchObject({ properties: { sql: { type: 'string' } }, required: ['sql'] });
+  });
+});
+
 describe('the agent server, given no instance', () => {
   it('refuses each request, saying so', async () => {
     const client = await clientOf(undefined);
