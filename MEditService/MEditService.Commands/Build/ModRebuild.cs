@@ -4,20 +4,15 @@ using Octodiff.Diagnostics;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>What a mod lacks to come back as its manifest says, and the writes that bring it back. Each step hands the
-/// next what it needs, and every delta is applied before any file is written.</summary>
 internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard mod, InstanceToDiscard instance, Manifest manifest) : IDisposable
 {
-    internal abstract record Lack(string Text)
+    internal record Lack(string Text)
     {
-        internal sealed record Other(string Why) : Lack(Why);
-
         internal sealed record GameFileMissing(string Path) : Lack($"game file '{Path}' is missing");
 
         internal sealed record DeltaMissing(string Name) : Lack($"delta '{Name}' is missing");
     }
 
-    /// <summary>What a step hands the next, or else what it lacks.</summary>
     internal sealed record Step<T>(T? Value, IReadOnlyList<Lack> Lacks) where T : class;
 
     internal interface ISource;
@@ -141,10 +136,10 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
 
     private (ISource? Source, IEnumerable<Lack> Lacks) SourceOf(ManifestFile file) => file.Provider switch
     {
-        FileProvider.NoProvider => (null, [new Lack.Other($"'{file.Path}' has no provider")]),
+        FileProvider.NoProvider => (null, [new Lack($"'{file.Path}' has no provider")]),
         FileProvider.FirstInstallationFile => manifest.InstallationFiles is [var first, ..]
             ? EntryOf(first.Name, file.Path, file.Hash)
-            : (null, [new Lack.Other($"'{file.Path}' names no installation file")]),
+            : (null, [new Lack($"'{file.Path}' names no installation file")]),
         FileProvider.InstallationFileEntry entry => EntryOf(entry.InstallationFile, entry.Path, file.Hash),
         FileProvider.InstallationFileDelta delta => DeltaOf(EntryOf(delta.InstallationFile, delta.Path, delta.BaseHash), file, delta.BaseHash),
         FileProvider.GameFile game => GameFileOf(game.Path, file.Hash),
@@ -156,12 +151,12 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
     {
         var handed = mod.InstallationFiles.FirstOrDefault(file => repository.InstallationFileName(file.Path) == name);
         if (handed is null || !repository.InstallationFileExists(handed.Path))
-            return (null, [new Lack.Other($"installation file '{name}' is not in the downloads folder")]);
+            return (null, [new Lack($"installation file '{name}' is not in the downloads folder")]);
         if (manifest.InstallationFiles.FirstOrDefault(source => source.Name == name)?.Hash != handed.Hash)
-            return (null, [new Lack.Other($"installation file '{name}' has other bytes")]);
+            return (null, [new Lack($"installation file '{name}' has other bytes")]);
         return handed.Entries.Any(entry => string.Equals(entry.Path, entryPath, StringComparison.OrdinalIgnoreCase) && entry.Hash == hash)
             ? (new EntrySource(handed, entryPath), [])
-            : (null, [new Lack.Other($"installation file '{name}' holds no '{entryPath}' with the bytes its manifest names")]);
+            : (null, [new Lack($"installation file '{name}' holds no '{entryPath}' with the bytes its manifest names")]);
     }
 
     private (ISource?, IEnumerable<Lack>) GameFileOf(string path, string hash)
@@ -171,7 +166,7 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
         var named = manifest.GameFiles.FirstOrDefault(source => string.Equals(source.Name, path, StringComparison.OrdinalIgnoreCase));
         return named?.Hash == handed.Hash && handed.Hash == hash
             ? (new GameSource(handed), [])
-            : (null, [new Lack.Other($"game file '{path}' has other bytes")]);
+            : (null, [new Lack($"game file '{path}' has other bytes")]);
     }
 
     private (ISource?, IEnumerable<Lack>) DeltaOf((ISource? Source, IEnumerable<Lack> Lacks) basis, ManifestFile file, string baseHash)
@@ -191,12 +186,12 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
             .Select(packed => ((InstallationFile, string)?)packed)
             .FirstOrDefault();
 
-    private Lack.Other? Apply(ManifestFile file, DeltaSource source, Stream basis, Dictionary<string, Stream> appliedByPath)
+    private Lack? Apply(ManifestFile file, DeltaSource source, Stream basis, Dictionary<string, Stream> appliedByPath)
     {
         var delta = source.OpenDelta();
         var applied = Scratch();
         basis.Position = 0;
-        var otherBytes = new Lack.Other($"delta '{repository.DeltaName(file.Path, source.BaseHash, file.Hash)}' has other bytes");
+        var otherBytes = new Lack($"delta '{repository.DeltaName(file.Path, source.BaseHash, file.Hash)}' has other bytes");
         try
         {
             new DeltaApplier().Apply(basis, new BinaryDeltaReader(delta, new NullProgressReporter()), applied);

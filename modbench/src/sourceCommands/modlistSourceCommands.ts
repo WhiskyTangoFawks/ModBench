@@ -30,7 +30,6 @@ export interface StageInstance {
   readonly gameFolder: GameFolder;
 }
 
-/** The slice of the instance value discard reads: stage's, each mod's folder, and the downloaded files. */
 export interface DiscardInstance extends StageInstance {
   readonly paths: { readonly downloadsDir: string | undefined; readonly modDirs: ReadonlyMap<string, string> };
   readonly downloads: { readonly kind: 'listed'; readonly rows: readonly { readonly name: string; readonly path: string }[] } | { readonly kind: 'unresolved' };
@@ -42,14 +41,10 @@ export type StageResult = ({ applied: true } & StageOutcome) | { applied: false;
 /** Where stage is: the Instance adapter reading a mod's files, or mEdit staging mods. */
 export type StageStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Staging' } & ModlistProgress);
 
-/** What discard answers: each mod discarded or skipped, or the whole discard refused, naming the mods it may not have
- *  finished. */
 export type DiscardResult =
   | ({ applied: true } & Omit<DiscardOutcome, 'notFound'>)
   | { applied: false; refusal: string; unfinished: readonly string[] };
 
-/** Where discard is: the Instance adapter reading a mod's files, mEdit discarding mods, or the Instance adapter reading a
- *  downloaded file a delta may be packed in. */
 export type DiscardStatus =
   | { readonly phase: 'ReadingFiles'; readonly mod: string }
   | ({ readonly phase: 'Discarding' } & ModlistProgress)
