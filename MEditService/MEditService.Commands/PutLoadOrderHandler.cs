@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Commands.Build;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
@@ -7,7 +8,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands;
 
 /// <summary>Validates the folders and the game release, applies the snapshot to Load order state as Mod Management
-/// sent it (ADR-0013) and checks it for external changes (ADR-0003). The
+/// sent it (ADR-0013), checks it for external changes (ADR-0003) and checks its mods' status. The
 /// Index reconciles on its own subscription.</summary>
 public sealed class PutLoadOrderHandler
 {
@@ -16,17 +17,18 @@ public sealed class PutLoadOrderHandler
     private readonly SchemaReflector _schemaReflector;
     private readonly ISourceAdapter _source;
     private readonly ExternalChangeCheck _externalChanges;
+    private readonly ModStatusCheck _modStatus;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal PutLoadOrderHandler(
         IPluginAdapter plugins, LoadOrderHolder holder, SchemaReflector schemaReflector, ISourceAdapter source,
-        ExternalChangeCheck externalChanges) =>
-        (_plugins, _holder, _schemaReflector, _source, _externalChanges) = (plugins, holder, schemaReflector, source, externalChanges);
+        ExternalChangeCheck externalChanges, ModStatusCheck modStatus) =>
+        (_plugins, _holder, _schemaReflector, _source, _externalChanges, _modStatus) = (plugins, holder, schemaReflector, source, externalChanges, modStatus);
 
     public PutLoadOrderResult Put(
         string dataFolder, string? instanceRoot, GameRelease gameRelease,
         IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine,
-        IReadOnlyList<StampedFile> archives, IReadOnlyList<StampedFile> stringsFiles)
+        IReadOnlyList<StampedFile> archives, IReadOnlyList<StampedFile> stringsFiles, SnapshotMods mods)
     {
         if (!_plugins.GameFolderExists(dataFolder))
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.GameDirectoryNotFound, $"Game directory not found: {dataFolder}");
@@ -50,6 +52,7 @@ public sealed class PutLoadOrderHandler
         var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active, loadedWithNoLine, archives, stringsFiles);
         var version = _holder.Apply(snapshot);
         _externalChanges.Check(snapshot);
+        _modStatus.Check(mods);
         return PutLoadOrderResult.Success(version);
     }
 }

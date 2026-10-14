@@ -16,6 +16,7 @@ import type { InstanceValue, ModlistEntry } from '../../instanceLoader/instance'
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { present } from '../../ports/present';
 import { ModListProvider, ModNode, SeparatorNode } from '../ModListProvider';
+import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { indicatorSetting, MOD_INDICATORS, ModIndicatorDecorations, modRowUri, separatorRowUri } from '../modIndicators';
 import { file, indexedValueOf, mod } from './indexedValue';
 
@@ -122,7 +123,7 @@ const allOn = Object.fromEntries(MOD_INDICATORS
   .flatMap(({ id }) => [[indicatorSetting(id, 'badge'), true], [indicatorSetting(id, 'colour'), true]]));
 
 async function rowUriOf(instance: FakeInstance, name: string): Promise<vscode.Uri> {
-  const rows = new ModListProvider({ instance });
+  const rows = new ModListProvider({ statuses: NO_MOD_STATUSES, instance });
   const row = (await rows.getChildren()).find((node) => node instanceof ModNode && node.mod.name === name);
   return present(row?.resourceUri, `${name}'s row URI`);
 }
@@ -293,7 +294,7 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
 
 describe('a separator row (mods.md, A row, Separator)', () => {
   it('has the URI its indicators are drawn on, and no icon from the file icon theme', async () => {
-    const row = (await new ModListProvider({ instance: new FakeInstance(await groupedMiddleOfThree()) }).getChildren())
+    const row = (await new ModListProvider({ statuses: NO_MOD_STATUSES, instance: new FakeInstance(await groupedMiddleOfThree()) }).getChildren())
       .find((node) => node instanceof SeparatorNode && node.separator.name === 'Section');
 
     expect(row?.resourceUri?.toString()).toBe(separatorRowUri('Section').toString());

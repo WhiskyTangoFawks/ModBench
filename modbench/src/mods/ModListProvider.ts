@@ -12,6 +12,8 @@ import {
 } from './modFiles';
 import type { ModArgument } from '../drivingLib/argument';
 import { modRowUri, separatorRowUri } from './modIndicators';
+import { countsInBadge, differingFiles, lackedLine, statusDescription, type ModStatuses } from './modStatuses';
+import type { ModStatus } from '../client';
 import { blankIcon } from '../drivingLib/blankIcon';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 
@@ -27,6 +29,8 @@ interface ModListProviderOptions {
   /** Mods/separators in override order, per-mod conflict/override/missing status and the
    *  overwrite/ file count. */
   instance: InstanceView;
+  /** Each mod's status against its manifest, which mEdit answers. */
+  statuses: Pick<ModStatuses, 'of' | 'onDidChange'>;
 }
 
 // Selection and expansion follow a row across a change on disk, and a mod and a separator may
@@ -49,6 +53,8 @@ interface ModFacts {
   readonly holdsPlugin: boolean;
   readonly tracked: boolean;
   readonly sourceFolder?: string;
+  /** Shown only while the instance holds a repository (modlist-source.md, Status, story 1). */
+  readonly status?: ModStatus;
 }
 
 /** A separator and the mods it shows: every mod it holds, or only the matching ones when a filter
@@ -83,8 +89,11 @@ export class ModNode extends vscode.TreeItem {
     this.id = rowIdentity(this.kind, mod.name);
     this.resourceUri = modRowUri(mod.name);
     this.nexusModId = mod.nexusId;
-    this.description = mod.version ?? '';
-    this.tooltip = [mod.name, mod.version, mod.nexusId, mod.archiveFilename, facts?.sourceFolder && `built from ${facts.sourceFolder}`]
+    const { status } = facts ?? {};
+    this.description = [mod.version, status && statusDescription(status)].filter((s): s is string => !!s).join(' · ');
+    this.tooltip = [
+      mod.name, mod.version, mod.nexusId, mod.archiveFilename, facts?.sourceFolder && `built from ${facts.sourceFolder}`, status && lackedLine(status),
+    ]
       .filter((s): s is string => !!s)
       .join(' · ');
     this.iconPath = new vscode.ThemeIcon(facts?.tracked ? 'repo' : 'package');
@@ -155,6 +164,8 @@ export class ModListProvider
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
   private readonly readFailureSubscription: vscode.Disposable;
+  private readonly statusSubscription: vscode.Disposable;
+  private readonly statuses: ModListProviderOptions['statuses'];
   private readonly firstRead: FirstRead;
 
   constructor(options: ModListProviderOptions) {
@@ -166,11 +177,14 @@ export class ModListProvider
       this.invalidate();
     });
     this.readFailureSubscription = options.instance.onReadFailure(() => this.render());
+    this.statuses = options.statuses;
+    this.statusSubscription = options.statuses.onDidChange(() => this.render());
   }
 
   dispose(): void {
     this.instanceSubscription.dispose();
     this.readFailureSubscription.dispose();
+    this.statusSubscription.dispose();
     this.firstRead.dispose();
   }
 
@@ -204,6 +218,19 @@ export class ModListProvider
   isEnabled(row: ModNode): boolean {
     const entry = this.instanceValue.mods.find((m) => m.kind === 'mod' && m.name === row.mod.name);
     return entry?.enabled ?? row.mod.enabled;
+  }
+
+  /** The modlist's badge: how many mods differ from their manifests or have none (modlist-source.md, Status, story 5). */
+  badge(): { value: number; tooltip: string } | undefined {
+    const count = this.instanceValue.mods.filter((entry) => {
+      const status = entry.kind === 'mod' ? this.statusOf(entry.name) : undefined;
+      return status !== undefined && countsInBadge(status);
+    }).length;
+    return count === 0 ? undefined : { value: count, tooltip: `Mods that differ from their manifests or have none: ${count}` };
+  }
+
+  private statusOf(mod: string): ModStatus | undefined {
+    return this.instanceValue.holdsRepository ? this.statuses.of(mod) : undefined;
   }
 
   /** The view's message line while no filter is active. Overwrite is always a row, so an empty
@@ -328,13 +355,18 @@ export class ModListProvider
     return new ModNode(m, {
       holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked,
       sourceFolder: tracked ? this.instanceValue.paths.sourceDirs.get(m.name) : undefined,
+      status: this.statusOf(m.name),
     }, found.files, found.folders, shown);
   }
 
   private within(row: ModNode | OverwriteNode | FolderNode) {
     const conflict = (origin: FileOrigin, file: OriginFile) =>
       fileOrderConflictOf(this.instanceValue.files.get(file.relativePath), origin);
-    return { shown: row.shown, matches: this.matches, conflict };
+    const differs = (origin: FileOrigin, relativePath: string) => {
+      const status = origin.kind === 'mod' ? this.statusOf(origin.name) : undefined;
+      return status !== undefined && [...differingFiles(status)].some((path) => path === relativePath || path.startsWith(`${relativePath}/`));
+    };
+    return { shown: row.shown, matches: this.matches, conflict, differs };
   }
 
   getParent(element: ModlistNode): ModlistNode | undefined {

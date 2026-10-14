@@ -34,8 +34,18 @@ internal static class ManifestEndpoints
             .WithDescription(
                 "What restore from manifest would destroy in each mod, from its manifest, its files' stamps and the stat cache, " +
                 "before anything is written: each file whose bytes the stat cache cannot vouch are its provider's, and each " +
-                "file no line names. A mod with no manifest destroys nothing, and a mod a file of which cannot be read is skipped.")
+                "file no line names. A mod with no manifest destroys nothing, and a mod whose manifest or a file cannot be read is skipped.")
             .Produces<WhatRestoreDestroysResponse>()
+            .ProducesProblem(400);
+
+        app.MapPost("/mod-status", ModStatusOf)
+            .WithName("ModStatus")
+            .WithTags("Modlist")
+            .WithDescription(
+                "Each mod's folder against its manifest (modlist-source.md, Status), from its manifest, a stat of each file and " +
+                "the stat cache, which keeps what the read found: each file whose bytes differ, each file no line names, each " +
+                "file a line names that is gone and each file with no provider, or that it has no manifest or why it cannot be read.")
+            .Produces<ModStatusResponse>()
             .ProducesProblem(400);
 
         app.MapPost("/modlist-gestures/{gesture}/cancel", (string gesture, ModlistGestureCancels cancels) =>
@@ -93,30 +103,35 @@ internal static class ManifestEndpoints
             [.. result.Refused.Select(refused => new ModRestoreRefusal(refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.GameFilesNotFound))]));
     }
 
-    internal static IResult WhatRestoreDestroys(WhatRestoreDestroysRequest req, IModFolderRepository repository)
+    internal static IResult WhatRestoreDestroys(ModFoldersRequest req, IModFolderRepository repository)
+    {
+        if (MalformedFolders(req) is { } malformed) return malformed;
+
+        List<ModRestoreDestroys> destroying = [];
+        List<ModRestoreRefusal> refused = [];
+        foreach (var status in StatusOf(req, repository))
+        {
+            if (status.Unreadable is { } why)
+                refused.Add(new ModRestoreRefusal(status.Mod, RestoreRefusal.Unreadable, $"'{status.Mod}' was skipped: {why}", []));
+            else if (status.Differing.Count + status.NamedByNoLine.Count > 0)
+                destroying.Add(new ModRestoreDestroys(status.Mod, status.Differing, status.NamedByNoLine));
+        }
+        return Results.Ok(new WhatRestoreDestroysResponse(destroying, refused));
+    }
+
+    internal static IResult ModStatusOf(ModFoldersRequest req, IModFolderRepository repository) =>
+        MalformedFolders(req) ?? Results.Ok(new ModStatusResponse(StatusOf(req, repository)));
+
+    private static IResult? MalformedFolders(ModFoldersRequest req)
     {
         var mods = req.Mods ?? [];
         if (mods.Count == 0 || mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.Folder)))
             return Results.Problem("At least one mod is required, and every mod needs a name and a folder.", statusCode: 400);
-        if (string.IsNullOrWhiteSpace(req.StatCache)) return Results.Problem("The folder of the stat cache is required.", statusCode: 400);
-
-        List<ModRestoreDestroys> destroying = [];
-        List<ModRestoreRefusal> refused = [];
-        foreach (var mod in mods)
-        {
-            try
-            {
-                var destroys = repository.WhatRestoreDestroys(mod.Folder, mod.Name, (mod.CommittedFiles ?? []).ToHashSet(StringComparer.Ordinal), req.StatCache);
-                if (destroys.Differing.Count + destroys.NamedByNoLine.Count > 0)
-                    destroying.Add(new ModRestoreDestroys(mod.Name, destroys.Differing, destroys.NamedByNoLine));
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                refused.Add(new ModRestoreRefusal(mod.Name, RestoreRefusal.Unreadable, $"'{mod.Name}' was skipped: a file could not be read: {e.Message}", []));
-            }
-        }
-        return Results.Ok(new WhatRestoreDestroysResponse(destroying, refused));
+        return string.IsNullOrWhiteSpace(req.StatCache) ? Results.Problem("The folder of the stat cache is required.", statusCode: 400) : null;
     }
+
+    private static List<ModStatus> StatusOf(ModFoldersRequest req, IModFolderRepository repository) =>
+        [.. req.Mods.Select(mod => repository.Status(mod.Folder, mod.Name, (mod.CommittedFiles ?? []).ToHashSet(StringComparer.Ordinal), req.StatCache))];
 
     private static IResult? Malformed(IReadOnlyList<IModRequest> mods, IReadOnlyList<OverriddenGameFileRequest>? gameFiles, string? statCache)
     {
@@ -185,11 +200,13 @@ internal sealed record RestoreFromManifestModRequest(
 /// no line names, for the trash, and StatCacheNotWritten why the stat cache did not keep the read.</summary>
 internal sealed record RestoredModResponse(string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten);
 
-/// <summary>The mods to ask what restore from manifest would destroy in, each with the files the repository commits, and
-/// the stat cache's folder.</summary>
-internal sealed record WhatRestoreDestroysRequest(IReadOnlyList<WhatRestoreDestroysModRequest> Mods, string StatCache);
+/// <summary>The mods to read the folders of against their manifests, and the stat cache's folder.</summary>
+internal sealed record ModFoldersRequest(IReadOnlyList<ModFolderRequest> Mods, string StatCache);
 
-internal sealed record WhatRestoreDestroysModRequest(string Name, string Folder, IReadOnlyList<string> CommittedFiles);
+/// <summary>A mod by its folder, with the files of it the repository commits, which no line names.</summary>
+internal sealed record ModFolderRequest(string Name, string Folder, IReadOnlyList<string> CommittedFiles);
+
+internal sealed record ModStatusResponse(IReadOnlyList<ModStatus> Mods);
 
 /// <summary>A mod restore would destroy files in, by forward-slash path: each file whose bytes differ from what its
 /// provider fixes, and each file no line names.</summary>

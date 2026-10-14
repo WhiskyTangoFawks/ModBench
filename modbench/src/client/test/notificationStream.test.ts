@@ -57,6 +57,19 @@ describe('SseNotificationSubscriber', () => {
     subscriber.stop();
   });
 
+  it('carries the mods a mod-status-changed frame names through the stream', async () => {
+    const event = rowsChanged([], { kind: 'mod-status-changed', mods: ['ModA'] });
+    const subscriber = new SseNotificationSubscriber({ openStream: vi.fn().mockResolvedValue(streamResponse([sseFrame(event)])) });
+    const received: unknown[] = [];
+    subscriber.onNotification('mod-status-changed', (p) => received.push(p));
+
+    subscriber.start();
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+
+    expect(received).toEqual([{ mods: ['ModA'] }]);
+    subscriber.stop();
+  });
+
   it('reconnects after the stream ends, without a live backend, as a one-shot adapter would be silently killed by a hiccup for the rest of the session', async () => {
     const secondEvent = rowsChanged(['000002:Other.esp']);
     const openStream = vi.fn()
@@ -258,6 +271,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     ['record-filter-cleared', rowsChanged([], { kind: 'record-filter-cleared', recordFilterCleared: { source: 'a.sql', reason: 'boom' } }), { source: 'a.sql', reason: 'boom' }],
     ['rows-changed', rowsChanged(['000001:Test.esp']), { plugin: { name: 'Test.esp', origin: 'ModA' }, keys: ['000001:Test.esp'] }],
     ['plugin-changed', rowsChanged([], { kind: 'plugin-changed' }), { plugin: { name: 'Test.esp', origin: 'ModA' } }],
+    ['mod-status-changed', rowsChanged([], { kind: 'mod-status-changed', mods: ['ModA', 'ModB'] }), { mods: ['ModA', 'ModB'] }],
   ];
 
   it.each(cases)('hands a %s listener its kind\'s payload', (kind, event, payload) => {

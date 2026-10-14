@@ -16,8 +16,8 @@ internal sealed class StatCache
     private readonly string _folder;
     private readonly string _file;
     private readonly string _modFolder;
-    private readonly Dictionary<string, Entry> _read = new(StringComparer.Ordinal);
-    private readonly Dictionary<(string Source, string Path), string> _providers = [];
+    private readonly Dictionary<string, Entry> _read;
+    private readonly Dictionary<(string Source, string Path), string> _providers;
     private readonly StampGatedMemo<string> _memo;
 
     public StatCache(string folder, string modFolder, TimeProvider time)
@@ -26,14 +26,20 @@ internal sealed class StatCache
         _modFolder = modFolder;
         _file = Path.Combine(folder, Path.GetFileName(Path.TrimEndingDirectorySeparator(modFolder)));
         _memo = new StampGatedMemo<string>(time);
-        var content = Read(_file);
+        (_read, _providers) = Parsed(Read(_file));
+        foreach (var (path, entry) in _read) _memo.Remember(FileAt(path), new FileStamp(entry.Size, entry.Modified, entry.Changed), entry.Hash);
+    }
+
+    private static (Dictionary<string, Entry> Files, Dictionary<(string Source, string Path), string> Providers) Parsed(Content content)
+    {
+        Dictionary<string, Entry> files = new(StringComparer.Ordinal);
         foreach (var (path, entry) in content.Files ?? [])
         {
-            if (entry is null) continue;
-            _read[path] = entry;
-            _memo.Remember(FileAt(path), new FileStamp(entry.Size, entry.Modified, entry.Changed), entry.Hash);
+            if (entry is not null) files[path] = entry;
         }
-        foreach (var provider in (content.Providers ?? []).OfType<ProviderHash>()) _providers[(provider.Source, provider.Path)] = provider.Hash;
+        Dictionary<(string Source, string Path), string> providers = [];
+        foreach (var provider in (content.Providers ?? []).OfType<ProviderHash>()) providers[(provider.Source, provider.Path)] = provider.Hash;
+        return (files, providers);
     }
 
     public string HashOf(string path, Func<string> read) =>
@@ -41,9 +47,28 @@ internal sealed class StatCache
 
     public string? HashFixedBy((string Source, string Path) provider) => _providers.GetValueOrDefault(provider);
 
+    // A status reads beside an update or a restore of the same mod, and each writes the whole cache.
+    private static readonly Lock Writing = new();
+
     /// <summary>Writes what this read kept of the files at <paramref name="paths"/>, and <paramref name="providers"/>, in
     /// place of what it found, and nothing when the two are the same. Why it could not, or null.</summary>
     public string? Write(IReadOnlyList<string> paths, IReadOnlyDictionary<(string Source, string Path), string> providers)
+    {
+        lock (Writing) return Write(Kept(paths), _read, providers, _providers);
+    }
+
+    /// <summary>Writes what this read kept of the files at <paramref name="paths"/> beside the provider hashes the cache
+    /// holds as it writes, which an update or a restore can have written since this read.</summary>
+    public string? Keep(IReadOnlyList<string> paths)
+    {
+        lock (Writing)
+        {
+            var (files, providers) = Parsed(Read(_file));
+            return Write(Kept(paths), files, providers, providers);
+        }
+    }
+
+    private Dictionary<string, Entry> Kept(IReadOnlyList<string> paths)
     {
         Dictionary<string, Entry> kept = new(StringComparer.Ordinal);
         foreach (var path in paths)
@@ -51,7 +76,14 @@ internal sealed class StatCache
             if (_memo.Known.TryGetValue(FileAt(path), out var known))
                 kept[path] = new Entry(known.Stamp.Size, known.Stamp.Modified, known.Stamp.Changed, known.Value);
         }
-        if (Same(kept, _read) && Same(providers, _providers)) return null;
+        return kept;
+    }
+
+    private string? Write(
+        Dictionary<string, Entry> kept, Dictionary<string, Entry> found,
+        IReadOnlyDictionary<(string Source, string Path), string> providers, Dictionary<(string Source, string Path), string> foundProviders)
+    {
+        if (Same(kept, found) && Same(providers, foundProviders)) return null;
 
         try
         {

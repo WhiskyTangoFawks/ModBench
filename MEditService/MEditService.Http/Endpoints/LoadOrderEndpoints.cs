@@ -1,4 +1,5 @@
 using MEditService.Commands;
+using MEditService.Commands.Build;
 using MEditService.LoadOrder;
 
 namespace MEditService.Http.Endpoints;
@@ -17,7 +18,9 @@ internal static class LoadOrderEndpoints
                 "Reconciles the load order against this snapshot (ADR-0013): every plugin file in " +
                 "the instance, each with its origin, path, provider, strings files and archives, the active plugins in load order, " +
                 "the plugins loaded with no line, the archives the game loads and the loose strings files it reads, as Mod Management decided them. " +
-                "Every archive and strings file carries its stamp. Plugins new to the snapshot are opened and " +
+                "Every archive and strings file carries its stamp. It names each mod, by its folder with the files of it the repository " +
+                "commits, and the stat cache's folder, and each mod whose status then changed is pushed as mod-status-changed. " +
+                "Plugins new to the snapshot are opened and " +
                 "registered (indexed only if never seen), plugins absent from it are unregistered, " +
                 "plugins whose load index moved are re-registered SQL-only; then one winner sweep. " +
                 "Answers as soon as the snapshot is applied; the sweep runs after, reported on " +
@@ -44,14 +47,17 @@ internal static class LoadOrderEndpoints
         }
         // Never defaulted here (ADR-0013).
         if (req.Active is not { } active || req.LoadedWithNoLine is not { } loadedWithNoLine
-            || req.Archives is not { } archives || req.StringsFiles is not { } stringsFiles || !AllStamped(archives, stringsFiles))
+            || req.Archives is not { } archives || req.StringsFiles is not { } stringsFiles || !AllStamped(archives, stringsFiles)
+            || req.Mods is not { } mods || string.IsNullOrWhiteSpace(req.StatCache)
+            || mods.Any(mod => string.IsNullOrWhiteSpace(mod?.Name) || string.IsNullOrWhiteSpace(mod.Folder)))
         {
-            return Results.Problem("The snapshot must state its active plugins, those loaded with no line, its archives and its strings files.", statusCode: 400);
+            return Results.Problem("The snapshot must state its active plugins, those loaded with no line, its archives, its strings files, its mods and the stat cache's folder.", statusCode: 400);
         }
 
         var result = handler.Put(
             req.GameDirectory, req.InstanceRoot, gameRelease,
-            registered, active, loadedWithNoLine, archives, stringsFiles);
+            registered, active, loadedWithNoLine, archives, stringsFiles,
+            new SnapshotMods([.. mods.Select(mod => new SnapshotMod(mod.Name, mod.Folder, mod.CommittedFiles ?? []))], req.StatCache));
         return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : EndpointMapping.Refusal(result);
     }
 

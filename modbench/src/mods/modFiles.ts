@@ -50,10 +50,12 @@ export function fileRowUri(origin: FileOrigin, relativePath: string): vscode.Uri
   return vscode.Uri.from({ scheme: FILE_ROW_SCHEME, path: `/${originPart}/${relativePath}` });
 }
 
-function fileRow(row: vscode.TreeItem, parent: ModlistNode, origin: FileOrigin, name: string, relativePath: string): void {
+// mods.md, A row, File and folder: the description says differs (modlist-source.md, Status, story 4).
+function fileRow(row: vscode.TreeItem, parent: ModlistNode, origin: FileOrigin, name: string, relativePath: string, differs: boolean): void {
   row.id = `${parent.id}/${name}`;
   row.resourceUri = fileRowUri(origin, relativePath);
   row.tooltip = relativePath;
+  if (differs) row.description = 'differs';
 }
 
 /** A folder in a mod or Overwrite, and the files and folders under it. */
@@ -67,9 +69,10 @@ export class FolderNode extends vscode.TreeItem {
     public readonly folders: readonly OriginFolder[],
     name: string,
     public readonly shown: ChildrenShown = 'all',
+    differs = false,
   ) {
     super(name, expanderOver([...files, ...folders], shown));
-    fileRow(this, parent, origin, name, folder.relativePath);
+    fileRow(this, parent, origin, name, folder.relativePath, differs);
     this.contextValue = 'folder';
   }
 }
@@ -94,9 +97,10 @@ export class FileNode extends vscode.TreeItem {
     public readonly file: OriginFile,
     name: string,
     public readonly conflict: FileOrderConflict = 'none',
+    differs = false,
   ) {
     super(name, vscode.TreeItemCollapsibleState.None);
-    fileRow(this, parent, origin, name, file.relativePath);
+    fileRow(this, parent, origin, name, file.relativePath, differs);
     this.exclusion = FILE_MARKS[file.excludedByName ? 'Excluded' : 'Included'].state;
     this.contextValue = ['file', conflict !== 'none' && 'conflict', conflict === 'loses' && 'losing', this.exclusion].filter(Boolean).join(' ');
     this.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(file.path), { preview: true }] };
@@ -111,7 +115,10 @@ export class FileNode extends vscode.TreeItem {
  *  those under it, and `path` is its own path in its mod, none for the mod or Overwrite itself. */
 export function filesIn(
   parent: ModlistNode, origin: FileOrigin, files: readonly OriginFile[], folders: readonly OriginFolder[], path?: string,
-  filter?: { shown: ChildrenShown; matches: NameMatch; conflict: (origin: FileOrigin, file: OriginFile) => FileOrderConflict },
+  filter?: {
+    shown: ChildrenShown; matches: NameMatch; conflict: (origin: FileOrigin, file: OriginFile) => FileOrderConflict;
+    differs: (origin: FileOrigin, relativePath: string) => boolean;
+  },
 ): (FolderNode | FileNode)[] {
   const prefix = path === undefined ? '' : `${path}/`;
   const ownFiles = byLevel(files, prefix);
@@ -119,8 +126,9 @@ export function filesIn(
   return [
     ...[...ownFolders.here].sort(byName).map(([name, folder]) => new FolderNode(
       parent, origin, folder, ownFiles.below.get(name) ?? [], ownFolders.below.get(name) ?? [], name,
-      filter ? shownUnder(filter.shown, filter.matches, name) : 'all',
+      filter ? shownUnder(filter.shown, filter.matches, name) : 'all', filter?.differs(origin, folder.relativePath),
     )),
-    ...[...ownFiles.here].sort(byName).map(([name, file]) => new FileNode(parent, origin, file, name, filter?.conflict(origin, file))),
+    ...[...ownFiles.here].sort(byName).map(([name, file]) =>
+      new FileNode(parent, origin, file, name, filter?.conflict(origin, file), filter?.differs(origin, file.relativePath))),
   ];
 }

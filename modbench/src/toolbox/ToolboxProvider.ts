@@ -37,6 +37,20 @@ function profileRow({ activeProfile }: InstanceValue): vscode.TreeItem {
   return row;
 }
 
+function modlistRow({ holdsRepository }: InstanceValue): vscode.TreeItem {
+  const row = new vscode.TreeItem('Modlist');
+  row.iconPath = new vscode.ThemeIcon('source-control');
+  row.contextValue = 'modlist';
+  if (holdsRepository) {
+    row.description = 'repository';
+    return row;
+  }
+  row.description = 'no repository';
+  row.tooltip = 'Git init';
+  row.command = { command: 'modbench.modlist.gitInit', title: 'Git Init Modlist' };
+  return row;
+}
+
 /** A readout of the instance itself, one fact per row, read from the instance value alone
  *  (ADR-0015). */
 export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>, vscode.Disposable {
@@ -83,6 +97,6 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
     if (instance.sequence === 0) {
       return instance.readFailure === undefined ? [] : [new ErrorNode(instance.readFailure)];
     }
-    return [gameRow(instance.value), profileRow(instance.value)];
+    return [gameRow(instance.value), profileRow(instance.value), modlistRow(instance.value)];
   }
 }

@@ -17,6 +17,8 @@ function snapshot(name: string): LoadOrderSnapshot {
     loadedWithNoLine: [],
     archives: [],
     stringsFiles: [],
+    mods: [],
+    statCache: '/instance/stat-cache',
     gameDirectory: '/game/Data',
     instanceRoot: '/instance',
     gameRelease: 'Fallout4',

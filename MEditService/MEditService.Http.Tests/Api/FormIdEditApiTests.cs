@@ -31,6 +31,8 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins.Where(p => p.Origin == Origin)),
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
+            mods = Array.Empty<object>(),
+            statCache = "stat-cache",
             gameRelease = "Fallout4",
         });
         load.EnsureSuccessStatusCode();

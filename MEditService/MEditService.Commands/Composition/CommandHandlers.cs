@@ -161,7 +161,8 @@ public static class CommandHandlers
             new ExternalChangeCheck(
                 sp.GetRequiredService<INotificationPublisher>(),
                 sp.GetRequiredService<IPluginAdapter>(),
-                sp.GetRequiredService<ISourceAdapter>())));
+                sp.GetRequiredService<ISourceAdapter>()),
+            new ModStatusCheck(sp.GetRequiredService<IModFolderRepository>(), sp.GetRequiredService<INotificationPublisher>())));
 
         return services;
     }

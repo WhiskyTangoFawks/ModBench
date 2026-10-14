@@ -13,6 +13,8 @@ import type { Sync } from '../drivingLib/syncFailureReport';
 import { modsKeyContext } from './gestureEntry';
 import { onModCheckboxChanged } from './modCheckboxHandler';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
+import { ModStatuses, type ReadStatus } from './modStatuses';
+import type { MEditClient } from '../client';
 import { registerModDecorations } from './modDecorations';
 import { registerModInstallCommands } from './installCommands';
 import { registerCompareFileCommand } from './compareFile';
@@ -37,6 +39,8 @@ interface ModsViewDeps {
   nexusRow: () => NexusModRow | undefined;
   /** Mod sync, whose failure the view's message line says. */
   modSync: Sync<ModSyncArguments>;
+  /** Each mod's status: mEdit pushes the mods whose status changed, and the view reads them. */
+  modStatus: { push: Pick<MEditClient, 'onNotification'>; read: ReadStatus };
 }
 
 interface ModsView extends vscode.Disposable {
@@ -50,7 +54,8 @@ interface ModsView extends vscode.Disposable {
  *  the loser silently vanishes. */
 export function createModsView(deps: ModsViewDeps): ModsView {
   const { instance, commands, log, modSync, reporterFor, ask, trash } = deps;
-  const provider = new ModListProvider({ instance });
+  const statuses = new ModStatuses(deps.modStatus.push, deps.modStatus.read, log);
+  const provider = new ModListProvider({ instance, statuses });
   const view = vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: provider,
     canSelectMany: true,
@@ -72,6 +77,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
   });
   const showCount = () => nameFilter.setBaseDescription(provider.description());
   showCount();
+  const showBadge = () => { view.badge = provider.badge(); };
   nameFilter.refresh();
   const showKeyContext = () => {
     for (const [name, value] of Object.entries(modsKeyContext(view.selection, (row) => provider.isEnabled(row)))) {
@@ -83,6 +89,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
   // Disposed in order: what reads the tree and the view goes before them.
   const disposable = vscode.Disposable.from(
     provider.onDidChangeTreeData(showCount),
+    provider.onDidChangeTreeData(showBadge),
     view.onDidChangeSelection(showKeyContext),
     provider.onDidChangeTreeData(showKeyContext),
     provider.onDidChangeTreeData(expand),
@@ -117,6 +124,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     nameFilter,
     view,
     provider,
+    statuses,
   );
   return {
     view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },

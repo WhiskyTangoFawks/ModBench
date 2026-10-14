@@ -18,6 +18,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { ModListProvider, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
+import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { modArgumentOf } from '../../drivingLib/argument';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
@@ -64,7 +65,7 @@ const explicitFailureIfNotSettledWithin = <T>(pending: Promise<T>, ms: number): 
 const makeProvider = (
   mods: ModlistEntry[],
   extra: Partial<{ instance: FakeInstance }> = {},
-) => new ModListProvider({ instance: extra.instance ?? new FakeInstance(valueOf(mods)) });
+) => new ModListProvider({ statuses: NO_MOD_STATUSES, instance: extra.instance ?? new FakeInstance(valueOf(mods)) });
 
 const orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt = ():ModlistEntry[] => [
   mod('Late Tweak'),
@@ -404,7 +405,7 @@ describe('ModListProvider', () => {
 
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
     const instance = new FakeInstance(valueOf([]), SEQUENCE_NOT_READ_YET);
-    const provider = new ModListProvider({ instance });
+    const provider = new ModListProvider({ statuses: NO_MOD_STATUSES, instance });
 
     const pending = provider.getChildren();
     instance.publish(valueOf([mod('A'), mod('B')]));

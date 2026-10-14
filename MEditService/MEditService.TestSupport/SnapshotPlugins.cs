@@ -28,7 +28,8 @@ public static class SnapshotPlugins
 
     /// <summary>The PUT /load-order body.</summary>
     public static object Body(
-        string gameDirectory, string instanceRoot, IEnumerable<LoadOrderEntry> entries, string gameRelease = "Fallout4")
+        string gameDirectory, string instanceRoot, IEnumerable<LoadOrderEntry> entries, string gameRelease = "Fallout4",
+        object? mods = null, string statCache = "stat-cache")
     {
         var list = entries.ToList();
         return new
@@ -40,6 +41,8 @@ public static class SnapshotPlugins
             loadedWithNoLine = LoadedWithNoLine(list),
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
+            mods = mods ?? Array.Empty<object>(),
+            statCache,
             gameRelease,
         };
     }

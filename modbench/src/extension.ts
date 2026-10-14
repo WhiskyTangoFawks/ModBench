@@ -56,7 +56,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex' | 'handStringsLanguage'
-  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build' | 'init' | 'updateManifest' | 'restoreFromManifest' | 'getWhatRestoreDestroys' | 'changeBuildConfiguration'>;
+  | 'getModStatus' | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build' | 'init' | 'updateManifest' | 'restoreFromManifest' | 'getWhatRestoreDestroys' | 'changeBuildConfiguration'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -140,6 +140,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     log: (line) => outputChannel.warn(`[downloads] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
+  const modlist = modlistSourceCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(instanceRoot), trash });
   const mods = own(createModsView({
     instance, commands: modlistCommands(adapter, client), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
@@ -148,6 +149,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
       progressViewId: DOWNLOADS_KEY_ARGS.view,
     },
     nexusRow: nexusRowInFocusedView(own, deps.focusedView, ['modbench.modList', 'modbench.downloads'], 'modbench.mod.nexusRowIn'),
+    modStatus: { push: client, read: (names) => modlist.modStatus(names) },
   }));
   const { editing } = plugins;
   void editing.enter(instance.landed());
@@ -161,7 +163,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));
   own(publishRepository(instance, instanceRoot));
   ownAll(own, registerModlistCommands({
-    commands: modlistSourceCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(instanceRoot), trash }),
+    commands: modlist,
     instance, reporter: reporterFor('modlist'), ask, say: (message) => { toolboxProvider.say(message); }, focusedView: deps.focusedView, modsView: MODS_KEY_ARGS.view,
   }));
   own(deps.focusedView.follow('modbench.modList', mods.view));

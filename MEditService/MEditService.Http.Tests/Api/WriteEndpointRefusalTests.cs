@@ -39,6 +39,8 @@ public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins),
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
+            mods = Array.Empty<object>(),
+            statCache = "stat-cache",
             gameRelease = "Fallout4",
         });
         load.EnsureSuccessStatusCode();
