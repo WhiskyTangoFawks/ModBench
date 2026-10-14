@@ -5,7 +5,21 @@ namespace MEditService.ModFolderAdapter;
 public sealed record Manifest(
     IReadOnlyList<ManifestSource> InstallationFiles,
     IReadOnlyList<ManifestSource> GameFiles,
-    IReadOnlyList<ManifestFile> Files);
+    IReadOnlyList<ManifestFile> Files)
+{
+    /// <summary>The provider of <paramref name="file"/>, by its source's hash and the path in it: what fixes the file's
+    /// bytes. Null when the line names none.</summary>
+    internal (string Source, string Path)? ProviderOf(ManifestFile file) => file.Provider switch
+    {
+        FileProvider.FirstInstallationFile when InstallationFiles is [var first, ..] => (first.Hash, file.Path),
+        FileProvider.InstallationFileEntry entry when InstallationFiles.FirstOrDefault(source => source.Name == entry.InstallationFile) is { } named =>
+            (named.Hash, entry.Path),
+        FileProvider.GameFile game
+            when GameFiles.FirstOrDefault(source => string.Equals(source.Name, game.Path, StringComparison.OrdinalIgnoreCase)) is { } named =>
+            (named.Hash, game.Path),
+        _ => null,
+    };
+}
 
 /// <summary>An installation file by its name, or a game file by its path under the game folder. Source is
 /// where the mod manager says the installation file comes from.</summary>

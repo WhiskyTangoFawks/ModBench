@@ -46,10 +46,27 @@ internal sealed class FakeModFolders : IModFolderRepository
         if (!_folders.Contains(modFolder)) throw new DirectoryNotFoundException(modFolder);
         var files = _files.Where(f => f.Key.Folder == modFolder && !leftOut.Contains(f.Key.Path)).ToList();
         if (files.FirstOrDefault(f => Unreadable.Contains(f.Key)) is { Key.Path: { } held }) throw new IOException($"{held} is held by another process");
-        return new(
-            [.. files.Select(f => new HashedFile(f.Key.Path, Encoding.ASCII.GetString(f.Value)))],
-            statCache is not null && UnwritableStatCaches.Contains(modFolder) ? $"{statCache} is read-only" : null);
+        return new([.. files.Select(f => new HashedFile(f.Key.Path, Encoding.ASCII.GetString(f.Value)))]);
     }
+
+    /// <summary>Each mod folder's hashes kept as its providers fix them, by path.</summary>
+    public Dictionary<string, IReadOnlyDictionary<string, string>> KeptProviderHashes { get; } = [];
+
+    public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided)
+    {
+        var modFolder = Manifests.First(held => ReferenceEquals(held.Value, manifest)).Key;
+        KeptProviderHashes[modFolder] = provided;
+        return UnwritableStatCaches.Contains(modFolder) ? "stat-cache is read-only" : null;
+    }
+
+    public IReadOnlyList<string> NamedByNoLine(string modFolder, string modName, Manifest manifest, IReadOnlySet<string> leftOut)
+    {
+        var named = manifest.Files.Select(line => line.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return [.. FilePaths(modFolder).Where(path => !named.Contains(path) && !leftOut.Contains(path))];
+    }
+
+    public RestoreDestroys WhatRestoreDestroys(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache) =>
+        throw new NotSupportedException("No command asks what restore destroys: the HTTP endpoint asks the Mod folder adapter.");
 
     public Stream OpenFile(string modFolder, string path) => Open(modFolder, path);
 

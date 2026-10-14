@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class RestoreFromManifestApiTests : HostedTests
+public sealed class RestoreFromManifestTraceTests : HostedTests
 {
     private const string Mod = "RestoredMod";
     private const string HashOfKept = "gO3vE0ddOto=";
@@ -28,6 +28,8 @@ public sealed class RestoreFromManifestApiTests : HostedTests
 
     private string Downloads => Path.Combine(_instance, "downloads");
 
+    private string StatCache => Path.Combine(_instance, "stat-cache");
+
     private static string Original => string.Concat(Enumerable.Range(0, 1000).Select(line => $"{line:D7}\n"));
 
     private string FileText(string path) => File.ReadAllText(Path.Combine(ModFolder, path));
@@ -38,6 +40,7 @@ public sealed class RestoreFromManifestApiTests : HostedTests
         File.WriteAllText(Path.Combine(ModFolder, "kept.txt"), "kept");
         File.WriteAllText(Path.Combine(ModFolder, "edited.txt"), Original);
         File.WriteAllText(Path.Combine(ModFolder, "Game.esm"), "vanilla");
+        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "[General]");
         Directory.CreateDirectory(Downloads);
         using var zip = ZipFile.Open(Path.Combine(Downloads, "Mod.zip"), ZipArchiveMode.Create);
         foreach (var (entry, content) in new[] { ("kept.txt", "kept"), ("edited.txt", Original) })
@@ -45,6 +48,16 @@ public sealed class RestoreFromManifestApiTests : HostedTests
             using var writer = new StreamWriter(zip.CreateEntry(entry).Open());
             writer.Write(content);
         }
+    }
+
+    private void ChangedSinceItsUpdate()
+    {
+        Directory.CreateDirectory(Path.Combine(_instance, "game", "Data"));
+        File.WriteAllText(Path.Combine(_instance, "game", "Data", "Game.esm"), "vanilla");
+        File.WriteAllText(Path.Combine(ModFolder, "edited.txt"), "edited");
+        File.Delete(Path.Combine(ModFolder, "kept.txt"));
+        File.Delete(Path.Combine(ModFolder, "Game.esm"));
+        File.WriteAllText(Path.Combine(ModFolder, "untracked.txt"), "mine");
     }
 
     private JsonObject Request(string gesture, string downloadName)
@@ -57,11 +70,15 @@ public sealed class RestoreFromManifestApiTests : HostedTests
             ["entries"] = new JsonArray(
                 new JsonObject { ["path"] = "kept.txt", ["hash"] = HashOfKept }, new JsonObject { ["path"] = "edited.txt", ["hash"] = HashOfOriginal }),
         };
+        var mod = new JsonObject
+        {
+            ["name"] = Mod, ["folder"] = ModFolder, ["installationFiles"] = new JsonArray(installationFile), ["committedFiles"] = new JsonArray("meta.ini"),
+        };
         var request = new JsonObject
         {
-            ["mods"] = new JsonArray(new JsonObject { ["name"] = Mod, ["folder"] = ModFolder, ["installationFiles"] = new JsonArray(installationFile) }),
+            ["mods"] = new JsonArray(mod),
             ["gameFiles"] = new JsonArray(new JsonObject { ["path"] = "Game.esm", ["size"] = 7, ["hash"] = HashOfVanilla }),
-            ["statCache"] = Path.Combine(_instance, "stat-cache"),
+            ["statCache"] = StatCache,
             ["gesture"] = Gesture,
         };
         if (gesture == "restore-from-manifest") request["dataFolder"] = Path.Combine(_instance, "game", "Data");
@@ -75,19 +92,84 @@ public sealed class RestoreFromManifestApiTests : HostedTests
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
+    private JsonObject WhatRestoreDestroysRequest() => new()
+    {
+        ["mods"] = new JsonArray(new JsonObject { ["name"] = Mod, ["folder"] = ModFolder, ["committedFiles"] = new JsonArray("meta.ini") }),
+        ["statCache"] = StatCache,
+    };
+
+    private async Task<JsonElement> WhatRestoreDestroys()
+    {
+        var response = await Client.PostAsJsonAsync("/what-restore-destroys", WhatRestoreDestroysRequest());
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("mods");
+    }
+
+    private static IEnumerable<string?> Paths(JsonElement mod, string list) =>
+        [.. mod.GetProperty(list).EnumerateArray().Select(path => path.GetString()).Order(StringComparer.Ordinal)];
+
     [Fact]
-    public async Task RestoringAModJustUpdated_OpensNoFileTheUpdateRead_AndWritesNoFile()
+    public async Task AModJustUpdated_RestoreDestroysNothing_AndRestoringItOpensNoFileTheUpdateRead_AndWritesNoFile()
     {
         ModInstalledFromADownload();
         await Post("update-manifest");
         using var held = new FileStream(Path.Combine(ModFolder, "kept.txt"), FileMode.Open, FileAccess.Read, FileShare.None);
 
+        var destroys = await WhatRestoreDestroys();
         var body = await Post("restore-from-manifest");
 
+        Assert.Empty(destroys.EnumerateArray());
         var restored = Assert.Single(body.GetProperty("applied").EnumerateArray());
         Assert.Equal(Mod, restored.GetProperty("mod").GetString());
         Assert.Empty(restored.GetProperty("written").EnumerateArray());
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task AModChangedSinceItsUpdate_ListsWhatRestoreDestroys_ButTheCommittedFiles()
+    {
+        ModInstalledFromADownload();
+        await Post("update-manifest");
+        ChangedSinceItsUpdate();
+
+        var destroys = Assert.Single((await WhatRestoreDestroys()).EnumerateArray());
+
+        Assert.Equal(Mod, destroys.GetProperty("mod").GetString());
+        Assert.Equal(["edited.txt"], Paths(destroys, "differing"));
+        Assert.Equal(["untracked.txt"], Paths(destroys, "namedByNoLine"));
+    }
+
+    [Fact]
+    public async Task RestoringAModChangedSinceItsUpdate_BringsEveryFileBack_AGameFilesFromTheGame_NamesEachFileNoLineNames_AndReportsItsProgressUnderItsGesture()
+    {
+        ModInstalledFromADownload();
+        await Post("update-manifest");
+        ChangedSinceItsUpdate();
+        using var stream = await Client.NotificationStream();
+
+        var body = await Post("restore-from-manifest");
+
+        var restored = Assert.Single(body.GetProperty("applied").EnumerateArray());
+        Assert.Equal(["Game.esm", "edited.txt", "kept.txt"], Paths(restored, "written"));
+        Assert.Equal(["untracked.txt"], Paths(restored, "namedByNoLine"));
+        Assert.Equal((Original, "kept", "vanilla"), (FileText("edited.txt"), FileText("kept.txt"), FileText("Game.esm")));
+        var progress = await stream.EventsUntil("restore-from-manifest-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
+        Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Mod);
+        Assert.All(progress, e => Assert.Equal(Gesture, e.GetProperty("modlistProgress").GetProperty("gesture").GetString()));
+    }
+
+    [Fact]
+    public async Task AModJustRestored_RestoreDestroysOnlyTheFilesNoLineNames()
+    {
+        ModInstalledFromADownload();
+        await Post("update-manifest");
+        ChangedSinceItsUpdate();
+        await Post("restore-from-manifest");
+
+        var destroys = Assert.Single((await WhatRestoreDestroys()).EnumerateArray());
+
+        Assert.Empty(Paths(destroys, "differing"));
+        Assert.Equal(["untracked.txt"], Paths(destroys, "namedByNoLine"));
     }
 
     [Fact]
@@ -106,31 +188,6 @@ public sealed class RestoreFromManifestApiTests : HostedTests
         Assert.Contains(taken, restored.GetProperty("statCacheNotWritten").GetString(), StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task RestoringAModChangedSinceItsUpdate_BringsEveryFileBack_AGameFilesFromTheGame_LeavesAnUntrackedFile_AndReportsItsProgressUnderItsGesture()
-    {
-        ModInstalledFromADownload();
-        await Post("update-manifest");
-        Directory.CreateDirectory(Path.Combine(_instance, "game", "Data"));
-        File.WriteAllText(Path.Combine(_instance, "game", "Data", "Game.esm"), "vanilla");
-        File.WriteAllText(Path.Combine(ModFolder, "edited.txt"), "edited");
-        File.Delete(Path.Combine(ModFolder, "kept.txt"));
-        File.Delete(Path.Combine(ModFolder, "Game.esm"));
-        File.WriteAllText(Path.Combine(ModFolder, "untracked.txt"), "mine");
-        using var stream = await Client.NotificationStream();
-
-        var body = await Post("restore-from-manifest");
-
-        var restored = Assert.Single(body.GetProperty("applied").EnumerateArray());
-        Assert.Equal(
-            ["Game.esm", "edited.txt", "kept.txt"], restored.GetProperty("written").EnumerateArray().Select(path => path.GetString()).Order(StringComparer.Ordinal));
-        Assert.Equal(
-            (Original, "kept", "vanilla", "mine"), (FileText("edited.txt"), FileText("kept.txt"), FileText("Game.esm"), FileText("untracked.txt")));
-        var progress = await stream.EventsUntil("restore-from-manifest-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
-        Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Mod);
-        Assert.All(progress, e => Assert.Equal(Gesture, e.GetProperty("modlistProgress").GetProperty("gesture").GetString()));
-    }
-
     [Theory]
     [InlineData("mods", "[]")]
     [InlineData("gameFiles", null)]
@@ -143,6 +200,21 @@ public sealed class RestoreFromManifestApiTests : HostedTests
         else request[field] = JsonNode.Parse(json);
 
         var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("mods", "[]")]
+    [InlineData("mods", "[{\"name\":\"RestoredMod\"}]")]
+    [InlineData("statCache", null)]
+    public async Task AskingWhatRestoreDestroysWithAFieldMissingOrMalformed_Is400(string field, string? json)
+    {
+        var request = WhatRestoreDestroysRequest();
+        if (json is null) request.Remove(field);
+        else request[field] = JsonNode.Parse(json);
+
+        var response = await Client.PostAsJsonAsync("/what-restore-destroys", request);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
