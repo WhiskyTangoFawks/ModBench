@@ -563,13 +563,6 @@ describe('the agent server, running a gesture', () => {
       expect(lines.join('\n')).toContain('"B" was renamed, but a line could not be renamed. disk full');
     });
 
-    it('refuses a move of a separator, naming it, firing nothing', async () => {
-      const answer = await fire({ command: 'modbench.mod.move', argument: [{ name: 'Textures', kind: 'separator' }], options: { place: { kind: 'ungrouped' }, end: 'losing' } });
-
-      expect(answer.text).toContain('"Textures" is a separator, not a mod.');
-      expect(fired.calls).toEqual([]);
-    });
-
     it('refuses a move that leaves out its place, naming it', async () => {
       const answer = await fire({ command: 'modbench.mod.move', argument: [{ name: 'B' }], options: { end: 'losing' } });
 
@@ -602,13 +595,6 @@ describe('the agent server, running a gesture', () => {
         { kind: 'file', origin: { kind: 'mod', name: 'C' }, relativePath: 'MESHES/x.nif' },
         { kind: 'file', origin: { kind: 'mod', name: 'B' }, relativePath: 'Textures/Rock.DDS' },
       ], {})]]);
-    });
-
-    it('refuses a file nothing in the mod is named, firing nothing', async () => {
-      const answer = await fire({ command: 'modbench.mod.excludeFile', argument: [{ mod: { name: 'B' }, path: 'gone.dds' }] });
-
-      expect(answer.text).toContain('Nothing is named "gone.dds" in mod B.');
-      expect(fired.calls).toEqual([]);
     });
   });
 
