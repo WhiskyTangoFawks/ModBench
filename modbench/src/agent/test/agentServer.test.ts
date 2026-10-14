@@ -383,7 +383,7 @@ describe('the agent server, selecting records through mEdit', () => {
 
 describe('the agent server, reading a record through mEdit', () => {
   const NPC = [{ formKey: '000800:A.esp', editorId: 'SharedNpc' }];
-  const comparison = { overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Npc' } as unknown as CompareResult;
+  const comparison: CompareResult = { overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Npc' };
 
   it('answers every active copy and the winner when it names no plugin', async () => {
     const mEdit = new InMemoryMEditClient();
