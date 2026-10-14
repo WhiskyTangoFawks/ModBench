@@ -61,7 +61,7 @@ public sealed class GameDataStringsTests : IDisposable
             handed ?? HandedStrings.Of(pluginPath));
 
     [Fact]
-    public void StringsPlacesOf_APluginWhoseStringsAreInOneOfTwoArchivesTheGameLoads_IsThatArchive()
+    public void ThePlaceOfAPluginsStringsInOneOfTwoLoadedArchivesIsThatArchive()
     {
         var other = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "Other")).FullName, "Other.esm");
         LocalizedDoorPlugin.Write(other, "The Other Door");
@@ -73,7 +73,7 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     [Fact]
-    public void ReadContent_APluginLocalizedOrNot_SaysWhichItIs()
+    public void AReadSaysWhetherAPluginIsLocalized()
     {
         var notLocalized = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "Plain")).FullName, PluginName);
         LocalizedDoorPlugin.WriteNameInPlugin(notLocalized, DoorName);
@@ -85,11 +85,11 @@ public sealed class GameDataStringsTests : IDisposable
         Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), pluginPath), LoadOrder, HandedStrings.Of(pluginPath)).Answered().Content.IsLocalized;
 
     [Fact]
-    public void StringsPlacesOf_AnArchiveRewrittenUnderAnUnchangedHandedStamp_IsNotListedAgain() =>
+    public void AnArchiveRewrittenUnderAnUnchangedHandedStampKeepsItsListing() =>
         Assert.Equal([[UpdateArchive], [UpdateArchive]], PlacesBeforeAndAfterAnotherPluginsStringsReplaceTheArchives(stampAfter: "1"));
 
     [Fact]
-    public void StringsPlacesOf_AnArchiveWhoseHandedStampChanged_IsListedAgain() =>
+    public void AnArchiveWhoseHandedStampChangedLosesItsOldListing() =>
         Assert.Equal([[UpdateArchive], []], PlacesBeforeAndAfterAnotherPluginsStringsReplaceTheArchives(stampAfter: "2"));
 
     private string UpdateArchive => Path.Combine(_dataFolder, "Update.bsa");
