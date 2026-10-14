@@ -179,7 +179,7 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
         var name = repository.DeltaName(file.Path, baseHash, file.Hash);
         var loose = repository.OpenDelta(instance.BuildFolder, instance.DownloadsFolder, file.Path, baseHash, file.Hash);
         if (loose is not null) _scratch.Add(loose);
-        Func<Stream>? open = loose is not null ? () => Rewound(loose) : PackedIn(name) is { } packed ? () => Extracted(packed) : null;
+        var open = OpenerOf(loose, name);
         if (open is null) return (null, [.. basis.Lacks, new Lack.DeltaMissing(name)]);
         return basis.Source is null ? (null, basis.Lacks) : (new DeltaSource(basis.Source, baseHash, open), []);
     }
@@ -209,6 +209,12 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
         if (repository.Hash(applied) != file.Hash) return otherBytes;
         appliedByPath[file.Path] = applied;
         return null;
+    }
+
+    private Func<Stream>? OpenerOf(Stream? loose, string deltaName)
+    {
+        if (loose is not null) return () => Rewound(loose);
+        return PackedIn(deltaName) is { } packed ? () => Extracted(packed) : null;
     }
 
     private static Stream Rewound(Stream loose)
