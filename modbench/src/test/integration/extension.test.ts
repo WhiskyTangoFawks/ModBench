@@ -535,11 +535,15 @@ describe('Mod sync', () => {
 });
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
-interface RecordToOpen { formKey: string; plugin?: { name: string; origin: string }; placement?: unknown }
+interface RecordToOpen { formKey: string; plugin?: { name: string; origin: string } }
 const carrying = ({ formKey, plugin }: RecordToOpen) => ({ argument: { kind: 'record', formKey, plugin } });
-const asArgument = (record: RecordToOpen) => ({ ...carrying(record), placement: record.placement });
-const openRecord = (records: RecordToOpen | RecordToOpen[]) =>
-  vscode.commands.executeCommand('modbench.record.open', Array.isArray(records) ? records.map(asArgument) : asArgument(records));
+const asArgument = (pinned?: true) => (record: RecordToOpen) => ({ ...carrying(record), pinned });
+const executeOpen = (records: RecordToOpen | RecordToOpen[], pinned?: true) =>
+  vscode.commands.executeCommand('modbench.record.open', Array.isArray(records) ? records.map(asArgument(pinned)) : asArgument(pinned)(records));
+const openRecord = (records: RecordToOpen | RecordToOpen[]) => executeOpen(records);
+const openPinnedRecord = (records: RecordToOpen | RecordToOpen[]) => executeOpen(records, true);
+const inSecondGroup = () => vscode.commands.executeCommand(
+  vscode.window.tabGroups.all.length < 2 ? 'workbench.action.newGroupRight' : 'workbench.action.focusSecondEditorGroup');
 
 const renderedName = (formKey: string) => `${formKey.replace(':', '_')}.json`;
 function renderedText(formKey: string): string {
@@ -574,7 +578,8 @@ describe('modbench.record.open', () => {
   });
 
   it('shows a record already open in a tab of its own, and does not open it twice', async () => {
-    await openRecord({ formKey: 'Fallout4.esm:000010', placement: 'beside' });
+    await inSecondGroup();
+    await openPinnedRecord({ formKey: 'Fallout4.esm:000010' });
     await waitFor('the pinned tab', () => hasRenderedTab('Fallout4.esm:000010') || undefined);
     const tabsBefore = openTabs().length;
 
@@ -585,7 +590,6 @@ describe('modbench.record.open', () => {
   });
 
   it('opens several records at once as one grid: the first record\'s document, which reads the others beside it in the order given', async () => {
-    const tabsBefore = openTabs().length;
     const winner = { name: 'Fallout4.esm', origin: 'Data/' };
     const copies = [{ formKey: 'Fallout4.esm:000011', plugin: winner }, { formKey: 'Fallout4.esm:000012', plugin: winner }];
     const askedSideBySide = () => comparedSideBySide.some((asked) => JSON.stringify(asked) === JSON.stringify(copies));
@@ -596,17 +600,19 @@ describe('modbench.record.open', () => {
     await waitFor('the first record\'s tab', () => hasRenderedTab('Fallout4.esm:000011') || undefined);
     await waitFor('the records read side by side', askedSideBySide);
 
-    assert.strictEqual(openTabs().length, tabsBefore + 1);
+    assert.strictEqual(openTabs().filter((t) => t.label === renderedName('Fallout4.esm:000011')).length, 1);
     assert.ok(!hasRenderedTab('Fallout4.esm:000012'), 'the second record is a column, not a tab');
   });
 
-  it('opens beside as a genuinely new tab, leaving the tab it was fired from alone', async () => {
-    await openRecord({ formKey: 'Fallout4.esm:000020', placement: 'beside' });
+  it('opens pinned in the second group as a genuinely new tab, leaving the tab it was fired from alone', async () => {
+    await inSecondGroup();
+    await openPinnedRecord({ formKey: 'Fallout4.esm:000020' });
     await waitFor('the seed tab', () => hasRenderedTab('Fallout4.esm:000020') || undefined);
     const tabsBefore = openTabs().length;
 
-    await openRecord({ formKey: 'Fallout4.esm:000021', placement: 'beside' });
-    await waitFor('the beside tab', () => hasRenderedTab('Fallout4.esm:000021') || undefined);
+    await inSecondGroup();
+    await openPinnedRecord({ formKey: 'Fallout4.esm:000021' });
+    await waitFor('the second group\'s tab', () => hasRenderedTab('Fallout4.esm:000021') || undefined);
 
     assert.strictEqual(openTabs().length, tabsBefore + 1);
     assert.ok(hasRenderedTab('Fallout4.esm:000020'), 'the seed tab is untouched');
@@ -615,7 +621,7 @@ describe('modbench.record.open', () => {
   it('reads the Argument of a Plugins-tree row from a menu to its own record', async () => {
     const row = { argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data/' }, formKey: 'Fallout4.esm:000030' } };
 
-    await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
+    await vscode.commands.executeCommand('modbench.record.openPinned', row, [row]);
 
     await waitFor('the RecordNode\'s tab', () => hasRenderedTab('Fallout4.esm:000030') || undefined);
   });
@@ -623,31 +629,33 @@ describe('modbench.record.open', () => {
   it('reads the Argument of a placed row from a menu to its own record', async () => {
     const row = { argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data/' }, formKey: 'Fallout4.esm:000040' } };
 
-    await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
+    await vscode.commands.executeCommand('modbench.record.openPinned', row, [row]);
 
     await waitFor('the ChildRecordNode\'s tab', () => hasRenderedTab('Fallout4.esm:000040') || undefined);
   });
 
-  it('a menu\'s multi-selection opens one grid, pinned, in a new group beside the active one', async () => {
+  it('a menu\'s multi-selection opens one grid, pinned, in the active group', async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllGroups');
     const selection = [
       { formKey: 'Fallout4.esm:000060' }, { formKey: 'Fallout4.esm:000061' }, { formKey: 'Fallout4.esm:000062' },
     ].map(carrying);
 
-    await vscode.commands.executeCommand('modbench.record.openToSide', selection[0], selection);
+    await vscode.commands.executeCommand('modbench.record.openPinned', selection[0], selection);
     const tab = await waitFor('the first selected record\'s tab', () =>
       vscode.window.tabGroups.all.flatMap((g) => g.tabs).find((t) => t.label === renderedName('Fallout4.esm:000060')));
 
     const tabsByGroup = vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => t.label));
-    assert.deepStrictEqual(tabsByGroup, [[], [renderedName('Fallout4.esm:000060')]]);
+    assert.deepStrictEqual(tabsByGroup, [[renderedName('Fallout4.esm:000060')]]);
     assert.strictEqual(tab.isPreview, false);
   });
 
   it('opens the headers of two untracked plugins of one file name from different origins as two tabs', async () => {
     const tabsBefore = openTabs().length;
 
-    await openRecord({ formKey: '000000:Twin.esp', plugin: { name: 'Twin.esp', origin: 'ModA' }, placement: 'beside' });
-    await openRecord({ formKey: '000000:Twin.esp', plugin: { name: 'Twin.esp', origin: 'ModB' }, placement: 'beside' });
+    await inSecondGroup();
+    await openPinnedRecord({ formKey: '000000:Twin.esp', plugin: { name: 'Twin.esp', origin: 'ModA' } });
+    await inSecondGroup();
+    await openPinnedRecord({ formKey: '000000:Twin.esp', plugin: { name: 'Twin.esp', origin: 'ModB' } });
     await waitFor('both Twin.esp tabs', () => openTabs().filter(t => t.label === '000000_Twin.esp.json').length === 2 || undefined);
 
     assert.strictEqual(openTabs().length, tabsBefore + 2);
@@ -802,9 +810,9 @@ describe('a child record of a tracked plugin', () => {
     answerEdit = () => refusedAsUntracked;
   });
 
-  const openLoaded = async (record: RecordToOpen) => {
+  const openLoaded = async (record: RecordToOpen, pinned?: true) => {
     const asked = requestLog.length;
-    await openRecord(record);
+    await executeOpen(record, pinned);
     await waitFor(`${record.formKey}'s page loaded, asking its read`,
       () => requestLog.slice(asked).includes(`GET /records/${encodeURIComponent(record.formKey)}/compare`));
   };
@@ -833,7 +841,8 @@ describe('a child record of a tracked plugin', () => {
       await openLoaded({ formKey, plugin });
       await vscode.commands.executeCommand('workbench.action.keepEditor');
     }
-    await openLoaded({ formKey: TRACKED_FORM_KEY, plugin, placement: 'beside' });
+    await inSecondGroup();
+    await openLoaded({ formKey: TRACKED_FORM_KEY, plugin }, true);
     const shows = (tab: vscode.Tab | undefined) =>
       tab?.input instanceof vscode.TabInputCustom ? [tab.input.uri.path, new URLSearchParams(tab.input.uri.query).get('formKey')] : [];
     await vscode.commands.executeCommand('workbench.action.focusSecondEditorGroup');
@@ -870,9 +879,10 @@ describe('a child record of a tracked plugin', () => {
     assert.strictEqual(recordTabs().length, 1);
   });
 
-  it('opens in a tab of its own beside its container\'s, on its container\'s file, titled with its own name', async () => {
+  it('opens in a tab of its own in the second group, on its container\'s file, titled with its own name', async () => {
     await openRecord({ formKey: TRACKED_FORM_KEY, plugin });
-    await openRecord({ ...childCopy, placement: 'beside' });
+    await inSecondGroup();
+    await openPinnedRecord({ ...childCopy });
 
     await waitFor('the child\'s tab titled with its EditorID', () => childTab()?.label === 'TrackedRef');
     assert.deepStrictEqual(recordTabs().map((t) => t.label).sort(), ['TrackedGun.json', 'TrackedRef']);
@@ -890,9 +900,10 @@ describe('a child record of a tracked plugin', () => {
     assert.strictEqual(recordTabs().length, 2);
   });
 
-  it('shows a change saved from its tab in its container\'s tab beside it, and one saved from the container\'s in its own', async () => {
+  it('shows a change saved from its tab in its container\'s tab in the other group, and one saved from the container\'s in its own', async () => {
     await openRecord({ formKey: TRACKED_FORM_KEY, plugin });
-    await openRecord({ ...childCopy, placement: 'beside' });
+    await inSecondGroup();
+    await openPinnedRecord({ ...childCopy });
     const child = await childDocument();
     const container = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
     const replaceAll = async (document: vscode.TextDocument, text: string) => {
@@ -927,7 +938,8 @@ describe('a child record of a tracked plugin', () => {
     const containerDocument = () => vscode.workspace.openTextDocument(vscode.Uri.file(cell));
     const openBoth = async () => {
       await openRecord({ formKey: CELL_FORM_KEY, plugin });
-      await openRecord({ ...childCopy, placement: 'beside' });
+      await inSecondGroup();
+      await openPinnedRecord({ ...childCopy });
       return { child: await childDocument(), container: await containerDocument() };
     };
 
@@ -958,7 +970,8 @@ describe('a child record of a tracked plugin', () => {
     it('leaves its own tab and its container\'s both saved when either saves, opened first on a file too large for VS Code to compare by content', async () => {
       await openRecord(childCopy);
       const child = await childDocument();
-      await openRecord({ formKey: CELL_FORM_KEY, plugin, placement: 'beside' });
+      await inSecondGroup();
+      await openPinnedRecord({ formKey: CELL_FORM_KEY, plugin });
       const container = await containerDocument();
       const large = { Padding: 'x'.repeat(1 << 20) };
 
@@ -975,7 +988,8 @@ describe('a child record of a tracked plugin', () => {
     });
 
     it('keeps every key typed in quick succession in its container\'s text editor, focused once its own tab\'s page has loaded, and saves them all', async () => {
-      await openLoaded({ ...childCopy, placement: 'beside' });
+      await inSecondGroup();
+      await openLoaded({ ...childCopy }, true);
       const child = await childDocument();
       const editor = await vscode.window.showTextDocument(await containerDocument(), vscode.ViewColumn.One);
       editor.selection = new vscode.Selection(0, 1, 0, 1);
@@ -1008,7 +1022,8 @@ describe('a child record of a tracked plugin', () => {
       return input instanceof vscode.TabInputCustom && vscode.workspace.textDocuments.find(({ uri }) => uri.toString() === input.uri.toString());
     });
     const typedInContainer = async () => {
-      await openRecord({ ...childCopy, placement: 'beside' });
+      await inSecondGroup();
+      await openPinnedRecord({ ...childCopy });
       const child = await shownDocumentOf(CHILD_FORM_KEY);
       const container = (await vscode.window.showTextDocument(await containerDocument(), vscode.ViewColumn.One)).document;
       await replace(container, cellText('Typed'));
@@ -1044,7 +1059,8 @@ describe('a child record of a tracked plugin', () => {
     it('leaves two children\'s tabs both saved when either saves, with no document of their large cell\'s file open', async () => {
       carriedIn.set(SECOND_CHILD_FORM_KEY, cell);
       await openRecord(childCopy);
-      await openRecord({ formKey: SECOND_CHILD_FORM_KEY, plugin, placement: 'beside' });
+      await inSecondGroup();
+      await openPinnedRecord({ formKey: SECOND_CHILD_FORM_KEY, plugin });
       const [first, second] = [await shownDocumentOf(CHILD_FORM_KEY), await shownDocumentOf(SECOND_CHILD_FORM_KEY)];
       const saved = cellText('SavedFromAChild', { Padding: 'x'.repeat(1 << 20) });
 
@@ -1309,6 +1325,16 @@ describe('a record opened from a column\'s header', () => {
     await openFromHeader('Fallout4.esm:000083', 'Fallout4.esm:000084');
 
     await tabsAre([renderedName('Fallout4.esm:000080'), `${renderedName('Fallout4.esm:000083')} (preview)`]);
+  });
+
+  it('keeps a record opened with Open pinned when another is clicked open', async () => {
+    const row = { argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data/' }, formKey: 'Fallout4.esm:000080' } };
+    await vscode.commands.executeCommand('modbench.record.openPinned', row, [row]);
+    await waitFor('the pinned tab active', () => vscode.window.tabGroups.activeTabGroup.activeTab?.label === renderedName('Fallout4.esm:000080'));
+
+    await openTab('Fallout4.esm:000081');
+
+    await tabsAre([renderedName('Fallout4.esm:000080'), `${renderedName('Fallout4.esm:000081')} (preview)`]);
   });
 
   it('shows the tab of a column\'s file already open, and opens no second', async () => {

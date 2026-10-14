@@ -4,12 +4,9 @@ import type { PluginAddress } from '../wire/pluginAddress';
 /** A record to open: a copy when it names its plugin, else its winning copy. */
 export interface RecordToOpen { formKey: string; plugin?: PluginAddress }
 
-type Placement = 'active' | 'beside';
-
 export interface RecordOpenPlan {
   addresses: RecordToOpen[];
-  placement: Placement;
-  preview: boolean;
+  pinned: boolean;
 }
 
 function addressOf(node: unknown): RecordToOpen | undefined {
@@ -17,22 +14,23 @@ function addressOf(node: unknown): RecordToOpen | undefined {
   return record?.plugin ? { formKey: record.formKey, plugin: record.plugin } : record && { formKey: record.formKey };
 }
 
-const placementOf = (argument: unknown): unknown =>
-  (typeof argument === 'object' && argument !== null && 'placement' in argument ? argument.placement : undefined);
+const isPinned = (argument: unknown): boolean =>
+  typeof argument === 'object' && argument !== null && 'pinned' in argument && argument.pinned === true;
 
-/** A palette entry or key hands over no Argument, so it takes the focused view's selection
+const isOptionsOnly = (argument: unknown): boolean => isPinned(argument) && !(typeof argument === 'object' && argument !== null && 'argument' in argument);
+
+/** A palette entry or key hands over no Argument, or only Options, so it takes the focused view's selection
  *  (commands.md, Principles). */
 export function recordOpenPlan(argument: unknown, focusedSelection: readonly unknown[]): RecordOpenPlan {
-  const subjects: readonly unknown[] = argument === undefined ? focusedSelection
-    : Array.isArray(argument) ? argument : [argument];
+  const given: readonly unknown[] = Array.isArray(argument) ? argument : [argument];
+  const optionsOnly = argument !== undefined && given.every(isOptionsOnly);
+  const subjects = argument === undefined || optionsOnly ? focusedSelection : given;
   const addresses = subjects.flatMap((s) => addressOf(s) ?? []);
-  const placements = subjects.map(placementOf);
-  const placement = placements.includes('beside') ? 'beside' : 'active';
-  return { addresses, placement, preview: placement === 'active' };
+  return { addresses, pinned: optionsOnly || subjects.some(isPinned) };
 }
 
-/** What a menu's open to the side hands to open: the menu's selection, else its clicked row. */
-export function besideArgument(row: unknown, selection: unknown) {
+/** What a menu's open hands to open: the menu's selection, else its clicked row. */
+export function pinnedArgument(row: unknown, selection: unknown) {
   const subjects = Array.isArray(selection) && selection.length > 0 ? selection : [row];
-  return subjects.flatMap((s) => addressOf(s) ?? []).map((address) => ({ argument: { kind: 'record' as const, ...address }, placement: 'beside' as const }));
+  return subjects.flatMap((s) => addressOf(s) ?? []).map((address) => ({ argument: { kind: 'record' as const, ...address }, pinned: true }));
 }
