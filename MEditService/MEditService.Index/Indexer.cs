@@ -101,6 +101,11 @@ internal sealed class Indexer : IDisposable
 
     private readonly List<string> _handed = [];
     private bool _validatingHanded;
+    // The writes the Source adapter announced, guarded by _lock; how many of them are validated, guarded by
+    // _writesValidatedGate, which a read waits on.
+    private long _writesHanded;
+    private long _writesValidated;
+    private readonly object _writesValidatedGate = new();
 
     // LoadOrder: the snapshot the scope last reconciled, which holds the masters a plugin is read against.
     private sealed record OpenScope(HeldPlugins Held, Store Store, Projector Projector, FailedReads Failed, LoadOrderSnapshot LoadOrder);
@@ -119,10 +124,15 @@ internal sealed class Indexer : IDisposable
 
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
     /// the Index has opened no store to read.</summary>
-    public RelationReads RequireReads() => RequireScope().Store.Reads;
+    public RelationReads RequireReads()
+    {
+        AwaitWritesValidated();
+        return RequireScope().Store.Reads;
+    }
 
     public RelationReads RequireWholeSetReads()
     {
+        AwaitWritesValidated();
         var status = Status;
         if (status.State == LoadOrderState.Ready) return RequireReads();
         if (_holder.Held is null) throw new NoLoadOrderException();
@@ -236,19 +246,27 @@ internal sealed class Indexer : IDisposable
 
     // ADR-0015: a handed path is validated as a change on disk is. A reconcile in flight is waited out,
     // never cancelled; paths handed meanwhile are validated together.
-    private void ValidateTreesHolding(IReadOnlyList<string> paths)
+    private void ValidateTreesHolding(IReadOnlyList<string> paths) => Hand(paths, written: false);
+
+    private void ValidateWritten(IReadOnlyList<string> paths) => Hand(paths, written: true);
+
+    private void Hand(IReadOnlyList<string> paths, bool written)
     {
         lock (_lock)
         {
             _handed.AddRange(paths);
+            if (written) _writesHanded++;
             if (_validatingHanded) return;
             _validatingHanded = true;
         }
         Task.Factory.StartNew(ValidateHanded, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
+    // The writes handed so far are released once their paths are validated, once validation stops, or once it fails
+    // outright, which the status then says: a read never waits on a validation that will not come.
     private void ValidateHanded()
     {
+        long writes = 0;
         try
         {
             while (true)
@@ -256,6 +274,7 @@ internal sealed class Indexer : IDisposable
                 List<string> paths;
                 lock (_lock)
                 {
+                    writes = _writesHanded;
                     if (_handed.Count == 0 || _disposed)
                     {
                         _validatingHanded = false;
@@ -276,7 +295,11 @@ internal sealed class Indexer : IDisposable
                         _handOverFailure = failure;
                     }
                 }
-                finally { _exclusive.Exit(); }
+                finally
+                {
+                    _exclusive.Exit();
+                    WritesValidated(writes);
+                }
                 if (moved) PublishStatus();
             }
         }
@@ -287,8 +310,33 @@ internal sealed class Indexer : IDisposable
             {
                 _handOverFailure = ex.Message;
                 _validatingHanded = false;
+                writes = _writesHanded;
             }
             throw;
+        }
+        finally
+        {
+            WritesValidated(writes);
+        }
+    }
+
+    private void WritesValidated(long through)
+    {
+        lock (_writesValidatedGate)
+        {
+            _writesValidated = Math.Max(_writesValidated, through);
+            Monitor.PulseAll(_writesValidatedGate);
+        }
+    }
+
+    // ADR-0015, read-your-writes: a read answers once every write the Source adapter announced before it is validated.
+    private void AwaitWritesValidated()
+    {
+        long handed;
+        lock (_lock) handed = _writesHanded;
+        lock (_writesValidatedGate)
+        {
+            while (_writesValidated < handed) Monitor.Wait(_writesValidatedGate);
         }
     }
 
@@ -1101,6 +1149,7 @@ internal sealed class Indexer : IDisposable
         _holder.Arrived += OnArrived;
         _stringsLanguage.Changed += StartReconcile;
         _unsaved.Arrived += ValidateTreesHolding;
+        _source.Wrote += ValidateWritten;
     }
 
     private void OnArrived(LoadOrderSnapshot snapshot, long version) => StartReconcile();
@@ -1136,6 +1185,7 @@ internal sealed class Indexer : IDisposable
     {
         _holder.Arrived -= OnArrived;
         _unsaved.Arrived -= ValidateTreesHolding;
+        _source.Wrote -= ValidateWritten;
 
         // Guarded because Dispose owns the scope and the reconcile's cancellation: double disposal
         // is a supported call pattern here.

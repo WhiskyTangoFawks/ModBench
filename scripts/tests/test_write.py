@@ -50,6 +50,21 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
         self.assertFalse(recipe_file.exists())
         self.assertIn(f' D {recipe_file.relative_to(self.source).as_posix()}', changed(self.source))
 
+    def test_a_select_after_an_edit_returns_the_edited_row(self):
+        medit.edit(PLUGIN, RECIPE, 'set', 'EditorID', 'MBDevEditedRecipe')
+        self.assertEqual(
+            medit.select(f"SELECT editor_id FROM records WHERE form_key = '{RECIPE}' AND plugin = '{PLUGIN}'"),
+            [{'editor_id': 'MBDevEditedRecipe'}])
+
+    def test_a_select_after_a_create_returns_the_created_row(self):
+        form_key = medit.create(PLUGIN, 'npc_')
+        self.assertEqual(
+            medit.select(f"SELECT plugin FROM records WHERE form_key = '{form_key}'"), [{'plugin': PLUGIN}])
+
+    def test_a_select_after_a_delete_returns_no_row(self):
+        medit.delete(PLUGIN, RECIPE)
+        self.assertEqual(medit.select(f"SELECT form_key FROM records WHERE form_key = '{RECIPE}' AND plugin = '{PLUGIN}'"), [])
+
     def test_raises_for_a_delete_of_a_file_held_unsaved_and_deletes_nothing(self):
         [recipe_file] = self.source.rglob('MBDevConditionedRecipe - *.json')
         self.hold_unsaved(recipe_file)

@@ -13,19 +13,23 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
 
     private readonly UnsavedFiles _unsaved;
     private readonly SourceRepository _repository;
+    private readonly Action<IReadOnlyList<string>> _wrote;
     private bool _writing;
     private SourceFailure? _stopped;
 
-    private WriteSession(PluginProvider.FromMod mod, GameRelease release, IEnumerable<DocumentChange> held)
+    private WriteSession(
+        PluginProvider.FromMod mod, GameRelease release, IEnumerable<DocumentChange> held, Action<IReadOnlyList<string>> wrote)
     {
         _unsaved = new UnsavedFiles(held);
         _repository = SourceRepository.Over(mod, release).Over(this);
+        _wrote = wrote;
     }
 
     /// <summary>A session over <paramref name="mod"/>'s source folder, reading each of <paramref name="held"/>'s texts in
-    /// place of the file at its absolute path.</summary>
-    public static WriteSession Over(PluginProvider.FromMod mod, GameRelease release, IReadOnlyList<DocumentChange> held) =>
-        new(mod, release, held);
+    /// place of the file at its absolute path, handing <paramref name="wrote"/> the paths each write to the disk reaches.</summary>
+    public static WriteSession Over(
+        PluginProvider.FromMod mod, GameRelease release, IReadOnlyList<DocumentChange> held, Action<IReadOnlyList<string>> wrote) =>
+        new(mod, release, held, wrote);
 
     public ISourceRepository Repository => _repository;
 
@@ -73,12 +77,14 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
     public SourceFailure? Write()
     {
         if (_writing) throw new InvalidOperationException("Write waits for Atomically to end: the changes inside it may still be put back.");
-        var (moves, deletions, documents) = Changes;
-        var held = moves.SelectMany(move => new[] { move.From, move.To }).Concat(deletions).Concat(documents.Select(document => document.Path))
-            .SelectMany(_unsaved.HeldAtOrUnder)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
+        var held = Paths().SelectMany(_unsaved.HeldAtOrUnder).Distinct(StringComparer.Ordinal).ToList();
         return held.Count > 0 ? new SourceFailure.Unsaved(held) : SourceFailure.Answer(WriteToDisk);
+    }
+
+    private IEnumerable<string> Paths()
+    {
+        var (moves, deletions, documents) = Changes;
+        return moves.SelectMany(move => new[] { move.From, move.To }).Concat(deletions).Concat(documents.Select(document => document.Path));
     }
 
     private void WriteToDisk()
@@ -96,6 +102,7 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
         finally
         {
             _repository.Locator.Forget();
+            _wrote([.. Paths()]);
         }
     }
 

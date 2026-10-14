@@ -62,6 +62,13 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         return new FakeWriteSession(new FakeRepository(_mods[provider.SourceFolder ?? throw Unreached()]));
     }
 
+    // Its sessions write no disk, so nothing is announced.
+    public event Action<IReadOnlyList<string>>? Wrote
+    {
+        add { }
+        remove { }
+    }
+
     public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) => throw Unreached();
 
     public ISourceRepositoryReads? TreeOf(RegisteredPlugin plugin, GameRelease release) => throw Unreached();

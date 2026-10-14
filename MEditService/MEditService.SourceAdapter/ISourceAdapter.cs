@@ -39,6 +39,10 @@ public interface ISourceAdapter
     /// place of the file at its absolute path.</summary>
     IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held);
 
+    /// <summary>Raised once a session's write has reached the disk, whether it held or was put back, with every
+    /// absolute path its changes move, delete or write (ADR-0015).</summary>
+    event Action<IReadOnlyList<string>>? Wrote;
+
     bool TreeHolds(RegisteredPlugin plugin, string path);
 
     RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path);
