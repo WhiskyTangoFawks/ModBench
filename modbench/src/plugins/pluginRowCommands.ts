@@ -14,7 +14,7 @@ import type { PluginsTreeNode } from './pluginRows';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import { argumentOfKind, registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import type { SelectionResult } from '../pluginsCommands/plugins';
-import { gestureEntry, isClickedRow, selectionArgument } from '../drivingLib/gestureEntry';
+import { isClickedRow, selectionArgument } from '../drivingLib/gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
