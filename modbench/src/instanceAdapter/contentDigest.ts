@@ -6,7 +6,7 @@ import xxhash from 'xxhash-wasm';
 const hasher = xxhash();
 
 /** xxHash64 as Wabbajack writes it, its eight little-endian bytes in base64: the hash mEdit's manifest
- *  carries (ADR-0023). Streamed: a texture or an archive runs to gigabytes. */
+ *  carries (ADR-0022). Streamed: a texture or an archive runs to gigabytes. */
 export async function digestOf(path: string): Promise<string> {
   const hash = (await hasher).create64();
   const bytes: AsyncIterable<Buffer> = createReadStream(path);

@@ -1,7 +1,7 @@
-# Init modlist, green: the repository and its ignore list; nothing staged, nothing committed.
+# Git init modlist, green: the repository and its ignore list; no manifest, nothing committed.
 ...@../styles
 shape: sequence_diagram
-driving: "Toolbox · Mods · Source Control" {class: driving}
+driving: "Toolbox · Source Control" {class: driving}
 sourcecommands: @../target-architecture.modbench_core.sourcecommands
 sourcecommands.label: source commands
 git: "VS Code's git" {class: other}
@@ -13,7 +13,7 @@ instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
-driving -> sourcecommands: "init, with the instance value" {class: track}
+driving -> sourcecommands: "git init, with the instance value" {class: track}
 sourcecommands."refused when the instance already holds a repository"
 sourcecommands -> instanceadapter: "the ignore list" {class: track}
 instanceadapter -> instance: "the ignore list" {class: track}

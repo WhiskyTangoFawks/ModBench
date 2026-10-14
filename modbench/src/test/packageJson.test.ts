@@ -556,7 +556,7 @@ describe('package.json command titles and categories', () => {
     expect(RETIRED_AHEAD_OF_CODE.filter((id) => !declared.has(id))).toEqual([]);
   });
 
-  const PALETTE_AHEAD_OF_CODE = ['modbench.modlist.clean'];
+  const PALETTE_AHEAD_OF_CODE = ['modbench.modlist.gitInit', 'modbench.mod.updateManifest', 'modbench.mod.restoreFromManifest'];
 
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
@@ -1227,7 +1227,7 @@ const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'mod
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
 const DISCARD_IN_MOD_FOLDER = 'modbench.modlist.discardChangesInModFolder';
 const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, DISCARD_IN_MOD_FOLDER];
-const RETIRED_AHEAD_OF_CODE: string[] = [];
+const RETIRED_AHEAD_OF_CODE: string[] = ['modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges'];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);

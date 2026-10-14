@@ -6,9 +6,9 @@ using System.Text.Json.Nodes;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 
-namespace MEditService.Http.Tests.Traces;
+namespace MEditService.Http.Tests.Api;
 
-public sealed class DiscardChangesTraceTests : HostedTests
+public sealed class DiscardChangesApiTests : HostedTests
 {
     private const string Mod = "DiscardedMod";
     private const string HashOfKept = "gO3vE0ddOto=";
