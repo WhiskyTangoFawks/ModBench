@@ -152,7 +152,7 @@ function recordOpenGesture(
 type OpenOutcome = GestureResult<RecordCopy>;
 
 // Several records open one grid: the first record's document, with the others as its columns
-// (editor.md, Opening, story 4). What lands names each record's copy.
+// (editor.md, Opening, story 4).
 async function openRecords(
   client: OpenClient, grid: Pick<RecordEditorProvider, 'open'>, { addresses, pinned }: RecordOpenPlan,
 ): Promise<OpenOutcome> {
