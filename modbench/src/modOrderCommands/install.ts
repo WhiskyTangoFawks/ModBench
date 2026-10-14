@@ -4,7 +4,7 @@ import { refuse } from '../ports/refuse';
 import type {
   InstallOutcome, InstallSource, InstallTarget, InstanceAdapter, OwnedMetaKeys,
 } from '../instanceAdapter/instanceAdapter';
-import { goneFromDisk, modNameTakenRefusal } from '../coreLib/commandRefusals';
+import { EMPTY_MOD_NAME, goneFromDisk, modNameTakenRefusal } from '../coreLib/commandRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
 
 /** What a mod is installed from: an archive or a folder the user picked, or a downloaded file by
@@ -46,6 +46,7 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
 export async function installMod(
   adapter: InstanceAdapter, source: ModSource, target: InstallTarget, gameName: string,
 ): Promise<CommandResult<{ isFomod: boolean; downloadRefusal?: string }>> {
+  if (target.kind === 'new' && target.name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
   let outcome: InstallOutcome;
   try {
     const extracted = source.kind === 'downloadedFile' ? { kind: 'archive' as const, path: source.path } : source;
