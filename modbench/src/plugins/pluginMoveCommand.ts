@@ -21,7 +21,6 @@ interface MoveView extends Pick<PluginsTreeProvider, 'movePlaces'> {
   selection: () => readonly PluginsTreeNode[];
 }
 
-/** `thrown` marks a failure no command refused, which the view reports apart from a refusal. */
 type MoveOutcome = SelectionResult<PluginAddress> | { applied: false; refusal: string; thrown: true };
 
 interface Move {

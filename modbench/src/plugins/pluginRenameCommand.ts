@@ -33,7 +33,6 @@ interface Rename {
 
 type RenameDeps = Pick<RenamePluginDeps, 'commands' | 'source' | 'instance'>;
 
-/** `refusal` is the whole reason, for the agent; `message` and `detail` are what the view reports. */
 type RenameOutcome = SelectionResult<PluginAddress> | { applied: false; refusal: string; message: string; detail?: string };
 
 const refused = (message: string, detail?: string): RenameOutcome =>
