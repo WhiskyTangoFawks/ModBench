@@ -5,6 +5,9 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { before, after, afterEach, beforeEach, describe, it } from 'mocha';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { CompareResult, PluginMetadata, PluginProblems } from '../../client';
 import { present } from '../../ports/present';
 import type { ReferencesViewInput } from '../../editor/referencesView';
@@ -36,6 +39,7 @@ function copyValueKeyArgs(view: string): unknown {
 }
 
 const TEST_PORT = Number(present(process.env.MODBENCH_TEST_PORT, 'the port .vscode-test.mjs hands the run'));
+const AGENT_PORT = Number(present(process.env.MODBENCH_TEST_AGENT_PORT, 'the agent port .vscode-test.mjs hands the run'));
 const LOGS = present(process.env.MODBENCH_TEST_LOGS, 'the logs folder .vscode-test.mjs hands the run');
 const root = present(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath, 'the workspace folder');
 const pluginsTxtPath = path.join(root, 'profiles', 'Default', 'plugins.txt');
@@ -531,6 +535,46 @@ describe('Mod sync', () => {
     writeFileSync(modlistPath, '+Gone Mod\r\n');
 
     await waitFor('mod sync to drop the line', () => !readFileSync(modlistPath, 'utf8').includes('Gone Mod'));
+  });
+});
+
+describe('a gesture the agent runs', () => {
+  const modDir = path.join(root, 'mods', 'Agent Mod');
+  const agent = new Client({ name: 'integration', version: '0' });
+  let original = '';
+
+  const callTool = async (name: string, args?: Record<string, unknown>) => {
+    const result = CallToolResultSchema.parse(await agent.callTool({ name, arguments: args }));
+    const block = present(result.content[0], 'a content block');
+    return { isError: result.isError === true, text: block.type === 'text' ? block.text : '' };
+  };
+  const agentModEnabled = async (): Promise<unknown> => {
+    const read = await callTool('list_mods');
+    const mods: unknown = read.isError ? undefined : JSON.parse(read.text);
+    const mod: unknown = Array.isArray(mods) ? mods.find((one) => isRecord(one) && one.name === 'Agent Mod') : undefined;
+    return isRecord(mod) ? mod.enabled : undefined;
+  };
+
+  before(async () => {
+    original = readFileSync(modlistPath, 'utf8');
+    await agent.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${AGENT_PORT}/mcp`)));
+    mkdirSync(modDir, { recursive: true });
+    writeFileSync(modlistPath, '-Agent Mod\r\n');
+    await waitFor('the agent to read the mod disabled', async () => (await agentModEnabled()) === false);
+  });
+
+  after(async () => {
+    await agent.close();
+    writeFileSync(modlistPath, original);
+    rmSync(modDir, { recursive: true, force: true });
+  });
+
+  it('writes as the user\'s does, and answers once the agent\'s next read sees the change', async () => {
+    const answer = await callTool('run_gesture', { command: 'modbench.mod.enable', argument: [{ name: 'Agent Mod' }] });
+
+    assert.strictEqual(answer.isError, false, answer.text);
+    assert.strictEqual(await agentModEnabled(), true);
+    assert.ok(readFileSync(modlistPath, 'utf8').includes('+Agent Mod'));
   });
 });
 

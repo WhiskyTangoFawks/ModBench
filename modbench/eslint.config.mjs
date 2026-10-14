@@ -332,6 +332,7 @@ export default defineConfig(
     // place `vscode.commands.executeCommand('modbench.…')` appears is `src/`, entry-point wiring.
     {
         files: ['src/**/*.ts'],
+        ignores: ['src/agent/**'], // agent.md, Reporting, story 3: the agent gets each gesture's outcome.
         plugins: { local },
         rules: {
             'local/no-gesture-result-use': 'error',
