@@ -5,6 +5,7 @@ import type { PluginAddress } from './pluginAddress';
 export type Argument =
   | { readonly kind: 'record'; readonly formKey: string; readonly plugin?: PluginAddress }
   | { readonly kind: 'plugin'; readonly plugin: PluginAddress }
-  | { readonly kind: 'mod'; readonly name: string };
+  | { readonly kind: 'mod'; readonly name: string }
+  | { readonly kind: 'file'; readonly origin: { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' }; readonly relativePath: string };
 
 export type ArgumentOf<K extends Argument['kind']> = Extract<Argument, { kind: K }>;
