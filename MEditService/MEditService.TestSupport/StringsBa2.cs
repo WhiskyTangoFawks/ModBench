@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace MEditService.PluginAdapter.Tests.TestSupport;
+namespace MEditService.TestSupport;
 
 /// <summary>A Fallout 4 general archive (BA2 version 1) holding strings files under <c>Strings</c>,
 /// uncompressed and unhashed: Mutagen's reader finds a file by the name table.</summary>

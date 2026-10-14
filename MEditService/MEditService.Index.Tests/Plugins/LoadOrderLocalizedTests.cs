@@ -137,6 +137,7 @@ public sealed class LoadOrderLocalizedTests
 
         Assert.Equal((false, true), before);
         Assert.DoesNotContain("The Big Door", index.BodyOf(doorFormKey.ToString(), DataCopy), StringComparison.Ordinal);
+        Assert.Contains("The Big Door", index.BodyOf(doorFormKey.ToString(), modEntry.Key), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -185,6 +186,46 @@ public sealed class LoadOrderLocalizedTests
         Assert.Contains("The New Door", name.Value?.ToString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ALocalizedPluginWhoseStringsTheGameReadsChangedBetweenSessions_IsReadAgainAtLoad()
+    {
+        using var data = LocalizedDoor("load-order-localized-game-sessions", out var doorFormKey);
+        var translation = StringsMovedIntoATranslation(data);
+        var coldHolder = new LoadOrderHolder();
+        using (var cold = Indexes.Open(coldHolder)) cold.Receive(coldHolder, SnapshotOf(data, data.Plugins, translation, instanceRoot: data.InstanceRoot));
+        StringsOfADoorNamed("The New Door", Path.GetDirectoryName(translation[0]).Require());
+
+        var warmHolder = new LoadOrderHolder();
+        using var warm = Indexes.Open(warmHolder);
+        warm.Receive(warmHolder, SnapshotOf(data, data.Plugins, translation, instanceRoot: data.InstanceRoot));
+
+        var name = Assert.Single(warm.CopyIn(doorFormKey.ToString(), DataCopy).Require().Fields, f => f.Metadata.Name == "Name");
+        Assert.Contains("The New Door", name.Value?.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ALocalizedPluginWhoseStringsInAnArchiveTheGameLoadsAreRewrittenInPlace_IsReadAgainWithThem()
+    {
+        using var data = LocalizedDoor("load-order-localized-archive-rewritten", out var doorFormKey);
+        var archive = Path.Combine(data.DataFolder, "Translation - Main.ba2");
+        var strings = Path.Combine(data.DataFolder, "Strings");
+        StringsBa2.Pack(Directory.EnumerateFiles(strings), archive);
+        Directory.Delete(strings, recursive: true);
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: [], gameArchives: [archive]));
+        using (var rewritten = new ScratchDirectory("load-order-localized-archive-strings-"))
+        {
+            StringsOfADoorNamed("The New Door", rewritten.Path);
+            StringsBa2.Pack(Directory.EnumerateFiles(rewritten.Path), archive);
+        }
+
+        index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: [], gameArchives: [archive]));
+
+        var name = Assert.Single(index.CopyIn(doorFormKey.ToString(), DataCopy).Require().Fields, f => f.Metadata.Name == "Name");
+        Assert.Contains("The New Door", name.Value?.ToString(), StringComparison.Ordinal);
+    }
+
     private static readonly PluginAddress DataCopy = new("Fixture.esp", PluginOrigin.DataDirectory);
 
     private static PluginFixtureData LocalizedDoor(string name, out FormKey doorFormKey)
@@ -224,9 +265,10 @@ public sealed class LoadOrderLocalizedTests
             File.Copy(file, Path.Combine(stringsFolder, Path.GetFileName(file)), overwrite: true);
     }
 
-    private static LoadOrderSnapshot SnapshotOf(PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads) =>
-        new(data.DataFolder, null, GameRelease.Fallout4, SnapshotPlugins.Of(plugins), SnapshotPlugins.Active(plugins),
-            SnapshotPlugins.LoadedWithNoLine(plugins), [], [.. gameReads.Select(HandedStrings.Stamped)]);
+    private static LoadOrderSnapshot SnapshotOf(
+        PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads, string[]? gameArchives = null, string? instanceRoot = null) =>
+        new(data.DataFolder, instanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(plugins), SnapshotPlugins.Active(plugins),
+            SnapshotPlugins.LoadedWithNoLine(plugins), [.. (gameArchives ?? []).Select(HandedStrings.Stamped)], [.. gameReads.Select(HandedStrings.Stamped)]);
 
     private static (bool NamesMissing, bool ReadsTheDoor) NameAfter(
         OpenedIndex index, LoadOrderHolder holder, PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads,
