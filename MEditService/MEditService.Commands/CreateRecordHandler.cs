@@ -12,16 +12,18 @@ public sealed class CreateRecordHandler
     private readonly CreateRecordChangesHandler _changes;
     private readonly ISourceAdapter _source;
     private readonly UnsavedDocuments _unsaved;
+    private readonly LoadOrderHolder _loadOrder;
     private readonly ILogger<CreateRecordHandler> _logger;
 
     internal CreateRecordHandler(
-        CreateRecordChangesHandler changes, ISourceAdapter source, UnsavedDocuments unsaved, ILogger<CreateRecordHandler> logger) =>
-        (_changes, _source, _unsaved, _logger) = (changes, source, unsaved, logger);
+        CreateRecordChangesHandler changes, ISourceAdapter source, UnsavedDocuments unsaved, LoadOrderHolder loadOrder,
+        ILogger<CreateRecordHandler> logger) =>
+        (_changes, _source, _unsaved, _loadOrder, _logger) = (changes, source, unsaved, loadOrder, logger);
 
     public RecordEditResult Create(PluginAddress plugin, string recordType, string? container = null, GridPosition? position = null)
     {
         var sessions = new WriteSessions(_source, _unsaved.Current);
         var outcome = _changes.CreateRecord(plugin, recordType, container, position, sessions).Outcome;
-        return sessions.Written(outcome, $"Could not write the new {recordType}", _logger);
+        return sessions.Written(outcome, $"Could not write the new {recordType}", _loadOrder, _logger);
     }
 }

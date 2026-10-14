@@ -26,7 +26,7 @@ REQUEST_TIMEOUT_S = 10
 STOP_GRACE_S = 5
 POLL_S = 0.1
 
-Fixture = collections.namedtuple('Fixture', 'url instance')
+Fixture = collections.namedtuple('Fixture', 'url instance load_order')
 
 
 @contextlib.contextmanager
@@ -47,8 +47,9 @@ def fixture_medit():
                 stdout=sink, stderr=subprocess.STDOUT)
             try:
                 await_health(process, url, output)
-                hand_load_order(url, snapshot(instance, game))
-                yield Fixture(url, instance)
+                load_order = snapshot(instance, game)
+                hand_load_order(url, load_order)
+                yield Fixture(url, instance, load_order)
             finally:
                 stop(process)
 
@@ -118,6 +119,10 @@ def source_folder(instance, mod):
 def track(fixture, mod):
     call('POST', fixture.url + '/init', {'mods': [
         {'name': mod, 'sourceFolder': str(source_folder(fixture.instance, mod)), 'installationFiles': [], 'modManagerFiles': []}]})
+
+
+def watcher_resends_load_order(fixture):
+    call('PUT', fixture.url + '/load-order', fixture.load_order)
 
 
 def hand_load_order(url, body):

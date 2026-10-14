@@ -1,0 +1,71 @@
+using MEditService.Index.Queries;
+using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
+using MEditService.TestSupport;
+using Microsoft.Extensions.Time.Testing;
+using Mutagen.Bethesda;
+
+namespace MEditService.Index.Tests.Plugins;
+
+public sealed class ReadAfterSourceWriteTests : IDisposable
+{
+    private const string Tracked = "Tracked.esp";
+    private static readonly DateTimeOffset Start = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+    private static readonly TimeSpan Generous = TimeSpan.FromSeconds(30);
+
+    private readonly FakeTimeProvider _clock = new(Start);
+    private readonly LoadOrderHolder _holder = new();
+    private readonly ScatteredFixtureData _fixture;
+    private readonly LoadOrderEntry _tracked;
+    private readonly string _npc;
+    private readonly OpenedIndex _index;
+
+    public ReadAfterSourceWriteTests()
+    {
+        string npc = "";
+        _fixture = new PluginFixtureBuilder("read-after-source-write")
+            .WithPlugin(Tracked, mod => npc = mod.Npcs.AddNew("TrackedNpc").FormKey.ToString(), origin: "TrackedMod")
+            .BuildScattered();
+        _tracked = _fixture.Plugins.Single(p => p.Name == Tracked);
+        _npc = npc;
+        TrackedMods.Track(_tracked);
+        _index = Indexes.Open(_holder, timeProvider: _clock);
+        _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        _tracked.HandEdit(_index.DocumentOf(_npc, _tracked.KeyOf()), "\"TrackedNpc\"", "\"Written\"");
+        _holder.SourceWritten();
+    }
+
+    public void Dispose()
+    {
+        _index.Dispose();
+        _fixture.Dispose();
+    }
+
+    private Task<Answer<RenderedDocument?, IndexRefused>> Read() =>
+        Task.Run(() => _index.Queries.GetRenderedDocument(_tracked.KeyOf(), _npc));
+
+    [Fact]
+    public async Task AReadAfterASourceWrite_AnswersOnceTheNextSnapshotIsReconciled()
+    {
+        var read = Read();
+        var first = await Task.WhenAny(read, Task.Delay(TimeSpan.FromMilliseconds(500)));
+
+        _holder.Apply(_holder.Current);
+
+        Assert.NotSame(read, first);
+        Assert.Contains("\"Written\"", (await read.WaitAsync(Generous)).Value()?.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AReadAfterASourceWrite_WithNoSnapshotAfterIt_IsRefusedOnceItsWaitExpires_NamingWhy()
+    {
+        var read = Read();
+
+        while (await Task.WhenAny(read, Task.Delay(TimeSpan.FromMilliseconds(50))) != read) _clock.Advance(TimeSpan.FromMinutes(2));
+
+        var refused = (await read.WaitAsync(Generous)).Refused();
+        Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
+        Assert.Contains("no load order arrived after the write", refused.Message, StringComparison.Ordinal);
+    }
+}
