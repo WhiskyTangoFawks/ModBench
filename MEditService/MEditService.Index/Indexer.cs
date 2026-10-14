@@ -829,7 +829,7 @@ internal sealed class Indexer : IDisposable
     {
         var modPath = ModPathOf(plugin.Path);
         // Taken before the read, as the binary's hash is: strings changed during it are then read again.
-        var stringsRead = StringsReadBy(scope, plugin.Registered);
+        var stringsRead = plugin.IsLocalized ? StringsReadBy(scope, plugin.Registered) : null;
         if (!_adapter.OpenDocuments(modPath, scope.LoadOrder, scope.Store.Schemas, plugin.Strings).Holds(out var opened, out var failure))
         {
             _logger.LogWarning(failure.Error, "Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);
@@ -844,19 +844,18 @@ internal sealed class Indexer : IDisposable
 
     private static ModPath ModPathOf(string path) => new(ModKey.FromFileName(Path.GetFileName(path)), path);
 
-    // A binary's rows hold its texts as its strings gave them; a tree's hold their own, and one that is not localized none.
+    // A binary's rows hold its texts as its strings gave them. A tree's hold their own, and a plugin not localized has none.
     private bool StringsStillRead(OpenScope scope, RegisteredPlugin plugin) =>
         scope.Store.DerivationOf(plugin.Key) is null or DerivedFrom.SourceTree
         || scope.Store.IndexedStringsRead(plugin.Key) is not { } read
         || read == StringsReadBy(scope, plugin);
 
-    // Each place a read takes its strings from, by the stamp Mod Management handed with it (ADR-0003); a place it could
-    // not read, by why. Null for a plugin that is not localized.
-    private string? StringsReadBy(OpenScope scope, RegisteredPlugin plugin)
-    {
-        if (!_adapter.StringsPlacesOf(ModPathOf(plugin.Path), scope.LoadOrder, plugin.Strings).Holds(out var places, out var failure)) return failure.Reason;
-        return places is null ? null : string.Join('\n', places.Select(place => $"{place}|{plugin.Strings.StampOf(place)}"));
-    }
+    // Each place a read of a localized plugin takes its strings from, by the stamp Mod Management handed with it, or why a
+    // place could not be read (ADR-0003).
+    private string StringsReadBy(OpenScope scope, RegisteredPlugin plugin) =>
+        _adapter.StringsPlacesOf(ModPathOf(plugin.Path), scope.LoadOrder, plugin.Strings).Holds(out var places, out var failure)
+            ? string.Join('\n', places.Select(place => $"{place}|{plugin.Strings.StampOf(place)}"))
+            : failure.Reason;
 
     // ADR-0015.
     private void ValidateIndex(CancellationToken token)

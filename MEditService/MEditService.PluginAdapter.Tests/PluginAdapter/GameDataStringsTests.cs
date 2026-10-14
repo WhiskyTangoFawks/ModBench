@@ -72,14 +72,18 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     [Fact]
-    public void StringsPlacesOf_APluginThatIsNotLocalized_IsNone()
+    public void ReadContent_APluginLocalizedOrNot_SaysWhichItIs()
     {
-        LocalizedDoorPlugin.WriteNameInPlugin(_pluginPath, DoorName);
+        var notLocalized = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "Plain")).FullName, PluginName);
+        LocalizedDoorPlugin.WriteNameInPlugin(notLocalized, DoorName);
 
-        Assert.Null(StringsPlacesOf(Plugin));
+        Assert.Equal([true, false], [IsLocalized(_pluginPath), IsLocalized(notLocalized)]);
     }
 
-    private IReadOnlyList<string>? StringsPlacesOf(RegisteredPlugin plugin) =>
+    private bool IsLocalized(string pluginPath) =>
+        Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), pluginPath), LoadOrder, HandedStrings.Of(pluginPath)).Answered().Content.IsLocalized;
+
+    private IReadOnlyList<string> StringsPlacesOf(RegisteredPlugin plugin) =>
         Adapter.StringsPlacesOf(new ModPath(ModKey.FromFileName(PluginName), plugin.Path), LoadOrder, plugin.Strings).Answered();
 
     [Fact]
