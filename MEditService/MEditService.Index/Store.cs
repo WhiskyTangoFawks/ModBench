@@ -556,8 +556,8 @@ internal sealed class Store : IDisposable
     }
 
     /// <summary>The one way the rows change (ADR-0015). Once the outermost commit's writes are in,
-    /// thrown or not, a sweep included: the winner sweep they owe, the filter again, one advance,
-    /// then their announcements.</summary>
+    /// thrown or not, a sweep included: the winner sweep they owe, a checkpoint, the filter again,
+    /// one advance, then their announcements.</summary>
     public T Commit<T>(Func<Projection, T> write)
     {
         using var held = _gate.Enter();
@@ -583,11 +583,25 @@ internal sealed class Store : IDisposable
         try
         {
             if (sweepOwed) SweepWinners();
+            Checkpoint();
         }
         finally
         {
             _filterInForce.Reapply(this);
         }
+    }
+
+    // DuckDB checkpoints by itself only once its WAL outgrows a threshold, and an ingest's rows reach
+    // the file without passing through the WAL. Until a checkpoint, the index nodes the rows built
+    // stay in memory DuckDB cannot evict, and the reads after them run short of it. FORCE because a
+    // read ending beside it holds the checkpoint lock for a moment, which a plain CHECKPOINT refuses
+    // rather than waits out.
+    private void Checkpoint()
+    {
+        var timer = Stopwatch.StartNew();
+        DuckDbSql.Execute(Connection, "FORCE CHECKPOINT");
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("Checkpointed the index in {ElapsedMs} ms", timer.ElapsedMilliseconds);
     }
 
     /// <summary>What one commit owes beyond its rows.</summary>
