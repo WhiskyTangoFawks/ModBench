@@ -12,8 +12,6 @@ public sealed class CreatePluginInModHandler
     internal CreatePluginInModHandler(CreatePluginHandler create, LoadOrderHolder holder) =>
         (_create, _holder) = (create, holder);
 
-    /// <summary>Refuses with <see cref="PluginCreateRefusal.OriginNotAMod"/> for Overwrite, the game folder and a mod
-    /// the load order holds no plugin of.</summary>
     public async Task<PluginCreateResult> CreatePluginIn(string origin, string name)
     {
         if (_holder.Held is not { Snapshot: var loadOrder })

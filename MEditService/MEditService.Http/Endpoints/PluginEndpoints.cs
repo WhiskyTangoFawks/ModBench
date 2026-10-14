@@ -269,13 +269,7 @@ internal static class PluginEndpoints
 
         var plugin = new PluginAddress(req.Name, req.Origin);
         var result = await create.CreatePlugin(plugin, req.Folder, req.SourceFolder);
-        if (result.Refusal is { } refusal)
-        {
-            EndpointMapping.LogRefusal(logger, "Create plugin", refusal, result.Message, plugin);
-            return EndpointMapping.Refusal(refusal, result.Message);
-        }
-
-        return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin));
+        return Created(logger, "Create plugin", plugin, result);
     }
 
     internal static async Task<IResult> CreatePluginInMod(
@@ -285,13 +279,15 @@ internal static class PluginEndpoints
         if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return Results.Problem("Plugin name and origin are required.", statusCode: 400);
 
         var result = await create.CreatePluginIn(plugin.Origin, plugin.Name);
-        if (result.Refusal is { } refusal)
-        {
-            EndpointMapping.LogRefusal(logger, "Create plugin in mod", refusal, result.Message, plugin);
-            return EndpointMapping.Refusal(refusal, result.Message);
-        }
+        return Created(logger, "Create plugin in mod", plugin, result);
+    }
 
-        return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin));
+    private static IResult Created(ILogger logger, string gesture, PluginAddress plugin, PluginCreateResult result)
+    {
+        if (result.Refusal is not { } refusal) return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin));
+
+        EndpointMapping.LogRefusal(logger, gesture, refusal, result.Message, plugin);
+        return EndpointMapping.Refusal(refusal, result.Message);
     }
 
     // The refusals a malformed request earns, taken before the door so a name that could never be
