@@ -23,15 +23,18 @@ internal interface ILoadedMod : IDisposable
 
 /// <summary>The one implementation: Mutagen's own mod factory and write builder, reached by the
 /// release the caller passed and never by a game this code names.</summary>
-public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAdapter
+public sealed class MutagenPluginAdapter(TimeProvider timeProvider, StringsLanguageHolder? stringsLanguage = null) : IPluginAdapter
 {
     private readonly PluginFileHashes _hashes = new(timeProvider);
 
+    private readonly StringsLanguageHolder _stringsLanguage = stringsLanguage ?? new StringsLanguageHolder();
+
     // The getter looks its strings up as they are read, so the folder it reads them from lives as long as it does.
     internal static ILoadedMod OpenForRead(
-        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null,
+        Language language = Language.English)
     {
-        var read = strings is { } named ? LocalizedStrings.ForRead(named, loadOrder, modPath, gameRelease) : null;
+        var read = strings is { } named ? LocalizedStrings.ForRead(named, loadOrder, modPath, gameRelease, language) : null;
         try
         {
             var loaded = new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(read, MasterStyles.Of(modPath, loadOrder))), read);
@@ -69,7 +72,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     }
 
     // The open passes to what its result holds; until it has, a failure disposes it here.
-    private static Answer<T, PluginFailure> Opened<T>(
+    private Answer<T, PluginFailure> Opened<T>(
         ModPath modPath, PluginStrings? strings, LoadOrderSnapshot loadOrder, Func<ILoadedMod, T> holding)
     {
         ILoadedMod? loaded = null;
@@ -77,7 +80,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         {
             return PluginFailure.Answer(() =>
             {
-                loaded = OpenForRead(modPath, loadOrder.GameRelease, strings, loadOrder);
+                loaded = OpenForRead(modPath, loadOrder.GameRelease, strings, loadOrder, _stringsLanguage.Current);
                 var held = holding(loaded);
                 loaded = null;
                 return held;
@@ -92,7 +95,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     public bool GameFolderExists(string gameFolder) => Directory.Exists(gameFolder);
 
     public Answer<IReadOnlyList<string>, PluginFailure> StringsPlacesOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
-        PluginFailure.Answer(() => LocalizedStrings.PlacesOf(strings, loadOrder, modPath, loadOrder.GameRelease));
+        PluginFailure.Answer(() => LocalizedStrings.PlacesOf(strings, loadOrder, modPath, loadOrder.GameRelease, _stringsLanguage.Current));
 
     public bool Exists(string pluginPath) => File.Exists(pluginPath);
 
@@ -122,7 +125,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                     && PluginFlagPredicates.IsBlueprint(loaded.Getter, name, ModHeaderFrame.FromPath(modPath, loadOrder.GameRelease).Flags);
                 var (content, unreachable) = OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint);
                 var missing = strings is { } named
-                    ? LocalizedStrings.FindMissingStringsFiles(loaded.Getter, modPath, named, loadOrder, loadOrder.GameRelease)
+                    ? LocalizedStrings.FindMissingStringsFiles(loaded.Getter, modPath, named, loadOrder, loadOrder.GameRelease, _stringsLanguage.Current)
                     : [];
                 return (content with { MissingStringsFiles = missing }, unreachable);
             }
@@ -162,12 +165,12 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
         RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>
-        PluginTrees.ReadAsync(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder, plugin.Strings, cancel);
+        PluginTrees.ReadAsync(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder, plugin.Strings, _stringsLanguage.Current, cancel);
 
     public Answer<string?, PluginFailure> DivergenceFrom(
         string pluginFileName, string pluginFilePath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         PluginFailure.Answer(() => PluginTrees.DivergenceBetween(
-            new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), recompiledPath, loadOrder, strings)?.Describe());
+            new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), recompiledPath, loadOrder, strings, _stringsLanguage.Current)?.Describe());
 
     public Task<Answer<PluginByteComparison, PluginFailure>> CompareBytesAsync(
         string originalPath, string recompiledPath, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>
@@ -196,19 +199,20 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     // Mutagen's parallel import shares the form version of the record being read across threads, so a
     // field its form version shapes is read by another record's, or by none.
     internal static IMod OpenForWrite(
-        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null)
-        => Import(modPath, gameRelease, strings, loadOrder, MasterStyles.Of(modPath, loadOrder));
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null,
+        Language language = Language.English)
+        => Import(modPath, gameRelease, strings, loadOrder, MasterStyles.Of(modPath, loadOrder), language);
 
     internal static IMod OpenForWrite(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings, IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles)
-        => Import(modPath, gameRelease, strings, loadOrder: null, masterStyles);
+        => Import(modPath, gameRelease, strings, loadOrder: null, masterStyles, Language.English);
 
     // The setter resolves every string as it imports, so the folder it reads them from is done with after.
     private static IMod Import(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings, LoadOrderSnapshot? loadOrder,
-        IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles)
+        IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles, Language language)
     {
-        using var read = strings is { } named ? LocalizedStrings.ForRead(named, loadOrder, modPath, gameRelease) : null;
+        using var read = strings is { } named ? LocalizedStrings.ForRead(named, loadOrder, modPath, gameRelease, language) : null;
         return ModFactory.ImportSetter(modPath, gameRelease, (ReadParameters(read, masterStyles) ?? new BinaryReadParameters()) with { Parallel = false });
     }
 

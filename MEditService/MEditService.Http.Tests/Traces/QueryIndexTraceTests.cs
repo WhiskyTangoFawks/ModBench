@@ -44,7 +44,7 @@ public sealed class QueryIndexTraceTests : HostedTests
 
     private ScatteredFixtureData? _localized;
 
-    private async Task LoadedLocalized(string stringsLanguage = "English")
+    private async Task LoadedLocalized()
     {
         _localized ??= Owned(new PluginFixtureBuilder("trace-query-localized")
             .WithPlugin("Localized.esp", mod =>
@@ -56,7 +56,7 @@ public sealed class QueryIndexTraceTests : HostedTests
                     new KeyValuePair<Language, string>(Language.English, "Lever"));
             }, origin: "LocalizedMod")
             .BuildScattered());
-        (await Client.PutLoadOrder(_localized, _localized.Plugins, stringsLanguage)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(_localized)).EnsureSuccessStatusCode();
     }
 
     private async Task<string?> LocalizedLeverName()
@@ -68,7 +68,8 @@ public sealed class QueryIndexTraceTests : HostedTests
     [Fact]
     public async Task ALocalizedPluginsRecords_ShowTheirNameInTheStringsLanguageTheLoadOrderNames()
     {
-        await LoadedLocalized("French");
+        await Client.PutStringsLanguage("French");
+        await LoadedLocalized();
 
         Assert.Equal("Levier", await LocalizedLeverName());
     }
@@ -76,16 +77,18 @@ public sealed class QueryIndexTraceTests : HostedTests
     [Fact]
     public async Task ChangingTheStringsLanguage_ChangesTheNameTheRecordsShow()
     {
-        await LoadedLocalized("French");
-        await LoadedLocalized("English");
+        await Client.PutStringsLanguage("French");
+        await LoadedLocalized();
 
-        Assert.Equal("Lever", await LocalizedLeverName());
+        await Client.PutStringsLanguage("English");
+
+        await Wire.Eventually(async () => await LocalizedLeverName() == "Lever", "the name shown in English");
     }
 
     [Fact]
     public async Task AStringsLanguageNoGameHas_IsRefused()
     {
-        var response = await Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body("g", "i", [], stringsLanguage: "Klingon"));
+        var response = await Client.PutStringsLanguage("Klingon");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

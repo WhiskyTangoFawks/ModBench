@@ -506,6 +506,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/strings-language": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description The language a translated text shows in, English until one is put. A change reads again the plugins whose rows took their texts in another language. */
+        put: operations["PutStringsLanguage"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/records": {
         parameters: {
             query?: never;
@@ -1208,7 +1225,6 @@ export interface components {
             gameDirectory: string;
             instanceRoot: string;
             gameRelease: string;
-            stringsLanguage?: string | null;
         };
         LoadOrderResponse: {
             applied: boolean;
@@ -1606,6 +1622,9 @@ export interface components {
         StampedFile: {
             path: string;
             stamp: string;
+        };
+        StringsLanguageRequest: {
+            language: string;
         };
         UnreadableSource: {
             reason: string;
@@ -3011,6 +3030,37 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    PutStringsLanguage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StringsLanguageRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

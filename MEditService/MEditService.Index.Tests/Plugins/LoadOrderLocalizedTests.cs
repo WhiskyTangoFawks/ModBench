@@ -1,5 +1,6 @@
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -232,17 +233,38 @@ public sealed class LoadOrderLocalizedTests
         using var data = LocalizedDoor("load-order-localized-language", out var doorFormKey);
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
+        index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: []));
+        string? NameCheckError() =>
+            Assert.Single(index.CopyIn(doorFormKey.ToString(), DataCopy).Require().Fields, f => f.Metadata.Name == "Name").CheckError;
         string? NameCheckErrorIn(Language language)
         {
-            index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: [], stringsLanguage: language));
-            return Assert.Single(index.CopyIn(doorFormKey.ToString(), DataCopy).Require().Fields, f => f.Metadata.Name == "Name").CheckError;
+            var before = index.Sequence;
+            index.StringsLanguage.Set(language);
+            Waits.Reached(() => index.Sequence > before, "the sequence moving");
+            Waits.Reached(() => index.Status.State != LoadOrderState.Reconciling, "the reconcile");
+            return NameCheckError();
         }
 
-        var (first, second, third) = (NameCheckErrorIn(Language.English), NameCheckErrorIn(Language.German), NameCheckErrorIn(Language.English));
+        var (first, second, third) = (NameCheckError(), NameCheckErrorIn(Language.German), NameCheckErrorIn(Language.English));
 
         Assert.Equal(
             (null, "Fixture_de.STRINGS, Fixture_de.ILSTRINGS, Fixture_de.DLSTRINGS", null),
             (first, second, third));
+    }
+
+    [Fact]
+    public void AChangeOfTheStringsLanguage_AdvancesTheSequenceEvenWhereNoPluginIsReadAgain()
+    {
+        using var fx = new PluginFixtureBuilder("load-order-language-sequence")
+            .WithPlugin("Fixture.esp", mod => mod.Doors.AddNew("MainDoor"))
+            .BuildScattered();
+        using var index = Indexes.Reconciled(fx);
+        index.Settled();
+        var before = index.Sequence;
+
+        index.StringsLanguage.Set(Language.German);
+
+        Waits.Reached(() => index.Sequence > before, "the sequence moving");
     }
 
     private static readonly PluginAddress DataCopy = new("Fixture.esp", PluginOrigin.DataDirectory);
@@ -285,10 +307,9 @@ public sealed class LoadOrderLocalizedTests
     }
 
     private static LoadOrderSnapshot SnapshotOf(
-        PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads, string[]? gameArchives = null, string? instanceRoot = null,
-        Language stringsLanguage = Language.English) =>
+        PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads, string[]? gameArchives = null, string? instanceRoot = null) =>
         new(data.DataFolder, instanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(plugins), SnapshotPlugins.Active(plugins),
-            SnapshotPlugins.LoadedWithNoLine(plugins), [.. (gameArchives ?? []).Select(HandedStrings.Stamped)], [.. gameReads.Select(HandedStrings.Stamped)], stringsLanguage);
+            SnapshotPlugins.LoadedWithNoLine(plugins), [.. (gameArchives ?? []).Select(HandedStrings.Stamped)], [.. gameReads.Select(HandedStrings.Stamped)]);
 
     private static (bool NamesMissing, bool ReadsTheDoor) NameAfter(
         OpenedIndex index, LoadOrderHolder holder, PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads,

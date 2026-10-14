@@ -16,8 +16,8 @@ internal static class Wire
         client.PutLoadOrder(fx, Listed(fx, origins));
 
     internal static Task<HttpResponseMessage> PutLoadOrder(
-        this HttpClient client, ScatteredFixtureData fx, IEnumerable<LoadOrderEntry> plugins, string stringsLanguage = "English") =>
-        client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, plugins, stringsLanguage: stringsLanguage));
+        this HttpClient client, ScatteredFixtureData fx, IEnumerable<LoadOrderEntry> plugins) =>
+        client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, plugins));
 
     /// <summary>What Modbench sends once its watch sees a change: the snapshot again, whose arrival
     /// validates every file (ADR-0003).</summary>
@@ -41,6 +41,9 @@ internal static class Wire
         origins.Length == 0
             ? fx.Plugins
             : fx.Plugins.Where(p => p.LoadedWithNoLine || origins.Contains(p.Origin, StringComparer.Ordinal));
+
+    internal static Task<HttpResponseMessage> PutStringsLanguage(this HttpClient client, string language) =>
+        client.PutAsJsonAsync("/strings-language", new { language });
 
     internal static Task<HttpResponseMessage> SetFilter(this HttpClient client) =>
         client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" });

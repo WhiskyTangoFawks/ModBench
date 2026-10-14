@@ -85,6 +85,7 @@ try
     builder.Services.AddSingleton<StageHandler>();
     builder.Services.AddSingleton<DiscardHandler>();
     builder.Services.AddSingleton<LoadOrderHolder>();
+    builder.Services.AddSingleton<StringsLanguageHolder>();
     // One Index for the whole process (ADR-0014). Which file it opens comes from the
     // load request (ADR-0010), not from here.
     builder.Services.AddRecordIndex();
@@ -121,6 +122,7 @@ try
         .WithTags("Health");
 
     app.MapLoadOrderEndpoints();
+    app.MapStringsLanguageEndpoints();
     app.MapPluginEndpoints();
     app.MapModEndpoints();
     app.MapRecordEndpoints(app.Services.GetRequiredService<ILoggerFactory>());

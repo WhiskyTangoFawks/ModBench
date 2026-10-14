@@ -4,6 +4,7 @@ using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Strings;
 using Noggog.WorkEngine;
 
 namespace MEditService.PluginAdapter;
@@ -15,7 +16,7 @@ internal static class PluginTrees
 {
     /// <summary>A plugin's own binary read as the documents its tree would hold.</summary>
     internal static async Task<Answer<PluginSource, PluginFailure>> ReadAsync(
-        ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings,
+        ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings, Language language,
         CancellationToken cancel = default)
     {
         var gameRelease = loadOrder.GameRelease;
@@ -24,11 +25,11 @@ internal static class PluginTrees
             // Hashed before the read: bytes another tool writes after it are then named as an external
             // change, never taken for the bytes this tree came from.
             var binarySha256 = PluginBinaryHash.TrailerFormOfFile(modPath.Path);
-            var mod = MutagenPluginAdapter.OpenForWrite(modPath, gameRelease, strings, loadOrder);
+            var mod = MutagenPluginAdapter.OpenForWrite(modPath, gameRelease, strings, loadOrder, language);
 
             // Refuse by name before any serialize: TranslatedString.TryLookup returns false for a missing
             // file with no exception.
-            if (LocalizedStrings.FindMissingStringsFile(mod, modPath, strings, loadOrder, gameRelease) is { } missing)
+            if (LocalizedStrings.FindMissingStringsFile(mod, modPath, strings, loadOrder, gameRelease, language) is { } missing)
                 return new PluginFailure.MissingStrings(missing);
             if (mod.EnumerateMajorRecords().FirstOrDefault(record => record.FormKey.IsNull || record.FormKey == new FormKey(mod.ModKey, 0)) is { } objectIdZero)
             {
@@ -170,9 +171,9 @@ internal static class PluginTrees
     /// the one at <paramref name="modPath"/>; null when they are model-identical. Both are
     /// reparsed, since only written bytes show what the writer does.</summary>
     internal static ModelIdentity.Divergence? DivergenceBetween(
-        ModPath modPath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings)
+        ModPath modPath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings, Language language)
     {
-        var original = MutagenPluginAdapter.OpenForWrite(modPath, loadOrder.GameRelease, strings, loadOrder);
+        var original = MutagenPluginAdapter.OpenForWrite(modPath, loadOrder.GameRelease, strings, loadOrder, language);
         var recompiled = MutagenPluginAdapter.OpenForWrite(
             new ModPath(modPath.ModKey, recompiledPath), loadOrder.GameRelease, loadOrder: loadOrder);
 

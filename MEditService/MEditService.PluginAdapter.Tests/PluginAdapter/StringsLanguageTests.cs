@@ -11,8 +11,6 @@ public sealed class StringsLanguageTests : IDisposable
 {
     private const string PluginName = "Update.esm";
 
-    private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
-
     private readonly ScratchDirectory _root = new("medit-strings-language-");
     private readonly string _pluginPath;
 
@@ -26,27 +24,47 @@ public sealed class StringsLanguageTests : IDisposable
 
     private ModPath Mod => new(ModKey.FromFileName(PluginName), _pluginPath);
 
-    private LoadOrderSnapshot LoadOrderIn(Language language)
+    private static MutagenPluginAdapter AdapterIn(Language language)
     {
-        var plugin = new RegisteredPlugin(
-            PluginName, PluginOrigin.DataDirectory, _pluginPath, PluginProvider.Game, Line: null, HandedStrings.Of(_pluginPath));
-        return new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], [], language);
+        var holder = new StringsLanguageHolder();
+        holder.Set(language);
+        return new MutagenPluginAdapter(TimeProvider.System, holder);
+    }
+
+    private LoadOrderSnapshot LoadOrder
+    {
+        get
+        {
+            var plugin = new RegisteredPlugin(
+                PluginName, PluginOrigin.DataDirectory, _pluginPath, PluginProvider.Game, Line: null, HandedStrings.Of(_pluginPath));
+            return new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], []);
+        }
     }
 
     [Fact]
-    public void OpenDocuments_TheSnapshotsStringsLanguage_IsTheLanguageTheTextShowsIn()
+    public void OpenDocuments_TheStringsLanguage_IsTheLanguageTheTextShowsIn()
     {
-        using var documents = Adapter.OpenDocuments(
-            Mod, LoadOrderIn(Language.German), SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE), HandedStrings.Of(_pluginPath)).Answered();
+        using var documents = AdapterIn(Language.German).OpenDocuments(
+            Mod, LoadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE), HandedStrings.Of(_pluginPath)).Answered();
 
         Assert.Matches("\"TargetLanguage\":\\s*\"German\"", documents.Records.Single().Text);
     }
 
     [Fact]
-    public void ReadContent_TheSnapshotsStringsLanguage_IsTheLanguageWhoseFilesItChecksFor()
+    public void ReadContent_TheStringsLanguage_IsTheLanguageWhoseFilesItChecksFor()
     {
-        var (content, _) = Adapter.ReadContent(Mod, LoadOrderIn(Language.French), HandedStrings.Of(_pluginPath)).Answered();
+        var (content, _) = AdapterIn(Language.French).ReadContent(Mod, LoadOrder, HandedStrings.Of(_pluginPath)).Answered();
 
         Assert.Equal(["Update_French.STRINGS", "Update_French.ILSTRINGS", "Update_French.DLSTRINGS"], content.MissingStringsFiles);
+    }
+
+    [Fact]
+    public async Task ReadSourceOf_TheStringsLanguage_IsTheLanguageWhoseFilesItChecksFor()
+    {
+        var plugin = LoadOrder.Plugins.Single();
+
+        var source = await AdapterIn(Language.French).ReadSourceOfAsync(plugin, LoadOrder);
+
+        Assert.Equal("Update_French.STRINGS", Assert.IsType<PluginFailure.MissingStrings>(source.Failure()).File);
     }
 }

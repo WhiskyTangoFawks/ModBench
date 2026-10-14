@@ -1,6 +1,5 @@
 using MEditService.Commands;
 using MEditService.LoadOrder;
-using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Http.Endpoints;
 
@@ -38,8 +37,6 @@ internal static class LoadOrderEndpoints
             logger.LogInformation("Received PutLoadOrder for {InstanceRoot} ({Count} plugins)", req.InstanceRoot, req.Plugins?.Count ?? 0);
         }
         if (EndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
-        var stringsLanguage = Language.English;
-        if (req.StringsLanguage is { } rawLanguage && EndpointMapping.ParseStringsLanguage(rawLanguage, out stringsLanguage) is { } languageErr) return languageErr;
 
         if (RegisteredPluginsOf(req.Plugins) is not { } registered)
         {
@@ -54,7 +51,7 @@ internal static class LoadOrderEndpoints
 
         var result = handler.Put(
             req.GameDirectory, req.InstanceRoot, gameRelease,
-            registered, active, loadedWithNoLine, archives, stringsFiles, stringsLanguage);
+            registered, active, loadedWithNoLine, archives, stringsFiles);
         return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : EndpointMapping.Refusal(result);
     }
 

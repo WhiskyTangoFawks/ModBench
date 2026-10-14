@@ -10,6 +10,7 @@ import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } 
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import { createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
+import { createStringsLanguageHandOver } from './stringsLanguageHandOver';
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
@@ -94,6 +95,7 @@ class HttpMEditClient implements MEditClient {
   private readonly loadOrder: LoadOrderSender;
   private readonly loadOrderStatusKept: LoadOrderStatusKeeper;
   private readonly handOver: UnsavedHandOver;
+  private readonly stringsLanguageHandOver: ReturnType<typeof createStringsLanguageHandOver>;
   constructor(deps: HttpMEditClientDeps) {
     this.log = deps.log ?? SILENT_LOG;
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
@@ -124,6 +126,12 @@ class HttpMEditClient implements MEditClient {
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
       onReconnected: (listener) => this.notifications.onReconnected(listener),
       put: (documents) => this.putUnsavedDocuments(documents),
+    });
+    this.stringsLanguageHandOver = createStringsLanguageHandOver({
+      status: () => this.lifecycle.status,
+      onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
+      onReconnected: (listener) => this.notifications.onReconnected(listener),
+      put: (language) => this.putStringsLanguage(language),
     });
   }
 
@@ -166,6 +174,17 @@ class HttpMEditClient implements MEditClient {
 
   handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.handOver.hand(documents); }
   onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void { return this.handOver.onSettled(listener); }
+
+  handStringsLanguage(language: string): void { this.stringsLanguageHandOver.hand(language); }
+
+  private async putStringsLanguage(language: string): Promise<void> {
+    try {
+      const { response, error } = await this.apiClient.PUT('/strings-language', { body: { language } });
+      if (!response.ok) this.log.error(`[HttpMEditClient] putStringsLanguage failed (${response.status}): ${errorText(error)}`);
+    } catch (e) {
+      this.log.error(`[HttpMEditClient] putStringsLanguage threw: ${errorMessage(e)}`);
+    }
+  }
 
   private putUnsavedDocuments(documents: readonly UnsavedDocument[]): Promise<ReadFailed | undefined> {
     return this.read('putUnsavedDocuments', (signal) => this.apiClient.PUT('/unsaved-documents', { body: { documents: [...documents] }, signal }), () => undefined);

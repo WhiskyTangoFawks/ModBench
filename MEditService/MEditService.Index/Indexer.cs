@@ -32,6 +32,7 @@ internal sealed class Indexer : IDisposable
     private readonly ILogger _logger;
     private readonly INotificationPublisher? _notifications;
     private readonly TimeProvider _timeProvider;
+    private readonly StringsLanguageHolder _stringsLanguage;
 
     /// <summary>The registration's door: the Index opens its own store (ADR-0014).</summary>
     public Indexer(
@@ -42,9 +43,11 @@ internal sealed class Indexer : IDisposable
         SchemaReflector schemaReflector,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        StringsLanguageHolder? stringsLanguage = null)
     {
         _holder = holder;
+        _stringsLanguage = stringsLanguage ?? new StringsLanguageHolder();
         _unsaved = unsaved;
         _adapter = adapter;
         _source = source;
@@ -496,7 +499,7 @@ internal sealed class Indexer : IDisposable
     {
         var (held, store) = (scope.Held, scope.Store);
         FailCollisions(snapshot.CaseOnlyCollisions);
-        store.Commit(_ => store.SetStringsLanguage(snapshot.StringsLanguage));
+        store.Commit(_ => store.SetStringsLanguage(_stringsLanguage.Current));
         var resolved = snapshot.Plugins;
         // A hash is kept only for a file the load order names, or the kept hashes grow by every path
         // a session ever read.
@@ -857,7 +860,7 @@ internal sealed class Indexer : IDisposable
     // The language a read shows its texts in, and each place it takes its strings from, by the stamp Mod Management
     // handed with it, or why a place could not be read (ADR-0003).
     private string StringsReadBy(LoadOrderSnapshot loadOrder, RegisteredPlugin plugin) =>
-        $"{loadOrder.StringsLanguage}\n" + (_adapter.StringsPlacesOf(ModPathOf(plugin.Path), loadOrder, plugin.Strings).Holds(out var places, out var failure)
+        $"{_stringsLanguage.Current}\n" + (_adapter.StringsPlacesOf(ModPathOf(plugin.Path), loadOrder, plugin.Strings).Holds(out var places, out var failure)
             ? string.Join('\n', places.Select(place => $"{place}|{plugin.Strings.StampOf(place) ?? loadOrder.StampOf(place)}"))
             : failure.Reason);
 
@@ -1093,6 +1096,7 @@ internal sealed class Indexer : IDisposable
     public void Subscribe()
     {
         _holder.Arrived += OnArrived;
+        _stringsLanguage.Changed += StartReconcile;
         _unsaved.Arrived += ValidateTreesHolding;
     }
 

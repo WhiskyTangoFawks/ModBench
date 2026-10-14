@@ -55,7 +55,7 @@ import type { MoveToTrash } from './ports/trash';
 type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
-  'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
+  'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex' | 'handStringsLanguage'
   | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build' | 'init' | 'stage' | 'discardChanges' | 'changeBuildConfiguration'>;
 
 interface ViewsDeps {
@@ -130,7 +130,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const sourceGestureRows = selectionInFocusedView(
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.sourceGestureRowsIn');
   const plugins = own(pluginsBox.onInstance({
-    instance, instanceRoot, stringsLanguage, commands: pluginsCommands({ adapter, client }), sourceCommands: sourceCommands({ client, adapter }), pluginSync, sourceGestureRows, modsView: MODS_KEY_ARGS.view,
+    instance, instanceRoot, commands: pluginsCommands({ adapter, client }), sourceCommands: sourceCommands({ client, adapter }), pluginSync, sourceGestureRows, modsView: MODS_KEY_ARGS.view,
     saveUnsavedPluginSource: (mod) => saveModPluginSource((origin) => sourceFiles(instance.value, origin), mod),
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
   }));
@@ -154,7 +154,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   void client.start();
   const putLoadOrder = loadOrderPutHandler(editing);
   own(loadOrderPutOnEachValue(instance, putLoadOrder));
-  own(onStringsLanguageChange(() => { putLoadOrder(instance.value); }));
+  client.handStringsLanguage(stringsLanguage());
+  own(onStringsLanguageChange(() => { client.handStringsLanguage(stringsLanguage()); }));
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putLoadOrder));
   const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
   ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));
