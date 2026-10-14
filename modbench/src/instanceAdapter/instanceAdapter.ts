@@ -302,6 +302,11 @@ export interface HashedFile {
   readonly hash: string;
 }
 
+/** A game file by its forward-slash path under the game's Data folder, with its size and hash. */
+export interface GameFile extends HashedFile {
+  readonly path: string;
+}
+
 /** A downloaded file hashed whole and entry by entry. */
 export interface HashedDownload extends HashedFile {
   /** Each entry by its forward-slash path inside the file. */
@@ -353,6 +358,8 @@ export interface InstanceReading {
   readonly folderMeta: ReadonlyMap<string, ModMeta>;
   /** Every repository in the source folder. */
   readonly sourceMods: SourceMods;
+  /** Whether the instance folder holds a repository. */
+  readonly holdsRepository: boolean;
 }
 
 export interface InstanceAdapter {
@@ -371,6 +378,16 @@ export interface InstanceAdapter {
   installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
   /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
   readonly managerFilesInModFolder: readonly string[];
+  /** The game files in `dataFolder` that files of a mod, by their paths in it, override, named as the game folder
+   *  names them, with their hashes. */
+  overriddenGameFiles(dataFolder: string, modFilePaths: readonly string[]): Promise<FileRead<readonly GameFile[]>>;
+  /** The folder stage writes deltas into. */
+  readonly buildFolder: string;
+  /** Writes the instance repository's ignore list: a whitelist of what the repository holds. Rejects, writing nothing,
+   *  when an ignore list is already there. */
+  writeIgnoreList(): Promise<void>;
+  /** Takes back the ignore list `writeIgnoreList` wrote. */
+  removeIgnoreList(): Promise<void>;
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** An origin file's size and hash at the path it is read from, remembered for this session alone: its lasting hash

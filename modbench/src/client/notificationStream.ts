@@ -8,7 +8,7 @@ import { errorMessage } from '../ports/errorMessage';
 // default answer below is settled, which `SseNotificationSubscriber` overrides with its own.
 class NotificationListenerRegistry {
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
-    'load-order-status': new Set(), 'init-progress': new Set(), 'external-change': new Set(),
+    'load-order-status': new Set(), 'init-progress': new Set(), 'stage-progress': new Set(), 'external-change': new Set(),
     'plugin-source-unreadable': new Set(), 'record-filter-cleared': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
   };
 
@@ -37,6 +37,9 @@ class NotificationListenerRegistry {
         break;
       case 'init-progress':
         if (event.initProgress) this.deliver('init-progress', event.initProgress);
+        break;
+      case 'stage-progress':
+        if (event.stageProgress) this.deliver('stage-progress', event.stageProgress);
         break;
       case 'external-change':
         this.deliver('external-change', { origin, changedPlugins: event.changedPlugins ?? [] });
@@ -108,6 +111,7 @@ function parseNotificationEvent(raw: string): NotificationEvent {
     kind?: unknown; plugin?: unknown; origin?: unknown; keys?: unknown; sequence?: unknown;
     loadOrderStatus?: NotificationEvent['loadOrderStatus'];
     initProgress?: NotificationEvent['initProgress'];
+    stageProgress?: NotificationEvent['stageProgress'];
     changedPlugins?: NotificationEvent['changedPlugins'];
     pluginWithUnreadableSources?: NotificationEvent['pluginWithUnreadableSources'];
     recordFilterCleared?: NotificationEvent['recordFilterCleared'];
@@ -119,7 +123,7 @@ function parseNotificationEvent(raw: string): NotificationEvent {
   if (typeof w.sequence !== 'number') throw new Error('Expected a notification event to carry a numeric sequence.');
   return {
     kind: w.kind, plugin: w.plugin, origin: w.origin, keys: w.keys, sequence: w.sequence,
-    loadOrderStatus: w.loadOrderStatus, initProgress: w.initProgress, changedPlugins: w.changedPlugins,
+    loadOrderStatus: w.loadOrderStatus, initProgress: w.initProgress, stageProgress: w.stageProgress, changedPlugins: w.changedPlugins,
     pluginWithUnreadableSources: w.pluginWithUnreadableSources, recordFilterCleared: w.recordFilterCleared,
   };
 }

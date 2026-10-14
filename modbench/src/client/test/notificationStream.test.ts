@@ -244,11 +244,13 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     conflictsComputed: true, failures: [], version: 4,
   };
   const initProgress: NotificationEvent['initProgress'] = { mod: 'ModA', phase: 'Parsing', pluginsDone: 1, pluginsTotal: 2 };
+  const stageProgress: NotificationEvent['stageProgress'] = { mod: 'ModA', modsDone: 1, modsTotal: 2 };
   const changedPlugins = [{ name: 'A.esp', bytesSha256: 'abc' }];
 
   const cases: [NotificationKind, NotificationEvent, unknown][] = [
     ['load-order-status', rowsChanged([], { kind: 'load-order-status', loadOrderStatus }), toLoadOrderStatus(loadOrderStatus)],
     ['init-progress', rowsChanged([], { kind: 'init-progress', initProgress }), initProgress],
+    ['stage-progress', rowsChanged([], { kind: 'stage-progress', stageProgress }), stageProgress],
     ['external-change', rowsChanged([], { kind: 'external-change', changedPlugins }), { origin: 'ModA', changedPlugins }],
     ['plugin-source-unreadable', rowsChanged([], { kind: 'plugin-source-unreadable', pluginWithUnreadableSources: [{ name: 'A.esp', source: { reason: 'Gone.', decompileRepairs: true } }] }),
       { plugins: [{ name: 'A.esp', origin: 'ModA', reason: 'Gone.', decompileRepairs: true }] }],
@@ -277,7 +279,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     expect(heard).toEqual([{ origin: 'ModA', changedPlugins: [] }]);
   });
 
-  it.each(['load-order-status', 'init-progress'] as const)('skips a %s frame missing its payload', (kind) => {
+  it.each(['load-order-status', 'init-progress', 'stage-progress'] as const)('skips a %s frame missing its payload', (kind) => {
     const subscriber = new TestableSubscriber();
     const heard: unknown[] = [];
     subscriber.onNotification(kind, (p) => heard.push(p));

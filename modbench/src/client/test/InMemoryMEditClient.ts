@@ -19,7 +19,7 @@ type QueryMethod =
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
-  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'init' | 'build' | 'getCreateChanges' | 'getDeleteChanges'
+  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'init' | 'build' | 'stage' | 'getCreateChanges' | 'getDeleteChanges'
   | 'getCopyChanges' | 'decompile' | 'changeBuildConfiguration';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
@@ -322,6 +322,9 @@ export class InMemoryMEditClient implements MEditClient {
   }
   build(...args: Parameters<MEditClient['build']>): ReturnType<MEditClient['build']> {
     return this.command('build', args);
+  }
+  stage(...args: Parameters<MEditClient['stage']>): ReturnType<MEditClient['stage']> {
+    return this.command('stage', args);
   }
   changeBuildConfiguration(...args: Parameters<MEditClient['changeBuildConfiguration']>): ReturnType<MEditClient['changeBuildConfiguration']> {
     return this.command('changeBuildConfiguration', args);

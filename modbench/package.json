@@ -553,6 +553,16 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.modlist.init",
+        "title": "Init Modlist",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.modlist.stage",
+        "title": "Stage Modlist",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.record.create",
         "title": "Create Record…",
         "category": "Modbench"
@@ -715,6 +725,14 @@
           "when": "modbench.folder == instance && modbench.mod.anySource"
         },
         {
+          "command": "modbench.modlist.init",
+          "when": "modbench.folder == instance && !modbench.modlist.hasRepository"
+        },
+        {
+          "command": "modbench.modlist.stage",
+          "when": "modbench.folder == instance && modbench.modlist.hasRepository"
+        },
+        {
           "command": "modbench.record.create",
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleCreatable"
         },
@@ -855,6 +873,13 @@
           "when": "modbench.folder == instance"
         }
       ],
+      "scm/title": [
+        {
+          "command": "modbench.modlist.stage",
+          "when": "scmProvider == git && scmProviderRootUri in modbench.modlist.instanceRoots",
+          "group": "modbench@1"
+        }
+      ],
       "view/title": [
         {
           "command": "modbench.instance.refresh",
@@ -961,6 +986,16 @@
         {
           "command": "modbench.profile.switch",
           "when": "view == modbench.toolbox && viewItem == profile",
+          "group": "modbench@1"
+        },
+        {
+          "command": "modbench.modlist.init",
+          "when": "view == modbench.toolbox && viewItem == modlist && !modbench.modlist.hasRepository",
+          "group": "modbench@1"
+        },
+        {
+          "command": "modbench.modlist.stage",
+          "when": "view == modbench.toolbox && viewItem == modlist && modbench.modlist.hasRepository",
           "group": "modbench@1"
         },
         {
@@ -1077,6 +1112,11 @@
           "command": "modbench.mod.build",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\btracked\\b/",
           "group": "4_sourceControl@2"
+        },
+        {
+          "command": "modbench.modlist.stage",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.modlist.hasRepository",
+          "group": "4_sourceControl@3"
         },
         {
           "command": "modbench.copyValue",

@@ -8,10 +8,12 @@
     "types": ["node", "vscode"]
   },
   "references": [
+    { "path": "../client" },
     { "path": "../drivingLib" },
     { "path": "../instanceLoader" },
     { "path": "../instanceCommands" },
     { "path": "../ports" },
+    { "path": "../sourceCommands" },
     { "path": "../wire" }
   ],
   "include": ["**/*.ts"],

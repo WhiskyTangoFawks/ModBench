@@ -14,6 +14,7 @@ import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type BackendStatus, type BuildConfigurationChange, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
+  type StageFacts, type StageMod, type StageOutcome, type StageProgress,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -473,6 +474,22 @@ class HttpMEditClient implements MEditClient {
         refused: answer.refused,
       }),
     });
+  }
+
+  async stage(
+    mods: readonly StageMod[], facts: StageFacts, options: { onProgress?: (progress: StageProgress) => void } = {},
+  ): Promise<StageOutcome | WriteRefused> {
+    const unsubscribe = options.onProgress ? this.notifications.onNotification('stage-progress', options.onProgress) : () => {};
+    try {
+      return await this.mutateEach({
+        verb: 'stage', noun: 'mod', items: mods,
+        op: (counted) => `stage(${counted})`,
+        post: () => this.apiClient.POST('/modlist/stage', { body: { mods: [...mods], ...facts } }),
+        outcome: (answer) => selectionOutcome(answer),
+      });
+    } finally {
+      unsubscribe();
+    }
   }
 
   /** A refusal (untracked plugin, a link that would dangle) comes back typed (ADR-0014); only a

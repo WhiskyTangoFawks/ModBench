@@ -13,6 +13,7 @@ import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
 import type { Mo2Context } from './mo2Context';
 import { mo2Landing } from './mo2Landing';
+import { mo2Repository } from './mo2Repository';
 import { mo2PluginRename } from './mo2PluginRename';
 import { mo2Installation } from './mo2Installation';
 import { mo2Reads, readingSource, readInstance } from './mo2Reads';
@@ -55,7 +56,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter
   return {
     names,
     reading: () => readInstance(source),
-    ...mo2Reads(context), ...mo2Installation(context, hashes), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives),
+    ...mo2Reads(context), ...mo2Installation(context, hashes), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives), ...mo2Repository(context, hashes),
     originFileHash: hashes.originFileHash,
     subscribe: (listener) => context.watch.subscribe(listener),
   };

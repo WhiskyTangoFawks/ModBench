@@ -169,6 +169,8 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
 
 const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, installationFiles: [], modManagerFiles: ['meta.ini'] });
 const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, installationFiles: [] });
+const modToStage = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], committedFiles: ['meta.ini'] });
+const stageFacts = { gameFiles: [{ path: 'Game.esm', size: 7, hash: 'AAECAwQFBgc=' }], dataFolder: '/game/Data', buildFolder: '/instance/build', deltaShare: 0.5 };
 const buildFacts = { excludedSuffix: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } } };
 
 describe('HttpMEditClient — what each verb sends and reads', () => {
@@ -258,6 +260,16 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         refused: [{ item: 'ModC', reason: 'git was not found on PATH.' }],
       },
       path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
+    { name: 'stage', verb: (c) => c.stage([modToStage('ModA'), modToStage('ModC')], stageFacts),
+      answer: {
+        applied: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif'] }],
+        refused: [{ item: 'ModC', refusal: 'InstallationFileMissing', message: "'ModC' was not staged: 'C.zip' not in the downloads folder." }],
+      },
+      reads: {
+        landed: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif'] }],
+        refused: [{ item: 'ModC', reason: "'ModC' was not staged: 'C.zip' not in the downloads folder." }],
+      },
+      path: '/modlist/stage', body: { mods: [modToStage('ModA'), modToStage('ModC')], ...stageFacts } },
     { name: 'decompile', verb: (c) => c.decompile([first, second]),
       answer: { applied: [first], refused: [{ item: second, refusal: 'NotInTrackedMod', message: 'Second.esp is not in a tracked mod.' }] },
       reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a tracked mod.' }] },
@@ -404,6 +416,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename the source of "Old.esp"' },
       { name: 'init', verb: (c) => c.init([modToInit('ModA'), modToInit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile and commit 2 mods' },
       { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModB')], buildFacts), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
+      { name: 'stage', verb: (c) => c.stage([modToStage('ModA'), modToStage('ModB')], stageFacts), status: 503, body: detail, text: detail, refusal: 'Could not stage 2 mods' },
       { name: 'decompile', verb: (c) => c.decompile([first, second]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
       { name: 'changeBuildConfiguration', verb: (c) => c.changeBuildConfiguration('/instance/source/ModA', { exclude: ['a.dds'] }), status: 422,
         body: { detail: 'It holds no build configuration.' }, text: 'It holds no build configuration.', refusal: 'Could not change the build configuration in "/instance/source/ModA"' },

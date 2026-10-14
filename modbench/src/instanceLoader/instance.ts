@@ -60,6 +60,8 @@ export interface InstanceValue {
   readonly trackedMods: ReadonlySet<string>;
   /** Every mod a repository in the source folder builds, listed in the mod order or not. */
   readonly sourceMods: ReadonlySet<string>;
+  /** Whether the instance folder holds a repository. */
+  readonly holdsRepository: boolean;
   /** Every profile, the switch's choices. */
   readonly profiles: readonly string[];
   /** The winning enabled provider of every relative path, and its contenders. */
@@ -169,6 +171,7 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   modFolders: [],
   trackedMods: new Set(),
   sourceMods: new Set(),
+  holdsRepository: false,
   profiles: [],
   files: new FileConflictLookup(),
   filesByMod: new Map(),
@@ -413,6 +416,7 @@ export class Instance implements Subscription {
       modFolders: modFolderList,
       trackedMods: new Set(entries.flatMap((entry) => (entry.kind === 'mod' && paths.sourceDirs.has(entry.name) ? [entry.name] : []))),
       sourceMods: new Set(paths.sourceDirs.keys()),
+      holdsRepository: reading.holdsRepository,
       profiles,
       files: index.files,
       filesByMod: index.filesByMod,

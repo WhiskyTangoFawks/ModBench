@@ -136,6 +136,14 @@ describe('Instance — the value', () => {
     expect(value.gameFolder).toEqual(GAME_FOLDER);
   });
 
+  it('carries whether the instance holds a repository', async () => {
+    const { instance } = loader({ holdsRepository: true });
+
+    await instance.refresh();
+
+    expect(instance.value.holdsRepository).toBe(true);
+  });
+
   it('carries each mod a repository builds as tracked, with that repository as its source folder, and each repository alone as a source mod', async () => {
     const { instance, logs } = loader({
       mods: [mod('Harder VATS'), mod('[NODELETE] Radfall'), mod('Plain')],
