@@ -89,7 +89,7 @@ export function registerRenamePluginCommand(
       if (refusal !== undefined) throw new Refusal(refusal);
       return { plugin, newName: name };
     },
-    run: ({ plugin, newName }) => vscode.window.withProgress({ location: { viewId: PLUGINS_KEY_ARGS.view } }, () =>
+    run: async ({ plugin, newName }) => vscode.window.withProgress({ location: { viewId: PLUGINS_KEY_ARGS.view } }, () =>
       instance.quiet(() => source.oneAtATime(() => renamed({ commands, source, instance }, plugin, newName)))),
     report: (result) => {
       if (!result.applied) reporter.report('error', 'message' in result ? result.message : result.refusal, 'detail' in result ? result.detail : undefined);
