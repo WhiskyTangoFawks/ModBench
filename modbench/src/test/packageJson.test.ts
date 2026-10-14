@@ -1131,6 +1131,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.separator.delete', 'mod'],
     ['modbench.mod.uninstall', 'separator'],
     ['modbench.mod.rename', 'separator'],
+    ['modbench.mod.openConflicts', 'separator'],
     ['modbench.separator.rename', 'mod'],
   ])('%s is not in the palette on a %s selection', (command, kind) => {
     const selection = { focusedView: 'modbench.modList', ...inInstance, 'modbench.mod.selectionKind': kind, 'modbench.mod.singleRow': true };
