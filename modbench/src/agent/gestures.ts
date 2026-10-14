@@ -4,8 +4,8 @@ import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { downloadsNamed, filesNamed, linesNamed, modsNamed, pluginsNamed } from './names';
 import type { MEditClient } from '../client/MEditClient';
-import { failureReason, isReadFailed } from '../wire/readFailed';
 import { Refusal } from '../drivingLib/refusal';
+import { formKeysNamed } from './recordNames';
 import { parseOrRefuse } from './refusal';
 
 interface GestureInput {
@@ -179,15 +179,11 @@ const OPEN_RECORD = gestureInput(
     options: z.object({ pinned: z.boolean().optional() }).optional(),
   }),
   async (value, { argument, options }, mEdit) => {
-    const named = await mEdit.resolveNames(argument.map(({ name }) => ({ name })));
-    if (isReadFailed(named)) throw new Refusal(failureReason(named));
-    const records = argument.map(({ name, plugin }, at) => ({ name, plugin, formKey: named[at]?.formKey }));
-    const notRecords = records.filter(({ formKey }) => !formKey).map(({ name }) => `"${name}" is not a record.`);
-    if (notRecords.length > 0) throw new Refusal(notRecords.join(' '));
+    const formKeys = await formKeysNamed(mEdit, argument.map(({ name }) => name));
     return new AgentCall(
-      records.flatMap(({ formKey, plugin }) => (formKey ? [{
-        kind: 'record' as const, formKey, ...(plugin && { plugin: pluginsNamed(value.plugins, [plugin])[0] }),
-      }] : [])),
+      formKeys.map((formKey, at) => ({
+        kind: 'record' as const, formKey, ...(argument[at]?.plugin && { plugin: pluginsNamed(value.plugins, [argument[at].plugin])[0] }),
+      })),
       { pinned: options?.pinned },
     );
   },
