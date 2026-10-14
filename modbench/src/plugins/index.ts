@@ -30,7 +30,7 @@ export interface PluginsDeps {
 
 type PluginsInstanceDeps = Pick<PluginsViewDeps,
   'instance' | 'commands' | 'sourceCommands' | 'pluginSync' | 'saveUnsavedPluginSource' | 'sourceGestureRows' | 'modsView' | 'dataFolderFile'
-> & { instanceRoot: string };
+> & { instanceRoot: string; stringsLanguage: () => string };
 
 interface PluginsOnInstance extends vscode.Disposable {
   followed: PluginsView['followed'];
@@ -60,7 +60,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
   return {
     recordWrite,
     conditionsOf: (plugin) => shown?.conditionsOf(plugin) ?? { tracked: false, editable: false },
-    onInstance: ({ instanceRoot, ...instanceDeps }) => {
+    onInstance: ({ instanceRoot, stringsLanguage, ...instanceDeps }) => {
       const view = createPluginsView({
         ...instanceDeps, recordBrowser, client, statusBar, channel, registerRepositories: deps.registerRepositories, reporterFor,
         ask: deps.ask, recordWrite, sourceEditing: deps.sourceEditing,
@@ -72,7 +72,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
         reporterFor,
       });
       const editing = editingFlow({
-        client, instanceRoot, around: editingShown.around, onPut: editingShown.onPut, reporterFor, log: (line) => channel.error(line),
+        client, instanceRoot, stringsLanguage, around: editingShown.around, onPut: editingShown.onPut, reporterFor, log: (line) => channel.error(line),
       });
       return {
         followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, editing,

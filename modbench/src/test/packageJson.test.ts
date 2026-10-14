@@ -1323,3 +1323,9 @@ describe('package.json Referenced By menus', () => {
     expect(pkg.contributes.keybindings.filter((k) => k.when.includes('references-view'))).toEqual([]);
   });
 });
+
+describe('package.json contributes the strings language as a setting (editor-fields.md, By type)', () => {
+  it('a string defaulting to English', () => {
+    expect(pkg.contributes.configuration.properties['modbench.stringsLanguage']).toMatchObject({ type: 'string', default: 'English' });
+  });
+});

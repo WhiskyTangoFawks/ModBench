@@ -30,13 +30,13 @@ export type PutLoadOrderResult =
 export const releaseOf = (game: InstanceGame): string => game.gameRelease ?? game.gameName;
 
 export async function putLoadOrder(
-  client: Pick<MEditClient, 'sendLoadOrder'>, instanceRoot: string, value: LoadOrderSource,
+  client: Pick<MEditClient, 'sendLoadOrder'>, instanceRoot: string, value: LoadOrderSource, stringsLanguage: string,
 ): Promise<PutLoadOrderResult> {
   if (!value.loadOrderSnapshot) return { sent: false };
   if ('refusal' in value.loadOrderSnapshot) return { sent: false, refusal: value.loadOrderSnapshot.refusal };
   const { plugins, active, loadedWithNoLine, archives, stringsFiles, dataFolder } = value.loadOrderSnapshot;
   const snapshot: LoadOrderSnapshot = {
-    plugins, active, loadedWithNoLine, archives, stringsFiles, gameDirectory: dataFolder, instanceRoot, gameRelease: releaseOf(value),
+    plugins, active, loadedWithNoLine, archives, stringsFiles, gameDirectory: dataFolder, instanceRoot, gameRelease: releaseOf(value), stringsLanguage,
   };
   return { sent: true, snapshot, outcome: await client.sendLoadOrder(snapshot) };
 }

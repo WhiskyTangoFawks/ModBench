@@ -16,8 +16,8 @@ internal static class Wire
         client.PutLoadOrder(fx, Listed(fx, origins));
 
     internal static Task<HttpResponseMessage> PutLoadOrder(
-        this HttpClient client, ScatteredFixtureData fx, IEnumerable<LoadOrderEntry> plugins) =>
-        client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, plugins));
+        this HttpClient client, ScatteredFixtureData fx, IEnumerable<LoadOrderEntry> plugins, string stringsLanguage = "English") =>
+        client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, plugins, stringsLanguage: stringsLanguage));
 
     /// <summary>What Modbench sends once its watch sees a change: the snapshot again, whose arrival
     /// validates every file (ADR-0003).</summary>

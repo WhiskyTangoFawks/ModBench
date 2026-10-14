@@ -1,4 +1,5 @@
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 // Where a judgement sees a plugin. One that is not active sits just before the active plugin with as
 // many active plugins before it, as false orders before true.
 using Place = (int ActivePluginsBefore, bool IsActive);
@@ -58,7 +59,7 @@ public readonly record struct PluginLine(int Place, bool NamesIt);
 public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 {
     /// <summary>No snapshot has arrived.</summary>
-    internal static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, [], [], [], [], []);
+    internal static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, [], [], [], [], [], Language.English);
 
     private readonly Dictionary<PluginAddress, int> _loadOrderIndex;
 
@@ -94,10 +95,13 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// every archive's copy.</summary>
     public IReadOnlyList<StampedFile> StringsFiles { get; }
 
+    /// <summary>The language a translated text shows in, and the one whose strings files a read of a localized plugin needs.</summary>
+    public Language StringsLanguage { get; }
+
     public LoadOrderSnapshot(
         string dataFolderPath, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<RegisteredPlugin> plugins,
         IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine, IReadOnlyList<StampedFile> archives,
-        IReadOnlyList<StampedFile> stringsFiles)
+        IReadOnlyList<StampedFile> stringsFiles, Language stringsLanguage = Language.English)
     {
         if (RefusalOf(plugins, active, loadedWithNoLine) is { } refusal) throw new ArgumentException(refusal);
         DataFolderPath = dataFolderPath;
@@ -118,6 +122,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         _places = PlacesOf(Plugins, Active, LoadedWithNoLine);
         Archives = [.. archives];
         StringsFiles = [.. stringsFiles];
+        StringsLanguage = stringsLanguage;
     }
 
     // A plugin with no line that is not active has no place.
@@ -206,7 +211,8 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         && Active.SequenceEqual(other.Active)
         && LoadedWithNoLine.SequenceEqual(other.LoadedWithNoLine)
         && Archives.SequenceEqual(other.Archives)
-        && StringsFiles.SequenceEqual(other.StringsFiles);
+        && StringsFiles.SequenceEqual(other.StringsFiles)
+        && StringsLanguage == other.StringsLanguage;
 
     public override bool Equals(object? obj) => Equals(obj as LoadOrderSnapshot);
 

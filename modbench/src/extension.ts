@@ -23,7 +23,7 @@ import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { sevenZip, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
-import { agentPort, attachPort, gameDirectoryOverrides, inheritedPythonPath, onGameDirectoryChange, onTerminalEnvChange } from './workspaceConfig';
+import { agentPort, attachPort, gameDirectoryOverrides, inheritedPythonPath, onGameDirectoryChange, onStringsLanguageChange, onTerminalEnvChange, stringsLanguage } from './workspaceConfig';
 import { createPlugins, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
@@ -130,7 +130,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const sourceGestureRows = selectionInFocusedView(
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.sourceGestureRowsIn');
   const plugins = own(pluginsBox.onInstance({
-    instance, instanceRoot, commands: pluginsCommands({ adapter, client }), sourceCommands: sourceCommands({ client, adapter }), pluginSync, sourceGestureRows, modsView: MODS_KEY_ARGS.view,
+    instance, instanceRoot, stringsLanguage, commands: pluginsCommands({ adapter, client }), sourceCommands: sourceCommands({ client, adapter }), pluginSync, sourceGestureRows, modsView: MODS_KEY_ARGS.view,
     saveUnsavedPluginSource: (mod) => saveModPluginSource((origin) => sourceFiles(instance.value, origin), mod),
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
   }));
@@ -154,6 +154,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   void client.start();
   const putLoadOrder = loadOrderPutHandler(editing);
   own(loadOrderPutOnEachValue(instance, putLoadOrder));
+  own(onStringsLanguageChange(() => { putLoadOrder(instance.value); }));
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putLoadOrder));
   const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
   ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));

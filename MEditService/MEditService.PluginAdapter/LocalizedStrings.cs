@@ -30,9 +30,6 @@ internal static class LocalizedStrings
 {
     private static readonly StringsSource[] Sources = [StringsSource.Normal, StringsSource.IL, StringsSource.DL];
 
-    // Mutagen's default target, and the one language init checks for until the strings language setting chooses another.
-    private const Language Target = Language.English;
-
     // Each archive's strings files by the stamp Mod Management handed with it (ADR-0013): a listed archive is opened
     // once, not on every read, and listed again once its stamp changes (ADR-0003).
     private static readonly ConcurrentDictionary<string, (string Stamp, string[] Paths)> StringsPathsIn = new(StringComparer.Ordinal);
@@ -60,7 +57,7 @@ internal static class LocalizedStrings
             var stringsFolder = Directory.CreateDirectory(Path.Combine(scratch, "Strings")).FullName;
             foreach (var ((source, language), file) in found)
                 File.WriteAllBytes(Path.Combine(stringsFolder, StringsUtility.GetFileName(languageFormat, plugin.ModKey, language, source)), file.Bytes());
-            return new StringsRead(ForFolder(scratch), scratch);
+            return new StringsRead(ForFolder(scratch, LanguageOf(loadOrder)), scratch);
         }
         catch
         {
@@ -87,8 +84,8 @@ internal static class LocalizedStrings
         return
         [
             .. Sources
-                .Where(source => !found.ContainsKey((source, Target)))
-                .Select(source => StringsUtility.GetFileName(languageFormat, plugin.ModKey, Target, source)),
+                .Where(source => !found.ContainsKey((source, loadOrder.StringsLanguage)))
+                .Select(source => StringsUtility.GetFileName(languageFormat, plugin.ModKey, loadOrder.StringsLanguage, source)),
         ];
     }
 
@@ -109,6 +106,8 @@ internal static class LocalizedStrings
             && StringsFile.Named(path[folder.Length..], plugin.ModKey, languageFormat, path, () => []) is not null;
     }
 
+    private static Language LanguageOf(LoadOrderSnapshot? loadOrder) => loadOrder?.StringsLanguage ?? Language.English;
+
     private static bool IsLocalized(ModPath plugin, GameRelease gameRelease) =>
         GameConstants.Get(gameRelease).StringsLanguageFormat is not null
         && gameRelease.ToCategory().GetLocalizedFlagIndex() is { } localized
@@ -124,19 +123,20 @@ internal static class LocalizedStrings
         PluginStrings strings, LoadOrderSnapshot? loadOrder, ModPath plugin, GameRelease gameRelease)
     {
         var languageFormat = LanguageFormat(gameRelease);
+        var language = LanguageOf(loadOrder);
         var found = loadOrder is not null && loadOrder.ReadsTheGamesStrings(plugin.Path)
-            ? FirstHolding(TheGamesPlaces(loadOrder, plugin.ModKey, gameRelease, languageFormat))
+            ? FirstHolding(TheGamesPlaces(loadOrder, plugin.ModKey, gameRelease, languageFormat), language)
             : [];
-        return found.Count > 0 ? found : FirstHolding(OwnPlaces(strings, plugin.ModKey, gameRelease, languageFormat));
+        return found.Count > 0 ? found : FirstHolding(OwnPlaces(strings, plugin.ModKey, gameRelease, languageFormat), language);
     }
 
-    private static Dictionary<(StringsSource Source, Language Language), StringsFile> FirstHolding(IEnumerable<IReadOnlyList<StringsFile>> places)
+    private static Dictionary<(StringsSource Source, Language Language), StringsFile> FirstHolding(IEnumerable<IReadOnlyList<StringsFile>> places, Language language)
     {
         var found = new Dictionary<(StringsSource, Language), StringsFile>();
         foreach (var place in places)
         {
             foreach (var file in place) found.TryAdd((file.Source, file.Language), file);
-            if (Sources.All(source => found.ContainsKey((source, Target)))) break;
+            if (Sources.All(source => found.ContainsKey((source, language)))) break;
         }
         return found;
     }
@@ -193,7 +193,7 @@ internal static class LocalizedStrings
         }
     }
 
-    private static BinaryReadParameters ForFolder(string folder)
+    private static BinaryReadParameters ForFolder(string folder, Language language)
     {
         EnsureLocalAppDataDefault();
         return new BinaryReadParameters
@@ -202,6 +202,7 @@ internal static class LocalizedStrings
             {
                 StringsFolderOverride = Path.Combine(folder, "Strings"),
                 BsaFolderOverride = folder,
+                TargetLanguage = language,
             },
         };
     }

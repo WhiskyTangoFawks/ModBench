@@ -1208,6 +1208,7 @@ export interface components {
             gameDirectory: string;
             instanceRoot: string;
             gameRelease: string;
+            stringsLanguage?: string | null;
         };
         LoadOrderResponse: {
             applied: boolean;

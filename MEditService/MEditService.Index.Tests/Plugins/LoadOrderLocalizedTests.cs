@@ -226,6 +226,25 @@ public sealed class LoadOrderLocalizedTests
         Assert.Contains("The New Door", name.Value?.ToString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ALocalizedPluginUnderAStringsLanguageItHoldsNoStringsFor_NamesThatLanguagesFiles_UntilTheLanguageChangesBack()
+    {
+        using var data = LocalizedDoor("load-order-localized-language", out var doorFormKey);
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        string? NameCheckErrorIn(Language language)
+        {
+            index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: [], stringsLanguage: language));
+            return Assert.Single(index.CopyIn(doorFormKey.ToString(), DataCopy).Require().Fields, f => f.Metadata.Name == "Name").CheckError;
+        }
+
+        var (first, second, third) = (NameCheckErrorIn(Language.English), NameCheckErrorIn(Language.German), NameCheckErrorIn(Language.English));
+
+        Assert.Equal(
+            (null, "Fixture_de.STRINGS, Fixture_de.ILSTRINGS, Fixture_de.DLSTRINGS", null),
+            (first, second, third));
+    }
+
     private static readonly PluginAddress DataCopy = new("Fixture.esp", PluginOrigin.DataDirectory);
 
     private static PluginFixtureData LocalizedDoor(string name, out FormKey doorFormKey)
@@ -266,9 +285,10 @@ public sealed class LoadOrderLocalizedTests
     }
 
     private static LoadOrderSnapshot SnapshotOf(
-        PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads, string[]? gameArchives = null, string? instanceRoot = null) =>
+        PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads, string[]? gameArchives = null, string? instanceRoot = null,
+        Language stringsLanguage = Language.English) =>
         new(data.DataFolder, instanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(plugins), SnapshotPlugins.Active(plugins),
-            SnapshotPlugins.LoadedWithNoLine(plugins), [.. (gameArchives ?? []).Select(HandedStrings.Stamped)], [.. gameReads.Select(HandedStrings.Stamped)]);
+            SnapshotPlugins.LoadedWithNoLine(plugins), [.. (gameArchives ?? []).Select(HandedStrings.Stamped)], [.. gameReads.Select(HandedStrings.Stamped)], stringsLanguage);
 
     private static (bool NamesMissing, bool ReadsTheDoor) NameAfter(
         OpenedIndex index, LoadOrderHolder holder, PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads,

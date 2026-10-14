@@ -290,7 +290,7 @@ describe('the Plugins view says what it knows of a plugin\'s tracking and editab
         sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
       });
       const onInstance = () => plugins.onInstance({
-        instance: new FakeInstance(value), instanceRoot: '/instance', commands: pluginsCommandsWith(fakeInstanceAdapter().adapter),
+        instance: new FakeInstance(value), instanceRoot: '/instance', stringsLanguage: () => 'English', commands: pluginsCommandsWith(fakeInstanceAdapter().adapter),
         sourceCommands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter }),
         pluginSync: syncRefusing().pluginSync, saveUnsavedPluginSource: () => Promise.resolve([]), sourceGestureRows: () => [],
         modsView: 'modbench.modList', dataFolderFile: () => undefined,

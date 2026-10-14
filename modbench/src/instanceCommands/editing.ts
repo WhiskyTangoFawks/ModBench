@@ -12,6 +12,8 @@ const STOPPED = 'mEdit stopped. Reload the window to start it again.';
 export interface EditingDeps {
   client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent' | 'onLaunch' | 'onExit' | 'latestLoadOrder'>;
   instanceRoot: string;
+  /** The strings language setting, read fresh at each put. */
+  stringsLanguage: () => string;
   /** Shows a launch, from its start until the snapshot it was for is told (plugins.md, States 2). */
   around: (entry: () => Promise<void>) => Promise<void>;
   /** What came of a put: the snapshot sent and mEdit's outcome, or why nothing was sent. */
@@ -43,7 +45,7 @@ function pending(logThrown: (reason: string) => void) {
 }
 
 export function editingFlow(deps: EditingDeps): EditingFlow {
-  const { client, instanceRoot, around, onPut, reporterFor, log } = deps;
+  const { client, instanceRoot, stringsLanguage, around, onPut, reporterFor, log } = deps;
   const reportStopped = (tag: string, detail?: string): void => { reporterFor(tag).report('error', STOPPED, detail); };
   const tells = pending((reason) => { log(`[loadOrder] handing mEdit the load order threw: ${reason}`); });
   const launches = pending((reason) => { log(`[loadOrder] telling the launch of mEdit threw: ${reason}`); });
@@ -93,7 +95,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
         entering = false;
       }
     },
-    onRecompute: (source) => { tellPut(putLoadOrder(client, instanceRoot, source)); },
+    onRecompute: (source) => { tellPut(putLoadOrder(client, instanceRoot, source, stringsLanguage())); },
     dispose: () => { for (const unsubscribe of unsubscribes) unsubscribe(); },
   };
 }

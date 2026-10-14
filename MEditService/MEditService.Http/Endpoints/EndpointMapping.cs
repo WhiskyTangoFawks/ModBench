@@ -7,6 +7,7 @@ using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Http.Endpoints;
 
@@ -32,6 +33,11 @@ internal static class EndpointMapping
         Enum.TryParse(raw, out release)
             ? null
             : Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
+
+    internal static IResult? ParseStringsLanguage(string raw, out Language language) =>
+        Enum.TryParse(raw, out language)
+            ? null
+            : Results.Problem($"Unknown strings language: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<Language>())}", statusCode: 400);
 
     /// <summary>The FormKey an applied create or copy allocated. Every caller here reaches
     /// this only once the result is known applied.</summary>

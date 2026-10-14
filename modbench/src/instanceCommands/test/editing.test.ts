@@ -54,7 +54,7 @@ function wired(status: 'running' | 'stopped' = 'running') {
   });
   const around: { entered: number; settled: boolean; told: number[] } = { entered: 0, settled: false, told: [] };
   const flow = editingFlow({
-    client, instanceRoot: '/instance', reporterFor, onPut: (put) => { tell({ kind: 'put', put }); return Promise.resolve(); }, log: (line) => { logged.push(line); },
+    client, instanceRoot: '/instance', stringsLanguage: () => 'English', reporterFor, onPut: (put) => { tell({ kind: 'put', put }); return Promise.resolve(); }, log: (line) => { logged.push(line); },
     around: async (entry) => { around.entered++; await entry(); around.settled = true; around.told.push(told.length); },
   });
   const putPluginNames = (): string[] => client.puts().map((put) => put.plugins.map((p) => p.name).join());

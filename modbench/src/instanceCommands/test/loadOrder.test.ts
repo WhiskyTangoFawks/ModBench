@@ -36,26 +36,34 @@ describe('put load order', () => {
   it('hands the mEdit client the snapshot the value carries, keyed by the instance and its release', async () => {
     const client = attachedClient();
 
-    const result = await putLoadOrder(client, '/instance', VALUE);
+    const result = await putLoadOrder(client, '/instance', VALUE, 'English');
 
     expect(client.puts()).toEqual([{
       plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
-      gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4',
+      gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
     }]);
     expect(result).toEqual({
       sent: true,
       snapshot: {
         plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
-        gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4',
+        gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
       },
       outcome: APPLIED,
     });
   });
 
+  it('sends the strings language it is given', async () => {
+    const client = attachedClient();
+
+    await putLoadOrder(client, '/instance', VALUE, 'German');
+
+    expect(client.puts().map((put) => put.stringsLanguage)).toEqual(['German']);
+  });
+
   it('sends the release the value holds, not one looked up from the game\'s name beside the Instance adapter\'s answer', async () => {
     const client = attachedClient();
 
-    await putLoadOrder(client, '/instance', { ...VALUE, gameRelease: 'Fallout4VR' });
+    await putLoadOrder(client, '/instance', { ...VALUE, gameRelease: 'Fallout4VR' }, 'English');
 
     expect(client.puts().map((put) => put.gameRelease)).toEqual(['Fallout4VR']);
   });
@@ -63,7 +71,7 @@ describe('put load order', () => {
   it('sends the game as the instance names it when the value holds no release, so a guessed release does not answer about another game and the name is refused visibly', async () => {
     const client = attachedClient();
 
-    await putLoadOrder(client, '/instance', { ...VALUE, gameName: 'Morrowind', gameRelease: undefined });
+    await putLoadOrder(client, '/instance', { ...VALUE, gameName: 'Morrowind', gameRelease: undefined }, 'English');
 
     expect(client.puts().map((put) => put.gameRelease)).toEqual(['Morrowind']);
   });
@@ -71,7 +79,7 @@ describe('put load order', () => {
   it('sends nothing while the value carries no snapshot, which is the loader\'s answer to a game folder not found or not listable', async () => {
     const client = attachedClient();
 
-    const result = await putLoadOrder(client, '/instance', { ...VALUE, loadOrderSnapshot: undefined });
+    const result = await putLoadOrder(client, '/instance', { ...VALUE, loadOrderSnapshot: undefined }, 'English');
 
     expect(client.calls).toEqual([]);
     expect(result).toEqual({ sent: false });
@@ -83,7 +91,7 @@ describe('put load order, refused by the loader', () => {
     const client = attachedClient();
 
     const result = await putLoadOrder(
-      client, '/instance', { ...VALUE, loadOrderSnapshot: { refusal: 'a.esp has no mod folder' } });
+      client, '/instance', { ...VALUE, loadOrderSnapshot: { refusal: 'a.esp has no mod folder' } }, 'English');
 
     expect(client.calls).toEqual([]);
     expect(result).toEqual({ sent: false, refusal: 'a.esp has no mod folder' });
