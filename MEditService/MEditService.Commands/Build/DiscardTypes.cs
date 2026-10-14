@@ -24,8 +24,8 @@ public enum DiscardRefusal
     /// has other bytes, or whose delta has other bytes.</summary>
     Lacking,
 
-    /// <summary>Each lack is a delta no place holds.</summary>
-    DeltaMissing,
+    /// <summary>Each lack is a game file the request did not name, or a delta no place it searched holds.</summary>
+    NotFound,
 
     /// <summary>A file the mod is discarded from could not be read: one of its own, an installation file or a game
     /// file.</summary>
@@ -34,6 +34,10 @@ public enum DiscardRefusal
     /// <summary>A write failed part way, so some files came back and some did not.</summary>
     NotFinished,
 }
+
+/// <summary>Why a mod was skipped. A NotFound mod names the game files and the deltas it lacks, by the paths and names a
+/// request can bring them back with.</summary>
+public sealed record DiscardSkip(DiscardRefusal Kind, IReadOnlyList<string> GameFilesNotFound, IReadOnlyList<string> DeltasNotFound);
 
 /// <summary>A mod whose folder is as its manifest says, and the files written to make it so.</summary>
 public sealed record DiscardedMod(IReadOnlyList<string> Written);

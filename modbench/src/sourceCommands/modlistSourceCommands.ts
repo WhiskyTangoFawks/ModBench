@@ -1,6 +1,6 @@
 import { dirname } from 'node:path';
 import {
-  isRefused, type DiscardFacts, type DiscardMod, type DiscardOutcome, type MEditClient, type ModlistProgress, type StageMod, type StageOutcome,
+  isRefused, type DiscardFacts, type DiscardMod, type DiscardOutcome, type MEditClient, type ModlistProgress, type NotFound, type StageMod, type StageOutcome,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
 import {
@@ -45,7 +45,7 @@ export type StageStatus = { readonly phase: 'ReadingFiles'; readonly mod: string
 /** What discard answers: each mod discarded or skipped, or the whole discard refused, naming the mods it may not have
  *  finished. */
 export type DiscardResult =
-  | ({ applied: true } & Omit<DiscardOutcome, 'deltaMissing'>)
+  | ({ applied: true } & Omit<DiscardOutcome, 'notFound'>)
   | { applied: false; refusal: string; unfinished: readonly string[] };
 
 /** Where discard is: the Instance adapter reading a mod's files, mEdit discarding mods, or the Instance adapter reading a
@@ -127,6 +127,16 @@ async function downloadedArchives(
   return { read, unread };
 }
 
+// The game files mEdit found its manifests name and the call did not, by their paths under the data folder.
+async function namedGameFiles(
+  adapter: Adapter, dataFolder: string, notFound: readonly NotFound[],
+): Promise<{ found: readonly GameFile[]; unread: string }> {
+  const paths = [...new Set(notFound.flatMap(({ gameFiles }) => gameFiles))];
+  if (paths.length === 0) return { found: [], unread: '' };
+  const found = await adapter.overriddenGameFiles(dataFolder, paths);
+  return found.kind === 'read' ? { found: found.answer, unread: '' } : { found: [], unread: ` The game files could not be read: ${found.reason}.` };
+}
+
 const notSearched = (unread: readonly ItemRefusal<string>[]): string =>
   (unread.length === 0 ? '' : ` Not searched for it: ${unread.map(({ item, reason }) => `"${item}" (${reason})`).join(', ')}.`);
 
@@ -146,18 +156,26 @@ async function discardChanges(
   const discarding = (progress: ModlistProgress): void => { onProgress({ phase: 'Discarding', ...progress }); };
   const first = await discardOnce(client, sent, facts, discarding);
   if (!first.applied) return first;
-  if (first.deltaMissing.length === 0) return { applied: true, landed: first.landed, refused: [...first.refused, ...read.refused] };
+  if (first.notFound.length === 0) return { applied: true, landed: first.landed, refused: [...first.refused, ...read.refused] };
 
-  const archives = await downloadedArchives(adapter, instance.downloads, (file) => { onProgress({ phase: 'ReadingDownloadedFile', file }); });
-  const again = sent.filter((mod) => first.deltaMissing.includes(mod.name));
-  const second = await discardOnce(client, again, { ...facts, downloadedFiles: archives.read.map(wireFile) }, discarding);
+  const retried = new Set(first.notFound.map(({ mod }) => mod));
+  const named = await namedGameFiles(adapter, gameFolder.dataFolder, first.notFound);
+  const archives = first.notFound.some(({ deltas }) => deltas)
+    ? await downloadedArchives(adapter, instance.downloads, (file) => { onProgress({ phase: 'ReadingDownloadedFile', file }); })
+    : { read: [], unread: [] };
+  const gameFiles = new Map([...facts.gameFiles, ...named.found].map((file) => [file.path.toLowerCase(), file]));
+  const second = await discardOnce(
+    client, sent.filter((mod) => retried.has(mod.name)), { ...facts, gameFiles: [...gameFiles.values()], downloadedFiles: archives.read.map(wireFile) },
+    discarding);
   if (!second.applied) return second;
+  const unreadFor = new Map(second.notFound.map(({ mod, gameFiles: lacked, deltas }) =>
+    [mod, (deltas ? notSearched(archives.unread) : '') + (lacked.length > 0 ? named.unread : '')]));
   return {
     applied: true,
     landed: [...first.landed, ...second.landed],
     refused: [
-      ...first.refused.filter((refused) => !first.deltaMissing.includes(refused.item)),
-      ...second.refused.map((refused) => (second.deltaMissing.includes(refused.item) ? { ...refused, reason: refused.reason + notSearched(archives.unread) } : refused)),
+      ...first.refused.filter((refused) => !retried.has(refused.item)),
+      ...second.refused.map((refused) => ({ ...refused, reason: refused.reason + (unreadFor.get(refused.item) ?? '') })),
       ...read.refused,
     ],
   };

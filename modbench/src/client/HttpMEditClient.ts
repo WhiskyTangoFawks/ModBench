@@ -503,7 +503,8 @@ class HttpMEditClient implements MEditClient {
         post: () => this.apiClient.POST('/modlist/discard-changes', { body: { mods: [...mods], ...facts } }),
         outcome: (answer) => ({
           ...selectionOutcome(answer),
-          deltaMissing: answer.refused.filter((refused) => refused.refusal === 'DeltaMissing').map((refused) => refused.item),
+          notFound: answer.refused.filter((refused) => refused.refusal === 'NotFound')
+            .map((refused) => ({ mod: refused.item, gameFiles: refused.gameFilesNotFound, deltas: refused.deltasNotFound.length > 0 })),
         }),
       });
     } finally {

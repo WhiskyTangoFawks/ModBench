@@ -8,7 +8,7 @@ namespace MEditService.Commands.Build;
 /// applied before any file is written.</summary>
 internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard mod, InstanceToDiscard instance, Manifest manifest) : IDisposable
 {
-    internal sealed record Lack(string Text, bool DeltaMissing = false);
+    internal sealed record Lack(string Text, string? GameFileNotFound = null, string? DeltaNotFound = null);
 
     private interface ISource;
 
@@ -150,7 +150,7 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
     private (ISource?, IEnumerable<Lack>) GameFileOf(string path, string hash)
     {
         var handed = instance.GameFiles.FirstOrDefault(game => string.Equals(game.Path, path, StringComparison.OrdinalIgnoreCase));
-        if (handed is null) return (null, [new($"game file '{path}' is missing")]);
+        if (handed is null) return (null, [new($"game file '{path}' is missing", GameFileNotFound: path)]);
         var named = manifest.GameFiles.FirstOrDefault(source => string.Equals(source.Name, path, StringComparison.OrdinalIgnoreCase));
         return named?.Hash == handed.Hash && handed.Hash == hash ? (new GameSource(handed), []) : (null, [new($"game file '{path}' has other bytes")]);
     }
@@ -160,7 +160,7 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
         var name = repository.DeltaName(file.Path, baseHash, file.Hash);
         using var loose = repository.OpenDelta(instance.BuildFolder, instance.DownloadsFolder, file.Path, baseHash, file.Hash);
         var packedIn = loose is null ? PackedIn(name) : null;
-        if (loose is null && packedIn is null) return (null, [.. basis.Lacks, new($"delta '{name}' is missing", DeltaMissing: true)]);
+        if (loose is null && packedIn is null) return (null, [.. basis.Lacks, new($"delta '{name}' is missing", DeltaNotFound: name)]);
         return basis.Source is null ? (null, basis.Lacks) : (new DeltaSource(basis.Source, baseHash, packedIn), []);
     }
 

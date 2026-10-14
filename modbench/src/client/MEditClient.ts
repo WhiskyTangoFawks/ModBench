@@ -228,12 +228,19 @@ interface DiscardedMod {
   written: readonly string[];
 }
 
-/** Discard's answer: each mod discarded or skipped with its reason. `deltaMissing` names each skipped mod whose only
- *  lack is a delta no place it was looked in holds. */
+/** A skipped mod whose only lacks are game files the call did not name, by their paths under the data folder, and
+ *  deltas no place it searched holds: a call that names them brings it back. */
+export interface NotFound {
+  mod: string;
+  gameFiles: readonly string[];
+  deltas: boolean;
+}
+
+/** Discard's answer: each mod discarded or skipped with its reason, and each skipped mod that is `NotFound`. */
 export interface DiscardOutcome {
   landed: readonly DiscardedMod[];
   refused: readonly ItemRefusal<string>[];
-  deltaMissing: readonly string[];
+  notFound: readonly NotFound[];
 }
 
 export type GridPosition = components['schemas']['GridPosition'];

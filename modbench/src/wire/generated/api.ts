@@ -1028,7 +1028,7 @@ export interface components {
             installationFiles: components["schemas"]["InstallationFileRequest"][];
         };
         /** @enum {string} */
-        DiscardRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "DeltaMissing" | "Unreadable" | "NotFinished";
+        DiscardRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "NotFound" | "Unreadable" | "NotFinished";
         DiscardRequest: {
             mods: components["schemas"]["DiscardModRequest"][];
             gameFiles: components["schemas"]["OverriddenGameFileRequest"][];
@@ -1238,6 +1238,8 @@ export interface components {
             item: string;
             refusal: components["schemas"]["DiscardRefusal"];
             message: string;
+            gameFilesNotFound: string[];
+            deltasNotFound: string[];
         };
         ModInitRefusal: {
             item: string;

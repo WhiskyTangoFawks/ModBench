@@ -64,10 +64,11 @@ internal static class ModlistEndpoints
             cancel);
 
         var logger = loggerFactory.CreateLogger(nameof(ModlistEndpoints));
-        foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Discard changes", item.Refusal, item.Message, item.Item);
+        foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Discard changes", item.Refusal.Kind, item.Message, item.Item);
         return Results.Ok(new DiscardResponse(
             [.. result.Landed.Select(landed => new DiscardedModResponse(landed.Item, landed.Outcome.Written))],
-            [.. result.Refused.Select(refused => new ModDiscardRefusal(refused.Item, refused.Refusal, refused.Message))]));
+            [.. result.Refused.Select(refused => new ModDiscardRefusal(
+                refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.GameFilesNotFound, refused.Refusal.DeltasNotFound))]));
     }
 
     private static IResult? Malformed(
@@ -127,7 +128,10 @@ internal sealed record DiscardModRequest(string Name, string Folder, IReadOnlyLi
 /// <summary>A mod whose folder is as its manifest says. Written names each file written to make it so.</summary>
 internal sealed record DiscardedModResponse(string Mod, IReadOnlyList<string> Written);
 
-internal sealed record ModDiscardRefusal(string Item, DiscardRefusal Refusal, string Message);
+/// <summary>A skipped mod. A NotFound mod names each game file, by its path under the data folder, and each delta it
+/// lacks; a request that names them brings it back.</summary>
+internal sealed record ModDiscardRefusal(
+    string Item, DiscardRefusal Refusal, string Message, IReadOnlyList<string> GameFilesNotFound, IReadOnlyList<string> DeltasNotFound);
 
 /// <summary>Landed, skipped or not finished, per mod (ADR-0019), never the status of the call.</summary>
 internal sealed record DiscardResponse(IReadOnlyList<DiscardedModResponse> Applied, IReadOnlyList<ModDiscardRefusal> Refused);

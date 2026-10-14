@@ -205,10 +205,10 @@ public sealed class DiscardHandlerTests
     [InlineData("installation file not handed", DiscardRefusal.Lacking, "installation file 'Mod.zip' is not in the downloads folder")]
     [InlineData("installation file gone", DiscardRefusal.Lacking, "installation file 'Mod.zip' is not in the downloads folder")]
     [InlineData("installation file changed", DiscardRefusal.Lacking, "installation file 'Mod.zip' has other bytes")]
-    [InlineData("game file not found", DiscardRefusal.Lacking, "game file 'Game.esm' is missing")]
+    [InlineData("game file not found", DiscardRefusal.NotFound, "game file 'Game.esm' is missing")]
     [InlineData("game file changed", DiscardRefusal.Lacking, "game file 'Game.esm' has other bytes")]
     [InlineData("no provider", DiscardRefusal.Lacking, "'mine.txt' has no provider")]
-    [InlineData("delta missing", DiscardRefusal.DeltaMissing, "delta 'edited.txt.<Original>_<Edited>.octodiff' is missing")]
+    [InlineData("delta missing", DiscardRefusal.NotFound, "delta 'edited.txt.<Original>_<Edited>.octodiff' is missing")]
     public void AModThatLacksASource_IsSkippedNamingIt_WritesNothing_AndTheOthersLand(string cause, DiscardRefusal refusal, string lack)
     {
         var download = Downloaded("dl/Mod.zip", ("a.nif", "a"), ("edited.txt", Original));
@@ -242,10 +242,44 @@ public sealed class DiscardHandlerTests
         var result = Handler.Discard([handed, AnotherModThatLands()], Instance(gameFiles));
 
         var skipped = Assert.Single(result.Refused);
-        Assert.Equal(("Mod", refusal), (skipped.Item, skipped.Refusal));
+        Assert.Equal(("Mod", refusal), (skipped.Item, skipped.Refusal.Kind));
         Assert.Equal($"'Mod' was skipped: {lack.Replace("<Original>", Original).Replace("<Edited>", Edited)}.", skipped.Message);
         Assert.Empty(WrittenIn(Mod));
         Assert.Equal("Other", Assert.Single(result.Landed).Item);
+    }
+
+    [Fact]
+    public void AModLackingOnlyGameFilesAndDeltasNotHanded_NamesEach_SoARequestNamingThemBringsItBack()
+    {
+        var download = Downloaded("dl/Mod.zip", ("edited.txt", Original));
+        _folders.WithFile(Mod, "meta.ini", "[General]");
+        _folders.Manifests[Mod] = new Manifest(
+            [SourceOf(download)], [new ManifestSource("Game.esm", 7, "vanilla"), new ManifestSource("Other.esm", 5, "other")],
+            [
+                Line("Game.esm", "vanilla", new FileProvider.GameFile("Game.esm")),
+                Line("Other.esm", "other", new FileProvider.GameFile("Other.esm")),
+                Line("edited.txt", Edited, new FileProvider.InstallationFileDelta("Mod.zip", "edited.txt", Original)),
+            ]);
+
+        var skipped = Assert.Single(Handler.Discard([ModFrom(Mod, download)], Instance()).Refused);
+
+        Assert.Equal(DiscardRefusal.NotFound, skipped.Refusal.Kind);
+        Assert.Equal(["Game.esm", "Other.esm"], skipped.Refusal.GameFilesNotFound);
+        Assert.Equal([_folders.DeltaName("edited.txt", Original, Edited)], skipped.Refusal.DeltasNotFound);
+    }
+
+    [Fact]
+    public void AModLackingAGameFileWithOtherBytesToo_IsLacking_AndNamesNothingToSendAgain()
+    {
+        _folders.WithFile(Mod, "meta.ini", "[General]");
+        _folders.Manifests[Mod] = new Manifest(
+            [], [new ManifestSource("Game.esm", 7, "vanilla"), new ManifestSource("Other.esm", 5, "other")],
+            [Line("Game.esm", "vanilla", new FileProvider.GameFile("Game.esm")), Line("Other.esm", "other", new FileProvider.GameFile("Other.esm"))]);
+
+        var skipped = Assert.Single(Handler.Discard([ModFrom(Mod)], Instance([new OverriddenGameFile("Game.esm", 7, "patched")])).Refused);
+
+        Assert.Equal(DiscardRefusal.Lacking, skipped.Refusal.Kind);
+        Assert.Empty(skipped.Refusal.GameFilesNotFound);
     }
 
     [Fact]
@@ -279,7 +313,7 @@ public sealed class DiscardHandlerTests
 
         var skipped = Assert.Single(Handler.Discard([ModFrom(Mod)], Instance()).Refused);
 
-        Assert.Equal((DiscardRefusal.NoManifest, "'Mod' was skipped: it has no manifest."), (skipped.Refusal, skipped.Message));
+        Assert.Equal((DiscardRefusal.NoManifest, "'Mod' was skipped: it has no manifest."), (skipped.Refusal.Kind, skipped.Message));
     }
 
     [Fact]
@@ -290,7 +324,7 @@ public sealed class DiscardHandlerTests
 
         var skipped = Assert.Single(Handler.Discard([ModFrom(Mod)], Instance()).Refused);
 
-        Assert.Equal((DiscardRefusal.ManifestUnreadable, "'Mod' was skipped: its manifest cannot be read at line 1."), (skipped.Refusal, skipped.Message));
+        Assert.Equal((DiscardRefusal.ManifestUnreadable, "'Mod' was skipped: its manifest cannot be read at line 1."), (skipped.Refusal.Kind, skipped.Message));
     }
 
     [Theory]
@@ -310,7 +344,7 @@ public sealed class DiscardHandlerTests
 
         Assert.Equal(
             (DiscardRefusal.Lacking, $"'Mod' was skipped: delta '{_folders.DeltaName("edited.txt", Original, Edited)}' has other bytes."),
-            (skipped.Refusal, skipped.Message));
+            (skipped.Refusal.Kind, skipped.Message));
         Assert.Empty(WrittenIn(Mod));
     }
 
@@ -327,7 +361,7 @@ public sealed class DiscardHandlerTests
         var unfinished = Assert.Single(result.Refused);
         Assert.Equal(
             (DiscardRefusal.NotFinished, "'Mod' was not finished: b.nif is held by another process. Discarding it again finishes it."),
-            (unfinished.Refusal, unfinished.Message));
+            (unfinished.Refusal.Kind, unfinished.Message));
         Assert.Equal("a", WrittenText(Mod, "a.nif"));
         Assert.Equal("Other", Assert.Single(result.Landed).Item);
     }

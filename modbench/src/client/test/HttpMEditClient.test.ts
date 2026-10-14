@@ -278,17 +278,20 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: {
         applied: [{ mod: 'ModA', written: ['a.nif'] }],
         refused: [
-          { item: 'ModB', refusal: 'DeltaMissing', message: "'ModB' was skipped: delta 'b.nif.0_1.octodiff' is missing." },
-          { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: 'c.nif' has no provider." },
+          {
+            item: 'ModB', refusal: 'NotFound', message: "'ModB' was skipped: game file 'B.esm' is missing; delta 'b.nif.0_1.octodiff' is missing.",
+            gameFilesNotFound: ['B.esm'], deltasNotFound: ['b.nif.0_1.octodiff'],
+          },
+          { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: 'c.nif' has no provider.", gameFilesNotFound: [], deltasNotFound: [] },
         ],
       },
       reads: {
         landed: [{ mod: 'ModA', written: ['a.nif'] }],
         refused: [
-          { item: 'ModB', reason: "'ModB' was skipped: delta 'b.nif.0_1.octodiff' is missing." },
+          { item: 'ModB', reason: "'ModB' was skipped: game file 'B.esm' is missing; delta 'b.nif.0_1.octodiff' is missing." },
           { item: 'ModC', reason: "'ModC' was skipped: 'c.nif' has no provider." },
         ],
-        deltaMissing: ['ModB'],
+        notFound: [{ mod: 'ModB', gameFiles: ['B.esm'], deltas: true }],
       },
       path: '/modlist/discard-changes', body: { mods: [modToDiscard('ModA'), modToDiscard('ModB'), modToDiscard('ModC')], ...discardFacts } },
     { name: 'decompile', verb: (c) => c.decompile([first, second]),

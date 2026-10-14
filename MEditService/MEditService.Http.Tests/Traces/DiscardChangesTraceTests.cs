@@ -89,20 +89,25 @@ public sealed class DiscardChangesTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task DiscardingAModChangedSinceItsStage_BringsEveryFileBack_AnEditedOneThroughItsDelta_AndLeavesAnUntrackedFile()
+    public async Task DiscardingAModChangedSinceItsStage_BringsEveryFileBack_AnEditedOneThroughItsDelta_AGameFilesFromTheGame_AndLeavesAnUntrackedFile()
     {
         ModInstalledFromADownload_ThenEdited();
         await Post("stage");
+        Directory.CreateDirectory(Path.Combine(_instance, "game", "Data"));
+        File.WriteAllText(Path.Combine(_instance, "game", "Data", "Game.esm"), "vanilla");
         File.WriteAllText(Path.Combine(ModFolder, "edited.txt"), Original);
         File.Delete(Path.Combine(ModFolder, "kept.txt"));
+        File.Delete(Path.Combine(ModFolder, "Game.esm"));
         File.WriteAllText(Path.Combine(ModFolder, "untracked.txt"), "mine");
         using var stream = await Client.NotificationStream();
 
         var body = await Post("discard-changes");
 
         var discarded = Assert.Single(body.GetProperty("applied").EnumerateArray());
-        Assert.Equal(["edited.txt", "kept.txt"], discarded.GetProperty("written").EnumerateArray().Select(path => path.GetString()).Order(StringComparer.Ordinal));
-        Assert.Equal((Edited, "kept", "mine"), (FileText("edited.txt"), FileText("kept.txt"), FileText("untracked.txt")));
+        Assert.Equal(
+            ["Game.esm", "edited.txt", "kept.txt"], discarded.GetProperty("written").EnumerateArray().Select(path => path.GetString()).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            (Edited, "kept", "vanilla", "mine"), (FileText("edited.txt"), FileText("kept.txt"), FileText("Game.esm"), FileText("untracked.txt")));
         var progress = await stream.EventsUntil("discard-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
         Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Mod);
     }

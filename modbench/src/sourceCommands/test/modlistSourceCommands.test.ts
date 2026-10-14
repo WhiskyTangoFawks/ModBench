@@ -180,7 +180,7 @@ describe('modlistSourceCommands stage', () => {
 });
 
 describe('modlistSourceCommands discard changes', () => {
-  const DISCARDED = { landed: [{ mod: 'ModA', written: ['a.nif'] }], refused: [], deltaMissing: [] };
+  const DISCARDED = { landed: [{ mod: 'ModA', written: ['a.nif'] }], refused: [], notFound: [] };
   const DELTAS: InstallationFile = { path: '/downloads/Deltas.7z', size: 3, hash: 'D', entries: [{ path: 'a.nif.0_1.octodiff', hash: 'P' }] };
   const discardInstance = (
     filesByMod: Record<string, readonly OriginFile[]> = {}, rows: readonly { name: string; path: string }[] = [], gameFolder: GameFolder = FOUND,
@@ -224,8 +224,8 @@ describe('modlistSourceCommands discard changes', () => {
     const { commands, client } = commandsOver({ downloadedFiles: new Map([[DELTAS.path, DELTAS]]) });
     const deltaMissing = "'ModB' was skipped: delta 'a.nif.0_1.octodiff' is missing.";
     client.setCommandHandler('discardChanges', (mods) => Promise.resolve(mods.length === 2
-      ? { landed: [{ mod: 'ModA', written: [] }], refused: [{ item: 'ModB', reason: deltaMissing }], deltaMissing: ['ModB'] }
-      : { landed: [{ mod: 'ModB', written: ['a.nif'] }], refused: [], deltaMissing: [] }));
+      ? { landed: [{ mod: 'ModA', written: [] }], refused: [{ item: 'ModB', reason: deltaMissing }], notFound: [{ mod: 'ModB', gameFiles: [], deltas: true }] }
+      : { landed: [{ mod: 'ModB', written: ['a.nif'] }], refused: [], notFound: [] }));
     const heard: unknown[] = [];
 
     const outcome = await commands.discardChanges(['ModA', 'ModB'], discardInstance({}, [
@@ -239,10 +239,54 @@ describe('modlistSourceCommands discard changes', () => {
     expect(outcome).toEqual({ applied: true, landed: [{ mod: 'ModA', written: [] }, { mod: 'ModB', written: ['a.nif'] }], refused: [] });
   });
 
+  it('sends a mod skipped for a game file the call did not name again, with that game file, in one more call that reads no downloaded file', async () => {
+    const { commands, client } = commandsOver({ gameFiles: [VANILLA] });
+    const gameFileMissing = "'ModA' was skipped: game file 'Game.esm' is missing.";
+    client.setCommandHandler('discardChanges', (_mods, facts) => Promise.resolve(facts.gameFiles.length === 0
+      ? { landed: [], refused: [{ item: 'ModA', reason: gameFileMissing }], notFound: [{ mod: 'ModA', gameFiles: ['Game.esm'], deltas: false }] }
+      : { landed: [{ mod: 'ModA', written: ['Game.esm'] }], refused: [], notFound: [] }));
+    const heard: DiscardStatus[] = [];
+
+    const outcome = await commands.discardChanges(['ModA'], discardInstance({}, [{ name: 'Deltas.7z', path: DELTAS.path }]), { onProgress: (status) => heard.push(status) });
+
+    expect(client.calls.map((call) => call.args[1])).toMatchObject([{ gameFiles: [] }, { gameFiles: [VANILLA], downloadedFiles: [] }]);
+    expect(heard.filter((status) => status.phase === 'ReadingDownloadedFile')).toEqual([]);
+    expect(outcome).toEqual({ applied: true, landed: [{ mod: 'ModA', written: ['Game.esm'] }], refused: [] });
+  });
+
+  it('names a game file still not found once the call names every game file it could', async () => {
+    const { commands, client } = commandsOver();
+    const gameFileMissing = "'ModA' was skipped: game file 'Gone.esm' is missing.";
+    client.setCommandResult('discardChanges', { landed: [], refused: [{ item: 'ModA', reason: gameFileMissing }], notFound: [{ mod: 'ModA', gameFiles: ['Gone.esm'], deltas: false }] });
+
+    const outcome = await commands.discardChanges(['ModA'], discardInstance());
+
+    expect([client.calls.length, outcome]).toEqual([2, { applied: true, landed: [], refused: [{ item: 'ModA', reason: gameFileMissing }] }]);
+  });
+
+  it('says why beside a mod still skipped for a game file the Instance adapter could not read', async () => {
+    const adapter = fakeInstanceAdapter().adapter;
+    const client = new InMemoryMEditClient();
+    const commands = modlistSourceCommands({
+      client, adapter: { ...adapter, overriddenGameFiles: (dataFolder, paths) => (paths.includes('Game.esm')
+        ? Promise.resolve({ kind: 'unreadable', reason: 'Game.esm is locked' })
+        : adapter.overriddenGameFiles(dataFolder, paths)) },
+      instanceRoot: '/instance', makeRepository: () => Promise.resolve(),
+    });
+    const gameFileMissing = "'ModA' was skipped: game file 'Game.esm' is missing.";
+    client.setCommandResult('discardChanges', { landed: [], refused: [{ item: 'ModA', reason: gameFileMissing }], notFound: [{ mod: 'ModA', gameFiles: ['Game.esm'], deltas: false }] });
+
+    const outcome = await commands.discardChanges(['ModA'], discardInstance());
+
+    expect(outcome).toEqual({
+      applied: true, landed: [], refused: [{ item: 'ModA', reason: `${gameFileMissing} The game files could not be read: Game.esm is locked.` }],
+    });
+  });
+
   it('names each downloaded archive it could not search beside a mod still skipped for its delta', async () => {
     const { commands, client } = commandsOver();
     const deltaMissing = "'ModA' was skipped: delta 'a.nif.0_1.octodiff' is missing.";
-    client.setCommandResult('discardChanges', { landed: [], refused: [{ item: 'ModA', reason: deltaMissing }], deltaMissing: ['ModA'] });
+    client.setCommandResult('discardChanges', { landed: [], refused: [{ item: 'ModA', reason: deltaMissing }], notFound: [{ mod: 'ModA', gameFiles: [], deltas: true }] });
 
     const outcome = await commands.discardChanges(['ModA'], discardInstance({}, [{ name: 'Locked.7z', path: '/downloads/Locked.7z' }]));
 
@@ -264,7 +308,7 @@ describe('modlistSourceCommands discard changes', () => {
 
   it('refuses a mod the Instance adapter cannot answer, naming why, and discards the rest', async () => {
     const { commands, client } = commandsOver({ installations: new Map([['ModA', { kind: 'unreadable', reason: 'not indexed' }]]) });
-    client.setCommandResult('discardChanges', { landed: [{ mod: 'ModB', written: [] }], refused: [], deltaMissing: [] });
+    client.setCommandResult('discardChanges', { landed: [{ mod: 'ModB', written: [] }], refused: [], notFound: [] });
 
     const outcome = await commands.discardChanges(['ModA', 'ModB'], discardInstance());
 
