@@ -22,7 +22,10 @@ public sealed class CopyRecordHandler
     {
         var sessions = new WriteSessions(_source, _unsaved.Current);
         var selection = await _changes.CopyRecords([record], mode, [destination], replace, sessions);
-        var outcome = ItemWrite.OfOne(selection, landed => landed.Outcome);
+        var outcome = ItemWrite.OfOne(selection, landed => RecordEditResult.Success(
+            mode == CopyMode.New
+                ? landed.Outcome.NewFormKey ?? throw new InvalidOperationException("Expected a copy as new to carry the new FormKey.")
+                : record.FormKey));
         return sessions.Written(outcome, $"Could not write the copy of {record.FormKey} into {destination.Name}", _logger);
     }
 }

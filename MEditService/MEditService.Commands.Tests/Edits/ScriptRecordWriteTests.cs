@@ -24,6 +24,7 @@ public sealed class ScriptRecordWriteTests
         var outcome = Copy(mod, CopyMode.Override, mod.DestinationPlugin);
 
         Assert.True(outcome.Applied, outcome.Message);
+        Assert.Equal(mod.SourceNpc.ToString(), outcome.NewFormKey);
         Assert.NotNull(mod.Document(mod.DestinationPlugin, mod.SourceNpc.ToString()));
     }
 
@@ -35,7 +36,7 @@ public sealed class ScriptRecordWriteTests
         var outcome = Copy(mod, CopyMode.New, mod.DestinationPlugin);
 
         Assert.True(outcome.Applied, outcome.Message);
-        Assert.NotNull(outcome.NewFormKey);
+        Assert.NotEqual(mod.SourceNpc.ToString(), outcome.NewFormKey.Require());
         Assert.NotNull(mod.Document(mod.DestinationPlugin, outcome.NewFormKey.Require()));
     }
 

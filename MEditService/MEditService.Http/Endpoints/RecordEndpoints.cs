@@ -316,7 +316,7 @@ internal static class RecordEndpoints
                     ? Results.Problem("Every destination needs a name and an origin.", statusCode: 400)
                     : null),
             execute: () => copies.Copy(AtRecord(request.Record), request.Mode, request.Destination, request.Replace),
-            onApplied: result => Results.Ok(new RecordWrittenResponse(result.NewFormKey ?? request.Record.FormKey)));
+            onApplied: result => Results.Ok(new RecordWrittenResponse(EndpointMapping.RequireNewFormKey(result))));
     }
 
     internal static Task<IResult> DeleteRecord(RecordAddress request, DeleteRecordHandler deletes, ILogger logger)
