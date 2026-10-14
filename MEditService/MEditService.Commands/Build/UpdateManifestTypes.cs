@@ -2,9 +2,9 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to stage, with its installation files in the mod manager's order and the paths of its files
+/// <summary>A mod to update the manifest of, with its installation files in the mod manager's order and the paths of its files
 /// the repository commits itself, which the manifest does not name.</summary>
-public sealed record ModToStage(
+public sealed record ModToUpdate(
     string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> CommittedFiles);
 
 /// <summary>A game file a mod file overrides, by its forward-slash path under the game's data folder, as the
@@ -13,10 +13,10 @@ public sealed record OverriddenGameFile(string Path, long Size, string Hash);
 
 /// <summary>The instance's facts beyond its mods. DeltaShare is the share of its file a delta may reach before
 /// the file counts as no provider.</summary>
-public sealed record InstanceToStage(IReadOnlyList<OverriddenGameFile> GameFiles, string DataFolder, string BuildFolder, double DeltaShare);
+public sealed record InstanceToUpdate(IReadOnlyList<OverriddenGameFile> GameFiles, string DataFolder, string BuildFolder, double DeltaShare);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum StageRefusal
+public enum UpdateManifestRefusal
 {
     None,
 
@@ -25,7 +25,7 @@ public enum StageRefusal
 
     ModFolderMissing,
 
-    /// <summary>A file the mod is staged from could not be read: one of its own, an installation file or a game
+    /// <summary>A file the manifest is updated from could not be read: one of its own, an installation file or a game
     /// file.</summary>
     ModFilesUnreadable,
 
@@ -35,4 +35,4 @@ public enum StageRefusal
 
 /// <summary>A mod whose manifest is as its folder says. ManifestWritten is false when the manifest was already so.
 /// NoProvider names each file nothing provides.</summary>
-public sealed record StagedMod(bool ManifestWritten, IReadOnlyList<string> NoProvider);
+public sealed record UpdatedMod(bool ManifestWritten, IReadOnlyList<string> NoProvider);

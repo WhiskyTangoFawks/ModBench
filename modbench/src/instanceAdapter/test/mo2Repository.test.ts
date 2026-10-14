@@ -58,6 +58,18 @@ describe('the MO2 adapter\'s repository', () => {
     expect(answer).toEqual({ kind: 'read', answer: [{ path: 'meshes/Armor.nif', size: 4, hash }, { path: 'Game.esm', size: 6, hash }] });
   });
 
+  it('names the game files the files in a mod\'s folder override, whether or not the active profile lists the mod', async () => {
+    const adapter = await instance();
+    await put('Data/meshes/Armor.nif', 'aaaa');
+    await put('Data/Other.esm', 'bbbbbb');
+    await put('mods/Unlisted/Meshes/armor.nif', 'mine');
+    await put('mods/Unlisted/own.txt');
+
+    const answer = await adapter.gameFilesOverriddenBy(join(root, 'Data'), 'Unlisted');
+
+    expect(answer).toEqual({ kind: 'read', answer: [{ path: 'meshes/Armor.nif', size: 4, hash: expect.stringMatching(/^[A-Za-z0-9+/]{11}=$/) as unknown }] });
+  });
+
   it('refuses to write over an ignore list already in the instance folder, naming it, and leaves it as it is', async () => {
     const adapter = await instance();
     await put('.gitignore', 'mine\n');

@@ -44,7 +44,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'init-progress', 'stage-progress', 'discard-progress', 'external-change',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'init-progress', 'update-manifest-progress', 'restore-from-manifest-progress', 'external-change',
   'plugin-source-unreadable', 'record-filter-cleared',
 ] as const;
 
@@ -57,8 +57,8 @@ export type NotificationKind = typeof NOTIFICATION_KINDS[number];
 export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
   'init-progress': InitStatus;
-  'stage-progress': ModlistProgress;
-  'discard-progress': ModlistProgress;
+  'update-manifest-progress': ModlistProgress;
+  'restore-from-manifest-progress': ModlistProgress;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
   'plugin-source-unreadable': { plugins: (PluginAddress & UnreadableSource)[] };
   'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
@@ -191,38 +191,45 @@ export interface BuildOutcome {
   refused: readonly ItemRefusal<string>[];
 }
 
-/** A mod to stage: its folder, its installation files and the files in its folder the repository commits itself
- *  (ADR-0013). */
-export type StageMod = components['schemas']['StageModRequest'];
+/** A mod to update the manifest of: its folder, its installation files and the files in its folder the repository
+ *  commits itself (ADR-0013). */
+export type UpdateManifestMod = components['schemas']['UpdateManifestModRequest'];
 
-/** The instance's facts every mod's stage needs: the game files its files override, the game's data folder, the
+/** The instance's facts every mod's manifest needs: the game files its files override, the game's data folder, the
  *  build folder and the share of a file a delta may reach. */
-export type StageFacts = Omit<components['schemas']['StageRequest'], 'mods'>;
+export type UpdateManifestFacts = Omit<components['schemas']['UpdateManifestRequest'], 'mods'>;
 
-/** Where stage is: the mod it works on, and how many mods it has done of how many. The mod is none once it ends. */
+/** Where a modlist gesture is: the mod it works on, and how many mods it has done of how many. The mod is none once
+ *  it ends. */
 export type ModlistProgress = components['schemas']['ModlistProgress'];
 
-interface StagedMod {
+/** An abort stops mEdit after the mod in hand, and the mods done stay done. */
+export interface ModlistCallOptions {
+  onProgress?: (progress: ModlistProgress) => void;
+  signal?: AbortSignal;
+}
+
+interface UpdatedMod {
   mod: string;
   manifestWritten: boolean;
   /** Each file nothing provides, by its path in the mod folder. */
   noProvider: readonly string[];
 }
 
-/** Stage's answer: each mod staged, or refused with its reason. */
-export interface StageOutcome {
-  landed: readonly StagedMod[];
+/** Update manifest's answer: each mod updated, or refused with its reason. */
+export interface UpdateManifestOutcome {
+  landed: readonly UpdatedMod[];
   refused: readonly ItemRefusal<string>[];
 }
 
-/** A mod to discard: its folder and its installation files (ADR-0013). */
-export type DiscardMod = components['schemas']['DiscardModRequest'];
+/** A mod to restore from its manifest: its folder and its installation files (ADR-0013). */
+export type RestoreMod = components['schemas']['RestoreFromManifestModRequest'];
 
-/** The instance's facts discard needs: the game files the mods' files override, the game's data folder, and the
+/** The instance's facts restore from manifest needs: the game files the mods' files override, the game's data folder, and the
  *  places a delta is looked for. */
-export type DiscardFacts = Omit<components['schemas']['DiscardRequest'], 'mods'>;
+export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestRequest'], 'mods'>;
 
-interface DiscardedMod {
+interface RestoredMod {
   mod: string;
   /** Each file written to bring the mod back, by its path in the mod folder. */
   written: readonly string[];
@@ -236,9 +243,9 @@ export interface NotFound {
   deltas: boolean;
 }
 
-/** Discard's answer: each mod discarded or skipped with its reason, and each skipped mod that is `NotFound`. */
-export interface DiscardOutcome {
-  landed: readonly DiscardedMod[];
+/** Restore from manifest's answer: each mod restored or skipped with its reason, and each skipped mod that is `NotFound`. */
+export interface RestoreOutcome {
+  landed: readonly RestoredMod[];
   refused: readonly ItemRefusal<string>[];
   notFound: readonly NotFound[];
 }
@@ -303,10 +310,8 @@ export interface MEditClient {
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;
-  stage(mods: readonly StageMod[], facts: StageFacts, options?: { onProgress?: (progress: ModlistProgress) => void }): Promise<StageOutcome | WriteRefused>;
-  discardChanges(
-    mods: readonly DiscardMod[], facts: DiscardFacts, options?: { onProgress?: (progress: ModlistProgress) => void },
-  ): Promise<DiscardOutcome | WriteRefused>;
+  updateManifest(mods: readonly UpdateManifestMod[], facts: UpdateManifestFacts, options?: ModlistCallOptions): Promise<UpdateManifestOutcome | WriteRefused>;
+  restoreFromManifest(mods: readonly RestoreMod[], facts: RestoreFacts, options?: ModlistCallOptions): Promise<RestoreOutcome | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).

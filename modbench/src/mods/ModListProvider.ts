@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { FileOrigin, Mod, OriginFile, OriginFolder, Separator } from '../instanceLoader/instance';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
-import { groupModlist, type ModlistGroup, type ModlistTree } from './modlistTree';
+import { groupModlist, type ModlistGroup, type ModlistTree } from '../drivingLib/modlistTree';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';

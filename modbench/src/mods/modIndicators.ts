@@ -3,7 +3,7 @@
 import * as vscode from 'vscode';
 import type { InstanceValue, InstanceView, OriginFile } from '../instanceLoader/instance';
 import { modOrigin, sameOrigin } from '../instanceLoader/fileConflictIndex';
-import { groupModlist } from './modlistTree';
+import { groupModlist } from '../drivingLib/modlistTree';
 import type { WorkspaceSettings } from './workspaceSettings';
 
 /** Each indicator in the order mods.md's table lists them, with its name there.

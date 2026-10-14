@@ -10,7 +10,7 @@ using Octodiff.Diagnostics;
 
 namespace MEditService.Commands.Tests.Build;
 
-public sealed class StageHandlerTests
+public sealed class UpdateManifestHandlerTests
 {
     private const string Mod = "mods/Mod";
     private const string DataFolder = "game/Data";
@@ -25,11 +25,11 @@ public sealed class StageHandlerTests
     private readonly FakeModFolders _folders = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
 
-    private StageHandler Handler => new(_folders, _notifications);
+    private UpdateManifestHandler Handler => new(_folders, _notifications);
 
-    private static InstanceToStage Instance(params OverriddenGameFile[] gameFiles) => new(gameFiles, DataFolder, BuildFolder, DeltaShare: 1);
+    private static InstanceToUpdate Instance(params OverriddenGameFile[] gameFiles) => new(gameFiles, DataFolder, BuildFolder, DeltaShare: 1);
 
-    private static ModToStage ModFrom(string name, params InstallationFile[] installationFiles) =>
+    private static ModToUpdate ModFrom(string name, params InstallationFile[] installationFiles) =>
         new(name, $"mods/{name}", installationFiles, []);
 
     private InstallationFile Downloaded(string path, params (string Path, string Hash)[] entries)
@@ -39,15 +39,15 @@ public sealed class StageHandlerTests
     }
 
     private IEnumerable<ModlistProgress> Progress =>
-        _notifications.Notifications.OfType<StageProgressNotification>().Select(n => n.Progress);
+        _notifications.Notifications.OfType<UpdateManifestProgressNotification>().Select(n => n.Progress);
 
     private ManifestFile FileOf(string folder, string path) => _folders.Manifests[folder].Files.Single(f => f.Path == path);
 
-    private StagedMod Landed(params ModToStage[] mods) => Landed(mods, Instance());
+    private UpdatedMod Landed(params ModToUpdate[] mods) => Landed(mods, Instance());
 
-    private StagedMod Landed(IReadOnlyList<ModToStage> mods, InstanceToStage instance)
+    private UpdatedMod Landed(IReadOnlyList<ModToUpdate> mods, InstanceToUpdate instance)
     {
-        var result = Handler.Stage(mods, instance);
+        var result = Handler.UpdateManifest(mods, instance);
         Assert.Empty(result.Refused);
         return result.Landed.Single().Outcome;
     }
@@ -131,11 +131,11 @@ public sealed class StageHandlerTests
     {
         _folders.WithFile(Mod, "meshes/a.nif", Edited);
 
-        var staged = Landed(ModFrom("Mod", Downloaded("dl/Base.zip", ("readme.txt", "")), Downloaded("dl/Patch.zip", ("Meshes/A.nif", Original))));
+        var updated = Landed(ModFrom("Mod", Downloaded("dl/Base.zip", ("readme.txt", "")), Downloaded("dl/Patch.zip", ("Meshes/A.nif", Original))));
 
         Assert.Equal(new FileProvider.InstallationFileDelta("Patch.zip", "Meshes/A.nif", Original), FileOf(Mod, "meshes/a.nif").Provider);
         Assert.Equal(Edited, DeltaAppliedAsWabbajackApplies("meshes/a.nif", Original, Edited));
-        Assert.Empty(staged.NoProvider);
+        Assert.Empty(updated.NoProvider);
     }
 
     [Fact]
@@ -155,10 +155,10 @@ public sealed class StageHandlerTests
     {
         _folders.WithFile(Mod, "a.txt", Edited);
 
-        var staged = Landed([ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.txt", Original)))], Instance() with { DeltaShare = 0.01 });
+        var updated = Landed([ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.txt", Original)))], Instance() with { DeltaShare = 0.01 });
 
         Assert.IsType<FileProvider.NoProvider>(FileOf(Mod, "a.txt").Provider);
-        Assert.Equal(["a.txt"], staged.NoProvider);
+        Assert.Equal(["a.txt"], updated.NoProvider);
         Assert.Empty(_folders.Deltas);
     }
 
@@ -183,9 +183,9 @@ public sealed class StageHandlerTests
         var mod = ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.txt", Original)));
         Landed(mod);
 
-        var staged = Landed([mod], Instance() with { DeltaShare = 0.01 });
+        var updated = Landed([mod], Instance() with { DeltaShare = 0.01 });
 
-        Assert.Equal(["a.txt"], staged.NoProvider);
+        Assert.Equal(["a.txt"], updated.NoProvider);
     }
 
     [Fact]
@@ -193,9 +193,9 @@ public sealed class StageHandlerTests
     {
         _folders.WithFile(Mod, "a.txt", Edited).WithBytes(string.Empty, "dl/Mod.zip", Zip(("other.txt", Original)));
 
-        var staged = Landed(ModFrom("Mod", new InstallationFile("dl/Mod.zip", null, 7, "#zip", [new HashedEntry("a.txt", Original)])));
+        var updated = Landed(ModFrom("Mod", new InstallationFile("dl/Mod.zip", null, 7, "#zip", [new HashedEntry("a.txt", Original)])));
 
-        Assert.Equal(["a.txt"], staged.NoProvider);
+        Assert.Equal(["a.txt"], updated.NoProvider);
     }
 
     [Fact]
@@ -228,10 +228,10 @@ public sealed class StageHandlerTests
         _folders.WithFile(string.Empty, "dl/Broken.zip", "not an archive");
         var broken = new InstallationFile("dl/Broken.zip", null, 14, "#broken", [new HashedEntry("a.txt", Original)]);
 
-        var result = Handler.Stage([ModFrom("Broken", broken), ModFrom("Fine")], Instance());
+        var result = Handler.UpdateManifest([ModFrom("Broken", broken), ModFrom("Fine")], Instance());
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(("Broken", StageRefusal.ModFilesUnreadable), (refused.Item, refused.Refusal));
+        Assert.Equal(("Broken", UpdateManifestRefusal.ModFilesUnreadable), (refused.Item, refused.Refusal));
         Assert.Contains("Broken.zip", refused.Message);
         Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
     }
@@ -255,11 +255,11 @@ public sealed class StageHandlerTests
         _folders.WithFile("mods/Locked", "a.txt", Edited).WithFile("mods/Fine", "a.txt", "hello");
         _folders.UnwritableBuildFolders.Add(BuildFolder);
 
-        var result = Handler.Stage([ModFrom("Locked", Downloaded("dl/Locked.zip", ("a.txt", Original))), ModFrom("Fine")], Instance());
+        var result = Handler.UpdateManifest([ModFrom("Locked", Downloaded("dl/Locked.zip", ("a.txt", Original))), ModFrom("Fine")], Instance());
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(("Locked", StageRefusal.NotWritten), (refused.Item, refused.Refusal));
-        Assert.StartsWith("'Locked' was not staged: a delta could not be written:", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(("Locked", UpdateManifestRefusal.NotWritten), (refused.Item, refused.Refusal));
+        Assert.StartsWith("'Locked' was not updated: a delta could not be written:", refused.Message, StringComparison.Ordinal);
         Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
     }
 
@@ -269,7 +269,7 @@ public sealed class StageHandlerTests
         _folders.WithFile(Mod, "meshes/a.nif", "hello", modified: 7);
         var download = Downloaded("dl/Mod.zip", ("meshes/a.nif", "hello")) with { Source = "nexus:1" };
 
-        Landed(new ModToStage("Mod", Mod, [download], []));
+        Landed(new ModToUpdate("Mod", Mod, [download], []));
 
         var line = FileOf(Mod, "meshes/a.nif");
         Assert.IsType<FileProvider.FirstInstallationFile>(line.Provider);
@@ -314,11 +314,11 @@ public sealed class StageHandlerTests
     {
         _folders.WithFile(Mod, "a.txt", "hellO").WithFile(Mod, "b.txt", "hello");
 
-        var staged = Landed(ModFrom("Mod", Downloaded("dl/Mod.zip", ("other/a.txt", "hello"), ("b.txt", "hello"))));
+        var updated = Landed(ModFrom("Mod", Downloaded("dl/Mod.zip", ("other/a.txt", "hello"), ("b.txt", "hello"))));
 
         Assert.IsType<FileProvider.NoProvider>(FileOf(Mod, "a.txt").Provider);
         Assert.Equal("hellO", FileOf(Mod, "a.txt").Hash);
-        Assert.Equal(["a.txt"], staged.NoProvider);
+        Assert.Equal(["a.txt"], updated.NoProvider);
     }
 
     [Fact]
@@ -339,11 +339,11 @@ public sealed class StageHandlerTests
         _folders.WithFile("mods/Lost", "a.txt", "hello").WithFile("mods/Found", "a.txt", "hello");
         var lost = new InstallationFile("dl/Lost.zip", null, 7, "#lost", [new HashedEntry("a.txt", "hello")]);
 
-        var result = Handler.Stage([ModFrom("Lost", lost), ModFrom("Found", Downloaded("dl/Found.zip", ("a.txt", "hello")))], Instance());
+        var result = Handler.UpdateManifest([ModFrom("Lost", lost), ModFrom("Found", Downloaded("dl/Found.zip", ("a.txt", "hello")))], Instance());
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(("Lost", StageRefusal.InstallationFileMissing), (refused.Item, refused.Refusal));
-        Assert.Equal("'Lost' was not staged: 'Lost.zip' not in the downloads folder.", refused.Message);
+        Assert.Equal(("Lost", UpdateManifestRefusal.InstallationFileMissing), (refused.Item, refused.Refusal));
+        Assert.Equal("'Lost' was not updated: 'Lost.zip' not in the downloads folder.", refused.Message);
         Assert.False(_folders.Manifests.ContainsKey("mods/Lost"));
         Assert.Equal(["Found"], result.Landed.Select(l => l.Item));
     }
@@ -351,13 +351,13 @@ public sealed class StageHandlerTests
     [Fact]
     public void AModWhoseFolderIsGone_IsRefused()
     {
-        var refused = Assert.Single(Handler.Stage([ModFrom("Gone")], Instance()).Refused);
+        var refused = Assert.Single(Handler.UpdateManifest([ModFrom("Gone")], Instance()).Refused);
 
-        Assert.Equal(StageRefusal.ModFolderMissing, refused.Refusal);
+        Assert.Equal(UpdateManifestRefusal.ModFolderMissing, refused.Refusal);
     }
 
     [Fact]
-    public void AModStagedTwice_WritesItsManifestOnce()
+    public void AModUpdatedTwice_WritesItsManifestOnce()
     {
         _folders.WithFile(Mod, "a.txt", "hello");
 
@@ -374,10 +374,10 @@ public sealed class StageHandlerTests
         _folders.WithFile("mods/Held", "held.txt", "hello").WithFile("mods/Fine", "a.txt", "hello");
         _folders.Unreadable.Add(("mods/Held", "held.txt"));
 
-        var result = Handler.Stage([ModFrom("Held"), ModFrom("Fine")], Instance());
+        var result = Handler.UpdateManifest([ModFrom("Held"), ModFrom("Fine")], Instance());
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(("Held", StageRefusal.ModFilesUnreadable), (refused.Item, refused.Refusal));
+        Assert.Equal(("Held", UpdateManifestRefusal.ModFilesUnreadable), (refused.Item, refused.Refusal));
         Assert.Contains("held.txt", refused.Message);
         Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
     }
@@ -388,10 +388,10 @@ public sealed class StageHandlerTests
         _folders.WithFile("mods/Locked", "a.txt", "hello").WithFile("mods/Fine", "a.txt", "hello");
         _folders.UnwritableManifests.Add("mods/Locked");
 
-        var result = Handler.Stage([ModFrom("Locked"), ModFrom("Fine")], Instance());
+        var result = Handler.UpdateManifest([ModFrom("Locked"), ModFrom("Fine")], Instance());
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(("Locked", StageRefusal.NotWritten), (refused.Item, refused.Refusal));
+        Assert.Equal(("Locked", UpdateManifestRefusal.NotWritten), (refused.Item, refused.Refusal));
         Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
     }
 
@@ -400,18 +400,18 @@ public sealed class StageHandlerTests
     {
         _folders.WithFile(Mod, "meta.ini", "hello").WithFile(Mod, "a.txt", "hello");
 
-        var staged = Landed(ModFrom("Mod") with { CommittedFiles = ["meta.ini"] });
+        var updated = Landed(ModFrom("Mod") with { CommittedFiles = ["meta.ini"] });
 
         Assert.Equal(["a.txt"], _folders.Manifests[Mod].Files.Select(f => f.Path));
-        Assert.Equal(["a.txt"], staged.NoProvider);
+        Assert.Equal(["a.txt"], updated.NoProvider);
     }
 
     [Fact]
-    public void AModNamedTwice_IsStagedOnce()
+    public void AModNamedTwice_IsUpdatedOnce()
     {
         _folders.WithFile(Mod, "a.txt", "hello");
 
-        var result = Handler.Stage([ModFrom("Mod"), ModFrom("MOD")], Instance());
+        var result = Handler.UpdateManifest([ModFrom("Mod"), ModFrom("MOD")], Instance());
 
         Assert.Single(result.Landed);
     }
@@ -421,7 +421,7 @@ public sealed class StageHandlerTests
     {
         _folders.WithFile("mods/A", "a.txt", "hello").WithFile("mods/B", "a.txt", "hello");
 
-        Handler.Stage([ModFrom("A"), ModFrom("B")], Instance());
+        Handler.UpdateManifest([ModFrom("A"), ModFrom("B")], Instance());
 
         Assert.Equal(
             [new ModlistProgress("A", 0, 2), new ModlistProgress("B", 1, 2), new ModlistProgress(null, 0, 0)],
@@ -429,13 +429,13 @@ public sealed class StageHandlerTests
     }
 
     [Fact]
-    public void ProgressGoesIdle_WhenTheStageIsCancelled()
+    public void ProgressGoesIdle_WhenTheUpdateIsCancelled()
     {
         _folders.WithFile(Mod, "a.txt", "hello");
         using var cancelled = new CancellationTokenSource();
         cancelled.Cancel();
 
-        Assert.Throws<OperationCanceledException>(() => Handler.Stage([ModFrom("Mod")], Instance(), cancelled.Token));
+        Assert.Throws<OperationCanceledException>(() => Handler.UpdateManifest([ModFrom("Mod")], Instance(), cancelled.Token));
 
         Assert.Equal([new ModlistProgress(null, 0, 0)], Progress);
     }
@@ -445,10 +445,10 @@ public sealed class StageHandlerTests
     {
         var handler = Handler;
         _folders.WithFile(Mod, "a.txt", "hello").WithFile(Mod, "b.txt", "hello");
-        handler.Stage([ModFrom("Mod")], Instance());
+        handler.UpdateManifest([ModFrom("Mod")], Instance());
 
         _folders.Without(Mod, "b.txt");
-        handler.Stage([ModFrom("Mod")], Instance());
+        handler.UpdateManifest([ModFrom("Mod")], Instance());
 
         Assert.Equal(["a.txt"], _folders.Manifests[Mod].Files.Select(f => f.Path));
     }

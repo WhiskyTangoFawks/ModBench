@@ -7,8 +7,9 @@ import type { HashIndex } from './hashIndex';
 import type { GameFile, InstanceAdapter } from './instanceAdapter';
 import { buildDir, ignoreListFile, WHITELIST_IGNORE_LIST } from './layout';
 import type { Mo2Context } from './mo2Context';
+import { originFilesIn } from './mo2Files';
 
-type Mo2Repository = Pick<InstanceAdapter, 'overriddenGameFiles' | 'buildFolder' | 'writeIgnoreList' | 'removeIgnoreList'>;
+type Mo2Repository = Pick<InstanceAdapter, 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'buildFolder' | 'writeIgnoreList' | 'removeIgnoreList'>;
 
 const lowerCased = (names: readonly Dirent[]): Map<string, Dirent> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
@@ -35,28 +36,35 @@ function caseBlindFinder(dataFolder: string) {
 export function mo2Repository(
   { instanceRoot }: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>,
 ): Mo2Repository {
+  const overriddenGameFiles: InstanceAdapter['overriddenGameFiles'] = async (dataFolder, modFilePaths) => {
+    const find = caseBlindFinder(dataFolder);
+    const files = new Map<string, GameFile>();
+    for (const modFilePath of modFilePaths) {
+      const found = await find(modFilePath);
+      if (found === undefined || files.has(found.join('/').toLowerCase())) continue;
+      const hashed = await gameFileHash(join(dataFolder, ...found));
+      if (hashed.kind === 'unreadable') return hashed;
+      files.set(found.join('/').toLowerCase(), { path: found.join('/'), ...hashed.answer });
+    }
+    return { kind: 'read', answer: [...files.values()] };
+  };
+
   return {
     buildFolder: buildDir(instanceRoot),
 
     async writeIgnoreList() {
       const file = ignoreListFile(instanceRoot);
-      if (await exists(file)) throw new Error(`${file} already exists; init does not write over it.`);
+      if (await exists(file)) throw new Error(`${file} already exists; git init does not write over it.`);
       await write(file, WHITELIST_IGNORE_LIST);
     },
 
     removeIgnoreList: () => remove(ignoreListFile(instanceRoot)),
 
-    async overriddenGameFiles(dataFolder, modFilePaths) {
-      const find = caseBlindFinder(dataFolder);
-      const files = new Map<string, GameFile>();
-      for (const modFilePath of modFilePaths) {
-        const found = await find(modFilePath);
-        if (found === undefined || files.has(found.join('/').toLowerCase())) continue;
-        const hashed = await gameFileHash(join(dataFolder, ...found));
-        if (hashed.kind === 'unreadable') return hashed;
-        files.set(found.join('/').toLowerCase(), { path: found.join('/'), ...hashed.answer });
-      }
-      return { kind: 'read', answer: [...files.values()] };
+    overriddenGameFiles,
+
+    async gameFilesOverriddenBy(dataFolder, mod) {
+      const { files } = await originFilesIn(instanceRoot, { kind: 'mod', name: mod });
+      return overriddenGameFiles(dataFolder, files.map((file) => file.relativePath));
     },
   };
 }

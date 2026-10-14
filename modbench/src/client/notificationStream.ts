@@ -8,7 +8,7 @@ import { errorMessage } from '../ports/errorMessage';
 // default answer below is settled, which `SseNotificationSubscriber` overrides with its own.
 class NotificationListenerRegistry {
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
-    'load-order-status': new Set(), 'init-progress': new Set(), 'stage-progress': new Set(), 'discard-progress': new Set(), 'external-change': new Set(),
+    'load-order-status': new Set(), 'init-progress': new Set(), 'update-manifest-progress': new Set(), 'restore-from-manifest-progress': new Set(), 'external-change': new Set(),
     'plugin-source-unreadable': new Set(), 'record-filter-cleared': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
   };
 
@@ -38,8 +38,8 @@ class NotificationListenerRegistry {
       case 'init-progress':
         if (event.initProgress) this.deliver('init-progress', event.initProgress);
         break;
-      case 'stage-progress':
-      case 'discard-progress':
+      case 'update-manifest-progress':
+      case 'restore-from-manifest-progress':
         if (event.modlistProgress) this.deliver(kind, event.modlistProgress);
         break;
       case 'external-change':

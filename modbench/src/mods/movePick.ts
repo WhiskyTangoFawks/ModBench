@@ -2,7 +2,7 @@
 
 import type { ModlistEntry } from '../instanceLoader/instance';
 import type { MovePlace, OrderEnd, SeparatorsPlace } from '../modOrderCommands/modOrderCommands';
-import { groupModlist, type ModlistGroup } from './modlistTree';
+import { groupModlist, type ModlistGroup } from '../drivingLib/modlistTree';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 
 export interface MovePickItem<T> {

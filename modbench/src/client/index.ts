@@ -3,7 +3,7 @@ export type {
   NotificationPayloads, BackendStatus, RecordPage, InteriorCellBlock, InteriorCellSubBlock,
   PluginRecordTypeCount, PluginProblems, PluginAddress, RecordAddress,
   CopyMode, CopyItem, ReferenceResult, RecordFilter,
-  InitMod, InitStatus, InitOutcome, BuildFacts, BuildMod, BuildOutcome, StageMod, StageOutcome, ModlistProgress, DiscardFacts, DiscardMod, DiscardOutcome, NotFound, PluginMetadata, PluginDiagnosisReport, RecordSummary,
+  InitMod, InitStatus, InitOutcome, BuildFacts, BuildMod, BuildOutcome, UpdateManifestMod, UpdateManifestOutcome, ModlistProgress, RestoreFacts, RestoreMod, RestoreOutcome, NotFound, PluginMetadata, PluginDiagnosisReport, RecordSummary,
   WorldspaceSummary, WorldspaceBlock, WorldspaceSubBlock, CellChildRecords, CellSummary,
   ChildRecordSummary, ContainerChildSummary, CompileDiagnostic,
   LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsResponse, RecordTypeChoice, GridPosition, WorkingTreeStatesBeneath,

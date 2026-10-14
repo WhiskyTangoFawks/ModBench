@@ -137,6 +137,10 @@ const pkg = parsePackageManifest(
 
 type Context = Parameters<typeof holds>[1];
 const inInstance: Context = { [FOLDER_KEY]: 'instance' };
+const GIT_INIT = 'modbench.modlist.gitInit';
+const UPDATE_MANIFEST = 'modbench.mod.updateManifest';
+const RESTORE_FROM_MANIFEST = 'modbench.mod.restoreFromManifest';
+const EVERY_MOD_ENTRY_POINTS = ['modbench.modList.updateManifestHere', 'modbench.modList.restoreFromManifestHere'];
 type Key = { key: string; mac?: string; command: string };
 const expectKeysFiring = (context: Context, expected: readonly Key[]): void => {
   const firing = pkg.contributes.keybindings.filter((k) => holds(k.when, context)).map(({ key, mac, command }) => ({ key, mac, command }));
@@ -556,7 +560,7 @@ describe('package.json command titles and categories', () => {
     expect(RETIRED_AHEAD_OF_CODE.filter((id) => !declared.has(id))).toEqual([]);
   });
 
-  const PALETTE_AHEAD_OF_CODE = ['modbench.modlist.gitInit', 'modbench.mod.updateManifest', 'modbench.mod.restoreFromManifest'];
+  const PALETTE_AHEAD_OF_CODE: string[] = [];
 
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
@@ -937,60 +941,62 @@ describe('package.json build\'s palette entry', () => {
   });
 });
 
-describe('package.json init, stage and discard changes follow modlist-source.md, Menus and keys', () => {
+describe('package.json git init, update manifest and restore from manifest follow modlist-source.md, Menus and keys', () => {
   const HAS_REPOSITORY = 'modbench.modlist.hasRepository';
-  const menu = (name: string, command: string): MenuEntry[] =>
-    present(pkg.contributes.menus[name], `contributes.menus['${name}']`).filter((e) => e.command === command);
   const hasRepository = { ...inInstance, [HAS_REPOSITORY]: true };
+  const onRow = (view: string, viewItem: string, facts: Context): [string, string][] =>
+    placed(present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
+      .filter((e) => holds(e.when, { view, viewItem, ...facts }) && [UPDATE_MANIFEST, RESTORE_FROM_MANIFEST, GIT_INIT].includes(e.command)));
 
-  it('offers stage, then discard changes, in the Source Control title bar\'s overflow, for the instance\'s own repository alone', () => {
+  it('offers update manifest, then restore from manifest, in the Source Control title bar\'s overflow, for the instance\'s own repository alone', () => {
     const entries = present(pkg.contributes.menus['scm/title'], "contributes.menus['scm/title']");
 
-    expect(entries.map((e) => e.command)).toEqual(['modbench.modlist.stage', 'modbench.modlist.discardChanges']);
+    expect(entries.map((e) => e.command)).toEqual([UPDATE_MANIFEST, RESTORE_FROM_MANIFEST]);
     expect(entries.every((e) => requires(e.when, 'scmProvider == git') && requires(e.when, 'scmProviderRootUri in modbench.modlist.instanceRoots'))).toBe(true);
     expect(entries.map((e) => e.group)).toEqual(['modbench@1', 'modbench@2']);
   });
 
-  it('offers discard changes in mod folder on a row of the instance\'s own repository, beside git\'s own discard, and nowhere else', () => {
-    const [entry, ...others] = menu('scm/resourceState/context', DISCARD_IN_MOD_FOLDER);
-    const title = pkg.contributes.commands.find((c) => c.command === DISCARD_IN_MOD_FOLDER)?.title;
+  it('offers git init in Source Control\'s welcome inside an instance with no repository, saying it writes the ignore list', () => {
+    const [first, ...others] = pkg.contributes.viewsWelcome.filter((w) => w.view === 'scm');
+    const { when = '', contents } = present(first, 'the Source Control welcome');
 
     expect(others).toEqual([]);
-    expect(requires(entry?.when, 'scmProvider == git')).toBe(true);
-    expect(requires(entry?.when, 'scmProviderRootUri in modbench.modlist.instanceRoots')).toBe(true);
-    expect([(entry?.group ?? '').startsWith('1_modification'), title]).toEqual([true, 'Discard Changes in Mod Folder…']);
+    expect([holds(when, inInstance), holds(when, hasRepository), holds(when, {})]).toEqual([true, false, false]);
+    expect(contents).toContain(`(command:${GIT_INIT})`);
+    expect(contents).toContain('ignore list');
   });
 
-  it('offers discard changes on a mod row while the instance holds a repository, after stage', () => {
-    const [entry, ...others] = menu('view/item/context', 'modbench.modlist.discardChanges').filter((e) => requires(e.when, 'view == modbench.modList'));
-
-    expect(others).toEqual([]);
-    expect([entry?.group, requires(entry?.when, HAS_REPOSITORY)]).toEqual(['4_sourceControl@4', true]);
+  it.each([
+    ['a mod', 'mod enabled', '4_sourceControl'],
+    ['a separator', 'separator', '4_sourceControl'],
+  ])('offers update manifest, then restore from manifest, on %s row while the instance holds a repository', (_row, viewItem, group) => {
+    expect([onRow('modbench.modList', viewItem, hasRepository), onRow('modbench.modList', viewItem, inInstance)])
+      .toEqual([[[UPDATE_MANIFEST, group], [RESTORE_FROM_MANIFEST, group]], []]);
   });
 
-  it('offers stage on a mod row while the instance holds a repository, after build', () => {
-    const [entry, ...others] = menu('view/item/context', 'modbench.modlist.stage').filter((e) => requires(e.when, 'view == modbench.modList'));
-
-    expect(others).toEqual([]);
-    expect([entry?.group, requires(entry?.when, HAS_REPOSITORY)]).toEqual(['4_sourceControl@3', true]);
+  it('offers git init on the Modlist row with no repository, and update manifest then restore from manifest with one', () => {
+    expect([onRow('modbench.toolbox', 'modlist', inInstance), onRow('modbench.toolbox', 'modlist', hasRepository)]).toEqual([
+      [[GIT_INIT, 'modbench']], [[UPDATE_MANIFEST, 'modbench'], [RESTORE_FROM_MANIFEST, 'modbench']],
+    ]);
   });
 
-  it('offers init on the Modlist row with no repository, and stage with one', () => {
-    const onTheRow = present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
-      .filter((e) => holds(e.when, { view: 'modbench.toolbox', viewItem: 'modlist', ...hasRepository }));
-    const withNone = present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
-      .filter((e) => holds(e.when, { view: 'modbench.toolbox', viewItem: 'modlist', ...inInstance }));
+  it('offers each on every mod in the Mods title bar\'s overflow while the instance holds a repository', () => {
+    const offered = (facts: Context) => present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']")
+      .filter((e) => holds(e.when, { view: 'modbench.modList', ...facts }) && EVERY_MOD_ENTRY_POINTS.includes(e.command)).map((e) => e.command);
 
-    expect([onTheRow.map((e) => e.command), withNone.map((e) => e.command)]).toEqual([['modbench.modlist.stage'], ['modbench.modlist.init']]);
+    expect([offered(hasRepository), offered(inInstance)]).toEqual([EVERY_MOD_ENTRY_POINTS, []]);
   });
 
-  it('offers init in the palette until the instance holds a repository, and stage once it does', () => {
+  it('offers git init in the palette until the instance holds a repository, and update manifest and restore from manifest once it does', () => {
     expect([
-      paletteOffers('modbench.modlist.init', inInstance), paletteOffers('modbench.modlist.init', hasRepository),
-      paletteOffers('modbench.modlist.stage', inInstance), paletteOffers('modbench.modlist.stage', hasRepository),
-      paletteOffers('modbench.modlist.stage', { [HAS_REPOSITORY]: true }),
-      paletteOffers('modbench.modlist.discardChanges', inInstance), paletteOffers('modbench.modlist.discardChanges', hasRepository),
+      paletteOffers(GIT_INIT, inInstance), paletteOffers(GIT_INIT, hasRepository),
+      paletteOffers(UPDATE_MANIFEST, inInstance), paletteOffers(UPDATE_MANIFEST, hasRepository), paletteOffers(UPDATE_MANIFEST, { [HAS_REPOSITORY]: true }),
+      paletteOffers(RESTORE_FROM_MANIFEST, inInstance), paletteOffers(RESTORE_FROM_MANIFEST, hasRepository),
     ]).toEqual([true, false, false, true, false, false, true]);
+  });
+
+  it('offers no item on a Source Control row', () => {
+    expect(pkg.contributes.menus['scm/resourceState/context']).toBeUndefined();
   });
 });
 
@@ -1061,7 +1067,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   const rowMenu = (row: string): MenuEntry[] => inModsView('view/item/context').filter((e) => requires(e.when, row));
   const MOD_ROW = String.raw`viewItem =~ /\bmod\b/`;
 
-  it('title bar: filter or clear, then sort direction, as icons, with Collapse All left to VS Code; install then create empty mod in the overflow', () => {
+  it('title bar: filter or clear, then sort direction, as icons, with Collapse All left to VS Code; install, create empty mod, update manifest, then restore from manifest in the overflow', () => {
     expect(placed(inModsView('view/title'))).toEqual([
       ['modbench.modList.filterHere', 'navigation'],
       ['modbench.modList.clearFilterHere', 'navigation'],
@@ -1069,6 +1075,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       ['modbench.mod.sortLosingAtTop', 'navigation'],
       ['modbench.mod.install', '3_create'],
       ['modbench.mod.createEmpty', '3_create'],
+      ...EVERY_MOD_ENTRY_POINTS.map((command): [string, string] => [command, '4_sourceControl']),
     ]);
   });
 
@@ -1087,8 +1094,8 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       ['modbench.mod.install', '3_create'],
       ['modbench.mod.decompileAndCommit', '4_sourceControl'],
       ['modbench.mod.build', '4_sourceControl'],
-      ['modbench.modlist.stage', '4_sourceControl'],
-      ['modbench.modlist.discardChanges', '4_sourceControl'],
+      [UPDATE_MANIFEST, '4_sourceControl'],
+      [RESTORE_FROM_MANIFEST, '4_sourceControl'],
       ['modbench.copyValue', '5_copy'],
       ['modbench.mod.uninstall', '6_destroy'],
     ]);
@@ -1203,8 +1210,8 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     expect(paletteOffers('modbench.mod.viewOnNexus', { ...mods, 'modbench.mod.nexusRowIn': 'modbench.downloads' })).toBe(false);
   });
 
-  it('the empty list\'s message names the overflow\'s own titles', () => {
-    const overflowTitles = inModsView('view/title').filter((e) => groupOf(e) !== 'navigation')
+  it('the empty list\'s message names the overflow\'s titles of install and create empty mod', () => {
+    const overflowTitles = inModsView('view/title').filter((e) => groupOf(e) === '3_create')
       .map((e) => present(pkg.contributes.commands.find((c) => c.command === e.command), e.command).title);
     expect(overflowTitles.length).toBeGreaterThan(0);
     const shown = present(new ModListProvider({ instance: new FakeInstance(instanceValueFixture({ mods: [] })) }).viewMessage(), 'the empty list\'s message');
@@ -1225,9 +1232,8 @@ const OPEN_REFERENCE = 'modbench.record.openReference';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
-const DISCARD_IN_MOD_FOLDER = 'modbench.modlist.discardChangesInModFolder';
-const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, DISCARD_IN_MOD_FOLDER];
-const RETIRED_AHEAD_OF_CODE: string[] = ['modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges'];
+const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, ...EVERY_MOD_ENTRY_POINTS];
+const RETIRED_AHEAD_OF_CODE: string[] = [];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);

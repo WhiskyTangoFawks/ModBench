@@ -4,7 +4,7 @@ using Octodiff.Diagnostics;
 
 namespace MEditService.Commands.Build;
 
-internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard mod, InstanceToDiscard instance, Manifest manifest) : IDisposable
+internal sealed class ModRebuild(IModFolderRepository repository, ModToRestore mod, InstanceToRestore instance, Manifest manifest) : IDisposable
 {
     internal record Lack(string Text)
     {
@@ -239,7 +239,7 @@ internal sealed class ModRebuild(IModFolderRepository repository, ModToDiscard m
         }
         catch (SharpCompress.Common.SharpCompressException e)
         {
-            throw new IOException($"'{repository.InstallationFileName(file.Path)}' is not an archive discard can read: {e.Message}", e);
+            throw new IOException($"'{repository.InstallationFileName(file.Path)}' is not an archive restore from manifest can read: {e.Message}", e);
         }
     }
 

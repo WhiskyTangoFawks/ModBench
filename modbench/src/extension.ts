@@ -56,7 +56,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex' | 'handStringsLanguage'
-  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build' | 'init' | 'stage' | 'discardChanges' | 'changeBuildConfiguration'>;
+  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build' | 'init' | 'updateManifest' | 'restoreFromManifest' | 'changeBuildConfiguration'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;

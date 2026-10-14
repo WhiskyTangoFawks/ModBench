@@ -117,7 +117,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/modlist/stage": {
+    "/update-manifest": {
         parameters: {
             query?: never;
             header?: never;
@@ -126,15 +126,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each mod's manifest from the mod as it is (ADR-0022), and into the build folder each delta a changed file needs. A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the stage-progress notification. */
-        post: operations["StageModlist"];
+        /** @description Writes each mod's manifest from the mod as it is (ADR-0022), and into the build folder each delta a changed file needs. A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification. */
+        post: operations["UpdateManifest"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/modlist/discard-changes": {
+    "/restore-from-manifest": {
         parameters: {
             query?: never;
             header?: never;
@@ -143,8 +143,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files, game files and deltas it names (ADR-0022), and touches no other file. A mod lands, is skipped naming what it lacks, or is named not finished when a write failed part way. Progress is the discard-progress notification. */
-        post: operations["DiscardChanges"];
+        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files, game files and deltas it names (ADR-0022), and touches no other file. A mod lands, is skipped naming what it lacks, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification. */
+        post: operations["RestoreFromManifest"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1140,29 +1140,6 @@ export interface components {
             applied: components["schemas"]["PluginAddress"][];
             refused: components["schemas"]["PluginDecompileRefusal"][];
         };
-        DiscardModRequest: {
-            name: string;
-            folder: string;
-            installationFiles: components["schemas"]["InstallationFileRequest"][];
-        };
-        /** @enum {string} */
-        DiscardRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "NotFound" | "Unreadable" | "NotFinished";
-        DiscardRequest: {
-            mods: components["schemas"]["DiscardModRequest"][];
-            gameFiles: components["schemas"]["OverriddenGameFileRequest"][];
-            dataFolder: string;
-            buildFolder: string;
-            downloadsFolder?: string | null;
-            downloadedFiles?: components["schemas"]["InstallationFileRequest"][] | null;
-        };
-        DiscardResponse: {
-            applied: components["schemas"]["DiscardedModResponse"][];
-            refused: components["schemas"]["ModDiscardRefusal"][];
-        };
-        DiscardedModResponse: {
-            mod: string;
-            written: string[];
-        };
         DocumentChange: {
             path: string;
             text: string;
@@ -1352,21 +1329,21 @@ export interface components {
             refusal: components["schemas"]["BuildRefusal"];
             message: string;
         };
-        ModDiscardRefusal: {
-            item: string;
-            refusal: components["schemas"]["DiscardRefusal"];
-            message: string;
-            gameFilesNotFound: string[];
-            deltasNotFound: string[];
-        };
         ModInitRefusal: {
             item: string;
             refusal: components["schemas"]["InitRefusal"];
             message: string;
         };
-        ModStageRefusal: {
+        ModRestoreRefusal: {
             item: string;
-            refusal: components["schemas"]["StageRefusal"];
+            refusal: components["schemas"]["RestoreRefusal"];
+            message: string;
+            gameFilesNotFound: string[];
+            deltasNotFound: string[];
+        };
+        ModUpdateManifestRefusal: {
+            item: string;
+            refusal: components["schemas"]["UpdateManifestRefusal"];
             message: string;
         };
         ModlistProgress: {
@@ -1676,6 +1653,29 @@ export interface components {
         ResolveNamesResponse: {
             named: components["schemas"]["NamedObject"][];
         };
+        RestoreFromManifestModRequest: {
+            name: string;
+            folder: string;
+            installationFiles: components["schemas"]["InstallationFileRequest"][];
+        };
+        RestoreFromManifestRequest: {
+            mods: components["schemas"]["RestoreFromManifestModRequest"][];
+            gameFiles: components["schemas"]["OverriddenGameFileRequest"][];
+            dataFolder: string;
+            buildFolder: string;
+            downloadsFolder?: string | null;
+            downloadedFiles?: components["schemas"]["InstallationFileRequest"][] | null;
+        };
+        RestoreFromManifestResponse: {
+            applied: components["schemas"]["RestoredModResponse"][];
+            refused: components["schemas"]["ModRestoreRefusal"][];
+        };
+        /** @enum {string} */
+        RestoreRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "NotFound" | "Unreadable" | "NotFinished";
+        RestoredModResponse: {
+            mod: string;
+            written: string[];
+        };
         ScriptCopyRequest: {
             record: components["schemas"]["RecordAddress"];
             mode: components["schemas"]["CopyMode"];
@@ -1704,31 +1704,6 @@ export interface components {
             sourceRelativePath: string;
             message: string;
         };
-        StageModRequest: {
-            name: string;
-            folder: string;
-            installationFiles: components["schemas"]["InstallationFileRequest"][];
-            committedFiles: string[];
-        };
-        /** @enum {string} */
-        StageRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "NotWritten";
-        StageRequest: {
-            mods: components["schemas"]["StageModRequest"][];
-            gameFiles: components["schemas"]["OverriddenGameFileRequest"][];
-            dataFolder: string;
-            buildFolder: string;
-            /** Format: double */
-            deltaShare?: number | null;
-        };
-        StageResponse: {
-            applied: components["schemas"]["StagedModResponse"][];
-            refused: components["schemas"]["ModStageRefusal"][];
-        };
-        StagedModResponse: {
-            mod: string;
-            manifestWritten: boolean;
-            noProvider: string[];
-        };
         StampedFile: {
             path: string;
             stamp: string;
@@ -1742,6 +1717,31 @@ export interface components {
         };
         UnsavedDocumentsRequest: {
             documents: components["schemas"]["DocumentChange"][];
+        };
+        UpdateManifestModRequest: {
+            name: string;
+            folder: string;
+            installationFiles: components["schemas"]["InstallationFileRequest"][];
+            committedFiles: string[];
+        };
+        /** @enum {string} */
+        UpdateManifestRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "NotWritten";
+        UpdateManifestRequest: {
+            mods: components["schemas"]["UpdateManifestModRequest"][];
+            gameFiles: components["schemas"]["OverriddenGameFileRequest"][];
+            dataFolder: string;
+            buildFolder: string;
+            /** Format: double */
+            deltaShare?: number | null;
+        };
+        UpdateManifestResponse: {
+            applied: components["schemas"]["UpdatedModResponse"][];
+            refused: components["schemas"]["ModUpdateManifestRefusal"][];
+        };
+        UpdatedModResponse: {
+            mod: string;
+            manifestWritten: boolean;
+            noProvider: string[];
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";
@@ -2080,7 +2080,7 @@ export interface operations {
             };
         };
     };
-    StageModlist: {
+    UpdateManifest: {
         parameters: {
             query?: never;
             header?: never;
@@ -2089,7 +2089,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["StageRequest"];
+                "application/json": components["schemas"]["UpdateManifestRequest"];
             };
         };
         responses: {
@@ -2099,7 +2099,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StageResponse"];
+                    "application/json": components["schemas"]["UpdateManifestResponse"];
                 };
             };
             /** @description Bad Request */
@@ -2113,7 +2113,7 @@ export interface operations {
             };
         };
     };
-    DiscardChanges: {
+    RestoreFromManifest: {
         parameters: {
             query?: never;
             header?: never;
@@ -2122,7 +2122,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DiscardRequest"];
+                "application/json": components["schemas"]["RestoreFromManifestRequest"];
             };
         };
         responses: {
@@ -2132,7 +2132,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DiscardResponse"];
+                    "application/json": components["schemas"]["RestoreFromManifestResponse"];
                 };
             };
             /** @description Bad Request */

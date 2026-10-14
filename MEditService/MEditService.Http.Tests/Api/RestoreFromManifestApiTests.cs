@@ -8,15 +8,15 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class DiscardChangesApiTests : HostedTests
+public sealed class RestoreFromManifestApiTests : HostedTests
 {
-    private const string Mod = "DiscardedMod";
+    private const string Mod = "RestoredMod";
     private const string HashOfKept = "gO3vE0ddOto=";
     private const string HashOfOriginal = "PclCUmd0Z4s=";
     private const string HashOfVanilla = "/Qk9lLVYbZs=";
     private const string HashOfTheZip = "AAECAwQFBgc=";
 
-    private readonly ScratchDirectory _instance = new("trace-discard-changes-");
+    private readonly ScratchDirectory _instance = new("restore-from-manifest-");
 
     protected override void DisposeFixtures() => _instance.Dispose();
 
@@ -62,37 +62,37 @@ public sealed class DiscardChangesApiTests : HostedTests
             ["dataFolder"] = Path.Combine(_instance, "game", "Data"),
             ["buildFolder"] = Path.Combine(_instance, "build"),
         };
-        if (gesture == "stage") request["deltaShare"] = 0.5;
+        if (gesture == "update-manifest") request["deltaShare"] = 0.5;
         else request["downloadsFolder"] = Downloads;
         return request;
     }
 
     private async Task<JsonElement> Post(string gesture, string downloadName = "Mod.zip")
     {
-        var response = await Client.PostAsJsonAsync($"/modlist/{gesture}", Request(gesture, downloadName));
+        var response = await Client.PostAsJsonAsync($"/{gesture}", Request(gesture, downloadName));
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
     [Fact]
-    public async Task DiscardingAModJustStaged_WritesNoFile()
+    public async Task RestoringAModJustUpdated_WritesNoFile()
     {
         ModInstalledFromADownload_ThenEdited();
-        await Post("stage");
+        await Post("update-manifest");
 
-        var body = await Post("discard-changes");
+        var body = await Post("restore-from-manifest");
 
-        var discarded = Assert.Single(body.GetProperty("applied").EnumerateArray());
-        Assert.Equal(Mod, discarded.GetProperty("mod").GetString());
-        Assert.Empty(discarded.GetProperty("written").EnumerateArray());
+        var restored = Assert.Single(body.GetProperty("applied").EnumerateArray());
+        Assert.Equal(Mod, restored.GetProperty("mod").GetString());
+        Assert.Empty(restored.GetProperty("written").EnumerateArray());
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
     }
 
     [Fact]
-    public async Task DiscardingAModChangedSinceItsStage_BringsEveryFileBack_AnEditedOneThroughItsDelta_AGameFilesFromTheGame_AndLeavesAnUntrackedFile()
+    public async Task RestoringAModChangedSinceItsUpdate_BringsEveryFileBack_AnEditedOneThroughItsDelta_AGameFilesFromTheGame_AndLeavesAnUntrackedFile()
     {
         ModInstalledFromADownload_ThenEdited();
-        await Post("stage");
+        await Post("update-manifest");
         Directory.CreateDirectory(Path.Combine(_instance, "game", "Data"));
         File.WriteAllText(Path.Combine(_instance, "game", "Data", "Game.esm"), "vanilla");
         File.WriteAllText(Path.Combine(ModFolder, "edited.txt"), Original);
@@ -101,14 +101,14 @@ public sealed class DiscardChangesApiTests : HostedTests
         File.WriteAllText(Path.Combine(ModFolder, "untracked.txt"), "mine");
         using var stream = await Client.NotificationStream();
 
-        var body = await Post("discard-changes");
+        var body = await Post("restore-from-manifest");
 
-        var discarded = Assert.Single(body.GetProperty("applied").EnumerateArray());
+        var restored = Assert.Single(body.GetProperty("applied").EnumerateArray());
         Assert.Equal(
-            ["Game.esm", "edited.txt", "kept.txt"], discarded.GetProperty("written").EnumerateArray().Select(path => path.GetString()).Order(StringComparer.Ordinal));
+            ["Game.esm", "edited.txt", "kept.txt"], restored.GetProperty("written").EnumerateArray().Select(path => path.GetString()).Order(StringComparer.Ordinal));
         Assert.Equal(
             (Edited, "kept", "vanilla", "mine"), (FileText("edited.txt"), FileText("kept.txt"), FileText("Game.esm"), FileText("untracked.txt")));
-        var progress = await stream.EventsUntil("discard-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
+        var progress = await stream.EventsUntil("restore-from-manifest-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
         Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Mod);
     }
 
@@ -118,13 +118,13 @@ public sealed class DiscardChangesApiTests : HostedTests
     [InlineData("dataFolder", null)]
     [InlineData("buildFolder", null)]
     [InlineData("downloadedFiles", "[{\"path\":\"d.zip\",\"size\":1,\"hash\":\"WHOLE\",\"entries\":[]}]")]
-    public async Task DiscardingWithAFieldMissingOrMalformed_Is400(string field, string? json)
+    public async Task RestoringWithAFieldMissingOrMalformed_Is400(string field, string? json)
     {
-        var request = Request("discard-changes", "Mod.zip");
+        var request = Request("restore-from-manifest", "Mod.zip");
         if (json is null) request.Remove(field);
         else request[field] = JsonNode.Parse(json);
 
-        var response = await Client.PostAsJsonAsync("/modlist/discard-changes", request);
+        var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

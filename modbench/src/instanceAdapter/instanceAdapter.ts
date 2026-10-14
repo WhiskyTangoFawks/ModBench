@@ -383,7 +383,10 @@ export interface InstanceAdapter {
   /** The game files in `dataFolder` that files of a mod, by their paths in it, override, named as the game folder
    *  names them, with their hashes. */
   overriddenGameFiles(dataFolder: string, modFilePaths: readonly string[]): Promise<FileRead<readonly GameFile[]>>;
-  /** The folder stage writes deltas into. */
+  /** The game files in `dataFolder` that the files in `mod`'s folder override, as `overriddenGameFiles` names them, listed in
+   *  any profile or none. */
+  gameFilesOverriddenBy(dataFolder: string, mod: string): Promise<FileRead<readonly GameFile[]>>;
+  /** The folder update manifest writes deltas into. */
   readonly buildFolder: string;
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds. Rejects, writing nothing,
    *  when an ignore list is already there. */

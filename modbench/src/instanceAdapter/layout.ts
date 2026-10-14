@@ -142,7 +142,7 @@ export const sourceRootDir = (instanceRoot: string): string => join(instanceRoot
 /** The folder at the instance root that holds the adapter's index of hashes, which the adapter alone writes. */
 export const hashIndexDir = (instanceRoot: string): string => join(instanceRoot, HASH_INDEX);
 
-/** The folder at the instance root that holds the deltas stage writes (ADR-0022). */
+/** The folder at the instance root that holds the deltas update manifest writes (ADR-0022). */
 export const buildDir = (instanceRoot: string): string => join(instanceRoot, BUILD);
 
 /** The instance repository's ignore list file. */
