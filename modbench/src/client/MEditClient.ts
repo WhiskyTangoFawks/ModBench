@@ -274,7 +274,6 @@ export interface MEditClient {
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;
-  // Each mod's manifest lands or is refused on its own. A WriteRefused is the call itself refused, with nothing written.
   stage(mods: readonly StageMod[], facts: StageFacts, options?: { onProgress?: (progress: StageProgress) => void }): Promise<StageOutcome | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
