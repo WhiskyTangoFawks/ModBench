@@ -31,13 +31,13 @@ public sealed class RestoreFromManifestHandler(IModFolderRepository repository, 
             return Skipped(mod, RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
         }
 
-        var resolved = new ManifestSources(repository, manifest, mod.InstallationFiles, instance.GameFiles).Resolve(manifest.Files);
+        var resolved = new ManifestSources(repository, manifest, mod.InstallationFiles, instance.GameFiles).Resolve();
         if (resolved.Lacks.Count > 0) return Lacked(mod, resolved.Lacks);
 
-        List<(ManifestFile File, ManifestSources.Source Source)> differing;
+        List<ManifestSources.SourcedFile> differing;
         try
         {
-            differing = WithOtherBytes(mod, resolved.Sourced);
+            differing = WithOtherBytes(mod, resolved);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -48,21 +48,25 @@ public sealed class RestoreFromManifestHandler(IModFolderRepository repository, 
         {
             new ModRebuild(repository, mod.Folder, instance.DataFolder).Write(differing);
         }
+        catch (InvalidDataException e)
+        {
+            return ItemAnswer<RestoreSkip, RestoredMod>.Refused(
+                new RestoreSkip(RestoreRefusal.NotFinished, []), $"'{mod.Name}' was not finished: {e.Message.TrimEnd('.')}.");
+        }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return ItemAnswer<RestoreSkip, RestoredMod>.Refused(
                 new RestoreSkip(RestoreRefusal.NotFinished, []), $"'{mod.Name}' was not finished: {e.Message.TrimEnd('.')}. Restoring it again finishes it.");
         }
-        return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod([.. differing.Select(file => file.File.Path)]));
+        return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod([.. differing.Select(file => file.Path)]));
     }
 
-    private List<(ManifestFile File, ManifestSources.Source Source)> WithOtherBytes(
-        ModToRestore mod, IReadOnlyList<(ManifestFile File, ManifestSources.Source Source)> sourced)
+    private List<ManifestSources.SourcedFile> WithOtherBytes(ModToRestore mod, ManifestSources.Resolved resolved)
     {
-        var provided = sourced.ToDictionary(file => file.File.Path, file => file.Source.Hash, StringComparer.Ordinal);
+        var provided = resolved.Hashes();
         var untracked = repository.FilePaths(mod.Folder).Where(path => !provided.ContainsKey(path)).ToHashSet(StringComparer.Ordinal);
         var hashes = repository.Files(mod.Folder, mod.Name, untracked, provided).ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
-        return [.. sourced.Where(file => hashes.GetValueOrDefault(file.File.Path) != file.Source.Hash)];
+        return [.. resolved.Files.Where(file => hashes.GetValueOrDefault(file.Path) != file.Source.Hash)];
     }
 
     private static ItemAnswer<RestoreSkip, RestoredMod> Lacked(ModToRestore mod, IReadOnlyList<ManifestSources.Lack> lacks)

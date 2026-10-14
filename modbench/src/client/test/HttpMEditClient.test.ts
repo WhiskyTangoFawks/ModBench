@@ -1003,9 +1003,10 @@ describe('HttpMEditClient — a modlist gesture the user cancels', () => {
 
   async function cancelled(
     [route, kind, call]: [string, ProgressKind, (client: MEditClient, signal: AbortSignal) => Promise<unknown>], cancelAnswer = noContent,
+    { ownProgress = true } = {},
   ) {
     const log = leveledLog();
-    const seen: { gesture?: unknown; cancelPath?: string; cancelBeforeProgress?: string; aborted?: boolean } = {};
+    const seen: { gesture?: unknown; cancelPath?: string; aborted?: boolean } = {};
     let answer = (): void => {};
     const answered = new Promise<void>((resolve) => { answer = resolve; });
     const { response, push } = pushableStreamResponse();
@@ -1030,18 +1031,25 @@ describe('HttpMEditClient — a modlist gesture the user cancels', () => {
     client.onNotification(kind, (progress) => heard.push(progress.gesture));
     push(progressFrame(kind, 'another-gesture'));
     await vi.waitFor(() => expect(heard).toEqual(['another-gesture']));
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    seen.cancelBeforeProgress = seen.cancelPath;
-    push(progressFrame(kind, seen.gesture));
+    if (ownProgress) push(progressFrame(kind, seen.gesture));
+    else answer();
     return { client, log, seen, outcome: await outcome };
   }
 
   it.each(gestures)('%s asks mEdit to stop that gesture once its own progress shows mEdit has begun it, and answers with what mEdit answers once it has', async (_name, ...gesture) => {
     const { client, seen, outcome } = await cancelled(gesture);
 
-    expect([seen.cancelBeforeProgress, seen.cancelPath, seen.aborted]).toEqual([undefined, `/modlist-gestures/${String(seen.gesture)}/cancel`, false]);
+    expect([seen.cancelPath, seen.aborted]).toEqual([`/modlist-gestures/${String(seen.gesture)}/cancel`, false]);
     expect(outcome).toMatchObject({ landed: [{ mod: 'ModA' }], refused: [] });
     expect(outcome).not.toHaveProperty('cancelRefusal');
+    await client.stop();
+  });
+
+  // The answer waits on any cancel the gesture sent, so a cancel sent on another gesture's progress lands before it.
+  it.each(gestures)('%s sends no cancel on another gesture\'s progress', async (_name, ...gesture) => {
+    const { client, seen, outcome } = await cancelled(gesture, noContent, { ownProgress: false });
+
+    expect([seen.cancelPath, outcome]).toMatchObject([undefined, { landed: [{ mod: 'ModA' }] }]);
     await client.stop();
   });
 

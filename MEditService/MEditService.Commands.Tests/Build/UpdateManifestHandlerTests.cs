@@ -79,40 +79,48 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public void AModUpdatedAgain_HandsItsFolderTheHashEachLinesProviderNames()
+    public void AFileWhoseStampMatchesItsLine_IsNotReadAgain_AndKeepsTheProviderItsLineNames()
     {
-        _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "game.esm", "vanilla").WithFile(Mod, "mine.txt", "mine");
+        _folders.WithFile(Mod, "a.nif", "a", modified: 9).WithFile(Mod, "game.esm", "vanilla", modified: 9);
         var mod = ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.nif", "a")));
         OverriddenGameFile[] gameFiles = [new OverriddenGameFile("Game.esm", 7, "vanilla")];
         Landed([mod], gameFiles);
+        _folders.WithFile(Mod, "a.nif", "b", modified: 9).WithFile(Mod, "game.esm", "patched", modified: 9);
 
-        Landed([mod], gameFiles);
+        var updated = Landed([mod], gameFiles);
 
-        Assert.Equal(new Dictionary<string, string> { ["a.nif"] = "a", ["game.esm"] = "vanilla" }, _folders.Provided[Mod]);
+        Assert.Empty(updated.NoProvider);
+        Assert.Equal(
+            [new FileProvider.FirstInstallationFile(), new FileProvider.GameFile("Game.esm")],
+            _folders.Manifests[Mod].Files.OrderBy(file => file.Path, StringComparer.Ordinal).Select(file => file.Provider));
     }
 
     [Fact]
-    public void AModWhoseInstallationFileChangedSinceItsLastUpdate_HandsItsFolderNoHashFromIt()
+    public void AFileWhoseInstallationFileChangedSinceItsLastUpdate_IsReadAgain()
     {
-        _folders.WithFile(Mod, "a.nif", "a");
+        _folders.WithFile(Mod, "a.nif", "a", modified: 9);
         var download = Downloaded("dl/Mod.zip", ("a.nif", "a"));
         Landed(ModFrom("Mod", download));
+        _folders.WithFile(Mod, "a.nif", "b", modified: 9);
 
-        Landed(ModFrom("Mod", download with { Hash = "#upgraded" }));
+        var updated = Landed(ModFrom("Mod", download with { Hash = "#upgraded" }));
 
-        Assert.Empty(_folders.Provided[Mod]);
+        Assert.Equal(["a.nif"], updated.NoProvider);
     }
 
     [Fact]
-    public void AModWhoseManifestCannotBeRead_IsUpdatedFromItsFolder()
+    public void AModWhoseManifestCannotBeRead_IsUpdatedFromItsFolder_ReadingEveryFile()
     {
-        _folders.WithFile(Mod, "a.txt", "hello");
+        _folders.WithFile(Mod, "a.nif", "a", modified: 9);
+        var mod = ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.nif", "a")));
+        Landed(mod);
+        _folders.WithFile(Mod, "a.nif", "b", modified: 9);
         _folders.UnreadableManifests.Add(Mod);
 
-        var updated = Landed(ModFrom("Mod"));
+        var updated = Landed(mod);
 
         Assert.True(updated.ManifestWritten);
-        Assert.Empty(_folders.Provided[Mod]);
+        Assert.Equal(["a.nif"], updated.NoProvider);
     }
 
     [Fact]

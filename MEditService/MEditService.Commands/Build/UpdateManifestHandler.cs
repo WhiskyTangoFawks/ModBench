@@ -71,7 +71,6 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
             return [];
         }
         if (there is null) return [];
-        return new ManifestSources(repository, there, mod.InstallationFiles, gameFiles).Resolve(there.Files).Sourced
-            .ToDictionary(file => file.File.Path, file => file.Source.Hash, StringComparer.Ordinal);
+        return new ManifestSources(repository, there, mod.InstallationFiles, gameFiles).Resolve().Hashes();
     }
 }

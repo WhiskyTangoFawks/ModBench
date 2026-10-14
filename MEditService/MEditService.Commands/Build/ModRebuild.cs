@@ -5,23 +5,24 @@ namespace MEditService.Commands.Build;
 /// <summary>Writes a mod folder's files from their sources, each installation file read once.</summary>
 internal sealed class ModRebuild(IModFolderRepository repository, string modFolder, string dataFolder)
 {
-    /// <summary>A write that fails leaves the files before it written.</summary>
-    public void Write(IReadOnlyList<(ManifestFile File, ManifestSources.Source Source)> files)
+    /// <summary>A write that fails leaves the files before it written. Throws <see cref="InvalidDataException"/> for an
+    /// installation file that is not an archive it can read.</summary>
+    public void Write(IReadOnlyList<ManifestSources.SourcedFile> files)
     {
         List<(string Path, ManifestSources.EntrySource Entry)> fromEntries = [];
-        foreach (var (file, source) in files)
+        foreach (var (path, source) in files)
         {
             switch (source)
             {
                 case ManifestSources.GameSource game:
-                    repository.WriteFile(modFolder, file.Path, target =>
+                    repository.WriteFile(modFolder, path, target =>
                     {
-                        using var copy = repository.OpenGameFile(dataFolder, game.Game.Path);
+                        using var copy = repository.OpenGameFile(dataFolder, game.Path);
                         copy.CopyTo(target);
                     });
                     break;
                 case ManifestSources.EntrySource entry:
-                    fromEntries.Add((file.Path, entry));
+                    fromEntries.Add((path, entry));
                     break;
             }
         }
@@ -57,7 +58,8 @@ internal sealed class ModRebuild(IModFolderRepository repository, string modFold
         }
         catch (SharpCompress.Common.SharpCompressException e)
         {
-            throw new IOException($"'{repository.InstallationFileName(file.Path)}' is not an archive restore from manifest can read: {e.Message}", e);
+            throw new InvalidDataException(
+                $"'{repository.InstallationFileName(file.Path)}' is not an archive restore from manifest can read: {e.Message}", e);
         }
     }
 }

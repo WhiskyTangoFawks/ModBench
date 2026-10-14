@@ -4,8 +4,8 @@ using MEditService.RepositoriesLib;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
-/// <summary>The Mod folder adapter's second implementation: every file held in memory, a file's hash its text, and a
-/// manifest written only when it differs from the one there.</summary>
+/// <summary>The Mod folder adapter's second implementation: every file held in memory, a file's hash its text unless its
+/// stamp matches its manifest line, and a manifest written only when it differs from the one there.</summary>
 internal sealed class FakeModFolders : IModFolderRepository
 {
     private readonly Dictionary<(string Folder, string Path), (byte[] Bytes, FileStamp? Stamp)> _files = [];
@@ -20,9 +20,6 @@ internal sealed class FakeModFolders : IModFolderRepository
     public HashSet<string> UnwritableManifests { get; } = [];
 
     public Dictionary<string, Manifest> Manifests { get; } = [];
-
-    /// <summary>The hashes each folder's last listing was handed for its files that match their lines.</summary>
-    public Dictionary<string, IReadOnlyDictionary<string, string>> Provided { get; } = [];
 
     public FakeModFolders WithFile(string folder, string path, string text, long modified = 0, long changed = 0) =>
         WithBytes(folder, path, Encoding.ASCII.GetBytes(text), modified, changed);
@@ -47,10 +44,18 @@ internal sealed class FakeModFolders : IModFolderRepository
         string modFolder, string modName, IReadOnlySet<string> leftOut, IReadOnlyDictionary<string, string> provided)
     {
         if (!_folders.Contains(modFolder)) throw new DirectoryNotFoundException(modFolder);
-        Provided[modFolder] = provided;
         var files = _files.Where(f => f.Key.Folder == modFolder && !leftOut.Contains(f.Key.Path)).ToList();
         if (files.FirstOrDefault(f => Unreadable.Contains(f.Key)) is { Key.Path: { } held }) throw new IOException($"{held} is held by another process");
-        return [.. files.Select(f => new HashedFile(f.Key.Path, f.Value.Bytes.Length, Encoding.ASCII.GetString(f.Value.Bytes), f.Value.Stamp))];
+        var lines = Manifests.TryGetValue(modFolder, out var manifest)
+            ? manifest.Files.ToDictionary(line => line.Path, line => line.Stamp)
+            : [];
+        return [.. files.Select(f => new HashedFile(f.Key.Path, f.Value.Bytes.Length, HashOf(f.Key.Path, f.Value.Bytes, f.Value.Stamp), f.Value.Stamp))];
+
+        string HashOf(string path, byte[] bytes, FileStamp? stamp) =>
+            stamp is { } now && lines.GetValueOrDefault(path) is { } line && line.Size == now.Size && line.Modified == now.Modified
+            && provided.TryGetValue(path, out var hash)
+                ? hash
+                : Encoding.ASCII.GetString(bytes);
     }
 
     public Stream OpenFile(string modFolder, string path) => Open(modFolder, path);
@@ -79,7 +84,9 @@ internal sealed class FakeModFolders : IModFolderRepository
     public Manifest? ReadManifest(string modFolder, string modName)
     {
         if (UnreadableManifests.Contains(modFolder)) throw new InvalidDataException("its manifest cannot be read at line 1");
-        return Manifests.GetValueOrDefault(modFolder);
+        return Manifests.GetValueOrDefault(modFolder) is { } manifest
+            ? manifest with { Files = [.. manifest.Files.Select(file => file with { Stamp = null })] }
+            : null;
     }
 
     public bool WriteFile(string folder, string path, Action<Stream> write)

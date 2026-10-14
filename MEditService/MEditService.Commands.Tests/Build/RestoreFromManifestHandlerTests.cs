@@ -4,6 +4,7 @@ using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.ModFolderAdapter;
 using MEditService.Ports;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Build;
@@ -13,6 +14,9 @@ public sealed class RestoreFromManifestHandlerTests
     private const string Mod = "mods/Mod";
     private const string Other = "mods/Other";
     private const string DataFolder = "game/Data";
+
+    private const string SolidSevenZipOfReadmeAndMeshes =
+        "N3q8ryccAATuUVnEpgAAAAAAAAAhAAAAAAAAAC+dzs3gIAIAKV0AMO/7v/6jsV7l+D+yqiZV+GhwQXAVD439HkwbikK3GfRpGHAufifG/wAAAACBMweuD9EP9rigkKB3XrpXH+ax2dPvt7i58wldO1uKWgKup3uXhzzBgYN/yWVyKGG6hrzHb+8AS3A4eb6xWIpNOTGqvAgOWKrbXPL2/IPdDY8hq8YbGjaD7xEjTC7CbMP6A0APd4UmYIrlYd9r+G9HAAAAFwYxAQl1AAcLAQABIwMBAQVdABAAAAyAhgoBy3m54QAA";
 
     private readonly FakeModFolders _folders = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
@@ -139,7 +143,7 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Theory]
-    [InlineData("installation file not handed", RestoreRefusal.Lacking, "installation file 'Mod.zip' is not in the downloads folder")]
+    [InlineData("installation file not handed", RestoreRefusal.Lacking, "the mod manager records no installation file 'Mod.zip' for it")]
     [InlineData("installation file gone", RestoreRefusal.Lacking, "installation file 'Mod.zip' is not in the downloads folder")]
     [InlineData("installation file changed", RestoreRefusal.Lacking, "installation file 'Mod.zip' has other bytes")]
     [InlineData("game file not found", RestoreRefusal.NotFound, "game file 'Game.esm' is missing")]
@@ -206,24 +210,86 @@ public sealed class RestoreFromManifestHandlerTests
         _folders.WithFile(Mod, "a.nif", "a");
         Manifested(Mod, [download], Line("a.nif", new FileProvider.FirstInstallationFile()));
 
-        var skipped = Assert.Single(Handler.Restore([ModFrom(Mod)], Instance()).Refused);
+        var skipped = Assert.Single(Handler.Restore([ModFrom(Mod, download with { Path = "dl/Gone/Mod.zip" })], Instance()).Refused);
 
         Assert.Equal("'Mod' was skipped: installation file 'Mod.zip' is not in the downloads folder.", skipped.Message);
     }
 
+    [Theory]
+    [InlineData("installation file", "the mod manager records no installation file 'Patch.zip' for it")]
+    [InlineData("game file", "game file 'Game.esm' has other bytes")]
+    public void AModIsSkipped_WhenASourceItsManifestNamesThatNoLineUses_IsMissingOrHasOtherBytes(string source, string lack)
+    {
+        var download = Downloaded("dl/Mod.zip", ("a.nif", "a"));
+        var patch = Downloaded("dl/Patch.zip", ("readme.txt", "r"));
+        _folders.WithFile(Mod, "a.nif", "a");
+        _folders.Manifests[Mod] = new Manifest(
+            source == "installation file" ? [SourceOf(download), SourceOf(patch)] : [SourceOf(download)],
+            source == "game file" ? [new ManifestSource("Game.esm", 7, "vanilla")] : [],
+            [Line("a.nif", new FileProvider.FirstInstallationFile())]);
+
+        var skipped = Assert.Single(Handler.Restore([ModFrom(Mod, download)], Instance(new OverriddenGameFile("Game.esm", 7, "patched"))).Refused);
+
+        Assert.Equal($"'Mod' was skipped: {lack}.", skipped.Message);
+    }
+
     [Fact]
-    public void AModRestored_HandsItsFolderTheHashEachLinesProviderNames()
+    public void AFileWhoseStampMatchesItsLine_IsTakenToHoldWhatItsProviderHolds_AndIsNotWritten()
     {
         var game = new OverriddenGameFile("Game.esm", 7, "vanilla");
         var download = Downloaded("dl/Mod.zip", ("A.nif", "a"));
-        _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "game.esm", "vanilla");
+        _folders.WithFile(Mod, "a.nif", "x", modified: 9).WithFile(Mod, "game.esm", "patched", modified: 9);
         _folders.Manifests[Mod] = new Manifest(
             [SourceOf(download)], [new ManifestSource("Game.esm", 7, "vanilla")],
-            [Line("a.nif", new FileProvider.FirstInstallationFile()), Line("game.esm", new FileProvider.GameFile("Game.esm"))]);
+            [
+                new ManifestFile("a.nif", new FileStamp(1, 9, 0), new FileProvider.FirstInstallationFile()),
+                new ManifestFile("game.esm", new FileStamp(7, 9, 0), new FileProvider.GameFile("Game.esm")),
+            ]);
 
-        Handler.Restore([ModFrom(Mod, download)], Instance(game));
+        var result = Handler.Restore([ModFrom(Mod, download)], Instance(game));
 
-        Assert.Equal(new Dictionary<string, string> { ["a.nif"] = "a", ["game.esm"] = "vanilla" }, _folders.Provided[Mod]);
+        Assert.Empty(Assert.Single(result.Landed).Outcome.Written);
+    }
+
+    [Fact]
+    public void AFileComesBackFromASolidSevenZipsEntry()
+    {
+        var copy = new string('a', 8192);
+        _folders.WithFile(Mod, "meshes/a.nif", "edited").WithBytes(string.Empty, "dl/Mod.7z", Convert.FromBase64String(SolidSevenZipOfReadmeAndMeshes));
+        var download = new InstallationFile("dl/Mod.7z", null, 231, "#7z", [new HashedEntry("readme.txt", "abc"), new HashedEntry("meshes/a.nif", copy)]);
+        Manifested(Mod, [download], Line("meshes/a.nif", new FileProvider.FirstInstallationFile()));
+
+        Handler.Restore([ModFrom(Mod, download)], Instance());
+
+        Assert.Equal(copy, WrittenText(Mod, "meshes/a.nif"));
+    }
+
+    [Fact]
+    public void AFileComesBackFromAnEntryNamedWithBackslashes()
+    {
+        _folders.WithFile(Mod, "meshes/a.nif", "edited").WithBytes(string.Empty, "dl/Mod.zip", Zip(("meshes\\a.nif", "a"u8.ToArray())));
+        var download = new InstallationFile("dl/Mod.zip", null, 7, "#zip", [new HashedEntry("meshes/a.nif", "a")]);
+        Manifested(Mod, [download], Line("meshes/a.nif", new FileProvider.FirstInstallationFile()));
+
+        Handler.Restore([ModFrom(Mod, download)], Instance());
+
+        Assert.Equal("a", WrittenText(Mod, "meshes/a.nif"));
+    }
+
+    [Fact]
+    public void AnInstallationFileThatIsNoArchive_LeavesTheModNotFinished_NamingIt_PromisingNoRetryMends_AndTheOthersLand()
+    {
+        _folders.WithFile(Mod, "a.nif", "edited").WithFile(string.Empty, "dl/Mod.zip", "not an archive");
+        var download = new InstallationFile("dl/Mod.zip", null, 14, "#zip", [new HashedEntry("a.nif", "a")]);
+        Manifested(Mod, [download], Line("a.nif", new FileProvider.FirstInstallationFile()));
+
+        var result = Handler.Restore([ModFrom(Mod, download), AnotherModThatLands()], Instance());
+
+        var unfinished = Assert.Single(result.Refused);
+        Assert.Equal(RestoreRefusal.NotFinished, unfinished.Refusal.Kind);
+        Assert.StartsWith("'Mod' was not finished: 'Mod.zip' is not an archive restore from manifest can read:", unfinished.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("again", unfinished.Message, StringComparison.Ordinal);
+        Assert.Equal("Other", Assert.Single(result.Landed).Item);
     }
 
     [Fact]
@@ -250,7 +316,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var skipped = Assert.Single(Handler.Restore([ModFrom(Mod)], Instance()).Refused);
 
-        Assert.Equal("'Mod' was skipped: installation file 'Mod.zip' is not in the downloads folder; 'c.nif' has no provider.", skipped.Message);
+        Assert.Equal("'Mod' was skipped: the mod manager records no installation file 'Mod.zip' for it; 'c.nif' has no provider.", skipped.Message);
     }
 
     [Fact]
