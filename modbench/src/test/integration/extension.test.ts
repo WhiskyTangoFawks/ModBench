@@ -542,7 +542,7 @@ async function openRecord(records: RecordToOpen | RecordToOpen[]) {
   if ([records].flat().some((record) => record.beside)) {
     await vscode.commands.executeCommand(vscode.window.tabGroups.all.length < 2 ? 'workbench.action.newGroupRight' : 'workbench.action.focusSecondEditorGroup');
   }
-  return vscode.commands.executeCommand('modbench.record.open', Array.isArray(records) ? records.map(asArgument) : asArgument(records));
+  await vscode.commands.executeCommand('modbench.record.open', Array.isArray(records) ? records.map(asArgument) : asArgument(records));
 }
 
 const renderedName = (formKey: string) => `${formKey.replace(':', '_')}.json`;
