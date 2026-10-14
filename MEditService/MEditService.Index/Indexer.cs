@@ -603,7 +603,6 @@ internal sealed class Indexer : IDisposable
         // this reconcile.
         PublishStatus();
 
-        // After Reconciling shows: the sequence moves here, and a reader that sees it move must not find Ready.
         store.Commit(_ => store.SetStringsLanguage(_readLanguage));
         if (leaving.Count > 0) store.Commit(_ => leaving.ForEach(store.Unregister));
         foreach (var key in leaving)
