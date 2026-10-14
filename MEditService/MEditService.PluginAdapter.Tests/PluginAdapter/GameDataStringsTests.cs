@@ -84,8 +84,33 @@ public sealed class GameDataStringsTests : IDisposable
     private bool IsLocalized(string pluginPath) =>
         Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), pluginPath), LoadOrder, HandedStrings.Of(pluginPath)).Answered().Content.IsLocalized;
 
-    private IReadOnlyList<string> StringsPlacesOf(RegisteredPlugin plugin) =>
-        Adapter.StringsPlacesOf(new ModPath(ModKey.FromFileName(PluginName), plugin.Path), LoadOrder, plugin.Strings).Answered();
+    [Fact]
+    public void StringsPlacesOf_AnArchiveRewrittenUnderAnUnchangedHandedStamp_IsNotListedAgain() =>
+        Assert.Equal([[UpdateArchive], [UpdateArchive]], PlacesBeforeAndAfterAnotherPluginsStringsReplaceTheArchives(stampAfter: "1"));
+
+    [Fact]
+    public void StringsPlacesOf_AnArchiveWhoseHandedStampChanged_IsListedAgain() =>
+        Assert.Equal([[UpdateArchive], []], PlacesBeforeAndAfterAnotherPluginsStringsReplaceTheArchives(stampAfter: "2"));
+
+    private string UpdateArchive => Path.Combine(_dataFolder, "Update.bsa");
+
+    private IReadOnlyList<string>[] PlacesBeforeAndAfterAnotherPluginsStringsReplaceTheArchives(string stampAfter)
+    {
+        LocalizedDoorPlugin.PackStrings(_pluginPath, UpdateArchive);
+        var before = StringsPlacesOf(Plugin, TheGameLoadingOnly(new StampedFile(UpdateArchive, "1")));
+        var other = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "Other")).FullName, "Other.esm");
+        LocalizedDoorPlugin.Write(other, "The Other Door");
+        LocalizedDoorPlugin.PackStrings(other, UpdateArchive);
+        return [before, StringsPlacesOf(Plugin, TheGameLoadingOnly(new StampedFile(UpdateArchive, stampAfter)))];
+    }
+
+    private LoadOrderSnapshot TheGameLoadingOnly(StampedFile archive) =>
+        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], [archive], []);
+
+    private IReadOnlyList<string> StringsPlacesOf(RegisteredPlugin plugin) => StringsPlacesOf(plugin, LoadOrder);
+
+    private static IReadOnlyList<string> StringsPlacesOf(RegisteredPlugin plugin, LoadOrderSnapshot loadOrder) =>
+        Adapter.StringsPlacesOf(new ModPath(ModKey.FromFileName(PluginName), plugin.Path), loadOrder, plugin.Strings).Answered();
 
     [Fact]
     public void OpenDocuments_TwoCopiesOfAPluginEachWithItsOwnStrings_EachReadsItsOwn()
