@@ -3,9 +3,8 @@ namespace MEditService.ModFolderAdapter;
 /// <summary>The one reader of a mod folder's files and the one writer of a mod's manifest.</summary>
 public interface IModFolderRepository
 {
-    /// <summary>Every file of the mod but its manifest and those left out, by forward-slash path. A file whose stamp is
-    /// what the stat cache in <paramref name="statCache"/> last read of it goes unread, and the cache keeps what this
-    /// read; with no stat cache every file is read.</summary>
+    /// <summary>Every file of the mod but its manifest and those left out, by forward-slash path. A file whose stamp the
+    /// stat cache in <paramref name="statCache"/> last read goes unread; with none, every file is read.</summary>
     IReadOnlyList<HashedFile> Files(string modFolder, string modName, IReadOnlySet<string> leftOut, string? statCache);
 
     Stream OpenFile(string modFolder, string path);

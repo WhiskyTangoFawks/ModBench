@@ -20,7 +20,7 @@ internal sealed class StatCache
     public StatCache(string folder, string modName)
     {
         _folder = folder;
-        _file = Path.Combine(folder, modName + ".json");
+        _file = Path.Combine(folder, modName);
         _read = Read(_file);
     }
 

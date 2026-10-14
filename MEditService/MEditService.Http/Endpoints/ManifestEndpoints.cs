@@ -107,9 +107,8 @@ internal static class ManifestEndpoints
         [.. files.Select(file => new OverriddenGameFile(file.Path, file.Size.GetValueOrDefault(), file.Hash))];
 }
 
-/// <summary>The mods to update the manifests of, with the instance's facts (ADR-0013). StatCache is the folder outside every
-/// mod folder where mEdit keeps what it last read of each mod's files. Gesture names it to a cancel and in its
-/// progress.</summary>
+/// <summary>The mods to update the manifests of, with the instance's facts (ADR-0013). StatCache is the stat cache's folder,
+/// outside every mod folder. Gesture names it to a cancel and in its progress.</summary>
 internal sealed record UpdateManifestRequest(
     IReadOnlyList<UpdateManifestModRequest> Mods, IReadOnlyList<OverriddenGameFileRequest> GameFiles, string StatCache, string? Gesture);
 
