@@ -44,7 +44,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'init-progress', 'external-change',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'init-progress', 'stage-progress', 'external-change',
   'plugin-source-unreadable', 'record-filter-cleared',
 ] as const;
 
@@ -57,6 +57,7 @@ export type NotificationKind = typeof NOTIFICATION_KINDS[number];
 export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
   'init-progress': InitStatus;
+  'stage-progress': StageProgress;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
   'plugin-source-unreadable': { plugins: (PluginAddress & UnreadableSource)[] };
   'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
@@ -197,6 +198,9 @@ export type StageMod = components['schemas']['StageModRequest'];
  *  build folder and the share of a file a delta may reach. */
 export type StageFacts = Omit<components['schemas']['StageRequest'], 'mods'>;
 
+/** Where stage is: the mod it works on, and how many mods it has done of how many. The mod is none once it ends. */
+export type StageProgress = components['schemas']['StageProgress'];
+
 interface StagedMod {
   mod: string;
   manifestWritten: boolean;
@@ -271,7 +275,7 @@ export interface MEditClient {
   // call itself refused, with nothing written.
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;
   // Each mod's manifest lands or is refused on its own. A WriteRefused is the call itself refused, with nothing written.
-  stage(mods: readonly StageMod[], facts: StageFacts): Promise<StageOutcome | WriteRefused>;
+  stage(mods: readonly StageMod[], facts: StageFacts, options?: { onProgress?: (progress: StageProgress) => void }): Promise<StageOutcome | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).

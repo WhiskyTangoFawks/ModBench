@@ -157,10 +157,10 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putLoadOrder));
   const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
   ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));
-  own(publishRepository(instance, instanceRoot, () => adapter.holdsRepository()));
+  own(publishRepository(instance, instanceRoot));
   ownAll(own, registerModlistCommands({
     commands: modlistSourceCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(instanceRoot) }),
-    instance, reporter: reporterFor('modlist'), modsView: MODS_KEY_ARGS.view,
+    instance, reporter: reporterFor('modlist'), say: (message) => { toolboxProvider.say(message); }, modsView: MODS_KEY_ARGS.view,
   }));
   own(deps.focusedView.follow('modbench.modList', mods.view));
   own(deps.focusedView.follow('modbench.pluginListTree', plugins.followed));

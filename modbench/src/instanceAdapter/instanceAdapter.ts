@@ -353,6 +353,8 @@ export interface InstanceReading {
   readonly folderMeta: ReadonlyMap<string, ModMeta>;
   /** Every repository in the source folder. */
   readonly sourceMods: SourceMods;
+  /** Whether the instance folder holds a repository. */
+  readonly holdsRepository: boolean;
 }
 
 export interface InstanceAdapter {
@@ -376,8 +378,6 @@ export interface InstanceAdapter {
   overriddenGameFiles(dataFolder: string, modFilePaths: readonly string[]): Promise<FileRead<readonly GameFile[]>>;
   /** The folder stage writes deltas into. */
   readonly buildFolder: string;
-  /** Whether the instance folder already holds a repository. */
-  holdsRepository(): Promise<boolean>;
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds. */
   writeIgnoreList(): Promise<void>;
   /** The stamp of an origin file, at the path it is read from. */

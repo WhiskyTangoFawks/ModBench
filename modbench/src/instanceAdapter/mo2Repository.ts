@@ -2,13 +2,13 @@
 
 import type { Dirent } from 'node:fs';
 import { join } from 'node:path';
-import { isTracked, listDir, write } from './files';
+import { listDir, write } from './files';
 import type { HashIndex } from './hashIndex';
 import type { GameFile, InstanceAdapter } from './instanceAdapter';
 import { buildDir, ignoreListFile, WHITELIST_IGNORE_LIST } from './layout';
 import type { Mo2Context } from './mo2Context';
 
-type Mo2Repository = Pick<InstanceAdapter, 'overriddenGameFiles' | 'buildFolder' | 'holdsRepository' | 'writeIgnoreList'>;
+type Mo2Repository = Pick<InstanceAdapter, 'overriddenGameFiles' | 'buildFolder' | 'writeIgnoreList'>;
 
 const lowerCased = (names: readonly Dirent[]): Map<string, Dirent> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
@@ -37,8 +37,6 @@ export function mo2Repository(
 ): Mo2Repository {
   return {
     buildFolder: buildDir(instanceRoot),
-
-    holdsRepository: () => isTracked(instanceRoot),
 
     writeIgnoreList: () => write(ignoreListFile(instanceRoot), WHITELIST_IGNORE_LIST),
 

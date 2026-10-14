@@ -14,31 +14,28 @@ import type { InstanceSubscriber } from '../../instanceLoader/instance';
 
 beforeEach(() => { vi.clearAllMocks(); });
 
-function instanceThatLands() {
-  const subscribers: (() => void)[] = [];
+function instanceHolding(holdsRepository: boolean) {
+  const subscribers: InstanceSubscriber[] = [];
   const disposed: true[] = [];
   return {
     instance: {
+      value: instanceValueFixture({ holdsRepository }),
       subscribe: (subscriber: InstanceSubscriber) => {
-        subscribers.push(() => { subscriber(instanceValueFixture(), 1); });
+        subscribers.push(subscriber);
         return { dispose: () => { disposed.push(true); } };
       },
     },
-    land: () => { for (const subscriber of subscribers) subscriber(); },
+    land: (held: boolean) => { for (const subscriber of subscribers) subscriber(instanceValueFixture({ holdsRepository: held }), 1); },
     disposed,
   };
 }
 
 describe('publishRepository', () => {
-  it('tells the menus whether the instance holds a repository, now and after each value the Instance loader lands', async () => {
-    let held = false;
-    const { instance, land } = instanceThatLands();
+  it('tells the menus whether the instance holds a repository, now and from each value the Instance loader lands', () => {
+    const { instance, land } = instanceHolding(false);
 
-    publishRepository(instance, '/instance', () => Promise.resolve(held));
-    await vi.waitFor(() => expect(executeCommand).toHaveBeenCalledTimes(2));
-    held = true;
-    land();
-    await vi.waitFor(() => expect(executeCommand).toHaveBeenCalledTimes(3));
+    publishRepository(instance, '/instance');
+    land(true);
 
     expect(executeCommand.mock.calls).toEqual([
       ['setContext', 'modbench.modlist.instanceRoots', ['file:///instance']],
@@ -48,9 +45,9 @@ describe('publishRepository', () => {
   });
 
   it('stops listening once disposed', () => {
-    const { instance, disposed } = instanceThatLands();
+    const { instance, disposed } = instanceHolding(true);
 
-    publishRepository(instance, '/instance', () => Promise.resolve(true)).dispose();
+    publishRepository(instance, '/instance').dispose();
 
     expect(disposed).toEqual([true]);
   });

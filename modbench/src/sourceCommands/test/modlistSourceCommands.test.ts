@@ -29,15 +29,15 @@ describe('modlistSourceCommands init', () => {
   it('makes the instance folder a repository, then writes its ignore list', async () => {
     const { commands, adapter, repositories } = commandsOver();
 
-    const result = await commands.init();
+    const result = await commands.init({ holdsRepository: false });
 
     expect([result.applied, repositories, adapter.calls]).toEqual([true, ['made'], [{ verb: 'writeIgnoreList' }]]);
   });
 
   it('refuses an instance folder that already holds a repository, naming it, and changes nothing', async () => {
-    const { commands, adapter, repositories } = commandsOver({ repositoryHeld: true });
+    const { commands, adapter, repositories } = commandsOver();
 
-    const result = await commands.init();
+    const result = await commands.init({ holdsRepository: true });
 
     expect([result, repositories, adapter.calls]).toEqual([{ applied: false, refusal: '/instance already holds a repository.' }, [], []]);
   });
@@ -49,7 +49,7 @@ describe('modlistSourceCommands init', () => {
       makeRepository: () => Promise.reject(new Error('git is not available')),
     });
 
-    const result = await commands.init();
+    const result = await commands.init({ holdsRepository: false });
 
     expect([result, adapter.calls]).toEqual([{ applied: false, refusal: 'git is not available' }, []]);
   });
@@ -57,7 +57,7 @@ describe('modlistSourceCommands init', () => {
   it('says so when the ignore list could not be written', async () => {
     const { commands } = commandsOver({ refusals: refusing('writeIgnoreList', 'read-only folder') });
 
-    expect(await commands.init()).toEqual({ applied: false, refusal: 'read-only folder' });
+    expect(await commands.init({ holdsRepository: false })).toEqual({ applied: false, refusal: 'read-only folder' });
   });
 });
 
@@ -80,8 +80,19 @@ describe('modlistSourceCommands stage', () => {
           { name: 'ModB', folder: '/mods/ModB', installationFiles: [], committedFiles: ['meta.ini'] },
         ],
         { gameFiles: [VANILLA], dataFolder: '/game/Data', buildFolder: '/build', deltaShare: 0.5 },
+        { onProgress: expect.any(Function) as unknown },
       ],
     }]);
+  });
+
+  it('reports the phase of reading each mod\'s files, then mEdit\'s progress staging them', async () => {
+    const { commands, client } = commandsOver();
+    client.setCommandResult('stage', STAGED);
+    const heard: unknown[] = [];
+
+    await commands.stage(['ModA', 'ModB'], instanceOf({}), { onProgress: (status) => heard.push(status) });
+
+    expect(heard).toEqual([{ phase: 'ReadingFiles', mod: 'ModA' }, { phase: 'ReadingFiles', mod: 'ModB' }]);
   });
 
   it('refuses a mod whose installation files or overridden game files cannot be read, naming why, and stages the rest', async () => {

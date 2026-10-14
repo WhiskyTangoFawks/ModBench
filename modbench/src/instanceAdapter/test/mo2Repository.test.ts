@@ -33,12 +33,16 @@ async function put(path: string, text = 'x'): Promise<void> {
 const runGit = (...args: string[]): string => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
 
 describe('the MO2 adapter\'s repository', () => {
-  it('holds none until the instance folder has a .git', async () => {
+  it('reads that the instance holds none until its folder has a .git', async () => {
     const adapter = await instance();
-    const before = await adapter.holdsRepository();
+    await put('ModOrganizer.ini', '[General]\r\ngameName=Fallout 4\r\nselected_profile=Default\r\n');
+    await put('profiles/Default/modlist.txt', '');
+    await put('profiles/Default/plugins.txt', '');
+    await mkdir(join(root, 'mods'));
+    const before = (await adapter.reading()).holdsRepository;
     runGit('init', '--quiet');
 
-    expect([before, await adapter.holdsRepository()]).toEqual([false, true]);
+    expect([before, (await adapter.reading()).holdsRepository]).toEqual([false, true]);
   });
 
   it('names the game files a mod\'s files override as the game folder spells them, with their size and hash', async () => {

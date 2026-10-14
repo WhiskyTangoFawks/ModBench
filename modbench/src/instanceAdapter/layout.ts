@@ -159,6 +159,9 @@ export const buildConfigurationFile = (sourceFolder: string): string => join(sou
 /** The git directory whose presence is what "tracked" means (ADR-0007). */
 export const repositoryGitDir = (sourceFolder: string): string => join(sourceFolder, GIT_DIR);
 
+/** A repository appearing at, or vanishing from, the instance root. */
+export const REPOSITORY_WATCH_GLOB = GIT_DIR;
+
 // Matched without case, as Windows matches a name, on every platform alike.
 const named = (name: string | undefined, as: string): boolean => name?.toLowerCase() === as;
 

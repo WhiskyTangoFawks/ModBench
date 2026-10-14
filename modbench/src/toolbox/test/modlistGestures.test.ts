@@ -42,12 +42,13 @@ const modRow = (name: string) => ({ argument: { kind: 'mod', name }, name });
 
 function register() {
   const reporter = recordingReporter();
+  const said: (string | undefined)[] = [];
   registerModlistCommands({
     commands: { init, stage },
     instance: { value, refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(undefined); } },
-    reporter, modsView: 'modbench.modList',
+    reporter, say: (message) => { said.push(message); }, modsView: 'modbench.modList',
   });
-  return { reporter, run: (id: string, ...args: unknown[]) => present(handlers.get(id), `the handler for "${id}"`)(...args) };
+  return { reporter, said, run: (id: string, ...args: unknown[]) => present(handlers.get(id), `the handler for "${id}"`)(...args) };
 }
 
 beforeEach(() => {
@@ -80,6 +81,28 @@ describe('Init', () => {
 });
 
 describe('Stage', () => {
+  it('says its phase on the Toolbox\'s message line while it runs, and gives the line back when it ends', async () => {
+    stage.mockImplementationOnce((_mods, _instance, options) => {
+      options?.onProgress?.({ phase: 'ReadingFiles', mod: 'ModA' });
+      options?.onProgress?.({ phase: 'Staging', mod: 'ModA', modsDone: 0, modsTotal: 2 });
+      return Promise.resolve({ applied: true, landed: [], refused: [] });
+    });
+    const { said, run } = register();
+
+    await run('modbench.modlist.stage');
+
+    expect(said).toEqual(['Staging "ModA" — reading its files…', 'Staging "ModA" — 0 of 2 mods staged…', undefined]);
+  });
+
+  it('gives the message line back when stage throws', async () => {
+    stage.mockRejectedValueOnce(new Error('boom'));
+    const { said, run } = register();
+
+    await expect(run('modbench.modlist.stage')).rejects.toThrow('boom');
+
+    expect(said).toEqual([undefined]);
+  });
+
   it('stages every mod, no separator, from the palette or the Source Control title bar, whatever that hands it', async () => {
     const { run } = register();
 

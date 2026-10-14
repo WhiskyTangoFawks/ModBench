@@ -3,7 +3,9 @@
 
 import * as vscode from 'vscode';
 import type { Subscription } from './instanceAdapter';
-import { MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, SETTINGS_WATCH_GLOB, SOURCE_GLOB } from './layout';
+import {
+  MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, REPOSITORY_WATCH_GLOB, SETTINGS_WATCH_GLOB, SOURCE_GLOB,
+} from './layout';
 
 type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives';
 
@@ -52,7 +54,7 @@ export function mo2Watch(instanceRoot: string, gameDirectoryChanged: (listener: 
   const armed = (): boolean => listeners.size > 0;
 
   const arm = (): void => {
-    fixed = [MODS_GLOB, OVERWRITE_GLOB, MODLIST_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, SETTINGS_WATCH_GLOB].map((glob) => watch(instanceRoot, glob));
+    fixed = [MODS_GLOB, OVERWRITE_GLOB, MODLIST_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, SETTINGS_WATCH_GLOB, REPOSITORY_WATCH_GLOB].map((glob) => watch(instanceRoot, glob));
     fixed.push(watchFiles(instanceRoot, SOURCE_GLOB, (path) => {
       if (isRepositoryChange(path)) changed();
     }));

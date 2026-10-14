@@ -8,7 +8,7 @@ import { parseMetaIni } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
 import { creationClubListFile, dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
-import { factsOf, get, listDir, readOrReason, stampOf } from './files';
+import { factsOf, get, isTracked, listDir, readOrReason, stampOf } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileOrigin, type GameFolder, type InstanceAdapter, type InstanceReading,
   type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type SourceMods,
@@ -52,6 +52,7 @@ export interface ReadingSource extends ArchiveReads {
   /** An origin's files, none when its folder is not there. */
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
   sourceMods(): Promise<SourceMods>;
+  holdsRepository(): Promise<boolean>;
 }
 
 async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile[] | undefined> {
@@ -151,6 +152,8 @@ export function readingSource(context: Mo2Context): ReadingSource {
     originFiles: (origin) => originFilesIn(instanceRoot, origin),
 
     sourceMods: () => sourceModsIn(instanceRoot),
+
+    holdsRepository: () => isTracked(instanceRoot),
   };
 }
 
@@ -204,7 +207,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
   const modFoldersRead = source.modFolders((name, reason) => skippedLinks.set(name, reason));
   const sourceModsRead = source.sourceMods();
   const downloadsRead = settings.downloadedFiles();
-  const [mods, pluginOrder, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceMods, modFiles, folderMeta] = await Promise.all([
+  const [mods, pluginOrder, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceMods, modFiles, folderMeta, holdsRepository] = await Promise.all([
     modsRead,
     source.pluginOrder(profile),
     downloadsRead,
@@ -223,12 +226,13 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
       .map(async ({ name }) => [name, await source.originFiles({ kind: 'mod', name })] as const)))),
     Promise.all([modsRead, modFoldersRead, downloadsRead]).then(([entries, folders, downloads]) =>
       folderMetaOf(source, entries, folders, downloads.kind === 'listed' && downloads.files !== undefined)),
+    source.holdsRepository(),
   ]);
   const { archiveList, dataFolderArchives, ...gameFacts } = game;
   return {
     profile, gameName, gameRelease, mods, pluginOrder, downloadedFiles, ...gameFacts,
     archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
     profiles, modFolders, skippedLinks, runtimeOutput, modFiles, folderMeta,
-    sourceMods,
+    sourceMods, holdsRepository,
   };
 }

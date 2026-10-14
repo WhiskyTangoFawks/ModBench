@@ -1,4 +1,4 @@
-import { isRefused, type MEditClient, type StageMod, type StageOutcome } from '../client';
+import { isRefused, type MEditClient, type StageMod, type StageOutcome, type StageProgress } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { GameFile, GameFolder, InstanceAdapter, OriginFile } from '../instanceAdapter/instanceAdapter';
 import { refuse } from '../ports/refuse';
@@ -9,7 +9,7 @@ const DELTA_SHARE = 0.5;
 interface ModlistSourceCommandsDeps {
   client: Pick<MEditClient, 'stage'>;
   adapter: Pick<InstanceAdapter,
-    'installationFiles' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'buildFolder' | 'holdsRepository' | 'writeIgnoreList'>;
+    'installationFiles' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'buildFolder' | 'writeIgnoreList'>;
   instanceRoot: string;
   /** VS Code's git makes the instance folder a repository. */
   makeRepository: () => Promise<void>;
@@ -24,12 +24,15 @@ export interface StageInstance {
 /** What stage answers: each mod staged or refused, or the whole stage refused, as a message to show. */
 export type StageResult = ({ applied: true } & StageOutcome) | { applied: false; refusal: string };
 
+/** Where stage is: the Instance adapter reading a mod's files, or mEdit staging mods. */
+export type StageStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Staging' } & StageProgress);
+
 /** The modlist gestures, bound to the mEdit client and handing it the instance's facts. */
 export function modlistSourceCommands({ client, adapter, instanceRoot, makeRepository }: ModlistSourceCommandsDeps) {
   return {
     /** Makes the repository and its ignore list, and stages nothing. Refused when the instance folder holds one already. */
-    init: async (): Promise<CommandResult<object>> => {
-      if (await adapter.holdsRepository()) return { applied: false, refusal: `${instanceRoot} already holds a repository.` };
+    init: async ({ holdsRepository }: { readonly holdsRepository: boolean }): Promise<CommandResult<object>> => {
+      if (holdsRepository) return { applied: false, refusal: `${instanceRoot} already holds a repository.` };
       try {
         await makeRepository();
         await adapter.writeIgnoreList();
@@ -41,12 +44,15 @@ export function modlistSourceCommands({ client, adapter, instanceRoot, makeRepos
 
     /** A mod whose folder, installation files or overridden game files the Instance adapter cannot answer is refused
      *  here, naming why, and mEdit stages the rest. */
-    stage: async (mods: readonly string[], { filesByMod, gameFolder }: StageInstance): Promise<StageResult> => {
+    stage: async (
+      mods: readonly string[], { filesByMod, gameFolder }: StageInstance, options: { onProgress?: (status: StageStatus) => void } = {},
+    ): Promise<StageResult> => {
       if (gameFolder.kind !== 'found') return { applied: false, refusal: 'Could not stage: the game folder was not found.' };
       const sent: StageMod[] = [];
       const gameFiles = new Map<string, GameFile>();
       const refused: ItemRefusal<string>[] = [];
       for (const mod of mods) {
+        options.onProgress?.({ phase: 'ReadingFiles', mod });
         const folder = await adapter.modFolderPath(mod);
         const installed = await adapter.installationFiles(mod);
         const overridden = await adapter.overriddenGameFiles(gameFolder.dataFolder, (filesByMod.get(mod) ?? []).map((file) => file.relativePath));
@@ -64,7 +70,7 @@ export function modlistSourceCommands({ client, adapter, instanceRoot, makeRepos
       if (sent.length === 0) return { applied: true, landed: [], refused };
       const outcome = await client.stage(sent, {
         gameFiles: [...gameFiles.values()], dataFolder: gameFolder.dataFolder, buildFolder: adapter.buildFolder, deltaShare: DELTA_SHARE,
-      });
+      }, { onProgress: (progress) => options.onProgress?.({ phase: 'Staging', ...progress }) });
       return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, landed: outcome.landed, refused: [...outcome.refused, ...refused] };
     },
   };

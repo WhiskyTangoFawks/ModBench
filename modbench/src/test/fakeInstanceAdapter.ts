@@ -32,6 +32,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     modFiles: noFilesFor(overrides.mods ?? []),
     folderMeta: new Map(),
     sourceMods: { folders: new Map(), folderOf: () => undefined, notes: [] },
+    holdsRepository: false,
     ...overrides,
   };
 }
@@ -68,8 +69,6 @@ export interface InstanceAnswers {
   unsourcedMods?: ReadonlySet<string>;
   /** The game's files, which a mod's files of the same path, whatever the case, override. */
   gameFiles?: readonly GameFile[];
-  /** Whether the instance folder already holds a repository. */
-  repositoryHeld?: boolean;
   installed?: InstallOutcome;
   /** Downloaded files that are gone: they get no mark. */
   goneDownloads?: ReadonlySet<string>;
@@ -145,7 +144,6 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return Promise.resolve({ kind: 'read', answer: (answers.gameFiles ?? []).filter((file) => paths.has(file.path.toLowerCase())) });
     },
     buildFolder: '/build',
-    holdsRepository: () => Promise.resolve(answers.repositoryHeld ?? false),
     writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, undefined),
     fileStamp: (path) => answer(answers.stamps?.get(path), path),
     originFileHash: (path) => {

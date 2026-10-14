@@ -5,7 +5,7 @@ import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Instance } from '../instanceLoader/instance';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
-import type { ModlistSourceCommands, StageResult } from '../sourceCommands/modlistSourceCommands';
+import type { ModlistSourceCommands, StageResult, StageStatus } from '../sourceCommands/modlistSourceCommands';
 
 const TOOLBOX_VIEW = 'modbench.toolbox';
 const NOT_A_MOD = 'it is not a mod';
@@ -14,6 +14,8 @@ interface ModlistGestureDeps {
   commands: Pick<ModlistSourceCommands, 'init' | 'stage'>;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporter: Reporter;
+  /** The Toolbox's message line: `undefined` gives it back to whatever else had something to say. */
+  say: (message: string | undefined) => void;
   /** The Mods view's id, whose bar a gesture from a Mods row runs under. */
   modsView: string;
 }
@@ -29,7 +31,7 @@ export function registerModlistCommands(deps: ModlistGestureDeps): vscode.Dispos
 
 function init({ commands, instance, reporter }: ModlistGestureDeps): Promise<void> {
   return runWritingGesture(TOOLBOX_VIEW, instance, async () => {
-    const result = await commands.init();
+    const result = await commands.init(instance.value);
     if (!result.applied) reporter.report('error', 'Could not init the modlist.', result.refusal);
   });
 }
@@ -48,10 +50,17 @@ async function stage(deps: ModlistGestureDeps, clicked: unknown, selected: reado
       return mod === undefined ? [] : [mod.name];
     });
   await runWritingGesture(rows.length === 0 ? TOOLBOX_VIEW : deps.modsView, instance, async () => {
-    const outcome = await commands.stage(mods, instance.value);
+    const outcome = await commands.stage(mods, instance.value, { onProgress: (status) => { deps.say(stageMessage(status)); } })
+      .finally(() => { deps.say(undefined); });
     if (!outcome.applied) { reporter.report('error', outcome.refusal); return; }
     reportStaged(reporter, mods.length + refusedRows.length, { landed: outcome.landed, refused: [...outcome.refused, ...refusedRows] });
   });
+}
+
+function stageMessage(status: StageStatus): string {
+  return status.phase === 'ReadingFiles'
+    ? `Staging "${status.mod}" — reading its files…`
+    : `Staging "${status.mod ?? ''}" — ${status.modsDone} of ${status.modsTotal} mods staged…`;
 }
 
 // modlist-source.md, Stage, story 4, and Reporting: a refused mod is named with why, the mods that landed are not

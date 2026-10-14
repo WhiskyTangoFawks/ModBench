@@ -801,6 +801,17 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(3);
     });
 
+    it('hears a repository appear at, or vanish from, the instance root', () => {
+      let signals = 0;
+      adapterAt(root).subscribe(() => { signals++; });
+      const entry = live().find((w) => w.base === root && matchesGlob('.git', w.pattern));
+
+      entry?.fireCreate(join(root, '.git'));
+      entry?.fireDelete(join(root, '.git'));
+
+      expect(signals).toBe(2);
+    });
+
     it('arms nothing until someone listens, and disarms when the last listener leaves', () => {
       const watched = adapterAt(root);
       expect(live()).toEqual([]);
