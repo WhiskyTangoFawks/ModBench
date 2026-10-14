@@ -747,6 +747,22 @@ describe('modbench.mod.build', () => {
       expect(answered).toMatchObject({ applied: true, outcome: { refused: [{ item: 'ModC', reason: 'it is not a source mod' }] } });
     });
 
+    it('answers a plugin and an archive refused inside a built mod as partial failures', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('build', { landed: [{
+        ...built('ModA', [], [{ item: PATCH, reason: 'it does not compile' }]), archivesRefused: [{ item: 'ModA - Main.ba2', reason: 'it is too large' }],
+      }], refused: [] });
+      const { handler, reporter } = registered(client);
+
+      const answered = await handler(calling('ModA'));
+
+      expect(answered).toMatchObject({ applied: true, partial: [
+        { message: 'Could not build "MyPatch.esp (ModA)" in "ModA".', detail: 'it does not compile', severity: 'log' },
+        { message: 'Could not pack "ModA - Main.ba2" in "ModA".', detail: 'it is too large', severity: 'log' },
+      ] });
+      expect(reporter.reports).toEqual([]);
+    });
+
     it('answers a mod built in part and a file it overwrote as partial failures', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('build', { landed: [{ ...built('ModA'), failure: 'the archive step failed', overwritten: ['Data/A.esp'] }], refused: [] });
