@@ -16,6 +16,18 @@ export function gameDirectoryOverrides(): GameDirectoryOverrides {
   return { gameDirectory: meditConfig().get<string>('mods.gameDirectory') };
 }
 
+const STRINGS_LANGUAGE_SETTING = 'stringsLanguage';
+
+export function stringsLanguage(): string {
+  return meditConfig().get<string>(STRINGS_LANGUAGE_SETTING, 'English');
+}
+
+export function onStringsLanguageChange(listener: () => void): vscode.Disposable {
+  return vscode.workspace.onDidChangeConfiguration((change) => {
+    if (change.affectsConfiguration(`modbench.${STRINGS_LANGUAGE_SETTING}`)) listener();
+  });
+}
+
 export function agentPort(): number {
   return meditConfig().get<number>('agent.port', 47200);
 }

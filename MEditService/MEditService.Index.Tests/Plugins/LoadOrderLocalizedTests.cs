@@ -1,5 +1,6 @@
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -224,6 +225,46 @@ public sealed class LoadOrderLocalizedTests
 
         var name = Assert.Single(index.CopyIn(doorFormKey.ToString(), DataCopy).Require().Fields, f => f.Metadata.Name == "Name");
         Assert.Contains("The New Door", name.Value?.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ALocalizedPluginUnderAStringsLanguageItHoldsNoStringsFor_NamesThatLanguagesFiles_UntilTheLanguageChangesBack()
+    {
+        using var data = LocalizedDoor("load-order-localized-language", out var doorFormKey);
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: []));
+        string? NameCheckError() =>
+            Assert.Single(index.CopyIn(doorFormKey.ToString(), DataCopy).Require().Fields, f => f.Metadata.Name == "Name").CheckError;
+        string? NameCheckErrorIn(Language language)
+        {
+            var before = index.Sequence;
+            index.StringsLanguage.Set(language);
+            Waits.Reached(() => index.Sequence > before, "the sequence moving");
+            Waits.Reached(() => index.Status.State != LoadOrderState.Reconciling, "the reconcile");
+            return NameCheckError();
+        }
+
+        var (first, second, third) = (NameCheckError(), NameCheckErrorIn(Language.German), NameCheckErrorIn(Language.English));
+
+        Assert.Equal(
+            (null, "Fixture_de.STRINGS, Fixture_de.ILSTRINGS, Fixture_de.DLSTRINGS", null),
+            (first, second, third));
+    }
+
+    [Fact]
+    public void AChangeOfTheStringsLanguage_AdvancesTheSequenceEvenWhereNoPluginIsReadAgain()
+    {
+        using var fx = new PluginFixtureBuilder("load-order-language-sequence")
+            .WithPlugin("Fixture.esp", mod => mod.Doors.AddNew("MainDoor"))
+            .BuildScattered();
+        using var index = Indexes.Reconciled(fx);
+        index.Settled();
+        var before = index.Sequence;
+
+        index.StringsLanguage.Set(Language.German);
+
+        Waits.Reached(() => index.Sequence > before, "the sequence moving");
     }
 
     private static readonly PluginAddress DataCopy = new("Fixture.esp", PluginOrigin.DataDirectory);

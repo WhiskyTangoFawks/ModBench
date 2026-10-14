@@ -51,6 +51,12 @@
           "default": null,
           "description": "Attach to an mEdit already running on this port instead of starting one. Never a fallback: if nothing answers, Modbench reports it. Leave unset: each window starts its own mEdit."
         },
+        "modbench.stringsLanguage": {
+          "type": "string",
+          "enum": ["English", "German", "Italian", "Spanish", "Spanish_Mexico", "French", "Polish", "Portuguese_Brazil", "Chinese", "Russian", "Japanese", "Czech", "Hungarian", "Danish", "Finnish", "Greek", "Norwegian", "Swedish", "Turkish", "Arabic", "Korean", "Thai", "ChineseSimplified"],
+          "default": "English",
+          "description": "The language a translated text shows in. A plugin's source keeps every language its strings hold."
+        },
         "modbench.agent.port": {
           "type": "number",
           "default": 47200,

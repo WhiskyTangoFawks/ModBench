@@ -30,9 +30,6 @@ internal static class LocalizedStrings
 {
     private static readonly StringsSource[] Sources = [StringsSource.Normal, StringsSource.IL, StringsSource.DL];
 
-    // Mutagen's default target, and the one language init checks for until the strings language setting chooses another.
-    private const Language Target = Language.English;
-
     // Each archive's strings files by the stamp Mod Management handed with it (ADR-0013): a listed archive is opened
     // once, not on every read, and listed again once its stamp changes (ADR-0003).
     private static readonly ConcurrentDictionary<string, (string Stamp, string[] Paths)> StringsPathsIn = new(StringComparer.Ordinal);
@@ -48,19 +45,20 @@ internal static class LocalizedStrings
 
     /// <summary>Mutagen reads strings from a scratch folder holding only the files found. In a folder
     /// holding an archive, Mutagen reads this machine's game INI for the archives it lists.</summary>
-    internal static StringsRead ForRead(PluginStrings strings, LoadOrderSnapshot? loadOrder, ModPath plugin, GameRelease gameRelease)
+    internal static StringsRead ForRead(
+        PluginStrings strings, LoadOrderSnapshot? loadOrder, ModPath plugin, GameRelease gameRelease, Language language)
     {
         if (!IsLocalized(plugin, gameRelease)) return new StringsRead(new BinaryReadParameters(), scratch: null);
 
-        var found = Find(strings, loadOrder, plugin, gameRelease);
+        var found = Find(strings, loadOrder, plugin, gameRelease, language);
         var scratch = Directory.CreateTempSubdirectory("medit-strings-").FullName;
         try
         {
             var languageFormat = LanguageFormat(gameRelease);
             var stringsFolder = Directory.CreateDirectory(Path.Combine(scratch, "Strings")).FullName;
-            foreach (var ((source, language), file) in found)
-                File.WriteAllBytes(Path.Combine(stringsFolder, StringsUtility.GetFileName(languageFormat, plugin.ModKey, language, source)), file.Bytes());
-            return new StringsRead(ForFolder(scratch), scratch);
+            foreach (var ((source, fileLanguage), file) in found)
+                File.WriteAllBytes(Path.Combine(stringsFolder, StringsUtility.GetFileName(languageFormat, plugin.ModKey, fileLanguage, source)), file.Bytes());
+            return new StringsRead(ForFolder(scratch, language), scratch);
         }
         catch
         {
@@ -72,30 +70,31 @@ internal static class LocalizedStrings
     /// <summary>A missing strings file is refused by name: <c>TranslatedString.TryLookup</c> returns false
     /// silently for one. Asked of the lookup the read uses.</summary>
     internal static string? FindMissingStringsFile(
-        IModGetter mod, ModPath plugin, PluginStrings strings, LoadOrderSnapshot loadOrder, GameRelease gameRelease) =>
-        FindMissingStringsFiles(mod, plugin, strings, loadOrder, gameRelease) is [var first, ..] ? first : null;
+        IModGetter mod, ModPath plugin, PluginStrings strings, LoadOrderSnapshot loadOrder, GameRelease gameRelease, Language language) =>
+        FindMissingStringsFiles(mod, plugin, strings, loadOrder, gameRelease, language) is [var first, ..] ? first : null;
 
     /// <summary>Every strings file the lookup did not find. A translated text's own file is among them
     /// whenever it reads no text for want of its file.</summary>
     internal static IReadOnlyList<string> FindMissingStringsFiles(
-        IModGetter mod, ModPath plugin, PluginStrings strings, LoadOrderSnapshot loadOrder, GameRelease gameRelease)
+        IModGetter mod, ModPath plugin, PluginStrings strings, LoadOrderSnapshot loadOrder, GameRelease gameRelease, Language language)
     {
         if (!mod.UsingLocalization) return [];
 
         var languageFormat = LanguageFormat(gameRelease);
-        var found = Find(strings, loadOrder, plugin, gameRelease);
+        var found = Find(strings, loadOrder, plugin, gameRelease, language);
         return
         [
             .. Sources
-                .Where(source => !found.ContainsKey((source, Target)))
-                .Select(source => StringsUtility.GetFileName(languageFormat, plugin.ModKey, Target, source)),
+                .Where(source => !found.ContainsKey((source, language)))
+                .Select(source => StringsUtility.GetFileName(languageFormat, plugin.ModKey, language, source)),
         ];
     }
 
     /// <summary>The loose strings files and archives a read of localized <paramref name="plugin"/> under
     /// <paramref name="loadOrder"/> takes its strings from.</summary>
-    internal static IReadOnlyList<string> PlacesOf(PluginStrings strings, LoadOrderSnapshot loadOrder, ModPath plugin, GameRelease gameRelease) =>
-        [.. Find(strings, loadOrder, plugin, gameRelease).Values.Select(file => file.Holder).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
+    internal static IReadOnlyList<string> PlacesOf(
+        PluginStrings strings, LoadOrderSnapshot loadOrder, ModPath plugin, GameRelease gameRelease, Language language) =>
+        [.. Find(strings, loadOrder, plugin, gameRelease, language).Values.Select(file => file.Holder).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
 
     /// <summary>Whether a path, forward-slash and relative to the plugin's folder, is one of the strings files compile
     /// writes for <paramref name="plugin"/>: none unless it is localized.</summary>
@@ -121,22 +120,22 @@ internal static class LocalizedStrings
     // Each file from the first handed place holding it (ADR-0013), as the game reads it, none past the one completing
     // its language. The game's lists are the resolved copy's alone: another copy's IDs may differ.
     private static Dictionary<(StringsSource Source, Language Language), StringsFile> Find(
-        PluginStrings strings, LoadOrderSnapshot? loadOrder, ModPath plugin, GameRelease gameRelease)
+        PluginStrings strings, LoadOrderSnapshot? loadOrder, ModPath plugin, GameRelease gameRelease, Language language)
     {
         var languageFormat = LanguageFormat(gameRelease);
         var found = loadOrder is not null && loadOrder.ReadsTheGamesStrings(plugin.Path)
-            ? FirstHolding(TheGamesPlaces(loadOrder, plugin.ModKey, gameRelease, languageFormat))
+            ? FirstHolding(TheGamesPlaces(loadOrder, plugin.ModKey, gameRelease, languageFormat), language)
             : [];
-        return found.Count > 0 ? found : FirstHolding(OwnPlaces(strings, plugin.ModKey, gameRelease, languageFormat));
+        return found.Count > 0 ? found : FirstHolding(OwnPlaces(strings, plugin.ModKey, gameRelease, languageFormat), language);
     }
 
-    private static Dictionary<(StringsSource Source, Language Language), StringsFile> FirstHolding(IEnumerable<IReadOnlyList<StringsFile>> places)
+    private static Dictionary<(StringsSource Source, Language Language), StringsFile> FirstHolding(IEnumerable<IReadOnlyList<StringsFile>> places, Language language)
     {
         var found = new Dictionary<(StringsSource, Language), StringsFile>();
         foreach (var place in places)
         {
             foreach (var file in place) found.TryAdd((file.Source, file.Language), file);
-            if (Sources.All(source => found.ContainsKey((source, Target)))) break;
+            if (Sources.All(source => found.ContainsKey((source, language)))) break;
         }
         return found;
     }
@@ -193,7 +192,7 @@ internal static class LocalizedStrings
         }
     }
 
-    private static BinaryReadParameters ForFolder(string folder)
+    private static BinaryReadParameters ForFolder(string folder, Language language)
     {
         EnsureLocalAppDataDefault();
         return new BinaryReadParameters
@@ -202,6 +201,7 @@ internal static class LocalizedStrings
             {
                 StringsFolderOverride = Path.Combine(folder, "Strings"),
                 BsaFolderOverride = folder,
+                TargetLanguage = language,
             },
         };
     }

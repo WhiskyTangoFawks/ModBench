@@ -4,6 +4,7 @@ using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Strings;
 using Noggog.WorkEngine;
 
 namespace MEditService.PluginAdapter;
@@ -15,7 +16,7 @@ internal static class PluginTrees
 {
     /// <summary>A plugin's own binary read as the documents its tree would hold.</summary>
     internal static async Task<Answer<PluginSource, PluginFailure>> ReadAsync(
-        ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings,
+        ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings, Language language,
         CancellationToken cancel = default)
     {
         var gameRelease = loadOrder.GameRelease;
@@ -24,11 +25,11 @@ internal static class PluginTrees
             // Hashed before the read: bytes another tool writes after it are then named as an external
             // change, never taken for the bytes this tree came from.
             var binarySha256 = PluginBinaryHash.TrailerFormOfFile(modPath.Path);
-            var mod = MutagenPluginAdapter.OpenForWrite(modPath, gameRelease, strings, loadOrder);
+            var mod = MutagenPluginAdapter.OpenForWrite(modPath, gameRelease, strings, loadOrder, language);
 
             // Refuse by name before any serialize: TranslatedString.TryLookup returns false for a missing
             // file with no exception.
-            if (LocalizedStrings.FindMissingStringsFile(mod, modPath, strings, loadOrder, gameRelease) is { } missing)
+            if (LocalizedStrings.FindMissingStringsFile(mod, modPath, strings, loadOrder, gameRelease, language) is { } missing)
                 return new PluginFailure.MissingStrings(missing);
             if (mod.EnumerateMajorRecords().FirstOrDefault(record => record.FormKey.IsNull || record.FormKey == new FormKey(mod.ModKey, 0)) is { } objectIdZero)
             {
@@ -170,9 +171,9 @@ internal static class PluginTrees
     /// the one at <paramref name="modPath"/>; null when they are model-identical. Both are
     /// reparsed, since only written bytes show what the writer does.</summary>
     internal static ModelIdentity.Divergence? DivergenceBetween(
-        ModPath modPath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings)
+        ModPath modPath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings, Language language)
     {
-        var original = MutagenPluginAdapter.OpenForWrite(modPath, loadOrder.GameRelease, strings, loadOrder);
+        var original = MutagenPluginAdapter.OpenForWrite(modPath, loadOrder.GameRelease, strings, loadOrder, language);
         var recompiled = MutagenPluginAdapter.OpenForWrite(
             new ModPath(modPath.ModKey, recompiledPath), loadOrder.GameRelease, loadOrder: loadOrder);
 
@@ -184,7 +185,7 @@ internal static class PluginTrees
     /// <summary>One source tree's files read into the mod they compile to, in a scratch folder of the
     /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005).</summary>
     internal static async Task<Answer<CompiledTree, PluginFailure>> ReadTreeAsync(
-        IReadOnlyList<TreeFile> files, LoadOrderSnapshot loadOrder,
+        IReadOnlyList<TreeFile> files, LoadOrderSnapshot loadOrder, Language language,
         CancellationToken cancel = default)
     {
         // Outside the catch below: a game the service was not wired for is no source defect.
@@ -192,7 +193,7 @@ internal static class PluginTrees
         var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;
         try
         {
-            return (await ReadIntoAsync(game, files, scratchDir, cancel)).Then(mod => PluginAnswer.Of(new CompiledTree(mod, loadOrder)));
+            return (await ReadIntoAsync(game, files, scratchDir, cancel)).Then(mod => PluginAnswer.Of(new CompiledTree(mod, loadOrder, language)));
         }
         finally
         {
@@ -213,13 +214,15 @@ public sealed class CompiledTree
 {
     private readonly IMod _mod;
     private readonly LoadOrderSnapshot _loadOrder;
+    private readonly Language _language;
     private readonly Lazy<IReadOnlyList<FormKey>> _formKeys;
     private readonly Lazy<IReadOnlyList<(IMajorRecordGetter Record, PluginDocument Document)>> _documents;
 
-    internal CompiledTree(IMod mod, LoadOrderSnapshot loadOrder)
+    internal CompiledTree(IMod mod, LoadOrderSnapshot loadOrder, Language language)
     {
         _mod = mod;
         _loadOrder = loadOrder;
+        _language = language;
         var gameRelease = loadOrder.GameRelease;
         _formKeys = new Lazy<IReadOnlyList<FormKey>>(
             () => mod.EnumerateMajorRecords().Select(record => record.FormKey).ToList());
@@ -248,7 +251,7 @@ public sealed class CompiledTree
     /// <summary>Every value of the tree that <paramref name="save"/>'s bytes do not hold.</summary>
     public IReadOnlyList<DroppedValue> DropsIn(PreparedPluginSave save)
     {
-        var written = save.Reread(_mod.ModKey, _loadOrder.GameRelease);
+        var written = save.Reread(_mod.ModKey, _loadOrder.GameRelease, _language);
         var held = _documents.Value.Select(pair => (pair.Record, pair.Document.Text)).ToList();
         return [.. ModelIdentity.FindDrops(held, written).Select(drop => new DroppedValue(
             new RecordIdentity(drop.Record.FormKey.ToString(), RecordTypes.For(_loadOrder.GameRelease).RecordTypeOf(drop.Record), drop.Record.EditorID),

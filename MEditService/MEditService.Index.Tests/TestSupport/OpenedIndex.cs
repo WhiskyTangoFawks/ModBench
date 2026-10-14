@@ -12,6 +12,8 @@ internal sealed class OpenedIndex(ServiceProvider container, LoadOrderHolder hol
 {
     internal LoadOrderHolder Holder { get; } = holder;
 
+    internal StringsLanguageHolder StringsLanguage { get; } = container.GetRequiredService<StringsLanguageHolder>();
+
     internal UnsavedDocuments Unsaved { get; } = container.GetRequiredService<UnsavedDocuments>();
 
     internal IQueries Queries { get; } = container.GetRequiredService<IQueries>();
