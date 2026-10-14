@@ -151,6 +151,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/modlist-gestures/{gesture}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Stops the modlist gesture its client named, now or once it arrives, after the mod in hand. Its request then answers the mods it finished. */
+        post: operations["CancelModlistGesture"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/build": {
         parameters: {
             query?: never;
@@ -1665,6 +1682,7 @@ export interface components {
             buildFolder: string;
             downloadsFolder?: string | null;
             downloadedFiles?: components["schemas"]["InstallationFileRequest"][] | null;
+            gesture?: string | null;
         };
         RestoreFromManifestResponse: {
             applied: components["schemas"]["RestoredModResponse"][];
@@ -1733,6 +1751,7 @@ export interface components {
             buildFolder: string;
             /** Format: double */
             deltaShare?: number | null;
+            gesture?: string | null;
         };
         UpdateManifestResponse: {
             applied: components["schemas"]["UpdatedModResponse"][];
@@ -2143,6 +2162,26 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
+            };
+        };
+    };
+    CancelModlistGesture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gesture: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

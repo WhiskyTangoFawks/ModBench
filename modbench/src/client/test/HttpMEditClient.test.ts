@@ -273,7 +273,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         landed: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif'] }],
         refused: [{ item: 'ModC', reason: "'ModC' was not updated: 'C.zip' not in the downloads folder." }],
       },
-      path: '/update-manifest', body: { mods: [modToUpdate('ModA'), modToUpdate('ModC')], ...updateFacts } },
+      path: '/update-manifest', body: { mods: [modToUpdate('ModA'), modToUpdate('ModC')], ...updateFacts, gesture: expect.any(String) as unknown } },
     { name: 'restoreFromManifest', verb: (c) => c.restoreFromManifest([modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], restoreFacts),
       answer: {
         applied: [{ mod: 'ModA', written: ['a.nif'] }],
@@ -293,7 +293,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         ],
         notFound: [{ mod: 'ModB', gameFiles: ['B.esm'], deltas: true }],
       },
-      path: '/restore-from-manifest', body: { mods: [modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], ...restoreFacts } },
+      path: '/restore-from-manifest', body: { mods: [modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], ...restoreFacts, gesture: expect.any(String) as unknown } },
     { name: 'decompile', verb: (c) => c.decompile([first, second]),
       answer: { applied: [first], refused: [{ item: second, refusal: 'NotInTrackedMod', message: 'Second.esp is not in a tracked mod.' }] },
       reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a tracked mod.' }] },
@@ -317,18 +317,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     expect(url.pathname).toBe(path);
     expect([...url.searchParams]).toEqual([]);
     expect(await request.json()).toEqual(body);
-  });
-
-  it.each([
-    ['updateManifest', (c: MEditClient, signal: AbortSignal) => c.updateManifest([modToUpdate('ModA')], updateFacts, { signal })],
-    ['restoreFromManifest', (c: MEditClient, signal: AbortSignal) => c.restoreFromManifest([modToRestore('ModA')], restoreFacts, { signal })],
-  ])('%s hands its caller\'s signal to the request, so a cancel stops mEdit after the mod in hand', async (_name, verb) => {
-    const cancel = new AbortController();
-    const { request } = await exchange((c) => verb(c, cancel.signal), answers(200, { applied: [], refused: [] }));
-
-    cancel.abort();
-
-    expect(request.signal.aborted).toBe(true);
   });
 
   it.each([
@@ -1003,4 +991,50 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await expect(client.getEditChanges(record.formKey, plugin, envelope)).rejects.toThrow(new Error('mEdit could not be reached.'));
   });
 
+});
+
+describe('HttpMEditClient — a modlist gesture the user cancels', () => {
+  const gestures: [string, string, (client: MEditClient, signal: AbortSignal) => Promise<unknown>][] = [
+    ['updateManifest', '/update-manifest', (c, signal) => c.updateManifest([modToUpdate('ModA')], updateFacts, { signal })],
+    ['restoreFromManifest', '/restore-from-manifest', (c, signal) => c.restoreFromManifest([modToRestore('ModA')], restoreFacts, { signal })],
+  ];
+
+  async function cancelled(route: string, call: (client: MEditClient, signal: AbortSignal) => Promise<unknown>) {
+    const log = leveledLog();
+    const seen: { gesture?: unknown; cancelPath?: string; aborted?: boolean } = {};
+    let answer = (): void => {};
+    const answered = new Promise<void>((resolve) => { answer = resolve; });
+    const client = makeClient(routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())], ['/unsaved-documents', noContent],
+      ['/modlist-gestures/', (req) => { seen.cancelPath = new URL(req.url).pathname; answer(); return noContent(); }],
+      [route, async (req) => {
+        const body: unknown = await req.clone().json();
+        seen.gesture = typeof body === 'object' && body !== null ? Reflect.get(body, 'gesture') : undefined;
+        await answered;
+        seen.aborted = req.signal.aborted;
+        if (req.signal.aborted) throw new DOMException('This operation was aborted', 'AbortError');
+        return jsonResponse(200, { applied: [{ mod: 'ModA', manifestWritten: true, noProvider: [], written: [] }], refused: [] });
+      }],
+    ]), { log });
+    await client.start();
+    const cancel = new AbortController();
+    const outcome = call(client, cancel.signal);
+    cancel.abort();
+    return { client, log, seen, outcome: await outcome };
+  }
+
+  it.each(gestures)('%s asks mEdit to stop that gesture after the mod in hand, and answers with what mEdit answers once it has', async (_name, route, call) => {
+    const { client, seen, outcome } = await cancelled(route, call);
+
+    expect([seen.cancelPath, seen.aborted]).toEqual([`/modlist-gestures/${String(seen.gesture)}/cancel`, false]);
+    expect(outcome).toMatchObject({ landed: [{ mod: 'ModA' }], refused: [] });
+    await client.stop();
+  });
+
+  it.each(gestures)('%s logs no error, since a cancel is no failure', async (_name, route, call) => {
+    const { client, log } = await cancelled(route, call);
+
+    expect(log.lines.error).toEqual([]);
+    await client.stop();
+  });
 });

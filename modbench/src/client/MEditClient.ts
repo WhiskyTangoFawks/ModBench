@@ -197,7 +197,7 @@ export type UpdateManifestMod = components['schemas']['UpdateManifestModRequest'
 
 /** The instance's facts every mod's manifest needs: the game files its files override, the game's data folder, the
  *  build folder and the share of a file a delta may reach. */
-export type UpdateManifestFacts = Omit<components['schemas']['UpdateManifestRequest'], 'mods'>;
+export type UpdateManifestFacts = Omit<components['schemas']['UpdateManifestRequest'], 'mods' | 'gesture'>;
 
 /** Where a modlist gesture is: the mod it works on, and how many mods it has done of how many. The mod is none once
  *  it ends. */
@@ -227,7 +227,7 @@ export type RestoreMod = components['schemas']['RestoreFromManifestModRequest'];
 
 /** The instance's facts restore from manifest needs: the game files the mods' files override, the game's data folder, and the
  *  places a delta is looked for. */
-export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestRequest'], 'mods'>;
+export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestRequest'], 'mods' | 'gesture'>;
 
 interface RestoredMod {
   mod: string;

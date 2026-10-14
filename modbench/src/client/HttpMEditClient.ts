@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { RecordEditEnvelope } from '../wire/messages';
 import { SILENT_LOG, type Log } from '../ports/log';
 import {
@@ -495,40 +496,54 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  async updateManifest(
-    mods: readonly UpdateManifestMod[], facts: UpdateManifestFacts, options: ModlistCallOptions = {},
-  ): Promise<UpdateManifestOutcome | WriteRefused> {
-    const unsubscribe = options.onProgress ? this.notifications.onNotification('update-manifest-progress', options.onProgress) : () => {};
-    try {
-      return await this.mutateEach({
-        verb: 'update the manifest of', noun: 'mod', items: mods,
-        op: (counted) => `updateManifest(${counted})`,
-        post: () => this.apiClient.POST('/update-manifest', { body: { mods: [...mods], ...facts }, signal: options.signal }),
-        outcome: (answer) => selectionOutcome(answer),
+  // A cancel asks mEdit to stop the gesture after the mod in hand, and the request answers the mods it finished, so
+  // the read that follows the answer shows what is on disk.
+  private async modlistGesture<O>(
+    kind: 'update-manifest-progress' | 'restore-from-manifest-progress', { onProgress, signal }: ModlistCallOptions,
+    call: (gesture: string) => Promise<O | WriteRefused>,
+  ): Promise<O | WriteRefused> {
+    const gesture = randomUUID();
+    const unsubscribe = onProgress ? this.notifications.onNotification(kind, onProgress) : () => {};
+    const cancel = (): void => {
+      void this.mutate({
+        op: `cancel(${gesture})`, failMsg: 'Could not cancel',
+        post: () => this.apiClient.POST('/modlist-gestures/{gesture}/cancel', { params: { path: { gesture } } }), noContent: {},
       });
+    };
+    if (signal?.aborted) cancel();
+    else signal?.addEventListener('abort', cancel);
+    try {
+      return await call(gesture);
     } finally {
       unsubscribe();
+      signal?.removeEventListener('abort', cancel);
     }
   }
 
-  async restoreFromManifest(
+  updateManifest(
+    mods: readonly UpdateManifestMod[], facts: UpdateManifestFacts, options: ModlistCallOptions = {},
+  ): Promise<UpdateManifestOutcome | WriteRefused> {
+    return this.modlistGesture('update-manifest-progress', options, (gesture) => this.mutateEach({
+      verb: 'update the manifest of', noun: 'mod', items: mods,
+      op: (counted) => `updateManifest(${counted})`,
+      post: () => this.apiClient.POST('/update-manifest', { body: { mods: [...mods], ...facts, gesture } }),
+      outcome: (answer) => selectionOutcome(answer),
+    }));
+  }
+
+  restoreFromManifest(
     mods: readonly RestoreMod[], facts: RestoreFacts, options: ModlistCallOptions = {},
   ): Promise<RestoreOutcome | WriteRefused> {
-    const unsubscribe = options.onProgress ? this.notifications.onNotification('restore-from-manifest-progress', options.onProgress) : () => {};
-    try {
-      return await this.mutateEach({
-        verb: 'restore', noun: 'mod', items: mods,
-        op: (counted) => `restoreFromManifest(${counted})`,
-        post: () => this.apiClient.POST('/restore-from-manifest', { body: { mods: [...mods], ...facts }, signal: options.signal }),
-        outcome: (answer) => ({
-          ...selectionOutcome(answer),
-          notFound: answer.refused.filter((refused) => refused.refusal === 'NotFound')
-            .map((refused) => ({ mod: refused.item, gameFiles: refused.gameFilesNotFound, deltas: refused.deltasNotFound.length > 0 })),
-        }),
-      });
-    } finally {
-      unsubscribe();
-    }
+    return this.modlistGesture('restore-from-manifest-progress', options, (gesture) => this.mutateEach({
+      verb: 'restore', noun: 'mod', items: mods,
+      op: (counted) => `restoreFromManifest(${counted})`,
+      post: () => this.apiClient.POST('/restore-from-manifest', { body: { mods: [...mods], ...facts, gesture } }),
+      outcome: (answer) => ({
+        ...selectionOutcome(answer),
+        notFound: answer.refused.filter((refused) => refused.refusal === 'NotFound')
+          .map((refused) => ({ mod: refused.item, gameFiles: refused.gameFilesNotFound, deltas: refused.deltasNotFound.length > 0 })),
+      }),
+    }));
   }
 
   /** A refusal (untracked plugin, a link that would dangle) comes back typed (ADR-0014); only a

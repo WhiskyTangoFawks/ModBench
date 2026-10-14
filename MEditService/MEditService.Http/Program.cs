@@ -84,6 +84,7 @@ try
     builder.Services.AddSingleton<IModFolderRepository, ModFolderRepository>();
     builder.Services.AddSingleton<UpdateManifestHandler>();
     builder.Services.AddSingleton<RestoreFromManifestHandler>();
+    builder.Services.AddSingleton<ModlistGestureCancels>();
     builder.Services.AddSingleton<LoadOrderHolder>();
     builder.Services.AddSingleton<StringsLanguageHolder>();
     // One Index for the whole process (ADR-0014). Which file it opens comes from the

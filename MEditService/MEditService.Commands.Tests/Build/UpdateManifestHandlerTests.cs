@@ -429,15 +429,17 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public void ProgressGoesIdle_WhenTheUpdateIsCancelled()
+    public void ACancelledUpdate_StopsAfterTheModInHand_AnswersTheModsThatLanded_AndGoesIdle()
     {
-        _folders.WithFile(Mod, "a.txt", "hello");
-        using var cancelled = new CancellationTokenSource();
-        cancelled.Cancel();
+        _folders.WithFile("mods/A", "a.txt", "hello").WithFile("mods/B", "b.txt", "hello");
+        using var cancel = new CancellationTokenSource();
+        _notifications.OnPublish = _ => cancel.Cancel();
 
-        Assert.Throws<OperationCanceledException>(() => Handler.UpdateManifest([ModFrom("Mod")], Instance(), cancelled.Token));
+        var result = Handler.UpdateManifest([ModFrom("A"), ModFrom("B")], Instance(), cancel.Token);
 
-        Assert.Equal([new ModlistProgress(null, 0, 0)], Progress);
+        Assert.Equal(["A"], result.Landed.Select(landed => landed.Item));
+        Assert.Empty(result.Refused);
+        Assert.Equal(new ModlistProgress(null, 0, 0), Progress.Last());
     }
 
     [Fact]
