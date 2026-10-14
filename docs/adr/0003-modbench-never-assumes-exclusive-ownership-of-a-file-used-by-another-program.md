@@ -1,6 +1,6 @@
 # Modbench never assumes exclusive ownership of a file used by another program
 
-Any program or the user can change any file Modbench shares with them, at any moment ([principles](../principles.md), Never break the instance for its owner). So every state Modbench derives from such a file validates by the file's content, never by trust in its own last write or in the watcher. A source plugin's binary is the one file git cannot show, so when its bytes differ from what Modbench last wrote, Modbench tells the user and does nothing else.
+Any program or the user can change any file Modbench shares with them, at any moment ([principles](../principles.md), Never break the instance for its owner). So every state Modbench derives from such a file validates by the file's content, or by a fact every write to the file changes, never by trust in its own last write or in the watcher. A source plugin's binary is the one file git cannot show, so when its bytes differ from what Modbench last wrote, Modbench tells the user and does nothing else.
 
 ## Consequences
 
@@ -9,7 +9,6 @@ Any program or the user can change any file Modbench shares with them, at any mo
 ## Alternatives rejected
 
 - Assume ownership: lock the files, or trust the last write. The principle rules it out.
-- Detect by modification time alone. Other tools' writes can preserve it.
 - Detect from the watcher's event list. Events are lossy and Modbench's own writes are in them. The bytes on disk are the only oracle that cannot drift.
 - Refuse every write to the mod until the user answers a question. Modbench's part ends at the notice. A gate on every write stands between the user and the work ([principles](../principles.md), Minimal by default).
 - Offer answers on the notice: commit to `main` as a new baseline, or apply to the working tree. Each answer chains several steps that the user does with git.
