@@ -11,8 +11,8 @@ public interface IModFolderRepository
     /// the one <paramref name="provided"/> holds for its path. Why it could not, or null.</summary>
     string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided);
 
-    /// <summary>Every file of the mod no line of <paramref name="manifest"/> names, but its manifest and those left out,
-    /// by forward-slash path. A line names a file in another case where the file system finds that file by the line's name.</summary>
+    /// <summary>Every file of the mod no line of <paramref name="manifest"/> names, but its manifest and those left out. A
+    /// line names a file in another case where the file system finds it by the line's name.</summary>
     IReadOnlyList<string> NamedByNoLine(string modFolder, string modName, Manifest manifest, IReadOnlySet<string> leftOut);
 
     /// <summary>What restore from manifest would destroy, from the manifest, each file's stamp and the stat cache in
