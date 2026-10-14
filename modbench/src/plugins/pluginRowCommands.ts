@@ -16,6 +16,7 @@ import { argumentOfKind, registerAgentGesture, reportPartial, type AgentGesture,
 import type { SelectionResult } from '../pluginsCommands/plugins';
 import { isClickedRow, selectionArgument } from '../drivingLib/gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import type { Argument } from '../wire/argument';
 import type { Reporter } from '../ports/reporter';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import type { AskQuestion } from '../ports/dialog';
@@ -69,12 +70,15 @@ type DecompiledAndCommitted = GestureResult<InitOutcome['landed'][number], strin
 export function registerDecompileAndCommitCommand(deps: DecompileAndCommitDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
   const gesture: AgentGesture<unknown, ModsGiven, DecompiledAndCommitted> = {
     fromView: (entry) => ({ ...targetsOf(entry.selection, deps.modDirs()), invokedFrom: viewOf(entry.selection, deps.modsView) }),
-    fromAgent: ({ argument }) => ({ mods: argument.map((mod) => argumentOfKind(mod, 'mod').name), refusedRows: [], invokedFrom: deps.modsView }),
+    fromAgent: ({ argument }) => givenByAgent(argument, deps.modsView),
     run: ({ mods, invokedFrom }) => decompileAndCommitMods(deps, mods, invokedFrom),
     report: (result, { mods, refusedRows }) => reportDecompiledAndCommitted(deps.reporter, result, mods, refusedRows),
   };
   return registerAgentGesture('modbench.mod.decompileAndCommit', paletteSelection, gesture, isClickedRow);
 }
+
+const givenByAgent = (argument: readonly Argument[], invokedFrom: string): ModsGiven =>
+  ({ mods: argument.map((mod) => argumentOfKind(mod, 'mod').name), refusedRows: [], invokedFrom });
 
 const viewOf = (rows: readonly unknown[], modsView: string): string =>
   (rows.some((row) => modArgumentOf(row) !== undefined) ? modsView : PLUGINS_KEY_ARGS.view);
@@ -248,7 +252,7 @@ export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => re
       const mods = await pickSourceMods(deps.sourceDirs());
       return mods === undefined ? undefined : { mods, refusedRows: [], invokedFrom: deps.modsView };
     },
-    fromAgent: ({ argument }) => ({ mods: argument.map((mod) => argumentOfKind(mod, 'mod').name), refusedRows: [], invokedFrom: deps.modsView }),
+    fromAgent: ({ argument }) => givenByAgent(argument, deps.modsView),
     run: (given) => buildMods(deps, given),
     report: (result) => reportBuildResult(deps.reporter, result),
   };
