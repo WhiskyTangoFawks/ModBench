@@ -37,7 +37,8 @@ public sealed class GameDataStringsTests : IDisposable
     private string[] _stringsFilesTheGameReads = [];
 
     private LoadOrderSnapshot LoadOrder =>
-        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], _archivesTheGameLoads, _stringsFilesTheGameReads);
+        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], [.. _archivesTheGameLoads.Select(HandedStrings.Stamped)],
+            [.. _stringsFilesTheGameReads.Select(HandedStrings.Stamped)]);
 
     private RegisteredPlugin Plugin => new(
         PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder, _modFolder), new PluginLine(0, NamesIt: true),
@@ -58,6 +59,58 @@ public sealed class GameDataStringsTests : IDisposable
             new ModPath(ModKey.FromFileName(PluginName), pluginPath), LoadOrder,
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE),
             handed ?? HandedStrings.Of(pluginPath));
+
+    [Fact]
+    public void ThePlaceOfAPluginsStringsInOneOfTwoLoadedArchivesIsThatArchive()
+    {
+        var other = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "Other")).FullName, "Other.esm");
+        LocalizedDoorPlugin.Write(other, "The Other Door");
+        LocalizedDoorPlugin.PackStrings(other, Path.Combine(_dataFolder, "Other.bsa"));
+        LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_dataFolder, "Update.bsa"));
+        TheGameLoads("Update.bsa", "Other.bsa");
+
+        Assert.Equal([Path.Combine(_dataFolder, "Update.bsa")], StringsPlacesOf(Plugin));
+    }
+
+    [Fact]
+    public void AReadSaysWhetherAPluginIsLocalized()
+    {
+        var notLocalized = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "Plain")).FullName, PluginName);
+        LocalizedDoorPlugin.WriteNameInPlugin(notLocalized, DoorName);
+
+        Assert.Equal([true, false], [IsLocalized(_pluginPath), IsLocalized(notLocalized)]);
+    }
+
+    private bool IsLocalized(string pluginPath) =>
+        Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), pluginPath), LoadOrder, HandedStrings.Of(pluginPath)).Answered().Content.IsLocalized;
+
+    [Fact]
+    public void AnArchiveRewrittenUnderAnUnchangedHandedStampKeepsItsListing() =>
+        Assert.Equal([[UpdateArchive], [UpdateArchive]], PlacesBeforeAndAfterAnotherPluginsStringsReplaceTheArchives(stampAfter: "1"));
+
+    [Fact]
+    public void AnArchiveWhoseHandedStampChangedLosesItsOldListing() =>
+        Assert.Equal([[UpdateArchive], []], PlacesBeforeAndAfterAnotherPluginsStringsReplaceTheArchives(stampAfter: "2"));
+
+    private string UpdateArchive => Path.Combine(_dataFolder, "Update.bsa");
+
+    private IReadOnlyList<string>[] PlacesBeforeAndAfterAnotherPluginsStringsReplaceTheArchives(string stampAfter)
+    {
+        LocalizedDoorPlugin.PackStrings(_pluginPath, UpdateArchive);
+        var before = StringsPlacesOf(Plugin, TheGameLoadingOnly(new StampedFile(UpdateArchive, "1")));
+        var other = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "Other")).FullName, "Other.esm");
+        LocalizedDoorPlugin.Write(other, "The Other Door");
+        LocalizedDoorPlugin.PackStrings(other, UpdateArchive);
+        return [before, StringsPlacesOf(Plugin, TheGameLoadingOnly(new StampedFile(UpdateArchive, stampAfter)))];
+    }
+
+    private LoadOrderSnapshot TheGameLoadingOnly(StampedFile archive) =>
+        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], [archive], []);
+
+    private IReadOnlyList<string> StringsPlacesOf(RegisteredPlugin plugin) => StringsPlacesOf(plugin, LoadOrder);
+
+    private static IReadOnlyList<string> StringsPlacesOf(RegisteredPlugin plugin, LoadOrderSnapshot loadOrder) =>
+        Adapter.StringsPlacesOf(new ModPath(ModKey.FromFileName(PluginName), plugin.Path), loadOrder, plugin.Strings).Answered();
 
     [Fact]
     public void OpenDocuments_TwoCopiesOfAPluginEachWithItsOwnStrings_EachReadsItsOwn()
@@ -120,7 +173,7 @@ public sealed class GameDataStringsTests : IDisposable
     [Fact]
     public void ReadContent_ALocalizedPluginWithOneOfItsStringsFilesHanded_NamesTheOthersMissing()
     {
-        var handed = new PluginStrings([], [Path.Combine(LocalizedDoorPlugin.LooseStrings(_pluginPath), "Update_English.STRINGS")]);
+        var handed = new PluginStrings([], [HandedStrings.Stamped(Path.Combine(LocalizedDoorPlugin.LooseStrings(_pluginPath), "Update_English.STRINGS"))]);
 
         var (content, _) = Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), _pluginPath), LoadOrder, handed).Answered();
 
@@ -371,7 +424,7 @@ public sealed class GameDataStringsTests : IDisposable
 
         using var documents = Adapter.OpenDocuments(
             new ModPath(ModKey.FromFileName(master), masterPath),
-            new LoadOrderSnapshot(_dataFolder, null, GameRelease.Fallout4, [copy], [copy.Key], [copy.Key], [Path.Combine(_dataFolder, "Fallout4 - Interface.ba2")], []),
+            new LoadOrderSnapshot(_dataFolder, null, GameRelease.Fallout4, [copy], [copy.Key], [copy.Key], [HandedStrings.Stamped(Path.Combine(_dataFolder, "Fallout4 - Interface.ba2"))], []),
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), copy.Strings).Answered();
 
         Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);

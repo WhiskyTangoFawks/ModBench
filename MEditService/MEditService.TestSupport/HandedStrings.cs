@@ -2,8 +2,8 @@ using MEditService.LoadOrder;
 
 namespace MEditService.TestSupport;
 
-/// <summary>The strings files Mod Management hands for the plugin copy at <c>pluginPath</c>: those in its folder's
-/// strings folder named for it, and the archives at the folder's root named for it (ADR-0013).</summary>
+/// <summary>What Mod Management hands, each stamped, beside the plugin copy at <c>pluginPath</c>: the strings files and
+/// archives named for it, in its folder's strings folder and at its root (ADR-0013).</summary>
 public static class HandedStrings
 {
     private static readonly string[] ArchiveExtensions = [".bsa", ".ba2"];
@@ -15,8 +15,14 @@ public static class HandedStrings
         var stem = Path.GetFileNameWithoutExtension(pluginPath);
         var stringsFolder = Path.Combine(folder, "Strings");
         return new PluginStrings(
-            Directory.Exists(folder) ? [.. Directory.EnumerateFiles(folder).Where(file => IsArchiveOf(stem, file)).Order(StringComparer.OrdinalIgnoreCase)] : [],
-            Directory.Exists(stringsFolder) ? [.. Directory.EnumerateFiles(stringsFolder).Where(file => IsStringsFileOf(stem, file))] : []);
+            Directory.Exists(folder) ? [.. Directory.EnumerateFiles(folder).Where(file => IsArchiveOf(stem, file)).Order(StringComparer.OrdinalIgnoreCase).Select(Stamped)] : [],
+            Directory.Exists(stringsFolder) ? [.. Directory.EnumerateFiles(stringsFolder).Where(file => IsStringsFileOf(stem, file)).Select(Stamped)] : []);
+    }
+
+    public static StampedFile Stamped(string path)
+    {
+        var file = new FileInfo(path);
+        return new StampedFile(path, $"{file.Length}/{file.LastWriteTimeUtc.Ticks}");
     }
 
     // Mutagen's CheckArchiveApplicability, as the companion rule holds it.

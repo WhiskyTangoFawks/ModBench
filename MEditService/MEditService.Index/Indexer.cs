@@ -487,8 +487,7 @@ internal sealed class Indexer : IDisposable
         leaving.Held.InstanceRoot is { } from && snapshot.InstanceRoot is { } to
         && string.Equals(IndexFile.For(from), IndexFile.For(to), StringComparison.OrdinalIgnoreCase);
 
-    // The diff is computed first and without side effects (one stamp read and a folder probe per
-    // plugin), so a snapshot that moves nothing writes nothing and publishes no status.
+    // The diff is computed first and without side effects, so a snapshot that moves nothing writes nothing and publishes no status.
 
     // Registrations the snapshot has stopped naming are dropped before anything new is opened, so a
     // freshly opened index file's last-run rows stop answering as early as possible. False when the
@@ -517,15 +516,20 @@ internal sealed class Indexer : IDisposable
             .Where(key => open.TryGetValue(key, out var h) && (h.Key != key || h.Path != wanted[key].Path || h.Registration != Registration.In(snapshot, key)))
             .ToList();
         var respelled = resolved.Select(r => r.Key).Where(key => held.IsSpelledOtherwise(key)).ToList();
+        var derivations = store.Reads.GetDerivations();
+        var stringsReads = store.Reads.GetStringsReads();
         // A plugin's text is read through its strings files, so other ones are a new read of it (ADR-0003).
-        var restrung = resolved.Where(r => open.TryGetValue(r.Key, out var h) && !h.Strings.Equals(r.Strings)).ToList();
+        var restrung = resolved
+            .Where(r => open.TryGetValue(r.Key, out var h)
+                && (!h.Strings.Equals(r.Strings)
+                    || !StringsStillRead(snapshot, r, derivations.TryGetValue(r.Key, out var d) ? d : null, stringsReads.GetValueOrDefault(r.Key))))
+            .ToList();
         // A plugin in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
         var arriving = resolved.Where(r => !open.ContainsKey(r.Key) && !scope.Failed.StillFailing(r)).ToList();
         // ADR-0007: which truth a plugin reads is its folder's answer, and the stamp
         // records the one its rows came from. A repository made or removed moves the first alone, and no
         // load-order difference above names them.
-        var derivations = store.Reads.GetDerivations();
         var reDerived = resolved.Where(r => open.ContainsKey(r.Key) && TruthMoved(scope, r, derivations)).ToList();
 
         bool conflictsComputed;
@@ -715,7 +719,8 @@ internal sealed class Indexer : IDisposable
         // (Store.ValidateAgainstDisk), so a second hash of every binary here would pay that whole cost
         // twice for no new answer.
         var truth = scope.Projector.TruthOf(plugin.Registered);
-        if (truth != DerivedFrom.SourceTree) return scope.Store.DerivationOf(plugin.Key) == truth;
+        if (truth != DerivedFrom.SourceTree) return scope.Store.DerivationOf(plugin.Key) is var derivedFrom && derivedFrom == truth
+            && StringsStillRead(scope.LoadOrder, plugin.Registered, derivedFrom, scope.Store.IndexedStringsRead(plugin.Key));
 
         try
         {
@@ -827,7 +832,9 @@ internal sealed class Indexer : IDisposable
     // never as a mod this side holds.
     private ReadOutcome IndexFromBinary(OpenScope scope, PluginMetadata plugin, DerivedFrom derivedFrom)
     {
-        var modPath = new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path);
+        var modPath = ModPathOf(plugin.Path);
+        // Taken before the read, as the binary's hash is: strings changed during it are then read again.
+        var stringsRead = plugin.IsLocalized ? StringsReadBy(scope.LoadOrder, plugin.Registered) : null;
         if (!_adapter.OpenDocuments(modPath, scope.LoadOrder, scope.Store.Schemas, plugin.Strings).Holds(out var opened, out var failure))
         {
             _logger.LogWarning(failure.Error, "Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);
@@ -835,10 +842,23 @@ internal sealed class Indexer : IDisposable
         }
 
         using var documents = opened;
-        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom) is not { } refused) return ReadOutcome.Read;
+        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom, stringsRead) is not { } refused) return ReadOutcome.Read;
         _logger.LogWarning("Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, refused.Reason);
         return ReadOutcome.Failed(refused);
     }
+
+    private static ModPath ModPathOf(string path) => new(ModKey.FromFileName(Path.GetFileName(path)), path);
+
+    // A binary's rows hold its texts as its strings gave them. A tree's hold their own, and a plugin not localized has none.
+    private bool StringsStillRead(LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, DerivedFrom? derivedFrom, string? read) =>
+        derivedFrom is null or DerivedFrom.SourceTree || read is null || read == StringsReadBy(loadOrder, plugin);
+
+    // Each place a read of a localized plugin takes its strings from, by the stamp Mod Management handed with it, or why a
+    // place could not be read (ADR-0003).
+    private string StringsReadBy(LoadOrderSnapshot loadOrder, RegisteredPlugin plugin) =>
+        _adapter.StringsPlacesOf(ModPathOf(plugin.Path), loadOrder, plugin.Strings).Holds(out var places, out var failure)
+            ? string.Join('\n', places.Select(place => $"{place}|{plugin.Strings.StampOf(place) ?? loadOrder.StampOf(place)}"))
+            : failure.Reason;
 
     // ADR-0015.
     private void ValidateIndex(CancellationToken token)

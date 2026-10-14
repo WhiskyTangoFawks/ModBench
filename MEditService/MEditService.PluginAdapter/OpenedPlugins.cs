@@ -17,6 +17,7 @@ internal static class OpenedPlugins
                 IsMedium: PluginFlags.IsMedium(mod, pluginName),
                 IsMaster: PluginFlags.IsMaster(mod, pluginName),
                 IsBlueprint: isBlueprint,
+                IsLocalized: mod.UsingLocalization,
                 Masters: [.. mod.MasterReferences.Select(reference => reference.Master.FileName.ToString())],
                 RecordCount: recordCount),
             unreachable);
