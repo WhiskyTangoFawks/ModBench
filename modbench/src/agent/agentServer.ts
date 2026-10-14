@@ -79,7 +79,7 @@ function mcpServerOf({ instance, mEdit, log }: AgentServerOptions): McpServer {
   register(server, log, RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
   register(server, log, RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
   register(server, log, SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
-  register(server, log, RUN_GESTURE, (args) => RUN_GESTURE.of(currentValue(instance), args));
+  register(server, log, RUN_GESTURE, (args) => RUN_GESTURE.of(currentValue(instance), mEdit, args));
   register(server, log, { ...SOURCE_PROBLEMS, input: NO_INPUT }, SOURCE_PROBLEMS.of);
   return server;
 }

@@ -4,6 +4,7 @@ import { commandHandlers, executeCommand, executed, forgetRegistrations, pickRec
 vi.mock('../recordPicker', () => ({ pickRecord: (...args: unknown[]) => pickRecord(...args) }));
 vi.mock('vscode', () => recordGridVscode);
 
+import { AgentCall } from '../../drivingLib/agentGesture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 beforeEach(forgetRegistrations);
@@ -206,5 +207,75 @@ describe('modbench.record.openPinned, the menus\' entry point', () => {
     expect(executeCommand).toHaveBeenCalledWith('modbench.record.open', [
       { ...a, pinned: true }, { ...b, pinned: true },
     ]);
+  });
+});
+
+describe('modbench.record.open on records two of which cannot open', () => {
+  it('reports the first record\'s failure, not a later column\'s', async () => {
+    reporter.report.mockClear();
+    const meditClient = new InMemoryMEditClient();
+    meditClient.setQueryAnswer('getCopyDocument', null);
+    meditClient.setQueryAnswer('getRecordOwner', undefined);
+    await register({ meditClient });
+
+    await commandHandlers.get('modbench.record.open')?.([
+      { argument: { kind: 'record', formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } } },
+      { argument: { kind: 'record', formKey: '000802:A.esp' } },
+    ]);
+
+    expect(reporter.report.mock.calls).toEqual([['error', 'Failed to open "000801:A.esp".', expect.stringContaining('000801:A.esp')]]);
+  });
+});
+
+describe('modbench.record.open for the agent', () => {
+  const plugin = { name: 'A.esp', origin: 'ModA' };
+  const call = (formKeys: string[], options: object = {}) =>
+    commandHandlers.get('modbench.record.open')?.(new AgentCall(formKeys.map((formKey) => ({ kind: 'record' as const, formKey, plugin })), options));
+  const openingAs = (answer: { kind: 'Rendered'; location: string } | null) => {
+    const meditClient = new InMemoryMEditClient();
+    meditClient.setQueryAnswer('getCopyDocument', answer);
+    return meditClient;
+  };
+
+  it('opens the given records and answers the copies that landed, never asking the selection or a picker', async () => {
+    reporter.report.mockClear();
+    await register({ meditClient: openingAs({ kind: 'Rendered', location: 'Gun.json' }), selection: () => [{ argument: { kind: 'record', formKey: '0009:A.esp', plugin } }] });
+
+    const answer = await call(['000801:A.esp', '000802:A.esp'], { pinned: true });
+
+    expect(answer).toEqual({ applied: true, outcome: { landed: [
+      { formKey: '000801:A.esp', plugin }, { formKey: '000802:A.esp', plugin },
+    ], refused: [] } });
+    expect(executed().filter(([id]) => id === 'vscode.openWith').map(([, uri, , options]) => [uri, options]))
+      .toEqual([['/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', { viewColumn: -1, preview: false }]]);
+    expect(pickRecord).not.toHaveBeenCalled();
+    expect(reporter.report).not.toHaveBeenCalled();
+  });
+
+  it('answers a refusal naming the reason, and reports nothing to the user', async () => {
+    reporter.report.mockClear();
+    await register({ meditClient: openingAs(null) });
+
+    const answer = await call(['000801:A.esp']);
+
+    expect(answer).toMatchObject({ applied: false, refusal: 'Failed to open "000801:A.esp".' });
+    expect(reporter.report).not.toHaveBeenCalled();
+  });
+
+  it('refuses a call with no record rather than opening the selection', async () => {
+    await register({ selection: () => [{ argument: { kind: 'record', formKey: '0009:A.esp', plugin } }] });
+
+    await expect(Promise.resolve(call([]))).rejects.toThrow('takes at least one record');
+    expect(executed()).toEqual([]);
+  });
+
+  it('opens a winning copy, resolved, when the record names no plugin', async () => {
+    const meditClient = openingAs({ kind: 'Rendered', location: 'Gun.json' });
+    meditClient.setQueryAnswer('getRecordOwner', plugin);
+    await register({ meditClient });
+
+    const answer = await commandHandlers.get('modbench.record.open')?.(new AgentCall([{ kind: 'record', formKey: '000801:A.esp' }], {}));
+
+    expect(answer).toMatchObject({ applied: true, outcome: { landed: [{ formKey: '000801:A.esp', plugin }] } });
   });
 });

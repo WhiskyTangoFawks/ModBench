@@ -176,9 +176,9 @@ export function mo2ModOrder(context: Mo2Context): Mo2ModOrder {
             const undo = await moveFolders(change);
             if (undo) undos.unshift(undo);
           }
-          if (after === before) return { wrote: false };
+          if (after === before) return { wrote: false, landed: resolved };
           await write(file, after);
-          return { wrote: true };
+          return { wrote: true, landed: resolved };
         } catch (err) {
           throw await undoAll(undos, err);
         }

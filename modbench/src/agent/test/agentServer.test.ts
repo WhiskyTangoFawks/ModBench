@@ -16,6 +16,7 @@ import { serveAgent, type AgentServer } from '../agentServer';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { FileConflictLookup, modOrigin, RUNTIME_OUTPUT, type ConflictEntry } from '../../instanceLoader/fileConflictIndex';
+import type { MEditClient } from '../../client/MEditClient';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -530,6 +531,43 @@ describe('the agent server, running a gesture', () => {
     });
   });
 
+  describe('the separator gestures', () => {
+    const textures = { kind: 'separator' as const, name: 'Textures' };
+    const fire = async (args: Record<string, unknown>) => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const { client } = await served();
+      return call(client, 'run_gesture', args);
+    };
+
+    it.each([
+      ['a mod', { name: 'B' }, { kind: 'mod', name: 'B' }],
+      ['a separator', { name: 'Textures', kind: 'separator' }, textures],
+    ] as const)('fires add with %s as the anchor Argument and the name as an Option', async (_, anchor, argument) => {
+      await fire({ command: 'modbench.separator.add', argument: [anchor], options: { name: 'New' } });
+
+      expect(fired.calls).toEqual([['modbench.separator.add', new AgentCall([argument], { name: 'New' })]]);
+    });
+
+    it('fires rename with the one separator as its Argument and the new name as an Option', async () => {
+      await fire({ command: 'modbench.separator.rename', argument: [{ name: 'Textures' }], options: { name: 'Skins' } });
+
+      expect(fired.calls).toEqual([['modbench.separator.rename', new AgentCall([textures], { name: 'Skins' })]]);
+    });
+
+    it('fires delete with the separators named as its Argument', async () => {
+      await fire({ command: 'modbench.separator.delete', argument: [{ name: 'Textures' }] });
+
+      expect(fired.calls).toEqual([['modbench.separator.delete', new AgentCall([textures], {})]]);
+    });
+
+    it('refuses a name that is a mod, not a separator, firing nothing', async () => {
+      const answer = await fire({ command: 'modbench.separator.delete', argument: [{ name: 'B' }] });
+
+      expect(answer.text).toContain('Nothing is named "B" as a separator.');
+      expect(fired.calls).toEqual([]);
+    });
+  });
+
   describe('the mod gestures', () => {
     const B = { kind: 'mod' as const, name: 'B' };
     const fire = async (args: Record<string, unknown>) => {
@@ -588,6 +626,14 @@ describe('the agent server, running a gesture', () => {
       expect(fired.calls).toEqual([['modbench.mod.createEmpty', new AgentCall([], { name: 'New' })]]);
     });
 
+    it('fires move with separators named as separators, so they are not taken for the mods of that name', async () => {
+      const options = { place: { kind: 'modOrder' }, end: 'winning' };
+
+      await fire({ command: 'modbench.mod.move', argument: [{ name: 'Textures', kind: 'separator' }], options });
+
+      expect(fired.calls).toEqual([['modbench.mod.move', new AgentCall([{ kind: 'separator', name: 'Textures' }], options)]]);
+    });
+
     it.each(['modbench.mod.excludeFile', 'modbench.mod.includeFile'])('fires %s with each file by its path in its mod, in the mod\'s own casing', async (command) => {
       await fire({ command, argument: [{ mod: { name: 'C' }, path: 'meshes/X.NIF' }, { mod: { name: 'B' }, path: 'textures/rock.dds' }] });
 
@@ -595,6 +641,102 @@ describe('the agent server, running a gesture', () => {
         { kind: 'file', origin: { kind: 'mod', name: 'C' }, relativePath: 'MESHES/x.nif' },
         { kind: 'file', origin: { kind: 'mod', name: 'B' }, relativePath: 'Textures/Rock.DDS' },
       ], {})]]);
+    });
+  });
+
+  describe('the downloaded file gestures and install', () => {
+    const rocks = { kind: 'downloadedFile' as const, name: 'rocks.7z' };
+    const outside = { kind: 'archive' as const, path: '/elsewhere/a.7z' };
+    const fire = async (args: Record<string, unknown>) => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const { client } = await served(CONFLICTED_WITH_DOWNLOADS);
+      return call(client, 'run_gesture', args);
+    };
+
+    it.each(['modbench.downloadedFile.exclude', 'modbench.downloadedFile.include', 'modbench.downloadedFile.delete'])(
+      'fires %s with the downloaded files named as its Argument', async (command) => {
+        await fire({ command, argument: [{ name: 'rocks.7z' }] });
+
+        expect(fired.calls).toEqual([[command, new AgentCall([rocks], {})]]);
+      });
+
+    it('refuses a downloaded file nothing is named, firing nothing', async () => {
+      const answer = await fire({ command: 'modbench.downloadedFile.delete', argument: [{ name: 'gone.7z' }] });
+
+      expect(answer.text).toContain('Nothing is named "gone.7z" among the downloaded files.');
+      expect(fired.calls).toEqual([]);
+    });
+
+    it.each([
+      ['a downloaded file', rocks],
+      ['an archive outside the downloads', outside],
+      ['a folder outside the downloads', { kind: 'folder' as const, path: '/elsewhere/a' }],
+    ])('fires install with %s as the source and the new mod\'s name as an Option', async (_, source) => {
+      await fire({ command: 'modbench.mod.install', argument: [source], options: { name: 'New' } });
+
+      expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([source], { name: 'New' })]]);
+    });
+
+    it('fires install with the target mod named as list_mods names it, to upgrade it', async () => {
+      await fire({ command: 'modbench.mod.install', argument: [outside], options: { target: 'B' } });
+
+      expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([outside], { target: 'B' })]]);
+    });
+
+    it('refuses an install over a mod nothing is named, firing nothing', async () => {
+      const answer = await fire({ command: 'modbench.mod.install', argument: [outside], options: { target: 'Gone' } });
+
+      expect(answer.text).toContain('Nothing is named "Gone" as a mod.');
+      expect(fired.calls).toEqual([]);
+    });
+  });
+
+  describe('the record open gesture', () => {
+    const gun = { kind: 'record' as const, formKey: '000801:A.esp' };
+    const fire = async (args: Record<string, unknown>, answer: Awaited<ReturnType<MEditClient['resolveNames']>>) => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setQueryAnswer('resolveNames', answer);
+      const client = await clientOf(new FakeInstance({ ...CONFLICTED, plugins: VALUE.plugins }), mEdit);
+      return { mEdit, answer: await call(client, 'run_gesture', { command: 'modbench.record.open', ...args }) };
+    };
+
+    it('resolves each record by EditorID or FormKey through mEdit, and fires the FormKeys as record Arguments with the pinned Option', async () => {
+      const { mEdit } = await fire(
+        { argument: [{ name: 'Gun' }, { name: '000802:A.esp' }], options: { pinned: true } },
+        [{ formKey: '000801:A.esp', editorId: 'Gun' }, { formKey: '000802:A.esp' }]);
+
+      expect(mEdit.calls).toContainEqual({ method: 'resolveNames', args: [[{ name: 'Gun' }, { name: '000802:A.esp' }]] });
+      expect(fired.calls).toEqual([['modbench.record.open', new AgentCall([gun, { kind: 'record', formKey: '000802:A.esp' }], { pinned: true })]]);
+    });
+
+    it('fires a copy when the record names its plugin, as list_plugins shows it', async () => {
+      const { name, origin } = VALUE.plugins[1] ?? { name: '', origin: '' };
+      await fire({ argument: [{ name: 'Gun', plugin: { name, origin } }] }, [{ formKey: '000801:A.esp' }]);
+
+      expect(fired.calls).toEqual([['modbench.record.open', new AgentCall([{ ...gun, plugin: { name, origin } }], { pinned: undefined })]]);
+    });
+
+    it('refuses with mEdit\'s listing of the matches a name means, firing nothing', async () => {
+      const listing = '"Gun" means more than one thing: record 000801:A.esp (Gun); record 000802:B.esp (Gun).';
+      const { answer } = await fire({ argument: [{ name: 'Gun' }] }, { failed: 'refused', refusal: listing });
+
+      expect(answer).toEqual({ isError: true, text: listing });
+      expect(fired.calls).toEqual([]);
+    });
+
+    it('refuses a name that is a plugin, not a record, firing nothing', async () => {
+      const { answer } = await fire({ argument: [{ name: 'A.esp' }] }, [{ plugin: { name: 'A.esp', origin: 'Big Rocks' } }]);
+
+      expect(answer.text).toContain('"A.esp" is not a record.');
+      expect(fired.calls).toEqual([]);
+    });
+
+    it('refuses a plugin nothing is named, firing nothing', async () => {
+      const { answer } = await fire({ argument: [{ name: 'Gun', plugin: { name: 'Gone.esp' } }] }, [{ formKey: '000801:A.esp' }]);
+
+      expect(answer.text).toContain('No plugin is named "Gone.esp".');
+      expect(fired.calls).toEqual([]);
     });
   });
 

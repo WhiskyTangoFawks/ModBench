@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { Argument, ArgumentOf } from '../wire/argument';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { Refusal } from './refusal';
+import type { Reporter } from '../ports/reporter';
 import { gestureEntry, type GestureEntry, type KindedRow } from './gestureEntry';
 
 /** The Argument and the Options an agent call gives a gesture (commands.md, The surface supplies the Argument). */
@@ -23,11 +24,21 @@ export type GestureResult<T> =
   | { applied: true; outcome: SelectionOutcome<T>; partial?: readonly PartialFailure[] }
   | { applied: false; refusal: string; detail?: string };
 
-const isKind = <K extends Argument['kind']>(argument: Argument, kind: K): argument is ArgumentOf<K> => argument.kind === kind;
+export function reportPartial(reporter: Reporter, partial: readonly PartialFailure[] = [], log: (line: string) => void = () => undefined): void {
+  for (const { message, detail, severity } of partial) {
+    if (severity === 'warning') reporter.report('warning', message, detail);
+    else log(`${message}: ${detail}`);
+  }
+}
 
-/** The agent box hands a gesture arguments of its one kind. */
-export function argumentOfKind<K extends Argument['kind']>(argument: Argument, kind: K): ArgumentOf<K> {
-  if (!isKind(argument, kind)) throw new Refusal(`An agent call to a ${kind} gesture carries ${kind}s only, and this one carries a ${argument.kind}.`);
+const isKind = <K extends Argument['kind']>(argument: Argument, kinds: readonly K[]): argument is ArgumentOf<K> =>
+  (kinds as readonly string[]).includes(argument.kind);
+
+/** The agent box hands a gesture arguments of its kind, or of one of its kinds. */
+export function argumentOfKind<K extends Argument['kind']>(argument: Argument, ...kinds: readonly [K, ...K[]]): ArgumentOf<K> {
+  if (!isKind(argument, kinds)) {
+    throw new Refusal(`An agent call to a ${kinds.join(' or ')} gesture carries ${kinds.join(' or ')}s only, and this one carries a ${argument.kind}.`);
+  }
   return argument;
 }
 

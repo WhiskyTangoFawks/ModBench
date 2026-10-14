@@ -31,6 +31,8 @@ vi.mock('vscode', async () => {
 const { installMod } = vi.hoisted(() => ({ installMod: vi.fn() }));
 
 import { registerModInstallCommands } from '../installCommands';
+import { AgentCall } from '../../drivingLib/agentGesture';
+import { Refusal } from '../../drivingLib/refusal';
 import { modlistCommands } from '../../modOrderCommands/modOrderCommands';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -69,10 +71,9 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     showQuickPick.mockResolvedValueOnce(undefined);
 
     registerModInstallCommands(deps());
-    const succeeded = await invoke('modbench.mod.install');
+    await invoke('modbench.mod.install');
 
     expect(showOpenDialog).not.toHaveBeenCalled();
-    expect(succeeded).toEqual({ installed: false });
   });
 
   it('asks archive or folder before either OS picker opens', async () => {
@@ -96,10 +97,9 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     showOpenDialog.mockResolvedValueOnce(undefined);
 
     registerModInstallCommands(deps());
-    const succeeded = await invoke('modbench.mod.install');
+    await invoke('modbench.mod.install');
 
     expect(installMod).not.toHaveBeenCalled();
-    expect(succeeded).toEqual({ installed: false });
   });
 
   it('archive: the OS picker offers install\'s own archive extensions rather than a list of its own that would drift', async () => {
@@ -148,9 +148,8 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
       reporterFor: () => reporter,
       downloadInstall: { reporter: recordingReporter(), log, progressViewId: 'modbench.downloads' },
     }));
-    const outcome = await invoke('modbench.mod.install');
+    await invoke('modbench.mod.install');
 
-    expect(outcome).toEqual({ installed: true });
     expect(log).toHaveBeenCalledWith('"foo.7z" was installed, but its Downloads status could not be updated: locked');
     expect(reporter.reports).toEqual([]);
   });
@@ -162,13 +161,12 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
     registerModInstallCommands(deps());
-    const succeeded = await invoke('modbench.mod.install');
+    await invoke('modbench.mod.install');
 
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'foo' }));
     expect(installMod).toHaveBeenCalledWith(
       { kind: 'archive', path: '/archive/foo.7z' }, { kind: 'new', name: 'New Mod' }, GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE,
     );
-    expect(succeeded).toEqual({ installed: true });
   });
 
   it('archive: a cancelled name prompt installs nothing', async () => {
@@ -177,10 +175,9 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     showOpenDialog.mockResolvedValueOnce([{ fsPath: '/archive/foo.7z' }]);
 
     registerModInstallCommands(deps());
-    const succeeded = await invoke('modbench.mod.install');
+    await invoke('modbench.mod.install');
 
     expect(installMod).not.toHaveBeenCalled();
-    expect(succeeded).toEqual({ installed: false });
   });
 
   it('folder: Esc at the OS picker installs nothing', async () => {
@@ -188,10 +185,9 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     showOpenDialog.mockResolvedValueOnce(undefined);
 
     registerModInstallCommands(deps());
-    const succeeded = await invoke('modbench.mod.install');
+    await invoke('modbench.mod.install');
 
     expect(installMod).not.toHaveBeenCalled();
-    expect(succeeded).toEqual({ installed: false });
   });
 
   it('folder: installs as a new mod under the name prompted, prefilled from the folder', async () => {
@@ -201,7 +197,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
     registerModInstallCommands(deps());
-    const succeeded = await invoke('modbench.mod.install');
+    await invoke('modbench.mod.install');
 
     expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({
       canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
@@ -210,7 +206,6 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     expect(installMod).toHaveBeenCalledWith(
       { kind: 'folder', path: '/somewhere/Loose Files' }, { kind: 'new', name: 'New Mod' }, GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE,
     );
-    expect(succeeded).toEqual({ installed: true });
   });
 });
 
@@ -245,13 +240,12 @@ describe('modbench.mod.install: a downloaded file is its source', () => {
     const row = downloadRowFixture('foo.7z');
 
     registerModInstallCommands(deps());
-    const outcome = await invoke('modbench.mod.install', { argument: { kind: 'download', row } });
+    await invoke('modbench.mod.install', { argument: { kind: 'download', row } });
 
     expect(installMod).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'downloadedFile', name: 'foo.7z', path: row.path, modID: row.modID }), { kind: 'new', name: 'Foo' }, expect.any(String));
     expect(showQuickPick).not.toHaveBeenCalled();
     expect(showOpenDialog).not.toHaveBeenCalled();
-    expect(outcome).toEqual({ installed: true });
   });
 
   it('reports a download install through the downloads reporter and log it was given, not the mod list\'s', async () => {
@@ -277,6 +271,134 @@ describe('modbench.mod.install: a downloaded file is its source', () => {
     await invoke('modbench.mod.install', { kind: 'mod', mod: { name: 'Some Mod' } });
 
     expect(showQuickPick).toHaveBeenCalled();
+    expect(installMod).not.toHaveBeenCalled();
+  });
+});
+
+describe('modbench.mod.install called by the agent', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const KEPT = GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE;
+  const outsideArchive = { kind: 'archive' as const, path: '/elsewhere/bar.zip' };
+  const install = (argument: AgentCall['argument'], options: object) => invoke('modbench.mod.install', new AgentCall(argument, options));
+  const nothingAsked = () => {
+    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(showOpenDialog).not.toHaveBeenCalled();
+    expect(showInputBox).not.toHaveBeenCalled();
+  };
+
+  it('installs the downloaded file named as a new mod under the name given, asking nothing, and answers the mod written', async () => {
+    const row = downloadRowFixture('foo.7z', { modID: '111', fileID: '222', version: '2.0' });
+    installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
+    const warnIfFomod = vi.fn();
+    const reporter = recordingReporter();
+
+    registerModInstallCommands(deps({
+      instance: { value: instanceValueFixture({ gameName: KEPT, downloads: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() },
+      warnIfFomod, downloadInstall: { reporter, log: vi.fn(), progressViewId: 'modbench.downloads' },
+    }));
+    const answered = await install([{ kind: 'downloadedFile', name: 'foo.7z' }], { name: 'Foo' });
+
+    expect(installMod).toHaveBeenCalledWith(
+      { kind: 'downloadedFile', name: 'foo.7z', path: row.path, modID: '111', fileID: '222', version: '2.0' }, { kind: 'new', name: 'Foo' }, KEPT);
+    expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Foo', isFomod: false }], refused: [] }, partial: [] });
+    expect(warnIfFomod).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([]);
+    nothingAsked();
+  });
+
+  it('installs an archive outside the downloads as an archive, and a folder as a folder', async () => {
+    installMod.mockResolvedValue({ applied: true, isFomod: false });
+
+    registerModInstallCommands(deps());
+    await install([outsideArchive], { name: 'Bar' });
+    await install([{ kind: 'folder', path: '/elsewhere/Loose' }], { name: 'Loose' });
+
+    expect(installMod).toHaveBeenNthCalledWith(1, outsideArchive, { kind: 'new', name: 'Bar' }, KEPT);
+    expect(installMod).toHaveBeenNthCalledWith(2, { kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'new', name: 'Loose' }, KEPT);
+    nothingAsked();
+  });
+
+  it('installs an archive that is a downloaded file as that downloaded file, so it is marked installed', async () => {
+    const row = downloadRowFixture('foo.7z');
+    installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
+
+    registerModInstallCommands(deps());
+    await install([{ kind: 'archive', path: row.path }], { name: 'Foo' });
+
+    expect(installMod).toHaveBeenCalledWith(expect.objectContaining({ kind: 'downloadedFile', name: 'foo.7z' }), { kind: 'new', name: 'Foo' }, KEPT);
+  });
+
+  it('installs over the target mod named, as an upgrade', async () => {
+    installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
+
+    registerModInstallCommands(deps());
+    const answered = await install([outsideArchive], { target: 'Harder VATS' });
+
+    expect(installMod).toHaveBeenCalledWith(outsideArchive, { kind: 'upgrade', name: 'Harder VATS' }, KEPT);
+    expect(answered).toMatchObject({ outcome: { landed: [{ name: 'Harder VATS' }] } });
+  });
+
+  it('answers a FOMOD archive as one, warning nothing itself', async () => {
+    installMod.mockResolvedValueOnce({ applied: true, isFomod: true });
+    const warnIfFomod = vi.fn();
+
+    registerModInstallCommands(deps({ warnIfFomod }));
+    const answered = await install([outsideArchive], { name: 'Bar' });
+
+    expect(answered).toMatchObject({ outcome: { landed: [{ name: 'Bar', isFomod: true }] } });
+    expect(warnIfFomod).not.toHaveBeenCalled();
+  });
+
+  it('answers a downloaded file it could not mark installed as a log partial, writing no line itself', async () => {
+    const log = vi.fn();
+    installMod.mockResolvedValueOnce({ applied: true, isFomod: false, downloadRefusal: 'locked' });
+
+    registerModInstallCommands(deps({ downloadInstall: { reporter: recordingReporter(), log, progressViewId: 'modbench.downloads' } }));
+    const answered = await install([{ kind: 'downloadedFile', name: 'foo.7z' }], { name: 'Foo' });
+
+    expect(answered).toMatchObject({
+      applied: true,
+      partial: [{ message: '"foo.7z" was installed, but its Downloads status could not be updated', detail: 'locked', severity: 'log' }],
+    });
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['refused by install', () => installMod.mockResolvedValueOnce({ applied: false, refusal: 'folder taken' }), 'folder taken'],
+    ['failing', () => installMod.mockRejectedValueOnce(new Error('disk full')), 'disk full'],
+  ])('answers an install %s as the failure the view reports, reporting nothing itself', async (_, script, detail) => {
+    script();
+    const reporter = recordingReporter();
+
+    registerModInstallCommands(deps({ reporterFor: () => reporter }));
+    const answered = await install([outsideArchive], { name: 'Bar' });
+
+    expect(answered).toEqual({ applied: false, refusal: 'Failed to install "Bar".', detail });
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it.each([
+    ['no name and no target', {}],
+    ['a name and a target', { name: 'Bar', target: 'Harder VATS' }],
+  ])('refuses %s, installing nothing', async (_, options) => {
+    registerModInstallCommands(deps());
+
+    await expect(install([outsideArchive], options)).rejects.toBeInstanceOf(Refusal);
+
+    expect(installMod).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no source', []],
+    ['two sources', [outsideArchive, { kind: 'folder', path: '/elsewhere/Loose' }]],
+    ['a mod', [{ kind: 'mod', name: 'Some Mod' }]],
+    ['a downloaded file the Downloads view lacks', [{ kind: 'downloadedFile', name: 'gone.7z' }]],
+  ] as const)('refuses %s, installing nothing', async (_, argument) => {
+    registerModInstallCommands(deps());
+
+    await expect(install(argument, { name: 'Bar' })).rejects.toBeInstanceOf(Refusal);
+
     expect(installMod).not.toHaveBeenCalled();
   });
 });
