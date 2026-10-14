@@ -519,6 +519,17 @@ describe('modbench.mod.build', () => {
     ]);
   });
 
+  it('names a plugin no mod provides before a mod that is not a source mod', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('build', { landed: [built('ModA')], refused: [] });
+    const { handler, reporter } = registered(client);
+    const rows = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModC'), row({ name: 'Loose.esp', origin: 'Overwrite' })];
+
+    await handler(rows[0], rows);
+
+    expect(reporter.reports.map((r) => r.detail)).toEqual(['"Loose.esp (Overwrite)" (it is not in a mod), "ModC" (it is not a source mod)']);
+  });
+
   it('points at the Problems panel when the build left diagnostics, and puts them on the source files', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', {

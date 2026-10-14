@@ -249,8 +249,8 @@ export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => re
       return mods === undefined ? undefined : { mods, refusedRows: [], invokedFrom: deps.modsView };
     },
     fromAgent: ({ argument }) => ({ mods: argument.map((mod) => argumentOfKind(mod, 'mod').name), refusedRows: [], invokedFrom: deps.modsView }),
-    run: ({ mods, invokedFrom }) => buildMods(deps, mods, invokedFrom),
-    report: (result, { refusedRows }) => reportBuildResult(deps.reporter, result, refusedRows),
+    run: (given) => buildMods(deps, given),
+    report: (result) => reportBuildResult(deps.reporter, result),
   };
   return registerAgentGesture('modbench.mod.build', paletteSelection, gesture, isClickedRow);
 }
@@ -262,12 +262,12 @@ async function pickSourceMods(sourceDirs: ReadonlyMap<string, string>): Promise<
   return picked?.map((item) => item.label);
 }
 
-async function buildMods(deps: BuildDeps, named: readonly string[], invokedFrom: string): Promise<Built> {
+async function buildMods(deps: BuildDeps, { mods: named, refusedRows, invokedFrom }: ModsGiven): Promise<Built> {
   const { commands, instance } = deps;
   const sourceDirs = deps.sourceDirs();
   const mods = named.filter((mod) => sourceDirs.has(mod));
   const notSource = named.filter((mod) => !sourceDirs.has(mod)).map((mod) => ({ item: mod, reason: NOT_A_SOURCE_MOD }));
-  if (mods.length === 0) return { applied: true, outcome: { landed: [], refused: notSource } };
+  if (mods.length === 0) return { applied: true, outcome: { landed: [], refused: [...refusedRows, ...notSource] } };
   const unsaved = await savedFirst(deps, mods);
   if (unsaved !== undefined) return unsaved;
   return runWritingGesture(invokedFrom, instance, async (): Promise<Built> => {
@@ -278,15 +278,15 @@ async function buildMods(deps: BuildDeps, named: readonly string[], invokedFrom:
     }
     return {
       applied: true,
-      outcome: { landed: outcome.landed, refused: [...outcome.refused, ...notSource] },
+      outcome: { landed: outcome.landed, refused: [...outcome.refused, ...refusedRows, ...notSource] },
       partial: [...partlyBuilt(outcome), ...overwritten(outcome), ...refusedInMods(outcome)],
     };
   });
 }
 
-function reportBuildResult(reporter: Reporter, result: Built, refusedRows: readonly ItemRefusal<string>[]): void {
+function reportBuildResult(reporter: Reporter, result: Built): void {
   if (!result.applied) { reporter.report('error', result.refusal, result.detail); return; }
-  reportBuilt(reporter, { landed: result.outcome.landed, refused: [...result.outcome.refused, ...refusedRows] });
+  reportBuilt(reporter, result.outcome);
   reportPartial(reporter, result.partial);
 }
 
