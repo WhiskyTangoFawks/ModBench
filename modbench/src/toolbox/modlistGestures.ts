@@ -17,7 +17,7 @@ const NEITHER = 'it is not a mod or a separator';
 const RESTORE = 'Restore';
 
 interface ModlistGestureDeps {
-  commands: Pick<ModlistSourceCommands, 'gitInit' | 'updateManifest' | 'restoreFromManifest'>;
+  commands: Pick<ModlistSourceCommands, 'gitInit' | 'updateManifest' | 'restoreFromManifest' | 'whatRestoreDestroys'>;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporter: Reporter;
   ask: AskQuestion;
@@ -155,6 +155,7 @@ async function confirmRestore(ask: AskQuestion, { mods, everyMod: all }: ModsToR
   return (await ask(question, { modal: true, detail: 'A change no manifest holds is lost.' }, RESTORE)) === RESTORE;
 }
 
+// modlist-source.md, Restore from manifest, story 2: the question only when the restore destroys something.
 async function restoreFromManifest(deps: ModlistGestureDeps, toRun: ModsToRun): Promise<void> {
   const { commands, instance, reporter } = deps;
   const { mods, refused, view } = toRun;
@@ -162,7 +163,9 @@ async function restoreFromManifest(deps: ModlistGestureDeps, toRun: ModsToRun): 
     reportRestored(reporter, refused.length, { landed: [], refused });
     return;
   }
-  if (!(await confirmRestore(deps.ask, toRun))) return;
+  const listing = await commands.whatRestoreDestroys(mods);
+  if ('refusal' in listing) { reporter.report('error', listing.refusal); return; }
+  if (listing.destroys.length > 0 && !(await confirmRestore(deps.ask, toRun))) return;
   await runWritingGesture(view, instance, async () => {
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
       commands.restoreFromManifest(mods, instance.value, { onProgress: (status) => { show(restoreMessage(status)); }, signal }));
@@ -184,20 +187,16 @@ function restoreMessage(status: RestoreStatus): string {
   }
 }
 
+// modlist-source.md, Reporting: one line, with each skipped mod and each stat cache not written in the Output.
 function reportRestored(reporter: Reporter, total: number, outcome: Omit<Extract<RestoreResult, { applied: true }>, 'applied'>): void {
-  reportLanded(reporter, total, outcome);
-  const unwritten = statCacheNotWritten(outcome.landed);
-  if (unwritten.length > 0) {
-    reporter.report('warning', `Restore from manifest: the stat cache could not be written for ${unwritten.length} mod${unwritten.length === 1 ? '' : 's'}.`, unwritten.join('\n'));
-  }
-}
-
-function reportLanded(reporter: Reporter, total: number, outcome: Omit<Extract<RestoreResult, { applied: true }>, 'applied'>): void {
+  const warnings = statCacheNotWritten(outcome.landed);
   if (outcome.refused.length > 0) {
-    reporter.selectionOutcome(
-      `Could not restore ${outcome.refused.length} of ${total} mods.`, { landed: outcome.landed.map(({ mod }) => mod), refused: outcome.refused }, (mod) => mod);
+    const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...warnings].join('\n');
+    reporter.report('error', `Could not restore ${outcome.refused.length} of ${total} mods.`, detail);
     return;
   }
-  const [only, ...more] = outcome.landed.filter(({ written }) => written.length > 0);
-  if (only !== undefined) reporter.landed(more.length === 0 ? `Restored "${only.mod}" from its manifest.` : `Restored ${more.length + 1} mods from their manifests.`);
+  const [only, ...more] = outcome.landed.filter(({ written, namedByNoLine }) => written.length + namedByNoLine.length > 0);
+  const line = only !== undefined && more.length === 0 ? `Restored "${only.mod}" from its manifest.` : `Restored ${more.length + (only ? 1 : 0)} mods from their manifests.`;
+  if (warnings.length > 0) reporter.report('warning', line, warnings.join('\n'));
+  else if (only !== undefined) reporter.landed(line);
 }

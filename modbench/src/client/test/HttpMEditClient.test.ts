@@ -171,7 +171,7 @@ const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${n
 const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, installationFiles: [] });
 const modToUpdate = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], committedFiles: ['meta.ini'] });
 const updateFacts = { gameFiles: [{ path: 'Game.esm', size: 7, hash: 'AAECAwQFBgc=' }], statCache: '/instance/stat-cache' };
-const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [] });
+const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], committedFiles: ['meta.ini'] });
 const restoreFacts = { gameFiles: [], dataFolder: '/game/Data', statCache: '/instance/stat-cache' };
 const buildFacts = { excludedSuffix: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } } };
 
@@ -274,7 +274,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/update-manifest', body: { mods: [modToUpdate('ModA'), modToUpdate('ModC')], ...updateFacts, gesture: expect.any(String) as unknown } },
     { name: 'restoreFromManifest', verb: (c) => c.restoreFromManifest([modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], restoreFacts),
       answer: {
-        applied: [{ mod: 'ModA', written: ['a.nif'] }],
+        applied: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: ['mine.txt'] }],
         refused: [
           {
             item: 'ModB', refusal: 'NotFound', message: "'ModB' was skipped: game file 'B.esm' is missing.", gameFilesNotFound: ['B.esm'],
@@ -283,7 +283,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         ],
       },
       reads: {
-        landed: [{ mod: 'ModA', written: ['a.nif'] }],
+        landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: ['mine.txt'] }],
         refused: [
           { item: 'ModB', reason: "'ModB' was skipped: game file 'B.esm' is missing." },
           { item: 'ModC', reason: "'ModC' was skipped: 'c.nif' has no provider." },
@@ -368,6 +368,16 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     expect(new URL(request.url).pathname).toBe('/names/resolve');
     expect(await request.json()).toEqual({ names: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }] });
     expect(result).toEqual([{ plugin: shared }, { formKey: sharedKey, editorId: 'SharedNpc' }]);
+  });
+
+  it('getWhatRestoreDestroys posts the mods and the stat cache and reads each mod restore would destroy files in', async () => {
+    const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', committedFiles: ['meta.ini'] }];
+    const destroys = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'] }];
+    const { result, request } = await exchange((c) => c.getWhatRestoreDestroys(mods, '/instance/stat-cache'), answers(200, { mods: destroys }));
+
+    expect(new URL(request.url).pathname).toBe('/what-restore-destroys');
+    expect(await request.json()).toEqual({ mods, statCache: '/instance/stat-cache' });
+    expect(result).toEqual(destroys);
   });
 
   it('selectRows posts the statement and reads the rows it selects', async () => {

@@ -232,10 +232,19 @@ export type RestoreMod = components['schemas']['RestoreFromManifestModRequest'];
  *  stat cache's folder. */
 export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestRequest'], 'mods' | 'gesture'>;
 
+/** A mod to ask what restore from manifest would destroy in: its folder and the files the repository commits. */
+export type RestoreDestroysMod = components['schemas']['WhatRestoreDestroysModRequest'];
+
+/** A mod restore would destroy files in: each file whose bytes differ from what its provider fixes, and each file no line
+ *  names, by its path in the mod folder. */
+export type ModRestoreDestroys = components['schemas']['ModRestoreDestroys'];
+
 interface RestoredMod {
   mod: string;
   /** Each file written to bring the mod back, by its path in the mod folder. */
   written: readonly string[];
+  /** Each file no line names, by its path in the mod folder, for the trash. */
+  namedByNoLine: readonly string[];
   /** Why the stat cache could not keep what the restore read. */
   statCacheNotWritten?: string | null;
 }
@@ -350,6 +359,8 @@ export interface MEditClient {
   /** What each name means, in order, or why one cannot be: mEdit's refusal names every name it could not resolve, with each
    *  match of an ambiguous one. A name with an origin names a plugin. */
   resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed>;
+  /** Each mod restore from manifest would destroy files in, from the stat cache in `statCache`, before anything is written. */
+  getWhatRestoreDestroys(mods: readonly RestoreDestroysMod[], statCache: string): Promise<ModRestoreDestroys[] | ReadFailed>;
   /** The rows one SQL SELECT over the index selects. A statement that is not a SELECT, or cannot run, fails with the database's reason. */
   selectRows(sql: string): Promise<unknown[] | ReadFailed>;
   getReferences(formKey: string): Promise<ReferenceResult[] | ReadFailed>;

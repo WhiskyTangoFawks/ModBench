@@ -1588,6 +1588,28 @@ describe('the MO2 Instance adapter', () => {
     it('refuses a mod that has no folder', async () => {
       await expect(adapter.markOriginFile({ kind: 'mod', name: '../profiles' }, 'a.esp', 'Excluded')).rejects.toThrow(/Not a file of/);
     });
+
+    it('moves a mod\'s file to the trash', async () => {
+      const trashed: string[] = [];
+
+      await adapter.trashModFile('Harder VATS', 'Textures/a.dds', (file) => {
+        trashed.push(file);
+        return Promise.resolve();
+      });
+
+      expect(trashed).toEqual([join(root, 'mods', 'Harder VATS', 'Textures', 'a.dds')]);
+    });
+
+    it('refuses to trash a path that leaves the mod\'s folder, trashing nothing', async () => {
+      const trashed: string[] = [];
+
+      await expect(adapter.trashModFile('Harder VATS', '../outside.txt', (file) => {
+        trashed.push(file);
+        return Promise.resolve();
+      })).rejects.toThrow(/Not a file of/);
+
+      expect(trashed).toEqual([]);
+    });
   });
 
   describe('changes to mod order', () => {

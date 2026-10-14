@@ -1,11 +1,11 @@
-// MO2's exclusion of a file: the file or folder renamed with MO2's suffix, or restored.
+// MO2's exclusion of a file, the file or folder renamed with MO2's suffix or restored, and a mod's file sent to the trash.
 
 import { exists, rename, withLock } from './files';
 import type { InstanceAdapter, OriginFileMark, OriginFileMarked } from './instanceAdapter';
 import { EXCLUDED_SUFFIX, excludedName, fileInFolder, includedName, isExcludedName, originDir } from './layout';
 import type { Mo2Context } from './mo2Context';
 
-type Mo2OriginFiles = Pick<InstanceAdapter, 'markOriginFile' | 'includedPath' | 'excludedSuffix'>;
+type Mo2OriginFiles = Pick<InstanceAdapter, 'markOriginFile' | 'trashModFile' | 'includedPath' | 'excludedSuffix'>;
 
 function fileUnder(folder: string | undefined, relativePath: string): string | undefined {
   const reachesOut = relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
@@ -30,6 +30,12 @@ export function mo2OriginFiles({ instanceRoot }: Mo2Context): Mo2OriginFiles {
         await rename(from, to);
         return { gone: false, wrote: true, relativePath: renamed(relativePath) };
       });
+    },
+
+    async trashModFile(mod, relativePath, trash) {
+      const file = fileUnder(originDir(instanceRoot, { kind: 'mod', name: mod }), relativePath);
+      if (file === undefined) throw new Error(`Not a file of mod "${mod}": "${relativePath}"`);
+      await trash(file);
     },
 
     excludedSuffix: EXCLUDED_SUFFIX,

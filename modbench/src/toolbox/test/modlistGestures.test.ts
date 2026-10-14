@@ -47,6 +47,7 @@ import type { ModlistSourceCommands } from '../../sourceCommands/modlistSourceCo
 const gitInit = vi.fn<ModlistSourceCommands['gitInit']>();
 const updateManifest = vi.fn<ModlistSourceCommands['updateManifest']>();
 const restoreFromManifest = vi.fn<ModlistSourceCommands['restoreFromManifest']>();
+const whatRestoreDestroys = vi.fn<ModlistSourceCommands['whatRestoreDestroys']>();
 
 const UPDATE = 'modbench.mod.updateManifest';
 const RESTORE = 'modbench.mod.restoreFromManifest';
@@ -74,7 +75,7 @@ function register(over: Partial<Parameters<typeof registerModlistCommands>[0]> =
   const reporter = recordingReporter();
   const said: (string | undefined)[] = [];
   registerModlistCommands({
-    commands: { gitInit, updateManifest, restoreFromManifest }, ask,
+    commands: { gitInit, updateManifest, restoreFromManifest, whatRestoreDestroys }, ask,
     instance: { value, refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(undefined); } },
     reporter, say: (message) => { said.push(message); }, modsView: 'modbench.modList',
     focusedView: { id: () => undefined, selection: () => [] }, ...over,
@@ -93,6 +94,7 @@ beforeEach(() => {
   gitInit.mockResolvedValue({ applied: true });
   updateManifest.mockResolvedValue({ applied: true, notes: [], landed: [], refused: [] });
   restoreFromManifest.mockResolvedValue({ applied: true, landed: [], refused: [] });
+  whatRestoreDestroys.mockResolvedValue({ destroys: [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: [] }] });
 });
 
 describe('Git init', () => {
@@ -390,6 +392,34 @@ describe('Restore from manifest', () => {
     expect([sentMods(restoreFromManifest), progressSteps[0]]).toEqual([[EVERY_MOD], 'progress opens on modbench.toolbox']);
   });
 
+  it('asks nothing when restore destroys nothing, as after a fresh clone, and restores', async () => {
+    whatRestoreDestroys.mockResolvedValueOnce({ destroys: [] });
+    const { ask, run } = register();
+
+    await run(RESTORE, modRow('ModA'));
+
+    expect([ask.asked, sentMods(restoreFromManifest)]).toEqual([[], [['ModA']]]);
+  });
+
+  it('asks about the mods it was handed, never whatever else the instance holds', async () => {
+    const { run } = register();
+
+    await run(RESTORE, modRow('ModB'), [modRow('ModA'), modRow('ModB')]);
+
+    expect(whatRestoreDestroys.mock.calls).toEqual([[['ModA', 'ModB']]]);
+  });
+
+  it('restores nothing, and says why, when mEdit cannot say what restore destroys', async () => {
+    whatRestoreDestroys.mockResolvedValueOnce({ refusal: 'Could not ask what restore from manifest destroys: mEdit could not be reached.' });
+    const { ask, reporter, run } = register();
+
+    await run(RESTORE, modRow('ModA'));
+
+    expect([ask.asked, restoreFromManifest.mock.calls, reporter.reports]).toEqual([[], [], [{
+      severity: 'error', message: 'Could not ask what restore from manifest destroys: mEdit could not be reached.', detail: undefined,
+    }]]);
+  });
+
   it('restores nothing and says nothing when the question is cancelled', async () => {
     const { reporter, run } = register({}, scriptedDialog(undefined));
 
@@ -403,7 +433,7 @@ describe('Restore from manifest', () => {
 
     await run(RESTORE);
 
-    expect([ask.asked, restoreFromManifest.mock.calls]).toEqual([[], []]);
+    expect([ask.asked, restoreFromManifest.mock.calls, whatRestoreDestroys.mock.calls]).toEqual([[], [], []]);
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not restore 1 of 1 mods.', detail: '"meshes" (it is not a mod or a separator)' }]);
   });
 
@@ -423,10 +453,11 @@ describe('Restore from manifest', () => {
   });
 
   it.each([
-    [[{ mod: 'ModA', written: ['a.nif'] }, { mod: 'ModB', written: [] }], ['Restored "ModA" from its manifest.']],
-    [[{ mod: 'ModA', written: ['a.nif'] }, { mod: 'ModB', written: ['b.nif'] }], ['Restored 2 mods from their manifests.']],
-    [[{ mod: 'ModA', written: [] }, { mod: 'ModB', written: [] }], []],
-  ])('says what it restored, and nothing when it wrote nothing: %j', async (landed, landings) => {
+    [[{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }, { mod: 'ModB', written: [], namedByNoLine: [] }], ['Restored "ModA" from its manifest.']],
+    [[{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }, { mod: 'ModB', written: ['b.nif'], namedByNoLine: [] }], ['Restored 2 mods from their manifests.']],
+    [[{ mod: 'ModA', written: [], namedByNoLine: [] }, { mod: 'ModB', written: [], namedByNoLine: [] }], []],
+    [[{ mod: 'ModA', written: [], namedByNoLine: ['mine.txt'] }], ['Restored "ModA" from its manifest.']],
+  ])('says what it restored, and nothing when it changed nothing: %j', async (landed, landings) => {
     restoreFromManifest.mockResolvedValueOnce({ applied: true, landed, refused: [] });
     const { reporter, run } = register();
 
@@ -435,23 +466,22 @@ describe('Restore from manifest', () => {
     expect([reporter.landings, reporter.reports]).toEqual([landings, []]);
   });
 
-  it('warns when the stat cache could not be written for a mod it restored, naming why in the Output', async () => {
+  it('warns in its one line when the stat cache could not be written for a mod it restored, naming why in the Output', async () => {
     restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [{ mod: 'ModA', written: ['a.nif'], statCacheNotWritten: '/i/stat-cache is read-only' }], refused: [],
+      applied: true, landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [], statCacheNotWritten: '/i/stat-cache is read-only' }], refused: [],
     });
     const { reporter, run } = register();
 
     await run(RESTORE, modRow('ModA'));
 
-    expect([reporter.landings, reporter.reports]).toEqual([['Restored "ModA" from its manifest.'], [{
-      severity: 'warning', message: 'Restore from manifest: the stat cache could not be written for 1 mod.',
-      detail: 'ModA: the stat cache could not be written: /i/stat-cache is read-only',
+    expect([reporter.landings, reporter.reports]).toEqual([[], [{
+      severity: 'warning', message: 'Restored "ModA" from its manifest.', detail: 'ModA: the stat cache could not be written: /i/stat-cache is read-only',
     }]]);
   });
 
   it('names each skipped mod with what it lacks, and does not call the mods that landed failed', async () => {
     restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [{ mod: 'ModA', written: ['a.nif'] }], refused: [{ item: 'ModB', reason: "'ModB' was skipped: 'b.nif' has no provider." }],
+      applied: true, landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [{ item: 'ModB', reason: "'ModB' was skipped: 'b.nif' has no provider." }],
     });
     const { reporter, run } = register();
 
@@ -461,6 +491,21 @@ describe('Restore from manifest', () => {
       severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"ModB" ('ModB' was skipped: 'b.nif' has no provider.)`,
     }]);
     expect(reporter.landings).toEqual([]);
+  });
+
+  it('names a skipped mod and a stat cache it could not write in its one line', async () => {
+    restoreFromManifest.mockResolvedValueOnce({
+      applied: true, landed: [{ mod: 'ModA', written: [], namedByNoLine: [], statCacheNotWritten: 'read-only' }],
+      refused: [{ item: 'ModB', reason: "'ModB' was skipped: it has no manifest." }],
+    });
+    const { reporter, run } = register();
+
+    await run(RESTORE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not restore 1 of 2 mods.',
+      detail: `"ModB" ('ModB' was skipped: it has no manifest.)\nModA: the stat cache could not be written: read-only`,
+    }]);
   });
 
   it('names the mods a restore interrupted part way did not finish', async () => {

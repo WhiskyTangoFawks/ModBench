@@ -442,6 +442,8 @@ export interface InstanceAdapter {
   renamePlugin(origin: FileOrigin, from: string, to: string, gameRelease: string | undefined): Promise<void>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
+  /** Moves the file at the forward-slash `relativePath` in the mod's folder into the trash. Rejects a path outside it. */
+  trashModFile(mod: string, relativePath: string, trash: MoveToTrash): Promise<void>;
   /** Moves the source folder that builds the mod into the trash; false when none does. */
   trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
   /** Puts the source's files in a new folder, or in place of the mod's own. Rejects with why; a

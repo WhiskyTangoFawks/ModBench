@@ -1,23 +1,26 @@
 import {
-  isRefused, type RestoreFacts, type RestoreMod, type RestoreOutcome, type MEditClient, type ModlistProgress, type NotFound, type UpdateManifestMod,
-  type UpdateManifestOutcome, type ModlistCallOptions,
+  isRefused, type RestoreFacts, type RestoreMod, type RestoreOutcome, type MEditClient, type ModlistProgress, type ModRestoreDestroys, type NotFound,
+  type RestoreDestroysMod, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { GameFile, GameFolder, InstallationFile, InstanceAdapter, OverriddenGameFiles } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
+import type { MoveToTrash } from '../ports/trash';
+import { failureReason, isReadFailed } from '../wire/readFailed';
 
 type Adapter = Pick<InstanceAdapter,
   'installationFiles' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'
-  | 'statCacheFolder'>;
+  | 'statCacheFolder' | 'trashModFile'>;
 
 interface ModlistSourceCommandsDeps {
-  client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest'>;
+  client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'getWhatRestoreDestroys'>;
   adapter: Adapter;
   instanceRoot: string;
   /** VS Code's git makes the instance folder a repository. */
   makeRepository: () => Promise<void>;
+  trash: MoveToTrash;
 }
 
 /** The slice of the instance value the modlist gestures read: where the game's files are. */
@@ -35,6 +38,9 @@ export type UpdateManifestStatus = { readonly phase: 'ReadingFiles'; readonly mo
 export type RestoreResult =
   | ({ applied: true } & Omit<RestoreOutcome, 'notFound'>)
   | { applied: false; refusal: string; unfinished: readonly string[] };
+
+/** What restore from manifest would destroy, each mod with a file it would replace or trash, or why mEdit could not say. */
+export type WhatRestoreDestroys = { destroys: readonly ModRestoreDestroys[] } | { refusal: string };
 
 export type RestoreStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Restoring' } & ModlistProgress);
 
@@ -112,6 +118,38 @@ function cancelRefused(...latestFirst: (string | undefined)[]): { cancelRefusal?
 }
 
 async function restoreFromManifest(
+  deps: ModlistSourceCommandsDeps, mods: readonly string[], instance: ModlistInstance, options: ModlistCallOptions<RestoreStatus>,
+): Promise<RestoreResult> {
+  const restored = await restoreFolders(deps, mods, instance, options);
+  return restored.applied ? { ...restored, ...await withFilesNoLineNamesTrashed(deps, restored) } : restored;
+}
+
+// modlist-source.md, Restore from manifest, story 1: mEdit names each file no line names, and the trash is the host's.
+async function withFilesNoLineNamesTrashed(
+  { adapter, trash }: ModlistSourceCommandsDeps, { landed, refused }: Extract<RestoreResult, { applied: true }>,
+): Promise<Pick<Extract<RestoreResult, { applied: true }>, 'landed' | 'refused'>> {
+  const finished: typeof landed[number][] = [];
+  const unfinished: ItemRefusal<string>[] = [];
+  for (const mod of landed) {
+    const why = await trashedOrWhy(adapter, trash, mod.mod, mod.namedByNoLine);
+    if (why === undefined) finished.push(mod);
+    else unfinished.push({ item: mod.mod, reason: `'${mod.mod}' was not finished: ${why}. Restoring it again finishes it.` });
+  }
+  return { landed: finished, refused: [...refused, ...unfinished] };
+}
+
+async function trashedOrWhy(adapter: Adapter, trash: MoveToTrash, mod: string, paths: readonly string[]): Promise<string | undefined> {
+  for (const path of paths) {
+    try {
+      await adapter.trashModFile(mod, path, trash);
+    } catch (err) {
+      return `'${path}' could not be moved to the trash: ${errorMessage(err)}`;
+    }
+  }
+  return undefined;
+}
+
+async function restoreFolders(
   { client, adapter }: ModlistSourceCommandsDeps, mods: readonly string[], instance: ModlistInstance,
   { onProgress, signal }: ModlistCallOptions<RestoreStatus>,
 ): Promise<RestoreResult> {
@@ -119,7 +157,7 @@ async function restoreFromManifest(
   if (gameFolder.kind !== 'found') return { applied: false, refusal: 'Could not restore from manifest: the game folder was not found.', unfinished: [] };
   const read = await readMods(adapter, mods, gameFolder.dataFolder, { onProgress, signal });
   if (read.sent.length === 0) return { applied: true, landed: [], refused: read.refused };
-  const sent = read.sent.map(({ name, folder, installationFiles }) => ({ name, folder, installationFiles }));
+  const sent: readonly RestoreMod[] = read.sent;
   const facts: RestoreFacts = { gameFiles: [...read.gameFiles], dataFolder: gameFolder.dataFolder, statCache: adapter.statCacheFolder };
   const restoring = { onProgress: (progress: ModlistProgress): void => { onProgress?.({ phase: 'Restoring', ...progress }); }, signal };
   const first = await restoreOnce(client, sent, facts, restoring);
@@ -189,6 +227,18 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
       const outcome = await client.updateManifest(
         sent, { gameFiles: [...gameFiles], statCache: adapter.statCacheFolder }, { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
       return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes };
+    },
+
+    /** Asks before anything is written, so a mod the Instance adapter gives no folder, which restore refuses, is not asked. */
+    whatRestoreDestroys: async (mods: readonly string[]): Promise<WhatRestoreDestroys> => {
+      const asked: RestoreDestroysMod[] = [];
+      for (const mod of mods) {
+        const folder = await adapter.modFolderPath(mod);
+        if (folder !== undefined) asked.push({ name: mod, folder, committedFiles: [...adapter.managerFilesInModFolder] });
+      }
+      if (asked.length === 0) return { destroys: [] };
+      const destroys = await client.getWhatRestoreDestroys(asked, adapter.statCacheFolder);
+      return isReadFailed(destroys) ? { refusal: `Could not ask what restore from manifest destroys: ${failureReason(destroys)}` } : { destroys };
     },
 
     restoreFromManifest: (
