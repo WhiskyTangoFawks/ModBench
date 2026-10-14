@@ -1373,6 +1373,23 @@ describe('the MO2 Instance adapter', () => {
         expect(answer.kind === 'unreadable' && answer.reason).toContain(DOWNLOAD);
         expect(answer.kind === 'unreadable' && answer.reason).toContain(INI);
       });
+
+      describe('a downloaded file', () => {
+        it('answers its size and hash and each entry\'s, whatever mod it installed', async () => {
+          const answer = await adapterAt(root, undefined, undefined, fakeArchiveReader([ENTRY])).downloadedFile(join(root, 'downloads', DOWNLOAD));
+
+          expect(answer).toEqual({
+            kind: 'read',
+            answer: { path: join(root, 'downloads', DOWNLOAD), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: ENTRY, hash: 'q7ZLRnu1+Os=' }] },
+          });
+        });
+
+        it('answers unreadable, naming why, when it is gone', async () => {
+          const answer = await adapter.downloadedFile(join(root, 'downloads', 'Gone.7z'));
+
+          expect(answer.kind === 'unreadable' && answer.reason).toContain('ENOENT');
+        });
+      });
     });
   });
 

@@ -71,8 +71,35 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public Dictionary<(string Folder, string Path), byte[]> Written { get; } = [];
 
+    public HashSet<(string Folder, string Path)> UnwritableFiles { get; } = [];
+
+    public HashSet<string> UnreadableManifests { get; } = [];
+
+    public string Hash(Stream content)
+    {
+        using var reader = new StreamReader(content, Encoding.ASCII, leaveOpen: true);
+        return reader.ReadToEnd();
+    }
+
+    public Manifest? ReadManifest(string modFolder, string modName)
+    {
+        if (UnreadableManifests.Contains(modFolder)) throw new InvalidDataException("its manifest cannot be read at line 1");
+        return Manifests.GetValueOrDefault(modFolder);
+    }
+
+    public string DeltaName(string path, string baseHash, string fileHash) => $"{path[(path.LastIndexOf('/') + 1)..]}.{baseHash}_{fileHash}.octodiff";
+
+    public Stream? OpenDelta(string buildFolder, string? downloadsFolder, string path, string baseHash, string fileHash)
+    {
+        if (Deltas.TryGetValue((buildFolder, path, baseHash, fileHash), out var built)) return new MemoryStream(built);
+        return downloadsFolder is not null && _files.TryGetValue((downloadsFolder, DeltaName(path, baseHash, fileHash)), out var loose)
+            ? new MemoryStream(loose.Bytes)
+            : null;
+    }
+
     public bool WriteFile(string folder, string path, Action<Stream> write)
     {
+        if (UnwritableFiles.Contains((folder, path))) throw new IOException($"{path} is held by another process");
         using var content = new MemoryStream();
         write(content);
         var bytes = content.ToArray();

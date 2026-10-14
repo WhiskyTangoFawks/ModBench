@@ -27,7 +27,7 @@ public sealed class StageHandlerTests
 
     private StageHandler Handler => new(_folders, _notifications);
 
-    private static InstanceToStage Instance(params GameFileToStage[] gameFiles) => new(gameFiles, DataFolder, BuildFolder, DeltaShare: 1);
+    private static InstanceToStage Instance(params OverriddenGameFile[] gameFiles) => new(gameFiles, DataFolder, BuildFolder, DeltaShare: 1);
 
     private static ModToStage ModFrom(string name, params InstallationFile[] installationFiles) =>
         new(name, $"mods/{name}", installationFiles, []);
@@ -38,7 +38,7 @@ public sealed class StageHandlerTests
         return new InstallationFile(path, Source: null, Size: 7, Hash: $"#{path}", [.. entries.Select(e => new HashedEntry(e.Path, e.Hash))]);
     }
 
-    private IEnumerable<StageProgress> Progress =>
+    private IEnumerable<ModlistProgress> Progress =>
         _notifications.Notifications.OfType<StageProgressNotification>().Select(n => n.Progress);
 
     private ManifestFile FileOf(string folder, string path) => _folders.Manifests[folder].Files.Single(f => f.Path == path);
@@ -143,7 +143,7 @@ public sealed class StageHandlerTests
     {
         _folders.WithFile(Mod, "game.esm", Edited).WithFile(DataFolder, "Game.esm", Original);
 
-        Landed([ModFrom("Mod")], Instance(new GameFileToStage("Game.esm", Original.Length, Original)));
+        Landed([ModFrom("Mod")], Instance(new OverriddenGameFile("Game.esm", Original.Length, Original)));
 
         Assert.Equal(new FileProvider.GameFileDelta("Game.esm", Original), FileOf(Mod, "game.esm").Provider);
         Assert.Equal(Edited, DeltaAppliedAsWabbajackApplies("game.esm", Original, Edited));
@@ -326,7 +326,7 @@ public sealed class StageHandlerTests
     {
         _folders.WithFile(Mod, "game.esm", "hello");
 
-        Landed([ModFrom("Mod")], Instance(new GameFileToStage("Game.esm", 5, "hello")));
+        Landed([ModFrom("Mod")], Instance(new OverriddenGameFile("Game.esm", 5, "hello")));
 
         Assert.Equal(new FileProvider.GameFile("Game.esm"), FileOf(Mod, "game.esm").Provider);
         var gameFile = Assert.Single(_folders.Manifests[Mod].GameFiles);
@@ -424,7 +424,7 @@ public sealed class StageHandlerTests
         Handler.Stage([ModFrom("A"), ModFrom("B")], Instance());
 
         Assert.Equal(
-            [new StageProgress("A", 0, 2), new StageProgress("B", 1, 2), new StageProgress(null, 0, 0)],
+            [new ModlistProgress("A", 0, 2), new ModlistProgress("B", 1, 2), new ModlistProgress(null, 0, 0)],
             Progress);
     }
 
@@ -437,7 +437,7 @@ public sealed class StageHandlerTests
 
         Assert.Throws<OperationCanceledException>(() => Handler.Stage([ModFrom("Mod")], Instance(), cancelled.Token));
 
-        Assert.Equal([new StageProgress(null, 0, 0)], Progress);
+        Assert.Equal([new ModlistProgress(null, 0, 0)], Progress);
     }
 
     [Fact]

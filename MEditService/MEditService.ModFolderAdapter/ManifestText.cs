@@ -1,12 +1,13 @@
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>A manifest as lines of JSON, one per source and one per file in path order, so a change to one file
 /// is one line in a diff.</summary>
-internal static class ManifestText
+internal static partial class ManifestText
 {
     private static readonly JsonWriterOptions Compact = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
@@ -45,6 +46,69 @@ internal static class ManifestText
         }
         return stamps;
     }
+
+    /// <summary>The manifest Of wrote, its files without stamps. Throws <see cref="InvalidDataException"/> naming the
+    /// first line it cannot read.</summary>
+    public static Manifest Parse(string text)
+    {
+        List<ManifestSource> installationFiles = [], gameFiles = [];
+        List<ManifestFile> files = [];
+        foreach (var (at, line) in text.Split('\n').Index())
+        {
+            if (line.Length == 0) continue;
+            try
+            {
+                using var parsed = JsonDocument.Parse(line);
+                var root = parsed.RootElement;
+                if (root.TryGetProperty("path", out var path)) files.Add(FileOf(Text(path), root));
+                else if (root.TryGetProperty("installationFile", out var name)) installationFiles.Add(SourceOf(name, root));
+                else if (root.TryGetProperty("gameFile", out var game)) gameFiles.Add(SourceOf(game, root));
+                else throw new FormatException();
+            }
+            catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException or KeyNotFoundException)
+            {
+                throw new InvalidDataException($"its manifest cannot be read at line {at + 1}", e);
+            }
+        }
+        return new Manifest(installationFiles, gameFiles, files);
+    }
+
+    private static string Text(JsonElement value) => value.GetString() ?? throw new FormatException();
+
+    private static ManifestSource SourceOf(JsonElement name, JsonElement root) => new(
+        Text(name), root.GetProperty("size").GetInt64(), Text(root.GetProperty("hash")),
+        root.TryGetProperty("source", out var source) ? Text(source) : null);
+
+    private static ManifestFile FileOf(string path, JsonElement root)
+    {
+        var hash = Text(root.GetProperty("hash"));
+        var provider = root.TryGetProperty("from", out var from) ? ProviderOf(path, hash, from) : new FileProvider.FirstInstallationFile();
+        return new ManifestFile(path, hash, null, provider);
+    }
+
+    private static FileProvider ProviderOf(string path, string hash, JsonElement from)
+    {
+        if (from.ValueKind == JsonValueKind.Null) return new FileProvider.NoProvider();
+        var baseHash = from.TryGetProperty("delta", out var delta) ? BaseHashOf(Text(delta), path, hash) : null;
+        if (from.TryGetProperty("gameFile", out var game))
+            return baseHash is null ? new FileProvider.GameFile(Text(game)) : new FileProvider.GameFileDelta(Text(game), baseHash);
+        var installationFile = Text(from.GetProperty("installationFile"));
+        var entry = Text(from.GetProperty("path"));
+        return baseHash is null
+            ? new FileProvider.InstallationFileEntry(installationFile, entry)
+            : new FileProvider.InstallationFileDelta(installationFile, entry, baseHash);
+    }
+
+    private static string BaseHashOf(string deltaName, string path, string fileHash)
+    {
+        var baseHash = DeltaHashes().Match(deltaName) is { Success: true } match
+            ? Convert.ToBase64String(Convert.FromHexString(match.Groups["base"].Value))
+            : throw new FormatException();
+        return DeltaName(path, baseHash, fileHash) == deltaName ? baseHash : throw new FormatException();
+    }
+
+    [GeneratedRegex(@"\.(?<base>[0-9a-f]{16})_[0-9a-f]{16}\.octodiff$")]
+    private static partial Regex DeltaHashes();
 
     /// <summary>A delta's name: the name of the file it makes, then the hashes of its base and of that file.</summary>
     public static string DeltaName(string path, string baseHash, string fileHash) =>

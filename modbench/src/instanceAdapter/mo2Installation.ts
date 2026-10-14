@@ -16,7 +16,7 @@ async function reinstallPath(context: Mo2Context, recorded: string): Promise<str
 
 export function mo2Installation(
   context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>,
-): Pick<InstanceAdapter, 'installationFiles' | 'managerFilesInModFolder'> {
+): Pick<InstanceAdapter, 'installationFiles' | 'downloadedFile' | 'managerFilesInModFolder'> {
   return {
     async installationFiles(mod) {
       const { archiveFilename } = await readOrAbsent(async () => parseMetaIni(await get(modMetaFile(context.instanceRoot, mod))), {});
@@ -28,6 +28,11 @@ export function mo2Installation(
       const path = located.answer;
       const hashed = await downloadedFileHash(path);
       return hashed.kind === 'read' ? { kind: 'read', answer: [{ path, ...hashed.answer }] } : refused(hashed.reason);
+    },
+
+    async downloadedFile(path) {
+      const hashed = await downloadedFileHash(path);
+      return hashed.kind === 'read' ? { kind: 'read', answer: { path, ...hashed.answer } } : hashed;
     },
 
     managerFilesInModFolder: [MOD_META_FILE_NAME],
