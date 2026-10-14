@@ -137,8 +137,10 @@ async function namedGameFiles(
   return found.kind === 'read' ? { found: found.answer, unread: '' } : { found: [], unread: ` The game files could not be read: ${found.reason}.` };
 }
 
-const notSearched = (unread: readonly ItemRefusal<string>[]): string =>
-  (unread.length === 0 ? '' : ` Not searched for it: ${unread.map(({ item, reason }) => `"${item}" (${reason})`).join(', ')}.`);
+const notSearched = (unread: readonly ItemRefusal<string>[]): string => {
+  const named = unread.map(({ item, reason }) => `"${item}" (${reason})`).join(', ');
+  return unread.length === 0 ? '' : ` Not searched for it: ${named}.`;
+};
 
 async function discardChanges(
   { client, adapter }: ModlistSourceCommandsDeps, mods: readonly string[], instance: DiscardInstance,
