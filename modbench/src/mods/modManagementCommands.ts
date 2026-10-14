@@ -176,6 +176,8 @@ interface ModContextDeps {
   log: (line: string) => void;
 }
 
+const EMPTY_MOD_NAME = 'A mod name cannot be empty.';
+
 interface Rename {
   readonly oldName: string;
   readonly newName: string;
@@ -206,7 +208,7 @@ export function registerModContextCommands(
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a mod carries one mod.');
       const oldName = modNameOf(only);
-      const refusal = name === '' ? 'A mod name cannot be empty.' : commands.renameModNameRefusal(instance.value, name, oldName);
+      const refusal = name === '' ? EMPTY_MOD_NAME : commands.renameModNameRefusal(instance.value, name, oldName);
       if (refusal !== undefined) throw new Refusal(refusal);
       return { oldName, newName: name };
     },
@@ -369,7 +371,7 @@ export function registerCreateEmptyModCommand(
       return name || undefined;
     },
     fromAgent: ({ options: { name } }) => {
-      const refusal = name.trim() === '' ? 'A mod name cannot be empty.' : commands.newModNameRefusal(instance.value, name);
+      const refusal = name.trim() === '' ? EMPTY_MOD_NAME : commands.newModNameRefusal(instance.value, name);
       if (refusal !== undefined) throw new Refusal(refusal);
       return name;
     },
