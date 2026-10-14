@@ -314,10 +314,8 @@ describe('modbench.mod.install called by the agent', () => {
     await install([outsideArchive], { name: 'Bar' });
     await install([{ kind: 'folder', path: '/elsewhere/Loose' }], { name: 'Loose' });
 
-    expect(installMod.mock.calls.map(([source, target]) => [source, target])).toEqual([
-      [outsideArchive, { kind: 'new', name: 'Bar' }],
-      [{ kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'new', name: 'Loose' }],
-    ]);
+    expect(installMod).toHaveBeenNthCalledWith(1, outsideArchive, { kind: 'new', name: 'Bar' }, KEPT);
+    expect(installMod).toHaveBeenNthCalledWith(2, { kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'new', name: 'Loose' }, KEPT);
     nothingAsked();
   });
 
