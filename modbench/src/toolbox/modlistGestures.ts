@@ -31,7 +31,6 @@ interface ModsToRun {
   readonly refused: readonly ItemRefusal<string>[];
   /** No selection named the mods. */
   readonly every: boolean;
-  /** The view whose progress bar the gesture runs under. */
   readonly view: string;
 }
 
@@ -64,8 +63,6 @@ function init({ commands, instance, reporter }: ModlistGestureDeps): Promise<voi
   });
 }
 
-// A Mods row runs on the selection; the palette, on the Mods view's while it has the focus. Source Control's title
-// bar and the Toolbox's Modlist row run on every mod.
 function rowsOf(deps: ModlistGestureDeps, clicked: unknown, selected: readonly unknown[] | undefined): readonly unknown[] {
   if (clicked === undefined) return deps.focusedView.id() === deps.modsView ? deps.focusedView.selection() : [];
   return modArgumentOf(clicked) === undefined ? [] : gestureEntry(clicked, selected, () => [], isClickedRow).selection;
@@ -119,7 +116,6 @@ function reportStaged(reporter: Reporter, total: number, outcome: Omit<Extract<S
 
 const quoted = (mods: readonly string[]): string => mods.map((mod) => `"${mod}"`).join(', ');
 
-// modlist-source.md, Discard changes, story 2: one question, as VS Code's Discard Changes asks.
 async function confirmDiscard(ask: AskQuestion, { mods, every }: ModsToRun): Promise<boolean> {
   const question = `Are you sure you want to discard changes in ${every ? 'every mod' : quoted(mods)}?`;
   return (await ask(question, { modal: true, detail: 'Changes not staged and committed are lost.' }, DISCARD)) === DISCARD;
@@ -154,8 +150,6 @@ function discardMessage(status: DiscardStatus): string {
   }
 }
 
-// modlist-source.md, Reporting: a skipped mod is named with what it lacks, and the mods that landed are not reported as
-// failed. A discard that wrote nothing says nothing (commands.md, Doing nothing is not an error).
 function reportDiscarded(reporter: Reporter, total: number, outcome: Omit<Extract<DiscardResult, { applied: true }>, 'applied'>): void {
   if (outcome.refused.length > 0) {
     reporter.selectionOutcome(
