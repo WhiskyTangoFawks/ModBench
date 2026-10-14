@@ -215,7 +215,7 @@ describe('modbench.record.open on records two of which cannot open', () => {
     reporter.report.mockClear();
     const meditClient = new InMemoryMEditClient();
     meditClient.setQueryAnswer('getCopyDocument', null);
-    meditClient.setQueryAnswer('getRecordOwner', null);
+    meditClient.setQueryAnswer('getRecordOwner', undefined);
     await register({ meditClient });
 
     await commandHandlers.get('modbench.record.open')?.([

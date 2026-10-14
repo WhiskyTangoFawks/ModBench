@@ -692,7 +692,7 @@ describe('the agent server, running a gesture', () => {
 
   describe('the record open gesture', () => {
     const gun = { kind: 'record' as const, formKey: '000801:A.esp' };
-    const fire = async (args: Record<string, unknown>, answer: unknown) => {
+    const fire = async (args: Record<string, unknown>, answer: Awaited<ReturnType<MEditClient['resolveNames']>>) => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const mEdit = new InMemoryMEditClient();
       mEdit.setQueryAnswer('resolveNames', answer);

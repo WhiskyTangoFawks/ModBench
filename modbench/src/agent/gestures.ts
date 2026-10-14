@@ -185,9 +185,9 @@ const OPEN_RECORD = gestureInput(
     const notRecords = records.filter(({ formKey }) => !formKey).map(({ name }) => `"${name}" is not a record.`);
     if (notRecords.length > 0) throw new Refusal(notRecords.join(' '));
     return new AgentCall(
-      records.map(({ formKey = '', plugin }) => ({
+      records.flatMap(({ formKey, plugin }) => (formKey ? [{
         kind: 'record' as const, formKey, ...(plugin && { plugin: pluginsNamed(value.plugins, [plugin])[0] }),
-      })),
+      }] : [])),
       { pinned: options?.pinned },
     );
   },
