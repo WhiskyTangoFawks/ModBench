@@ -112,7 +112,6 @@ function cancelRefused(...latestFirst: (string | undefined)[]): { cancelRefusal?
 
 type Restored = Extract<RestoreResult, { applied: true }>['landed'];
 
-/** A restore whose call failed part way, with the mods an earlier call landed. */
 type FoldersNotFinished = Extract<RestoreResult, { applied: false }> & { readonly landed: Restored };
 
 async function restoreFromManifest(
