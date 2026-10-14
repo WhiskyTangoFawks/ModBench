@@ -932,7 +932,7 @@ describe('a child record of a tracked plugin', () => {
     const openBoth = async () => {
       await openRecord({ formKey: CELL_FORM_KEY, plugin });
       await openRecord({ ...childCopy, beside: true });
-        return { child: await childDocument(), container: await containerDocument() };
+      return { child: await childDocument(), container: await containerDocument() };
     };
 
     beforeEach(() => {
