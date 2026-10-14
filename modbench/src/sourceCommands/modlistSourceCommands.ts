@@ -1,10 +1,10 @@
 import {
   isRefused, type RestoreFacts, type RestoreMod, type RestoreOutcome, type MEditClient, type ModlistProgress, type NotFound, type UpdateManifestMod,
-  type UpdateManifestOutcome,
+  type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
 import {
-  isArchiveName, type GameFile, type GameFolder, type InstallationFile, type InstanceAdapter,
+  isArchiveName, type GameFile, type GameFolder, type InstallationFile, type InstanceAdapter, type OverriddenGameFiles,
 } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
@@ -34,17 +34,12 @@ export interface RestoreInstance extends UpdateManifestInstance {
   readonly downloads: { readonly kind: 'listed'; readonly rows: readonly { readonly name: string; readonly path: string }[] } | { readonly kind: 'unresolved' };
 }
 
-/** What update manifest answers: each mod updated or refused, or the whole gesture refused, as a message to show. */
-export type UpdateManifestResult = ({ applied: true } & UpdateManifestOutcome) | { applied: false; refusal: string };
+/** What update manifest answers: each mod updated or refused, and each entry a mod folder's listing skipped, or the
+ *  whole gesture refused, as a message to show. */
+export type UpdateManifestResult = ({ applied: true; notes: readonly string[] } & UpdateManifestOutcome) | { applied: false; refusal: string };
 
 /** Where update manifest is: the Instance adapter reading a mod's files, or mEdit updating manifests. */
 export type UpdateManifestStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Updating' } & ModlistProgress);
-
-/** An abort stops after the mod in hand, and the mods done stay done. */
-export interface ModlistGestureOptions<S> {
-  readonly onProgress?: (status: S) => void;
-  readonly signal?: AbortSignal;
-}
 
 export type RestoreResult =
   | ({ applied: true } & Omit<RestoreOutcome, 'notFound'>)
@@ -59,13 +54,14 @@ interface ReadMods {
   readonly sent: readonly UpdateManifestMod[];
   readonly gameFiles: readonly GameFile[];
   readonly refused: readonly ItemRefusal<string>[];
+  readonly notes: readonly string[];
 }
 
 const wireFile = (file: InstallationFile): UpdateManifestMod['installationFiles'][number] => ({ ...file, entries: [...file.entries] });
 
 async function readMod(
   adapter: Adapter, mod: string, dataFolder: string,
-): Promise<{ read: UpdateManifestMod; gameFiles: readonly GameFile[] } | { refusal: string }> {
+): Promise<{ read: UpdateManifestMod; overridden: OverriddenGameFiles } | { refusal: string }> {
   const folder = await adapter.modFolderPath(mod);
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
   const installed = await adapter.installationFiles(mod);
@@ -74,29 +70,31 @@ async function readMod(
   if (overridden.kind === 'unreadable') return { refusal: overridden.reason };
   return {
     read: { name: mod, folder, installationFiles: installed.answer.map(wireFile), committedFiles: [...adapter.managerFilesInModFolder] },
-    gameFiles: overridden.answer,
+    overridden: overridden.answer,
   };
 }
 
 async function readMods(
-  adapter: Adapter, mods: readonly string[], dataFolder: string, { onProgress, signal }: ModlistGestureOptions<{ phase: 'ReadingFiles'; mod: string }>,
+  adapter: Adapter, mods: readonly string[], dataFolder: string, { onProgress, signal }: ModlistCallOptions<{ phase: 'ReadingFiles'; mod: string }>,
 ): Promise<ReadMods> {
   const sent: UpdateManifestMod[] = [];
   const gameFiles = new Map<string, GameFile>();
   const refused: ItemRefusal<string>[] = [];
+  const notes: string[] = [];
   for (const mod of mods) {
     if (signal?.aborted) break;
     onProgress?.({ phase: 'ReadingFiles', mod });
     const read = await readMod(adapter, mod, dataFolder);
     if ('refusal' in read) { refused.push({ item: mod, reason: read.refusal }); continue; }
     sent.push(read.read);
-    for (const file of read.gameFiles) gameFiles.set(file.path.toLowerCase(), file);
+    for (const file of read.overridden.gameFiles) gameFiles.set(file.path.toLowerCase(), file);
+    notes.push(...read.overridden.notes.map((note) => `${mod}: ${note}`));
   }
-  return { sent, gameFiles: [...gameFiles.values()], refused };
+  return { sent: signal?.aborted ? [] : sent, gameFiles: [...gameFiles.values()], refused, notes };
 }
 
 async function restoreOnce(
-  client: ModlistSourceCommandsDeps['client'], mods: readonly RestoreMod[], facts: RestoreFacts, { onProgress, signal }: ModlistGestureOptions<ModlistProgress>,
+  client: ModlistSourceCommandsDeps['client'], mods: readonly RestoreMod[], facts: RestoreFacts, { onProgress, signal }: ModlistCallOptions,
 ): Promise<({ applied: true } & RestoreOutcome) | Extract<RestoreResult, { applied: false }>> {
   let done = 0;
   const outcome = await client.restoreFromManifest(mods, facts, {
@@ -139,9 +137,14 @@ const notSearched = (unread: readonly ItemRefusal<string>[]): string => {
   return unread.length === 0 ? '' : ` Not searched for it: ${named}.`;
 };
 
+function cancelRefused(...latestFirst: (string | undefined)[]): { cancelRefusal?: string } {
+  const [cancelRefusal] = latestFirst.filter((refusal) => refusal !== undefined);
+  return cancelRefusal === undefined ? {} : { cancelRefusal };
+}
+
 async function restoreFromManifest(
   { client, adapter }: ModlistSourceCommandsDeps, mods: readonly string[], instance: RestoreInstance,
-  { onProgress, signal }: ModlistGestureOptions<RestoreStatus>,
+  { onProgress, signal }: ModlistCallOptions<RestoreStatus>,
 ): Promise<RestoreResult> {
   const { gameFolder } = instance;
   if (gameFolder.kind !== 'found') return { applied: false, refusal: 'Could not restore from manifest: the game folder was not found.', unfinished: [] };
@@ -155,7 +158,10 @@ async function restoreFromManifest(
   const restoring = { onProgress: (progress: ModlistProgress): void => { onProgress?.({ phase: 'Restoring', ...progress }); }, signal };
   const first = await restoreOnce(client, sent, facts, restoring);
   if (!first.applied) return first;
-  if (first.notFound.length === 0 || signal?.aborted) return { applied: true, landed: first.landed, refused: [...first.refused, ...read.refused] };
+  const { cancelRefusal } = first;
+  if (first.notFound.length === 0 || signal?.aborted) {
+    return { applied: true, landed: first.landed, refused: [...first.refused, ...read.refused], ...cancelRefused(cancelRefusal) };
+  }
 
   const retried = new Set(first.notFound.map(({ mod }) => mod));
   const named = await namedGameFiles(adapter, gameFolder.dataFolder, first.notFound);
@@ -177,6 +183,7 @@ async function restoreFromManifest(
       ...second.refused.map((refused) => ({ ...refused, reason: refused.reason + (unreadFor.get(refused.item) ?? '') })),
       ...read.refused,
     ],
+    ...cancelRefused(second.cancelRefusal, cancelRefusal),
   };
 }
 
@@ -213,20 +220,20 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
     /** A mod whose folder, installation files or overridden game files the Instance adapter cannot answer is refused
      *  here, naming why, and mEdit updates the rest. */
     updateManifest: async (
-      mods: readonly string[], instance: UpdateManifestInstance, { onProgress, signal }: ModlistGestureOptions<UpdateManifestStatus> = {},
+      mods: readonly string[], instance: UpdateManifestInstance, { onProgress, signal }: ModlistCallOptions<UpdateManifestStatus> = {},
     ): Promise<UpdateManifestResult> => {
       const { gameFolder } = instance;
       if (gameFolder.kind !== 'found') return { applied: false, refusal: 'Could not update manifests: the game folder was not found.' };
-      const { sent, gameFiles, refused } = await readMods(adapter, mods, gameFolder.dataFolder, { onProgress, signal });
-      if (sent.length === 0) return { applied: true, landed: [], refused };
+      const { sent, gameFiles, refused, notes } = await readMods(adapter, mods, gameFolder.dataFolder, { onProgress, signal });
+      if (sent.length === 0) return { applied: true, landed: [], refused, notes };
       const outcome = await client.updateManifest(sent, {
         gameFiles: [...gameFiles], dataFolder: gameFolder.dataFolder, buildFolder: adapter.buildFolder, deltaShare: DELTA_SHARE,
       }, { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
-      return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, landed: outcome.landed, refused: [...outcome.refused, ...refused] };
+      return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes };
     },
 
     restoreFromManifest: (
-      mods: readonly string[], instance: RestoreInstance, options: ModlistGestureOptions<RestoreStatus> = {},
+      mods: readonly string[], instance: RestoreInstance, options: ModlistCallOptions<RestoreStatus> = {},
     ): Promise<RestoreResult> => restoreFromManifest(deps, mods, instance, options),
   };
 }

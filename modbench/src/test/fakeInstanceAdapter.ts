@@ -149,7 +149,11 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     downloadedFile: (path) => answer(answers.downloadedFiles?.get(path), path),
     managerFilesInModFolder: ['meta.ini'],
     overriddenGameFiles: (_dataFolder, modFilePaths) => overridden(modFilePaths),
-    gameFilesOverriddenBy: (_dataFolder, mod) => overridden((current.modFiles.get(mod)?.files ?? []).map((file) => file.relativePath)),
+    gameFilesOverriddenBy: async (_dataFolder, mod) => {
+      const listing = current.modFiles.get(mod);
+      const found = await overridden((listing?.files ?? []).map((file) => file.relativePath));
+      return found.kind === 'read' ? { kind: 'read', answer: { gameFiles: found.answer, notes: listing?.notes ?? [] } } : found;
+    },
     buildFolder: '/build',
     writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, undefined),
     removeIgnoreList: () => record({ verb: 'removeIgnoreList' }, undefined),

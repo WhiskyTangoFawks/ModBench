@@ -307,6 +307,12 @@ export interface GameFile extends HashedFile {
   readonly path: string;
 }
 
+/** The game files a mod's files override, and each entry of its folder the listing skipped, one line apiece. */
+export interface OverriddenGameFiles {
+  readonly gameFiles: readonly GameFile[];
+  readonly notes: readonly string[];
+}
+
 /** A downloaded file hashed whole and entry by entry. */
 export interface HashedDownload extends HashedFile {
   /** Each entry by its forward-slash path inside the file. */
@@ -385,7 +391,7 @@ export interface InstanceAdapter {
   overriddenGameFiles(dataFolder: string, modFilePaths: readonly string[]): Promise<FileRead<readonly GameFile[]>>;
   /** The game files in `dataFolder` that the files in `mod`'s folder override, as `overriddenGameFiles` names them, listed in
    *  any profile or none. */
-  gameFilesOverriddenBy(dataFolder: string, mod: string): Promise<FileRead<readonly GameFile[]>>;
+  gameFilesOverriddenBy(dataFolder: string, mod: string): Promise<FileRead<OverriddenGameFiles>>;
   /** The folder update manifest writes deltas into. */
   readonly buildFolder: string;
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds. Rejects, writing nothing,

@@ -496,27 +496,35 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  // A cancel asks mEdit to stop the gesture after the mod in hand, and the request answers the mods it finished, so
-  // the read that follows the answer shows what is on disk.
-  private async modlistGesture<O>(
+  // A cancel asks mEdit to stop after the mod in hand, and the request then answers what landed, so the read that
+  // follows shows the disk. mEdit holds a gesture once begun, which its first progress shows.
+  private async modlistGesture<O extends object>(
     kind: 'update-manifest-progress' | 'restore-from-manifest-progress', { onProgress, signal }: ModlistCallOptions,
     call: (gesture: string) => Promise<O | WriteRefused>,
-  ): Promise<O | WriteRefused> {
+  ): Promise<(O & { cancelRefusal?: string }) | WriteRefused> {
     const gesture = randomUUID();
-    const unsubscribe = onProgress ? this.notifications.onNotification(kind, onProgress) : () => {};
+    let begun = false;
+    let cancelling: Promise<{ cancelled: true } | WriteRefused> | undefined;
     const cancel = (): void => {
-      void this.mutate({
-        op: `cancel(${gesture})`, failMsg: 'Could not cancel',
-        post: () => this.apiClient.POST('/modlist-gestures/{gesture}/cancel', { params: { path: { gesture } } }), noContent: {},
+      cancelling ??= this.mutate({
+        op: `cancel(${gesture})`, failMsg: 'Could not cancel', noContent: { cancelled: true as const },
+        post: () => this.apiClient.POST('/modlist-gestures/{gesture}/cancel', { params: { path: { gesture } } }),
       });
     };
-    if (signal?.aborted) cancel();
-    else signal?.addEventListener('abort', cancel);
+    const unsubscribe = this.notifications.onNotification(kind, (progress) => {
+      begun = true;
+      if (signal?.aborted) cancel();
+      onProgress?.(progress);
+    });
+    const cancelOnceBegun = (): void => { if (begun) cancel(); };
+    signal?.addEventListener('abort', cancelOnceBegun);
     try {
-      return await call(gesture);
+      const answer = await call(gesture);
+      const cancelled = await cancelling;
+      return isRefused(answer) || cancelled === undefined || !isRefused(cancelled) ? answer : { ...answer, cancelRefusal: cancelled.message };
     } finally {
       unsubscribe();
-      signal?.removeEventListener('abort', cancel);
+      signal?.removeEventListener('abort', cancelOnceBegun);
     }
   }
 

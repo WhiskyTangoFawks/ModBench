@@ -91,7 +91,7 @@ beforeEach(() => {
   notification.messages.length = 0;
   vi.clearAllMocks();
   gitInit.mockResolvedValue({ applied: true });
-  updateManifest.mockResolvedValue({ applied: true, landed: [], refused: [] });
+  updateManifest.mockResolvedValue({ applied: true, notes: [], landed: [], refused: [] });
   restoreFromManifest.mockResolvedValue({ applied: true, landed: [], refused: [] });
 });
 
@@ -194,7 +194,7 @@ describe('Every mod (update manifest and restore from manifest)', () => {
   it('update manifest shows its progress by mod in a notification with Cancel', async () => {
     updateManifest.mockImplementationOnce((_mods, _instance, options) => {
       options?.onProgress?.({ phase: 'Updating', mod: 'ModA', modsDone: 0, modsTotal: 2 });
-      return Promise.resolve({ applied: true, landed: [], refused: [] });
+      return Promise.resolve({ applied: true, notes: [], landed: [], refused: [] });
     });
     const { run } = register();
 
@@ -215,24 +215,46 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     expect([notification.cancellable, notification.messages]).toEqual([[true], [expect.stringContaining('"ModA", 0 of 2 mods done') as unknown]]);
   });
 
-  const signals: (AbortSignal | undefined)[] = [];
-  const cancelling = (options?: { signal?: AbortSignal }) => {
-    notification.cancel();
-    signals.push(options?.signal);
-    return Promise.resolve({ applied: false as const, refusal: 'Could not reach mEdit.', unfinished: [] });
-  };
+  it('update manifest, cancelled, aborts the signal it handed the command, and reports what mEdit answered', async () => {
+    let signal: AbortSignal | undefined;
+    updateManifest.mockImplementationOnce((_mods, _instance, options) => {
+      notification.cancel();
+      signal = options?.signal;
+      return Promise.resolve({ applied: true, notes: [], landed: [{ mod: 'ModA', manifestWritten: true, noProvider: [] }], refused: [] });
+    });
+    const { reporter, run } = register();
+
+    await run(UPDATE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
+
+    expect([signal?.aborted, reporter.landings]).toEqual([true, ['Update manifest: 0 mods unchanged, 1 updated, 0 refused; 0 files have no provider.']]);
+  });
+
+  it('restore from manifest, cancelled, aborts the signal it handed the command, and reports what mEdit answered', async () => {
+    let signal: AbortSignal | undefined;
+    restoreFromManifest.mockImplementationOnce((_mods, _instance, options) => {
+      notification.cancel();
+      signal = options?.signal;
+      return Promise.resolve({ applied: false, refusal: 'Could not restore 2 mods — mEdit stopped.', unfinished: ['ModB'] });
+    });
+    const { reporter, run } = register();
+
+    await run(RESTORE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
+
+    expect([signal?.aborted, reporter.reports]).toEqual([true, [{
+      severity: 'error', message: 'Could not restore 2 mods — mEdit stopped.', detail: 'Not finished: "ModB". Restoring again finishes them.',
+    }]]);
+  });
 
   it.each([
-    [UPDATE, () => updateManifest.mockImplementationOnce((_mods, _instance, options) => cancelling(options))],
-    [RESTORE, () => restoreFromManifest.mockImplementationOnce((_mods, _instance, options) => cancelling(options))],
-  ])('%s, cancelled, aborts the signal it handed the command, and reports nothing', async (id, cancelsMidway) => {
-    signals.length = 0;
-    cancelsMidway();
+    [UPDATE, () => updateManifest.mockResolvedValueOnce({ applied: true, notes: [], landed: [], refused: [], cancelRefusal: 'Could not cancel — not running.' })],
+    [RESTORE, () => restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [], refused: [], cancelRefusal: 'Could not cancel — not running.' })],
+  ])('%s reports a cancel mEdit refused', async (id, answersCancelRefused) => {
+    answersCancelRefused();
     const { reporter, run } = register();
 
     await run(id, modRow('ModA'));
 
-    expect([signals.map((signal) => signal?.aborted), reporter.reports, reporter.landings]).toEqual([[true], [], []]);
+    expect(reporter.reports).toContainEqual({ severity: 'error', message: 'Could not cancel — not running.', detail: undefined });
   });
 });
 
@@ -241,7 +263,7 @@ describe('Update manifest', () => {
     updateManifest.mockImplementationOnce((_mods, _instance, options) => {
       options?.onProgress?.({ phase: 'ReadingFiles', mod: 'ModA' });
       options?.onProgress?.({ phase: 'Updating', mod: 'ModA', modsDone: 0, modsTotal: 2 });
-      return Promise.resolve({ applied: true, landed: [], refused: [] });
+      return Promise.resolve({ applied: true, notes: [], landed: [], refused: [] });
     });
     const { said, run } = register();
 
@@ -260,7 +282,7 @@ describe('Update manifest', () => {
   });
 
   it('runs under the Mods view\'s progress when a Mods row asked, and asks nothing', async () => {
-    updateManifest.mockImplementationOnce(() => { progressSteps.push('update manifest'); return Promise.resolve({ applied: true, landed: [], refused: [] }); });
+    updateManifest.mockImplementationOnce(() => { progressSteps.push('update manifest'); return Promise.resolve({ applied: true, notes: [], landed: [], refused: [] }); });
     const { ask, run } = register();
 
     await run(UPDATE, modRow('ModA'));
@@ -271,7 +293,7 @@ describe('Update manifest', () => {
 
   it('says in one line how many mods were unchanged, updated and refused, and that no file lacks a provider', async () => {
     updateManifest.mockResolvedValueOnce({
-      applied: true, refused: [],
+      applied: true, notes: [], refused: [],
       landed: [{ mod: 'ModA', manifestWritten: true, noProvider: [] }, { mod: 'ModB', manifestWritten: false, noProvider: [] }, { mod: 'C', manifestWritten: false, noProvider: [] }],
     });
     const { reporter, run } = register();
@@ -282,7 +304,7 @@ describe('Update manifest', () => {
   });
 
   it('warns in that line when a file has no provider, naming each by mod in the Output', async () => {
-    updateManifest.mockResolvedValueOnce({ applied: true, landed: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif', 'b/c.dds'] }], refused: [] });
+    updateManifest.mockResolvedValueOnce({ applied: true, notes: [], landed: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif', 'b/c.dds'] }], refused: [] });
     const { reporter, run } = register();
 
     await run(UPDATE, modRow('ModA'));
@@ -294,7 +316,7 @@ describe('Update manifest', () => {
 
   it('errs in that line when a mod is refused, naming each refused mod with why, then each file with no provider', async () => {
     updateManifest.mockResolvedValueOnce({
-      applied: true,
+      applied: true, notes: [],
       landed: [{ mod: 'ModA', manifestWritten: false, noProvider: ['a.nif'] }],
       refused: [{ item: 'ModB', reason: "'ModB' was not updated: 'B.zip' not in the downloads folder." }],
     });
@@ -306,6 +328,17 @@ describe('Update manifest', () => {
       severity: 'error', message: 'Update manifest: 1 mod unchanged, 0 updated, 1 refused; 1 file has no provider.',
       detail: `"ModB" ('ModB' was not updated: 'B.zip' not in the downloads folder.)\nModA: a.nif`,
     }]);
+  });
+
+  it('warns in that line when a mod folder\'s listing skipped an entry, naming each in the Output', async () => {
+    updateManifest.mockResolvedValueOnce({ applied: true, notes: ['ModA: broken link "a.nif", skipped'], landed: [{ mod: 'ModA', manifestWritten: false, noProvider: [] }], refused: [] });
+    const { reporter, run } = register();
+
+    await run(UPDATE, modRow('ModA'));
+
+    expect([reporter.landings, reporter.reports]).toEqual([[], [{
+      severity: 'warning', message: 'Update manifest: 1 mod unchanged, 0 updated, 0 refused; 0 files have no provider.', detail: 'ModA: broken link "a.nif", skipped',
+    }]]);
   });
 
   it('reports a gesture mEdit refused whole', async () => {

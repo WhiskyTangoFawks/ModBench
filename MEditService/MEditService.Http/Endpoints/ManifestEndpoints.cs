@@ -28,16 +28,16 @@ internal static class ManifestEndpoints
             .ProducesProblem(400);
 
         app.MapPost("/modlist-gestures/{gesture}/cancel", (string gesture, ModlistGestureCancels cancels) =>
-            {
-                cancels.Cancel(gesture);
-                return Results.NoContent();
-            })
+                cancels.Cancel(gesture)
+                    ? Results.NoContent()
+                    : Results.Problem($"No modlist gesture '{gesture}' is running.", statusCode: 404))
             .WithName("CancelModlistGesture")
             .WithTags("Modlist")
             .WithDescription(
-                "Stops the modlist gesture its client named, now or once it arrives, after the mod in hand. Its request then " +
-                "answers the mods it finished.")
-            .Produces(204);
+                "Stops the running modlist gesture its client named after the mod in hand. Its request then answers the mods " +
+                "it finished.")
+            .Produces(204)
+            .ProducesProblem(404);
 
         return app;
     }

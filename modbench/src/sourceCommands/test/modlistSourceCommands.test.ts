@@ -139,7 +139,7 @@ describe('modlistSourceCommands update manifest', () => {
       const outcome = await commands.updateManifest(['ModA', 'ModB'], instanceOf());
 
       expect(client.calls.map((call) => sentNamesOf(call.args[0]))).toEqual([['ModB']]);
-      expect(outcome).toEqual({ applied: true, ...UPDATED, refused: [{ item: 'ModA', reason }] });
+      expect(outcome).toEqual({ applied: true, ...UPDATED, refused: [{ item: 'ModA', reason }], notes: [] });
     });
   });
 
@@ -162,7 +162,25 @@ describe('modlistSourceCommands update manifest', () => {
 
     const outcome = await commands.updateManifest(['ModA'], instanceOf());
 
-    expect([client.calls, outcome]).toEqual([[], { applied: true, landed: [], refused: [{ item: 'ModA', reason: 'not indexed' }] }]);
+    expect([client.calls, outcome]).toEqual([[], { applied: true, landed: [], refused: [{ item: 'ModA', reason: 'not indexed' }], notes: [] }]);
+  });
+
+  it('names each entry a mod folder\'s listing skipped, by mod, so a game file it overrides is never left out in silence', async () => {
+    const modFiles = new Map([['ModA', { origin: 'ModA', folder: '/mods/ModA', files: [], folders: [], notes: ['broken link "a.nif", skipped'] }]]);
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('updateManifest', UPDATED);
+    const commands = modlistSourceCommands({
+      client, adapter: fakeInstanceAdapter(readingFixture({ modFiles })).adapter, instanceRoot: '/instance', makeRepository: () => Promise.resolve(),
+    });
+
+    expect(await commands.updateManifest(['ModA'], instanceOf())).toMatchObject({ notes: ['ModA: broken link "a.nif", skipped'] });
+  });
+
+  it('answers the refusal of the user\'s cancel beside what mEdit updated', async () => {
+    const { commands, client } = commandsOver();
+    client.setCommandResult('updateManifest', { ...UPDATED, cancelRefusal: 'Could not cancel — not running.' });
+
+    expect(await commands.updateManifest(['ModA'], instanceOf())).toMatchObject({ ...UPDATED, cancelRefusal: 'Could not cancel — not running.' });
   });
 
   it('refuses the whole gesture with the message when mEdit refused the call', async () => {
@@ -181,16 +199,26 @@ describe('modlistSourceCommands update manifest', () => {
     expect([client.calls, outcome]).toEqual([[], { applied: false, refusal: 'Could not update manifests: the game folder was not found.' }]);
   });
 
-  it('reads no further mod once its signal aborts, and hands mEdit the signal, so a cancel stops after the mod in hand', async () => {
+  it('reads no further mod, and hands mEdit none, once its signal aborts while it reads', async () => {
     const cancel = new AbortController();
     const { commands, client } = commandsOver();
     client.setCommandResult('updateManifest', UPDATED);
 
-    await commands.updateManifest(['ModA', 'ModB'], instanceOf(), {
+    const outcome = await commands.updateManifest(['ModA', 'ModB'], instanceOf(), {
       signal: cancel.signal, onProgress: (status) => { if (status.phase === 'ReadingFiles') cancel.abort(); },
     });
 
-    expect(client.calls.map((call) => [sentNamesOf(call.args[0]), call.args[2]])).toMatchObject([[['ModA'], { signal: cancel.signal }]]);
+    expect([client.calls, outcome]).toEqual([[], { applied: true, landed: [], refused: [], notes: [] }]);
+  });
+
+  it('hands mEdit the signal, so a cancel stops it after the mod in hand', async () => {
+    const cancel = new AbortController();
+    const { commands, client } = commandsOver();
+    client.setCommandResult('updateManifest', UPDATED);
+
+    await commands.updateManifest(['ModA'], instanceOf(), { signal: cancel.signal });
+
+    expect(client.calls.map((call) => call.args[2])).toMatchObject([{ signal: cancel.signal }]);
   });
 });
 
@@ -329,6 +357,22 @@ describe('modlistSourceCommands restore from manifest', () => {
     await commands.restoreFromManifest(['ModA'], restoreInstance(), { signal: cancel.signal });
 
     expect(client.calls.map((call) => call.args[2])).toMatchObject([{ signal: cancel.signal }]);
+  });
+
+  it('answers the refusal of the user\'s cancel beside what mEdit restored', async () => {
+    const { commands, client } = commandsOver();
+    client.setCommandResult('restoreFromManifest', { ...RESTORED, cancelRefusal: 'Could not cancel — not running.' });
+
+    expect(await commands.restoreFromManifest(['ModA'], restoreInstance())).toMatchObject({ cancelRefusal: 'Could not cancel — not running.' });
+  });
+
+  it('answers the refusal of a cancel during the second send beside what both sends restored', async () => {
+    const { commands, client } = commandsOver({ gameFiles: [VANILLA] });
+    client.setCommandHandler('restoreFromManifest', (_mods, facts) => Promise.resolve(facts.gameFiles.length === 0
+      ? { landed: [], refused: [], notFound: [{ mod: 'ModA', gameFiles: ['Game.esm'], deltas: false }] }
+      : { landed: [{ mod: 'ModA', written: ['Game.esm'] }], refused: [], notFound: [], cancelRefusal: 'Could not cancel — not running.' }));
+
+    expect(await commands.restoreFromManifest(['ModA'], restoreInstance())).toMatchObject({ cancelRefusal: 'Could not cancel — not running.' });
   });
 
   it('refuses a mod the Instance adapter cannot answer, naming why, and restores the rest', async () => {

@@ -94,14 +94,13 @@ function modsToRun(deps: ModlistGestureDeps, clicked: unknown, selected: readonl
 // Toolbox's message line says what the notification says (Reporting).
 function withProgressAndCancel<T>(
   { say }: ModlistGestureDeps, run: (show: (message: string) => void, signal: AbortSignal) => Promise<T>,
-): Promise<T | undefined> {
+): Promise<T> {
   return Promise.resolve(vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, cancellable: true }, async (progress, token) => {
     const cancel = new AbortController();
     token.onCancellationRequested(() => { cancel.abort(); });
     const show = (message: string): void => { say(message); progress.report({ message }); };
     try {
-      const outcome = await run(show, cancel.signal);
-      return cancel.signal.aborted ? undefined : outcome;
+      return await run(show, cancel.signal);
     } finally {
       say(undefined);
     }
@@ -113,9 +112,9 @@ async function updateManifest(deps: ModlistGestureDeps, { mods, refused, view }:
   await runWritingGesture(view, instance, async () => {
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
       commands.updateManifest(mods, instance.value, { onProgress: (status) => { show(updateMessage(status)); }, signal }));
-    if (outcome === undefined) return;
     if (!outcome.applied) { reporter.report('error', outcome.refusal); return; }
-    reportUpdated(reporter, { landed: outcome.landed, refused: [...outcome.refused, ...refused] });
+    reportCancelRefused(reporter, outcome);
+    reportUpdated(reporter, { ...outcome, refused: [...outcome.refused, ...refused] });
   });
 }
 
@@ -135,10 +134,14 @@ function reportUpdated(reporter: Reporter, outcome: Omit<Extract<UpdateManifestR
   const unchanged = outcome.landed.length - updated;
   const line = `Update manifest: ${unchanged} mod${unchanged === 1 ? '' : 's'} unchanged, ${updated} updated, `
     + `${outcome.refused.length} refused; ${counted(unprovided.length, 'file has', 'files have')} no provider.`;
-  const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...unprovided].join('\n');
+  const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...unprovided, ...outcome.notes].join('\n');
   if (outcome.refused.length > 0) reporter.report('error', line, detail);
-  else if (unprovided.length > 0) reporter.report('warning', line, detail);
+  else if (unprovided.length > 0 || outcome.notes.length > 0) reporter.report('warning', line, detail);
   else reporter.landed(line);
+}
+
+function reportCancelRefused(reporter: Reporter, { cancelRefusal }: { readonly cancelRefusal?: string }): void {
+  if (cancelRefusal !== undefined) reporter.report('error', cancelRefusal);
 }
 
 const quoted = (mods: readonly string[]): string => mods.map((mod) => `"${mod}"`).join(', ');
@@ -159,13 +162,13 @@ async function restoreFromManifest(deps: ModlistGestureDeps, toRun: ModsToRun): 
   await runWritingGesture(view, instance, async () => {
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
       commands.restoreFromManifest(mods, instance.value, { onProgress: (status) => { show(restoreMessage(status)); }, signal }));
-    if (outcome === undefined) return;
     if (!outcome.applied) {
       reporter.report('error', outcome.refusal, outcome.unfinished.length === 0
         ? undefined
         : `Not finished: ${quoted(outcome.unfinished)}. Restoring again finishes them.`);
       return;
     }
+    reportCancelRefused(reporter, outcome);
     reportRestored(reporter, mods.length + refused.length, { landed: outcome.landed, refused: [...outcome.refused, ...refused] });
   });
 }

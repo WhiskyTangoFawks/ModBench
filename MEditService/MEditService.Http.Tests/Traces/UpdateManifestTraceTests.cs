@@ -165,20 +165,4 @@ public sealed class UpdateManifestTraceTests : HostedTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
-
-    [Fact]
-    public async Task AnUpdateItsClientCancelledBeforeItArrived_AnswersNoModUpdated_AndWritesNoManifest()
-    {
-        ModInstalledFromADownload(edited: false);
-        (await Client.PostAsync("/modlist-gestures/the-gesture/cancel", null)).EnsureSuccessStatusCode();
-        var request = Request("Mod.zip").Whole;
-        request["gesture"] = "the-gesture";
-
-        var response = await Client.PostAsJsonAsync("/update-manifest", request);
-
-        response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Empty(body.GetProperty("applied").EnumerateArray());
-        Assert.False(File.Exists(Path.Combine(ModFolder, Mod + ".manifest")));
-    }
 }

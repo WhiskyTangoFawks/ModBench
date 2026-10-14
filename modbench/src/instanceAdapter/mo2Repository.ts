@@ -63,8 +63,9 @@ export function mo2Repository(
     overriddenGameFiles,
 
     async gameFilesOverriddenBy(dataFolder, mod) {
-      const { files } = await originFilesIn(instanceRoot, { kind: 'mod', name: mod });
-      return overriddenGameFiles(dataFolder, files.map((file) => file.relativePath));
+      const { files, notes } = await originFilesIn(instanceRoot, { kind: 'mod', name: mod });
+      const overridden = await overriddenGameFiles(dataFolder, files.map((file) => file.relativePath));
+      return overridden.kind === 'read' ? { kind: 'read', answer: { gameFiles: overridden.answer, notes } } : overridden;
     },
   };
 }

@@ -160,7 +160,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Stops the modlist gesture its client named, now or once it arrives, after the mod in hand. Its request then answers the mods it finished. */
+        /** @description Stops the running modlist gesture its client named after the mod in hand. Its request then answers the mods it finished. */
         post: operations["CancelModlistGesture"];
         delete?: never;
         options?: never;
@@ -2182,6 +2182,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };

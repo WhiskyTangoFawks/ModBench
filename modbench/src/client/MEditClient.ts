@@ -204,9 +204,9 @@ export type UpdateManifestFacts = Omit<components['schemas']['UpdateManifestRequ
 export type ModlistProgress = components['schemas']['ModlistProgress'];
 
 /** An abort stops mEdit after the mod in hand, and the mods done stay done. */
-export interface ModlistCallOptions {
-  onProgress?: (progress: ModlistProgress) => void;
-  signal?: AbortSignal;
+export interface ModlistCallOptions<P = ModlistProgress> {
+  readonly onProgress?: (progress: P) => void;
+  readonly signal?: AbortSignal;
 }
 
 interface UpdatedMod {
@@ -220,6 +220,8 @@ interface UpdatedMod {
 export interface UpdateManifestOutcome {
   landed: readonly UpdatedMod[];
   refused: readonly ItemRefusal<string>[];
+  /** Why mEdit refused the user's cancel. */
+  cancelRefusal?: string;
 }
 
 /** A mod to restore from its manifest: its folder and its installation files (ADR-0013). */
@@ -248,6 +250,8 @@ export interface RestoreOutcome {
   landed: readonly RestoredMod[];
   refused: readonly ItemRefusal<string>[];
   notFound: readonly NotFound[];
+  /** Why mEdit refused the user's cancel. */
+  cancelRefusal?: string;
 }
 
 export type GridPosition = components['schemas']['GridPosition'];

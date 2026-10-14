@@ -994,19 +994,26 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
 });
 
 describe('HttpMEditClient — a modlist gesture the user cancels', () => {
-  const gestures: [string, string, (client: MEditClient, signal: AbortSignal) => Promise<unknown>][] = [
-    ['updateManifest', '/update-manifest', (c, signal) => c.updateManifest([modToUpdate('ModA')], updateFacts, { signal })],
-    ['restoreFromManifest', '/restore-from-manifest', (c, signal) => c.restoreFromManifest([modToRestore('ModA')], restoreFacts, { signal })],
+  const gestures: [string, string, string, (client: MEditClient, signal: AbortSignal) => Promise<unknown>][] = [
+    ['updateManifest', '/update-manifest', 'update-manifest-progress', (c, signal) => c.updateManifest([modToUpdate('ModA')], updateFacts, { signal })],
+    ['restoreFromManifest', '/restore-from-manifest', 'restore-from-manifest-progress',
+      (c, signal) => c.restoreFromManifest([modToRestore('ModA')], restoreFacts, { signal })],
   ];
+  const progressFrame = (kind: string) =>
+    new TextEncoder().encode(`data: ${JSON.stringify({ kind, plugin: '', origin: '', keys: [], sequence: 0, modlistProgress: { mod: 'ModA', modsDone: 0, modsTotal: 2 } })}\n\n`);
+  const NOT_RUNNING = "No modlist gesture 'x' is running.";
 
-  async function cancelled(route: string, call: (client: MEditClient, signal: AbortSignal) => Promise<unknown>) {
+  async function cancelled(
+    [route, kind, call]: [string, string, (client: MEditClient, signal: AbortSignal) => Promise<unknown>], cancelAnswer = noContent,
+  ) {
     const log = leveledLog();
-    const seen: { gesture?: unknown; cancelPath?: string; aborted?: boolean } = {};
+    const seen: { gesture?: unknown; cancelPath?: string; cancelBeforeProgress?: string; aborted?: boolean } = {};
     let answer = (): void => {};
     const answered = new Promise<void>((resolve) => { answer = resolve; });
+    const { response, push } = pushableStreamResponse();
     const client = makeClient(routedFetch([
-      ['/notifications/stream', () => Promise.resolve(openStreamResponse())], ['/unsaved-documents', noContent],
-      ['/modlist-gestures/', (req) => { seen.cancelPath = new URL(req.url).pathname; answer(); return noContent(); }],
+      ['/notifications/stream', () => Promise.resolve(response)], ['/unsaved-documents', noContent],
+      ['/modlist-gestures/', (req) => { seen.cancelPath = new URL(req.url).pathname; answer(); return cancelAnswer(); }],
       [route, async (req) => {
         const body: unknown = await req.clone().json();
         seen.gesture = typeof body === 'object' && body !== null ? Reflect.get(body, 'gesture') : undefined;
@@ -1020,21 +1027,32 @@ describe('HttpMEditClient — a modlist gesture the user cancels', () => {
     const cancel = new AbortController();
     const outcome = call(client, cancel.signal);
     cancel.abort();
+    await vi.waitFor(() => expect(seen.gesture).toBeDefined());
+    seen.cancelBeforeProgress = seen.cancelPath;
+    push(progressFrame(kind));
     return { client, log, seen, outcome: await outcome };
   }
 
-  it.each(gestures)('%s asks mEdit to stop that gesture after the mod in hand, and answers with what mEdit answers once it has', async (_name, route, call) => {
-    const { client, seen, outcome } = await cancelled(route, call);
+  it.each(gestures)('%s asks mEdit to stop that gesture once mEdit has begun it, and answers with what mEdit answers once it has', async (_name, ...gesture) => {
+    const { client, seen, outcome } = await cancelled(gesture);
 
-    expect([seen.cancelPath, seen.aborted]).toEqual([`/modlist-gestures/${String(seen.gesture)}/cancel`, false]);
+    expect([seen.cancelBeforeProgress, seen.cancelPath, seen.aborted]).toEqual([undefined, `/modlist-gestures/${String(seen.gesture)}/cancel`, false]);
     expect(outcome).toMatchObject({ landed: [{ mod: 'ModA' }], refused: [] });
+    expect(outcome).not.toHaveProperty('cancelRefusal');
     await client.stop();
   });
 
-  it.each(gestures)('%s logs no error, since a cancel is no failure', async (_name, route, call) => {
-    const { client, log } = await cancelled(route, call);
+  it.each(gestures)('%s logs no error, since a cancel is no failure', async (_name, ...gesture) => {
+    const { client, log } = await cancelled(gesture);
 
     expect(log.lines.error).toEqual([]);
+    await client.stop();
+  });
+
+  it.each(gestures)('%s answers a cancel mEdit refused beside what mEdit answers, so the refusal surfaces', async (_name, ...gesture) => {
+    const { client, outcome } = await cancelled(gesture, answers(404, { detail: NOT_RUNNING }));
+
+    expect(outcome).toMatchObject({ landed: [{ mod: 'ModA' }], cancelRefusal: `Could not cancel — ${NOT_RUNNING}` });
     await client.stop();
   });
 });
