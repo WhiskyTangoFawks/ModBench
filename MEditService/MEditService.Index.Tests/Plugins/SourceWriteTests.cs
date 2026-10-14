@@ -1,5 +1,6 @@
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -20,6 +21,7 @@ public sealed class SourceWriteTests : IDisposable
     private readonly OpenedIndex _index;
     private readonly string _file;
     private Action? _atStamps;
+    private Action? _atTreeAsked;
 
     public SourceWriteTests()
     {
@@ -33,6 +35,7 @@ public sealed class SourceWriteTests : IDisposable
         _source = new HookedSource((moment, _) =>
         {
             if (moment == TreeMoment.StampsTaken) Interlocked.Exchange(ref _atStamps, null)?.Invoke();
+            if (moment == TreeMoment.TreeAsked) Interlocked.Exchange(ref _atTreeAsked, null)?.Invoke();
         });
         _index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, notifications: _notifications, source: _source);
         _file = _tracked.SourceFileOf(_index.DocumentOf(_npc, _tracked.KeyOf()));
@@ -82,6 +85,17 @@ public sealed class SourceWriteTests : IDisposable
 
         Assert.NotSame(read, first);
         Assert.Equal("Written", await read);
+    }
+
+    [Fact]
+    public void AValidationOfAWriteThatTimesOut_IsMadeAgain_BeforeAReadAnswers()
+    {
+        _atTreeAsked = () => throw new TimeoutException("Another write held the index.");
+
+        WriteEditorId("Written");
+
+        Assert.Equal("Written", EditorIdRead());
+        Assert.Equal(LoadOrderState.Ready, _index.Status.State);
     }
 
     [Fact]

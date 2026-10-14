@@ -285,10 +285,11 @@ internal sealed class Indexer : IDisposable
                 }
 
                 bool moved;
+                var validated = true;
                 _exclusive.Enter();
                 try
                 {
-                    var failure = ValidationFailure(() => ValidateTreesOf(paths), CancellationToken.None);
+                    var failure = ValidationFailure(() => validated = ValidatedUnlessBusy(paths), CancellationToken.None);
                     lock (_lock)
                     {
                         moved = _handOverFailure != failure;
@@ -298,7 +299,7 @@ internal sealed class Indexer : IDisposable
                 finally
                 {
                     _exclusive.Exit();
-                    WritesValidated(writes);
+                    if (validated) WritesValidated(writes);
                 }
                 if (moved) PublishStatus();
             }
@@ -317,6 +318,24 @@ internal sealed class Indexer : IDisposable
         finally
         {
             WritesValidated(writes);
+        }
+    }
+
+    // Busy, not broken, as at a reconcile; but a read waits on these paths, and the rows they hold were not read, so
+    // they are handed again rather than left to the next snapshot. A timeout reaching here is the index write gate's:
+    // a plugin's own read times out inside its validation.
+    private bool ValidatedUnlessBusy(List<string> paths)
+    {
+        try
+        {
+            ValidateTreesOf(paths);
+            return true;
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogWarning(ex, "Could not validate the handed paths while another write held the index; validating them again");
+            lock (_lock) _handed.AddRange(paths);
+            return false;
         }
     }
 

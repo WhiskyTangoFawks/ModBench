@@ -6,7 +6,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.TestSupport;
 
-internal enum TreeMoment { StampsTaken, ReadBegins, ReadEnds, RecordRead }
+internal enum TreeMoment { StampsTaken, ReadBegins, ReadEnds, RecordRead, TreeAsked }
 
 /// <summary>The Git source adapter, calling <c>at</c> at each moment of a tree's read.</summary>
 internal sealed class HookedSource(Action<TreeMoment, PluginAddress> at) : ISourceAdapter
@@ -40,7 +40,11 @@ internal sealed class HookedSource(Action<TreeMoment, PluginAddress> at) : ISour
         remove => _inner.Wrote -= value;
     }
 
-    public bool TreeHolds(RegisteredPlugin plugin, string path) => _inner.TreeHolds(plugin, path);
+    public bool TreeHolds(RegisteredPlugin plugin, string path)
+    {
+        at(TreeMoment.TreeAsked, plugin.Key);
+        return _inner.TreeHolds(plugin, path);
+    }
 
     public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => _inner.RecordOfFile(loadOrder, path);
 
