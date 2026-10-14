@@ -72,7 +72,10 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         };
         var mod = new JsonObject
         {
-            ["name"] = Mod, ["folder"] = ModFolder, ["installationFiles"] = new JsonArray(installationFile), ["committedFiles"] = new JsonArray("meta.ini"),
+            ["name"] = Mod,
+            ["folder"] = ModFolder,
+            ["installationFiles"] = new JsonArray(installationFile),
+            ["committedFiles"] = new JsonArray("meta.ini"),
         };
         var request = new JsonObject
         {
