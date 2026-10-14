@@ -156,7 +156,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider, StringsLangu
         IReadOnlyList<TreeFile> files,
         LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default) =>
-        PluginTrees.ReadTreeAsync(files, loadOrder, cancel);
+        PluginTrees.ReadTreeAsync(files, loadOrder, _stringsLanguage.Current, cancel);
 
     public Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, LoadOrderSnapshot loadOrder,
@@ -204,8 +204,9 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider, StringsLangu
         => Import(modPath, gameRelease, strings, loadOrder, MasterStyles.Of(modPath, loadOrder), language);
 
     internal static IMod OpenForWrite(
-        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles)
-        => Import(modPath, gameRelease, strings, loadOrder: null, masterStyles, Language.English);
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings, IReadOnlyCache<IModMasterStyledGetter, ModKey>? masterStyles,
+        Language language)
+        => Import(modPath, gameRelease, strings, loadOrder: null, masterStyles, language);
 
     // The setter resolves every string as it imports, so the folder it reads them from is done with after.
     private static IMod Import(

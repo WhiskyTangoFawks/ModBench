@@ -6,7 +6,6 @@ internal static class StringsLanguageEndpoints
 {
     public static IEndpointRouteBuilder MapStringsLanguageEndpoints(this IEndpointRouteBuilder app)
     {
-        // PUT, because sending the same language twice changes nothing.
         app.MapPut("/strings-language", PutStringsLanguage)
             .WithName("PutStringsLanguage")
             .WithTags("Records")

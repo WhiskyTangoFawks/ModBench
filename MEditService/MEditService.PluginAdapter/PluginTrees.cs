@@ -185,7 +185,7 @@ internal static class PluginTrees
     /// <summary>One source tree's files read into the mod they compile to, in a scratch folder of the
     /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005).</summary>
     internal static async Task<Answer<CompiledTree, PluginFailure>> ReadTreeAsync(
-        IReadOnlyList<TreeFile> files, LoadOrderSnapshot loadOrder,
+        IReadOnlyList<TreeFile> files, LoadOrderSnapshot loadOrder, Language language,
         CancellationToken cancel = default)
     {
         // Outside the catch below: a game the service was not wired for is no source defect.
@@ -193,7 +193,7 @@ internal static class PluginTrees
         var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;
         try
         {
-            return (await ReadIntoAsync(game, files, scratchDir, cancel)).Then(mod => PluginAnswer.Of(new CompiledTree(mod, loadOrder)));
+            return (await ReadIntoAsync(game, files, scratchDir, cancel)).Then(mod => PluginAnswer.Of(new CompiledTree(mod, loadOrder, language)));
         }
         finally
         {
@@ -214,13 +214,15 @@ public sealed class CompiledTree
 {
     private readonly IMod _mod;
     private readonly LoadOrderSnapshot _loadOrder;
+    private readonly Language _language;
     private readonly Lazy<IReadOnlyList<FormKey>> _formKeys;
     private readonly Lazy<IReadOnlyList<(IMajorRecordGetter Record, PluginDocument Document)>> _documents;
 
-    internal CompiledTree(IMod mod, LoadOrderSnapshot loadOrder)
+    internal CompiledTree(IMod mod, LoadOrderSnapshot loadOrder, Language language)
     {
         _mod = mod;
         _loadOrder = loadOrder;
+        _language = language;
         var gameRelease = loadOrder.GameRelease;
         _formKeys = new Lazy<IReadOnlyList<FormKey>>(
             () => mod.EnumerateMajorRecords().Select(record => record.FormKey).ToList());
@@ -249,7 +251,7 @@ public sealed class CompiledTree
     /// <summary>Every value of the tree that <paramref name="save"/>'s bytes do not hold.</summary>
     public IReadOnlyList<DroppedValue> DropsIn(PreparedPluginSave save)
     {
-        var written = save.Reread(_mod.ModKey, _loadOrder.GameRelease);
+        var written = save.Reread(_mod.ModKey, _loadOrder.GameRelease, _language);
         var held = _documents.Value.Select(pair => (pair.Record, pair.Document.Text)).ToList();
         return [.. ModelIdentity.FindDrops(held, written).Select(drop => new DroppedValue(
             new RecordIdentity(drop.Record.FormKey.ToString(), RecordTypes.For(_loadOrder.GameRelease).RecordTypeOf(drop.Record), drop.Record.EditorID),

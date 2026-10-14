@@ -35,7 +35,7 @@ internal static class EndpointMapping
             : Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
 
     internal static IResult? ParseStringsLanguage(string raw, out Language language) =>
-        Enum.TryParse(raw, out language)
+        Enum.TryParse(raw, out language) && Enum.IsDefined(language)
             ? null
             : Results.Problem($"Unknown strings language: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<Language>())}", statusCode: 400);
 
