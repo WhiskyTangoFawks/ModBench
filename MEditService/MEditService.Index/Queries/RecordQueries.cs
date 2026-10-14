@@ -384,7 +384,11 @@ internal sealed class RecordQueries(
 
     // A plugin the index has not opened would read as no dependant.
     public Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin) =>
-        IndexAnswer.Of(() => Dependants.Of(plugin, _loadOrder.Require(), _index.RequireWholeSetReads().OpenedPlugins));
+        IndexAnswer.Of(() =>
+        {
+            var opened = _index.RequireWholeSetReads().OpenedPlugins;
+            return Dependants.Of(plugin, _loadOrder.Require(), opened);
+        });
 
     // A plugin the index has not reached holds no record yet, so every link into it would read as a
     // missing record.
@@ -421,8 +425,8 @@ internal sealed class RecordQueries(
     public Answer<IReadOnlyList<NamedObject>, IndexRefused> ResolveNames(IReadOnlyList<NameQuery> names) =>
         IndexAnswer.Flat<IReadOnlyList<NamedObject>>(() =>
         {
-            var snapshot = _loadOrder.Require();
             var reads = _index.RequireWholeSetReads();
+            var snapshot = _loadOrder.Require();
             var matches = names.Select(query => (Query: query, Matches: NamedBy(query, snapshot, reads))).ToList();
             var unresolved = matches.Where(m => m.Matches.Count != 1).ToList();
             if (unresolved.Count > 0)

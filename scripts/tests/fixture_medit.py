@@ -92,16 +92,8 @@ def await_health(process, url, output):
 
 
 def snapshot(instance, game):
-    plugins = []
-    for line, (name, mod) in enumerate(PLUGINS):
-        folder = instance / 'mods' / mod
-        plugins.append({
-            'name': name, 'path': str(folder / name), 'origin': mod,
-            'provider': {'kind': 'Mod', 'mod': mod, 'folder': str(folder), 'sourceFolder': str(source_folder(instance, mod))},
-            'line': line, 'lineNamesIt': True, 'archives': [], 'stringsFiles': [],
-        })
     return {
-        'plugins': plugins,
+        'plugins': [plugin_entry(instance, name, mod, line) for line, (name, mod) in enumerate(PLUGINS)],
         'active': [{'name': name, 'origin': mod} for name, mod in PLUGINS],
         'loadedWithNoLine': [],
         'archives': [],
@@ -109,6 +101,15 @@ def snapshot(instance, game):
         'gameDirectory': str(game),
         'instanceRoot': str(instance),
         'gameRelease': 'Fallout4',
+    }
+
+
+def plugin_entry(instance, name, mod, line):
+    folder = instance / 'mods' / mod
+    return {
+        'name': name, 'path': str(folder / name), 'origin': mod,
+        'provider': {'kind': 'Mod', 'mod': mod, 'folder': str(folder), 'sourceFolder': str(source_folder(instance, mod))},
+        'line': line, 'lineNamesIt': line is not None, 'archives': [], 'stringsFiles': [],
     }
 
 
@@ -121,8 +122,10 @@ def track(fixture, mod):
         {'name': mod, 'sourceFolder': str(source_folder(fixture.instance, mod)), 'installationFiles': [], 'modManagerFiles': []}]})
 
 
-def watcher_resends_load_order(fixture):
-    call('PUT', fixture.url + '/load-order', fixture.load_order)
+def watcher_resends_load_order(fixture, *created):
+    """Modbench's watcher, which sends the load order again once the instance changed; a created plugin joins it with no line."""
+    plugins = fixture.load_order['plugins'] + [plugin_entry(fixture.instance, name, mod, None) for name, mod in created]
+    call('PUT', fixture.url + '/load-order', {**fixture.load_order, 'plugins': plugins})
 
 
 def hand_load_order(url, body):
