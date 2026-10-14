@@ -388,8 +388,8 @@ describe('ModListProvider', () => {
     expect(rows.map((n) => [n.mod.name, n.contextValue])).toEqual([
       ['Off', 'mod disabled untracked'],
       ['Apart', 'mod enabled untracked'],
-      ['Low', 'mod enabled untracked fileOrderConflict'],
-      ['High', 'mod enabled untracked fileOrderConflict'],
+      ['Low', 'mod enabled untracked'],
+      ['High', 'mod enabled untracked'],
     ]);
   });
 
@@ -403,7 +403,7 @@ describe('ModListProvider', () => {
 
     expect(rows.map((n) => [n.mod.name, n.contextValue])).toEqual([
       ['Apart', 'mod enabled untracked'],
-      ['Shares', 'mod enabled untracked fileOrderConflict'],
+      ['Shares', 'mod enabled untracked'],
     ]);
   });
 
