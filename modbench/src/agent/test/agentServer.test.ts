@@ -55,7 +55,7 @@ async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new I
   const reporter = recordingReporter();
   const lines: string[] = [];
   const server = serveAgent({
-    port, instance, mEdit, reporter, log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => lines.push(line) },
+    port, instance, mEdit, reporter, log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => lines.push(line), error: (line) => lines.push(line) },
   });
   running.push(server);
   const address = await server.listening;
@@ -338,6 +338,21 @@ describe('the agent server, resolving names through mEdit', () => {
   });
 });
 
+describe('the agent server, failing', () => {
+  it('answers a failure that is not a refusal with its message, in the Output and in no notification', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.selectRows = () => Promise.reject(new Error('socket hang up'));
+    const { bound, lines, reporter } = await serve(new FakeInstance(VALUE), 0, mEdit);
+    const client = new Client({ name: 'test', version: '0' });
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
+    clients.push(client);
+
+    expect(await call(client, 'select_rows', { sql: 'SELECT 1' })).toEqual({ isError: true, text: 'socket hang up' });
+    expect(lines).toEqual(['[agent] select_rows: socket hang up']);
+    expect(reporter.reports).toEqual([]);
+  });
+});
+
 describe('the agent server, selecting records through mEdit', () => {
   it('hands mEdit the statement as given and answers the rows it selects', async () => {
     const mEdit = new InMemoryMEditClient();
@@ -381,22 +396,22 @@ describe('the agent server, running a gesture', () => {
     expect(answer).toEqual({ isError: false, text: JSON.stringify(fired.outcome) });
   });
 
-  it('refuses in part, naming each refused item and why, in the Output and in no notification', async () => {
+  it('refuses in part with the whole outcome, what landed and what was refused and why, in the Output and in no notification', async () => {
     fired.outcome = { applied: true, outcome: { landed: ['A'], refused: [{ item: 'B', reason: 'Mod not found in modlist: B' }] } };
     const { client, lines, reporter } = await served();
 
     const answer = await call(client, 'run_gesture', { command: 'modbench.mod.enable', argument: [{ name: 'A' }, { name: 'B' }] });
 
-    expect(answer).toEqual({ isError: true, text: 'Refused 1 of 2: "B" (Mod not found in modlist: B).' });
+    expect(answer).toEqual({ isError: true, text: JSON.stringify(fired.outcome) });
     expect(lines.join('\n')).toContain('"B" (Mod not found in modlist: B)');
     expect(reporter.reports).toEqual([]);
   });
 
-  it('refuses in whole with the command\'s refusal', async () => {
+  it('refuses in whole with the outcome, which holds the command\'s refusal', async () => {
     fired.outcome = { applied: false, refusal: 'ENOENT: modlist.txt' };
     const { client, lines } = await served();
 
-    expect(await call(client, 'run_gesture', { command: 'modbench.mod.enable', argument: [{ name: 'A' }] })).toEqual({ isError: true, text: 'ENOENT: modlist.txt' });
+    expect(await call(client, 'run_gesture', { command: 'modbench.mod.enable', argument: [{ name: 'A' }] })).toEqual({ isError: true, text: JSON.stringify(fired.outcome) });
     expect(lines.join('\n')).toContain('ENOENT: modlist.txt');
   });
 

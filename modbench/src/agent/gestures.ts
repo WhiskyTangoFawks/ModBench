@@ -56,7 +56,7 @@ function refusalIn(outcome: GestureOutcome): string | undefined {
 export const RUN_GESTURE = {
   name: 'run_gesture',
   description: 'Run a gesture as the user does, by its Command ID, on the Argument given: never on the selection, and with no picker, prompt or confirmation. '
-    + 'It answers once the read model shows the change, with the gesture\'s outcome. A refusal names each item refused and why. Gestures: '
+    + 'It answers once the read model shows the change, with the gesture\'s outcome. A refusal answers the outcome too: what landed, and each item refused and why. Gestures: '
     + [...AGENT_GESTURES].map(([command, { takes }]) => `${command} (${takes})`).join('; '),
   input: { command: z.string(), argument: z.unknown().optional() },
   of: async (value: InstanceValue, { command, ...given }: { command: string; argument?: unknown }) => {
@@ -64,7 +64,7 @@ export const RUN_GESTURE = {
     if (gesture === undefined) throw new Refusal(`${command} is not a gesture your agent runs.`);
     const outcome = await vscode.commands.executeCommand<GestureOutcome>(command, gesture.callOf(value, given));
     const refusal = refusalIn(outcome);
-    if (refusal !== undefined) throw new Refusal(refusal);
+    if (refusal !== undefined) throw new Refusal(refusal, outcome);
     return outcome;
   },
 };

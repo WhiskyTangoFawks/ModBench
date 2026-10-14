@@ -43,9 +43,11 @@ async function answer(log: Log, name: string, work: () => unknown) {
   try {
     return { content: [{ type: 'text' as const, text: JSON.stringify(await work()) }] };
   } catch (error) {
-    if (!(error instanceof Refusal)) throw error;
-    log.warn(`[agent] ${name}: ${error.message}`);
-    return { isError: true, content: [{ type: 'text' as const, text: error.message }] };
+    const line = `[agent] ${name}: ${errorMessage(error)}`;
+    if (error instanceof Refusal) log.warn(line);
+    else log.error(line);
+    const text = error instanceof Refusal && error.answer !== undefined ? JSON.stringify(error.answer) : errorMessage(error);
+    return { isError: true, content: [{ type: 'text' as const, text }] };
   }
 }
 
