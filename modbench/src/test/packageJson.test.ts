@@ -6,6 +6,7 @@ import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, uriFile, uriFrom,
 } from './vscodeMock';
 import { FOLDER_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
+import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN } from './commandsCatalog';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
 const orderOf = (entry: MenuEntry): number => Number((entry.group ?? '').split('@')[1] ?? Number.NaN);
@@ -536,9 +537,9 @@ describe('package.json command titles and categories', () => {
   });
 
   it('offers every catalog gesture in the palette, but a gesture specified ahead of its code', () => {
-    const gestureIds = catalogCommandIds(commandsMarkdown.slice(0, commandsMarkdown.indexOf('## System commands')));
+    const gestureIds = catalogCommandIds(GESTURES_MARKDOWN);
     const declared = new Set(commands.map((c) => c.command));
-    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id) || (!declared.has(id) && !SPECIFIED_AHEAD_OF_CODE.includes(id)));
+    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id) || (!declared.has(id) && !PALETTE_AHEAD_OF_CODE.includes(id)));
     expect(
       hidden,
       'commands.md, Entry points are not gestures: every gesture is also in the command palette.',
@@ -547,7 +548,7 @@ describe('package.json command titles and categories', () => {
 
   it('registers no gesture the catalog lists as specified ahead of its code', () => {
     const declared = new Set(commands.map((c) => c.command));
-    expect(SPECIFIED_AHEAD_OF_CODE.filter((id) => declared.has(id))).toEqual([]);
+    expect(PALETTE_AHEAD_OF_CODE.filter((id) => declared.has(id))).toEqual([]);
   });
 
   it('still registers every gesture named as retired ahead of its code, so the list expires with the code', () => {
@@ -555,7 +556,7 @@ describe('package.json command titles and categories', () => {
     expect(RETIRED_AHEAD_OF_CODE.filter((id) => !declared.has(id))).toEqual([]);
   });
 
-  const SPECIFIED_AHEAD_OF_CODE = ['modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges', 'modbench.modlist.clean'];
+  const PALETTE_AHEAD_OF_CODE = ['modbench.modlist.init', 'modbench.modlist.stage', 'modbench.modlist.discardChanges', 'modbench.modlist.clean'];
 
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
@@ -568,7 +569,7 @@ describe('package.json command titles and categories', () => {
   });
 
   it('gates every internal system command out of the palette too', () => {
-    const systemCommandIds = catalogCommandIds(commandsMarkdown.slice(commandsMarkdown.indexOf('## System commands')));
+    const systemCommandIds = catalogCommandIds(SYSTEM_COMMANDS_MARKDOWN);
     const notASystemCommand = INTERNAL_COMMANDS.filter((c) => !systemCommandIds.has(c));
     expect(
       notASystemCommand,
@@ -1064,14 +1065,13 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   const modCreation = [ADD_SEPARATOR_ENTRY, CREATE_EMPTY_ENTRY, INSTALL_ENTRY];
 
   const menus: [contextValue: string, entries: [string, string][]][] = [
-    [contextOf(new ModNode({ kind: 'mod', name: 'X', enabled: true })), [OPEN_FOLDER_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    [contextOf(new ModNode({ kind: 'mod', name: 'X', enabled: false, nexusId: '1' })), [OPEN_FOLDER_ENTRY, VIEW_ON_NEXUS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod enabled holdsPlugin untracked', [OPEN_FOLDER_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, DECOMPILE_AND_COMMIT_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod enabled holdsPlugin tracked', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, BUILD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod disabled tracked', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, BUILD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod enabled holdsPlugin', [OPEN_FOLDER_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod enabled untracked', [OPEN_FOLDER_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod enabled untracked fileOrderConflict', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    [contextOf(new ModNode({ kind: 'mod', name: 'X', enabled: true })), [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    [contextOf(new ModNode({ kind: 'mod', name: 'X', enabled: false, nexusId: '1' })), [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, VIEW_ON_NEXUS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod enabled holdsPlugin untracked', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, DECOMPILE_AND_COMMIT_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod enabled holdsPlugin tracked', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, BUILD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod disabled tracked', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, OPEN_CONFLICTS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, BUILD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod enabled holdsPlugin', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod enabled untracked', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     [contextOf(new SeparatorNode({ kind: 'separator', name: 'S', enabled: true }, [])), [MOVE_ENTRY, ADD_SEPARATOR_ENTRY, ['modbench.separator.rename', '3_create'], COPY_VALUE_ENTRY, ['modbench.separator.delete', '6_destroy']]],
     [contextOf(new OverwriteNode([], 'MO2')), [OPEN_FOLDER_ENTRY]],
     ['file', [OPEN_FOLDER_ENTRY, COPY_VALUE_ENTRY]],
@@ -1121,7 +1121,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.openFolder', { 'modbench.mod.singleOpenFolderRow': true }],
     ['modbench.mod.openSource', { 'modbench.mod.singleOpenSourceRow': true }],
     ['modbench.mod.goToMod', { 'modbench.mod.singleGoToModRow': true }],
-    ['modbench.mod.openConflicts', { 'modbench.mod.singleOpenConflictsRow': true }],
+    ['modbench.mod.openConflicts', ONE_MOD],
     ['modbench.mod.compareFile', { 'modbench.mod.singleCompareFileRow': true }],
     ['modbench.mod.excludeFile', { 'modbench.mod.holdsIncludedFile': true }],
     ['modbench.mod.includeFile', { 'modbench.mod.holdsExcludedFile': true }],
@@ -1131,6 +1131,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.separator.delete', 'mod'],
     ['modbench.mod.uninstall', 'separator'],
     ['modbench.mod.rename', 'separator'],
+    ['modbench.mod.openConflicts', 'separator'],
     ['modbench.separator.rename', 'mod'],
   ])('%s is not in the palette on a %s selection', (command, kind) => {
     const selection = { focusedView: 'modbench.modList', ...inInstance, 'modbench.mod.selectionKind': kind, 'modbench.mod.singleRow': true };
@@ -1159,32 +1160,7 @@ describe('package.json open', () => {
   });
 });
 
-function catalogCommandIds(markdown: string): Set<string> {
-  const ids = new Set<string>();
-  let idColumn: number | undefined;
-  for (const line of markdown.split('\n')) {
-    if (!line.startsWith('|')) {
-      idColumn = undefined;
-      continue;
-    }
-    const cells = line.split('|').slice(1, -1).map((c) => c.trim());
-    if (idColumn === undefined) {
-      idColumn = cells.indexOf('Command ID');
-      continue;
-    }
-    if (idColumn === -1) continue;
-    for (const match of (cells[idColumn] ?? '').matchAll(/`(modbench\.[\w.]+)`/g)) {
-      ids.add(present(match[1], 'the backticked Command ID'));
-    }
-  }
-  return ids;
-}
-
-const commandsMarkdown = readFileSync(
-  path.join(__dirname, '..', '..', '..', 'docs', 'architecture', 'commands.md'), 'utf8',
-);
-
-const catalog = catalogCommandIds(commandsMarkdown);
+const catalog = catalogCommandIds(COMMANDS_MARKDOWN);
 
 const OPEN_REFERENCE = 'modbench.record.openReference';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']

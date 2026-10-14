@@ -636,7 +636,7 @@
         },
         {
           "command": "modbench.mod.openConflicts",
-          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleOpenConflictsRow"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind == mod && modbench.mod.singleRow"
         },
         {
           "command": "modbench.mod.compareFile",
@@ -1020,7 +1020,7 @@
         },
         {
           "command": "modbench.mod.openConflicts",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bfileOrderConflict\\b/",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
           "group": "1_open@3"
         },
         {

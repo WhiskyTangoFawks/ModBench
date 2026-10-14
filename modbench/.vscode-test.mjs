@@ -14,6 +14,7 @@ const freePort = () => new Promise((resolve, reject) => {
 });
 
 const port = await freePort();
+const agentPort = await freePort();
 const runDir = mkdtempSync(path.join(tmpdir(), 'modbench-it-'));
 process.on('exit', () => rmSync(runDir, { recursive: true, force: true, maxRetries: 5 }));
 
@@ -26,7 +27,7 @@ const workspace = (name, fixture) => {
   if (fixture) cpSync(path.join(import.meta.dirname, fixture), folder, { recursive: true });
   mkdirSync(path.join(folder, '.vscode'), { recursive: true });
   writeFileSync(path.join(folder, '.vscode', 'settings.json'), JSON.stringify({
-    'modbench.attachToBackendPort': port, 'modbench.mods.gameDirectory': gameDirectory,
+    'modbench.attachToBackendPort': port, 'modbench.mods.gameDirectory': gameDirectory, 'modbench.agent.port': agentPort,
   }));
   return folder;
 };
@@ -50,7 +51,7 @@ const shared = {
     '--logsPath', logs,
   ],
   // Linux's OS trash lives under XDG_DATA_HOME, and every run trashes folders of the same names.
-  env: { MODBENCH_TEST_PORT: String(port), XDG_DATA_HOME: path.join(runDir, 'data'), MODBENCH_TEST_LOGS: logs },
+  env: { MODBENCH_TEST_PORT: String(port), MODBENCH_TEST_AGENT_PORT: String(agentPort), XDG_DATA_HOME: path.join(runDir, 'data'), MODBENCH_TEST_LOGS: logs },
   mocha: { timeout: 20000, ui: 'bdd' },
 };
 
