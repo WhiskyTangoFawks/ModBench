@@ -14,7 +14,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { inheritedPythonPath, onGameDirectoryChange, onTerminalEnvChange } from '../workspaceConfig';
+import { inheritedPythonPath, onGameDirectoryChange, onStringsLanguageChange, onTerminalEnvChange } from '../workspaceConfig';
 
 const changeTo = (key: string): void => configListener?.({ affectsConfiguration: (section) => section === key });
 
@@ -27,6 +27,19 @@ describe('onGameDirectoryChange', () => {
     expect(listener).not.toHaveBeenCalled();
 
     changeTo('modbench.mods.gameDirectory');
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('onStringsLanguageChange', () => {
+  it('signals for the strings language setting and for no other key', () => {
+    const listener = vi.fn();
+    onStringsLanguageChange(listener);
+
+    changeTo('modbench.agent.port');
+    expect(listener).not.toHaveBeenCalled();
+
+    changeTo('modbench.stringsLanguage');
     expect(listener).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,6 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Index;
 
@@ -58,6 +59,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     /// <summary>One row per plugin the snapshot names, carrying its load index, null when it is not
     /// active (ADR-0013). Every public view joins it.</summary>
     internal const string RegistrationsRelation = "registrations";
+    internal const string StringsLanguageRelation = MirrorSchema + ".strings_language";
 
     /// <summary>The active plugins with their load index (ADR-0013), which the sweep
     /// orders by. Load-order-owned state, so it lives in <c>main</c>.</summary>
@@ -88,10 +90,17 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreateCellLocationTable(connection);
         CreateRecordTypeFailureTable(connection);
         CreateSequenceTable(connection);
+        CreateStringsLanguageTable(connection);
         DuckDbSql.Execute(connection, $"CREATE TABLE IF NOT EXISTS {MirrorSchema}.index_version (value VARCHAR NOT NULL)");
 
         // Views after tables: the public views over every mirror table.
         CreatePublicViews(connection);
+    }
+
+    private static void CreateStringsLanguageTable(DuckDBConnection connection)
+    {
+        DuckDbSql.Execute(connection, $"CREATE TABLE IF NOT EXISTS {StringsLanguageRelation} (language VARCHAR NOT NULL)");
+        DuckDbSql.Execute(connection, $"INSERT INTO {StringsLanguageRelation} SELECT '{Language.English}' WHERE NOT EXISTS (SELECT 1 FROM {StringsLanguageRelation})");
     }
 
     // ADR-0015: a plain table, not DuckDB's SEQUENCE — nextval() is not transactional,

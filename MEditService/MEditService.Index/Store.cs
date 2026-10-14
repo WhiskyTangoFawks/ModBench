@@ -9,6 +9,7 @@ using MEditService.PluginAdapter;
 using MEditService.Ports;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Index;
 
@@ -365,6 +366,13 @@ internal sealed class Store : IDisposable
             derivedFrom.ToString(), key.Name, key.Origin);
         if (restamped > 0) BumpSequence();
         tx.Commit();
+    }
+
+    /// <summary>The language the translated texts show in, from the next read on.</summary>
+    public void SetStringsLanguage(Language language)
+    {
+        if (DuckDbSql.Execute(Connection, $"UPDATE {TableDdlBuilder.StringsLanguageRelation} SET language = $1 WHERE language <> $1", language.ToString()) > 0)
+            BumpSequence();
     }
 
     /// <summary>What <paramref name="key"/>'s rows took their strings from, or null when none.</summary>
