@@ -175,6 +175,21 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         Assert.Equal(["untracked.txt"], Paths(destroys, "namedByNoLine"));
     }
 
+    [PosixFact]
+    public async Task OnAFileSystemThatTellsCaseApart_AFileRenamedInCaseAlone_IsDestroyedAsOneNoLineNames_AndRestoringItNamesItForTheTrash()
+    {
+        ModInstalledFromADownload();
+        await Post("update-manifest");
+        File.Move(Path.Combine(ModFolder, "kept.txt"), Path.Combine(ModFolder, "KEPT.txt"));
+
+        var destroys = Assert.Single((await WhatRestoreDestroys()).EnumerateArray());
+        var restored = Assert.Single((await Post("restore-from-manifest")).GetProperty("applied").EnumerateArray());
+
+        Assert.Equal(["KEPT.txt"], Paths(destroys, "namedByNoLine"));
+        Assert.Equal(["KEPT.txt"], Paths(restored, "namedByNoLine"));
+        Assert.Equal("kept", FileText("kept.txt"));
+    }
+
     [Fact]
     public async Task RestoringAModWhoseStatCacheCannotBeWritten_LandsNamingWhy()
     {

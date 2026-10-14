@@ -2,9 +2,15 @@ using System.Text;
 
 namespace MEditService.ModFolderAdapter;
 
-public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepository
+/// <summary><paramref name="fileExists"/> is the file system's answer to whether a file is at a path, in the case it
+/// matches names in.</summary>
+public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fileExists) : IModFolderRepository
 {
     private const string ManifestExtension = ".manifest";
+
+    public ModFolderRepository(TimeProvider time) : this(time, File.Exists)
+    {
+    }
 
     public ModFolderFiles Files(string modFolder, string modName, IReadOnlySet<string> leftOut, string? statCache)
     {
@@ -28,9 +34,16 @@ public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepositor
 
     public IReadOnlyList<string> NamedByNoLine(string modFolder, string modName, Manifest manifest, IReadOnlySet<string> leftOut)
     {
-        var named = manifest.Files.Select(line => line.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return [.. FilesOf(modFolder, modName).Where(path => !named.Contains(path) && !leftOut.Contains(path))];
+        var onDisk = FilesOf(modFolder, modName).ToHashSet(StringComparer.Ordinal);
+        var lines = manifest.Files.Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
+        var linesInAnyCase = lines.ToLookup(line => line, StringComparer.OrdinalIgnoreCase);
+        return [.. onDisk.Where(path => !leftOut.Contains(path) && !lines.Contains(path) && !linesInAnyCase[path].Any(line => FoundAt(modFolder, line, onDisk)))];
     }
+
+    // A line names a file in another case only where the file system finds that file by the line's name: no file of its
+    // own has that name, and yet one is there.
+    private bool FoundAt(string modFolder, string line, HashSet<string> onDisk) =>
+        !onDisk.Contains(line) && fileExists(Path.Combine(modFolder, line));
 
     public RestoreDestroys WhatRestoreDestroys(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache)
     {
@@ -47,7 +60,7 @@ public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepositor
 
         var cache = new StatCache(statCache, modFolder, time);
         List<string> differing = [];
-        foreach (var line in manifest.Files.Where(line => File.Exists(Path.Combine(modFolder, line.Path))))
+        foreach (var line in manifest.Files.Where(line => fileExists(Path.Combine(modFolder, line.Path))))
         {
             if (manifest.ProviderOf(line) is { } provider && !HoldsWhatItsProviderFixes(modFolder, line.Path, cache, provider)) differing.Add(line.Path);
         }

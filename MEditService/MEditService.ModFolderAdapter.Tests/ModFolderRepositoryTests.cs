@@ -144,13 +144,31 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Empty(destroys.Differing);
     }
 
-    [Fact]
-    public void AFileNamedByALineInAnotherCase_IsNamed()
+    [Theory]
+    [InlineData("matches a name in any case", false)]
+    [InlineData("matches a name in its case alone", true)]
+    public void AFileNamedByALineInAnotherCase_IsNamedByNoLine_OnlyWhereTheFileSystemFindsItByTheLinesName(string fileSystem, bool namedByNoLine)
     {
         Write("Meshes/A.nif", "hello");
         var manifest = Manifested(Line("meshes/a.nif", "Mod.zip"));
+        var comparison = fileSystem == "matches a name in any case" ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var repository = new ModFolderRepository(
+            TimeProvider.System, path => Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories).Any(file => string.Equals(file, path, comparison)));
 
-        Assert.Empty(_repository.NamedByNoLine(_root, "mod", manifest, new HashSet<string>()));
+        var destroys = repository.WhatRestoreDestroys(_root, "mod", new HashSet<string>(), _statCache);
+
+        Assert.Equal(namedByNoLine ? ["Meshes/A.nif"] : [], repository.NamedByNoLine(_root, "mod", manifest, new HashSet<string>()));
+        Assert.Equal(namedByNoLine ? ["Meshes/A.nif"] : [], destroys.NamedByNoLine);
+    }
+
+    [PosixFact]
+    public void OnAFileSystemThatTellsCaseApart_TwoFilesWhoseNamesDifferInCaseAlone_AreOneNamedByALineAndOneNot()
+    {
+        Write("a.nif", "hello");
+        Write("A.nif", "hello");
+        var manifest = Manifested(Line("a.nif", "Mod.zip"));
+
+        Assert.Equal(["A.nif"], _repository.NamedByNoLine(_root, "mod", manifest, new HashSet<string>()));
     }
 
     [Fact]

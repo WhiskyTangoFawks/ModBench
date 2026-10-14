@@ -61,7 +61,7 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public IReadOnlyList<string> NamedByNoLine(string modFolder, string modName, Manifest manifest, IReadOnlySet<string> leftOut)
     {
-        var named = manifest.Files.Select(line => line.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var named = manifest.Files.Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
         return [.. FilePaths(modFolder).Where(path => !named.Contains(path) && !leftOut.Contains(path))];
     }
 
