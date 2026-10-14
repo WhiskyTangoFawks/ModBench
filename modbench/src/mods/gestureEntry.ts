@@ -35,8 +35,6 @@ interface ModsKeyContext {
   readonly singleGoToModRow: boolean;
   /** One row, and a file that loses its file order conflict. */
   readonly singleCompareFileRow: boolean;
-  /** One row, and a mod with a file order conflict. */
-  readonly singleOpenConflictsRow: boolean;
   readonly holdsEnabledMod: boolean;
   readonly holdsDisabledMod: boolean;
   readonly holdsUntrackedModWithPlugin: boolean;
@@ -62,7 +60,6 @@ export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (ro
     singleOpenSourceRow: onlyRow?.kind === 'mod' && onlyRow.facts?.tracked === true,
     singleGoToModRow: onlyRow?.kind === 'file' && onlyRow.conflict !== 'none',
     singleCompareFileRow: onlyRow?.kind === 'file' && onlyRow.conflict === 'loses',
-    singleOpenConflictsRow: onlyRow?.kind === 'mod' && onlyRow.facts?.fileOrderConflict === true,
     holdsEnabledMod: mods.some(isEnabled),
     holdsDisabledMod: mods.some((row) => !isEnabled(row)),
     holdsUntrackedModWithPlugin: mods.some((row) => row.facts?.holdsPlugin === true && !row.facts.tracked),

@@ -269,7 +269,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
       'Default', instance.value.mods, [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
   });
 
-  const facts = { holdsPlugin: true, tracked: true, fileOrderConflict: false };
+  const facts = { holdsPlugin: true, tracked: true };
 
   it('warns, naming the source, of a mod uninstalled whose source could not be trashed, and does not report the uninstall failed', async () => {
     uninstallMods.mockResolvedValueOnce({
