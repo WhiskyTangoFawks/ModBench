@@ -1,4 +1,4 @@
-using MEditService.RepositoriesLib;
+using System.Text.Json;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
 
@@ -8,6 +8,8 @@ public sealed class ModFolderRepositoryTests : IDisposable
 {
     private const string HashOfHello = "o22fiH2CxyY=";
     private const string HashOfHelloWithACapitalO = "0RePZfC1RR4=";
+
+    private static readonly DateTime LongAgo = new(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     private readonly ScratchDirectory _root = new("modfolder-adapter-");
     private readonly ScratchDirectory _statCache = new("stat-cache-");
@@ -49,10 +51,13 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void AFile_TakesTheStatCachesHash_OnlyWhileItsSizeModifiedTimeAndChangeTimeAreAsLastRead(
         long sizeApart, long modifiedApart, long changedApart, string hash)
     {
-        var stamp = Stamped("a.txt", "hello");
-        StatCacheSays(
-            $"{{\"a.txt\":{{\"size\":{stamp.Size + sizeApart},\"modified\":{stamp.Modified + modifiedApart},"
-            + $"\"changed\":{stamp.Changed + changedApart},\"hash\":\"{HashOfHelloWithACapitalO}\"}}}}");
+        Write("a.txt", "hello");
+        Files();
+        var read = StatCacheEntries()["a.txt"];
+        StatCacheSays(new Dictionary<string, CachedEntry>
+        {
+            ["a.txt"] = new(read.Size + sizeApart, read.Modified + modifiedApart, read.Changed + changedApart, HashOfHelloWithACapitalO),
+        });
 
         Assert.Equal(hash, Assert.Single(Files()).Hash);
     }
@@ -60,8 +65,8 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void AFileChangedAsItWasRead_IsOpenedAgain_BecauseAWriteInTheSameTickLeavesItsStamp()
     {
-        var stamp = Stamped("a.txt", "hello");
-        new ModFolderRepository(new FakeTimeProvider(DateTimeOffset.UnixEpoch.AddTicks(stamp.Changed / 100)))
+        Write("a.txt", "hello");
+        new ModFolderRepository(new FakeTimeProvider(File.GetLastWriteTimeUtc(Path.Combine(_root, "a.txt"))))
             .Files(_root, "mod", new HashSet<string>(), _statCache);
         using var held = HeldOpen("a.txt");
 
@@ -108,12 +113,11 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         Write("a.txt", "hello");
         Files();
-        var cache = Assert.Single(Directory.GetFiles(_statCache));
-        var stamp = FileStamp.Of(cache);
+        File.SetLastWriteTimeUtc(StatCacheFile, LongAgo);
 
         Files();
 
-        Assert.Equal(stamp, FileStamp.Of(cache));
+        Assert.Equal(LongAgo, File.GetLastWriteTimeUtc(StatCacheFile));
     }
 
     [Fact]
@@ -187,12 +191,11 @@ public sealed class ModFolderRepositoryTests : IDisposable
         var manifest = new Manifest([], [], [new ManifestFile("a.txt", new FileProvider.NoProvider())]);
         _repository.WriteManifest(_root, "mod", manifest);
         var path = Path.Combine(_root, "mod.manifest");
-        var longAgo = new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        File.SetLastWriteTimeUtc(path, longAgo);
+        File.SetLastWriteTimeUtc(path, LongAgo);
 
         Assert.False(_repository.WriteManifest(_root, "mod", manifest));
 
-        Assert.Equal(longAgo, File.GetLastWriteTimeUtc(path));
+        Assert.Equal(LongAgo, File.GetLastWriteTimeUtc(path));
     }
 
     [Fact]
@@ -285,11 +288,12 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void WriteFile_OfTheBytesAlreadyThere_LeavesTheFileUntouched()
     {
-        var stamp = Stamped("mod.ba2", "same");
+        Write("mod.ba2", "same");
+        File.SetLastWriteTimeUtc(Path.Combine(_root, "mod.ba2"), LongAgo);
 
         _repository.WriteFile(_root, "mod.ba2", content => content.Write("same"u8));
 
-        Assert.Equal(stamp, FileStamp.Of(Path.Combine(_root, "mod.ba2")));
+        Assert.Equal(LongAgo, File.GetLastWriteTimeUtc(Path.Combine(_root, "mod.ba2")));
         Assert.Equal(["mod.ba2"], Directory.GetFiles(_root).Select(Path.GetFileName));
     }
 
@@ -355,13 +359,16 @@ public sealed class ModFolderRepositoryTests : IDisposable
     private FileStream HeldOpen(string relative) =>
         new(Path.Combine(_root, relative), FileMode.Open, FileAccess.Read, FileShare.None);
 
-    private void StatCacheSays(string text) => File.WriteAllText(Path.Combine(_statCache, Path.GetFileName(_root.Path)), text);
+    private sealed record CachedEntry(long Size, long Modified, long Changed, string Hash);
 
-    private FileStamp Stamped(string relative, string text)
-    {
-        Write(relative, text);
-        return FileStamp.Of(Path.Combine(_root, relative)) ?? throw new InvalidOperationException("The file system gave no stamp.");
-    }
+    private string StatCacheFile => Path.Combine(_statCache, Path.GetFileName(_root.Path));
+
+    private Dictionary<string, CachedEntry> StatCacheEntries() =>
+        JsonSerializer.Deserialize<Dictionary<string, CachedEntry>>(File.ReadAllText(StatCacheFile), JsonSerializerOptions.Web) ?? [];
+
+    private void StatCacheSays(Dictionary<string, CachedEntry> entries) => StatCacheSays(JsonSerializer.Serialize(entries, JsonSerializerOptions.Web));
+
+    private void StatCacheSays(string text) => File.WriteAllText(StatCacheFile, text);
 
     private void Write(string relative, string text)
     {

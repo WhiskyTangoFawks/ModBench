@@ -188,7 +188,7 @@ function reportRestored(reporter: Reporter, total: number, outcome: Omit<Extract
   reportLanded(reporter, total, outcome);
   const unwritten = statCacheNotWritten(outcome.landed);
   if (unwritten.length > 0) {
-    reporter.report('warning', `Restore from manifest: the stat cache could not be written for ${counted(unwritten.length, 'mod', 'mods')}.`, unwritten.join('\n'));
+    reporter.report('warning', `Restore from manifest: the stat cache could not be written for ${unwritten.length} mod${unwritten.length === 1 ? '' : 's'}.`, unwritten.join('\n'));
   }
 }
 

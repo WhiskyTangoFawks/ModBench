@@ -33,6 +33,5 @@ public enum UpdateManifestRefusal
 }
 
 /// <summary>A mod whose manifest is as its folder says. ManifestWritten is false when the manifest was already so.
-/// NoProvider names each file nothing provides. StatCacheNotWritten is why the stat cache could not keep what the update read,
-/// or null.</summary>
+/// NoProvider names each file nothing provides. StatCacheNotWritten is why the stat cache could not be written, or null.</summary>
 public sealed record UpdatedMod(bool ManifestWritten, IReadOnlyList<string> NoProvider, string? StatCacheNotWritten);
