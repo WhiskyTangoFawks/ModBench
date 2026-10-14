@@ -18,7 +18,7 @@ function gestureInput<Given>(takes: string, input: z.ZodType<Given>, callOf: (va
 
 const MOD_NAME = z.object({ name: z.string(), kind: z.enum(['mod', 'separator']).optional() });
 
-const modsCall = (value: InstanceValue, argument: readonly z.infer<typeof MOD_NAME>[]) => modsNamed(value.mods, argument).map((entry) => {
+const modArguments = (value: InstanceValue, argument: readonly z.infer<typeof MOD_NAME>[]) => modsNamed(value.mods, argument).map((entry) => {
   if (entry.kind !== 'mod') throw new Refusal(`"${entry.name}" is a separator, not a mod.`);
   return { kind: 'mod' as const, name: entry.name };
 });
@@ -28,7 +28,7 @@ const MODS_TAKES = 'argument: the mods, each { name, kind? } as list_mods names 
 const MODS = gestureInput(
   MODS_TAKES,
   z.object({ argument: z.array(MOD_NAME) }),
-  (value, { argument }) => new AgentCall(modsCall(value, argument), {}),
+  (value, { argument }) => new AgentCall(modArguments(value, argument), {}),
 );
 
 const MOVE_PLACE = z.union([
@@ -43,7 +43,7 @@ const MOVE_MODS = gestureInput(
   `${MODS_TAKES}; options: { place: { kind: 'ungrouped' | 'modOrder' } or { kind: 'separator' | 'mod', name: the one it lands in or beside }, end: 'winning' | 'losing' }`,
   z.object({ argument: z.array(MOD_NAME), options: z.object({ place: MOVE_PLACE, end: z.enum(['winning', 'losing']) }) }),
   (value, { argument, options: { place, end } }) =>
-    new AgentCall(modsCall(value, argument), { place: placeNamed(value, place), end }),
+    new AgentCall(modArguments(value, argument), { place: placeNamed(value, place), end }),
 );
 
 const NAME_OPTION = z.object({ options: z.object({ name: z.string() }) });
@@ -51,7 +51,7 @@ const NAME_OPTION = z.object({ options: z.object({ name: z.string() }) });
 const RENAME_MOD = gestureInput(
   'argument: the mod, { name } as list_mods names it; options: { name: its new name }',
   NAME_OPTION.extend({ argument: z.array(MOD_NAME) }),
-  (value, { argument, options }) => new AgentCall(modsCall(value, argument), options),
+  (value, { argument, options }) => new AgentCall(modArguments(value, argument), options),
 );
 
 const CREATE_EMPTY_MOD = gestureInput(

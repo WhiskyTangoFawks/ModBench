@@ -109,7 +109,7 @@ export function registerModMoveCommand(
   const failed = (kind: Move['kind'], detail: string): GestureResult<string> =>
     ({ applied: false, refusal: `Failed to move ${kind}s.`, detail });
 
-  const reported = (kind: Move['kind'], result: SelectionResult<string>): GestureResult<string> =>
+  const asMoveResult = (kind: Move['kind'], result: SelectionResult<string>): GestureResult<string> =>
     result.applied ? result : failed(kind, result.refusal);
 
   const gesture: AgentGesture<ModlistNode, Move, GestureResult<string>, MoveTarget> = {
@@ -140,10 +140,10 @@ export function registerModMoveCommand(
         if (place.kind === 'mod' && names.includes(place.name)) {
           return { applied: true, outcome: { landed: [], refused: names.map((item) => ({ item, reason: `The target is "${place.name}", which is moving.` })) } };
         }
-        return runModsWriting(instance, async () => reported(kind, await commands.moveMods(instance.value.activeProfile, names, place, end)));
+        return runModsWriting(instance, async () => asMoveResult(kind, await commands.moveMods(instance.value.activeProfile, names, place, end)));
       }
       if (!isSeparatorsPlace(place)) return failed(kind, SEPARATOR_PLACES);
-      return runModsWriting(instance, async () => reported(kind, await commands.moveSeparators(instance.value.activeProfile, names, place, end)));
+      return runModsWriting(instance, async () => asMoveResult(kind, await commands.moveSeparators(instance.value.activeProfile, names, place, end)));
     },
     report: (result, { kind, names }) => {
       if (!result.applied) {
@@ -252,8 +252,6 @@ export function registerModContextCommands(
 
   const uninstall: AgentGesture<ModlistNode, readonly ModToUninstall[], GestureResult<Uninstalled>> = {
     fromView: async (entry) => {
-      // The download to mark comes off the row the tree already holds, so the command walks
-      // nothing to find it.
       const rows = pluralArgument(entry, 'mod');
       const mods = rows.map((n) => ({ name: n.mod.name, archiveFilename: n.mod.archiveFilename }));
       if (mods.length === 0) return undefined;
