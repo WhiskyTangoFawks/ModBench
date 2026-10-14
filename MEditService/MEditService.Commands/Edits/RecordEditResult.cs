@@ -62,6 +62,10 @@ public enum RecordEditRefusal
     /// system's own words, and the way out is outside Modbench.</summary>
     SourceAccessFailed,
 
+    /// <summary>A script's write reaches a file VS Code holds unsaved changes to; the way out is saving or reverting it
+    /// (scripts.md, Writing, story 6).</summary>
+    UnsavedChanges,
+
     /// <summary>Two documents in the tree claim one FormKey, most likely left by another tool or an
     /// interrupted rename; which to change is the user's call, so the way out is resolving it by hand.</summary>
     AmbiguousSourceUnit,

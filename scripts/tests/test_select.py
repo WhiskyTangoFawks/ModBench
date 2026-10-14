@@ -56,7 +56,7 @@ class SelectAgainstTheFixtureInstance(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.medit = contextlib.ExitStack()
-        cls.url = cls.medit.enter_context(fixture_medit())
+        cls.url = cls.medit.enter_context(fixture_medit()).url
 
     @classmethod
     def tearDownClass(cls):

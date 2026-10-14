@@ -27,6 +27,13 @@ internal sealed class UnsavedFiles(IEnumerable<DocumentChange> unsaved) : ISourc
 
     public IEnumerable<string> DirectoriesIn(string directory) => DiskFiles.Instance.DirectoriesIn(directory);
 
+    public IEnumerable<string> HeldAtOrUnder(string path)
+    {
+        var full = Path.GetFullPath(path);
+        return _unsaved.Select(document => document.Path).Where(held =>
+            string.Equals(held, full, SourceRepositoryLocator.PathComparison) || SourceRepositoryLocator.IsUnder(full, held));
+    }
+
     private string? UnsavedText(string path)
     {
         var full = Path.GetFullPath(path);

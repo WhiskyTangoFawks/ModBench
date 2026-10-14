@@ -9,6 +9,7 @@ public sealed class CommandHandlerConventionTests
     private static readonly Type[] SingleWriteHandlers =
     [
         typeof(CreateRecordChangesHandler),
+        typeof(EditRecordHandler),
         typeof(CreatePluginHandler),
         typeof(PutLoadOrderHandler),
         typeof(RenameSourceChangesHandler),

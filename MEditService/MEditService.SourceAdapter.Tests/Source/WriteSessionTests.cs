@@ -133,10 +133,16 @@ public sealed class WriteSessionTests : IDisposable
         Assert.True(File.Exists(FullPath(QuestPath)));
     }
 
-    private IReadOnlyList<string> TreeTheSessionAnswers(Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
+    private IWriteSession SessionAfter(Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
     {
         var session = Session();
         foreach (var write in writes) Assert.Null(Write(session, write));
+        return session;
+    }
+
+    private IReadOnlyList<string> TreeTheSessionAnswers(Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
+    {
+        var session = SessionAfter(writes);
         Repository.SaveChanges(SourceAnswer.Of(session.Changes)).Wrote();
         return TreeSnapshot.Of(_modFolder);
     }
@@ -476,6 +482,84 @@ public sealed class WriteSessionTests : IDisposable
         ];
 
         Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
+    }
+
+    [Fact]
+    public void TheChangesWritten_LeaveTheTreeTheWritesLeaveOneAfterAnother()
+    {
+        var renamed = Renamed(_quest, "qust", QuestPath, "Renamed");
+        var created = Child(new Npc(_mod) { EditorID = "NewNpc" }, "npc_");
+        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
+        [
+            repository => repository.ChangesToPut(Plugin, renamed),
+            repository => repository.ChangesToRemove(Plugin, Identity(_response, "info")),
+            repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell")),
+            repository => repository.ChangesToPut(Plugin, created),
+        ];
+        var oneAfterAnother = TreeTheWritesLeaveOneAfterAnother(writes);
+
+        SessionAfter(writes).Write().Wrote();
+
+        Assert.Equal(oneAfterAnother, TreeSnapshot.Of(_modFolder));
+    }
+
+    private string FileUnderTheRenamedCell =>
+        Path.Combine(PluginSourceRoot.For(PluginName), "Cells", "0", "0", $"RenamedCell - {_cell.FormKey.ID:X6}_{PluginName}", "Unsaved.json");
+
+    private Dictionary<string, (string Held, Func<ISourceRepository, Answer<SourceChanges, SourceFailure>> Write)> WritesReachingAHeldFile => new()
+    {
+        ["rewriting a file"] = (QuestPath, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))),
+        ["moving a file"] = (QuestPath, repository => repository.ChangesToPut(Plugin, Renamed(_quest, "qust", QuestPath, "Renamed"))),
+        ["deleting a folder holding a file"] = (ExteriorCellPath, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))),
+        ["moving onto a folder holding a file"] = (
+            FileUnderTheRenamedCell, repository => repository.ChangesToPut(Plugin, Renamed(_cell, "cell", CellPath, "RenamedCell"))),
+    };
+
+    public static TheoryData<string> WriteNames { get; } =
+        ["rewriting a file", "moving a file", "deleting a folder holding a file", "moving onto a folder holding a file"];
+
+    [Theory]
+    [MemberData(nameof(WriteNames))]
+    public void AWriteReachingAFileHeldUnsaved_IsRefusedNamingTheFile_AndWritesNothing(string write)
+    {
+        var (held, changes) = WritesReachingAHeldFile[write];
+        var session = Session(new DocumentChange(FullPath(held), File.Exists(FullPath(held)) ? File.ReadAllText(FullPath(held)) + " " : "{}"));
+        Assert.Null(Write(session, changes));
+        var before = TreeSnapshot.Of(_modFolder);
+
+        var refused = session.Write().Failed();
+
+        Assert.IsType<SourceFailure.Unsaved>(refused);
+        Assert.Contains(FullPath(held), refused.Reason, StringComparison.Ordinal);
+        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+    }
+
+    [Fact]
+    public void AFileHeldUnsavedThatTheWriteDoesNotReach_IsNoRefusal()
+    {
+        var session = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))));
+
+        session.Write().Wrote();
+
+        Assert.False(File.Exists(FullPath(ExteriorCellPath)));
+    }
+
+    [Fact]
+    public void AWriteTheDiskStopsPartWay_PutsBackWhatItMovedAndDeleted_AndIsInaccessible()
+    {
+        var session = Session();
+        Assert.Null(Write(session, repository => repository.ChangesToPut(Plugin, Renamed(_cell, "cell", CellPath, "RenamedCell"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
+        File.Delete(FullPath(QuestPath));
+        Directory.CreateDirectory(FullPath(QuestPath));
+        var before = TreeSnapshot.Of(_modFolder);
+
+        var failed = session.Write().Failed();
+
+        Assert.IsType<SourceFailure.Inaccessible>(failed);
+        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
     [Theory]
