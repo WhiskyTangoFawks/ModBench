@@ -9,6 +9,7 @@ import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { MEditClient } from '../client/MEditClient';
 import { FILE_CONFLICTS } from './fileConflicts';
+import { RUN_GESTURE } from './gestures';
 import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
 import { INSTANCE_READS } from './instanceReads';
 import { Refusal } from './refusal';
@@ -60,6 +61,8 @@ function mcpServerOf({ instance, mEdit, log }: AgentServerOptions): McpServer {
     (args) => answer(log, RESOLVE_NAMES.name, () => RESOLVE_NAMES.of(mEdit, args)));
   server.registerTool(SELECT_ROWS.name, { description: SELECT_ROWS.description, inputSchema: SELECT_ROWS.input },
     (args) => answer(log, SELECT_ROWS.name, () => SELECT_ROWS.of(mEdit, args)));
+  server.registerTool(RUN_GESTURE.name, { description: RUN_GESTURE.description, inputSchema: RUN_GESTURE.input },
+    (args) => answer(log, RUN_GESTURE.name, () => RUN_GESTURE.of(currentValue(instance), args)));
   server.registerTool(SOURCE_PROBLEMS.name, { description: SOURCE_PROBLEMS.description }, () => answer(log, SOURCE_PROBLEMS.name, SOURCE_PROBLEMS.of));
   return server;
 }

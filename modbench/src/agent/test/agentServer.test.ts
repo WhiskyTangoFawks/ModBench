@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Held = [{ scheme: string; fsPath: string }, { severity: number; range: { start: { line: number } }; message: string }[]][];
 const diagnosticsHeld = vi.hoisted(() => ({ held: [] as Held }));
+const fired = vi.hoisted((): { calls: unknown[][]; outcome: unknown } => ({ calls: [], outcome: undefined }));
 vi.mock('vscode', () => ({
   languages: { getDiagnostics: () => diagnosticsHeld.held },
+  commands: { executeCommand: (...args: unknown[]) => { fired.calls.push(args); return Promise.resolve(fired.outcome); } },
   DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3, 0: 'Error', 1: 'Warning', 2: 'Information', 3: 'Hint' },
 }));
 import { createServer, request, type OutgoingHttpHeaders, type Server } from 'node:http';
@@ -11,6 +13,7 @@ import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { serveAgent, type AgentServer } from '../agentServer';
+import { AgentCall } from '../../drivingLib/agentGesture';
 import { FileConflictLookup, modOrigin, RUNTIME_OUTPUT, type ConflictEntry } from '../../instanceLoader/fileConflictIndex';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -84,7 +87,7 @@ describe('the agent server, given an instance value', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mods', 'list_plugins', 'list_profiles', 'list_source_problems', 'resolve_instance_names', 'resolve_names', 'select_rows']);
+    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mods', 'list_plugins', 'list_profiles', 'list_source_problems', 'resolve_instance_names', 'resolve_names', 'run_gesture', 'select_rows']);
   });
 
   it('reads the profiles and the active one', async () => {
@@ -354,6 +357,63 @@ describe('the agent server, selecting records through mEdit', () => {
     const client = await clientOf(new FakeInstance(VALUE), mEdit);
 
     expect(await call(client, 'select_rows', { sql: 'DROP TABLE records' })).toEqual({ isError: true, text: 'Only a SELECT runs.' });
+  });
+});
+
+describe('the agent server, running a gesture', () => {
+  beforeEach(() => { fired.calls = []; fired.outcome = undefined; });
+
+  async function served() {
+    const { bound, lines, reporter } = await serve(new FakeInstance(CONFLICTED));
+    const client = new Client({ name: 'test', version: '0' });
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
+    clients.push(client);
+    return { client, lines, reporter };
+  }
+
+  it('fires the gesture\'s command with the mods named as its Argument, and answers its outcome', async () => {
+    fired.outcome = { applied: true, outcome: { landed: ['A', 'Textures'], refused: [] } };
+    const { client } = await served();
+
+    const answer = await call(client, 'run_gesture', { command: 'modbench.mod.disable', argument: [{ name: 'A' }, { name: 'Textures', kind: 'mod' }] });
+
+    expect(fired.calls).toEqual([['modbench.mod.disable', new AgentCall([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'Textures' }])]]);
+    expect(answer).toEqual({ isError: false, text: JSON.stringify(fired.outcome) });
+  });
+
+  it('refuses in part, naming each refused item and why, in the Output and in no notification', async () => {
+    fired.outcome = { applied: true, outcome: { landed: ['A'], refused: [{ item: 'B', reason: 'Mod not found in modlist: B' }] } };
+    const { client, lines, reporter } = await served();
+
+    const answer = await call(client, 'run_gesture', { command: 'modbench.mod.enable', argument: [{ name: 'A' }, { name: 'B' }] });
+
+    expect(answer).toEqual({ isError: true, text: 'Refused 1 of 2: "B" (Mod not found in modlist: B).' });
+    expect(lines.join('\n')).toContain('"B" (Mod not found in modlist: B)');
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('refuses in whole with the command\'s refusal', async () => {
+    fired.outcome = { applied: false, refusal: 'ENOENT: modlist.txt' };
+    const { client, lines } = await served();
+
+    expect(await call(client, 'run_gesture', { command: 'modbench.mod.enable', argument: [{ name: 'A' }] })).toEqual({ isError: true, text: 'ENOENT: modlist.txt' });
+    expect(lines.join('\n')).toContain('ENOENT: modlist.txt');
+  });
+
+  it.each([
+    ['a gesture kept from the agent', { command: 'modbench.profile.switch', argument: [] }, 'modbench.profile.switch is not a gesture your agent runs.'],
+    ['a name that means a mod and a separator', { command: 'modbench.mod.enable', argument: [{ name: 'Textures' }] }, '"Textures" means more than one thing: separator Textures; mod Textures. Name it with its kind.'],
+    ['a separator', { command: 'modbench.mod.enable', argument: [{ name: 'Textures', kind: 'separator' }] }, '"Textures" is a separator, not a mod.'],
+    ['no Argument', { command: 'modbench.mod.enable' }, 'argument'],
+  ])('refuses %s, firing nothing', async (_case, args, refusal) => {
+    const { client, lines } = await served();
+
+    const answer = await call(client, 'run_gesture', args);
+
+    expect(answer.isError).toBe(true);
+    expect(answer.text).toContain(refusal);
+    expect(lines.join('\n')).toContain(refusal);
+    expect(fired.calls).toEqual([]);
   });
 });
 

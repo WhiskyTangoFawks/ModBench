@@ -4,7 +4,8 @@ import type { ModlistNode } from './ModListProvider';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
 import { promptRename } from '../drivingLib/promptRename';
-import { MODS_KEY_ARGS, runModsWriting, openFolderArgument } from './gestureEntry';
+import { MODS_KEY_ARGS, modNameOf, runModsWriting, openFolderArgument } from './gestureEntry';
+import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
 import { viewCopyValueText } from '../drivingLib/copyValue';
 import {
   pluralArgument, registerGesture, singularArgument, type GestureEntry, type RowOf,
@@ -26,25 +27,30 @@ export function registerModEnableCommands(
   commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>,
   viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
-  const run = (enabled: boolean) => (entry: GestureEntry<ModlistNode>) => {
-    const modNames = pluralArgument(entry, 'mod').map((n) => n.mod.name);
-    if (modNames.length === 0) return;
+  const gesture = (enabled: boolean): AgentGesture<ModlistNode, readonly string[], SelectionResult<string>> => {
     const verb = enabled ? 'enable' : 'disable';
-    return runModsWriting(instance, async () => {
-      const result = await commands.setModsEnabled(instance.value.activeProfile, modNames, enabled);
-      if (!result.applied) {
-        reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
-        return;
-      }
-      reporter.selectionOutcome(
-        `Could not ${verb} ${result.outcome.refused.length} of ${modNames.length} mods.`,
-        result.outcome, (name) => name,
-      );
-    });
+    return {
+      fromView: (entry) => {
+        const modNames = pluralArgument(entry, 'mod').map((n) => n.mod.name);
+        return modNames.length === 0 ? undefined : modNames;
+      },
+      fromAgent: ({ argument }) => argument.map(modNameOf),
+      run: (modNames) => runModsWriting(instance, () => commands.setModsEnabled(instance.value.activeProfile, modNames, enabled)),
+      report: (result, modNames) => {
+        if (!result.applied) {
+          reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
+          return;
+        }
+        reporter.selectionOutcome(
+          `Could not ${verb} ${result.outcome.refused.length} of ${modNames.length} mods.`,
+          result.outcome, (name) => name,
+        );
+      },
+    };
   };
   return [
-    registerGesture('modbench.mod.enable', viewSelection, run(true)),
-    registerGesture('modbench.mod.disable', viewSelection, run(false)),
+    registerAgentGesture('modbench.mod.enable', viewSelection, gesture(true)),
+    registerAgentGesture('modbench.mod.disable', viewSelection, gesture(false)),
   ];
 }
 

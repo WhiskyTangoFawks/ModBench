@@ -49,6 +49,7 @@ import {
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import type { NexusModRow } from '../../drivingLib/inFocusedView';
+import { AgentCall } from '../../drivingLib/agentGesture';
 import { MODS_KEY_ARGS } from '../gestureEntry';
 import { FileNode, FolderNode } from '../modFiles';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
@@ -807,6 +808,40 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to disable mods.', detail: 'ENOENT: modlist.txt' },
+    ]);
+  });
+});
+
+describe('modbench.mod.enable / modbench.mod.disable, called by the agent', () => {
+  beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
+
+  const instance = { ...instanceThatReads, value: instanceValueFixture({ activeProfile: 'Default' }) };
+  const selected = new ModNode({ kind: 'mod', name: 'Selected Mod', enabled: false });
+  const outcome = { applied: true, outcome: { landed: ['Mod B'], refused: [{ item: 'Gone', reason: 'Mod not found in modlist: Gone' }] } };
+
+  it.each([
+    ['modbench.mod.enable', true],
+    ['modbench.mod.disable', false],
+  ])('%s acts on the mods given, never on the selection, and answers the outcome, reporting nothing', async (command, enabled) => {
+    setModsEnabled.mockResolvedValue(outcome);
+    const reporter = recordingReporter();
+    registerModEnableCommands(commands, instance, () => [selected], reporter);
+
+    const answered = await invoke(command, new AgentCall([{ kind: 'mod', name: 'Mod B' }, { kind: 'mod', name: 'Gone' }]));
+
+    expect(setModsEnabled).toHaveBeenCalledWith('Default', ['Mod B', 'Gone'], enabled);
+    expect(answered).toEqual(outcome);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('answers once the instance has been read again, so the agent\'s next read sees the change', async () => {
+    setModsEnabled.mockImplementation(() => { progressSteps.push('modlist.txt written'); return Promise.resolve(outcome); });
+    registerModEnableCommands(commands, instance, () => [], recordingReporter());
+
+    await invoke('modbench.mod.enable', new AgentCall([{ kind: 'mod', name: 'Mod B' }]));
+
+    expect(progressSteps).toEqual([
+      'progress opens on modbench.modList', 'modlist.txt written', 'Instance loader: read every file again', 'progress closes',
     ]);
   });
 });

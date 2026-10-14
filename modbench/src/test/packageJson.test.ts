@@ -6,6 +6,7 @@ import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, uriFile, uriFrom,
 } from './vscodeMock';
 import { FOLDER_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
+import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN } from './commandsCatalog';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
 const orderOf = (entry: MenuEntry): number => Number((entry.group ?? '').split('@')[1] ?? Number.NaN);
@@ -536,7 +537,7 @@ describe('package.json command titles and categories', () => {
   });
 
   it('offers every catalog gesture in the palette, but a gesture specified ahead of its code', () => {
-    const gestureIds = catalogCommandIds(commandsMarkdown.slice(0, commandsMarkdown.indexOf('## System commands')));
+    const gestureIds = catalogCommandIds(GESTURES_MARKDOWN);
     const declared = new Set(commands.map((c) => c.command));
     const hidden = [...gestureIds].filter((id) => gatedFalse().has(id) || (!declared.has(id) && !SPECIFIED_AHEAD_OF_CODE.includes(id)));
     expect(
@@ -568,7 +569,7 @@ describe('package.json command titles and categories', () => {
   });
 
   it('gates every internal system command out of the palette too', () => {
-    const systemCommandIds = catalogCommandIds(commandsMarkdown.slice(commandsMarkdown.indexOf('## System commands')));
+    const systemCommandIds = catalogCommandIds(SYSTEM_COMMANDS_MARKDOWN);
     const notASystemCommand = INTERNAL_COMMANDS.filter((c) => !systemCommandIds.has(c));
     expect(
       notASystemCommand,
@@ -1159,32 +1160,7 @@ describe('package.json open to the side', () => {
   });
 });
 
-function catalogCommandIds(markdown: string): Set<string> {
-  const ids = new Set<string>();
-  let idColumn: number | undefined;
-  for (const line of markdown.split('\n')) {
-    if (!line.startsWith('|')) {
-      idColumn = undefined;
-      continue;
-    }
-    const cells = line.split('|').slice(1, -1).map((c) => c.trim());
-    if (idColumn === undefined) {
-      idColumn = cells.indexOf('Command ID');
-      continue;
-    }
-    if (idColumn === -1) continue;
-    for (const match of (cells[idColumn] ?? '').matchAll(/`(modbench\.[\w.]+)`/g)) {
-      ids.add(present(match[1], 'the backticked Command ID'));
-    }
-  }
-  return ids;
-}
-
-const commandsMarkdown = readFileSync(
-  path.join(__dirname, '..', '..', '..', 'docs', 'architecture', 'commands.md'), 'utf8',
-);
-
-const catalog = catalogCommandIds(commandsMarkdown);
+const catalog = catalogCommandIds(COMMANDS_MARKDOWN);
 
 const OPEN_REFERENCE = 'modbench.record.openReference';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
