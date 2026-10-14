@@ -54,7 +54,7 @@ describe('the MO2 adapter\'s repository', () => {
 
     const answer = await adapter.overriddenGameFiles(join(root, 'Data'), ['Meshes/armor.NIF', 'game.esm', 'Game.esm', 'meshes/none.nif', 'textures/a.dds', 'Meshes']);
 
-    const hash = expect.stringMatching(/^[A-Za-z0-9+/]{11}=$/) as string;
+    const hash: unknown = expect.stringMatching(/^[A-Za-z0-9+/]{11}=$/);
     expect(answer).toEqual({ kind: 'read', answer: [{ path: 'meshes/Armor.nif', size: 4, hash }, { path: 'Game.esm', size: 6, hash }] });
   });
 
