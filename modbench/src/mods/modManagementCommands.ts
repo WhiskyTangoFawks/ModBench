@@ -376,7 +376,7 @@ export function registerSeparatorCommands(
     run: ({ oldName, newName }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
       const result = await commands.renameSeparator(instance.value.activeProfile, oldName, newName);
       if (!result.applied) return { applied: false, refusal: 'Failed to rename separator.', detail: result.refusal };
-      return { applied: true, outcome: { landed: result.wrote ? [newName] : [], refused: [] } };
+      return { applied: true, outcome: { landed: result.wrote ? [result.name] : [], refused: [] } };
     }),
     report: (result) => {
       if (!result.applied) reporter.report('error', result.refusal, result.detail);
@@ -404,7 +404,7 @@ export function registerSeparatorCommands(
     run: ({ name, anchor }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
       const result = await commands.insertSeparator(instance.value.activeProfile, name, anchor);
       return result.applied
-        ? { applied: true, outcome: { landed: [name], refused: [] } }
+        ? { applied: true, outcome: { landed: [result.name], refused: [] } }
         : { applied: false, refusal: 'Failed to add separator.', detail: result.refusal };
     }),
     report: (result) => {

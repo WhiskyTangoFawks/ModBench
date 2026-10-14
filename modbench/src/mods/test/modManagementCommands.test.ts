@@ -1896,7 +1896,7 @@ describe('the separator gestures, called by the agent', () => {
       ['a mod', { kind: 'mod', name: 'Mod A' }],
       ['a separator', group('Group A')],
     ] as const)('adds the separator named beside %s given, never the selection, asking nothing, and answers the outcome', async (_, anchor) => {
-      insertSeparator.mockResolvedValue({ applied: true, wrote: true });
+      insertSeparator.mockResolvedValue({ applied: true, wrote: true, name: 'Written Name' });
       const reporter = recordingReporter();
       const ask = scriptedDialog();
       register(reporter, ask);
@@ -1904,7 +1904,7 @@ describe('the separator gestures, called by the agent', () => {
       const answered = await invoke('modbench.separator.add', new AgentCall([anchor], { name: 'New Section' }));
 
       expect(insertSeparator.mock.calls).toEqual([['Default', 'New Section', anchor]]);
-      expect(answered).toEqual({ applied: true, outcome: { landed: ['New Section'], refused: [] } });
+      expect(answered).toEqual({ applied: true, outcome: { landed: ['Written Name'], refused: [] } });
       expect(reporter.reports).toEqual([]);
       nothingOpened(ask);
     });
@@ -1945,7 +1945,7 @@ describe('the separator gestures, called by the agent', () => {
     const renameCall = (name: string) => new AgentCall([group('Group A')], { name });
 
     it('renames the separator given to the name given, never the selection, asking nothing, and answers the outcome', async () => {
-      renameSeparator.mockResolvedValue({ applied: true, wrote: true });
+      renameSeparator.mockResolvedValue({ applied: true, wrote: true, name: 'Written Name' });
       const reporter = recordingReporter();
       const ask = scriptedDialog();
       register(reporter, ask);
@@ -1953,7 +1953,7 @@ describe('the separator gestures, called by the agent', () => {
       const answered = await invoke('modbench.separator.rename', renameCall('Renamed'));
 
       expect(renameSeparator.mock.calls).toEqual([['Default', 'Group A', 'Renamed']]);
-      expect(answered).toEqual({ applied: true, outcome: { landed: ['Renamed'], refused: [] } });
+      expect(answered).toEqual({ applied: true, outcome: { landed: ['Written Name'], refused: [] } });
       expect(reporter.reports).toEqual([]);
       nothingOpened(ask);
     });
@@ -1969,7 +1969,7 @@ describe('the separator gestures, called by the agent', () => {
     });
 
     it('answers a rename that wrote nothing as nothing landed and nothing refused', async () => {
-      renameSeparator.mockResolvedValue({ applied: true, wrote: false });
+      renameSeparator.mockResolvedValue({ applied: true, wrote: false, name: 'Group A' });
       register();
 
       expect(await invoke('modbench.separator.rename', renameCall('Group A'))).toEqual({ applied: true, outcome: { landed: [], refused: [] } });

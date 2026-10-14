@@ -225,6 +225,11 @@ interface Written {
   readonly wrote: boolean;
 }
 
+interface ModOrderWritten extends Written {
+  /** The changes with their names as written. */
+  readonly landed: readonly ModOrderChange[];
+}
+
 type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
 
 /** A mark on a file of an origin, with the path it has once marked, or why it was refused before
@@ -376,7 +381,7 @@ export interface InstanceAdapter {
   /** Every change lands in one write, its folders with it. Naming an entry not there, or adding a
    *  separator that is, rejects all of it. Adding at the winning end an entry there, or dropping
    *  one not there, changes nothing. */
-  changeModOrder(profile: string, decide: DecideModOrder): Promise<Written>;
+  changeModOrder(profile: string, decide: DecideModOrder): Promise<ModOrderWritten>;
   /** Every change lands in one write. A change naming a plugin that is not there rejects, and
    *  nothing is written. Adding a plugin that is there changes nothing. */
   changePluginOrder(profile: string, decide: DecidePluginOrder): Promise<Written>;

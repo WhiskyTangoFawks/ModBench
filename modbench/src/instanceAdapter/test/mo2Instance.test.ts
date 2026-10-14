@@ -1624,7 +1624,7 @@ describe('the MO2 Instance adapter', () => {
         { kind: 'dropSeparator', separator: 'Radfall - All-In-One Survival Overhaul' },
       ]);
 
-      expect(written).toEqual({ wrote: true });
+      expect(written).toMatchObject({ wrote: true });
       assertOnlyChanged(before, await snapshotTree(root), new Set([DEFAULT_MODLIST]));
       expect(modNames(await source.modOrder('Default'))).toEqual([
         'separator:Orphan:false',
@@ -1674,14 +1674,14 @@ describe('the MO2 Instance adapter', () => {
       const before = await snapshotTree(root);
       const order = modNames(await source.modOrder('Default'));
 
-      expect(await change([{ kind: 'renameMod', from: 'harder vats', to: 'Harder VATS 2' }])).toEqual({ wrote: true });
+      expect(await change([{ kind: 'renameMod', from: 'harder vats', to: 'Harder VATS 2' }])).toMatchObject({ wrote: true });
 
       expect(modNames(await source.modOrder('Default'))).toEqual(order.map((n) => n.replace('mod:Harder VATS:', 'mod:Harder VATS 2:')));
       assertOnlyChanged(before, await snapshotTree(root), new Set([DEFAULT_MODLIST]));
     });
 
     it('writes nothing for a rename of a mod the profile does not list', async () => {
-      expect(await change([{ kind: 'renameMod', from: 'No Such Mod', to: 'Anything' }])).toEqual({ wrote: false });
+      expect(await change([{ kind: 'renameMod', from: 'No Such Mod', to: 'Anything' }])).toMatchObject({ wrote: false });
     });
 
     it('refuses a rename onto a name another listed mod has, in any case', async () => {
@@ -1696,7 +1696,7 @@ describe('the MO2 Instance adapter', () => {
       const before = await text(root, DEFAULT_MODLIST);
       const mtime = (await stat(join(root, DEFAULT_MODLIST))).mtimeMs;
 
-      expect(await change([{ kind: 'enable', mod: 'Tracked Patch Mod', enabled: true }])).toEqual({ wrote: false });
+      expect(await change([{ kind: 'enable', mod: 'Tracked Patch Mod', enabled: true }])).toMatchObject({ wrote: false });
 
       expect(await text(root, DEFAULT_MODLIST)).toBe(before);
       expect((await stat(join(root, DEFAULT_MODLIST))).mtimeMs).toBe(mtime);
@@ -1736,7 +1736,7 @@ describe('the MO2 Instance adapter', () => {
     ])('writes nothing for %s, and says so, the entry already being as the change would leave it, so a gesture that raced mod sync to the same line does not fail', async (_, already) => {
       const before = await text(root, DEFAULT_MODLIST);
 
-      expect(await change([already])).toEqual({ wrote: false });
+      expect(await change([already])).toMatchObject({ wrote: false });
 
       expect(await text(root, DEFAULT_MODLIST)).toBe(before);
     });
@@ -1942,7 +1942,7 @@ describe('the MO2 Instance adapter', () => {
         const before = await text(root, DEFAULT_MODLIST);
 
         expect(await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: ' Unassigned (Modlist Development). ' }]))
-          .toEqual({ wrote: false });
+          .toMatchObject({ wrote: false });
 
         expect(await text(root, DEFAULT_MODLIST)).toBe(before);
       });
