@@ -11,7 +11,7 @@ As a user, I want:
 1. Every agent I run inside VS Code, in Chat or in its own panel, to reach the same things, with only its standard MCP setup, once. Source: VS Code's interaction; ADR-0021
 2. My agent to edit plugin source as files, and to change the mod manager's files only through the gestures I use. A question the files cannot answer, it asks Modbench. Source: Existing tools; Orthogonality
 3. My agent's changes to reach every view as mine do. Source: common, A view, story 2; ADR-0015
-4. To approve my agent's requests to Modbench as I approve any of its tools, in my agent's own way. Modbench adds no approval of its own, and a gesture my agent requests does not confirm: my approval of the request stands in for it. This is an exception to commands.md, Principles, Confirm what destroys. Source: VS Code's interaction; Minimal by default
+4. To approve my agent's requests to Modbench as I approve any of its tools, in my agent's own way. Modbench adds no approval of its own, and a gesture my agent requests does not confirm: my approval of the request stands in for it, because git or the trash keeps what the gesture destroys. A gesture that would destroy what neither keeps refuses my agent's request and lists what it would destroy, until my agent requests it again with the Option that accepts the loss, as git refuses a checkout over my changes until it is forced. This is an exception to commands.md, Principles, Confirm what destroys. Source: VS Code's interaction; Minimal by default; Never silently wrong
 5. Modbench to take one port for my agent, the same in every workspace unless I set another for a workspace, so two windows on two instances each have their own. A window that cannot take its port says so, and names the setting.
 6. My agent to learn Modbench from Modbench: what plugin source holds, how each object is named, and which job is a file edit, which a gesture and which a script. I set up nothing to teach it. Source: Minimal by default
 
@@ -40,7 +40,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. My agent to read my profiles, my mod order, my plugin order, what is enabled, and my downloaded files. Source: toolbox.md; mods.md; plugins.md; downloads.md
+1. My agent to read my profiles, my mod order, my plugin order, what is enabled, my downloaded files, and each mod's status against its manifest. Source: toolbox.md; mods.md; plugins.md; downloads.md; modlist-source.md, Status
 2. My agent to read each file order conflict: which mod wins each file, and which files each mod loses, as the Mods view and the conflict table show me. Source: mods.md, The tree, story 8; mods-conflicts.md
 3. My agent never to switch my profile. The profile is the context I work in.
 4. My agent never to deploy.
