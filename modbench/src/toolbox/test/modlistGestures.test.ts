@@ -16,7 +16,7 @@ vi.mock('vscode', async () => {
   return {
     commands: { registerCommand },
     window: { withProgress: recordedWithProgress },
-    TreeItem: function TreeItem() { /* a row's constructor */ },
+    TreeItem: class { readonly label = ''; },
   };
 });
 
