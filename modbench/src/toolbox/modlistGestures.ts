@@ -39,8 +39,8 @@ function init({ commands, instance, reporter }: ModlistGestureDeps): Promise<voi
   });
 }
 
-// A Mods row stages its mod, and the selection its mods. The palette stages the Mods view's selection while it has the
-// focus. Anything else, Source Control's title bar or a click on the Toolbox's Modlist row, stages every mod.
+// A Mods row stages the selection; the palette, the Mods view's while it has the focus. Source Control's title bar
+// and the Toolbox's Modlist row stage every mod.
 function rowsToStage(deps: ModlistGestureDeps, clicked: unknown, selected: readonly unknown[] | undefined): readonly unknown[] {
   if (clicked === undefined) return deps.focusedView.id() === deps.modsView ? deps.focusedView.selection() : [];
   return modArgumentOf(clicked) === undefined ? [] : gestureEntry(clicked, selected, () => [], isClickedRow).selection;
