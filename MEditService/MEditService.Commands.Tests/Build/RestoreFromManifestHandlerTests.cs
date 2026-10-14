@@ -4,7 +4,6 @@ using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.ModFolderAdapter;
 using MEditService.Ports;
-using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Build;
@@ -23,7 +22,7 @@ public sealed class RestoreFromManifestHandlerTests
 
     private RestoreFromManifestHandler Handler => new(_folders, _notifications);
 
-    private static InstanceToRestore Instance(params OverriddenGameFile[] gameFiles) => new(gameFiles, DataFolder);
+    private static InstanceToRestore Instance(params OverriddenGameFile[] gameFiles) => new(gameFiles, DataFolder, "stat-cache");
 
     private static ModToRestore ModFrom(string folder, params InstallationFile[] installationFiles) =>
         new(folder[(folder.LastIndexOf('/') + 1)..], folder, installationFiles);
@@ -39,7 +38,7 @@ public sealed class RestoreFromManifestHandlerTests
 
     private static ManifestSource SourceOf(InstallationFile file) => new(file.Path[(file.Path.LastIndexOf('/') + 1)..], file.Size, file.Hash);
 
-    private static ManifestFile Line(string path, FileProvider provider) => new(path, null, provider);
+    private static ManifestFile Line(string path, FileProvider provider) => new(path, provider);
 
     private void Manifested(string folder, IReadOnlyList<InstallationFile> installationFiles, params ManifestFile[] files) =>
         _folders.Manifests[folder] = new Manifest([.. installationFiles.Select(SourceOf)], [], files);
@@ -89,6 +88,19 @@ public sealed class RestoreFromManifestHandlerTests
         Assert.Equal(["a.nif"], Assert.Single(result.Landed).Outcome.Written);
         Assert.Equal([(Mod, "a.nif")], WrittenIn(Mod));
         Assert.Equal("a", WrittenText(Mod, "a.nif"));
+    }
+
+    [Fact]
+    public void AModWhoseStatCacheCannotBeWritten_Lands_NamingWhy()
+    {
+        var download = Downloaded("dl/Mod.zip", ("a.nif", "a"));
+        _folders.WithFile(Mod, "a.nif", "a");
+        Manifested(Mod, [download], Line("a.nif", new FileProvider.FirstInstallationFile()));
+        _folders.UnwritableStatCaches.Add(Mod);
+
+        var result = Handler.Restore([ModFrom(Mod, download)], Instance());
+
+        Assert.Equal("stat-cache is read-only", Assert.Single(result.Landed).Outcome.StatCacheNotWritten);
     }
 
     [Fact]
@@ -231,24 +243,6 @@ public sealed class RestoreFromManifestHandlerTests
         var skipped = Assert.Single(Handler.Restore([ModFrom(Mod, download)], Instance(new OverriddenGameFile("Game.esm", 7, "patched"))).Refused);
 
         Assert.Equal($"'Mod' was skipped: {lack}.", skipped.Message);
-    }
-
-    [Fact]
-    public void AFileWhoseStampMatchesItsLine_IsTakenToHoldWhatItsProviderHolds_AndIsNotWritten()
-    {
-        var game = new OverriddenGameFile("Game.esm", 7, "vanilla");
-        var download = Downloaded("dl/Mod.zip", ("A.nif", "a"));
-        _folders.WithFile(Mod, "a.nif", "x", modified: 9).WithFile(Mod, "game.esm", "patched", modified: 9);
-        _folders.Manifests[Mod] = new Manifest(
-            [SourceOf(download)], [new ManifestSource("Game.esm", 7, "vanilla")],
-            [
-                new ManifestFile("a.nif", new FileStamp(1, 9, 0), new FileProvider.FirstInstallationFile()),
-                new ManifestFile("game.esm", new FileStamp(7, 9, 0), new FileProvider.GameFile("Game.esm")),
-            ]);
-
-        var result = Handler.Restore([ModFrom(Mod, download)], Instance(game));
-
-        Assert.Empty(Assert.Single(result.Landed).Outcome.Written);
     }
 
     [Fact]

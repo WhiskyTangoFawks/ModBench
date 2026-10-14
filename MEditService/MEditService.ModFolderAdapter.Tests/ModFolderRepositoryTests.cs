@@ -1,4 +1,4 @@
-using MEditService.RepositoriesLib;
+using System.Text.Json;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
 
@@ -9,10 +9,17 @@ public sealed class ModFolderRepositoryTests : IDisposable
     private const string HashOfHello = "o22fiH2CxyY=";
     private const string HashOfHelloWithACapitalO = "0RePZfC1RR4=";
 
+    private static readonly DateTime LongAgo = new(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
     private readonly ScratchDirectory _root = new("modfolder-adapter-");
+    private readonly ScratchDirectory _statCache = new("stat-cache-");
     private readonly ModFolderRepository _repository = new(new FakeTimeProvider(TimeProvider.System.GetUtcNow().AddDays(1)));
 
-    public void Dispose() => _root.Dispose();
+    public void Dispose()
+    {
+        _root.Dispose();
+        _statCache.Dispose();
+    }
 
     [Fact]
     public void Files_ListsEveryFileByForwardSlashPath_HashedAsWabbajackHashes()
@@ -20,75 +27,107 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Write("readme.txt", "abc");
         Write(Path.Combine("meshes", "deep", "a.nif"), "hello");
 
-        var files = _repository.Files(_root, "mod", new HashSet<string>(), NoHashes).OrderBy(f => f.Path, StringComparer.Ordinal).ToList();
+        var files = _repository.Files(_root, "mod", new HashSet<string>(), statCache: null).Files.OrderBy(f => f.Path, StringComparer.Ordinal).ToList();
 
         Assert.Equal(["meshes/deep/a.nif", "readme.txt"], files.Select(f => f.Path));
         Assert.Equal(HashOfHello, files[0].Hash);
     }
 
     [Fact]
-    public void AFileWhoseSizeAndTimeMatchItsManifestLine_TakesTheHashItsProviderNames()
+    public void AFileWhoseStampMatchesTheLastRead_IsNotOpenedAgain()
     {
-        var stamp = Stamped("a.txt", "hello");
-        _repository.WriteManifest(_root, "mod", Manifest(new ManifestFile("a.txt", stamp, new FileProvider.FirstInstallationFile())));
+        Write("a.txt", "hello");
+        Files();
+        using var held = HeldOpen("a.txt");
 
-        Assert.Equal(HashOfHelloWithACapitalO, OnlyFile(("a.txt", HashOfHelloWithACapitalO)).Hash);
-    }
-
-    [Fact]
-    public void AFileWhoseSizeAndTimeMatchItsManifestLine_WhoseProviderNamesNoHash_IsHashed()
-    {
-        var stamp = Stamped("a.txt", "hello");
-        _repository.WriteManifest(_root, "mod", Manifest(new ManifestFile("a.txt", stamp, new FileProvider.NoProvider())));
-
-        Assert.Equal(HashOfHello, OnlyFile(("b.txt", HashOfHelloWithACapitalO)).Hash);
+        Assert.Equal(HashOfHello, Assert.Single(Files()).Hash);
     }
 
     [Theory]
-    [InlineData(1, 0)]
-    [InlineData(0, 1)]
-    public void AFileWhoseSizeOrTimeDiffersFromItsManifestLine_IsHashed(long sizeApart, long modifiedApart)
-    {
-        var stamp = Stamped("a.txt", "hello");
-        var line = stamp with { Size = stamp.Size + sizeApart, Modified = stamp.Modified + modifiedApart };
-        _repository.WriteManifest(_root, "mod", Manifest(new ManifestFile("a.txt", line, new FileProvider.FirstInstallationFile())));
-
-        Assert.Equal(HashOfHello, OnlyFile(("a.txt", HashOfHelloWithACapitalO)).Hash);
-    }
-
-    [Fact]
-    public void AFileWhoseManifestLineHasNoStamp_IsHashed()
+    [InlineData(0, 0, 0, HashOfHelloWithACapitalO)]
+    [InlineData(1, 0, 0, HashOfHello)]
+    [InlineData(0, 1, 0, HashOfHello)]
+    [InlineData(0, 0, 1, HashOfHello)]
+    public void AFile_TakesTheStatCachesHash_OnlyWhileItsSizeModifiedTimeAndChangeTimeAreAsLastRead(
+        long sizeApart, long modifiedApart, long changedApart, string hash)
     {
         Write("a.txt", "hello");
-        _repository.WriteManifest(_root, "mod", Manifest(new ManifestFile("a.txt", null, new FileProvider.FirstInstallationFile())));
+        Files();
+        var read = StatCacheEntries()["a.txt"];
+        StatCacheSays(new Dictionary<string, CachedEntry>
+        {
+            ["a.txt"] = new(read.Size + sizeApart, read.Modified + modifiedApart, read.Changed + changedApart, HashOfHelloWithACapitalO),
+        });
 
-        Assert.Equal(HashOfHello, OnlyFile(("a.txt", HashOfHelloWithACapitalO)).Hash);
+        Assert.Equal(hash, Assert.Single(Files()).Hash);
     }
 
     [Fact]
-    public void AManifestWithLinesThatAreNotJson_StillLetsEachFileBeHashed()
+    public void AFileChangedAsItWasRead_IsOpenedAgain_BecauseAWriteInTheSameTickLeavesItsStamp()
     {
         Write("a.txt", "hello");
-        Write("mod.manifest", "<<<<<<< HEAD\n{\"path\":\"a.txt\",\"size\":5\n=======\n>>>>>>> theirs\n");
+        new ModFolderRepository(new FakeTimeProvider(File.GetLastWriteTimeUtc(Path.Combine(_root, "a.txt"))))
+            .Files(_root, "mod", new HashSet<string>(), _statCache);
+        using var held = HeldOpen("a.txt");
 
-        Assert.Equal(HashOfHello, OnlyFile(("a.txt", HashOfHelloWithACapitalO)).Hash);
+        Assert.Throws<IOException>(Files);
+    }
+
+    [Theory]
+    [InlineData("<<<<<<< HEAD")]
+    [InlineData("{\"a.txt\":null}")]
+    public void AStatCacheThatCannotBeRead_VouchesForNoFile(string text)
+    {
+        Write("a.txt", "hello");
+        StatCacheSays(text);
+        using var held = HeldOpen("a.txt");
+
+        Assert.Throws<IOException>(Files);
     }
 
     [Fact]
-    public void AFileChangedLongBeforeItWasRead_CarriesItsStamp()
+    public void AStatCacheThatCannotBeWritten_SaysWhy_AndEveryFileIsReadAllTheSame()
     {
-        var stamp = Stamped("a.txt", "hello");
+        Write("a.txt", "hello");
+        var taken = Path.Combine(_statCache, "taken");
+        File.WriteAllText(taken, "a file where the stat cache's folder would be");
 
-        Assert.Equal(stamp, OnlyFile().Stamp);
+        var read = _repository.Files(_root, "mod", new HashSet<string>(), taken);
+
+        Assert.Equal(HashOfHello, Assert.Single(read.Files).Hash);
+        Assert.Contains(taken, read.StatCacheNotWritten, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AFileChangedAsItWasRead_CarriesNoStamp_BecauseAWriteInTheSameTickLeavesItsStamp()
+    public void AModWhoseNameHoldsASlash_KeepsItsStatCacheByItsFolderName()
     {
-        var stamp = Stamped("a.txt", "hello");
-        var readAtTheChange = new ModFolderRepository(new FakeTimeProvider(DateTimeOffset.UnixEpoch.AddTicks(stamp.Changed / 100)));
+        Write("a.txt", "hello");
+        _repository.Files(_root, "Mods/Mod", new HashSet<string>(), _statCache);
+        using var held = HeldOpen("a.txt");
 
-        Assert.Null(Assert.Single(readAtTheChange.Files(_root, "mod", new HashSet<string>(), NoHashes)).Stamp);
+        Assert.Equal(HashOfHello, Assert.Single(_repository.Files(_root, "Mods/Mod", new HashSet<string>(), _statCache).Files).Hash);
+    }
+
+    [Fact]
+    public void AReadThatFindsEveryFileAsLastRead_LeavesTheStatCacheUntouched()
+    {
+        Write("a.txt", "hello");
+        Files();
+        File.SetLastWriteTimeUtc(StatCacheFile, LongAgo);
+
+        Files();
+
+        Assert.Equal(LongAgo, File.GetLastWriteTimeUtc(StatCacheFile));
+    }
+
+    [Fact]
+    public void TheStatCache_IsKeptOutsideTheModFolder()
+    {
+        Write("a.txt", "hello");
+
+        Files();
+
+        Assert.Equal(["a.txt"], Directory.GetFileSystemEntries(_root).Select(Path.GetFileName));
     }
 
     [Fact]
@@ -117,21 +156,20 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Write("meta.ini", "abc");
         Write("mod.manifest", "{}\n");
 
-        Assert.Equal(["a.txt"], _repository.Files(_root, "mod", new HashSet<string> { "meta.ini" }, NoHashes).Select(f => f.Path));
+        Assert.Equal(["a.txt"], _repository.Files(_root, "mod", new HashSet<string> { "meta.ini" }, statCache: null).Files.Select(f => f.Path));
     }
 
     [Fact]
-    public void WriteManifest_WritesOneLinePerSourceAndFile_InPathOrder_AFileLineCarryingNoHash()
+    public void WriteManifest_WritesOneLinePerSourceAndFile_InPathOrder_AFileLineNamingOnlyItsProvider()
     {
-        var stamp = new FileStamp(5, 1234, 99);
         var manifest = new Manifest(
             [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
             [new ManifestSource("Data/Game.esm", 9, "CCCC")],
             [
-                new ManifestFile("z.txt", stamp, new FileProvider.NoProvider()),
-                new ManifestFile("b.nif", stamp, new FileProvider.InstallationFileEntry("Patch.zip", "Data/b.nif")),
-                new ManifestFile("a.nif", stamp, new FileProvider.FirstInstallationFile()),
-                new ManifestFile("c.esm", null, new FileProvider.GameFile("Data/Game.esm")),
+                new ManifestFile("z.txt", new FileProvider.NoProvider()),
+                new ManifestFile("b.nif", new FileProvider.InstallationFileEntry("Patch.zip", "Data/b.nif")),
+                new ManifestFile("a.nif", new FileProvider.FirstInstallationFile()),
+                new ManifestFile("c.esm", new FileProvider.GameFile("Data/Game.esm")),
             ]);
 
         Assert.True(_repository.WriteManifest(_root, "mod", manifest));
@@ -140,31 +178,30 @@ public sealed class ModFolderRepositoryTests : IDisposable
             "{\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"source\":\"nexus:1:2\"}\n"
             + "{\"installationFile\":\"Patch.zip\",\"size\":7,\"hash\":\"BBBB\"}\n"
             + "{\"gameFile\":\"Data/Game.esm\",\"size\":9,\"hash\":\"CCCC\"}\n"
-            + "{\"path\":\"a.nif\",\"size\":5,\"modified\":1234}\n"
-            + "{\"path\":\"b.nif\",\"size\":5,\"modified\":1234,\"from\":{\"installationFile\":\"Patch.zip\",\"path\":\"Data/b.nif\"}}\n"
+            + "{\"path\":\"a.nif\"}\n"
+            + "{\"path\":\"b.nif\",\"from\":{\"installationFile\":\"Patch.zip\",\"path\":\"Data/b.nif\"}}\n"
             + "{\"path\":\"c.esm\",\"from\":{\"gameFile\":\"Data/Game.esm\"}}\n"
-            + "{\"path\":\"z.txt\",\"size\":5,\"modified\":1234,\"from\":null}\n",
+            + "{\"path\":\"z.txt\",\"from\":null}\n",
             File.ReadAllText(Path.Combine(_root, "mod.manifest")));
     }
 
     [Fact]
     public void WriteManifest_OfTheTextAlreadyThere_WritesNothing()
     {
-        var manifest = new Manifest([], [], [new ManifestFile("a.txt", null, new FileProvider.NoProvider())]);
+        var manifest = new Manifest([], [], [new ManifestFile("a.txt", new FileProvider.NoProvider())]);
         _repository.WriteManifest(_root, "mod", manifest);
         var path = Path.Combine(_root, "mod.manifest");
-        var longAgo = new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        File.SetLastWriteTimeUtc(path, longAgo);
+        File.SetLastWriteTimeUtc(path, LongAgo);
 
         Assert.False(_repository.WriteManifest(_root, "mod", manifest));
 
-        Assert.Equal(longAgo, File.GetLastWriteTimeUtc(path));
+        Assert.Equal(LongAgo, File.GetLastWriteTimeUtc(path));
     }
 
     [Fact]
     public void WriteManifest_WritesNoByteOrderMark_AndKeepsANonAsciiNameReadable()
     {
-        var manifest = new Manifest([], [], [new ManifestFile("meshes/café.nif", null, new FileProvider.NoProvider())]);
+        var manifest = new Manifest([], [], [new ManifestFile("meshes/café.nif", new FileProvider.NoProvider())]);
 
         _repository.WriteManifest(_root, "mod", manifest);
 
@@ -174,17 +211,16 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void ReadManifest_ReadsWhatWriteManifestWrote_WithoutTheStampsOnlyFilesTrusts()
+    public void ReadManifest_ReadsWhatWriteManifestWrote()
     {
-        var stamp = new FileStamp(5, 1234, 99);
         var manifest = new Manifest(
             [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
             [new ManifestSource("Data/Game.esm", 9, "CCCC")],
             [
-                new ManifestFile("a.nif", stamp, new FileProvider.FirstInstallationFile()),
-                new ManifestFile("b.nif", stamp, new FileProvider.InstallationFileEntry("Patch.zip", "Data/b.nif")),
-                new ManifestFile("c.esm", null, new FileProvider.GameFile("Data/Game.esm")),
-                new ManifestFile("z.txt", stamp, new FileProvider.NoProvider()),
+                new ManifestFile("a.nif", new FileProvider.FirstInstallationFile()),
+                new ManifestFile("b.nif", new FileProvider.InstallationFileEntry("Patch.zip", "Data/b.nif")),
+                new ManifestFile("c.esm", new FileProvider.GameFile("Data/Game.esm")),
+                new ManifestFile("z.txt", new FileProvider.NoProvider()),
             ]);
         _repository.WriteManifest(_root, "mod", manifest);
 
@@ -193,7 +229,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.NotNull(read);
         Assert.Equal(manifest.InstallationFiles, read.InstallationFiles);
         Assert.Equal(manifest.GameFiles, read.GameFiles);
-        Assert.Equal(manifest.Files.Select(file => file with { Stamp = null }), read.Files);
+        Assert.Equal(manifest.Files, read.Files);
     }
 
     [Fact]
@@ -252,11 +288,12 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void WriteFile_OfTheBytesAlreadyThere_LeavesTheFileUntouched()
     {
-        var stamp = Stamped("mod.ba2", "same");
+        Write("mod.ba2", "same");
+        File.SetLastWriteTimeUtc(Path.Combine(_root, "mod.ba2"), LongAgo);
 
         _repository.WriteFile(_root, "mod.ba2", content => content.Write("same"u8));
 
-        Assert.Equal(stamp, FileStamp.Of(Path.Combine(_root, "mod.ba2")));
+        Assert.Equal(LongAgo, File.GetLastWriteTimeUtc(Path.Combine(_root, "mod.ba2")));
         Assert.Equal(["mod.ba2"], Directory.GetFiles(_root).Select(Path.GetFileName));
     }
 
@@ -317,18 +354,21 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Empty(Directory.GetFileSystemEntries(_root));
     }
 
-    private static Manifest Manifest(params ManifestFile[] files) => new([], [], files);
+    private IReadOnlyList<HashedFile> Files() => _repository.Files(_root, "mod", new HashSet<string>(), _statCache).Files;
 
-    private static readonly Dictionary<string, string> NoHashes = [];
+    private FileStream HeldOpen(string relative) =>
+        new(Path.Combine(_root, relative), FileMode.Open, FileAccess.Read, FileShare.None);
 
-    private HashedFile OnlyFile(params (string Path, string Hash)[] provided) =>
-        Assert.Single(_repository.Files(_root, "mod", new HashSet<string>(), provided.ToDictionary(p => p.Path, p => p.Hash)));
+    private sealed record CachedEntry(long Size, long Modified, long Changed, string Hash);
 
-    private FileStamp Stamped(string relative, string text)
-    {
-        Write(relative, text);
-        return FileStamp.Of(Path.Combine(_root, relative)) ?? throw new InvalidOperationException("The file system gave no stamp.");
-    }
+    private string StatCacheFile => Path.Combine(_statCache, Path.GetFileName(_root.Path));
+
+    private Dictionary<string, CachedEntry> StatCacheEntries() =>
+        JsonSerializer.Deserialize<Dictionary<string, CachedEntry>>(File.ReadAllText(StatCacheFile), JsonSerializerOptions.Web) ?? [];
+
+    private void StatCacheSays(Dictionary<string, CachedEntry> entries) => StatCacheSays(JsonSerializer.Serialize(entries, JsonSerializerOptions.Web));
+
+    private void StatCacheSays(string text) => File.WriteAllText(StatCacheFile, text);
 
     private void Write(string relative, string text)
     {

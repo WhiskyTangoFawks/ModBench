@@ -1,5 +1,4 @@
 using System.Text;
-using MEditService.RepositoriesLib;
 
 namespace MEditService.ModFolderAdapter;
 
@@ -7,20 +6,17 @@ public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepositor
 {
     private const string ManifestExtension = ".manifest";
 
-    public IReadOnlyList<HashedFile> Files(
-        string modFolder, string modName, IReadOnlySet<string> leftOut, IReadOnlyDictionary<string, string> provided)
+    public ModFolderFiles Files(string modFolder, string modName, IReadOnlySet<string> leftOut, string? statCache)
     {
-        var files = new DirectoryInfo(modFolder).EnumerateFiles("*", SearchOption.AllDirectories)
-            .Select(file => (Path: Path.GetRelativePath(modFolder, file.FullName).Replace('\\', '/'), Size: file.Length))
-            .Where(file => file.Path != ManifestName(modName) && !leftOut.Contains(file.Path))
+        var paths = new DirectoryInfo(modFolder).EnumerateFiles("*", SearchOption.AllDirectories)
+            .Select(file => PathIn(modFolder, file.FullName))
+            .Where(path => path != ManifestName(modName) && !leftOut.Contains(path))
             .ToList();
-        var manifest = Path.Combine(modFolder, ManifestName(modName));
-        var lines = File.Exists(manifest) ? ManifestText.LineStamps(File.ReadAllText(manifest, Encoding.UTF8)) : [];
-        return
-        [
-            .. files.Select(file => Hashed(
-                modFolder, file.Path, file.Size, lines.TryGetValue(file.Path, out var line) ? line : null, provided.GetValueOrDefault(file.Path))),
-        ];
+        if (statCache is null) return new([.. paths.Select(path => new HashedFile(path, HashOf(modFolder, path)))], StatCacheNotWritten: null);
+
+        var cache = new StatCache(statCache, modFolder, time);
+        List<HashedFile> files = [.. paths.Select(path => new HashedFile(path, cache.HashOf(path, () => HashOf(modFolder, path))))];
+        return new(files, cache.Write(paths));
     }
 
     public Stream OpenFile(string modFolder, string path) => File.OpenRead(Path.Combine(modFolder, path));
@@ -94,15 +90,10 @@ public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepositor
         return File.Exists(path) ? ManifestText.Parse(File.ReadAllText(path, Encoding.UTF8)) : null;
     }
 
-    private HashedFile Hashed(string modFolder, string path, long size, LineStamp? line, string? provided)
+    private static string HashOf(string modFolder, string path)
     {
-        var stamp = FileStamp.Of(Path.Combine(modFolder, path));
-        if (stamp is { } now && line is { } known && known.Size == now.Size && known.Modified == now.Modified && provided is not null)
-            return new HashedFile(path, size, provided, now);
-
-        var readFrom = time.GetUtcNow();
         using var content = new FileStream(Path.Combine(modFolder, path), FileMode.Open, FileAccess.Read, FileShare.Read);
-        return new HashedFile(path, size, FileHash.Of(content), stamp is { } read && read.SettledAt(readFrom) ? read : null);
+        return FileHash.Of(content);
     }
 
     private static string ManifestName(string modName) => modName + ManifestExtension;

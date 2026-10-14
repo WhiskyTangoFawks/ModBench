@@ -10,7 +10,7 @@ public readonly record struct FileStamp(long Size, long Modified, long Changed)
 {
     /// <summary>Null when the file system cannot answer, and then nothing vouches for a remembered
     /// hash.</summary>
-    public static FileStamp? Of(string path) =>
+    internal static FileStamp? Of(string path) =>
         OperatingSystem.IsWindows() ? WindowsFileStamp.Of(path) : LinuxFileStamp.Of(path);
 
     // A file system stamps a change with a clock coarser than a read is quick, and a network share's
@@ -18,7 +18,7 @@ public readonly record struct FileStamp(long Size, long Modified, long Changed)
     private const int SettledAfterSeconds = 2;
 
     /// <summary>True once the file's last change is old enough that a later write would move the stamp.</summary>
-    public bool SettledAt(DateTimeOffset moment) =>
+    internal bool SettledAt(DateTimeOffset moment) =>
         Changed < (moment.AddSeconds(-SettledAfterSeconds) - DateTimeOffset.UnixEpoch).Ticks * (1_000_000_000 / TimeSpan.TicksPerSecond);
 }
 

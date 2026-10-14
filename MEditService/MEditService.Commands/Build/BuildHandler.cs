@@ -165,7 +165,7 @@ public sealed class BuildHandler
     }
 
     private Dictionary<string, string> HashesIn(ModToBuild mod) =>
-        _modFolders.Files(mod.Folder, mod.Name, new HashSet<string>(), new Dictionary<string, string>()).ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
+        _modFolders.Files(mod.Folder, mod.Name, new HashSet<string>(), statCache: null).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
 
     private bool ChangedOutside(RegisteredPlugin plugin, GameRelease release) =>
         _plugins.Exists(plugin.Path)

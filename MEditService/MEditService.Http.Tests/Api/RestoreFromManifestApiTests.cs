@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Http.Tests.Api;
 
@@ -18,6 +19,8 @@ public sealed class RestoreFromManifestApiTests : HostedTests
     private const string Gesture = "a-gesture";
 
     private readonly ScratchDirectory _instance = new("restore-from-manifest-");
+
+    protected override MEditHost CreateHost() => new(services => services.AddSingleton<TimeProvider>(new ADayAhead()));
 
     protected override void DisposeFixtures() => _instance.Dispose();
 
@@ -58,6 +61,7 @@ public sealed class RestoreFromManifestApiTests : HostedTests
         {
             ["mods"] = new JsonArray(new JsonObject { ["name"] = Mod, ["folder"] = ModFolder, ["installationFiles"] = new JsonArray(installationFile) }),
             ["gameFiles"] = new JsonArray(new JsonObject { ["path"] = "Game.esm", ["size"] = 7, ["hash"] = HashOfVanilla }),
+            ["statCache"] = Path.Combine(_instance, "stat-cache"),
             ["gesture"] = Gesture,
         };
         if (gesture == "restore-from-manifest") request["dataFolder"] = Path.Combine(_instance, "game", "Data");
@@ -72,10 +76,11 @@ public sealed class RestoreFromManifestApiTests : HostedTests
     }
 
     [Fact]
-    public async Task RestoringAModJustUpdated_WritesNoFile()
+    public async Task RestoringAModJustUpdated_OpensNoFileTheUpdateRead_AndWritesNoFile()
     {
         ModInstalledFromADownload();
         await Post("update-manifest");
+        using var held = new FileStream(Path.Combine(ModFolder, "kept.txt"), FileMode.Open, FileAccess.Read, FileShare.None);
 
         var body = await Post("restore-from-manifest");
 
@@ -83,6 +88,22 @@ public sealed class RestoreFromManifestApiTests : HostedTests
         Assert.Equal(Mod, restored.GetProperty("mod").GetString());
         Assert.Empty(restored.GetProperty("written").EnumerateArray());
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task RestoringAModWhoseStatCacheCannotBeWritten_LandsNamingWhy()
+    {
+        ModInstalledFromADownload();
+        await Post("update-manifest");
+        var taken = Path.Combine(_instance, "taken");
+        File.WriteAllText(taken, "a file where the stat cache's folder would be");
+        var request = Request("restore-from-manifest", "Mod.zip");
+        request["statCache"] = taken;
+
+        var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
+
+        var restored = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").EnumerateArray());
+        Assert.Contains(taken, restored.GetProperty("statCacheNotWritten").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -114,6 +135,7 @@ public sealed class RestoreFromManifestApiTests : HostedTests
     [InlineData("mods", "[]")]
     [InlineData("gameFiles", null)]
     [InlineData("dataFolder", null)]
+    [InlineData("statCache", null)]
     public async Task RestoringWithAFieldMissingOrMalformed_Is400(string field, string? json)
     {
         var request = Request("restore-from-manifest", "Mod.zip");

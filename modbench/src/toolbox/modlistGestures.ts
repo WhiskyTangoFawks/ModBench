@@ -126,6 +126,9 @@ function updateMessage(status: UpdateManifestStatus): string {
 
 const counted = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
 
+const statCacheNotWritten = (landed: readonly { mod: string; statCacheNotWritten?: string | null }[]): string[] =>
+  landed.flatMap(({ mod, statCacheNotWritten: why }) => (why ? [`${mod}: the stat cache could not be written: ${why}`] : []));
+
 // modlist-source.md, Update manifest, story 8: one line, the modlist's validation, with each refused mod and each
 // file with no provider in the Output.
 function reportUpdated(reporter: Reporter, outcome: Omit<Extract<UpdateManifestResult, { applied: true }>, 'applied'>): void {
@@ -134,9 +137,10 @@ function reportUpdated(reporter: Reporter, outcome: Omit<Extract<UpdateManifestR
   const unchanged = outcome.landed.length - updated;
   const line = `Update manifest: ${unchanged} mod${unchanged === 1 ? '' : 's'} unchanged, ${updated} updated, `
     + `${outcome.refused.length} refused; ${counted(unprovided.length, 'file has', 'files have')} no provider.`;
-  const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...unprovided, ...outcome.notes].join('\n');
+  const warnings = [...unprovided, ...outcome.notes, ...statCacheNotWritten(outcome.landed)];
+  const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...warnings].join('\n');
   if (outcome.refused.length > 0) reporter.report('error', line, detail);
-  else if (unprovided.length > 0 || outcome.notes.length > 0) reporter.report('warning', line, detail);
+  else if (warnings.length > 0) reporter.report('warning', line, detail);
   else reporter.landed(line);
 }
 
@@ -181,6 +185,14 @@ function restoreMessage(status: RestoreStatus): string {
 }
 
 function reportRestored(reporter: Reporter, total: number, outcome: Omit<Extract<RestoreResult, { applied: true }>, 'applied'>): void {
+  reportLanded(reporter, total, outcome);
+  const unwritten = statCacheNotWritten(outcome.landed);
+  if (unwritten.length > 0) {
+    reporter.report('warning', `Restore from manifest: the stat cache could not be written for ${unwritten.length} mod${unwritten.length === 1 ? '' : 's'}.`, unwritten.join('\n'));
+  }
+}
+
+function reportLanded(reporter: Reporter, total: number, outcome: Omit<Extract<RestoreResult, { applied: true }>, 'applied'>): void {
   if (outcome.refused.length > 0) {
     reporter.selectionOutcome(
       `Could not restore ${outcome.refused.length} of ${total} mods.`, { landed: outcome.landed.map(({ mod }) => mod), refused: outcome.refused }, (mod) => mod);

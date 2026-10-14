@@ -195,7 +195,7 @@ export interface BuildOutcome {
  *  commits itself (ADR-0013). */
 export type UpdateManifestMod = components['schemas']['UpdateManifestModRequest'];
 
-/** The instance's facts every mod's manifest needs: the game files its files override. */
+/** The instance's facts every mod's manifest needs: the game files its files override, and the stat cache's folder. */
 export type UpdateManifestFacts = Omit<components['schemas']['UpdateManifestRequest'], 'mods' | 'gesture'>;
 
 /** Where a modlist gesture is: the gesture it is, the mod it works on, and how many mods it has done of how many. The
@@ -213,6 +213,8 @@ interface UpdatedMod {
   manifestWritten: boolean;
   /** Each file nothing provides, by its path in the mod folder. */
   noProvider: readonly string[];
+  /** Why the stat cache could not keep what the update read. */
+  statCacheNotWritten?: string | null;
 }
 
 /** Update manifest's answer: each mod updated, or refused with its reason. */
@@ -226,13 +228,16 @@ export interface UpdateManifestOutcome {
 /** A mod to restore from its manifest: its folder and its installation files (ADR-0013). */
 export type RestoreMod = components['schemas']['RestoreFromManifestModRequest'];
 
-/** The instance's facts restore from manifest needs: the game files the mods' files override, and the game's data folder. */
+/** The instance's facts restore from manifest needs: the game files the mods' files override, the game's data folder and the
+ *  stat cache's folder. */
 export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestRequest'], 'mods' | 'gesture'>;
 
 interface RestoredMod {
   mod: string;
   /** Each file written to bring the mod back, by its path in the mod folder. */
   written: readonly string[];
+  /** Why the stat cache could not keep what the restore read. */
+  statCacheNotWritten?: string | null;
 }
 
 /** A skipped mod whose only lacks are game files the call did not name, by their paths under the data folder: a call

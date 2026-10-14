@@ -341,6 +341,20 @@ describe('Update manifest', () => {
     }]]);
   });
 
+  it('warns in that line when the stat cache could not be written for a mod, naming why in the Output', async () => {
+    updateManifest.mockResolvedValueOnce({
+      applied: true, notes: [], landed: [{ mod: 'ModA', manifestWritten: true, noProvider: [], statCacheNotWritten: '/i/stat-cache is read-only' }], refused: [],
+    });
+    const { reporter, run } = register();
+
+    await run(UPDATE, modRow('ModA'));
+
+    expect([reporter.landings, reporter.reports]).toEqual([[], [{
+      severity: 'warning', message: 'Update manifest: 0 mods unchanged, 1 updated, 0 refused; 0 files have no provider.',
+      detail: 'ModA: the stat cache could not be written: /i/stat-cache is read-only',
+    }]]);
+  });
+
   it('reports a gesture mEdit refused whole', async () => {
     updateManifest.mockResolvedValueOnce({ applied: false, refusal: 'Could not update the manifest of 2 mods — mEdit is not running.' });
     const { reporter, run } = register();
@@ -419,6 +433,20 @@ describe('Restore from manifest', () => {
     await run(RESTORE);
 
     expect([reporter.landings, reporter.reports]).toEqual([landings, []]);
+  });
+
+  it('warns when the stat cache could not be written for a mod it restored, naming why in the Output', async () => {
+    restoreFromManifest.mockResolvedValueOnce({
+      applied: true, landed: [{ mod: 'ModA', written: ['a.nif'], statCacheNotWritten: '/i/stat-cache is read-only' }], refused: [],
+    });
+    const { reporter, run } = register();
+
+    await run(RESTORE, modRow('ModA'));
+
+    expect([reporter.landings, reporter.reports]).toEqual([['Restored "ModA" from its manifest.'], [{
+      severity: 'warning', message: 'Restore from manifest: the stat cache could not be written for 1 mod.',
+      detail: 'ModA: the stat cache could not be written: /i/stat-cache is read-only',
+    }]]);
   });
 
   it('names each skipped mod with what it lacks, and does not call the mods that landed failed', async () => {

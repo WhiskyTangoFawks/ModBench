@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Http.Tests.Api;
 
@@ -18,6 +19,8 @@ public sealed class UpdateManifestTraceTests : HostedTests
     private const string Gesture = "a-gesture";
 
     private readonly ScratchDirectory _instance = new("trace-update-manifest-");
+
+    protected override MEditHost CreateHost() => new(services => services.AddSingleton<TimeProvider>(new ADayAhead()));
 
     protected override void DisposeFixtures() => _instance.Dispose();
 
@@ -58,6 +61,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
         {
             ["mods"] = new JsonArray(new JsonObject { ["name"] = Mod, ["folder"] = ModFolder, ["installationFiles"] = new JsonArray(installationFile) }),
             ["gameFiles"] = new JsonArray(gameFile),
+            ["statCache"] = Path.Combine(_instance, "stat-cache"),
             ["gesture"] = Gesture,
         };
         return (whole, installationFile, entry, gameFile);
@@ -72,6 +76,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
     [InlineData("installationFile", "entries", null)]
     [InlineData("entry", "hash", "\"WHOLE\"")]
     [InlineData("request", "gameFiles", null)]
+    [InlineData("request", "statCache", null)]
     [InlineData("gameFile", "path", null)]
     [InlineData("gameFile", "size", null)]
     [InlineData("gameFile", "hash", null)]
@@ -123,16 +128,33 @@ public sealed class UpdateManifestTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task UpdatingTheManifestOfAModAgain_AnswersItsManifestNotWritten()
+    public async Task UpdatingTheManifestOfAModAgain_OpensNoFileTheLastUpdateRead_AndAnswersItsManifestNotWritten()
     {
         ModInstalledFromADownload(edited: false);
         (await UpdateManifest("Mod.zip")).EnsureSuccessStatusCode();
+        using var held = new FileStream(Path.Combine(ModFolder, "kept.txt"), FileMode.Open, FileAccess.Read, FileShare.None);
 
         var body = await (await UpdateManifest("Mod.zip")).Content.ReadFromJsonAsync<JsonElement>();
 
         var updated = Assert.Single(body.GetProperty("applied").EnumerateArray());
         Assert.False(updated.GetProperty("manifestWritten").GetBoolean());
         Assert.Empty(updated.GetProperty("noProvider").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task UpdatingTheManifestOfAModWhoseStatCacheCannotBeWritten_LandsNamingWhy()
+    {
+        ModInstalledFromADownload(edited: false);
+        var taken = Path.Combine(_instance, "taken");
+        File.WriteAllText(taken, "a file where the stat cache's folder would be");
+        var request = Request("Mod.zip").Whole;
+        request["statCache"] = taken;
+
+        var response = await Client.PostAsJsonAsync("/update-manifest", request);
+
+        var updated = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").EnumerateArray());
+        Assert.True(updated.GetProperty("manifestWritten").GetBoolean());
+        Assert.Contains(taken, updated.GetProperty("statCacheNotWritten").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]

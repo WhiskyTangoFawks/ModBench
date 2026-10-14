@@ -79,7 +79,7 @@ describe('modlistSourceCommands git init', () => {
 describe('modlistSourceCommands update manifest', () => {
   const UPDATED = { landed: [{ mod: 'ModA', manifestWritten: true, noProvider: [] }], refused: [] };
 
-  it('hands mEdit each mod with its folder, its installation files and the files the repository commits itself, and the game files its files override', async () => {
+  it('hands mEdit each mod with its folder, its installation files and the files the repository commits itself, the game files its files override, and the stat cache\'s folder', async () => {
     const { commands, client } = commandsOver({
       installations: new Map([['ModA', recording([INSTALLED])]]), gameFiles: [VANILLA, { path: 'Other.esm', size: 1, hash: 'O' }],
     }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.ESM')], ModB: [fileIn('/mods/ModB', 'a.nif')] });
@@ -94,7 +94,7 @@ describe('modlistSourceCommands update manifest', () => {
           { name: 'ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], committedFiles: ['meta.ini'] },
           { name: 'ModB', folder: '/mods/ModB', installationFiles: [], committedFiles: ['meta.ini'] },
         ],
-        { gameFiles: [VANILLA] },
+        { gameFiles: [VANILLA], statCache: '/instance/stat-cache' },
         { onProgress: expect.any(Function) as unknown, signal: undefined },
       ],
     }]);
@@ -226,7 +226,7 @@ describe('modlistSourceCommands restore from manifest', () => {
   const RESTORED = { landed: [{ mod: 'ModA', written: ['a.nif'] }], refused: [], notFound: [] };
   const sentNames = (client: InMemoryMEditClient): string[][] => client.calls.map((call) => sentNamesOf(call.args[0]));
 
-  it('hands mEdit each mod with its folder and installation files, and the game files its files override', async () => {
+  it('hands mEdit each mod with its folder and installation files, the game files its files override, and the stat cache\'s folder', async () => {
     const { commands, client } = commandsOver(
       { installations: new Map([['ModA', recording([INSTALLED])]]), gameFiles: [VANILLA] }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.esm')] });
     client.setCommandResult('restoreFromManifest', RESTORED);
@@ -237,7 +237,7 @@ describe('modlistSourceCommands restore from manifest', () => {
       method: 'restoreFromManifest',
       args: [
         [{ name: 'ModA', folder: '/mods/ModA', installationFiles: [INSTALLED] }],
-        { gameFiles: [VANILLA], dataFolder: '/game/Data' },
+        { gameFiles: [VANILLA], dataFolder: '/game/Data', statCache: '/instance/stat-cache' },
         { onProgress: expect.any(Function) as unknown, signal: undefined },
       ],
     }]);

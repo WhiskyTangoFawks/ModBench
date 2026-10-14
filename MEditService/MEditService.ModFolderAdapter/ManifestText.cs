@@ -20,32 +20,7 @@ internal static class ManifestText
         return text.ToString();
     }
 
-    public static Dictionary<string, LineStamp> LineStamps(string text)
-    {
-        Dictionary<string, LineStamp> stamps = new(StringComparer.Ordinal);
-        foreach (var line in text.Split('\n'))
-        {
-            try
-            {
-                using var parsed = JsonDocument.Parse(line);
-                var root = parsed.RootElement;
-                if (root.ValueKind == JsonValueKind.Object
-                    && root.TryGetProperty("path", out var path) && path.GetString() is { } file
-                    && root.TryGetProperty("size", out var size) && size.TryGetInt64(out var bytes)
-                    && root.TryGetProperty("modified", out var modified) && modified.TryGetInt64(out var at))
-                {
-                    stamps[file] = new LineStamp(bytes, at);
-                }
-            }
-            catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException)
-            {
-                // A line that is not one of ours, as a merge conflict leaves, vouches for nothing.
-            }
-        }
-        return stamps;
-    }
-
-    /// <summary>The manifest Of wrote, its files without stamps. Throws <see cref="InvalidDataException"/> naming the
+    /// <summary>The manifest Of wrote. Throws <see cref="InvalidDataException"/> naming the
     /// first line it cannot read.</summary>
     public static Manifest Parse(string text)
     {
@@ -78,7 +53,7 @@ internal static class ManifestText
         root.TryGetProperty("source", out var source) ? Text(source) : null);
 
     private static ManifestFile FileOf(string path, JsonElement root) =>
-        new(path, null, root.TryGetProperty("from", out var from) ? ProviderOf(from) : new FileProvider.FirstInstallationFile());
+        new(path, root.TryGetProperty("from", out var from) ? ProviderOf(from) : new FileProvider.FirstInstallationFile());
 
     private static FileProvider ProviderOf(JsonElement from)
     {
@@ -108,11 +83,6 @@ internal static class ManifestText
     {
         writer.WriteStartObject();
         writer.WriteString("path", file.Path);
-        if (file.Stamp is { } stamp)
-        {
-            writer.WriteNumber("size", stamp.Size);
-            writer.WriteNumber("modified", stamp.Modified);
-        }
         switch (file.Provider)
         {
             case FileProvider.InstallationFileEntry entry:
@@ -133,6 +103,3 @@ internal static class ManifestText
         writer.WriteEndObject();
     }
 }
-
-/// <summary>The size and time a manifest's file line says its file was read at.</summary>
-internal readonly record struct LineStamp(long Size, long Modified);

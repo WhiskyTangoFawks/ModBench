@@ -1679,6 +1679,7 @@ export interface components {
             mods: components["schemas"]["RestoreFromManifestModRequest"][];
             gameFiles: components["schemas"]["OverriddenGameFileRequest"][];
             dataFolder: string;
+            statCache: string;
             gesture?: string | null;
         };
         RestoreFromManifestResponse: {
@@ -1690,6 +1691,7 @@ export interface components {
         RestoredModResponse: {
             mod: string;
             written: string[];
+            statCacheNotWritten?: string | null;
         };
         ScriptCopyRequest: {
             record: components["schemas"]["RecordAddress"];
@@ -1744,6 +1746,7 @@ export interface components {
         UpdateManifestRequest: {
             mods: components["schemas"]["UpdateManifestModRequest"][];
             gameFiles: components["schemas"]["OverriddenGameFileRequest"][];
+            statCache: string;
             gesture?: string | null;
         };
         UpdateManifestResponse: {
@@ -1754,6 +1757,7 @@ export interface components {
             mod: string;
             manifestWritten: boolean;
             noProvider: string[];
+            statCacheNotWritten?: string | null;
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";
