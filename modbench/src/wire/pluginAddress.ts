@@ -2,6 +2,9 @@ import type { components } from './generated/api';
 
 export type PluginAddress = components['schemas']['PluginAddress'];
 
+/** A strings file or archive, with the stamp Mod Management read of it. */
+export type StampedFile = components['schemas']['StampedFile'];
+
 // Ends in `/`, which no folder name holds, so no mod shares it. Equal to mEdit's PluginOrigin.
 export const DATA_DIRECTORY_ORIGIN = 'Data/';
 

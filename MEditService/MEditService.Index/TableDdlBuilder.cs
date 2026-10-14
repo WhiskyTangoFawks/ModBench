@@ -234,6 +234,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 origin        VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 file_path     VARCHAR NOT NULL,
                 content_hash  VARCHAR NOT NULL,
+                strings_read  VARCHAR,
                 PRIMARY KEY (plugin, origin)
             )
             """);

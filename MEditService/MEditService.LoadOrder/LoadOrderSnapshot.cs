@@ -12,21 +12,39 @@ public sealed record RegisteredPlugin(string Name, string Origin, string Path, P
     public PluginAddress Key => new(Name, Origin);
 }
 
+/// <summary>A file at <paramref name="Path"/> with the stamp Mod Management read of it, which changes as its content
+/// does (ADR-0003, ADR-0013).</summary>
+public sealed record StampedFile(string Path, string Stamp)
+{
+    public bool Equals(StampedFile? other) =>
+        other is not null && string.Equals(Path, other.Path, StringComparison.OrdinalIgnoreCase) && string.Equals(Stamp, other.Stamp, StringComparison.Ordinal);
+
+    public override int GetHashCode() => HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(Path), Stamp);
+}
+
+internal static class StampedFiles
+{
+    /// <summary>The stamp handed with the file at <paramref name="path"/>, or null when none is at it.</summary>
+    internal static string? StampIn(this IEnumerable<StampedFile> files, string path) =>
+        files.FirstOrDefault(handed => string.Equals(handed.Path, path, StringComparison.OrdinalIgnoreCase))?.Stamp;
+}
+
 /// <summary>The strings files beside one copy of a plugin, loose, and the archives named for it in its folder,
 /// in the order they are read. Mod Management finds them (ADR-0013).</summary>
-public sealed record PluginStrings(IReadOnlyList<string> Archives, IReadOnlyList<string> StringsFiles)
+public sealed record PluginStrings(IReadOnlyList<StampedFile> Archives, IReadOnlyList<StampedFile> StringsFiles)
 {
     public static readonly PluginStrings None = new([], []);
 
     // Copied, not aliased: a caller keeping its list would otherwise mutate this value.
-    public IReadOnlyList<string> Archives { get; } = [.. Archives];
+    public IReadOnlyList<StampedFile> Archives { get; } = [.. Archives];
 
-    public IReadOnlyList<string> StringsFiles { get; } = [.. StringsFiles];
+    public IReadOnlyList<StampedFile> StringsFiles { get; } = [.. StringsFiles];
+
+    /// <summary>The stamp handed with the file at <paramref name="path"/>, or null when none of these is at it.</summary>
+    public string? StampOf(string path) => Archives.Concat(StringsFiles).StampIn(path);
 
     public bool Equals(PluginStrings? other) =>
-        other is not null
-        && Archives.SequenceEqual(other.Archives, StringComparer.OrdinalIgnoreCase)
-        && StringsFiles.SequenceEqual(other.StringsFiles, StringComparer.OrdinalIgnoreCase);
+        other is not null && Archives.SequenceEqual(other.Archives) && StringsFiles.SequenceEqual(other.StringsFiles);
 
     public override int GetHashCode() => HashCode.Combine(Archives.Count, StringsFiles.Count);
 }
@@ -70,16 +88,16 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 
     /// <summary>The archive files the game loads, in the order it loads them, each at the path that wins
     /// (ADR-0013). A later archive's file replaces an earlier one's.</summary>
-    public IReadOnlyList<string> Archives { get; }
+    public IReadOnlyList<StampedFile> Archives { get; }
 
     /// <summary>The loose strings files the game reads, each at the path that wins (ADR-0013). One beats
     /// every archive's copy.</summary>
-    public IReadOnlyList<string> StringsFiles { get; }
+    public IReadOnlyList<StampedFile> StringsFiles { get; }
 
     public LoadOrderSnapshot(
         string dataFolderPath, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<RegisteredPlugin> plugins,
-        IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine, IReadOnlyList<string> archives,
-        IReadOnlyList<string> stringsFiles)
+        IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine, IReadOnlyList<StampedFile> archives,
+        IReadOnlyList<StampedFile> stringsFiles)
     {
         if (RefusalOf(plugins, active, loadedWithNoLine) is { } refusal) throw new ArgumentException(refusal);
         DataFolderPath = dataFolderPath;
@@ -165,6 +183,10 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         Plugins.FirstOrDefault(p => string.Equals(p.Path, path, StringComparison.Ordinal)) is { } copy
         && (copy.Line is { NamesIt: true } || LoadedWithNoLine.Contains(copy));
 
+    /// <summary>The stamp handed with the game's archive or loose strings file at <paramref name="path"/>, or null when the
+    /// game reads none at it.</summary>
+    public string? StampOf(string path) => Archives.Concat(StringsFiles).StampIn(path);
+
     /// <summary>What provides the plugin, or null for a plugin none registered here names.</summary>
     public PluginProvider? ProviderOf(PluginAddress plugin) => Plugin(plugin)?.Provider;
 
@@ -183,8 +205,8 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         && CaseOnlyCollisions.SequenceEqual(other.CaseOnlyCollisions)
         && Active.SequenceEqual(other.Active)
         && LoadedWithNoLine.SequenceEqual(other.LoadedWithNoLine)
-        && Archives.SequenceEqual(other.Archives, StringComparer.OrdinalIgnoreCase)
-        && StringsFiles.SequenceEqual(other.StringsFiles, StringComparer.OrdinalIgnoreCase);
+        && Archives.SequenceEqual(other.Archives)
+        && StringsFiles.SequenceEqual(other.StringsFiles);
 
     public override bool Equals(object? obj) => Equals(obj as LoadOrderSnapshot);
 

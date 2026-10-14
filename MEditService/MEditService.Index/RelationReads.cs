@@ -389,6 +389,16 @@ internal sealed class RelationReads(
                     reader.GetStringOrNull(2), reader.GetString(3), reader.GetStringOrNull(4), reader.GetString(5))));
     }
 
+    /// <summary>What each plugin's rows took their strings from: a localized plugin read from its binary.</summary>
+    public IReadOnlyDictionary<PluginAddress, string> GetStringsReads()
+    {
+        using var connection = store.OpenReadConnection();
+        var rows = DuckDbSql.Rows(
+            connection, $"SELECT plugin, origin, strings_read FROM {Store.FilesRelation} WHERE strings_read IS NOT NULL",
+            reader => KeyValuePair.Create(DuckDbSql.ReadPluginAddress(reader), reader.GetString(2)));
+        return new Dictionary<PluginAddress, string>(rows, PluginAddress.Comparer);
+    }
+
     /// <summary>What each registered plugin's rows were derived from. A plugin with no rows is absent.</summary>
     public IReadOnlyDictionary<PluginAddress, DerivedFrom> GetDerivations()
     {

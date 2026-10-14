@@ -42,8 +42,8 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     [Fact]
     public async Task PutLoadOrder_TheArchivesAndStringsFilesItNames_AreTheOnesTheLoadOrderHolds()
     {
-        string[] archives = [Path.Combine(_fixture.DataFolder, "Fallout4 - Interface.ba2"), Path.Combine(_fixture.DataFolder, "A - Main.ba2")];
-        string[] stringsFiles = [Path.Combine(_fixture.DataFolder, "Strings", "A_en.STRINGS")];
+        StampedFile[] archives = [new(Path.Combine(_fixture.DataFolder, "Fallout4 - Interface.ba2"), "1/2/3"), new(Path.Combine(_fixture.DataFolder, "A - Main.ba2"), "4/5/6")];
+        StampedFile[] stringsFiles = [new(Path.Combine(_fixture.DataFolder, "Strings", "A_en.STRINGS"), "7/8/9")];
 
         var response = await _client.PutLoadOrderAndAwaitReady(new
         {
@@ -59,7 +59,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var held = loaded.Services.GetRequiredService<LoadOrderHolder>().Require();
-        Assert.Equal([archives, stringsFiles], [held.Archives, held.StringsFiles]);
+        Assert.Equal<IEnumerable<StampedFile>>([archives, stringsFiles], [held.Archives, held.StringsFiles]);
     }
 
     [Fact]
@@ -67,7 +67,9 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     {
         var handed = _fixture.Plugins[0] with
         {
-            NamedStrings = new([Path.Combine(_fixture.DataFolder, "A - Main.ba2")], [Path.Combine(_fixture.DataFolder, "Strings", "A_en.STRINGS")]),
+            NamedStrings = new(
+                [new StampedFile(Path.Combine(_fixture.DataFolder, "A - Main.ba2"), "1/2")],
+                [new StampedFile(Path.Combine(_fixture.DataFolder, "Strings", "A_en.STRINGS"), "3/4")]),
         };
 
         var response = await _client.PutLoadOrderAndAwaitReady(new
@@ -207,6 +209,32 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             gameDirectory = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
             plugins,
+            active = Array.Empty<object>(),
+            loadedWithNoLine = Array.Empty<object>(),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
+            gameRelease = "Fallout4",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutLoadOrder_APluginsStringsFileWithNoStamp_Returns400()
+    {
+        var response = await _client.PutAsJsonAsync("/load-order", new
+        {
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
+            plugins = _fixture.Plugins.Select(p => new
+            {
+                p.Name,
+                p.Path,
+                p.Origin,
+                Provider = new { Kind = "Game" },
+                Archives = Array.Empty<object>(),
+                StringsFiles = new[] { new { Path = Path.Combine(_fixture.DataFolder, "Strings", "A_en.STRINGS") } },
+            }),
             active = Array.Empty<object>(),
             loadedWithNoLine = Array.Empty<object>(),
             archives = Array.Empty<string>(),
