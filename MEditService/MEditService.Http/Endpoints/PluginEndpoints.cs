@@ -150,6 +150,19 @@ internal static class PluginEndpoints
             .ProducesProblem(422)
             .ProducesProblem(503);
 
+        app.MapPost("/plugins/create-in-mod", CreatePluginInMod)
+            .WithName("CreatePluginInMod")
+            .WithTags(Tag)
+            .WithDescription(
+                "Writes an empty plugin into the folder, and the source folder, of a mod the held load " +
+                "order holds a plugin of, named by its origin. Refuses an origin that is no such mod.")
+            .Produces<PluginCreatedResponse>()
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(409)
+            .ProducesProblem(422)
+            .ProducesProblem(503);
+
         app.MapPost("/plugins/decompile", Decompile)
             .WithName("DecompilePlugin")
             .WithTags(Tag)
@@ -263,6 +276,23 @@ internal static class PluginEndpoints
         }
 
         return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin));
+    }
+
+    internal static async Task<IResult> CreatePluginInMod(
+        CreatePluginInModRequest req, CreatePluginHandler create, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("The plugin name and the origin are required.", statusCode: 400);
+
+        var result = await create.CreatePluginIn(req.Origin, req.Name);
+        if (result.Refusal is { } refusal)
+        {
+            EndpointMapping.LogRefusal(logger, "Create plugin in mod", refusal, result.Message, new PluginAddress(req.Name, req.Origin));
+            return EndpointMapping.Refusal(refusal, result.Message);
+        }
+
+        return Results.Ok(new PluginCreatedResponse(req.Name, req.Origin));
     }
 
     // The refusals a malformed request earns, taken before the door so a name that could never be
@@ -383,6 +413,9 @@ internal static class PluginEndpoints
 /// <summary>The origin and the file name are the plugin (ADR-0012); the folder is where
 /// the instance holds that origin's files, and the source folder the mod's repository's, none for Overwrite.</summary>
 internal sealed record CreatePluginRequest(string Origin, string Name, string Folder, string? SourceFolder = null);
+
+/// <summary>The mod that provides the plugin (ADR-0012) and its file name.</summary>
+internal sealed record CreatePluginInModRequest(string Origin, string Name);
 
 /// <summary>The plugins that list the plugin as a master, and those whose masters could not be read.</summary>
 internal sealed record PluginDependantsResponse(IReadOnlyList<PluginAddress> Dependants, IReadOnlyList<PluginAddress> Unreadable);

@@ -11,6 +11,9 @@ public enum PluginCreateRefusal
     LightPluginUnsupported,
     NotAPluginFile,
 
+    /// <summary>The origin is no mod the load order holds a plugin of, so it names no folder to write into.</summary>
+    OriginNotAMod,
+
     /// <summary>The file system refused the write (ADR-0003), and the way out is outside Modbench.</summary>
     WriteFailed,
 

@@ -56,6 +56,13 @@ def copy(plugin, form_key, destination, mode='override', replace=False):
         'mode': mode.capitalize(), 'destination': {'name': into_name, 'origin': into_origin}, 'replace': replace})['formKey']
 
 
+def create_plugin(name, origin):
+    """Writes an empty plugin, with its plugin source in a source mod, into the mod origin, which must hold a plugin
+    already, and returns (name, origin). The plugin joins the load order disabled, once Modbench's watcher sees it."""
+    _call('POST', '/plugins/create-in-mod', {'origin': origin, 'name': name})
+    return name, origin
+
+
 def create(plugin, record_type, container=None, position=None):
     """Writes a new record of a record type, such as npc_, into the plugin's source, in a container such as a cell, at
     a grid position (x, y) for a cell in a worldspace, and returns its FormKey."""

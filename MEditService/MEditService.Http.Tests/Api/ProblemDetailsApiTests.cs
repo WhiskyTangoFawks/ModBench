@@ -96,6 +96,15 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         AssertIsProblemDetails(resp, 409);
     }
 
+    [Fact]
+    public async Task CreatePluginInMod_AnOriginNoModHoldsAPluginOf_ReturnsProblemDetails404()
+    {
+        var resp = await _client.PostAsJsonAsync("/plugins/create-in-mod", new { origin = "NoSuchMod", name = "New.esp" });
+
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+        AssertIsProblemDetails(resp, 404);
+    }
+
     [Theory]
     [InlineData("createPlugin", 503)]
     [InlineData("getFilter", 503)]
@@ -160,6 +169,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [InlineData("decompile")]
     [InlineData("compile")]
     [InlineData("createPlugin")]
+    [InlineData("createPluginInMod")]
     [InlineData("copyRecord")]
     [InlineData("deleteRecordChanges")]
     [InlineData("renameSourceChanges")]
@@ -178,6 +188,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             "compile" => await client.Compile([("New.esp", "NoLoadOrderMod")]),
             "createPlugin" => await client.PostAsJsonAsync(
                 "/plugins/create", new { origin = "NoLoadOrderMod", name = "New.esp", folder = Path.Combine(_fixture.DataFolder, "NoLoadOrderMod") }),
+            "createPluginInMod" => await client.PostAsJsonAsync("/plugins/create-in-mod", new { origin = "NoLoadOrderMod", name = "New.esp" }),
             "copyRecord" => await client.Copy("000800:New.esp", ("New.esp", "NoLoadOrderMod"), "Override", ("Dest.esp", "DestMod")),
             "deleteRecordChanges" => await client.PostAsJsonAsync("/records/delete-changes", new
             {
