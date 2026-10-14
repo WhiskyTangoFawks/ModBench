@@ -640,7 +640,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(moveCommands.map(({ plugins }) => plugins)).toEqual([[{ name: 'A.esp', origin: 'SomeMod' }]]);
   });
 
-  it('a drop of rows the view no longer holds moves nothing, and does not fall back to the selection', async () => {
+  it('a drop of rows the view does not hold moves nothing, and does not fall back to the selection', async () => {
     await drag(['Gone.esp'], 'D.esp');
     expect(moveCommands).toEqual([]);
   });
