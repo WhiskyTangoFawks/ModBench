@@ -96,6 +96,12 @@ describe('the agent server, given an instance value', () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mods', 'list_plugins', 'list_profiles', 'list_references', 'list_source_problems', 'read_record', 'resolve_instance_names', 'resolve_names', 'run_gesture', 'select_rows']);
   });
 
+  it('hands the client its instructions on initialize', async () => {
+    const client = await clientOf(new FakeInstance(VALUE));
+
+    expect(client.getInstructions()).toBeTruthy();
+  });
+
   it('reads the profiles and the active one', async () => {
     const client = await clientOf(new FakeInstance(VALUE));
 
