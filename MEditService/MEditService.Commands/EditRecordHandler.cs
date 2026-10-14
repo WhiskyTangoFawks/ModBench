@@ -22,8 +22,6 @@ public sealed class EditRecordHandler
     {
         var sessions = new WriteSessions(_source, _unsaved.Current);
         var outcome = _changes.Changes(plugin, formKey, envelope, sessions).Outcome;
-        return outcome.Applied && sessions.Write() is { } failure
-            ? WriteFailure.Refusal(failure, $"Could not write the edit of {formKey}", _logger)
-            : outcome;
+        return sessions.Written(outcome, $"Could not write the edit of {formKey}", _logger);
     }
 }

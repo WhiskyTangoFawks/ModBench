@@ -61,6 +61,9 @@ public abstract class TestInstance : IDisposable
     public TestEditor EditHandler => new(Handler<EditRecordChangesHandler>());
     public EditRecordChangesHandler EditChangesHandler => Handler<EditRecordChangesHandler>();
     public EditRecordHandler ScriptEditHandler => Handler<EditRecordHandler>();
+    public CopyRecordHandler ScriptCopyHandler => Handler<CopyRecordHandler>();
+    public CreateRecordHandler ScriptCreateHandler => Handler<CreateRecordHandler>();
+    public DeleteRecordHandler ScriptDeleteHandler => Handler<DeleteRecordHandler>();
     public DeleteRecordChangesHandler DeleteHandler => Handler<DeleteRecordChangesHandler>();
     public CreateRecordChangesHandler CreateHandler => Handler<CreateRecordChangesHandler>();
     public CopyRecordChangesHandler CopyHandler => Handler<CopyRecordChangesHandler>();

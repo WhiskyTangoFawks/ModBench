@@ -29,8 +29,13 @@ public sealed class CopyRecordChangesHandler
 
     /// <summary>Each record's copy into each destination, containers first, answered as the changes it makes over
     /// the unsaved documents mEdit holds, written nowhere. Refuses with <see cref="RecordEditRefusal.NoLoadOrder"/> when none is held.</summary>
-    public async Task<SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges>> CopyRecords(
-        IReadOnlyList<RecordAt> records, CopyMode mode, IReadOnlyList<PluginAddress> destinations, bool replace)
+    public Task<SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges>> CopyRecords(
+        IReadOnlyList<RecordAt> records, CopyMode mode, IReadOnlyList<PluginAddress> destinations, bool replace) =>
+        CopyRecords(records, mode, destinations, replace, new WriteSessions(_source, _unsaved.Current));
+
+    /// <summary>The changes stay in <paramref name="sessions"/>, for a caller that writes them.</summary>
+    internal async Task<SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges>> CopyRecords(
+        IReadOnlyList<RecordAt> records, CopyMode mode, IReadOnlyList<PluginAddress> destinations, bool replace, WriteSessions sessions)
     {
         if (replace && mode == CopyMode.New)
         {
@@ -44,7 +49,6 @@ public sealed class CopyRecordChangesHandler
                 RecordEditRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
         }
 
-        var sessions = new WriteSessions(_source, _unsaved.Current);
         using var sources = new CopySources(_resolution, sessions);
         var containersFirst = records.OrderBy(record => sources.Of(record.Plugin).ContainmentDepth(record.FormKey));
         return await ItemWrite.Over(

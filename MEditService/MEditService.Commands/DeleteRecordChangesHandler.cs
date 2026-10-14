@@ -26,7 +26,12 @@ public sealed class DeleteRecordChangesHandler
 
     /// <summary>Each record's deletion answered as the changes it makes over the held unsaved documents, written
     /// nowhere (ADR-0001). Each item sees the ones before it. No load order held refuses (ADR-0013).</summary>
-    public Task<SelectionResult<RecordAt, RecordEditRefusal, SourceChanges>> DeleteRecords(IReadOnlyList<RecordAt> records)
+    public Task<SelectionResult<RecordAt, RecordEditRefusal, SourceChanges>> DeleteRecords(IReadOnlyList<RecordAt> records) =>
+        DeleteRecords(records, new WriteSessions(_source, _unsaved.Current));
+
+    /// <summary>The changes stay in <paramref name="sessions"/>, for a caller that writes them.</summary>
+    internal Task<SelectionResult<RecordAt, RecordEditRefusal, SourceChanges>> DeleteRecords(
+        IReadOnlyList<RecordAt> records, WriteSessions sessions)
     {
         if (_loadOrder.Held is null)
         {
@@ -34,7 +39,6 @@ public sealed class DeleteRecordChangesHandler
                 RecordEditRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage));
         }
 
-        var sessions = new WriteSessions(_source, _unsaved.Current);
         return ItemWrite.Over(
             _source,
             records, SameRecord.Instance,
