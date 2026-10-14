@@ -321,9 +321,8 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    // Busy, not broken, as at a reconcile; but a read waits on these paths, and the rows they hold were not read, so
-    // they are handed again rather than left to the next snapshot. A timeout reaching here is the index write gate's:
-    // a plugin's own read times out inside its validation.
+    // Busy, not broken: a read waits on these paths, so they are handed again rather than left to the next snapshot.
+    // A timeout reaching here is the write gate's; a plugin's own read times out inside its validation.
     private bool ValidatedUnlessBusy(List<string> paths)
     {
         try
