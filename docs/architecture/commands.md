@@ -135,7 +135,7 @@ What every list view does to whatever it shows, whatever the object. common.md s
 
 ## Modlist
 
-The instance's mods and profiles as git holds them ([modlist-source.md](surfaces/modlist-source.md)). Commit, branch, merge, log, diff and checkout are VS Code's. A checkout changes the manifests and leaves the mod folders as they were, and restore from manifest rebuilds them.
+The instance's mods and profiles as git holds them ([modlist-source.md](surfaces/modlist-source.md)). Commit, branch, merge, log, diff and checkout are VS Code's. A checkout changes the manifests and leaves the mod folders as they were, and restore from manifest restores them.
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|

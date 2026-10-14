@@ -28,8 +28,17 @@ instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
-driving."the confirmation"
 driving -> sourcecommands: "restore from manifest: the mods, or every mod, with the instance value" {class: compile}
+sourcecommands -> client: "what restore destroys: the mods" {class: query}
+client -> http: envelope {class: query}
+http -> modfolderadapter: "what restore destroys: the mods" {class: query}
+modfolder -> modfolderadapter: "each manifest · each mod's files: stamps · the stat cache" {class: query}
+modfolderadapter -> http: "each file that differs · each file no line names" {class: query}
+http -> client: the listing {class: query}
+client -> sourcecommands: the listing {class: query}
+sourcecommands -> driving: "the listing" {class: compile}
+driving."the confirmation, when the listing holds a file"
+driving -> sourcecommands: "confirmed" {class: compile}
 instance -> instanceadapter: "each downloaded file: bytes, when its index is stale" {class: compile}
 instanceadapter -> sourcecommands: "each installation file: hash and entries · each game file a mod file overrides: hash" {class: compile}
 sourcecommands -> client: "restore: each mod's folder and installation files with their hashes and entries, the game folder" {class: compile}

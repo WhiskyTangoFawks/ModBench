@@ -10,7 +10,7 @@ A native tree view, `modbench.modList`, second in the `modbench` container and o
 
 The view's description shows how many mods are enabled out of how many are listed, counting the whole list even while a filter is active, then the filter's term: `12 / 30 · "arm"`. Source: MO2's active-mod counter
 
-The view's badge counts the mods that differ from their manifests ([modlist-source.md](modlist-source.md), Status, story 5).
+The view's badge is the modlist's ([modlist-source.md](modlist-source.md), Status, story 5).
 
 ## The tree
 
@@ -35,10 +35,10 @@ As a user, I want:
 |---|---|---|
 | Label | the mod's name | MO2 |
 | Check box | checked when the mod is enabled | MO2 |
-| Description | the `meta.ini` version, then differs or no manifest ([modlist-source.md](modlist-source.md), Status) | MO2 |
+| Description | the `meta.ini` version, then the mod's status against its manifest ([modlist-source.md](modlist-source.md), Status) | MO2 |
 | Icon | `$(package)`, or `$(repo)` for a source mod | |
 | Indicators | a badge at the right edge, and a colour on the label, for each indicator that holds ([Indicators](#indicators)) | MO2's Conflicts and Flags columns |
-| Tooltip | name, version, Nexus mod ID and installation file, each only when known, and, for a source mod, its source folder and that the folder is built from it | MO2's columns |
+| Tooltip | name, version, Nexus mod ID and installation file, each only when known, and, for a source mod, its source folder and that the folder is built from it, then the files its folder lacks ([modlist-source.md](modlist-source.md), Status, story 4) | MO2's columns |
 | Identity | the row's kind and the mod's name, so selection and expansion survive a change on disk. A mod and a separator can share a name. | |
 
 ### Separator
