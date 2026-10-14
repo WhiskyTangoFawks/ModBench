@@ -115,6 +115,43 @@ internal sealed class WriteJournal(string sourceFolder)
         File.Delete(path);
     }
 
+    /// <summary>Runs <paramref name="steps"/>; one that fails puts back what the steps wrote.</summary>
+    internal void PutBackOnFailure(Action steps)
+    {
+        try
+        {
+            steps();
+        }
+        catch (Exception cause) when (cause is not OutOfMemoryException)
+        {
+            if (Report(cause, UndoSince(0)) is { } report) throw report;
+            throw;
+        }
+    }
+
+    internal void Move(string from, string to)
+    {
+        MoveFileOrFolder(from, to);
+        RecordUndo(() => MoveFileOrFolder(to, from), to);
+    }
+
+    private static void MoveFileOrFolder(string source, string destination)
+    {
+        if (Directory.Exists(source)) Directory.Move(source, destination);
+        else File.Move(source, destination);
+    }
+
+    internal void DeleteTree(string path)
+    {
+        if (!Directory.Exists(path))
+        {
+            Delete(path);
+            return;
+        }
+        foreach (var file in Directory.GetFiles(path, "*", SearchOption.AllDirectories)) Delete(file);
+        DeleteEmptyDirectories(path);
+    }
+
     internal void DeleteIfHolds(string path, byte[] expected)
     {
         if (!SameBytes(Snapshot(path), expected)) throw new IOException($"{path} was changed by another program, so it was not removed.");

@@ -16,4 +16,17 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
             _byFolder[mod.Folder] = session = source.WriteSessionOver(mod, release, unsaved);
         return session;
     }
+
+    /// <summary>Writes the one session that holds changes; a write across folders could not put back a folder it wrote.</summary>
+    internal SourceFailure? Write() =>
+        _byFolder.Values.Where(Changes).ToList() switch
+        {
+            [] => null,
+            [var changed] => changed.Write(),
+            var changed => throw new InvalidOperationException(
+                $"Expected a written gesture to change one folder, not {changed.Count}: nothing puts back a folder already written."),
+        };
+
+    private static bool Changes(IWriteSession session) =>
+        session.Changes is { Moves.Count: > 0 } or { Deletions.Count: > 0 } or { Documents.Count: > 0 };
 }

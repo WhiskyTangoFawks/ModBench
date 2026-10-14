@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -27,12 +28,35 @@ def _resolved(named):
 
 def read(plugin, form_key):
     """The plugin's copy of a record whole, as the document plugin source holds it; plugin is a file name or (name, origin)."""
+    name, origin = _plugin(plugin)
+    document = _call('GET', f'/plugins/{_quoted(name)}/records/{_quoted(form_key)}/rendered-document?origin={_quoted(origin)}')
+    return json.loads(document['text'])
+
+
+_NO_VALUE = object()
+
+
+def edit(plugin, form_key, op, path, value=_NO_VALUE):
+    """Writes set, add, remove or move to the plugin's copy of a record in its plugin source, at a field path spelled
+    as references spells one, such as Conditions[0].ComparisonValue. A value of None clears a member."""
+    name, origin = _plugin(plugin)
+    body = {'plugin': name, 'origin': origin, 'op': op, 'path': _hops(path)}
+    if value is not _NO_VALUE:
+        body['value'] = value
+    _call('POST', f'/records/{_quoted(form_key)}/edit', body)
+
+
+def _plugin(plugin):
     [named] = resolve(plugin)
     if named['plugin'] is None:
         raise MEditError(f'{plugin} is not a plugin.')
-    name, origin = named['plugin'], named['origin']
-    document = _call('GET', f'/plugins/{_quoted(name)}/records/{_quoted(form_key)}/rendered-document?origin={_quoted(origin)}')
-    return json.loads(document['text'])
+    return named['plugin'], named['origin']
+
+
+def _hops(path):
+    return [
+        {'kind': 'member', 'name': member} if member else {'kind': 'index', 'index': int(index)}
+        for member, index in re.findall(r'([^.\[\]]+)|\[(\d+)\]', path)]
 
 
 def references(form_key):
@@ -57,7 +81,8 @@ def _call(method, path, body=None):
         headers={'Content-Type': 'application/json'})
     try:
         with urllib.request.urlopen(request) as response:
-            return json.load(response)
+            answer = response.read()
+        return json.loads(answer) if answer else None
     except urllib.error.HTTPError as refused:
         raise MEditError(json.load(refused).get('detail') or f'mEdit answered {refused.code}.') from None
     except urllib.error.URLError as unreachable:

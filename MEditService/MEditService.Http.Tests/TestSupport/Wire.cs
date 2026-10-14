@@ -166,6 +166,13 @@ internal static class Wire
             $"/records/{Uri.EscapeDataString(formKey)}/edit-changes",
             new { edit = new { plugin, origin, op, path = new[] { new { kind = "member", name = member } }, value } });
 
+    /// <summary>An edit as a script makes one: mEdit writes it.</summary>
+    internal static Task<HttpResponseMessage> ScriptEdit(
+        this HttpClient client, string formKey, string plugin, string origin, string member, object value) =>
+        client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString(formKey)}/edit",
+            new { plugin, origin, op = "set", path = new[] { new { kind = "member", name = member } }, value });
+
     /// <summary>The unsaved documents Modbench hands mEdit, which every changes request after it reads.</summary>
     internal static async Task HandUnsaved(this HttpClient client, params (string Path, string Text)[] unsaved) =>
         (await client.PutAsJsonAsync("/unsaved-documents", new { documents = unsaved.Select(d => new { path = d.Path, text = d.Text }) }))

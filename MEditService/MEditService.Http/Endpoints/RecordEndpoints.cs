@@ -186,6 +186,21 @@ internal static class RecordEndpoints
         .ProducesProblem(422)
         .ProducesProblem(500);
 
+        app.MapPost("/records/{formKey}/edit", (string formKey, RecordEditRequest request, EditRecordHandler edits) =>
+            EditRecord(formKey, request, edits, logger))
+        .WithName("EditRecord")
+        .WithSummary("Writes an edit of a record to plugin source: a script's edit.")
+        .WithDescription(
+            "Writes to the working tree what the same edit's changes answer, an unsaved document read in place of its " +
+            "file. An edit that would write a file held unsaved is refused naming it, and nothing is written.")
+        .WithTags("Records")
+        .Produces(204)
+        .ProducesProblem(400)
+        .ProducesProblem(404)
+        .ProducesProblem(409)
+        .ProducesProblem(422)
+        .ProducesProblem(500);
+
         app.MapPost("/records/delete-changes", (RecordDeleteChangesRequest request, DeleteRecordChangesHandler edits) =>
             DeleteRecordChanges(request, edits, logger))
         .WithName("DeleteRecordChanges")
@@ -237,21 +252,37 @@ internal static class RecordEndpoints
         var spelled = RecordEditEnvelope.Spell(edit?.Path ?? []);
         return EndpointMapping.Execute(
             "EditChanges", logger,
-            logReceived: () =>
-            {
-                if (logger.IsEnabled(LogLevel.Information))
-                {
-                    logger.LogInformation(
-                        "Received EditRecordChanges {Op} {Path} for {FormKey} in {Plugin} ({Origin})",
-                        edit?.Op, spelled, decoded, edit?.Plugin, edit?.Origin);
-                }
-            },
+            logReceived: () => LogEditReceived(logger, "EditRecordChanges", edit, decoded, spelled),
             validate: () => EditRequestProblem(edit),
             execute: () => edits.Changes(
                 new PluginAddress(request.Edit.Plugin, request.Edit.Origin), decoded,
                 new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.EditedValue)),
             outcome: answer => answer.Outcome,
             onApplied: answer => Results.Ok(RecordEditChangesResponse.Of(decoded, spelled, answer)));
+    }
+
+    internal static IResult EditRecord(string formKey, RecordEditRequest request, EditRecordHandler edits, ILogger logger)
+    {
+        var decoded = Uri.UnescapeDataString(formKey);
+        var spelled = RecordEditEnvelope.Spell(request.Path ?? []);
+        return EndpointMapping.Execute(
+            "EditRecord", logger,
+            logReceived: () => LogEditReceived(logger, "EditRecord", request, decoded, spelled),
+            validate: () => EditRequestProblem(request),
+            execute: () => edits.Edit(
+                new PluginAddress(request.Plugin, request.Origin), decoded,
+                new RecordEditEnvelope(request.Op, request.Path ?? [], request.EditedValue)),
+            onApplied: _ => Results.NoContent());
+    }
+
+    private static void LogEditReceived(ILogger logger, string route, RecordEditRequest? edit, string formKey, string spelled)
+    {
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Received {Route} {Op} {Path} for {FormKey} in {Plugin} ({Origin})",
+                route, edit?.Op, spelled, formKey, edit?.Plugin, edit?.Origin);
+        }
     }
 
     private static IResult? EditRequestProblem(RecordEditRequest? request)

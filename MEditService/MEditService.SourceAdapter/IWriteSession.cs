@@ -3,9 +3,13 @@ using MEditService.RepositoriesLib;
 namespace MEditService.SourceAdapter;
 
 /// <summary>Writes to one source folder's plugin source, answered as the changes they make, written nowhere
-/// (ADR-0001).</summary>
+/// (ADR-0001) until <see cref="Write"/>.</summary>
 public interface IWriteSession
 {
+    /// <summary>Makes <see cref="Changes"/> on the disk. A change reaching a file held unsaved refuses the write, naming
+    /// the file, and writes nothing. A write the disk stops part way puts back what it wrote.</summary>
+    SourceFailure? Write();
+
     /// <summary>The repository the session's writes are made through, reading the held unsaved texts in place of
     /// their files, and each change made through the session. Its verbs that write the disk themselves refuse.</summary>
     ISourceRepository Repository { get; }

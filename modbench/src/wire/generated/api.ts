@@ -696,6 +696,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/records/{formKey}/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Writes an edit of a record to plugin source: a script's edit.
+         * @description Writes to the working tree what the same edit's changes answer, an unsaved document read in place of its file. An edit that would write a file held unsaved is refused naming it, and nothing is written.
+         */
+        post: operations["EditRecord"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/records/delete-changes": {
         parameters: {
             query?: never;
@@ -1507,7 +1527,7 @@ export interface components {
             newFormKey?: string | null;
         };
         /** @enum {string} */
-        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginSourceUnreadable" | "PluginHasNoModFolder" | "PluginNotInLoadOrder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "ContainerCannotHoldType" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "HeldInAnotherRecordNotYetSupported" | "SourceUnitNotFound" | "SourceAccessFailed" | "AmbiguousSourceUnit" | "FormIdOutsideFlagLimit" | "PartialFormFieldReadOnly" | "CannotBePartialForm" | "SyntheticMemberIndirectWrite" | "PersistentOnDeletedRecord" | "PersistentMoveDestinationUnknown" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "ChildSlotHeldByAnotherRecord" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "AlphaNotHeld" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable" | "NoLoadOrder";
+        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginSourceUnreadable" | "PluginHasNoModFolder" | "PluginNotInLoadOrder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "ContainerCannotHoldType" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "HeldInAnotherRecordNotYetSupported" | "SourceUnitNotFound" | "SourceAccessFailed" | "UnsavedChanges" | "AmbiguousSourceUnit" | "FormIdOutsideFlagLimit" | "PartialFormFieldReadOnly" | "CannotBePartialForm" | "SyntheticMemberIndirectWrite" | "PersistentOnDeletedRecord" | "PersistentMoveDestinationUnknown" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "ChildSlotHeldByAnotherRecord" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "AlphaNotHeld" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable" | "NoLoadOrder";
         RecordEditRequest: {
             plugin: string;
             origin: string;
@@ -3533,6 +3553,75 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RecordEditChangesResponse"];
                 };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    EditRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordEditRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Bad Request */
             400: {

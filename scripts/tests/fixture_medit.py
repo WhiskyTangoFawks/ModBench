@@ -1,3 +1,4 @@
+import collections
 import contextlib
 import json
 import pathlib
@@ -25,6 +26,8 @@ REQUEST_TIMEOUT_S = 10
 STOP_GRACE_S = 5
 POLL_S = 0.1
 
+Fixture = collections.namedtuple('Fixture', 'url instance')
+
 
 @contextlib.contextmanager
 def fixture_medit():
@@ -45,7 +48,7 @@ def fixture_medit():
             try:
                 await_health(process, url, output)
                 hand_load_order(url, snapshot(instance, game))
-                yield url
+                yield Fixture(url, instance)
             finally:
                 stop(process)
 
@@ -93,7 +96,7 @@ def snapshot(instance, game):
         folder = instance / 'mods' / mod
         plugins.append({
             'name': name, 'path': str(folder / name), 'origin': mod,
-            'provider': {'kind': 'Mod', 'mod': mod, 'folder': str(folder), 'sourceFolder': str(instance / 'source' / mod)},
+            'provider': {'kind': 'Mod', 'mod': mod, 'folder': str(folder), 'sourceFolder': str(source_folder(instance, mod))},
             'line': line, 'lineNamesIt': True, 'archives': [], 'stringsFiles': [],
         })
     return {
@@ -106,6 +109,15 @@ def snapshot(instance, game):
         'instanceRoot': str(instance),
         'gameRelease': 'Fallout4',
     }
+
+
+def source_folder(instance, mod):
+    return instance / 'source' / mod
+
+
+def track(fixture, mod):
+    call('POST', fixture.url + '/init', {'mods': [
+        {'name': mod, 'sourceFolder': str(source_folder(fixture.instance, mod)), 'installationFiles': [], 'modManagerFiles': []}]})
 
 
 def hand_load_order(url, body):
@@ -130,4 +142,5 @@ def call(method, url, body=None, timeout=REQUEST_TIMEOUT_S):
         url, method=method, data=None if body is None else json.dumps(body).encode(),
         headers={'Content-Type': 'application/json'})
     with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.load(response)
+        answer = response.read()
+    return json.loads(answer) if answer else None

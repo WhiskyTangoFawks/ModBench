@@ -34,13 +34,17 @@ public sealed class EditRecordChangesHandler
 
     /// <summary>Over the unsaved documents mEdit holds, which stand in for their files.</summary>
     public RecordEditChanges Changes(PluginAddress plugin, string formKey, RecordEditEnvelope envelope) =>
-        WriteFailure.Refused(
-            EditSource(plugin, formKey, envelope), refused => refused, $"Could not read the source of {formKey}", _logger);
+        Changes(plugin, formKey, envelope, new WriteSessions(_source, _unsaved.Current));
 
-    private Answer<RecordEditChanges, SourceFailure> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
+    /// <summary>The changes stay in <paramref name="sessions"/>, for a caller that writes them.</summary>
+    internal RecordEditChanges Changes(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, WriteSessions sessions) =>
+        WriteFailure.Refused(
+            EditSource(plugin, formKey, envelope, sessions), refused => refused, $"Could not read the source of {formKey}", _logger);
+
+    private Answer<RecordEditChanges, SourceFailure> EditSource(
+        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, WriteSessions sessions)
     {
         if (ItemWrite.RefuseWithoutGit(_source) is { } gitMissing) return gitMissing;
-        var sessions = new WriteSessions(_source, _unsaved.Current);
         if (_targets.ResolveEditTarget(plugin, formKey, sessions, out var target) is { } blocked) return blocked;
         return Edit(plugin, formKey, envelope, target, sessions)
             .Then(outcome => SourceAnswer.Of(new RecordEditChanges(outcome, target.Session.Changes)));
