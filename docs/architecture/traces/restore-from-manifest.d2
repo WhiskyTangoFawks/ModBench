@@ -1,7 +1,7 @@
-# Discard changes, orange: each mod's folder back to its manifest; a source mod with a remote rebuilt from its source at the commit.
+# Restore from manifest, orange: each mod's folder made what its manifest says; a source mod with a remote rebuilt from its source at the commit.
 ...@../styles
 shape: sequence_diagram
-driving: "Toolbox · Mods · Source Control" {class: driving}
+driving: "Mods · Source Control · Toolbox" {class: driving}
 sourcecommands: @../target-architecture.modbench_core.sourcecommands
 sourcecommands.label: source commands
 instance: @../target-architecture.modbench_data.instance
@@ -13,7 +13,7 @@ http.label: HTTP endpoints
 engine: @../target-architecture.medit_core.commands.engine
 engine.label: Build engine
 modfolder: @../target-architecture.medit_data.modfolder
-modfolder.label: "Mod folders\nfiles · manifests · the build folder"
+modfolder.label: "Mod folders\nfiles · manifests · the stat cache"
 modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
 modfolderadapter.label: Mod folder adapter
 source: @../target-architecture.medit_data.source
@@ -29,13 +29,13 @@ instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
 driving."the confirmation"
-driving -> sourcecommands: "discard changes: the mods, or every mod, with the instance value" {class: compile}
+driving -> sourcecommands: "restore from manifest: the mods, or every mod, with the instance value" {class: compile}
 instance -> instanceadapter: "each downloaded file: bytes, when its index is stale" {class: compile}
 instanceadapter -> sourcecommands: "each installation file: hash and entries · each game file a mod file overrides: hash" {class: compile}
-sourcecommands -> client: "discard: each mod's folder and installation files with their hashes and entries, the game folder" {class: compile}
+sourcecommands -> client: "restore: each mod's folder and installation files with their hashes and entries, the game folder" {class: compile}
 client -> http: envelope {class: compile}
 http -> engine: envelope {class: compile}
-modfolder -> modfolderadapter: "each manifest · installation files, deltas, game files: bytes" {class: compile}
+modfolder -> modfolderadapter: "each manifest · installation files, game files: bytes" {class: compile}
 modfolderadapter -> engine: "manifests and bytes" {class: compile}
 
 tracked: "a source mod with a remote" {
@@ -46,13 +46,15 @@ tracked: "a source mod with a remote" {
   engine."build-mod at the manifest's commit; skipped and named when the source is at another commit"
 }
 
-engine."per mod: every file whose bytes differ is written; untracked files stay; a mod that lacks anything is skipped"
+engine."per mod: every file whose bytes differ is written; a mod that lacks anything is skipped"
 engine -> port: "progress, per mod" {class: push}
 engine -> modfolderadapter: "each file whose bytes differ" {class: compile}
-modfolderadapter -> modfolder: "the files" {class: compile}
-engine -> http: "landed or skipped, per mod, with what it lacks" {class: compile}
-http -> client: "landed or skipped, per mod" {class: compile}
+modfolderadapter -> modfolder: "the files · the stat cache" {class: compile}
+engine -> http: "landed or skipped, per mod, with what it lacks · each file no line names" {class: compile}
+http -> client: "landed or skipped, per mod · each file no line names" {class: compile}
 client -> sourcecommands: the outcome {class: compile}
+sourcecommands -> instanceadapter: "each file no line names, to the trash" {class: compile}
+instanceadapter -> instance: "the trash" {class: compile}
 sourcecommands -> driving: "the outcome" {class: compile}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}

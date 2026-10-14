@@ -8,7 +8,7 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Traces;
 
-public sealed class DiscardChangesTraceTests : HostedTests
+public sealed class RestoreFromManifestTraceTests : HostedTests
 {
     private const string Mod = "DiscardedMod";
     private const string HashOfKept = "gO3vE0ddOto=";

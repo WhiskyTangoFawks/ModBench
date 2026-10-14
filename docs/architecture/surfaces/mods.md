@@ -1,6 +1,6 @@
 # Mods
 
-The Mods surface shows the active profile's mod order: its mods, grouped by separators, and the Overwrite folder. Each mod and Overwrite opens into its files, and each file shows whether the game gets it. Its template is MO2's mod list ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../../out-of-scope/mo2.md) says why. Its gestures are in [commands.md](../commands.md) under Mod and Separator, and `stage`, `discard changes` and `clean` under Modlist. What every view shares is in [common.md](common.md). [mods-conflicts.md](mods-conflicts.md) holds the conflict table, which opens from a mod's row in an editor tab.
+The Mods surface shows the active profile's mod order: its mods, grouped by separators, and the Overwrite folder. Each mod and Overwrite opens into its files, and each file shows whether the game gets it. Its template is MO2's mod list ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../../out-of-scope/mo2.md) says why. Its gestures are in [commands.md](../commands.md) under Mod and Separator. What every view shares is in [common.md](common.md). [mods-conflicts.md](mods-conflicts.md) holds the conflict table, which opens from a mod's row in an editor tab.
 
 Each story cites its source. A story with no source is owned here.
 
@@ -9,6 +9,8 @@ Each story cites its source. A story with no source is owned here.
 A native tree view, `modbench.modList`, second in the `modbench` container and open by default (commands.md, Where surfaces live). Separators hold the mods they group, and a mod or Overwrite holds its files, so it has Collapse All (Chrome).
 
 The view's description shows how many mods are enabled out of how many are listed, counting the whole list even while a filter is active, then the filter's term: `12 / 30 · "arm"`. Source: MO2's active-mod counter
+
+The view's badge counts the mods that differ from their manifests ([modlist-source.md](modlist-source.md), Status, story 5).
 
 ## The tree
 
@@ -33,10 +35,9 @@ As a user, I want:
 |---|---|---|
 | Label | the mod's name | MO2 |
 | Check box | checked when the mod is enabled | MO2 |
-| Description | the `meta.ini` version, then stale when the mod is stale ([modlist-source.md](modlist-source.md), Status) | MO2 |
+| Description | the `meta.ini` version, then differs or no manifest ([modlist-source.md](modlist-source.md), Status) | MO2 |
 | Icon | `$(package)`, or `$(repo)` for a source mod | |
 | Indicators | a badge at the right edge, and a colour on the label, for each indicator that holds ([Indicators](#indicators)) | MO2's Conflicts and Flags columns |
-| Badge | git's `M`, `U` and `D` in git's colours, while the instance has a repository, and the word stale in the description | [modlist-source.md](modlist-source.md), Status |
 | Tooltip | name, version, Nexus mod ID and installation file, each only when known, and, for a source mod, its source folder and that the folder is built from it | MO2's columns |
 | Identity | the row's kind and the mod's name, so selection and expansion survive a change on disk. A mod and a separator can share a name. | |
 
@@ -66,6 +67,7 @@ Overwrite is always a row, even when it holds nothing. It is not a mod: it has n
 | Label | the file's or folder's name | VS Code's Explorer |
 | Icon | the file icon theme's icon | VS Code's Explorer |
 | Colour | greyed when the game does not get the file (The tree, story 8) | |
+| Description | differs ([modlist-source.md](modlist-source.md), Status) | |
 | Tooltip | the path in its mod | |
 | Identity | the mod or Overwrite, and the path in it | |
 
@@ -89,7 +91,7 @@ A source mod's folder is its build's output ([ADR-0007](../../adr/0007-plugin-ed
 1. Its row to open into the folder's files as any mod's, since they are what the game gets. The source is in the Explorer and Source Control, and `open source` shows it. Source: catalog `open source`
 2. Rename and exclude or include to write the build configuration and the folder together, so the folder already equals the next build's output: rename changes the output folder's name (Rename mod, story 3), and exclude or include its exclusions, which build writes as `.mohidden`. Source: ADR-0007
 3. No gesture that changes content the build makes. A record edit goes to plugin source, a plugin created lands in it, and decompile reads the folder into it. Source: ADR-0006; ADR-0007
-4. A file I change in the folder to show as modified, and build to overwrite it and name it. A lock on the folder is mine to add with VS Code's `files.readonlyInclude`. Source: modlist-source.md, Status; VS Code's interaction
+4. A file I change in the folder to show as differing from the manifest, and build to overwrite it and name it. A lock on the folder is mine to add with VS Code's `files.readonlyInclude`. Source: modlist-source.md, Status; VS Code's interaction
 5. Uninstall to send the folder and the source to the trash, and the confirmation to say so. Source: Confirm what destroys
 
 ## Order and view state
@@ -112,9 +114,9 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 
 | Where | Items, in order |
 |---|---|
-| Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod. Collapse All last. |
-| Mod menu | open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add separator · create empty mod · install… · decompile and commit (a mod with no source that holds a plugin) · build (a source mod) · stage · discard changes… · clean… (the instance has a repository) · copy value · uninstall |
-| Separator menu | move… · add separator · rename… · copy value · delete |
+| Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod · update manifest · restore from manifest…, on every mod (the instance has a repository). Collapse All last. |
+| Mod menu | open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add separator · create empty mod · install… · decompile and commit (a mod with no source that holds a plugin) · build (a source mod) · update manifest · restore from manifest… (the instance has a repository) · copy value · uninstall |
+| Separator menu | move… · add separator · rename… · update manifest · restore from manifest… (the instance has a repository) · copy value · delete |
 | Overwrite menu | open folder |
 | File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · copy value |
 | Folder menu | open folder · copy value |
@@ -180,7 +182,7 @@ As a user, I want:
 
 1. Build to write the mod folder from the source, without asking: the base is what the installation files provide, the source's assets override it, each plugin compiles from its plugin source, and the manifest is written last. A source plugin's source is the truth, and build makes the folder from it. Source: catalog `build`; ADR-0006; ADR-0007
 2. The build configuration in the source to name the output folder and, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
-3. A file in the folder the build did not make left where it is and shown as untracked. Clean removes it. Source: ADR-0023
+3. A file in the folder the build did not make left where it is, and the mod shown as differing from its manifest. Restore from manifest removes it. Source: ADR-0022
 4. A build whose configuration names an output folder that is not this mod's folder refused, naming both, so a folder renamed outside Modbench is never overwritten. Source: ADR-0003
 5. Build to save the mod's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugins are built from what I see. A file VS Code does not save refuses build, naming it. Source: VS Code's save before run; ADR-0001; Never silently wrong
 6. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.

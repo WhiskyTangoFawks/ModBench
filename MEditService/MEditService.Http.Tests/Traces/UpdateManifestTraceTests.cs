@@ -8,7 +8,7 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Traces;
 
-public sealed class StageModlistTraceTests : HostedTests
+public sealed class UpdateManifestTraceTests : HostedTests
 {
     private const string Mod = "StagedMod";
     private const string HashOfKept = "gO3vE0ddOto=";
