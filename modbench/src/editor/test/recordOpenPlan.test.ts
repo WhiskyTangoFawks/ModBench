@@ -17,7 +17,7 @@ describe('recordOpenPlan', () => {
       .toEqual({ addresses: [A], pinned: true });
   });
 
-  it('records that each ask pinned open pinned, each record on its own', () => {
+  it('records that each ask pinned open pinned, as one grid', () => {
     expect(recordOpenPlan([{ ...ofRecord(A), pinned: true }, { ...ofRecord(B), pinned: true }], []))
       .toEqual({ addresses: [A, B], pinned: true });
   });

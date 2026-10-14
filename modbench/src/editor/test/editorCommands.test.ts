@@ -9,7 +9,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 beforeEach(forgetRegistrations);
 
 describe('modbench.record.open from the palette, with no Argument', () => {
-  const open = (argument?: unknown) => commandHandlers.get('modbench.record.open')?.(argument);
+  const open = () => commandHandlers.get('modbench.record.open')?.();
   const winner = { name: 'A.esp', origin: 'ModA' };
   const rowOf = (formKey: string) => ({ argument: { kind: 'record', plugin: winner, formKey } });
   const renderingTheWinner = (): { meditClient: InMemoryMEditClient } => {
@@ -28,15 +28,6 @@ describe('modbench.record.open from the palette, with no Argument', () => {
       'vscode.openWith', '/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', 'modbench.record',
       { viewColumn: -1, preview: true },
     ]]);
-  });
-
-  it('opens a record given as pinned in the active group, not as a preview', async () => {
-    await register(renderingTheWinner());
-
-    await open({ argument: { kind: 'record', formKey: '000801:A.esp' }, pinned: true });
-
-    expect(executed().filter(([id]) => id === 'vscode.openWith').map(([, , , options]) => options))
-      .toEqual([{ viewColumn: -1, preview: false }]);
   });
 
   it('asks for a record when the focused view has none selected, and opens the one picked as a preview', async () => {
@@ -113,6 +104,15 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     expect(executed().map(([id, uri, ...rest]) => [id, String(uri), ...rest])).toEqual([
       ['vscode.openWith', `file://${FILE}`, 'modbench.record', { viewColumn: -1, preview: true }],
     ]);
+  });
+
+  it('opens a record given as pinned in the active group, not as a preview', async () => {
+    await registerAnswering(rendered('Gun.json'));
+
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin }, pinned: true });
+
+    expect(executed().filter(([id]) => id === 'vscode.openWith').map(([, , , options]) => options))
+      .toEqual([{ viewColumn: -1, preview: false }]);
   });
 
   it('opens an untracked copy, which has no file, as the document mEdit renders it as, in the record grid', async () => {

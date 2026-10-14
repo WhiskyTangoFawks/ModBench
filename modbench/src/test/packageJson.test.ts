@@ -1154,7 +1154,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
 });
 
 describe('package.json open', () => {
-  it('reads Open to the Side', () => {
+  it('reads Open', () => {
     expect(pkg.contributes.commands.find((c) => c.command === OPEN_PINNED)?.title).toBe('Open');
   });
 });

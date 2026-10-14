@@ -1297,7 +1297,7 @@ describe('what a record tab\'s webview posts', () => {
 });
 
 describe('a click on a column\'s header', () => {
-  it('opens the records it names through the open command, with no flag', async () => {
+  it('opens the records it names through the open command, as a preview', async () => {
     const gun = { formKey: '000801:A.esp', plugin: COPY_PLUGIN };
     const { openDocument } = makeEditor();
     const tab = await openDocument(renderedUri(gun.formKey, 'Gun.json'));
