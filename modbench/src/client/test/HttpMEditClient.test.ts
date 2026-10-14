@@ -1045,8 +1045,7 @@ describe('HttpMEditClient — a modlist gesture the user cancels', () => {
     await client.stop();
   });
 
-  // The answer waits on any cancel the gesture sent, so a cancel sent on another gesture's progress lands before it.
-  it.each(gestures)('%s sends no cancel on another gesture\'s progress', async (_name, ...gesture) => {
+  it.each(gestures)('%s sends no cancel on another gesture\'s progress: none lands before its answer, which waits on any cancel it sent', async (_name, ...gesture) => {
     const { client, seen, outcome } = await cancelled(gesture, noContent, { ownProgress: false });
 
     expect([seen.cancelPath, outcome]).toMatchObject([undefined, { landed: [{ mod: 'ModA' }] }]);
