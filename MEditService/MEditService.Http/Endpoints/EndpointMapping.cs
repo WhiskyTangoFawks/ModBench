@@ -281,4 +281,23 @@ internal static class EndpointMapping
         LogRefusal(logger, gesture, result.Refusal, result.Message);
         return Refusal(result);
     }
+
+    internal static async Task<IResult> ExecuteWriting(
+        string gesture, ILogger logger,
+        Action? logReceived,
+        Func<IResult?> validate,
+        Func<Task<RecordEditResult>> execute,
+        Func<RecordEditResult, IResult> onApplied)
+    {
+        logReceived?.Invoke();
+
+        if (validate() is { } validationFailure)
+            return validationFailure;
+
+        var result = await execute();
+        if (result.Applied) return onApplied(result);
+
+        LogRefusal(logger, gesture, result.Refusal, result.Message);
+        return Refusal(result);
+    }
 }

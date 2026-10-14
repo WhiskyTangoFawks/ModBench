@@ -46,6 +46,32 @@ def edit(plugin, form_key, op, path, value=_NO_VALUE):
     _call('POST', f'/records/{_quoted(form_key)}/edit', body)
 
 
+def copy(plugin, form_key, destination, mode='override', replace=False):
+    """Writes a copy of the plugin's record into the destination plugin's source, as an override or as new, and returns
+    the FormKey the copy holds there. Replace lets an override copy over the record the destination holds."""
+    name, origin = _plugin(plugin)
+    into_name, into_origin = _plugin(destination)
+    return _call('POST', '/records/copy', {
+        'record': {'formKey': form_key, 'plugin': name, 'origin': origin},
+        'mode': mode.capitalize(), 'destination': {'name': into_name, 'origin': into_origin}, 'replace': replace})['formKey']
+
+
+def create(plugin, record_type, container=None, position=None):
+    """Writes a new record of a record type, such as npc_, into the plugin's source, in a container such as a cell, at
+    a grid position (x, y) for a cell in a worldspace, and returns its FormKey."""
+    name, origin = _plugin(plugin)
+    body = {'origin': origin, 'recordType': record_type, 'container': container}
+    if position is not None:
+        body['position'] = {'x': position[0], 'y': position[1]}
+    return _call('POST', f'/plugins/{_quoted(name)}/create-record', body)['formKey']
+
+
+def delete(plugin, form_key):
+    """Deletes the plugin's copy of a record from its plugin source."""
+    name, origin = _plugin(plugin)
+    _call('POST', '/records/delete', {'formKey': form_key, 'plugin': name, 'origin': origin})
+
+
 def _plugin(plugin):
     [named] = resolve(plugin)
     if named['plugin'] is None:

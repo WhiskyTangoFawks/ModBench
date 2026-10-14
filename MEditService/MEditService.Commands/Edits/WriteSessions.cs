@@ -1,5 +1,6 @@
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
@@ -26,6 +27,11 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
             var changed => throw new InvalidOperationException(
                 $"Expected a written gesture to change one folder, not {changed.Count}: nothing puts back a folder already written."),
         };
+
+    /// <summary>The <paramref name="outcome"/> of a gesture whose changes are in these sessions, once they are written; an
+    /// outcome that changed nothing is not written.</summary>
+    internal RecordEditResult Written(RecordEditResult outcome, string doing, ILogger logger) =>
+        outcome.Applied && Write() is { } failure ? WriteFailure.Refusal(failure, doing, logger) : outcome;
 
     private static bool Changes(IWriteSession session) =>
         session.Changes is { Moves.Count: > 0 } or { Deletions.Count: > 0 } or { Documents.Count: > 0 };

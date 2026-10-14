@@ -41,8 +41,13 @@ public sealed class CreateRecordChangesHandler
     /// files. The outcome carries the new FormKey.</summary>
     public RecordEditChanges CreateRecord(
         PluginAddress plugin, string recordType, string? container = null, GridPosition? position = null) =>
+        CreateRecord(plugin, recordType, container, position, new WriteSessions(_source, _unsaved.Current));
+
+    /// <summary>The changes stay in <paramref name="sessions"/>, for a caller that writes them.</summary>
+    internal RecordEditChanges CreateRecord(
+        PluginAddress plugin, string recordType, string? container, GridPosition? position, WriteSessions sessions) =>
         WriteFailure.Refused(
-            MintRecord(plugin, recordType, container, position), refused => refused,
+            MintRecord(plugin, recordType, container, position, sessions), refused => refused,
             $"Could not read the source to create the new {recordType}", _logger);
 
     private static RecordEditResult MalformedPosition(string why) =>
@@ -50,11 +55,11 @@ public sealed class CreateRecordChangesHandler
 
     private static string AsInteriorCell(string bareCell) => PlacedCell.MarkedInterior(Document.Parse(bareCell)).Text;
 
-    private Answer<RecordEditChanges, SourceFailure> MintRecord(PluginAddress plugin, string recordType, string? container, GridPosition? position)
+    private Answer<RecordEditChanges, SourceFailure> MintRecord(
+        PluginAddress plugin, string recordType, string? container, GridPosition? position, WriteSessions sessions)
     {
         if (ItemWrite.RefuseWithoutGit(_source) is { } gitMissing) return gitMissing;
         if (_targets.RefuseUnlessEditable(plugin) is { } blocked) return blocked;
-        var sessions = new WriteSessions(_source, _unsaved.Current);
         var session = _targets.SessionOf(plugin, sessions);
         var repository = session.Repository;
 

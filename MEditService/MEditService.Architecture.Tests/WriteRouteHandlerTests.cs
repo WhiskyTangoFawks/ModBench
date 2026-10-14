@@ -13,6 +13,9 @@ public sealed class WriteRouteHandlerTests
     [
         ("POST", "/records/{formKey}/edit-changes", typeof(EditRecordChangesHandler)),
         ("POST", "/records/{formKey}/edit", typeof(EditRecordHandler)),
+        ("POST", "/records/copy", typeof(CopyRecordHandler)),
+        ("POST", "/records/delete", typeof(DeleteRecordHandler)),
+        ("POST", "/plugins/{plugin}/create-record", typeof(CreateRecordHandler)),
         ("POST", "/records/delete-changes", typeof(DeleteRecordChangesHandler)),
         ("POST", "/records/copy-changes", typeof(CopyRecordChangesHandler)),
         ("POST", "/plugins/create", typeof(CreatePluginHandler)),

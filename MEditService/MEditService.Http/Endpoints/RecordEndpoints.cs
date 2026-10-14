@@ -201,6 +201,37 @@ internal static class RecordEndpoints
         .ProducesProblem(422)
         .ProducesProblem(500);
 
+        app.MapPost("/records/copy", (ScriptCopyRequest request, CopyRecordHandler copies) =>
+            CopyRecord(request, copies, logger))
+        .WithName("CopyRecord")
+        .WithSummary("Writes a copy of a record into a destination plugin's source: a script's copy.")
+        .WithDescription(
+            "Writes to the working tree what the same copy's changes answer, an unsaved document read in place of its " +
+            "file. Answers the FormKey the copy holds in the destination. A copy that would write a file held unsaved " +
+            "is refused naming it, and nothing is written.")
+        .WithTags("Records")
+        .Produces<RecordWrittenResponse>()
+        .ProducesProblem(400)
+        .ProducesProblem(404)
+        .ProducesProblem(409)
+        .ProducesProblem(422)
+        .ProducesProblem(500);
+
+        app.MapPost("/records/delete", (RecordAddress request, DeleteRecordHandler deletes) =>
+            DeleteRecord(request, deletes, logger))
+        .WithName("DeleteRecord")
+        .WithSummary("Deletes a record from plugin source: a script's delete.")
+        .WithDescription(
+            "Writes to the working tree what the same deletion's changes answer, an unsaved document read in place of its " +
+            "file. A deletion that would write a file held unsaved is refused naming it, and nothing is written.")
+        .WithTags("Records")
+        .Produces(204)
+        .ProducesProblem(400)
+        .ProducesProblem(404)
+        .ProducesProblem(409)
+        .ProducesProblem(422)
+        .ProducesProblem(500);
+
         app.MapPost("/records/delete-changes", (RecordDeleteChangesRequest request, DeleteRecordChangesHandler edits) =>
             DeleteRecordChanges(request, edits, logger))
         .WithName("DeleteRecordChanges")
@@ -274,6 +305,36 @@ internal static class RecordEndpoints
                 new RecordEditEnvelope(request.Op, request.Path ?? [], request.EditedValue)),
             onApplied: _ => Results.NoContent());
     }
+
+    internal static Task<IResult> CopyRecord(ScriptCopyRequest request, CopyRecordHandler copies, ILogger logger)
+    {
+        return EndpointMapping.ExecuteWriting(
+            "CopyRecord", logger,
+            logReceived: null,
+            validate: () => AddressProblem(request.Record) ?? (
+                string.IsNullOrWhiteSpace(request.Destination.Name) || string.IsNullOrWhiteSpace(request.Destination.Origin)
+                    ? Results.Problem("Every destination needs a name and an origin.", statusCode: 400)
+                    : null),
+            execute: () => copies.Copy(AtRecord(request.Record), request.Mode, request.Destination, request.Replace),
+            onApplied: result => Results.Ok(new RecordWrittenResponse(EndpointMapping.RequireNewFormKey(result))));
+    }
+
+    internal static Task<IResult> DeleteRecord(RecordAddress request, DeleteRecordHandler deletes, ILogger logger)
+    {
+        return EndpointMapping.ExecuteWriting(
+            "DeleteRecord", logger,
+            logReceived: null,
+            validate: () => AddressProblem(request),
+            execute: () => deletes.Delete(AtRecord(request)),
+            onApplied: _ => Results.NoContent());
+    }
+
+    private static IResult? AddressProblem(RecordAddress? record) =>
+        string.IsNullOrWhiteSpace(record?.FormKey) || string.IsNullOrWhiteSpace(record.Plugin) || string.IsNullOrWhiteSpace(record.Origin)
+            ? Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400)
+            : null;
+
+    private static RecordAt AtRecord(RecordAddress record) => new(new PluginAddress(record.Plugin, record.Origin), record.FormKey);
 
     private static void LogEditReceived(ILogger logger, string route, RecordEditRequest? edit, string formKey, string spelled)
     {

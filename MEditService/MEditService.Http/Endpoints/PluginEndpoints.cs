@@ -216,7 +216,36 @@ internal static class PluginEndpoints
             .ProducesProblem(422)
             .ProducesProblem(500);
 
+        app.MapPost("/plugins/{plugin}/create-record", CreateRecord)
+            .WithName("CreateRecord")
+            .WithSummary("Writes a new record to plugin source: a script's create.")
+            .WithDescription(
+                "Writes to the working tree what the same creation's changes answer, an unsaved document read in place " +
+                "of its file. Answers the new FormKey. A creation that would write a file held unsaved is refused " +
+                "naming it, and nothing is written.")
+            .WithTags(Tag)
+            .Produces<RecordWrittenResponse>()
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(409)
+            .ProducesProblem(422)
+            .ProducesProblem(500);
+
         return app;
+    }
+
+    internal static Task<IResult> CreateRecord(
+        string plugin, RecordCreateChangesRequest req, CreateRecordHandler creates, ILoggerFactory loggerFactory)
+    {
+        if (!EndpointMapping.PluginAt(plugin, req.Origin, out var address, out var refused)) return Task.FromResult(refused);
+        return EndpointMapping.ExecuteWriting(
+            "CreateRecord", loggerFactory.CreateLogger(nameof(PluginEndpoints)),
+            logReceived: null,
+            validate: () => string.IsNullOrWhiteSpace(req.RecordType)
+                ? Results.Problem("A record type is required.", statusCode: 400)
+                : null,
+            execute: () => Task.FromResult(creates.Create(address, req.RecordType, req.Container, req.Position)),
+            onApplied: result => Results.Ok(new RecordWrittenResponse(EndpointMapping.RequireNewFormKey(result))));
     }
 
     internal static async Task<IResult> CreatePlugin(

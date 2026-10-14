@@ -47,6 +47,17 @@ internal static class ItemWrite
         return SelectionResult<TItem, TRefusal, TOutcome>.PerItem(landed, refused);
     }
 
+    /// <summary>What a selection of one item came to.</summary>
+    internal static RecordEditResult OfOne<TItem, TOutcome>(
+        SelectionResult<TItem, RecordEditRefusal, TOutcome> selection, Func<TOutcome, RecordEditResult> landed) =>
+        selection switch
+        {
+            { SelectionRefusal: { } whole } => RecordEditResult.Refused(whole.Refusal, whole.Message),
+            { Refused: [var refused] } => RecordEditResult.Refused(refused.Refusal, refused.Message),
+            { Landed: [var one] } => landed(one.Outcome),
+            _ => throw new InvalidOperationException("Expected a selection of one item to land or be refused."),
+        };
+
     /// <summary>The refusal of a single write that needs git when git is missing, before any write.</summary>
     internal static RecordEditResult? RefuseWithoutGit(ISourceAdapter source) =>
         source.WhyGitCannotRun() is { } gitMissing

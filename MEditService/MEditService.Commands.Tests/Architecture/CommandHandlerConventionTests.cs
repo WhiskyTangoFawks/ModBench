@@ -10,6 +10,9 @@ public sealed class CommandHandlerConventionTests
     [
         typeof(CreateRecordChangesHandler),
         typeof(EditRecordHandler),
+        typeof(CopyRecordHandler),
+        typeof(CreateRecordHandler),
+        typeof(DeleteRecordHandler),
         typeof(CreatePluginHandler),
         typeof(PutLoadOrderHandler),
         typeof(RenameSourceChangesHandler),
