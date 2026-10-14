@@ -73,8 +73,12 @@ function register<Shape extends z.ZodRawShape>(
 
 const NO_INPUT = {};
 
+const INSTRUCTIONS = `Name objects as Modbench's views do: a plugin by its file name, a mod or a separator by its name, a record by its EditorID or FormKey, a downloaded file by its file name, an archive or a folder outside the downloads by its path, a file in a mod by its path in the mod. A name that means more than one thing is refused with each match listed as you can name it; name the one you mean that way.
+
+A plugin with source is a text file in a repository: edit it with your file tools, and the user reviews the change in Source Control. A plugin with no source is a binary: never edit it. Mod manager files change only through run_gesture. Ask Modbench what the files cannot answer.`;
+
 function mcpServerOf({ instance, mEdit, log }: AgentServerOptions): McpServer {
-  const server = new McpServer({ name: 'modbench', version: '0' });
+  const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
   for (const read of INSTANCE_READS) register(server, log, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance)));
   register(server, log, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), args));
   register(server, log, RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
