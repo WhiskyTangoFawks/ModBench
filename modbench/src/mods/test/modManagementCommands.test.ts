@@ -1551,3 +1551,214 @@ describe('open source: a source mod\'s source folder', () => {
     expect(revealed()).toEqual([]);
   });
 });
+
+describe('the mod gestures, called by the agent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks(); progressSteps.length = 0;
+    renameModNameRefusal.mockReset(); newModNameRefusal.mockReset();
+  });
+
+  const instance = {
+    ...instanceThatReads,
+    value: instanceValueFixture({
+      activeProfile: 'Default',
+      profiles: ['Default', 'Secondary'],
+      mods: [
+        { kind: 'mod', name: 'Mod A', enabled: true, archiveFilename: 'mod-a.7z' },
+        { kind: 'mod', name: 'Mod B', enabled: true },
+        { kind: 'separator', name: 'Group', enabled: true },
+      ],
+    }),
+  };
+  const selected = new ModNode({ kind: 'mod', name: 'Selected Mod', enabled: true });
+  const ofMods = (...names: string[]) => new AgentCall(names.map((name) => ({ kind: 'mod' as const, name })), {});
+  const nothingOpened = () => {
+    expect(showInputBox).not.toHaveBeenCalled();
+    expect(createQuickPick).not.toHaveBeenCalled();
+  };
+
+  describe('modbench.mod.move', () => {
+    const group = { kind: 'separator', name: 'Group' } as const;
+    const moveCall = (place: typeof group | { kind: 'mod'; name: string }) =>
+      new AgentCall([{ kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod B' }], { place, end: 'winning' });
+    const view = { selection: () => [selected], direction: () => 'losingAtTop' as const };
+
+    it('moves the mods given to the place given, never the selection, opening no pick, and answers the outcome', async () => {
+      const outcome = { applied: true, outcome: { landed: ['Mod A', 'Mod B'], refused: [] } };
+      moveMods.mockResolvedValue(outcome);
+      const reporter = recordingReporter();
+      registerModMoveCommand(commands, instance, view, reporter);
+
+      const answered = await invoke('modbench.mod.move', moveCall(group));
+
+      expect(moveMods).toHaveBeenCalledWith('Default', ['Mod A', 'Mod B'], group, 'winning');
+      expect(answered).toEqual(outcome);
+      expect(reporter.reports).toEqual([]);
+      nothingOpened();
+    });
+
+    it('lands nothing for a place that is one of the mods moving, as a drop on a row being dragged does', async () => {
+      registerModMoveCommand(commands, instance, view, recordingReporter());
+
+      const answered = await invoke('modbench.mod.move', moveCall({ kind: 'mod', name: 'Mod B' }));
+
+      expect(moveMods).not.toHaveBeenCalled();
+      expect(answered).toEqual({ applied: true, outcome: { landed: [], refused: [
+        { item: 'Mod A', reason: 'The target is "Mod B", which is moving.' }, { item: 'Mod B', reason: 'The target is "Mod B", which is moving.' },
+      ] } });
+    });
+
+    it('refuses an Argument that is not a mod, writing nothing', async () => {
+      registerModMoveCommand(commands, instance, view, recordingReporter());
+
+      await expect(invoke('modbench.mod.move', new AgentCall([{ kind: 'plugin', plugin: { name: 'A.esp', origin: 'Mod B' } }], { place: group, end: 'winning' }))).rejects.toBeInstanceOf(Refusal);
+
+      expect(moveMods).not.toHaveBeenCalled();
+    });
+
+    it('answers a refusal of the whole move with its detail, reporting nothing', async () => {
+      moveMods.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
+      const reporter = recordingReporter();
+      registerModMoveCommand(commands, instance, view, reporter);
+
+      const answered = await invoke('modbench.mod.move', moveCall(group));
+
+      expect(answered).toEqual({ applied: false, refusal: 'Failed to move mods.', detail: 'ENOENT: modlist.txt' });
+      expect(reporter.reports).toEqual([]);
+    });
+  });
+
+  describe('modbench.mod.rename', () => {
+    const renameCall = (name: string) => new AgentCall([{ kind: 'mod', name: 'Mod A' }], { name });
+    const register = (reporter = recordingReporter()) =>
+      registerModContextCommands({ commands, instance, viewSelection: () => [selected], reporter, ask: scriptedDialog(), trash: vi.fn(), log: vi.fn() });
+
+    it('renames the mod given to the name given, never the selection, asking nothing, and answers the outcome', async () => {
+      renameMod.mockResolvedValue({ applied: true, lineRefusals: [] });
+      const reporter = recordingReporter();
+      register(reporter);
+
+      const answered = await invoke('modbench.mod.rename', renameCall('Renamed'));
+
+      expect(renameMod).toHaveBeenCalledWith('Default', ['Default', 'Secondary'], 'Mod A', 'Renamed', undefined);
+      expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Renamed', lineRefusals: [] }], refused: [] } });
+      expect(reporter.reports).toEqual([]);
+      nothingOpened();
+    });
+
+    it.each([
+      ['an empty name', '', undefined, 'A mod name cannot be empty.'],
+      ['a name the command refuses', 'Mod B', 'A mod with this name already exists', 'A mod with this name already exists'],
+    ])('refuses %s as a Refusal, renaming nothing', async (_, name, commandRefusal, text) => {
+      renameModNameRefusal.mockReturnValueOnce(commandRefusal);
+      register();
+
+      await expect(invoke('modbench.mod.rename', renameCall(name))).rejects.toEqual(new Refusal(text));
+
+      expect(renameMod).not.toHaveBeenCalled();
+    });
+
+    it('asks the command for the refusal with the mod\'s own name, so its own name is no clash', async () => {
+      renameMod.mockResolvedValue({ applied: true, lineRefusals: [] });
+      register();
+
+      await invoke('modbench.mod.rename', renameCall('Renamed'));
+
+      expect(renameModNameRefusal).toHaveBeenCalledWith(instance.value, 'Renamed', 'Mod A');
+    });
+
+    it('refuses an Argument of more than one mod', async () => {
+      register();
+
+      await expect(invoke('modbench.mod.rename', new AgentCall([{ kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod B' }], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
+
+      expect(renameMod).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('modbench.mod.uninstall', () => {
+    it('uninstalls the mods given, never the selection, with the download each was installed from, confirming nothing', async () => {
+      const outcome = { applied: true, outcome: { landed: [{ name: 'Mod A' }, { name: 'Mod B' }], refused: [] } };
+      uninstallMods.mockResolvedValue(outcome);
+      const ask = scriptedDialog();
+      const trash = vi.fn();
+      registerModContextCommands({ commands, instance, viewSelection: () => [selected], reporter: recordingReporter(), ask, trash, log: vi.fn() });
+
+      const answered = await invoke('modbench.mod.uninstall', ofMods('Mod A', 'Mod B'));
+
+      expect(uninstallMods).toHaveBeenCalledWith(
+        'Default', instance.value.mods, [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }, { name: 'Mod B', archiveFilename: undefined }], trash);
+      expect(answered).toEqual(outcome);
+      expect(ask.asked).toEqual([]);
+    });
+  });
+
+  describe('modbench.mod.createEmpty', () => {
+    const createCall = (name: string) => new AgentCall([], { name });
+
+    it('creates the mod named, prompting for nothing, and answers the outcome', async () => {
+      createEmptyMod.mockResolvedValue({ applied: true, wrote: true });
+      const reporter = recordingReporter();
+      registerCreateEmptyModCommand(commands, instance, reporter);
+
+      const answered = await invoke('modbench.mod.createEmpty', createCall('New Mod'));
+
+      expect(createEmptyMod).toHaveBeenCalledWith('Default', 'New Mod');
+      expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'New Mod', lineRefusal: undefined }], refused: [] } });
+      expect(reporter.reports).toEqual([]);
+      nothingOpened();
+    });
+
+    it.each([
+      ['a blank name', '  ', undefined, 'A mod name cannot be empty.'],
+      ['a name a folder holds', 'Mod A', '"Mod A" already exists', '"Mod A" already exists'],
+    ])('refuses %s as a Refusal, creating nothing', async (_, name, commandRefusal, text) => {
+      newModNameRefusal.mockReturnValueOnce(commandRefusal);
+      registerCreateEmptyModCommand(commands, instance, recordingReporter());
+
+      await expect(invoke('modbench.mod.createEmpty', createCall(name))).rejects.toEqual(new Refusal(text));
+
+      expect(createEmptyMod).not.toHaveBeenCalled();
+    });
+
+    it('answers a failed create with its detail, reporting nothing', async () => {
+      createEmptyMod.mockResolvedValue({ applied: false, refusal: 'disk full' });
+      const reporter = recordingReporter();
+      registerCreateEmptyModCommand(commands, instance, reporter);
+
+      const answered = await invoke('modbench.mod.createEmpty', createCall('New Mod'));
+
+      expect(answered).toEqual({ applied: false, refusal: 'Failed to create "New Mod".', detail: 'disk full' });
+      expect(reporter.reports).toEqual([]);
+    });
+  });
+
+  describe.each([
+    ['modbench.mod.excludeFile', 'Excluded'],
+    ['modbench.mod.includeFile', 'Included'],
+  ])('%s', (command, mark) => {
+    const origin = { kind: 'mod', name: 'Mod A' } as const;
+    const inSelection = new FileNode(selected, origin, { relativePath: 'sel.dds', path: '/p/sel.dds', sourcePath: '/p/sel.dds', excluded: false, excludedByName: false }, 'sel.dds');
+
+    it('marks the files given, never the selection, and answers the outcome', async () => {
+      const outcome = { applied: true, outcome: { landed: [{ origin, relativePath: 'a.dds' }], refused: [] } };
+      markFiles.mockResolvedValue(outcome);
+      const reporter = recordingReporter();
+      registerFileExclusionCommands(commands, instance, () => [inSelection], reporter);
+
+      const answered = await invoke(command, new AgentCall([{ kind: 'file', origin, relativePath: 'a.dds' }], {}));
+
+      expect(markFiles).toHaveBeenCalledWith([{ origin, relativePath: 'a.dds' }], mark, instance.value.paths.sourceDirs);
+      expect(answered).toEqual(outcome);
+      expect(reporter.reports).toEqual([]);
+    });
+
+    it('refuses an Argument that is not a file, writing nothing', async () => {
+      registerFileExclusionCommands(commands, instance, () => [], recordingReporter());
+
+      await expect(invoke(command, ofMods('Mod A'))).rejects.toBeInstanceOf(Refusal);
+
+      expect(markFiles).not.toHaveBeenCalled();
+    });
+  });
+});

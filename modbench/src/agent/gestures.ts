@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { linesNamed, modsNamed, pluginsNamed } from './names';
+import { filesNamed, linesNamed, modsNamed, pluginsNamed } from './names';
 import { Refusal } from '../drivingLib/refusal';
 import { parseOrRefuse } from './refusal';
 
@@ -18,13 +18,49 @@ function gestureInput<Given>(takes: string, input: z.ZodType<Given>, callOf: (va
 
 const MOD_NAME = z.object({ name: z.string(), kind: z.enum(['mod', 'separator']).optional() });
 
+const modsCall = (value: InstanceValue, argument: readonly z.infer<typeof MOD_NAME>[]) => modsNamed(value.mods, argument).map((entry) => {
+  if (entry.kind !== 'mod') throw new Refusal(`"${entry.name}" is a separator, not a mod.`);
+  return { kind: 'mod' as const, name: entry.name };
+});
+
+const MODS_TAKES = 'argument: the mods, each { name, kind? } as list_mods names it';
+
 const MODS = gestureInput(
-  'argument: the mods, each { name, kind? } as list_mods names it',
+  MODS_TAKES,
   z.object({ argument: z.array(MOD_NAME) }),
-  (value, { argument }) => new AgentCall(modsNamed(value.mods, argument).map((entry) => {
-    if (entry.kind !== 'mod') throw new Refusal(`"${entry.name}" is a separator, not a mod.`);
-    return { kind: 'mod', name: entry.name };
-  }), {}),
+  (value, { argument }) => new AgentCall(modsCall(value, argument), {}),
+);
+
+const MOVE_PLACE = z.union([
+  z.object({ kind: z.enum(['ungrouped', 'modOrder']) }),
+  z.object({ kind: z.enum(['separator', 'mod']), name: z.string() }),
+]);
+
+const MOVE_MODS = gestureInput(
+  `${MODS_TAKES}; options: { place: { kind: 'ungrouped' | 'modOrder' } or { kind: 'separator' | 'mod', name: the one it lands in or beside }, end: 'winning' | 'losing' }`,
+  z.object({ argument: z.array(MOD_NAME), options: z.object({ place: MOVE_PLACE, end: z.enum(['winning', 'losing']) }) }),
+  (value, { argument, options }) => new AgentCall(modsCall(value, argument), options),
+);
+
+const NAME_OPTION = z.object({ options: z.object({ name: z.string() }) });
+
+const RENAME_MOD = gestureInput(
+  'argument: the mod, { name } as list_mods names it; options: { name: its new name }',
+  NAME_OPTION.extend({ argument: z.array(MOD_NAME) }),
+  (value, { argument, options }) => new AgentCall(modsCall(value, argument), options),
+);
+
+const CREATE_EMPTY_MOD = gestureInput(
+  'options: { name: the new mod\'s name }',
+  NAME_OPTION,
+  (_value, { options }) => new AgentCall([], options),
+);
+
+const FILES = gestureInput(
+  'argument: the files, each { mod: { name, kind? } as list_mods names it, path: its path in the mod }',
+  z.object({ argument: z.array(z.object({ mod: MOD_NAME, path: z.string() })) }),
+  (value, { argument }) => new AgentCall(filesNamed(value, argument).map(({ mod, file }) =>
+    ({ kind: 'file', origin: { kind: 'mod', name: mod }, relativePath: file })), {}),
 );
 
 const PLUGIN_NAME = z.object({ name: z.string(), origin: z.string().optional() });
@@ -77,6 +113,12 @@ const RENAME_PLUGIN = gestureInput(
 export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.enable', MODS],
   ['modbench.mod.disable', MODS],
+  ['modbench.mod.move', MOVE_MODS],
+  ['modbench.mod.uninstall', MODS],
+  ['modbench.mod.rename', RENAME_MOD],
+  ['modbench.mod.createEmpty', CREATE_EMPTY_MOD],
+  ['modbench.mod.excludeFile', FILES],
+  ['modbench.mod.includeFile', FILES],
   ['modbench.plugin.enable', LINES],
   ['modbench.plugin.disable', LINES],
   ['modbench.plugin.decompile', PLUGINS],
