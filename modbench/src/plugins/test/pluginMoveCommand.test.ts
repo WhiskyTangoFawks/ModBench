@@ -220,7 +220,7 @@ describe('modbench.plugin.move, called by the agent', () => {
 
     const answered = await invoke(new AgentCall([{ kind: 'plugin', plugin: A }], { drop: { kind: 'winningEnd' } }));
 
-    expect(answered).toEqual({ applied: false, refusal: '"A.esp" is a master of "B.esp", so it must load before it.' });
+    expect(answered).toEqual({ applied: false, refusal: 'Could not move plugins.', detail: '"A.esp" is a master of "B.esp", so it must load before it.' });
     expect(fake.calls).toEqual([]);
     expect(reporter.reports).toEqual([]);
   });

@@ -20,10 +20,10 @@ const CHANGES = { treeName: 'Tracked Patch Mod.esp', moves: [{ from: '/m/plugin-
 describe('renamePlugin — the plugin source first, then the file and its lines', () => {
   let client: InMemoryMEditClient;
   let applied: unknown[];
-  let applies: boolean;
+  let failure: string | undefined;
   const apply = vi.fn((changes: unknown) => {
     applied.push(changes);
-    return Promise.resolve(applies);
+    return Promise.resolve(failure);
   });
   const rename = (newName: string, plugin: PluginAddress = PLUGIN, answers: InstanceAnswers = {}) => {
     const fake = fakeInstanceAdapter(undefined, answers);
@@ -36,7 +36,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     client.setCommandResult('getRenameSourceChanges', CHANGES);
     client.setCommandResult('moveLastWritten', { moved: true });
     applied = [];
-    applies = true;
+    failure = undefined;
     apply.mockClear();
   });
 
@@ -74,11 +74,11 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     expect(fake.calls).toEqual([]);
   });
 
-  it('moves nothing and renames no file when VS Code does not apply the changes, which the apply has told', async () => {
-    applies = false;
+  it('moves nothing and renames no file when VS Code does not apply the changes, and carries why', async () => {
+    failure = 'EEXIST';
     const { fake, result } = rename('Renamed Patch.esp');
 
-    expect(await result).toEqual({ applied: false, reported: true });
+    expect(await result).toEqual({ applied: false, reported: 'EEXIST' });
     expect(client.calls.map((call) => call.method)).toEqual(['getRenameSourceChanges']);
     expect(fake.calls).toEqual([]);
   });

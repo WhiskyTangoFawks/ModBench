@@ -289,7 +289,8 @@ describe('modbench.plugin.rename, called by the agent', () => {
     instanceAnswers.refusals = refusing('renamePlugin', 'disk full');
     expect(await run(calling('Renamed.esp'))).toMatchObject({
       applied: false,
-      refusal: 'Could not rename "Patch.esp" (ModA): its plugin source was renamed, its file and lines were not. Reverting the source rename in git undoes it. disk full',
+      refusal: 'Could not rename "Patch.esp" (ModA): its plugin source was renamed, its file and lines were not. Reverting the source rename in git undoes it.',
+      detail: 'disk full',
     });
     expect(reporter.reports).toEqual([]);
   });

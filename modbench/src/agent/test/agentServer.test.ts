@@ -480,7 +480,17 @@ describe('the agent server, running a gesture', () => {
 
       await call(client, 'run_gesture', { command: 'modbench.plugin.decompile', argument: [{ name: 'Same.esp', origin: 'ModB' }] });
 
-      expect(fired.calls).toHaveLength(1);
+      expect(fired.calls).toEqual([['modbench.plugin.decompile', new AgentCall([{ kind: 'plugin', plugin: { name: 'Same.esp', origin: 'ModB' } }], {})]]);
+    });
+
+    it('answers a refusal with its detail joined on', async () => {
+      fired.outcome = { applied: false, refusal: 'Could not move plugins.', detail: 'A.esp is a master.' };
+      const { client } = await served(PLUGGED);
+
+      const answer = await call(client, 'run_gesture', { command: 'modbench.plugin.decompile', argument: [{ name: 'Solo.esp' }] });
+
+      expect(answer.isError).toBe(true);
+      expect(answer.text).toContain('Could not move plugins. A.esp is a master.');
     });
 
     it('fires move with the drop as an Option', async () => {
