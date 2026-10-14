@@ -169,6 +169,12 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
 
 const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, installationFiles: [], modManagerFiles: ['meta.ini'] });
 const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, installationFiles: [] });
+const modToStage = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], committedFiles: ['meta.ini'] });
+const stageFacts = { gameFiles: [{ path: 'Game.esm', size: 7, hash: 'AAECAwQFBgc=' }], dataFolder: '/game/Data', buildFolder: '/instance/build', deltaShare: 0.5 };
+const modToDiscard = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [] });
+const discardFacts = {
+  gameFiles: [], dataFolder: '/game/Data', buildFolder: '/instance/build', downloadsFolder: '/instance/downloads', downloadedFiles: [],
+};
 const buildFacts = { excludedSuffix: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } } };
 
 describe('HttpMEditClient — what each verb sends and reads', () => {
@@ -258,6 +264,36 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         refused: [{ item: 'ModC', reason: 'git was not found on PATH.' }],
       },
       path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
+    { name: 'stage', verb: (c) => c.stage([modToStage('ModA'), modToStage('ModC')], stageFacts),
+      answer: {
+        applied: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif'] }],
+        refused: [{ item: 'ModC', refusal: 'InstallationFileMissing', message: "'ModC' was not staged: 'C.zip' not in the downloads folder." }],
+      },
+      reads: {
+        landed: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif'] }],
+        refused: [{ item: 'ModC', reason: "'ModC' was not staged: 'C.zip' not in the downloads folder." }],
+      },
+      path: '/modlist/stage', body: { mods: [modToStage('ModA'), modToStage('ModC')], ...stageFacts } },
+    { name: 'discardChanges', verb: (c) => c.discardChanges([modToDiscard('ModA'), modToDiscard('ModB'), modToDiscard('ModC')], discardFacts),
+      answer: {
+        applied: [{ mod: 'ModA', written: ['a.nif'] }],
+        refused: [
+          {
+            item: 'ModB', refusal: 'NotFound', message: "'ModB' was skipped: game file 'B.esm' is missing; delta 'b.nif.0_1.octodiff' is missing.",
+            gameFilesNotFound: ['B.esm'], deltasNotFound: ['b.nif.0_1.octodiff'],
+          },
+          { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: 'c.nif' has no provider.", gameFilesNotFound: [], deltasNotFound: [] },
+        ],
+      },
+      reads: {
+        landed: [{ mod: 'ModA', written: ['a.nif'] }],
+        refused: [
+          { item: 'ModB', reason: "'ModB' was skipped: game file 'B.esm' is missing; delta 'b.nif.0_1.octodiff' is missing." },
+          { item: 'ModC', reason: "'ModC' was skipped: 'c.nif' has no provider." },
+        ],
+        notFound: [{ mod: 'ModB', gameFiles: ['B.esm'], deltas: true }],
+      },
+      path: '/modlist/discard-changes', body: { mods: [modToDiscard('ModA'), modToDiscard('ModB'), modToDiscard('ModC')], ...discardFacts } },
     { name: 'decompile', verb: (c) => c.decompile([first, second]),
       answer: { applied: [first], refused: [{ item: second, refusal: 'NotInTrackedMod', message: 'Second.esp is not in a tracked mod.' }] },
       reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a tracked mod.' }] },
@@ -402,8 +438,11 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         text: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'Could not create "New.esp"' },
       { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'), status: 409,
         body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename the source of "Old.esp"' },
-      { name: 'init', verb: (c) => c.init([modToInit('ModA'), modToInit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not init 2 mods' },
+      { name: 'init', verb: (c) => c.init([modToInit('ModA'), modToInit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile and commit 2 mods' },
       { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModB')], buildFacts), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
+      { name: 'stage', verb: (c) => c.stage([modToStage('ModA'), modToStage('ModB')], stageFacts), status: 503, body: detail, text: detail, refusal: 'Could not stage 2 mods' },
+      { name: 'discardChanges', verb: (c) => c.discardChanges([modToDiscard('ModA')], discardFacts), status: 503, body: detail, text: detail,
+        refusal: 'Could not discard changes in 1 mod' },
       { name: 'decompile', verb: (c) => c.decompile([first, second]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
       { name: 'changeBuildConfiguration', verb: (c) => c.changeBuildConfiguration('/instance/source/ModA', { exclude: ['a.dds'] }), status: 422,
         body: { detail: 'It holds no build configuration.' }, text: 'It holds no build configuration.', refusal: 'Could not change the build configuration in "/instance/source/ModA"' },
@@ -584,8 +623,8 @@ describe('HttpMEditClient — sendLoadOrder', () => {
   const active = [{ name: 'Foo.esp', origin: 'A' }];
   const loadedWithNoLine = [{ name: 'Foo.esp', origin: 'A' }];
   const appliedBody = { applied: true, version: 1 };
-  const archives = ['/game/Data/Foo - Main.ba2'];
-  const stringsFiles = ['/mods/A/Strings/Foo_en.STRINGS'];
+  const archives = [{ path: '/game/Data/Foo - Main.ba2', stamp: '1/2/3' }];
+  const stringsFiles = [{ path: '/mods/A/Strings/Foo_en.STRINGS', stamp: '4/5/6' }];
   const snapshot = { plugins, active, loadedWithNoLine, archives, stringsFiles, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' };
 
   it('PUTs every plugin with its line, the active plugins, the archives and strings files, the game directory and the instance root', async () => {

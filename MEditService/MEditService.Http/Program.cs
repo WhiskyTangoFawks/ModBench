@@ -83,6 +83,7 @@ try
     builder.Services.AddSingleton<ISourceAdapter, GitSourceAdapter>();
     builder.Services.AddSingleton<IModFolderRepository, ModFolderRepository>();
     builder.Services.AddSingleton<StageHandler>();
+    builder.Services.AddSingleton<DiscardHandler>();
     builder.Services.AddSingleton<LoadOrderHolder>();
     // One Index for the whole process (ADR-0014). Which file it opens comes from the
     // load request (ADR-0010), not from here.

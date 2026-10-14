@@ -3,7 +3,7 @@
 import type { Log } from '../ports/log';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
-  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, OVERWRITE_ORIGIN, pluginsLoadedWithNoLineOf, type ArchiveSources,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, OVERWRITE_ORIGIN, pluginsLoadedWithNoLineOf, stampedSnapshot, type ArchiveSources,
   type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
   type LoadOrderSnapshotValue,
 } from './loadOrderSnapshot';
@@ -60,6 +60,8 @@ export interface InstanceValue {
   readonly trackedMods: ReadonlySet<string>;
   /** Every mod a repository in the source folder builds, listed in the mod order or not. */
   readonly sourceMods: ReadonlySet<string>;
+  /** Whether the instance folder holds a repository. */
+  readonly holdsRepository: boolean;
   /** Every profile, the switch's choices. */
   readonly profiles: readonly string[];
   /** The winning enabled provider of every relative path, and its contenders. */
@@ -169,6 +171,7 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   modFolders: [],
   trackedMods: new Set(),
   sourceMods: new Set(),
+  holdsRepository: false,
   profiles: [],
   files: new FileConflictLookup(),
   filesByMod: new Map(),
@@ -405,11 +408,15 @@ export class Instance implements Subscription {
       filesByOrigin: new Map([...index.filesByMod, [OVERWRITE_ORIGIN, runtimeOutput.files]]),
     };
     this.tellArchivesNothingHolds(archiveSources);
+    const loadOrderSnapshot = loadOrderSnapshotOf({
+      plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs, archives: archiveSources,
+    });
     return {
       mods: entries,
       modFolders: modFolderList,
       trackedMods: new Set(entries.flatMap((entry) => (entry.kind === 'mod' && paths.sourceDirs.has(entry.name) ? [entry.name] : []))),
       sourceMods: new Set(paths.sourceDirs.keys()),
+      holdsRepository: reading.holdsRepository,
       profiles,
       files: index.files,
       filesByMod: index.filesByMod,
@@ -429,10 +436,9 @@ export class Instance implements Subscription {
       gameFolder,
       dataFolderPlugins,
       pluginsLoadedWithNoLine,
-      loadOrderSnapshot: loadOrderSnapshotOf({
-        plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs,
-        archives: archiveSources,
-      }),
+      loadOrderSnapshot: loadOrderSnapshot === undefined || 'refusal' in loadOrderSnapshot
+        ? loadOrderSnapshot
+        : await stampedSnapshot(loadOrderSnapshot, (path) => adapter.fileStamp(path)),
       overwriteFiles: runtimeOutput.files,
       overwriteFolders: runtimeOutput.folders,
       paths,

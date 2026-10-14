@@ -48,8 +48,7 @@ function valueOf(copy: ReadCopy, cellValue: ConflictCellValue, letters: Readonly
 
 const message = (text: string): ConflictTable => ({ kind: 'message', text });
 
-/** The mod's own files that another enabled mod or Overwrite also provides. */
-export function filesInConflict(value: Pick<InstanceValue, 'files' | 'filesByMod'>, name: string): OriginFile[] {
+function filesInConflict(value: Pick<InstanceValue, 'files' | 'filesByMod'>, name: string): OriginFile[] {
   const own = modOrigin(name);
   return (value.filesByMod.get(name) ?? [])
     .filter((file) => inFileOrderConflict(value.files.get(file.relativePath), own));

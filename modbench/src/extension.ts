@@ -31,10 +31,14 @@ import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
+import { initRepositoryIn } from './instanceRepository';
+import { registerModlistCommands } from './toolbox/modlistGestures';
+import { publishRepository } from './toolbox/repositoryContext';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import { openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { pluginsCommands, pluginSyncOver } from './pluginsCommands/plugins';
+import { modlistSourceCommands } from './sourceCommands/modlistSourceCommands';
 import { sourceCommands } from './sourceCommands/sourceCommands';
 import { modSyncOver, modlistCommands } from './modOrderCommands/modOrderCommands';
 import { warnIfFomod } from './mods/fomodWarning';
@@ -52,7 +56,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build' | 'init' | 'changeBuildConfiguration'>;
+  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'build' | 'init' | 'stage' | 'discardChanges' | 'changeBuildConfiguration'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -153,6 +157,11 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putLoadOrder));
   const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
   ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));
+  own(publishRepository(instance, instanceRoot));
+  ownAll(own, registerModlistCommands({
+    commands: modlistSourceCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(instanceRoot) }),
+    instance, reporter: reporterFor('modlist'), ask, say: (message) => { toolboxProvider.say(message); }, focusedView: deps.focusedView, modsView: MODS_KEY_ARGS.view,
+  }));
   own(deps.focusedView.follow('modbench.modList', mods.view));
   own(deps.focusedView.follow('modbench.pluginListTree', plugins.followed));
   own(deps.focusedView.follow('modbench.downloads', downloadsView));
@@ -256,7 +265,7 @@ export function activate(context: vscode.ExtensionContext): void {
     views,
     plugins,
     editor,
-    serveAgent({ port: agentPort(), instance: views.instance, mEdit: meditClient, reporter: reporterFor('agent'), log: outputChannel }),
+    serveAgent({ port: agentPort(), instance: views.instance, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel }),
     reachMEditFromTerminals(context.environmentVariableCollection, meditClient, vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath, inheritedPythonPath, onTerminalEnvChange),
     createSourceLanguage({
       client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),

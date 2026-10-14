@@ -44,7 +44,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'init-progress', 'external-change',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'init-progress', 'stage-progress', 'discard-progress', 'external-change',
   'plugin-source-unreadable', 'record-filter-cleared',
 ] as const;
 
@@ -57,6 +57,8 @@ export type NotificationKind = typeof NOTIFICATION_KINDS[number];
 export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
   'init-progress': InitStatus;
+  'stage-progress': ModlistProgress;
+  'discard-progress': ModlistProgress;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
   'plugin-source-unreadable': { plugins: (PluginAddress & UnreadableSource)[] };
   'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
@@ -189,6 +191,58 @@ export interface BuildOutcome {
   refused: readonly ItemRefusal<string>[];
 }
 
+/** A mod to stage: its folder, its installation files and the files in its folder the repository commits itself
+ *  (ADR-0013). */
+export type StageMod = components['schemas']['StageModRequest'];
+
+/** The instance's facts every mod's stage needs: the game files its files override, the game's data folder, the
+ *  build folder and the share of a file a delta may reach. */
+export type StageFacts = Omit<components['schemas']['StageRequest'], 'mods'>;
+
+/** Where stage is: the mod it works on, and how many mods it has done of how many. The mod is none once it ends. */
+export type ModlistProgress = components['schemas']['ModlistProgress'];
+
+interface StagedMod {
+  mod: string;
+  manifestWritten: boolean;
+  /** Each file nothing provides, by its path in the mod folder. */
+  noProvider: readonly string[];
+}
+
+/** Stage's answer: each mod staged, or refused with its reason. */
+export interface StageOutcome {
+  landed: readonly StagedMod[];
+  refused: readonly ItemRefusal<string>[];
+}
+
+/** A mod to discard: its folder and its installation files (ADR-0013). */
+export type DiscardMod = components['schemas']['DiscardModRequest'];
+
+/** The instance's facts discard needs: the game files the mods' files override, the game's data folder, and the
+ *  places a delta is looked for. */
+export type DiscardFacts = Omit<components['schemas']['DiscardRequest'], 'mods'>;
+
+interface DiscardedMod {
+  mod: string;
+  /** Each file written to bring the mod back, by its path in the mod folder. */
+  written: readonly string[];
+}
+
+/** A skipped mod whose only lacks are game files the call did not name, by their paths under the data folder, and
+ *  deltas no place it searched holds: a call that names them brings it back. */
+export interface NotFound {
+  mod: string;
+  gameFiles: readonly string[];
+  deltas: boolean;
+}
+
+/** Discard's answer: each mod discarded or skipped with its reason, and each skipped mod that is `NotFound`. */
+export interface DiscardOutcome {
+  landed: readonly DiscardedMod[];
+  refused: readonly ItemRefusal<string>[];
+  notFound: readonly NotFound[];
+}
+
 export type GridPosition = components['schemas']['GridPosition'];
 /** A record and the plugin holding it (ADR-0012). */
 export type RecordAddress = components['schemas']['RecordAddress'];
@@ -249,6 +303,10 @@ export interface MEditClient {
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;
+  stage(mods: readonly StageMod[], facts: StageFacts, options?: { onProgress?: (progress: ModlistProgress) => void }): Promise<StageOutcome | WriteRefused>;
+  discardChanges(
+    mods: readonly DiscardMod[], facts: DiscardFacts, options?: { onProgress?: (progress: ModlistProgress) => void },
+  ): Promise<DiscardOutcome | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).

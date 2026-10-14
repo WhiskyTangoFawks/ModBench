@@ -3,16 +3,21 @@ import type { AddressInfo } from 'node:net';
 import { text } from 'node:stream/consumers';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { z } from 'zod';
 import type { InstanceView } from '../instanceLoader/instance';
 import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { MEditClient } from '../client/MEditClient';
 import { FILE_CONFLICTS } from './fileConflicts';
+import { RUN_GESTURE } from './gestures';
 import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
 import { INSTANCE_READS } from './instanceReads';
-import { Refusal } from './refusal';
+import { Refusal } from '../drivingLib/refusal';
+import { parseOrRefuse } from './refusal';
+import { LIST_REFERENCES, READ_RECORD } from './readRecord';
 import { RESOLVE_NAMES } from './resolveNames';
+import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironment';
 import { SELECT_ROWS } from './selectRows';
 import { SOURCE_PROBLEMS } from './sourceProblems';
 
@@ -21,7 +26,8 @@ const AGENT_PORT_SETTING = 'modbench.agent.port';
 export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence'> | undefined;
-  mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows'>;
+  mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences'>;
+  terminalEnvironment: TerminalEnvironment;
   reporter: Reporter;
   log: Log;
 }
@@ -41,26 +47,52 @@ async function answer(log: Log, name: string, work: () => unknown) {
   try {
     return { content: [{ type: 'text' as const, text: JSON.stringify(await work()) }] };
   } catch (error) {
-    if (!(error instanceof Refusal)) throw error;
-    log.warn(`[agent] ${name}: ${error.message}`);
-    return { isError: true, content: [{ type: 'text' as const, text: error.message }] };
+    const line = `[agent] ${name}: ${errorMessage(error)}`;
+    if (error instanceof Refusal) log.warn(line);
+    else log.error(line);
+    const text = error instanceof Refusal && error.answer !== undefined ? JSON.stringify(error.answer) : errorMessage(error);
+    return { isError: true, content: [{ type: 'text' as const, text }] };
   }
 }
 
-function mcpServerOf({ instance, mEdit, log }: AgentServerOptions): McpServer {
-  const server = new McpServer({ name: 'modbench', version: '0' });
-  for (const read of INSTANCE_READS) {
-    server.registerTool(read.name, { description: read.description }, () => answer(log, read.name, () => read.of(currentValue(instance))));
-  }
-  server.registerTool(FILE_CONFLICTS.name, { description: FILE_CONFLICTS.description, inputSchema: FILE_CONFLICTS.input },
-    (args) => answer(log, FILE_CONFLICTS.name, () => FILE_CONFLICTS.of(currentValue(instance), args)));
-  server.registerTool(RESOLVE_INSTANCE_NAMES.name, { description: RESOLVE_INSTANCE_NAMES.description, inputSchema: RESOLVE_INSTANCE_NAMES.input },
-    (args) => answer(log, RESOLVE_INSTANCE_NAMES.name, () => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args)));
-  server.registerTool(RESOLVE_NAMES.name, { description: RESOLVE_NAMES.description, inputSchema: RESOLVE_NAMES.input },
-    (args) => answer(log, RESOLVE_NAMES.name, () => RESOLVE_NAMES.of(mEdit, args)));
-  server.registerTool(SELECT_ROWS.name, { description: SELECT_ROWS.description, inputSchema: SELECT_ROWS.input },
-    (args) => answer(log, SELECT_ROWS.name, () => SELECT_ROWS.of(mEdit, args)));
-  server.registerTool(SOURCE_PROBLEMS.name, { description: SOURCE_PROBLEMS.description }, () => answer(log, SOURCE_PROBLEMS.name, SOURCE_PROBLEMS.of));
+interface Tool<Shape extends z.ZodRawShape> {
+  readonly name: string;
+  readonly description: string;
+  readonly input: Shape;
+}
+
+// The SDK refuses an input its schema rejects before the handler runs, with no Output line
+// (agent.md, Reporting, story 1), so it holds one that takes any object and advertises the tool's.
+function register<Shape extends z.ZodRawShape>(
+  server: McpServer, log: Log, { name, description, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>) => unknown,
+): void {
+  const schema = z.object(input);
+  const anyObject = z.looseObject({}).meta(z.toJSONSchema(schema, { io: 'input', target: 'draft-7' }));
+  server.registerTool(name, { description, inputSchema: anyObject }, (args) => answer(log, name, () => {
+    return run(parseOrRefuse(schema, args));
+  }));
+}
+
+const NO_INPUT = {};
+
+const INSTRUCTIONS = `Name objects as Modbench's views do: a plugin by its file name, a mod or a separator by its name, a record by its EditorID or FormKey, a downloaded file by its file name, an archive or a folder outside the downloads by its path, a file in a mod by its path in the mod. A name that means more than one thing is refused with each match listed as you can name it; name the one you mean that way.
+
+A plugin with source is a text file in a repository: edit it with your file tools, and the user reviews the change in Source Control. A plugin with no source is a binary: never edit it. Mod manager files change only through run_gesture. A change to many records by a rule is a script: write a Python file with import medit and run it in your shell with the variables script_environment returns.
+
+Ask Modbench what the files cannot answer.`;
+
+function mcpServerOf({ instance, mEdit, terminalEnvironment, log }: AgentServerOptions): McpServer {
+  const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
+  for (const read of INSTANCE_READS) register(server, log, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance)));
+  register(server, log, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), args));
+  register(server, log, RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
+  register(server, log, RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
+  register(server, log, READ_RECORD, (args) => READ_RECORD.of(mEdit, currentValue(instance), args));
+  register(server, log, LIST_REFERENCES, (args) => LIST_REFERENCES.of(mEdit, args));
+  register(server, log, SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
+  register(server, log, RUN_GESTURE, (args) => RUN_GESTURE.of(currentValue(instance), mEdit, args));
+  register(server, log, { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
+  register(server, log, { ...SOURCE_PROBLEMS, input: NO_INPUT }, SOURCE_PROBLEMS.of);
   return server;
 }
 

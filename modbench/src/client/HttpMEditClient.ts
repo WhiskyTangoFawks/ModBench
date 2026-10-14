@@ -14,6 +14,7 @@ import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type BackendStatus, type BuildConfigurationChange, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
+  type StageFacts, type StageMod, type StageOutcome, type ModlistProgress, type DiscardFacts, type DiscardMod, type DiscardOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -389,7 +390,7 @@ class HttpMEditClient implements MEditClient {
     const unsubscribe = options.onProgress ? this.notifications.onNotification('init-progress', options.onProgress) : () => {};
     try {
       return await this.mutateEach({
-        verb: 'init', noun: 'mod', items: mods.map((mod) => mod.name),
+        verb: 'decompile and commit', noun: 'mod', items: mods.map((mod) => mod.name),
         op: (counted) => `init(${counted})`,
         post: () => this.apiClient.POST('/init', { body: { mods: [...mods] } }),
         outcome: (answer) => selectionOutcome({
@@ -473,6 +474,42 @@ class HttpMEditClient implements MEditClient {
         refused: answer.refused,
       }),
     });
+  }
+
+  async stage(
+    mods: readonly StageMod[], facts: StageFacts, options: { onProgress?: (progress: ModlistProgress) => void } = {},
+  ): Promise<StageOutcome | WriteRefused> {
+    const unsubscribe = options.onProgress ? this.notifications.onNotification('stage-progress', options.onProgress) : () => {};
+    try {
+      return await this.mutateEach({
+        verb: 'stage', noun: 'mod', items: mods,
+        op: (counted) => `stage(${counted})`,
+        post: () => this.apiClient.POST('/modlist/stage', { body: { mods: [...mods], ...facts } }),
+        outcome: (answer) => selectionOutcome(answer),
+      });
+    } finally {
+      unsubscribe();
+    }
+  }
+
+  async discardChanges(
+    mods: readonly DiscardMod[], facts: DiscardFacts, options: { onProgress?: (progress: ModlistProgress) => void } = {},
+  ): Promise<DiscardOutcome | WriteRefused> {
+    const unsubscribe = options.onProgress ? this.notifications.onNotification('discard-progress', options.onProgress) : () => {};
+    try {
+      return await this.mutateEach({
+        verb: 'discard changes in', noun: 'mod', items: mods,
+        op: (counted) => `discardChanges(${counted})`,
+        post: () => this.apiClient.POST('/modlist/discard-changes', { body: { mods: [...mods], ...facts } }),
+        outcome: (answer) => ({
+          ...selectionOutcome(answer),
+          notFound: answer.refused.filter((refused) => refused.refusal === 'NotFound')
+            .map((refused) => ({ mod: refused.item, gameFiles: refused.gameFilesNotFound, deltas: refused.deltasNotFound.length > 0 })),
+        }),
+      });
+    } finally {
+      unsubscribe();
+    }
   }
 
   /** A refusal (untracked plugin, a link that would dangle) comes back typed (ADR-0014); only a

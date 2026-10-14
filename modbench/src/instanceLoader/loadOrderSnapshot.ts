@@ -4,13 +4,13 @@ import {
   foldPath, isRootLevel, type FileConflictIndex, type FileWinners,
 } from './fileConflictIndex';
 import {
-  fileInFolder, isPluginFile, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type GameFolder, type ModFolders,
-  type OriginFile, type PluginEntry,
+  fileInFolder, isPluginFile, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
+  type ModFolders, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile, pluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
-import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
+import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress, type StampedFile } from '../wire/pluginAddress';
 
 export { OVERWRITE_ORIGIN };
 export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
@@ -36,13 +36,14 @@ export interface LoadOrderPlugin {
 
 type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string; sourceFolder?: string } | { kind: 'Game' } | { kind: 'None' };
 
-interface StringsBeside {
-  readonly archives: string[];
-  readonly stringsFiles: string[];
+// A file is a path until the snapshot is stamped.
+interface StringsBeside<F> {
+  readonly archives: F[];
+  readonly stringsFiles: F[];
 }
 
 // `lineNamesIt`: the line names this copy of its filename, for Editing's judgements (ADR-0013).
-type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin' | 'line'> & StringsBeside & { provider: SnapshotProvider; lineNamesIt: boolean };
+type SnapshotPlugin<F> = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin' | 'line'> & StringsBeside<F> & { provider: SnapshotProvider; lineNamesIt: boolean };
 
 /** The snapshot was not built, and why: the user is told once (common.md, Reporting). */
 export interface LoadOrderSnapshotRefusal {
@@ -50,15 +51,15 @@ export interface LoadOrderSnapshotRefusal {
 }
 
 /** ADR-0013's snapshot. */
-export interface LoadOrderSnapshotValue {
+export interface LoadOrderSnapshotValue<F = StampedFile> {
   readonly dataFolder: string;
-  readonly plugins: SnapshotPlugin[];
+  readonly plugins: SnapshotPlugin<F>[];
   readonly active: PluginAddress[];
   readonly loadedWithNoLine: PluginAddress[];
   /** In the order the game loads them, each at the path that wins. */
-  readonly archives: string[];
+  readonly archives: F[];
   /** The loose strings files the game reads, each at the path that wins. */
-  readonly stringsFiles: string[];
+  readonly stringsFiles: F[];
 }
 
 /** What the snapshot's archives and strings files are resolved from. */
@@ -211,7 +212,7 @@ function winningFiles(
 // replaces an earlier one's, and loose files replace every archive's.
 function archivesAndStringsOf(
   { gameRelease, listed, inData, files }: ArchiveSources, dataFolder: string, active: readonly PluginAddress[],
-): Pick<LoadOrderSnapshotValue, 'archives' | 'stringsFiles'> {
+): Pick<LoadOrderSnapshotValue<string>, 'archives' | 'stringsFiles'> {
   const rule = pluginCompanionRule(gameRelease);
   if (rule === undefined || inData.kind !== 'listed') return { archives: [], stringsFiles: [] };
   const archives = winningFiles(dataFolder, inData.archives, files, rule.isArchive);
@@ -224,7 +225,7 @@ function archivesAndStringsOf(
 
 function stringsBeside(
   { gameRelease, inData, filesByOrigin }: ArchiveSources, dataFolder: string, { name, origin }: PluginAddress,
-): StringsBeside {
+): StringsBeside<string> {
   const rule = pluginCompanionRule(gameRelease);
   if (rule === undefined) return { archives: [], stringsFiles: [] };
   const inGameFolder = inData.kind === 'listed' ? [...inData.archives, ...inData.stringsFiles] : [];
@@ -256,7 +257,7 @@ export function loadOrderSnapshotOf(value: {
   /** Each source mod's source folder, by mod name. */
   readonly sourceDirs: ReadonlyMap<string, string>;
   readonly archives: ArchiveSources;
-}): LoadOrderSnapshotValue | LoadOrderSnapshotRefusal | undefined {
+}): LoadOrderSnapshotValue<string> | LoadOrderSnapshotRefusal | undefined {
   // Without the game's masters or its archives the snapshot would be silently wrong (principles.md), so
   // the index keeps what it holds until the folder can be read (common.md, States, story 5).
   if (value.gameFolder.kind !== 'found' || value.pluginsLoadedWithNoLine === undefined || value.archives.inData.kind !== 'listed') {
@@ -288,7 +289,7 @@ export function loadOrderSnapshotOf(value: {
       placed.add(folded);
       return true;
     });
-  const sent = new Map<string, SnapshotPlugin>();
+  const sent = new Map<string, SnapshotPlugin<string>>();
   const unprovided = new Map<string, string[]>();
   for (const { name, path, origin, line, winning } of [...loadedWithNoLine, ...rows]) {
     const provider = whatProvides(origin);
@@ -310,6 +311,29 @@ export function loadOrderSnapshotOf(value: {
     loadedWithNoLine: loadedWithNoLine.map(({ name, origin }) => ({ name, origin })),
     ...archivesAndStringsOf(value.archives, dataFolder, active),
   };
+}
+
+// Equal while the file's content is (ADR-0003); a file whose stamp could not be read, by why.
+const stampText = (read: FileRead<FileStamp>): string =>
+  (read.kind === 'unreadable' ? read.reason : `${read.answer.size}/${read.answer.modifiedNs}/${read.answer.changedNs}`);
+
+/** The snapshot with each archive and strings file it hands stamped at its own path, each path read once, so no file it
+ *  hands goes without its stamp. */
+export async function stampedSnapshot(
+  value: LoadOrderSnapshotValue<string>, stampOf: (path: string) => Promise<FileRead<FileStamp>>,
+): Promise<LoadOrderSnapshotValue> {
+  const reads = new Map<string, Promise<StampedFile>>();
+  const stamped = (paths: readonly string[]): Promise<StampedFile[]> => Promise.all(paths.map((path) => {
+    const read = reads.get(path) ?? stampOf(path).then((stamp) => ({ path, stamp: stampText(stamp) }));
+    reads.set(path, read);
+    return read;
+  }));
+  const [plugins, archives, stringsFiles] = await Promise.all([
+    Promise.all(value.plugins.map(async (plugin) => ({ ...plugin, archives: await stamped(plugin.archives), stringsFiles: await stamped(plugin.stringsFiles) }))),
+    stamped(value.archives),
+    stamped(value.stringsFiles),
+  ]);
+  return { ...value, plugins, archives, stringsFiles };
 }
 
 const listed = (names: readonly string[]): string =>

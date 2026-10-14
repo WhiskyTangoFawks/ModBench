@@ -71,6 +71,10 @@ function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: Instan
   };
 }
 
+function handedStringsFiles(snapshot: InstanceValue['loadOrderSnapshot']): { path: string; stamp: string }[] {
+  return snapshot !== undefined && 'plugins' in snapshot ? snapshot.plugins.flatMap((plugin) => plugin.stringsFiles) : [];
+}
+
 function pastSequence(instance: Instance, sequence: number): Promise<InstanceValue> {
   if (instance.sequence > sequence) return Promise.resolve(instance.value);
   return new Promise((resolve) => {
@@ -130,6 +134,14 @@ describe('Instance — the value', () => {
     expect(value.profiles).toEqual(['Default', 'Secondary']);
     expect([value.gameName, value.gameRelease, value.nexusSlug]).toEqual(['Fallout 4', 'Fallout4', 'fallout4']);
     expect(value.gameFolder).toEqual(GAME_FOLDER);
+  });
+
+  it('carries whether the instance holds a repository', async () => {
+    const { instance } = loader({ holdsRepository: true });
+
+    await instance.refresh();
+
+    expect(instance.value.holdsRepository).toBe(true);
   });
 
   it('carries each mod a repository builds as tracked, with that repository as its source folder, and each repository alone as a source mod', async () => {
@@ -532,7 +544,7 @@ describe('Instance — game folder and the archives the game loads', () => {
     await instance.refresh();
     await instance.refresh();
 
-    expect(instance.value.loadOrderSnapshot).toMatchObject({ archives: [SUPPLIED] });
+    expect(instance.value.loadOrderSnapshot).toMatchObject({ archives: [{ path: SUPPLIED }] });
     expect(warnings).toEqual([`[instance] ${note}`]);
     expect(logs).toEqual([]);
   });
@@ -565,8 +577,30 @@ describe('Instance — game folder and the archives the game loads', () => {
     await instance.refresh();
 
     expect(instance.value.loadOrderSnapshot).toMatchObject({
-      plugins: expect.arrayContaining([expect.objectContaining({ origin: 'Tracked Patch Mod', stringsFiles: [stringsFile] })]) as unknown,
+      plugins: expect.arrayContaining([expect.objectContaining({ origin: 'Tracked Patch Mod', stringsFiles: [expect.objectContaining({ path: stringsFile })] })]) as unknown,
     });
+  });
+
+  it('hands a mod\'s plugin the new stamp of a strings file rewritten beside it, at the next read', async () => {
+    const stringsFile = '/mods/Tracked Patch Mod/Strings/Tracked Patch Mod_en.STRINGS';
+    let changedNs = 1n;
+    const { instance } = loader({
+      ...GAME_FOUND,
+      mods: [mod('Tracked Patch Mod')],
+      pluginOrder: [{ name: 'Tracked Patch Mod.esp', enabled: true }],
+      modFolders: modFoldersOf('Tracked Patch Mod'),
+      modFiles: new Map([['Tracked Patch Mod', filesOfMod('Tracked Patch Mod', 'Tracked Patch Mod.esp', 'Strings/Tracked Patch Mod_en.STRINGS')]]),
+    }, (adapter) => ({ ...adapter, fileStamp: (path) => Promise.resolve({ kind: 'read', answer: { size: 5n, modifiedNs: 1n, changedNs: path === stringsFile ? changedNs : 0n } }) }));
+    await instance.refresh();
+    const before = handedStringsFiles(instance.value.loadOrderSnapshot);
+
+    changedNs = 2n;
+    await instance.refresh();
+
+    const after = handedStringsFiles(instance.value.loadOrderSnapshot);
+    expect(after.map(({ path }) => path)).toEqual([stringsFile]);
+    expect(before.map(({ path }) => path)).toEqual([stringsFile]);
+    expect(after[0]?.stamp).not.toEqual(before[0]?.stamp);
   });
 
   it('lands a value carrying the game folder not found, rather than a failure, and back again when it is found', async () => {

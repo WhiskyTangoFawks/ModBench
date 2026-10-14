@@ -92,6 +92,22 @@ describe('the Toolbox view, given a later read that fails', () => {
   });
 });
 
+describe('the Toolbox view, while a gesture says its phase', () => {
+  it('shows the gesture\'s message over the last good read\'s, announces the change, and gives the line back', () => {
+    const instance = new FakeInstance(VALUE);
+    const provider = new ToolboxProvider({ instance, channel: SILENT });
+    const fired: unknown[] = [];
+    provider.onDidChangeTreeData((e) => fired.push(e));
+    instance.fail('EACCES modlist.txt');
+
+    provider.say('Staging "ModA" — reading its files…');
+    const during = provider.viewMessage();
+    provider.say(undefined);
+
+    expect([during, provider.viewMessage(), fired.length]).toEqual(['Staging "ModA" — reading its files…', 'Showing the last good read: EACCES modlist.txt', 3]);
+  });
+});
+
 describe('the Toolbox view, given the game folder not found', () => {
   const NOT_FOUND = { ...VALUE, gameFolder: GAME_FOLDER_NOT_FOUND };
 

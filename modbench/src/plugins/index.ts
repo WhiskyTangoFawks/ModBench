@@ -22,7 +22,7 @@ export interface PluginsDeps {
   facts: Pick<Instance, 'refresh'>;
   channel: Pick<vscode.LogOutputChannel, 'error' | 'info' | 'warn' | 'show'>;
   reporterFor: (tag: string) => Reporter;
-  /** Registers the tracked mods' repositories: a reconcile reached Ready, or an init landed. */
+  /** Registers the tracked mods' repositories: a reconcile reached Ready, or a decompile and commit landed. */
   registerRepositories: () => Promise<void>;
   ask: AskQuestion;
   sourceEditing: PluginsViewDeps['sourceEditing'];

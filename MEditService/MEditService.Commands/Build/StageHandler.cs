@@ -9,34 +9,9 @@ namespace MEditService.Commands.Build;
 public sealed class StageHandler(IModFolderRepository repository, INotificationPublisher notifications)
 {
     public SelectionResult<string, StageRefusal, StagedMod> Stage(
-        IReadOnlyList<ModToStage> mods, InstanceToStage instance, CancellationToken cancel = default)
-    {
-        var distinct = mods.DistinctBy(mod => mod.Name, StringComparer.OrdinalIgnoreCase).ToList();
-        List<ItemLanded<string, StagedMod>> landed = [];
-        List<ItemRefused<string, StageRefusal>> refused = [];
-        try
-        {
-            foreach (var (mod, done) in distinct.Select((mod, done) => (mod, done)))
-            {
-                cancel.ThrowIfCancellationRequested();
-                notifications.Publish(new StageProgressNotification(new StageProgress(mod.Name, done, distinct.Count)));
-                switch (StageMod(mod, instance))
-                {
-                    case ItemAnswer<StageRefusal, StagedMod>.Wrote wrote:
-                        landed.Add(new ItemLanded<string, StagedMod>(mod.Name, wrote.Outcome));
-                        break;
-                    case ItemAnswer<StageRefusal, StagedMod>.Refusing refusing:
-                        refused.Add(new ItemRefused<string, StageRefusal>(mod.Name, refusing.Refusal, refusing.Message));
-                        break;
-                }
-            }
-        }
-        finally
-        {
-            notifications.Publish(new StageProgressNotification(new StageProgress(null, 0, 0)));
-        }
-        return SelectionResult<string, StageRefusal, StagedMod>.PerItem(landed, refused);
-    }
+        IReadOnlyList<ModToStage> mods, InstanceToStage instance, CancellationToken cancel = default) =>
+        ModByMod.Over(
+            mods, mod => mod.Name, progress => notifications.Publish(new StageProgressNotification(progress)), mod => StageMod(mod, instance), cancel);
 
     private ItemAnswer<StageRefusal, StagedMod> StageMod(ModToStage mod, InstanceToStage instance)
     {

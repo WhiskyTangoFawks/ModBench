@@ -26,6 +26,13 @@ describe('installMod', () => {
     expect(result).toEqual({ applied: false, refusal });
   });
 
+  it('refuses a new mod named by blanks and installs nothing', async () => {
+    const { result, calls } = await install(ARCHIVE, { kind: 'new', name: '  ' });
+
+    expect(result).toEqual({ applied: false, refusal: 'A mod name cannot be empty.' });
+    expect(calls).toEqual([]);
+  });
+
   it('refuses with why the adapter failed', async () => {
     const { result } = await install(ARCHIVE, NEW_MOD, { refusals: refusing('install', 'archive is corrupt') });
 

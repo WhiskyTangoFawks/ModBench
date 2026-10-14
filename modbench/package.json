@@ -194,8 +194,8 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.record.openToSide",
-        "title": "Open to the Side",
+        "command": "modbench.record.openPinned",
+        "title": "Open",
         "category": "Modbench"
       },
       {
@@ -538,8 +538,8 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.mod.init",
-        "title": "Init Mod",
+        "command": "modbench.mod.decompileAndCommit",
+        "title": "Decompile and Commit Mod",
         "category": "Modbench"
       },
       {
@@ -550,6 +550,26 @@
       {
         "command": "modbench.mod.build",
         "title": "Build Mod",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.modlist.init",
+        "title": "Init Modlist",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.modlist.stage",
+        "title": "Stage Modlist",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.modlist.discardChanges",
+        "title": "Discard Modlist Changes…",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.modlist.discardChangesInModFolder",
+        "title": "Discard Changes in Mod Folder…",
         "category": "Modbench"
       },
       {
@@ -571,7 +591,7 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "modbench.record.openToSide",
+          "command": "modbench.record.openPinned",
           "when": "false"
         },
         {
@@ -636,7 +656,7 @@
         },
         {
           "command": "modbench.mod.openConflicts",
-          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleOpenConflictsRow"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind == mod && modbench.mod.singleRow"
         },
         {
           "command": "modbench.mod.compareFile",
@@ -703,7 +723,7 @@
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.holdsEnabledPlugin"
         },
         {
-          "command": "modbench.mod.init",
+          "command": "modbench.mod.decompileAndCommit",
           "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsUntrackedModWithPlugin && modbench.mod.sourceGestureRowsIn == modbench.modList || focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allInUntrackedMod && modbench.mod.sourceGestureRowsIn == modbench.pluginListTree"
         },
         {
@@ -713,6 +733,22 @@
         {
           "command": "modbench.mod.build",
           "when": "modbench.folder == instance && modbench.mod.anySource"
+        },
+        {
+          "command": "modbench.modlist.init",
+          "when": "modbench.folder == instance && !modbench.modlist.hasRepository"
+        },
+        {
+          "command": "modbench.modlist.stage",
+          "when": "modbench.folder == instance && modbench.modlist.hasRepository"
+        },
+        {
+          "command": "modbench.modlist.discardChanges",
+          "when": "modbench.folder == instance && modbench.modlist.hasRepository"
+        },
+        {
+          "command": "modbench.modlist.discardChangesInModFolder",
+          "when": "false"
         },
         {
           "command": "modbench.record.create",
@@ -855,6 +891,25 @@
           "when": "modbench.folder == instance"
         }
       ],
+      "scm/title": [
+        {
+          "command": "modbench.modlist.stage",
+          "when": "scmProvider == git && scmProviderRootUri in modbench.modlist.instanceRoots",
+          "group": "modbench@1"
+        },
+        {
+          "command": "modbench.modlist.discardChanges",
+          "when": "scmProvider == git && scmProviderRootUri in modbench.modlist.instanceRoots",
+          "group": "modbench@2"
+        }
+      ],
+      "scm/resourceState/context": [
+        {
+          "command": "modbench.modlist.discardChangesInModFolder",
+          "when": "scmProvider == git && scmProviderRootUri in modbench.modlist.instanceRoots",
+          "group": "1_modification@99"
+        }
+      ],
       "view/title": [
         {
           "command": "modbench.instance.refresh",
@@ -964,7 +1019,17 @@
           "group": "modbench@1"
         },
         {
-          "command": "modbench.record.openToSide",
+          "command": "modbench.modlist.init",
+          "when": "view == modbench.toolbox && viewItem == modlist && !modbench.modlist.hasRepository",
+          "group": "modbench@1"
+        },
+        {
+          "command": "modbench.modlist.stage",
+          "when": "view == modbench.toolbox && viewItem == modlist && modbench.modlist.hasRepository",
+          "group": "modbench@1"
+        },
+        {
+          "command": "modbench.record.openPinned",
           "when": "view == references-view.tree && reference-list.source == modbench.referencedBy && viewItem == referencedByReferrer",
           "group": "1_open@1"
         },
@@ -979,7 +1044,7 @@
           "group": "5_copy@1"
         },
         {
-          "command": "modbench.record.openToSide",
+          "command": "modbench.record.openPinned",
           "when": "view == references-view.tree && reference-list.source == modbench.referencedBy && viewItem =~ /^referencedByHolder\\b/",
           "group": "1_open@1"
         },
@@ -1020,7 +1085,7 @@
         },
         {
           "command": "modbench.mod.openConflicts",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bfileOrderConflict\\b/",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
           "group": "1_open@3"
         },
         {
@@ -1069,7 +1134,7 @@
           "group": "6_destroy@1"
         },
         {
-          "command": "modbench.mod.init",
+          "command": "modbench.mod.decompileAndCommit",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bholdsPlugin\\b/ && viewItem =~ /\\buntracked\\b/",
           "group": "4_sourceControl@1"
         },
@@ -1077,6 +1142,16 @@
           "command": "modbench.mod.build",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\btracked\\b/",
           "group": "4_sourceControl@2"
+        },
+        {
+          "command": "modbench.modlist.stage",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.modlist.hasRepository",
+          "group": "4_sourceControl@3"
+        },
+        {
+          "command": "modbench.modlist.discardChanges",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.modlist.hasRepository",
+          "group": "4_sourceControl@4"
         },
         {
           "command": "modbench.copyValue",
@@ -1209,7 +1284,7 @@
           "group": "3_create@1"
         },
         {
-          "command": "modbench.mod.init",
+          "command": "modbench.mod.decompileAndCommit",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\binUntrackedMod\\b/",
           "group": "4_sourceControl@1"
         },
@@ -1244,7 +1319,7 @@
           "group": "3_create@1"
         },
         {
-          "command": "modbench.record.openToSide",
+          "command": "modbench.record.openPinned",
           "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
           "group": "1_open@1"
         },
@@ -1321,7 +1396,7 @@
           "group": "2_change@4"
         },
         {
-          "command": "modbench.mod.init",
+          "command": "modbench.mod.decompileAndCommit",
           "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && inMod == untracked",
           "group": "4_sourceControl@1"
         },

@@ -4,21 +4,25 @@ import type { ModlistNode } from './ModListProvider';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
 import { promptRename } from '../drivingLib/promptRename';
-import { MODS_KEY_ARGS, runModsWriting, openFolderArgument } from './gestureEntry';
+import { MODS_KEY_ARGS, entryRefOf, fileRefOf, modNameOf, separatorNameOf, runModsWriting, openFolderArgument } from './gestureEntry';
+import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { viewCopyValueText } from '../drivingLib/copyValue';
 import {
-  pluralArgument, registerGesture, singularArgument, type GestureEntry, type RowOf,
+  pluralArgument, registerGesture, singularArgument, type RowOf,
 } from '../drivingLib/gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
-import type { ModlistCommands, MovePlace, OriginFileMark, SelectionResult } from '../modOrderCommands/modOrderCommands';
+import type { EntryRef, ModlistCommands, MovePlace, OriginFileMark, OriginFileRef, SelectionResult } from '../modOrderCommands/modOrderCommands';
 import { FILE_MARKS, fileLabel } from './modFiles';
-import { endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
+import {
+  endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem, type MoveTarget,
+} from './movePick';
 import { errorMessage } from '../ports/errorMessage';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { reportFailure } from '../drivingLib/reportFailure';
+import { Refusal } from '../drivingLib/refusal';
 
 // modbench.mod.enable / modbench.mod.disable: the whole selection through the entry (mods.md,
 // Menus and keys, story 3). Each mod lands on its own (commands.md, "A selection is one gesture").
@@ -26,25 +30,30 @@ export function registerModEnableCommands(
   commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>,
   viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
-  const run = (enabled: boolean) => (entry: GestureEntry<ModlistNode>) => {
-    const modNames = pluralArgument(entry, 'mod').map((n) => n.mod.name);
-    if (modNames.length === 0) return;
+  const gesture = (enabled: boolean): AgentGesture<ModlistNode, readonly string[], SelectionResult<string>> => {
     const verb = enabled ? 'enable' : 'disable';
-    return runModsWriting(instance, async () => {
-      const result = await commands.setModsEnabled(instance.value.activeProfile, modNames, enabled);
-      if (!result.applied) {
-        reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
-        return;
-      }
-      reporter.selectionOutcome(
-        `Could not ${verb} ${result.outcome.refused.length} of ${modNames.length} mods.`,
-        result.outcome, (name) => name,
-      );
-    });
+    return {
+      fromView: (entry) => {
+        const modNames = pluralArgument(entry, 'mod').map((n) => n.mod.name);
+        return modNames.length === 0 ? undefined : modNames;
+      },
+      fromAgent: ({ argument }) => argument.map(modNameOf),
+      run: (modNames) => runModsWriting(instance, () => commands.setModsEnabled(instance.value.activeProfile, modNames, enabled)),
+      report: (result, modNames) => {
+        if (!result.applied) {
+          reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
+          return;
+        }
+        reporter.selectionOutcome(
+          `Could not ${verb} ${result.outcome.refused.length} of ${modNames.length} mods.`,
+          result.outcome, (name) => name,
+        );
+      },
+    };
   };
   return [
-    registerGesture('modbench.mod.enable', viewSelection, run(true)),
-    registerGesture('modbench.mod.disable', viewSelection, run(false)),
+    registerAgentGesture('modbench.mod.enable', viewSelection, gesture(true)),
+    registerAgentGesture('modbench.mod.disable', viewSelection, gesture(false)),
   ];
 }
 
@@ -53,23 +62,30 @@ export function registerModEnableCommands(
 export function registerFileExclusionCommands(
   commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
-  const run = (mark: OriginFileMark) => (entry: GestureEntry<ModlistNode>) => {
-    const rows = pluralArgument(entry, 'file');
-    if (rows.length === 0) return;
+  const gesture = (mark: OriginFileMark): AgentGesture<ModlistNode, readonly OriginFileRef[], GestureResult<OriginFileRef>> => {
     const { verb } = FILE_MARKS[mark];
-    const refs = rows.map((row) => row.ref);
-    return runModsWriting(instance, async () => {
-      const result = await commands.markFiles(refs, mark, instance.value.paths.sourceDirs);
-      if (!result.applied) {
-        reporter.report('error', `Could not ${verb} ${refs.length} files.`, result.refusal);
-        return;
-      }
-      reporter.selectionOutcome(`Could not ${verb} ${result.outcome.refused.length} of ${refs.length} files.`, result.outcome, fileLabel);
-    });
+    return {
+      fromView: (entry) => {
+        const refs = pluralArgument(entry, 'file').map((row) => row.ref);
+        return refs.length === 0 ? undefined : refs;
+      },
+      fromAgent: ({ argument }) => argument.map(fileRefOf),
+      run: async (refs) => {
+        const result = await runModsWriting(instance, () => commands.markFiles(refs, mark, instance.value.paths.sourceDirs));
+        return result.applied ? result : { applied: false, refusal: `Could not ${verb} ${refs.length} files.`, detail: result.refusal };
+      },
+      report: (result, refs) => {
+        if (!result.applied) {
+          reporter.report('error', result.refusal, result.detail);
+          return;
+        }
+        reporter.selectionOutcome(`Could not ${verb} ${result.outcome.refused.length} of ${refs.length} files.`, result.outcome, fileLabel);
+      },
+    };
   };
   return [
-    registerGesture('modbench.mod.excludeFile', viewSelection, run('Excluded')),
-    registerGesture('modbench.mod.includeFile', viewSelection, run('Included')),
+    registerAgentGesture('modbench.mod.excludeFile', viewSelection, gesture('Excluded')),
+    registerAgentGesture('modbench.mod.includeFile', viewSelection, gesture('Included')),
   ];
 }
 
@@ -81,46 +97,69 @@ interface MoveView {
 const SEPARATOR_PLACES =
   'A separator lands beside another separator or at an end of mod order, never beside a mod or among the ungrouped mods.';
 
+interface Move {
+  readonly kind: 'mod' | 'separator';
+  readonly names: readonly string[];
+  readonly target: MoveTarget;
+}
+
 export function registerModMoveCommand(
   commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
-  const report = (kind: 'mod' | 'separator', names: readonly string[], result: SelectionResult<string>) => {
-    const noun = `${kind}s`;
-    if (!result.applied) {
-      reporter.report('error', `Failed to move ${noun}.`, result.refusal);
-      return;
-    }
-    reporter.selectionOutcome(
-      `Could not move ${result.outcome.refused.length} of ${names.length} ${noun}.`, result.outcome, (name) => name);
-  };
-  return registerGesture('modbench.mod.move', view.selection, async (entry, option) => {
-    const rows = pluralArgument(entry, 'mod', 'separator');
-    const modNames = rows.flatMap((row) => (row.kind === 'mod' ? [row.mod.name] : []));
-    const separatorNames = rows.flatMap((row) => (row.kind === 'separator' ? [row.separator.name] : []));
-    const { mods: entries, activeProfile } = instance.value;
-    const direction = view.direction();
-    const given = moveTargetOf(option);
-    const pick = async <T extends MovePlace>(items: MovePickItem<T>[], placeholder: string) => {
-      const picked = await pickWithMarked(items, onlyCurrent(items), placeholder);
-      return picked && { place: picked.target, end: endAtTop(direction) };
-    };
-    if (modNames.length > 0 && separatorNames.length === 0) {
-      const target = given ?? await pick(modsMovePick(entries, direction, modNames), 'Move to…');
-      if (!target) return;
-      await runModsWriting(instance, async () =>
-        report('mod', modNames, await commands.moveMods(activeProfile, modNames, target.place, target.end)));
-    } else if (separatorNames.length > 0 && modNames.length === 0) {
-      const target = given ?? await pick(separatorsMovePick(entries, direction, separatorNames), 'Move above…');
-      if (!target) return;
-      const { place, end } = target;
-      if (!isSeparatorsPlace(place)) {
-        reporter.report('error', 'Failed to move separators.', SEPARATOR_PLACES);
+  const failed = (kind: Move['kind'], detail: string): GestureResult<string> =>
+    ({ applied: false, refusal: `Failed to move ${kind}s.`, detail });
+
+  const asMoveResult = (kind: Move['kind'], result: SelectionResult<string>): GestureResult<string> =>
+    result.applied ? result : failed(kind, result.refusal);
+
+  const gesture: AgentGesture<ModlistNode, Move, GestureResult<string>, MoveTarget> = {
+    fromView: async (entry, option) => {
+      const rows = pluralArgument(entry, 'mod', 'separator');
+      const modNames = rows.flatMap((row) => (row.kind === 'mod' ? [row.mod.name] : []));
+      const separatorNames = rows.flatMap((row) => (row.kind === 'separator' ? [row.separator.name] : []));
+      const { mods: entries } = instance.value;
+      const direction = view.direction();
+      const given = moveTargetOf(option);
+      const pick = async <T extends MovePlace>(items: MovePickItem<T>[], placeholder: string) => {
+        const picked = await pickWithMarked(items, onlyCurrent(items), placeholder);
+        return picked && { place: picked.target, end: endAtTop(direction) };
+      };
+      if (modNames.length > 0 && separatorNames.length === 0) {
+        const target = given ?? await pick(modsMovePick(entries, direction, modNames), 'Move to…');
+        return target && { kind: 'mod', names: modNames, target };
+      }
+      if (separatorNames.length > 0 && modNames.length === 0) {
+        const target = given ?? await pick(separatorsMovePick(entries, direction, separatorNames), 'Move above…');
+        return target && { kind: 'separator', names: separatorNames, target };
+      }
+      return undefined;
+    },
+    fromAgent: ({ argument, options }) => {
+      const entries = argument.map(entryRefOf);
+      const kind = entries[0]?.kind ?? 'mod';
+      if (entries.some((entry) => entry.kind !== kind)) throw new Refusal('An agent call to move carries mods or separators, not both.');
+      return { kind, names: entries.map((entry) => entry.name), target: options };
+    },
+    run: async ({ kind, names, target: { place, end } }) => {
+      if (kind === 'mod') {
+        if (place.kind === 'mod' && names.includes(place.name)) {
+          return { applied: true, outcome: { landed: [], refused: names.map((item) => ({ item, reason: `The target is "${place.name}", which is moving.` })) } };
+        }
+        return runModsWriting(instance, async () => asMoveResult(kind, await commands.moveMods(instance.value.activeProfile, names, place, end)));
+      }
+      if (!isSeparatorsPlace(place)) return failed(kind, SEPARATOR_PLACES);
+      return runModsWriting(instance, async () => asMoveResult(kind, await commands.moveSeparators(instance.value.activeProfile, names, place, end)));
+    },
+    report: (result, { kind, names }) => {
+      if (!result.applied) {
+        reporter.report('error', result.refusal, result.detail);
         return;
       }
-      await runModsWriting(instance, async () =>
-        report('separator', separatorNames, await commands.moveSeparators(activeProfile, separatorNames, place, end)));
-    }
-  });
+      reporter.selectionOutcome(
+        `Could not move ${result.outcome.refused.length} of ${names.length} ${kind}s.`, result.outcome, (name) => name);
+    },
+  };
+  return registerAgentGesture('modbench.mod.move', view.selection, gesture);
 }
 
 // One question for the whole selection: naming the mod alone, or listing several, both saying
@@ -145,58 +184,101 @@ interface ModContextDeps {
   log: (line: string) => void;
 }
 
+interface Rename {
+  readonly oldName: string;
+  readonly newName: string;
+}
+
+type Uninstalled = Extract<Awaited<ReturnType<ModlistCommands['uninstallMods']>>, { applied: true }>['outcome']['landed'][number];
+
+interface ModToUninstall {
+  readonly name: string;
+  readonly archiveFilename?: string;
+}
+
+function partialsOfUninstall(item: Uninstalled, modOrderFile: string): PartialFailure[] {
+  const partial: PartialFailure[] = [];
+  if (item.sourceRefusal !== undefined) {
+    partial.push({ message: `"${item.name}" was uninstalled, but its source folder could not be moved to the trash.`, detail: item.sourceRefusal, severity: 'warning' });
+  }
+  if (item.lineRefusal !== undefined) {
+    partial.push({ message: `"${item.name}" was uninstalled, but its ${modOrderFile} line could not be removed.`, detail: item.lineRefusal, severity: 'warning' });
+  } else if (item.markRefusal !== undefined) {
+    partial.push({ message: `"${item.name}" was uninstalled, but its downloaded file could not be marked uninstalled`, detail: item.markRefusal, severity: 'log' });
+  }
+  return partial;
+}
+
 export function registerModContextCommands(
   { commands, instance, viewSelection, reporter, ask, trash, log }: ModContextDeps,
 ): vscode.Disposable[] {
+  const rename: AgentGesture<ModlistNode, Rename, GestureResult<string>, { name: string }> = {
+    fromView: async (entry) => {
+      const node = singularArgument(entry, 'mod');
+      if (!node) return undefined;
+      const oldName = node.mod.name;
+      const newName = await promptRename('Rename mod', oldName, modNamePrompt(commands, instance, oldName));
+      return newName === undefined ? undefined : { oldName, newName };
+    },
+    fromAgent: ({ argument, options: { name } }) => {
+      const [only, ...more] = argument;
+      if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a mod carries one mod.');
+      const oldName = modNameOf(only);
+      const refusal = commands.renameModNameRefusal(instance.value, name, oldName);
+      if (refusal !== undefined) throw new Refusal(refusal);
+      return { oldName, newName: name };
+    },
+    run: ({ oldName, newName }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
+      const { activeProfile, profiles, paths, managerNames } = instance.value;
+      const result = await commands.renameMod(activeProfile, profiles, oldName, newName, paths.sourceDirs.get(oldName));
+      if (!result.applied) return { applied: false, refusal: 'Failed to rename mod.', detail: result.refusal };
+      if (result.unchanged) return { applied: true, outcome: { landed: [], refused: [] } };
+      return {
+        applied: true,
+        outcome: { landed: [newName], refused: [] },
+        partial: result.lineRefusals.map(({ profile, refusal }) => ({
+          message: `"${oldName}" was renamed, but its ${managerNames.modOrderFile} line in profile "${profile}" could not be renamed.`,
+          detail: refusal, severity: 'warning',
+        })),
+      };
+    }),
+    report: (result) => {
+      if (!result.applied) reporter.report('error', result.refusal, result.detail);
+      else reportPartial(reporter, result.partial);
+    },
+  };
+
+  const uninstall: AgentGesture<ModlistNode, readonly ModToUninstall[], GestureResult<Uninstalled>> = {
+    fromView: async (entry) => {
+      const rows = pluralArgument(entry, 'mod');
+      const mods = rows.map((n) => ({ name: n.mod.name, archiveFilename: n.mod.archiveFilename }));
+      if (mods.length === 0) return undefined;
+      const sourceMods = rows.filter((n) => n.facts?.tracked === true).map((n) => n.mod.name);
+      return (await confirmUninstall(mods.map((m) => m.name), sourceMods, ask)) ? mods : undefined;
+    },
+    fromAgent: ({ argument }) => argument.map(modNameOf).map((name) => ({
+      name, archiveFilename: instance.value.mods.flatMap((entry) => (entry.kind === 'mod' && entry.name === name ? [entry.archiveFilename] : []))[0],
+    })),
+    run: (mods) => runModsWriting(instance, async (): Promise<GestureResult<Uninstalled>> => {
+      const { activeProfile, mods: order, managerNames } = instance.value;
+      const result = await commands.uninstallMods(activeProfile, order, mods, trash);
+      if (!result.applied) return { applied: false, refusal: 'Failed to uninstall mods.', detail: result.refusal };
+      return { applied: true, outcome: result.outcome, partial: result.outcome.landed.flatMap((item) => partialsOfUninstall(item, managerNames.modOrderFile)) };
+    }),
+    report: (result, mods) => {
+      if (!result.applied) {
+        reporter.report('error', result.refusal, result.detail);
+        return;
+      }
+      reporter.selectionOutcome(
+        `Could not uninstall ${result.outcome.refused.length} of ${mods.length} mods.`, result.outcome, (m) => m.name);
+      reportPartial(reporter, result.partial, log);
+    },
+  };
+
   return [
-      registerGesture('modbench.mod.rename', viewSelection, async (entry) => {
-        const node = singularArgument(entry, 'mod');
-        if (!node) return;
-        const oldName = node.mod.name;
-        const newName = await promptRename('Rename mod', oldName, modNamePrompt(commands, instance, oldName));
-        if (newName === undefined) return;
-        await runModsWriting(instance, async () => {
-          const { activeProfile, profiles, managerNames, paths } = instance.value;
-          const result = await commands.renameMod(activeProfile, profiles, oldName, newName, paths.sourceDirs.get(oldName));
-          if (!result.applied) {
-            reporter.report('error', 'Failed to rename mod.', result.refusal);
-            return;
-          }
-          for (const { profile, refusal } of result.lineRefusals) {
-            reporter.report('warning',
-              `"${oldName}" was renamed, but its ${managerNames.modOrderFile} line in profile "${profile}" could not be renamed.`, refusal);
-          }
-        });
-      }),
-      registerGesture('modbench.mod.uninstall', viewSelection, async (entry) => {
-        // The download to mark comes off the row the tree already holds, so the command walks
-        // nothing to find it.
-        const rows = pluralArgument(entry, 'mod');
-        const mods = rows.map((n) => ({ name: n.mod.name, archiveFilename: n.mod.archiveFilename }));
-        if (mods.length === 0) return;
-        const sourceMods = rows.filter((n) => n.facts?.tracked === true).map((n) => n.mod.name);
-        if (!(await confirmUninstall(mods.map((m) => m.name), sourceMods, ask))) return;
-        await runModsWriting(instance, async () => {
-          const result = await commands.uninstallMods(instance.value.activeProfile, instance.value.mods, mods, trash);
-          if (!result.applied) {
-            reporter.report('error', 'Failed to uninstall mods.', result.refusal);
-            return;
-          }
-          reporter.selectionOutcome(
-            `Could not uninstall ${result.outcome.refused.length} of ${mods.length} mods.`, result.outcome, (m) => m.name);
-          for (const item of result.outcome.landed) {
-            if (item.sourceRefusal !== undefined) {
-              reporter.report('warning', `"${item.name}" was uninstalled, but its source folder could not be moved to the trash.`, item.sourceRefusal);
-            }
-            if (item.lineRefusal !== undefined) {
-              reporter.report('warning',
-                `"${item.name}" was uninstalled, but its ${instance.value.managerNames.modOrderFile} line could not be removed.`, item.lineRefusal);
-            } else if (item.markRefusal !== undefined) {
-              log(`"${item.name}" was uninstalled, but its downloaded file could not be marked uninstalled: ${item.markRefusal}`);
-            }
-          }
-        });
-      }),
+    registerAgentGesture('modbench.mod.rename', viewSelection, rename),
+    registerAgentGesture('modbench.mod.uninstall', viewSelection, uninstall),
   ];
 }
 function separatorNamePrompt(
@@ -218,93 +300,161 @@ async function confirmSeparatorDelete(names: readonly string[], ask: AskQuestion
   return (await ask(question, { modal: true }, 'Delete')) === 'Delete';
 }
 
-export function registerSeparatorCommands(
-  commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
-  viewSelection: () => readonly ModlistNode[],
-): vscode.Disposable[] {
-  return [
-      registerGesture('modbench.separator.rename', viewSelection, async (entry) => {
-        const node = singularArgument(entry, 'separator');
-        if (!node) return;
-        const oldName = node.separator.name;
-        const newName = await promptRename('Rename separator', oldName, separatorNamePrompt(commands, instance, oldName));
-        if (newName === undefined) return;
-        const failed = 'Failed to rename separator.';
-        await runModsWriting(instance, async () => {
-          try {
-            const result = await commands.renameSeparator(instance.value.activeProfile, oldName, newName);
-            if (!result.applied) reporter.report('error', failed, result.refusal);
-          } catch (err) {
-            reporter.report('error', failed, errorMessage(err));
-          }
-        });
-      }),
-      registerGesture('modbench.separator.add', viewSelection, async (entry) => {
-        const node = singularArgument(entry, 'mod', 'separator');
-        if (!node) return;
-        const name = await vscode.window.showInputBox({
-          prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNamePrompt(commands, instance),
-        });
-        if (!name) return;
-        const anchor = node.kind === 'mod' ? node.mod : node.separator;
-        const failed = 'Failed to add separator.';
-        await runModsWriting(instance, async () => {
-          try {
-            const result = await commands.insertSeparator(instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name });
-            if (!result.applied) reporter.report('error', failed, result.refusal);
-          } catch (err) {
-            reporter.report('error', failed, errorMessage(err));
-          }
-        });
-      }),
-      registerGesture('modbench.separator.delete', viewSelection, async (entry) => {
-        const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
-        if (names.length === 0) return;
-        if (!(await confirmSeparatorDelete(names, ask))) return;
-        await runModsWriting(instance, async () => {
-          const result = await commands.deleteSeparators(instance.value.activeProfile, instance.value.mods, names, trash);
-          if (!result.applied) {
-            reporter.report('error', 'Failed to delete separators.', result.refusal);
-            return;
-          }
-          reporter.selectionOutcome(
-            `Could not delete ${result.outcome.refused.length} of ${names.length} separators.`,
-            result.outcome, (item) => item.name);
-          for (const item of result.outcome.landed) {
-            if (item.lineRefusal !== undefined) {
-              reporter.report('warning',
-                `"${item.name}" was deleted, but its ${instance.value.managerNames.modOrderFile} line could not be removed.`, item.lineRefusal);
-            }
-          }
-        });
-      }),
-  ];
+interface SeparatorAdd {
+  readonly name: string;
+  readonly anchor: EntryRef;
 }
-export function registerCreateEmptyModCommand(
+
+interface SeparatorRename {
+  readonly oldName: string;
+  readonly newName: string;
+}
+
+type DeletedSeparator = Extract<Awaited<ReturnType<ModlistCommands['deleteSeparators']>>, { applied: true }>['outcome']['landed'][number];
+
+function renameGesture(
   commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
-): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.mod.createEmpty', async () => {
-    const name = await vscode.window.showInputBox({
-      prompt: 'New mod name', placeHolder: 'My New Mod',
-      validateInput: (value) => commands.newModNameRefusal(instance.value, value),
-    });
-    if (!name) return;
-    await runModsWriting(instance, async () => {
-      try {
-        const outcome = await commands.createEmptyMod(instance.value.activeProfile, name);
-        if (!outcome.applied) {
-          reporter.report('error', `Failed to create "${name}".`, outcome.refusal);
-          return;
-        }
-        if (outcome.lineRefusal !== undefined) {
-          reporter.report(
-            'warning', `"${name}" was created, but its ${instance.value.managerNames.modOrderFile} line could not be written.`, outcome.lineRefusal);
-        }
-      } catch (err) {
-        reporter.report('error', `Failed to create "${name}".`, errorMessage(err));
+): AgentGesture<ModlistNode, SeparatorRename, GestureResult<string>, { name: string }> {
+  return {
+    fromView: async (entry) => {
+      const node = singularArgument(entry, 'separator');
+      if (!node) return undefined;
+      const oldName = node.separator.name;
+      const newName = await promptRename('Rename separator', oldName, separatorNamePrompt(commands, instance, oldName));
+      return newName === undefined ? undefined : { oldName, newName };
+    },
+    fromAgent: ({ argument, options: { name } }) => {
+      const [only, ...more] = argument;
+      if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a separator carries one separator.');
+      const oldName = separatorNameOf(only);
+      const refusal = commands.separatorNameRefusal(instance.value, name, oldName);
+      if (refusal !== undefined) throw new Refusal(refusal);
+      return { oldName, newName: name };
+    },
+    run: ({ oldName, newName }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
+      const result = await commands.renameSeparator(instance.value.activeProfile, oldName, newName);
+      if (!result.applied) return { applied: false, refusal: 'Failed to rename separator.', detail: result.refusal };
+      return { applied: true, outcome: { landed: result.wrote ? [result.name] : [], refused: [] } };
+    }),
+    report: (result) => {
+      if (!result.applied) reporter.report('error', result.refusal, result.detail);
+    },
+  };
+  }
+
+  function addGesture(
+    commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
+  ): AgentGesture<ModlistNode, SeparatorAdd, GestureResult<string>, { name: string }> {
+    return {
+    fromView: async (entry) => {
+      const node = singularArgument(entry, 'mod', 'separator');
+      if (!node) return undefined;
+      const name = await vscode.window.showInputBox({
+        prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNamePrompt(commands, instance),
+      });
+      if (!name) return undefined;
+      const anchor = node.kind === 'mod' ? node.mod : node.separator;
+      return { name, anchor: { kind: anchor.kind, name: anchor.name } };
+    },
+    fromAgent: ({ argument, options: { name } }) => {
+      const [only, ...more] = argument;
+      if (only === undefined || more.length > 0) throw new Refusal('An agent call to add a separator carries one mod or separator, the anchor.');
+      const refusal = commands.separatorNameRefusal(instance.value, name);
+      if (refusal !== undefined) throw new Refusal(refusal);
+      return { name, anchor: entryRefOf(only) };
+    },
+    run: ({ name, anchor }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
+      const result = await commands.insertSeparator(instance.value.activeProfile, name, anchor);
+      return result.applied
+        ? { applied: true, outcome: { landed: [result.name], refused: [] } }
+        : { applied: false, refusal: 'Failed to add separator.', detail: result.refusal };
+    }),
+    report: (result) => {
+      if (!result.applied) reporter.report('error', result.refusal, result.detail);
+    },
+  };
+  }
+
+  function deleteGesture(
+    commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  ): AgentGesture<ModlistNode, readonly string[], GestureResult<DeletedSeparator>> {
+    return {
+    fromView: async (entry) => {
+      const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
+      return names.length > 0 && await confirmSeparatorDelete(names, ask) ? names : undefined;
+    },
+    fromAgent: ({ argument }) => argument.map(separatorNameOf),
+    run: (names) => runModsWriting(instance, async (): Promise<GestureResult<DeletedSeparator>> => {
+      const { activeProfile, mods, managerNames } = instance.value;
+      const result = await commands.deleteSeparators(activeProfile, mods, names, trash);
+      if (!result.applied) return { applied: false, refusal: 'Failed to delete separators.', detail: result.refusal };
+      return {
+        applied: true,
+        outcome: result.outcome,
+        partial: result.outcome.landed.flatMap((item) => (item.lineRefusal === undefined ? [] : [{
+          message: `"${item.name}" was deleted, but its ${managerNames.modOrderFile} line could not be removed.`,
+          detail: item.lineRefusal, severity: 'warning' as const,
+        }])),
+      };
+    }),
+    report: (result, names) => {
+      if (!result.applied) {
+        reporter.report('error', result.refusal, result.detail);
+        return;
       }
-    });
-  });
+      reporter.selectionOutcome(
+        `Could not delete ${result.outcome.refused.length} of ${names.length} separators.`, result.outcome, (item) => item.name);
+      reportPartial(reporter, result.partial);
+    },
+  };
+  }
+
+  export function registerSeparatorCommands(
+    commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+    viewSelection: () => readonly ModlistNode[],
+  ): vscode.Disposable[] {
+    return [
+      registerAgentGesture('modbench.separator.rename', viewSelection, renameGesture(commands, instance, reporter)),
+      registerAgentGesture('modbench.separator.add', viewSelection, addGesture(commands, instance, reporter)),
+      registerAgentGesture('modbench.separator.delete', viewSelection, deleteGesture(commands, instance, reporter, ask, trash)),
+    ];
+  }
+  const createPartial = (name: string, lineRefusal: string | undefined, modOrderFile: string): PartialFailure[] =>
+    (lineRefusal === undefined ? [] : [{ message: `"${name}" was created, but its ${modOrderFile} line could not be written.`, detail: lineRefusal, severity: 'warning' }]);
+
+  export function registerCreateEmptyModCommand(
+    commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
+  ): vscode.Disposable {
+    const gesture: AgentGesture<ModlistNode, string, GestureResult<string>, { name: string }> = {
+      fromView: async () => {
+        const name = await vscode.window.showInputBox({
+          prompt: 'New mod name', placeHolder: 'My New Mod',
+          validateInput: (value) => commands.newModNameRefusal(instance.value, value),
+        });
+        return name || undefined;
+      },
+      fromAgent: ({ options: { name } }) => {
+        const refusal = commands.newModNameRefusal(instance.value, name);
+        if (refusal !== undefined) throw new Refusal(refusal);
+        return name;
+      },
+      run: (name) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
+        const failed = `Failed to create "${name}".`;
+        try {
+          const outcome = await commands.createEmptyMod(instance.value.activeProfile, name);
+          return outcome.applied
+            ? { applied: true, outcome: { landed: [name], refused: [] }, partial: createPartial(name, outcome.lineRefusal, instance.value.managerNames.modOrderFile) }
+            : { applied: false, refusal: failed, detail: outcome.refusal };
+        } catch (err) {
+          return { applied: false, refusal: failed, detail: errorMessage(err) };
+        }
+      }),
+      report: (result) => {
+        if (!result.applied) reporter.report('error', result.refusal, result.detail);
+        else reportPartial(reporter, result.partial);
+      },
+  };
+  return registerAgentGesture('modbench.mod.createEmpty', () => [], gesture);
 }
 
 /** A mod row opens the mod's folder, the Overwrite row the overwrite folder, and a file or folder

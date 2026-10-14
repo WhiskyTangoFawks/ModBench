@@ -1,5 +1,5 @@
 import type {
-  DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, HashedFile, InstallationFile,
+  DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, GameFile, HashedFile, InstallationFile,
   InstallOutcome, InstallSource, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
   ModFolder, ModFolders, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription,
 } from '../instanceAdapter/instanceAdapter';
@@ -32,6 +32,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     modFiles: noFilesFor(overrides.mods ?? []),
     folderMeta: new Map(),
     sourceMods: { folders: new Map(), folderOf: () => undefined, notes: [] },
+    holdsRepository: false,
     ...overrides,
   };
 }
@@ -48,6 +49,8 @@ export type AdapterCall =
   | { readonly verb: 'renamePlugin'; readonly origin: FileOrigin; readonly from: string; readonly to: string; readonly gameRelease: string | undefined }
   | { readonly verb: 'trashEntryFolder'; readonly entry: EntryRef }
   | { readonly verb: 'trashSourceFolder'; readonly mod: string }
+  | { readonly verb: 'writeIgnoreList' }
+  | { readonly verb: 'removeIgnoreList' }
   | { readonly verb: 'install'; readonly source: InstallSource; readonly target: InstallTarget; readonly keys: OwnedMetaKeys };
 
 export type WriteVerb = AdapterCall['verb'];
@@ -63,8 +66,12 @@ export interface InstanceAnswers {
   stamps?: ReadonlyMap<string, FileStamp>;
   /** What the installation of each mod answers, by mod name; a mod not there records none. */
   installations?: ReadonlyMap<string, FileRead<readonly InstallationFile[]>>;
+  /** Each downloaded file with its hashes, by its path; a path not there is unreadable. */
+  downloadedFiles?: ReadonlyMap<string, InstallationFile>;
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
+  /** The game's files, which a mod's files of the same path, whatever the case, override. */
+  gameFiles?: readonly GameFile[];
   installed?: InstallOutcome;
   /** Downloaded files that are gone: they get no mark. */
   goneDownloads?: ReadonlySet<string>;
@@ -134,7 +141,15 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     modFolderPath: (mod) => Promise.resolve(`/mods/${mod}`),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFiles: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: [] }),
+    downloadedFile: (path) => answer(answers.downloadedFiles?.get(path), path),
     managerFilesInModFolder: ['meta.ini'],
+    overriddenGameFiles: (_dataFolder, modFilePaths) => {
+      const paths = new Set(modFilePaths.map((path) => path.toLowerCase()));
+      return Promise.resolve({ kind: 'read', answer: (answers.gameFiles ?? []).filter((file) => paths.has(file.path.toLowerCase())) });
+    },
+    buildFolder: '/build',
+    writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, undefined),
+    removeIgnoreList: () => record({ verb: 'removeIgnoreList' }, undefined),
     fileStamp: (path) => answer(answers.stamps?.get(path), path),
     originFileHash: (path) => {
       hashed.push(path);
@@ -142,7 +157,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     changeModOrder: (profile, decide: DecideModOrder) => {
       const changes = decide(current.mods, current.modFolders);
-      return record({ verb: 'changeModOrder', profile, changes }, { wrote: changes.length > 0 });
+      return record({ verb: 'changeModOrder', profile, changes }, { wrote: changes.length > 0, landed: changes });
     },
     changePluginOrder: (profile, decide: DecidePluginOrder) => {
       const changes = decide(current.pluginOrder);

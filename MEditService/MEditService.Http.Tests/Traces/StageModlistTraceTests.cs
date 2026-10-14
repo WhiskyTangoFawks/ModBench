@@ -128,8 +128,8 @@ public sealed class StageModlistTraceTests : HostedTests
             $"{{\"installationFile\":\"Mod.zip\",\"path\":\"edited.txt\",\"delta\":\"{Delta}\"}}",
             JsonDocument.Parse(manifest[3]).RootElement.GetProperty("from").GetRawText());
         Assert.Equal([Delta], Directory.GetFiles(BuildFolder).Select(Path.GetFileName));
-        var progress = await stream.EventsUntil("stage-progress", e => e.GetProperty("stageProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
-        Assert.Contains(progress, e => e.GetProperty("stageProgress").GetProperty("mod").GetString() == Mod);
+        var progress = await stream.EventsUntil("stage-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
+        Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Mod);
     }
 
     [Fact]

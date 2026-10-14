@@ -83,6 +83,23 @@ public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepositor
         return true;
     }
 
+    public string Hash(Stream content) => FileHash.Of(content);
+
+    public Manifest? ReadManifest(string modFolder, string modName)
+    {
+        var path = Path.Combine(modFolder, ManifestName(modName));
+        return File.Exists(path) ? ManifestText.Parse(File.ReadAllText(path, Encoding.UTF8)) : null;
+    }
+
+    public string DeltaName(string path, string baseHash, string fileHash) => ManifestText.DeltaName(path, baseHash, fileHash);
+
+    public Stream? OpenDelta(string buildFolder, string? downloadsFolder, string path, string baseHash, string fileHash)
+    {
+        var name = ManifestText.DeltaName(path, baseHash, fileHash);
+        return new[] { buildFolder, downloadsFolder }.OfType<string>().Select(folder => Path.Combine(folder, name))
+            .FirstOrDefault(File.Exists) is { } found ? File.OpenRead(found) : null;
+    }
+
     public long? DeltaSize(string buildFolder, string path, string baseHash, string fileHash)
     {
         var delta = new FileInfo(Path.Combine(buildFolder, ManifestText.DeltaName(path, baseHash, fileHash)));

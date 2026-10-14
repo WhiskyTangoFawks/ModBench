@@ -38,6 +38,9 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
 
     public virtual bool GameFolderExists(string gameFolder) => inner.GameFolderExists(gameFolder);
 
+    public virtual Answer<IReadOnlyList<string>, PluginFailure> StringsPlacesOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
+        inner.StringsPlacesOf(modPath, loadOrder, strings);
+
     public virtual LinkAnswers LinkTargets(
         LoadOrderSnapshot loadOrder, RegisteredPlugin compiled, IReadOnlyCollection<string> formKeys) =>
         inner.LinkTargets(loadOrder, compiled, formKeys);

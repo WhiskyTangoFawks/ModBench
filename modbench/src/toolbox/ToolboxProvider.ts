@@ -46,6 +46,8 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
 
   private readonly subscriptions: vscode.Disposable[];
 
+  private gesture: string | undefined;
+
   constructor(private readonly deps: ToolboxDeps) {
     const changed = () => this._onDidChangeTreeData.fire(undefined);
     this.subscriptions = deps.instance
@@ -61,8 +63,14 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
     this._onDidChangeTreeData.dispose();
   }
 
+  /** What a gesture running says on the message line, until `undefined` gives the line back. */
+  say(message: string | undefined): void {
+    this.gesture = message;
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
   viewMessage(): string | undefined {
-    return this.deps.instance && lastGoodReadMessage(this.deps.instance);
+    return this.gesture ?? (this.deps.instance && lastGoodReadMessage(this.deps.instance));
   }
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {

@@ -27,8 +27,8 @@ vi.mock('vscode', async () => {
     Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
     window: { withProgress: recordedWithProgress },
     commands: {
-      executeCommand: (id: string, plugins: PluginAddress[], drop: PluginsDrop) => {
-        if (id === 'modbench.plugin.move') moveCommands.push({ plugins, drop });
+      executeCommand: (id: string, _clicked: unknown, rows: { plugin: { name: string }; origin: string }[], drop: PluginsDrop) => {
+        if (id === 'modbench.plugin.move') moveCommands.push({ plugins: rows.map(({ plugin, origin }) => ({ name: plugin.name, origin })), drop });
         return Promise.resolve();
       },
     },
@@ -640,6 +640,11 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(moveCommands.map(({ plugins }) => plugins)).toEqual([[{ name: 'A.esp', origin: 'SomeMod' }]]);
   });
 
+  it('a drop of rows the view does not hold moves nothing, and does not fall back to the selection', async () => {
+    await drag(['Gone.esp'], 'D.esp');
+    expect(moveCommands).toEqual([]);
+  });
+
   it('a drop fires nothing before the read lands', async () => {
     const { fired } = await drag(['A.esp'], 'D.esp');
     expect(fired).toBe(false);
@@ -1229,7 +1234,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
     return { group: present(group, 'the Weapon group'), record: present(record, 'the record row') };
   }
 
-  it('flips a record row on the reconcile after its mod is initialized, from the rows already read', async () => {
+  it('flips a record row on the reconcile after its mod is decompiled and committed, from the rows already read', async () => {
     const client = weaponOf(recordSummary());
     const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
     await reconcile(h, [held('A.esp')]);
@@ -2113,7 +2118,7 @@ describe('PluginsTreeProvider — changed outside Modbench', () => {
 });
 
 describe('PluginsTreeProvider — a healthy plugin row after a reconcile', () => {
-  it('states only its kind and where init applies, with no description and the base tooltip', async () => {
+  it('states only its kind and where decompile and commit applies, with no description and the base tooltip', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('A.esp'), held('B.esp')]);
 

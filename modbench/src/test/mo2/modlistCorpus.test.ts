@@ -72,6 +72,39 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     expect((await stat(join(dir, 'mods', 'QA Corpus Marker_separator'))).isDirectory()).toBe(true);
   });
 
+  it('insertSeparator answers the name the separator was written under, folded as MO2 folds a folder name', async () => {
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).insertSeparator(PROFILE, '  QA  Marker. ', { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
+
+    expect(outcome).toEqual({ applied: true, wrote: true, name: 'QA Marker' });
+    expect(await separatorNames(dir)).toContain('QA Marker');
+  });
+
+  it('renameSeparator answers the name the separator was written under, folded as MO2 folds a folder name', async () => {
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).renameSeparator(PROFILE, 'Unassigned (Modlist Development)', 'Renamed  QA Group.');
+
+    expect(outcome).toEqual({ applied: true, wrote: true, name: 'Renamed QA Group' });
+    expect(await separatorNames(dir)).toContain('Renamed QA Group');
+  });
+
+  it('renameSeparator to the separator\'s own name writes nothing', async () => {
+    const before = await snapshotTree(dir);
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).renameSeparator(PROFILE, 'Unassigned (Modlist Development)', 'Unassigned (Modlist Development)');
+    assertOnlyChanged(before, await snapshotTree(dir), new Set());
+
+    expect(outcome).toMatchObject({ applied: true, wrote: false });
+  });
+
+  it.each(['', '   ', '...'])('insertSeparator and renameSeparator refuse the name %j the adapter folds to nothing, writing nothing', async (name) => {
+    const commands = modlistCommands(adapterOver(dir), unscriptedMEdit);
+    const before = await snapshotTree(dir);
+    const added = await commands.insertSeparator(PROFILE, name, { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
+    const renamed = await commands.renameSeparator(PROFILE, 'Unassigned (Modlist Development)', name);
+    assertOnlyChanged(before, await snapshotTree(dir), new Set());
+
+    const refusal = { applied: false, refusal: `Not a valid separator name: "${name}"` };
+    expect([added, renamed]).toEqual([refusal, refusal]);
+  });
+
   it('renameSeparator renames the line and its mods/ folder, its meta.ini carried along unchanged', async () => {
     const OLD_META = 'mods/Unassigned (Modlist Development)_separator/meta.ini';
     const NEW_META = 'mods/Renamed QA Group_separator/meta.ini';

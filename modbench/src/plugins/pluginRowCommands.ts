@@ -9,11 +9,14 @@ import { modArgumentOf, pluginArgumentOf, rowNameOf } from '../drivingLib/argume
 import { recordArgumentOf } from '../drivingLib/recordArgument';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { initProgressMessage } from './initProgress';
+import { decompileAndCommitProgressMessage } from './decompileAndCommitProgress';
 import type { PluginsTreeNode } from './pluginRows';
-import { PLUGINS_KEY_ARGS } from './gestureEntry';
-import { gestureEntry, isClickedRow, selectionArgument } from '../drivingLib/gestureEntry';
+import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
+import { argumentOfKind, registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
+import type { SelectionResult } from '../pluginsCommands/plugins';
+import { isClickedRow, selectionArgument } from '../drivingLib/gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import type { Argument } from '../wire/argument';
 import type { Reporter } from '../ports/reporter';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import type { AskQuestion } from '../ports/dialog';
@@ -32,12 +35,12 @@ function rowName(row: PluginAddress): string {
   return `${row.name} (${row.origin})`;
 }
 
-export interface InitDeps {
+export interface DecompileAndCommitDeps {
   progress: Pick<PluginsViewProgress, 'say'>;
   instance: Pick<Instance, 'refresh'>;
-  commands: Pick<SourceCommands, 'init'>;
+  commands: Pick<SourceCommands, 'decompileAndCommit'>;
   reporter: Reporter;
-  onInitialized: () => Promise<void>;
+  onCommitted: () => Promise<void>;
   /** The instance's mod folders by mod name, which say whether an origin is a mod. */
   modDirs: () => ReadonlyMap<string, string>;
   /** The Mods view's id, whose bar a gesture from a Mods row runs under. */
@@ -53,18 +56,32 @@ interface ModTargets {
 const NOT_IN_A_MOD = 'it is not in a mod';
 const NO_MOD_OR_PLUGIN = 'it carries no mod or plugin';
 
-/** commands.md, `init`: the mods of Mods rows, plugin rows, a column header, or the palette's
- *  selection, in one call. A plugin no mod provides is refused here, since mEdit is sent mods. */
-export function registerInitCommand(deps: InitDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
-  return vscode.commands.registerCommand(
-    'modbench.mod.init',
-    async (clicked?: unknown, selected?: readonly unknown[]) => {
-      const rows = gestureEntry(clicked, selected, paletteSelection, isClickedRow).selection;
-      const invokedFrom = rows.some((row) => modArgumentOf(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
-      await initMods(deps, targetsOf(rows, deps.modDirs()), invokedFrom);
-    },
-  );
+interface ModsGiven {
+  readonly mods: readonly string[];
+  /** What a view call was given that names no mod to send, and why. */
+  readonly refusedRows: readonly ItemRefusal<string>[];
+  readonly invokedFrom: string;
 }
+
+type DecompiledAndCommitted = GestureResult<InitOutcome['landed'][number], string>;
+
+/** commands.md, `decompile and commit`: the mods of Mods rows, plugin rows, a column header, or the palette's
+ *  selection, in one call. A plugin no mod provides is refused here, since mEdit is sent mods. */
+export function registerDecompileAndCommitCommand(deps: DecompileAndCommitDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
+  const gesture: AgentGesture<unknown, ModsGiven, DecompiledAndCommitted> = {
+    fromView: (entry) => ({ ...targetsOf(entry.selection, deps.modDirs()), invokedFrom: viewOf(entry.selection, deps.modsView) }),
+    fromAgent: ({ argument }) => givenByAgent(argument, deps.modsView),
+    run: ({ mods, invokedFrom }) => decompileAndCommitMods(deps, mods, invokedFrom),
+    report: (result, { mods, refusedRows }) => reportDecompiledAndCommitted(deps.reporter, result, mods, refusedRows),
+  };
+  return registerAgentGesture('modbench.mod.decompileAndCommit', paletteSelection, gesture, isClickedRow);
+}
+
+const givenByAgent = (argument: readonly Argument[], invokedFrom: string): ModsGiven =>
+  ({ mods: argument.map((mod) => argumentOfKind(mod, 'mod').name), refusedRows: [], invokedFrom });
+
+const viewOf = (rows: readonly unknown[], modsView: string): string =>
+  (rows.some((row) => modArgumentOf(row) !== undefined) ? modsView : PLUGINS_KEY_ARGS.view);
 
 function targetsOf(rows: readonly unknown[], modDirs: ReadonlyMap<string, string>): ModTargets {
   const mods = new Set<string>();
@@ -87,37 +104,39 @@ function pluginAddressOf(row: unknown): PluginAddress | undefined {
 
 // A mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost, so this runs
 // under the Plugins-view progress indicator.
-async function initMods(deps: InitDeps, { mods, refusedRows }: ModTargets, invokedFrom: string): Promise<void> {
-  const { progress, instance, commands, reporter, onInitialized } = deps;
+async function decompileAndCommitMods(
+  { progress, instance, commands, onCommitted }: DecompileAndCommitDeps, mods: readonly string[], invokedFrom: string,
+): Promise<DecompiledAndCommitted> {
   const [firstMod] = mods;
-  if (firstMod === undefined) {
-    if (refusedRows.length > 0) reportRefused(reporter, 0, { refused: [], plugins: [], refusedPlugins: refusedRows });
-    return;
-  }
-  const what = mods.length === 1 ? `"${firstMod}"` : `${mods.length} mods`;
-
-  await runWritingGesture(invokedFrom, instance, async () => {
+  if (firstMod === undefined) return { applied: true, outcome: { landed: [], refused: [] } };
+  return runWritingGesture(invokedFrom, instance, async (): Promise<DecompiledAndCommitted> => {
     try {
-      progress.say(initProgressMessage(firstMod, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
-      const result = await commands.init(mods, {
-        onProgress: (status) => { progress.say(initProgressMessage(status.mod ?? firstMod, status)); },
+      progress.say(decompileAndCommitProgressMessage(firstMod, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
+      const result = await commands.decompileAndCommit(mods, {
+        onProgress: (status) => { progress.say(decompileAndCommitProgressMessage(status.mod ?? firstMod, status)); },
       });
-      if (isRefused(result)) { reporter.report('error', result.message); return; }
-      if (result.landed.length > 0) await onInitialized();
-      const outcome = {
-        refused: result.refused,
-        plugins: result.landed.flatMap((landed) => landed.plugins),
-        refusedPlugins: refusedRows,
-      };
-      if (outcome.refused.length + outcome.refusedPlugins.length > 0) reportRefused(reporter, mods.length, outcome);
-      else if (result.landed.length > 0) reporter.landed(`Initialized ${what}.`);
+      if (isRefused(result)) return { applied: false, refusal: result.message };
+      if (result.landed.length > 0) await onCommitted();
+      return { applied: true, outcome: result };
     } finally {
       progress.say(undefined);
     }
   });
 }
 
-interface InitReport {
+function reportDecompiledAndCommitted(
+  reporter: Reporter, result: DecompiledAndCommitted, mods: readonly string[], refusedRows: readonly ItemRefusal<string>[],
+): void {
+  if (!result.applied) { reporter.report('error', result.refusal); return; }
+  const { landed, refused } = result.outcome;
+  if (refused.length + refusedRows.length > 0) {
+    reportRefused(reporter, mods.length, { refused, plugins: landed.flatMap((mod) => mod.plugins), refusedPlugins: refusedRows });
+  } else if (landed.length > 0) {
+    reporter.landed(`Decompiled and committed ${mods.length === 1 ? `"${mods[0]}"` : `${mods.length} mods`}.`);
+  }
+}
+
+interface DecompileAndCommitReport {
   refused: InitOutcome['refused'];
   plugins: readonly PluginAddress[];
   refusedPlugins: readonly ItemRefusal<string>[];
@@ -125,14 +144,14 @@ interface InitReport {
 
 // commands.md, "each item lands on its own": one notification naming each refused mod and each
 // refused plugin.
-function reportRefused(reporter: Reporter, modCount: number, report: InitReport): void {
+function reportRefused(reporter: Reporter, modCount: number, report: DecompileAndCommitReport): void {
   const counts = [
     ...(report.refused.length > 0 ? [`${report.refused.length} of ${modCount} mods`] : []),
     ...(report.refusedPlugins.length > 0
       ? [`${report.refusedPlugins.length} of ${report.plugins.length + report.refusedPlugins.length} plugins`]
       : []),
   ];
-  reporter.selectionOutcome(`Could not init ${counts.join(' and ')}.`, {
+  reporter.selectionOutcome(`Could not decompile and commit ${counts.join(' and ')}.`, {
     landed: report.plugins.map(rowName),
     refused: [
       ...report.refusedPlugins,
@@ -155,21 +174,23 @@ export interface DecompileDeps {
 export function registerDecompileCommand(
   deps: DecompileDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  return vscode.commands.registerCommand(
-    'modbench.plugin.decompile',
-    async (clicked?: unknown, selected?: readonly PluginsTreeNode[]) => {
+  const gesture: AgentGesture<PluginsTreeNode, readonly PluginAddress[], SelectionResult<PluginAddress>> = {
+    fromView: async (entry, _option, clicked) => {
       const header = columnHeaderOf(clicked);
-      const plugins = header
-        ? [header]
-        : selectionArgument(gestureEntry(clicked, selected, viewSelection), 'plugin').map((node) => node.argument.plugin);
-      if (plugins.length === 0 || !(await confirmDecompile(deps.ask, plugins))) return;
-      await runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
-        const outcome = await deps.client.decompile(plugins);
-        if (isRefused(outcome)) { deps.reporter.report('error', outcome.message); return; }
-        reportDecompiled(deps.reporter, outcome, plugins.length);
-      });
+      const plugins = header ? [header] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
+      return plugins.length > 0 && await confirmDecompile(deps.ask, plugins) ? plugins : undefined;
     },
-  );
+    fromAgent: ({ argument }) => argument.map(pluginOf),
+    run: (plugins) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
+      const outcome = await deps.client.decompile(plugins);
+      return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, outcome };
+    }),
+    report: (result, plugins) => {
+      if (result.applied) reportDecompiled(deps.reporter, result.outcome, plugins.length);
+      else deps.reporter.report('error', result.refusal);
+    },
+  };
+  return registerAgentGesture('modbench.plugin.decompile', viewSelection, gesture);
 }
 
 // plugins.md, Decompile: one confirmation for the selection, naming the plugins; it replaces
@@ -218,24 +239,24 @@ export interface BuildDeps {
 
 const NOT_A_SOURCE_MOD = 'it is not a source mod';
 
+type Built = GestureResult<BuildOutcome['landed'][number], string>;
+
 /** commands.md, `build`: the mods of Mods rows, plugin rows, a column header, the palette's
  *  selection, or the palette's pick of every source mod, built from the working tree. */
 export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
-  return vscode.commands.registerCommand(
-    'modbench.mod.build',
-    async (clicked?: unknown, selected?: readonly unknown[]) => {
-      const entry = gestureEntry(clicked, selected, paletteSelection, isClickedRow);
+  const gesture: AgentGesture<unknown, ModsGiven, Built> = {
+    fromView: async (entry) => {
       const targets = targetsOf(entry.selection, deps.modDirs());
       const fromARow = entry.clicked !== undefined || targets.mods.some((mod) => deps.sourceDirs().has(mod));
-      if (fromARow) {
-        const invokedFrom = entry.selection.some((row) => modArgumentOf(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
-        await buildMods(deps, targets, invokedFrom);
-        return;
-      }
+      if (fromARow) return { ...targets, invokedFrom: viewOf(entry.selection, deps.modsView) };
       const mods = await pickSourceMods(deps.sourceDirs());
-      if (mods !== undefined) await buildMods(deps, { mods, refusedRows: [] }, deps.modsView);
+      return mods === undefined ? undefined : { mods, refusedRows: [], invokedFrom: deps.modsView };
     },
-  );
+    fromAgent: ({ argument }) => givenByAgent(argument, deps.modsView),
+    run: (given) => buildMods(deps, given),
+    report: (result) => reportBuildResult(deps.reporter, result),
+  };
+  return registerAgentGesture('modbench.mod.build', paletteSelection, gesture, isClickedRow);
 }
 
 // mods.md, Build, story 7: from the palette with no source mod selected, a pick of every source.
@@ -245,35 +266,38 @@ async function pickSourceMods(sourceDirs: ReadonlyMap<string, string>): Promise<
   return picked?.map((item) => item.label);
 }
 
-async function buildMods(deps: BuildDeps, targets: ModTargets, invokedFrom: string): Promise<void> {
-  const { reporter, commands, instance } = deps;
+async function buildMods(deps: BuildDeps, { mods: named, refusedRows, invokedFrom }: ModsGiven): Promise<Built> {
+  const { commands, instance } = deps;
   const sourceDirs = deps.sourceDirs();
-  const mods = targets.mods.filter((mod) => sourceDirs.has(mod));
-  const refusedRows = [
-    ...targets.refusedRows,
-    ...targets.mods.filter((mod) => !sourceDirs.has(mod)).map((mod) => ({ item: mod, reason: NOT_A_SOURCE_MOD })),
-  ];
-  if (mods.length === 0) {
-    if (refusedRows.length > 0) reportBuilt(reporter, { landed: [], refused: refusedRows });
-    return;
-  }
-  if (!(await savedFirst(deps, mods))) return;
-  await runWritingGesture(invokedFrom, instance, async () => {
+  const mods = named.filter((mod) => sourceDirs.has(mod));
+  const notSource = named.filter((mod) => !sourceDirs.has(mod)).map((mod) => ({ item: mod, reason: NOT_A_SOURCE_MOD }));
+  if (mods.length === 0) return { applied: true, outcome: { landed: [], refused: [...refusedRows, ...notSource] } };
+  const unsaved = await savedFirst(deps, mods);
+  if (unsaved !== undefined) return unsaved;
+  return runWritingGesture(invokedFrom, instance, async (): Promise<Built> => {
     const outcome = await commands.build(mods, deps.gameRelease(), sourceDirs);
-    if (isRefused(outcome)) { reporter.report('error', outcome.message); return; }
+    if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
     for (const { compiled } of outcome.landed) {
       for (const plugin of compiled) deps.problems.publish(plugin, deps.sourceFiles(plugin.origin), plugin.diagnostics);
     }
-    reportBuilt(reporter, { landed: outcome.landed, refused: [...outcome.refused, ...refusedRows] });
-    reportPartlyBuilt(reporter, outcome);
-    reportOverwritten(reporter, outcome);
+    return {
+      applied: true,
+      outcome: { landed: outcome.landed, refused: [...outcome.refused, ...refusedRows, ...notSource] },
+      partial: [...partlyBuilt(outcome), ...overwritten(outcome), ...refusedInMods(outcome)],
+    };
   });
+}
+
+function reportBuildResult(reporter: Reporter, result: Built): void {
+  if (!result.applied) { reporter.report('error', result.refusal, result.detail); return; }
+  reportBuilt(reporter, result.outcome);
+  reportPartial(reporter, result.partial);
 }
 
 // mods.md, Build, story 5: the plugins are built from what the user sees, so the mod's unsaved
 // plugin source is saved first, and a file VS Code does not save refuses the build before anything
 // is written.
-async function savedFirst(deps: BuildDeps, mods: readonly string[]): Promise<boolean> {
+async function savedFirst(deps: BuildDeps, mods: readonly string[]): Promise<Built | undefined> {
   const unsaved: string[] = [];
   const homeless: string[] = [];
   for (const mod of mods) {
@@ -281,13 +305,9 @@ async function savedFirst(deps: BuildDeps, mods: readonly string[]): Promise<boo
     if (left === undefined) homeless.push(mod);
     else unsaved.push(...left);
   }
-  if (homeless.length > 0) {
-    deps.reporter.report('error', 'Could not build: no source folder for these mods.', homeless.join('\n'));
-    return false;
-  }
-  if (unsaved.length === 0) return true;
-  deps.reporter.report('error', 'Could not build: VS Code did not save its plugin source.', unsaved.join('\n'));
-  return false;
+  if (homeless.length > 0) return { applied: false, refusal: 'Could not build: no source folder for these mods.', detail: homeless.join('\n') };
+  if (unsaved.length === 0) return undefined;
+  return { applied: false, refusal: 'Could not build: VS Code did not save its plugin source.', detail: unsaved.join('\n') };
 }
 
 function diagnosticsWords(count: number): string {
@@ -322,21 +342,27 @@ function reportBuilt(reporter: Reporter, outcome: BuildOutcome): void {
 }
 
 // common.md, Reporting: a mod whose build stopped after it began writing landed, and the part that failed is named.
-function reportPartlyBuilt(reporter: Reporter, outcome: BuildOutcome): void {
+function partlyBuilt(outcome: BuildOutcome): PartialFailure[] {
   const partly = outcome.landed.flatMap(({ mod, failure }) => (failure === undefined ? [] : [`"${mod}" (${failure})`]));
-  if (partly.length === 0) return;
-  reporter.report('warning', `Built ${partly.length} mod${partly.length === 1 ? '' : 's'} only in part.`, partly.join(', '));
+  return partly.length === 0 ? [] : [{
+    message: `Built ${partly.length} mod${partly.length === 1 ? '' : 's'} only in part.`, detail: partly.join(', '), severity: 'warning',
+  }];
 }
 
 // mods.md, A source mod, story 4: a file the build overwrote is named, whatever else the build did.
-function reportOverwritten(reporter: Reporter, outcome: BuildOutcome): void {
-  const overwritten = outcome.landed.flatMap(({ mod, overwritten: paths }) => paths.map((path) => inMod(path, mod)));
-  if (overwritten.length === 0) return;
-  reporter.report(
-    'warning',
-    `Build overwrote ${overwritten.length} ${overwritten.length === 1 ? 'file' : 'files'} that differed.`,
-    overwritten.map((name) => `"${name}"`).join(', '),
-  );
+function overwritten(outcome: BuildOutcome): PartialFailure[] {
+  const paths = outcome.landed.flatMap(({ mod, overwritten: files }) => files.map((path) => inMod(path, mod)));
+  return paths.length === 0 ? [] : [{
+    message: `Build overwrote ${paths.length} ${paths.length === 1 ? 'file' : 'files'} that differed.`,
+    detail: paths.map((name) => `"${name}"`).join(', '), severity: 'warning',
+  }];
+}
+
+function refusedInMods(outcome: BuildOutcome): PartialFailure[] {
+  return outcome.landed.flatMap(({ mod, refused, archivesRefused }) => [
+    ...refused.map(({ item, reason }) => ({ message: `Could not build "${rowName(item)}" in "${mod}".`, detail: reason, severity: 'log' as const })),
+    ...archivesRefused.map(({ item, reason }) => ({ message: `Could not pack "${item}" in "${mod}".`, detail: reason, severity: 'log' as const })),
+  ]);
 }
 
 function inMod(path: string, mod: string): string {

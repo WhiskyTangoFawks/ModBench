@@ -180,6 +180,78 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void ReadManifest_ReadsWhatWriteManifestWrote_WithoutTheStampsOnlyFilesTrusts()
+    {
+        var stamp = new FileStamp(5, 1234, 99);
+        var manifest = new Manifest(
+            [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
+            [new ManifestSource("Data/Game.esm", 9, "CCCC")],
+            [
+                new ManifestFile("a.nif", "H1", stamp, new FileProvider.FirstInstallationFile()),
+                new ManifestFile("b.nif", "H2", stamp, new FileProvider.InstallationFileEntry("Patch.zip", "Data/b.nif")),
+                new ManifestFile("c.esm", "H4", null, new FileProvider.GameFile("Data/Game.esm")),
+                new ManifestFile("d/d.nif", HashOfHelloWithACapitalO, stamp, new FileProvider.InstallationFileDelta("Patch.zip", "Data/d.nif", HashOfHello)),
+                new ManifestFile("e.esm", HashOfHelloWithACapitalO, null, new FileProvider.GameFileDelta("Data/Game.esm", HashOfHello)),
+                new ManifestFile("z.txt", "H3", stamp, new FileProvider.NoProvider()),
+            ]);
+        _repository.WriteManifest(_root, "mod", manifest);
+
+        var read = _repository.ReadManifest(_root, "mod");
+
+        Assert.NotNull(read);
+        Assert.Equal(manifest.InstallationFiles, read.InstallationFiles);
+        Assert.Equal(manifest.GameFiles, read.GameFiles);
+        Assert.Equal(manifest.Files.Select(file => file with { Stamp = null }), read.Files);
+    }
+
+    [Fact]
+    public void ReadManifest_OfAModWithNone_IsNull()
+    {
+        Write("a.txt", "abc");
+
+        Assert.Null(_repository.ReadManifest(_root, "mod"));
+        Assert.Null(_repository.ReadManifest(Path.Combine(_root, "absent"), "mod"));
+    }
+
+    [Theory]
+    [InlineData("<<<<<<< HEAD")]
+    [InlineData("{\"path\":\"a.txt\"}")]
+    [InlineData("{\"path\":\"a.txt\",\"hash\":\"H\",\"from\":{\"gameFile\":\"Game.esm\",\"delta\":\"a.txt.0000000000000000_0000000000000000.octodiff\"}}")]
+    public void ReadManifest_WithALineItCannotRead_RefusesNamingTheLine(string line)
+    {
+        Write("mod.manifest", "{\"path\":\"b.txt\",\"hash\":\"H\"}\n" + line + "\n");
+
+        var refused = Assert.Throws<InvalidDataException>(() => _repository.ReadManifest(_root, "mod"));
+
+        Assert.Contains("line 2", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ADelta_IsOpenedFromTheBuildFolder_ElseLooseInTheDownloadsFolder_ElseNot()
+    {
+        var build = Path.Combine(_root, "build");
+        var downloads = Path.Combine(_root, "downloads");
+        _repository.WriteDelta(build, "a.nif", HashOfHello, HashOfHelloWithACapitalO, Writing([1], keep: true));
+        Write(Path.Combine("downloads", $"a.nif.{DeltaFromHelloToHelloWithACapitalO}"), "\u0002");
+        Write(Path.Combine("downloads", $"b.nif.{DeltaFromHelloToHelloWithACapitalO}"), "\u0003");
+
+        int? FirstByte(string path)
+        {
+            using var delta = _repository.OpenDelta(build, downloads, path, HashOfHello, HashOfHelloWithACapitalO);
+            return delta?.ReadByte();
+        }
+
+        Assert.Equal([1, 3, null], new[] { FirstByte("a.nif"), FirstByte("meshes/b.nif"), FirstByte("c.nif") });
+        Assert.Null(_repository.OpenDelta(build, null, "b.nif", HashOfHello, HashOfHelloWithACapitalO));
+    }
+
+    [Fact]
+    public void ADeltasName_CarriesTheFileItMakesAndTheHashesOfBothEnds()
+    {
+        Assert.Equal($"a.nif.{DeltaFromHelloToHelloWithACapitalO}", _repository.DeltaName("meshes/a.nif", HashOfHello, HashOfHelloWithACapitalO));
+    }
+
+    [Fact]
     public void OpenFile_ReadsTheFileAtThePathUnderTheFolder()
     {
         Write("scripts/a.pex", "bytes");

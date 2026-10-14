@@ -240,6 +240,7 @@ internal sealed class HeldPlugins
             IsMedium: content.IsMedium,
             IsMaster: content.IsMaster,
             IsBlueprint: content.IsBlueprint,
+            IsLocalized: content.IsLocalized,
             Masters: content.Masters,
             RecordCount: content.RecordCount,
             Origin: plugin.Origin,

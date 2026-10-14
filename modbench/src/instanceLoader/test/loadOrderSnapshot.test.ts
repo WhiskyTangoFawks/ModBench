@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import type { DataFolderPlugins, GameFolder, ModFolders, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
+import type { DataFolderPlugins, FileRead, FileStamp, GameFolder, ModFolders, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { buildFileConflictIndex, FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
 import {
-  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, providedPluginsOf, sourceFiles, type ArchiveSources,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, providedPluginsOf, sourceFiles, stampedSnapshot,
+  type ArchiveSources,
   type LoadOrderPlugin, type LoadOrderPluginLine,
 } from '../loadOrderSnapshot';
 import type { PluginAddress } from '../../wire/pluginAddress';
@@ -458,6 +459,39 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
       { origin: 'ModO', archives: [], stringsFiles: ['/store/ModO/Strings/A_en.STRINGS'] },
       { origin: 'Data/', archives: [join('/game/Data', 'D - Main.ba2')], stringsFiles: [join('/game/Data', 'Strings/D_en.STRINGS')] },
     ]);
+  });
+
+  it('stamps every archive and strings file it hands, the game\'s and each copy\'s, by the stamp read at its own path, reading each path once', async () => {
+    const asked: string[] = [];
+    const stampOf = (path: string): Promise<FileRead<FileStamp>> => {
+      asked.push(path);
+      return Promise.resolve(path.endsWith('.STRINGS')
+        ? { kind: 'unreadable', reason: `EACCES ${path}` }
+        : { kind: 'read', answer: { size: BigInt(path.length), modifiedNs: 1n, changedNs: 2n } });
+    };
+    const value: Parameters<typeof stampedSnapshot>[0] = {
+      dataFolder: '/game/Data',
+      plugins: [{
+        name: 'A.esp', path: '/a/A.esp', origin: 'ModA', provider: { kind: 'Game' }, line: 0, lineNamesIt: true,
+        archives: ['/a/A - Main.ba2'], stringsFiles: ['/a/A_en.STRINGS'],
+      }],
+      active: [], loadedWithNoLine: [],
+      archives: ['/g/Interface.ba2', '/a/A - Main.ba2'], stringsFiles: ['/t/A_en.STRINGS'],
+    };
+
+    const stamped = await stampedSnapshot(value, stampOf);
+
+    expect(stamped).toEqual({
+      ...value,
+      plugins: [{
+        ...value.plugins.at(0),
+        archives: [{ path: '/a/A - Main.ba2', stamp: '15/1/2' }],
+        stringsFiles: [{ path: '/a/A_en.STRINGS', stamp: 'EACCES /a/A_en.STRINGS' }],
+      }],
+      archives: [{ path: '/g/Interface.ba2', stamp: '16/1/2' }, { path: '/a/A - Main.ba2', stamp: '15/1/2' }],
+      stringsFiles: [{ path: '/t/A_en.STRINGS', stamp: 'EACCES /t/A_en.STRINGS' }],
+    });
+    expect(asked.sort()).toEqual(['/a/A - Main.ba2', '/a/A_en.STRINGS', '/g/Interface.ba2', '/t/A_en.STRINGS']);
   });
 
   it('carries the game folder\'s dataFolder, and every plugin with its origin and path', () => {
