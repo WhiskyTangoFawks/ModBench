@@ -55,23 +55,22 @@ Dispatch each further lane while the first executor is still implementing, and c
 
 When an executor reports committed, work through these in order.
 
-1. Start a refactorer: a fresh `general-purpose` agent on Sonnet with `run_in_background: true`, in the executor's worktree. The prompt is [`REFACTOR.md`](REFACTOR.md) verbatim, followed by the ticket's body, the breaks the executor's report names, the worktree's absolute path, its lane's boxes, and the boxes the open lanes hold. Keep the agentId. Continue when it reports done.
-2. Run `git merge-base --is-ancestor main <branch> || { echo REFUSED; exit 1; }`. The only exemption is a branch whose `git diff --name-only main...<branch>` lists nothing outside `docs/` and root-level `*.md`.
-3. Compare the test count before and after, across both reports. A drop stops the merge unless every missing test is named as retired, with the member it tested or the test that now holds its case.
-4. Run `bash .claude/skills/validate/run-gates.sh --comments` in the branch's worktree: the comment gate alone, seconds. An agent's report is not evidence for this gate, because the editor-time hook does not fire on script-patched files.
-5. Dispatch a reviewer with [`REVIEW.md`](REVIEW.md) as its brief, the breaks the executor's report names, and the refactorer's report. Merge on MERGE. On HOLD, send every blocking finding to the executor except a breach of a documented standard whose fix keeps behaviour. Once the executor reports committed, send those breaches to the refactorer. Re-verify with the same reviewer once both have committed. The executor reverts a change to a maintainer's document, and you quote the reverted diff as a break for the drain. You read the verdict, never the code.
-6. Run the tripwires:
+1. Run `git merge-base --is-ancestor main <branch> || { echo REFUSED; exit 1; }`. The only exemption is a branch whose `git diff --name-only main...<branch>` lists nothing outside `docs/` and root-level `*.md`.
+2. Compare the test count before and after. A drop stops the merge unless every missing test is named as retired, with the member it tested or the test that now holds its case.
+3. Run `bash .claude/skills/validate/run-gates.sh --comments` in the branch's worktree: the comment gate alone, seconds. An executor's report is not evidence for this gate, because the editor-time hook does not fire on script-patched files.
+4. Dispatch a reviewer with [`REVIEW.md`](REVIEW.md) as its brief and the breaks the report names. Merge on MERGE. On HOLD, send the blocking findings to the executor, and re-verify with the same reviewer after the fix commit. The executor reverts a change to a maintainer's document, and you quote the reverted diff as a break for the drain. You read the verdict, never the code.
+5. Run the tripwires:
    - When the report says "no behaviour change", diff the wire format and the public signatures.
    - Check whether README's What works today list now names anything this ticket did not build.
    - For a new cross-boundary import, name what it drags with it.
    - When a named surface was wired, retired or renamed, grep `CLAUDE.md`, the specs and adjacent doc comments for present-tense claims about it. A stale doc comment is fixed; a stale claim in a maintainer's document is a break for the drain.
-7. Run `git -C <checkout-absolute-path> merge --no-ff <branch>`.
-8. Where the outcome leaves a maintainer's document out of step with the code, such as a feature the README's What works today list should now name, quote it as a break for the drain.
-9. Close the ticket. Anything that needs human eyes is noted for the drain, since verification happens at the epic.
-10. Remove the worktree (`git worktree remove .claude/worktrees/<name>`) and delete the branch.
-11. Tell every open executor what landed and the new baseline test count, in one line.
-12. Sort the findings in the executor's and the refactorer's reports. A defect the run finds is the run's to fix, whatever ticket or epic it sits under and however old it is. Each finding takes one of four routes:
-   - A defect, or a finding that serves the epic, inside the lane's boxes: message the lane's executor the finding along with landed-since, and it lands with the ticket.
+6. Run `git -C <checkout-absolute-path> merge --no-ff <branch>`.
+7. Where the outcome leaves a maintainer's document out of step with the code, such as a feature the README's What works today list should now name, quote it as a break for the drain.
+8. Close the ticket. Anything that needs human eyes is noted for the drain, since verification happens at the epic.
+9. Remove the worktree (`git worktree remove .claude/worktrees/<name>`) and delete the branch.
+10. Tell every open executor what landed and the new baseline test count, in one line.
+11. Sort the report's **findings**. A defect the run finds is the run's to fix, whatever ticket or epic it sits under and however old it is. Each finding takes one of four routes:
+   - A defect, or a finding that serves the epic, inside the reporting executor's boxes: message that executor the finding along with landed-since, and it lands with the ticket.
    - A defect, or a finding that serves the epic, outside them: start a fresh executor with a brief you write, in the lane of the box it touches.
    - A finding whose root lives in a maintainer's document, once resolution leaves it open: a break or a strategic question for the drain, in the chain of authority's form.
    - Anything else is dropped.
