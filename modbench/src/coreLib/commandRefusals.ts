@@ -1,5 +1,8 @@
 import type { EntryRef, ModFolder } from '../instanceAdapter/instanceAdapter';
 
+/** The refusal of a mod named by blanks. */
+export const EMPTY_MOD_NAME = 'A mod name cannot be empty.';
+
 /** The refusal of a new mod whose name a folder already holds: one wording for create and install. */
 export const modNameTakenRefusal = (name: string): string =>
   `A mod named "${name}" already exists — install its next release from the Downloads view instead.`;
