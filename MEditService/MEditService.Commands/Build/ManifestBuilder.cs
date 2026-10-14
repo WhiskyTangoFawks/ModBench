@@ -2,8 +2,8 @@ using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod's manifest from the mod as it is: each file comes from the first provider that holds its bytes,
-/// else from a delta of the first copy at its path, else from nothing.</summary>
+/// <summary>A mod's manifest from the mod as it is: each file comes from the first provider that holds its bytes, else
+/// from nothing.</summary>
 internal sealed class ManifestBuilder
 {
     private readonly List<(string Name, InstallationFile File)> _installationFiles;
@@ -26,13 +26,8 @@ internal sealed class ManifestBuilder
     public Manifest Manifest(IReadOnlyList<ManifestFile> files) => new(
         [.. _installationFiles.Select(file => new ManifestSource(file.Name, file.File.Size, file.File.Hash, file.File.Source))],
         [
-            .. files.Select(file => file.Provider switch
-                {
-                    FileProvider.GameFile game => game.Path,
-                    FileProvider.GameFileDelta game => game.Path,
-                    _ => null,
-                })
-                .OfType<string>()
+            .. files.Select(file => file.Provider).OfType<FileProvider.GameFile>()
+                .Select(game => game.Path)
                 .Distinct(StringComparer.Ordinal)
                 .Select(path => _gameFiles[path])
                 .Select(game => new ManifestSource(game.Path, game.Size, game.Hash)),
@@ -52,15 +47,9 @@ internal sealed class ManifestBuilder
             return new FileProvider.InstallationFileEntry(name, entry.Path);
         }
 
-        _gameFiles.TryGetValue(file.Path, out var game);
-        if (game?.Hash == file.Hash) return new FileProvider.GameFile(game.Path);
-
-        foreach (var (name, _, byPath) in _indexes)
-        {
-            if (byPath.TryGetValue(file.Path, out var copy)) return new FileProvider.InstallationFileDelta(name, copy.Path, copy.Hash);
-        }
-
-        return game is null ? new FileProvider.NoProvider() : new FileProvider.GameFileDelta(game.Path, game.Hash);
+        return _gameFiles.TryGetValue(file.Path, out var game) && game.Hash == file.Hash
+            ? new FileProvider.GameFile(game.Path)
+            : new FileProvider.NoProvider();
     }
 
     private static Dictionary<string, HashedEntry> IndexByPath(IReadOnlyList<HashedEntry> entries)

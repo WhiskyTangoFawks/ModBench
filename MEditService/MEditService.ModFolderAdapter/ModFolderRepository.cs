@@ -7,7 +7,8 @@ public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepositor
 {
     private const string ManifestExtension = ".manifest";
 
-    public IReadOnlyList<HashedFile> Files(string modFolder, string modName, IReadOnlySet<string> leftOut)
+    public IReadOnlyList<HashedFile> Files(
+        string modFolder, string modName, IReadOnlySet<string> leftOut, IReadOnlyDictionary<string, string> provided)
     {
         var files = new DirectoryInfo(modFolder).EnumerateFiles("*", SearchOption.AllDirectories)
             .Select(file => (Path: Path.GetRelativePath(modFolder, file.FullName).Replace('\\', '/'), Size: file.Length))
@@ -15,7 +16,11 @@ public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepositor
             .ToList();
         var manifest = Path.Combine(modFolder, ManifestName(modName));
         var lines = File.Exists(manifest) ? ManifestText.LineStamps(File.ReadAllText(manifest, Encoding.UTF8)) : [];
-        return [.. files.Select(file => Hashed(modFolder, file.Path, file.Size, lines.TryGetValue(file.Path, out var line) ? line : null))];
+        return
+        [
+            .. files.Select(file => Hashed(
+                modFolder, file.Path, file.Size, lines.TryGetValue(file.Path, out var line) ? line : null, provided.GetValueOrDefault(file.Path))),
+        ];
     }
 
     public Stream OpenFile(string modFolder, string path) => File.OpenRead(Path.Combine(modFolder, path));
@@ -83,61 +88,17 @@ public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepositor
         return true;
     }
 
-    public string Hash(Stream content) => FileHash.Of(content);
-
     public Manifest? ReadManifest(string modFolder, string modName)
     {
         var path = Path.Combine(modFolder, ManifestName(modName));
         return File.Exists(path) ? ManifestText.Parse(File.ReadAllText(path, Encoding.UTF8)) : null;
     }
 
-    public string DeltaName(string path, string baseHash, string fileHash) => ManifestText.DeltaName(path, baseHash, fileHash);
-
-    public Stream? OpenDelta(string buildFolder, string? downloadsFolder, string path, string baseHash, string fileHash)
-    {
-        var name = ManifestText.DeltaName(path, baseHash, fileHash);
-        return new[] { buildFolder, downloadsFolder }.OfType<string>().Select(folder => Path.Combine(folder, name))
-            .FirstOrDefault(File.Exists) is { } found ? File.OpenRead(found) : null;
-    }
-
-    public long? DeltaSize(string buildFolder, string path, string baseHash, string fileHash)
-    {
-        var delta = new FileInfo(Path.Combine(buildFolder, ManifestText.DeltaName(path, baseHash, fileHash)));
-        return delta.Exists ? delta.Length : null;
-    }
-
-    public bool WriteDelta(string buildFolder, string path, string baseHash, string fileHash, Func<Stream, bool> write)
-    {
-        Directory.CreateDirectory(buildFolder);
-        var named = Path.Combine(buildFolder, ManifestText.DeltaName(path, baseHash, fileHash));
-        var partial = named + ".partial";
-        try
-        {
-            bool keep;
-            using (var delta = new FileStream(partial, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
-                keep = write(delta);
-            if (keep) File.Move(partial, named, overwrite: true);
-            return keep;
-        }
-        finally
-        {
-            File.Delete(partial);
-        }
-    }
-
-    public Stream CreateScratchFile(string buildFolder)
-    {
-        Directory.CreateDirectory(buildFolder);
-        return new FileStream(
-            Path.Combine(buildFolder, Path.GetRandomFileName() + ".scratch"),
-            FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, bufferSize: 1 << 16, FileOptions.DeleteOnClose);
-    }
-
-    private HashedFile Hashed(string modFolder, string path, long size, LineStamp? line)
+    private HashedFile Hashed(string modFolder, string path, long size, LineStamp? line, string? provided)
     {
         var stamp = FileStamp.Of(Path.Combine(modFolder, path));
-        if (stamp is { } now && line is { } known && known.Size == now.Size && known.Modified == now.Modified)
-            return new HashedFile(path, size, known.Hash, now);
+        if (stamp is { } now && line is { } known && known.Size == now.Size && known.Modified == now.Modified && provided is not null)
+            return new HashedFile(path, size, provided, now);
 
         var readFrom = time.GetUtcNow();
         using var content = new FileStream(Path.Combine(modFolder, path), FileMode.Open, FileAccess.Read, FileShare.Read);

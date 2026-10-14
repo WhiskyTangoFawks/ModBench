@@ -1,13 +1,12 @@
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>A manifest as lines of JSON, one per source and one per file in path order, so a change to one file
 /// is one line in a diff.</summary>
-internal static partial class ManifestText
+internal static class ManifestText
 {
     private static readonly JsonWriterOptions Compact = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
@@ -32,11 +31,10 @@ internal static partial class ManifestText
                 var root = parsed.RootElement;
                 if (root.ValueKind == JsonValueKind.Object
                     && root.TryGetProperty("path", out var path) && path.GetString() is { } file
-                    && root.TryGetProperty("hash", out var hash) && hash.GetString() is { } hashText && FileHash.IsHash(hashText)
                     && root.TryGetProperty("size", out var size) && size.TryGetInt64(out var bytes)
                     && root.TryGetProperty("modified", out var modified) && modified.TryGetInt64(out var at))
                 {
-                    stamps[file] = new LineStamp(bytes, at, hashText);
+                    stamps[file] = new LineStamp(bytes, at);
                 }
             }
             catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException)
@@ -79,40 +77,15 @@ internal static partial class ManifestText
         Text(name), root.GetProperty("size").GetInt64(), Text(root.GetProperty("hash")),
         root.TryGetProperty("source", out var source) ? Text(source) : null);
 
-    private static ManifestFile FileOf(string path, JsonElement root)
-    {
-        var hash = Text(root.GetProperty("hash"));
-        var provider = root.TryGetProperty("from", out var from) ? ProviderOf(path, hash, from) : new FileProvider.FirstInstallationFile();
-        return new ManifestFile(path, hash, null, provider);
-    }
+    private static ManifestFile FileOf(string path, JsonElement root) =>
+        new(path, null, root.TryGetProperty("from", out var from) ? ProviderOf(from) : new FileProvider.FirstInstallationFile());
 
-    private static FileProvider ProviderOf(string path, string hash, JsonElement from)
+    private static FileProvider ProviderOf(JsonElement from)
     {
         if (from.ValueKind == JsonValueKind.Null) return new FileProvider.NoProvider();
-        var baseHash = from.TryGetProperty("delta", out var delta) ? BaseHashOf(Text(delta), path, hash) : null;
-        if (from.TryGetProperty("gameFile", out var game))
-            return baseHash is null ? new FileProvider.GameFile(Text(game)) : new FileProvider.GameFileDelta(Text(game), baseHash);
-        var installationFile = Text(from.GetProperty("installationFile"));
-        var entry = Text(from.GetProperty("path"));
-        return baseHash is null
-            ? new FileProvider.InstallationFileEntry(installationFile, entry)
-            : new FileProvider.InstallationFileDelta(installationFile, entry, baseHash);
+        if (from.TryGetProperty("gameFile", out var game)) return new FileProvider.GameFile(Text(game));
+        return new FileProvider.InstallationFileEntry(Text(from.GetProperty("installationFile")), Text(from.GetProperty("path")));
     }
-
-    private static string BaseHashOf(string deltaName, string path, string fileHash)
-    {
-        var baseHash = DeltaHashes().Match(deltaName) is { Success: true } match
-            ? Convert.ToBase64String(Convert.FromHexString(match.Groups["base"].Value))
-            : throw new FormatException();
-        return DeltaName(path, baseHash, fileHash) == deltaName ? baseHash : throw new FormatException();
-    }
-
-    [GeneratedRegex(@"\.(?<base>[0-9a-f]{16})_[0-9a-f]{16}\.octodiff$")]
-    private static partial Regex DeltaHashes();
-
-    /// <summary>A delta's name: the name of the file it makes, then the hashes of its base and of that file.</summary>
-    public static string DeltaName(string path, string baseHash, string fileHash) =>
-        $"{path[(path.LastIndexOf('/') + 1)..]}.{FileHash.Hex(baseHash)}_{FileHash.Hex(fileHash)}.octodiff";
 
     private static void Line(StringBuilder text, Action<Utf8JsonWriter> write)
     {
@@ -135,7 +108,6 @@ internal static partial class ManifestText
     {
         writer.WriteStartObject();
         writer.WriteString("path", file.Path);
-        writer.WriteString("hash", file.Hash);
         if (file.Stamp is { } stamp)
         {
             writer.WriteNumber("size", stamp.Size);
@@ -154,19 +126,6 @@ internal static partial class ManifestText
                 writer.WriteString("gameFile", game.Path);
                 writer.WriteEndObject();
                 break;
-            case FileProvider.InstallationFileDelta delta:
-                writer.WriteStartObject("from");
-                writer.WriteString("installationFile", delta.InstallationFile);
-                writer.WriteString("path", delta.Path);
-                writer.WriteString("delta", DeltaName(file.Path, delta.BaseHash, file.Hash));
-                writer.WriteEndObject();
-                break;
-            case FileProvider.GameFileDelta delta:
-                writer.WriteStartObject("from");
-                writer.WriteString("gameFile", delta.Path);
-                writer.WriteString("delta", DeltaName(file.Path, delta.BaseHash, file.Hash));
-                writer.WriteEndObject();
-                break;
             case FileProvider.NoProvider:
                 writer.WriteNull("from");
                 break;
@@ -175,5 +134,5 @@ internal static partial class ManifestText
     }
 }
 
-/// <summary>What a manifest's file line says of its file: the size and time it was hashed at, and the hash.</summary>
-internal readonly record struct LineStamp(long Size, long Modified, string Hash);
+/// <summary>The size and time a manifest's file line says its file was read at.</summary>
+internal readonly record struct LineStamp(long Size, long Modified);

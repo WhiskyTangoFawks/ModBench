@@ -11,9 +11,9 @@ internal static class ManifestEndpoints
             .WithName("UpdateManifest")
             .WithTags("Modlist")
             .WithDescription(
-                "Writes each mod's manifest from the mod as it is (ADR-0022), and into the build folder each delta a changed " +
-                "file needs. A mod lands or is refused on its own, " +
-                "and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification.")
+                "Writes each mod's manifest from the mod as it is (ADR-0022). A mod lands or is refused on its own, " +
+                "and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification, " +
+                "which names the request's gesture.")
             .Produces<UpdateManifestResponse>()
             .ProducesProblem(400);
 
@@ -21,9 +21,10 @@ internal static class ManifestEndpoints
             .WithName("RestoreFromManifest")
             .WithTags("Modlist")
             .WithDescription(
-                "Writes each file a mod's manifest names whose bytes differ, from the installation files, game files and deltas " +
+                "Writes each file a mod's manifest names whose bytes differ, from the installation files and game files " +
                 "it names (ADR-0022), and touches no other file. A mod lands, is skipped naming what it lacks, or is named " +
-                "not finished when a write failed part way. Progress is the restore-from-manifest-progress notification.")
+                "not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, " +
+                "which names the request's gesture.")
             .Produces<RestoreFromManifestResponse>()
             .ProducesProblem(400);
 
@@ -46,15 +47,12 @@ internal static class ManifestEndpoints
         UpdateManifestRequest req, UpdateManifestHandler handler, ModlistGestureCancels cancels, ILoggerFactory loggerFactory, CancellationToken aborted)
     {
         var mods = req.Mods ?? [];
-        if (Malformed(mods, [], req.GameFiles) is { } malformed) return malformed;
-        if (string.IsNullOrWhiteSpace(req.DataFolder) || string.IsNullOrWhiteSpace(req.BuildFolder) || req.DeltaShare is not (>= 0 and <= 1))
-            return Results.Problem("The game's data folder, the build folder and a delta share from 0 to 1 are required.", statusCode: 400);
+        if (Malformed(mods, req.GameFiles) is { } malformed) return malformed;
 
         using var running = cancels.Run(req.Gesture, aborted);
         var result = handler.UpdateManifest(
             [.. mods.Select(mod => new ModToUpdate(mod.Name, mod.Folder, InstallationFilesOf(mod.InstallationFiles), mod.CommittedFiles ?? []))],
-            new InstanceToUpdate(GameFilesOf(req.GameFiles), req.DataFolder, req.BuildFolder, req.DeltaShare.GetValueOrDefault()),
-            running.Token);
+            GameFilesOf(req.GameFiles), req.Gesture, running.Token);
 
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
         foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Update manifest", item.Refusal, item.Message, item.Item);
@@ -68,31 +66,25 @@ internal static class ManifestEndpoints
         CancellationToken aborted)
     {
         var mods = req.Mods ?? [];
-        if (Malformed(mods, req.DownloadedFiles ?? [], req.GameFiles) is { } malformed) return malformed;
-        if (string.IsNullOrWhiteSpace(req.DataFolder) || string.IsNullOrWhiteSpace(req.BuildFolder))
-            return Results.Problem("The game's data folder and the build folder are required.", statusCode: 400);
+        if (Malformed(mods, req.GameFiles) is { } malformed) return malformed;
+        if (string.IsNullOrWhiteSpace(req.DataFolder)) return Results.Problem("The game's data folder is required.", statusCode: 400);
 
         using var running = cancels.Run(req.Gesture, aborted);
         var result = handler.Restore(
             [.. mods.Select(mod => new ModToRestore(mod.Name, mod.Folder, InstallationFilesOf(mod.InstallationFiles)))],
-            new InstanceToRestore(
-                GameFilesOf(req.GameFiles), req.DataFolder, req.BuildFolder, req.DownloadsFolder, InstallationFilesOf(req.DownloadedFiles)),
-            running.Token);
+            new InstanceToRestore(GameFilesOf(req.GameFiles), req.DataFolder), req.Gesture, running.Token);
 
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
         foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Restore from manifest", item.Refusal.Kind, item.Message, item.Item);
         return Results.Ok(new RestoreFromManifestResponse(
             [.. result.Landed.Select(landed => new RestoredModResponse(landed.Item, landed.Outcome.Written))],
-            [.. result.Refused.Select(refused => new ModRestoreRefusal(
-                refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.GameFilesNotFound, refused.Refusal.DeltasNotFound))]));
+            [.. result.Refused.Select(refused => new ModRestoreRefusal(refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.GameFilesNotFound))]));
     }
 
-    private static IResult? Malformed(
-        IReadOnlyList<IModRequest> mods,
-        IReadOnlyList<InstallationFileRequest> downloadedFiles, IReadOnlyList<OverriddenGameFileRequest>? gameFiles)
+    private static IResult? Malformed(IReadOnlyList<IModRequest> mods, IReadOnlyList<OverriddenGameFileRequest>? gameFiles)
     {
         if (mods.Count == 0) return Results.Problem("At least one mod is required.", statusCode: 400);
-        var installationFiles = mods.SelectMany(mod => mod.InstallationFiles ?? []).Concat(downloadedFiles).ToList();
+        var installationFiles = mods.SelectMany(mod => mod.InstallationFiles ?? []).ToList();
         if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.Folder)) || installationFiles.Any(file => !file.IsWhole))
         {
             return Results.Problem(
@@ -114,11 +106,10 @@ internal static class ManifestEndpoints
         [.. files.Select(file => new OverriddenGameFile(file.Path, file.Size.GetValueOrDefault(), file.Hash))];
 }
 
-/// <summary>The mods to update the manifests of, with the instance's facts (ADR-0013). DeltaShare is the share of its file a
-/// delta may reach before the file has no provider. Gesture names it to a cancel.</summary>
+/// <summary>The mods to update the manifests of, with the instance's facts (ADR-0013). Gesture names it to a cancel and in its
+/// progress.</summary>
 internal sealed record UpdateManifestRequest(
-    IReadOnlyList<UpdateManifestModRequest> Mods, IReadOnlyList<OverriddenGameFileRequest> GameFiles, string DataFolder, string BuildFolder,
-    double? DeltaShare, string? Gesture);
+    IReadOnlyList<UpdateManifestModRequest> Mods, IReadOnlyList<OverriddenGameFileRequest> GameFiles, string? Gesture);
 
 internal interface IModRequest
 {
@@ -142,21 +133,19 @@ internal sealed record ModUpdateManifestRefusal(string Item, UpdateManifestRefus
 /// <summary>Landed or refused, per mod (ADR-0019), never the status of the call.</summary>
 internal sealed record UpdateManifestResponse(IReadOnlyList<UpdatedModResponse> Applied, IReadOnlyList<ModUpdateManifestRefusal> Refused);
 
-/// <summary>The mods to restore from their manifests, with the instance's facts (ADR-0013). A delta is found in the build
-/// folder, the downloads folder, or the installation files' and DownloadedFiles' entries. Gesture names it to a cancel.</summary>
+/// <summary>The mods to restore from their manifests, with the instance's facts (ADR-0013). Gesture names it to a cancel and in
+/// its progress.</summary>
 internal sealed record RestoreFromManifestRequest(
-    IReadOnlyList<RestoreFromManifestModRequest> Mods, IReadOnlyList<OverriddenGameFileRequest> GameFiles, string DataFolder, string BuildFolder,
-    string? DownloadsFolder, IReadOnlyList<InstallationFileRequest>? DownloadedFiles, string? Gesture);
+    IReadOnlyList<RestoreFromManifestModRequest> Mods, IReadOnlyList<OverriddenGameFileRequest> GameFiles, string DataFolder, string? Gesture);
 
 internal sealed record RestoreFromManifestModRequest(string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles) : IModRequest;
 
 /// <summary>A mod whose folder is as its manifest says. Written names each file written to make it so.</summary>
 internal sealed record RestoredModResponse(string Mod, IReadOnlyList<string> Written);
 
-/// <summary>A skipped mod. A NotFound mod names each game file, by its path under the data folder, and each delta it
-/// lacks; a request that names them brings it back.</summary>
-internal sealed record ModRestoreRefusal(
-    string Item, RestoreRefusal Refusal, string Message, IReadOnlyList<string> GameFilesNotFound, IReadOnlyList<string> DeltasNotFound);
+/// <summary>A skipped mod. A NotFound mod names each game file it lacks, by its path under the data folder; a request that
+/// names them brings it back.</summary>
+internal sealed record ModRestoreRefusal(string Item, RestoreRefusal Refusal, string Message, IReadOnlyList<string> GameFilesNotFound);
 
 /// <summary>Landed, skipped or not finished, per mod (ADR-0019), never the status of the call.</summary>
 internal sealed record RestoreFromManifestResponse(IReadOnlyList<RestoredModResponse> Applied, IReadOnlyList<ModRestoreRefusal> Refused);

@@ -11,10 +11,6 @@ public sealed record ModToUpdate(
 /// Instance adapter knows it (ADR-0013).</summary>
 public sealed record OverriddenGameFile(string Path, long Size, string Hash);
 
-/// <summary>The instance's facts beyond its mods. DeltaShare is the share of its file a delta may reach before
-/// the file counts as no provider.</summary>
-public sealed record InstanceToUpdate(IReadOnlyList<OverriddenGameFile> GameFiles, string DataFolder, string BuildFolder, double DeltaShare);
-
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum UpdateManifestRefusal
 {
@@ -25,11 +21,10 @@ public enum UpdateManifestRefusal
 
     ModFolderMissing,
 
-    /// <summary>A file the manifest is updated from could not be read: one of its own, an installation file or a game
-    /// file.</summary>
+    /// <summary>A file of the mod could not be read.</summary>
     ModFilesUnreadable,
 
-    /// <summary>The mod's manifest, or a delta it needs, could not be written.</summary>
+    /// <summary>The mod's manifest could not be written.</summary>
     NotWritten,
 }
 

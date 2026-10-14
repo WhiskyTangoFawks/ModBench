@@ -5,29 +5,17 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.ModFolderAdapter;
 using MEditService.Ports;
 using MEditService.TestSupport;
-using Octodiff.Core;
-using Octodiff.Diagnostics;
 
 namespace MEditService.Commands.Tests.Build;
 
 public sealed class UpdateManifestHandlerTests
 {
     private const string Mod = "mods/Mod";
-    private const string DataFolder = "game/Data";
-    private const string BuildFolder = "build";
-
-    private const string SolidSevenZipOfReadmeAndMeshes =
-        "N3q8ryccAATuUVnEpgAAAAAAAAAhAAAAAAAAAC+dzs3gIAIAKV0AMO/7v/6jsV7l+D+yqiZV+GhwQXAVD439HkwbikK3GfRpGHAufifG/wAAAACBMweuD9EP9rigkKB3XrpXH+ax2dPvt7i58wldO1uKWgKup3uXhzzBgYN/yWVyKGG6hrzHb+8AS3A4eb6xWIpNOTGqvAgOWKrbXPL2/IPdDY8hq8YbGjaD7xEjTC7CbMP6A0APd4UmYIrlYd9r+G9HAAAAFwYxAQl1AAcLAQABIwMBAQVdABAAAAyAhgoBy3m54QAA";
-
-    private static readonly string Original = string.Concat(Enumerable.Range(0, 1000).Select(line => $"{line:D7}\n"));
-    private static readonly string Edited = Original.Replace("0000500", "edited!", StringComparison.Ordinal);
 
     private readonly FakeModFolders _folders = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
 
     private UpdateManifestHandler Handler => new(_folders, _notifications);
-
-    private static InstanceToUpdate Instance(params OverriddenGameFile[] gameFiles) => new(gameFiles, DataFolder, BuildFolder, DeltaShare: 1);
 
     private static ModToUpdate ModFrom(string name, params InstallationFile[] installationFiles) =>
         new(name, $"mods/{name}", installationFiles, []);
@@ -43,73 +31,13 @@ public sealed class UpdateManifestHandlerTests
 
     private ManifestFile FileOf(string folder, string path) => _folders.Manifests[folder].Files.Single(f => f.Path == path);
 
-    private UpdatedMod Landed(params ModToUpdate[] mods) => Landed(mods, Instance());
+    private UpdatedMod Landed(params ModToUpdate[] mods) => Landed(mods, []);
 
-    private UpdatedMod Landed(IReadOnlyList<ModToUpdate> mods, InstanceToUpdate instance)
+    private UpdatedMod Landed(IReadOnlyList<ModToUpdate> mods, IReadOnlyList<OverriddenGameFile> gameFiles)
     {
-        var result = Handler.UpdateManifest(mods, instance);
+        var result = Handler.UpdateManifest(mods, gameFiles);
         Assert.Empty(result.Refused);
         return result.Landed.Single().Outcome;
-    }
-
-    private string DeltaAppliedAsWabbajackApplies(string path, string basis, string file)
-    {
-        using var output = new MemoryStream();
-        new DeltaApplier().Apply(
-            new MemoryStream(Encoding.ASCII.GetBytes(basis)),
-            new BinaryDeltaReader(new MemoryStream(_folders.Deltas[(BuildFolder, path, basis, file)]), new NullProgressReporter()),
-            output);
-        return Encoding.ASCII.GetString(output.ToArray());
-    }
-
-    private static SparseStream StoredZipOfZeros(string name, long size, uint crc)
-    {
-        var zip = new SparseStream();
-        var nameBytes = Encoding.ASCII.GetBytes(name);
-        using (var writer = new BinaryWriter(zip, Encoding.ASCII, leaveOpen: true))
-        {
-            writer.Write(0x04034b50);
-            Entry(writer);
-            writer.Write(nameBytes);
-            writer.Flush();
-            var centralAt = zip.Position + size;
-            zip.Position = centralAt;
-            writer.Write(0x02014b50);
-            writer.Write((short)20);
-            Entry(writer);
-            writer.Write((short)0);
-            writer.Write((short)0);
-            writer.Write((short)0);
-            writer.Write(0);
-            writer.Write(0);
-            writer.Write(nameBytes);
-            writer.Flush();
-            var centralSize = zip.Position - centralAt;
-            writer.Write(0x06054b50);
-            writer.Write((short)0);
-            writer.Write((short)0);
-            writer.Write((short)1);
-            writer.Write((short)1);
-            writer.Write((uint)centralSize);
-            writer.Write((uint)centralAt);
-            writer.Write((short)0);
-        }
-        zip.Position = 0;
-        return zip;
-
-        void Entry(BinaryWriter writer)
-        {
-            writer.Write((short)20);
-            writer.Write((short)0);
-            writer.Write((short)0);
-            writer.Write((short)0);
-            writer.Write((short)0x21);
-            writer.Write(crc);
-            writer.Write((uint)size);
-            writer.Write((uint)size);
-            writer.Write((short)nameBytes.Length);
-            writer.Write((short)0);
-        }
     }
 
     private static byte[] Zip(params (string Path, string Text)[] entries)
@@ -127,140 +55,64 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public void AFileWhoseBytesDifferFromAnInstallationFilesCopy_IsADeltaFromThatCopy_InTheBuildFolder()
+    public void AFileWhoseBytesDifferFromAnInstallationFilesCopy_HasNoProvider_IsReported_AndNoInstallationFileIsOpened()
     {
-        _folders.WithFile(Mod, "meshes/a.nif", Edited);
+        _folders.WithFile(Mod, "meshes/a.nif", "edited");
 
-        var updated = Landed(ModFrom("Mod", Downloaded("dl/Base.zip", ("readme.txt", "")), Downloaded("dl/Patch.zip", ("Meshes/A.nif", Original))));
+        var updated = Landed(ModFrom("Mod", Downloaded("dl/Base.zip", ("readme.txt", "")), Downloaded("dl/Patch.zip", ("Meshes/A.nif", "original"))));
 
-        Assert.Equal(new FileProvider.InstallationFileDelta("Patch.zip", "Meshes/A.nif", Original), FileOf(Mod, "meshes/a.nif").Provider);
-        Assert.Equal(Edited, DeltaAppliedAsWabbajackApplies("meshes/a.nif", Original, Edited));
-        Assert.Empty(updated.NoProvider);
+        Assert.IsType<FileProvider.NoProvider>(FileOf(Mod, "meshes/a.nif").Provider);
+        Assert.Equal(["meshes/a.nif"], updated.NoProvider);
+        Assert.Equal(0, _folders.Opens);
     }
 
     [Fact]
-    public void APluginCleanedFromTheGamesOwn_IsADeltaFromTheGameFile_WhichTheManifestNames()
+    public void APluginCleanedFromTheGamesOwn_HasNoProvider_AndTheManifestNamesNoGameFile()
     {
-        _folders.WithFile(Mod, "game.esm", Edited).WithFile(DataFolder, "Game.esm", Original);
+        _folders.WithFile(Mod, "game.esm", "cleaned");
 
-        Landed([ModFrom("Mod")], Instance(new OverriddenGameFile("Game.esm", Original.Length, Original)));
+        var updated = Landed([ModFrom("Mod")], [new OverriddenGameFile("Game.esm", 7, "vanilla")]);
 
-        Assert.Equal(new FileProvider.GameFileDelta("Game.esm", Original), FileOf(Mod, "game.esm").Provider);
-        Assert.Equal(Edited, DeltaAppliedAsWabbajackApplies("game.esm", Original, Edited));
-        Assert.Equal(["Game.esm"], _folders.Manifests[Mod].GameFiles.Select(game => game.Name));
+        Assert.IsType<FileProvider.NoProvider>(FileOf(Mod, "game.esm").Provider);
+        Assert.Equal(["game.esm"], updated.NoProvider);
+        Assert.Empty(_folders.Manifests[Mod].GameFiles);
     }
 
     [Fact]
-    public void ADeltaLargerThanTheShare_HasNoProvider_IsReported_AndIsNotWritten()
+    public void AModUpdatedAgain_HandsItsFolderTheHashEachLinesProviderNames()
     {
-        _folders.WithFile(Mod, "a.txt", Edited);
+        _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "game.esm", "vanilla").WithFile(Mod, "mine.txt", "mine");
+        var mod = ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.nif", "a")));
+        OverriddenGameFile[] gameFiles = [new OverriddenGameFile("Game.esm", 7, "vanilla")];
+        Landed([mod], gameFiles);
 
-        var updated = Landed([ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.txt", Original)))], Instance() with { DeltaShare = 0.01 });
+        Landed([mod], gameFiles);
 
-        Assert.IsType<FileProvider.NoProvider>(FileOf(Mod, "a.txt").Provider);
-        Assert.Equal(["a.txt"], updated.NoProvider);
-        Assert.Empty(_folders.Deltas);
+        Assert.Equal(new Dictionary<string, string> { ["a.nif"] = "a", ["game.esm"] = "vanilla" }, _folders.Provided[Mod]);
     }
 
     [Fact]
-    public void ADeltaTheBuildFolderHolds_IsKept_AndNoFileIsOpened()
+    public void AModWhoseInstallationFileChangedSinceItsLastUpdate_HandsItsFolderNoHashFromIt()
     {
-        _folders.WithFile(Mod, "a.txt", Edited);
-        var mod = ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.txt", Original)));
-        Landed(mod);
-        var opened = _folders.Opens;
+        _folders.WithFile(Mod, "a.nif", "a");
+        var download = Downloaded("dl/Mod.zip", ("a.nif", "a"));
+        Landed(ModFrom("Mod", download));
 
-        Landed(mod);
+        Landed(ModFrom("Mod", download with { Hash = "#upgraded" }));
 
-        Assert.Equal(opened, _folders.Opens);
-        Assert.IsType<FileProvider.InstallationFileDelta>(FileOf(Mod, "a.txt").Provider);
+        Assert.Empty(_folders.Provided[Mod]);
     }
 
     [Fact]
-    public void ADeltaTheBuildFolderHolds_LargerThanALoweredShare_HasNoProvider()
+    public void AModWhoseManifestCannotBeRead_IsUpdatedFromItsFolder()
     {
-        _folders.WithFile(Mod, "a.txt", Edited);
-        var mod = ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.txt", Original)));
-        Landed(mod);
+        _folders.WithFile(Mod, "a.txt", "hello");
+        _folders.UnreadableManifests.Add(Mod);
 
-        var updated = Landed([mod], Instance() with { DeltaShare = 0.01 });
+        var updated = Landed(ModFrom("Mod"));
 
-        Assert.Equal(["a.txt"], updated.NoProvider);
-    }
-
-    [Fact]
-    public void ACopyTheInstallationFileTurnsOutNotToHold_LeavesTheFileWithNoProvider()
-    {
-        _folders.WithFile(Mod, "a.txt", Edited).WithBytes(string.Empty, "dl/Mod.zip", Zip(("other.txt", Original)));
-
-        var updated = Landed(ModFrom("Mod", new InstallationFile("dl/Mod.zip", null, 7, "#zip", [new HashedEntry("a.txt", Original)])));
-
-        Assert.Equal(["a.txt"], updated.NoProvider);
-    }
-
-    [Fact]
-    public void ASolidSevenZipsEntry_IsACopyADeltaIsMadeFrom()
-    {
-        var copy = new string('a', 8192);
-        var edited = copy[..4096] + "b" + copy[4097..];
-        _folders.WithFile(Mod, "meshes/a.nif", edited).WithBytes(string.Empty, "dl/Mod.7z", Convert.FromBase64String(SolidSevenZipOfReadmeAndMeshes));
-
-        Landed(ModFrom("Mod", new InstallationFile(
-            "dl/Mod.7z", null, 231, "#7z", [new HashedEntry("readme.txt", "abc"), new HashedEntry("meshes/a.nif", copy)])));
-
-        Assert.Equal(edited, DeltaAppliedAsWabbajackApplies("meshes/a.nif", copy, edited));
-    }
-
-    [Fact]
-    public void AnEntryNamedWithBackslashes_IsTheCopyAtItsSlashedPath()
-    {
-        _folders.WithFile(Mod, "meshes/a.nif", Edited).WithBytes(string.Empty, "dl/Mod.zip", Zip(("meshes\\a.nif", Original)));
-
-        Landed(ModFrom("Mod", new InstallationFile("dl/Mod.zip", null, 7, "#zip", [new HashedEntry("meshes/a.nif", Original)])));
-
-        Assert.Equal(Edited, DeltaAppliedAsWabbajackApplies("meshes/a.nif", Original, Edited));
-    }
-
-    [Fact]
-    public void AnInstallationFileThatIsNoArchive_RefusesTheModWhoseDeltaNeedsIt_AndTheOthersLand()
-    {
-        _folders.WithFile("mods/Broken", "a.txt", Edited).WithFile("mods/Fine", "a.txt", "hello");
-        _folders.WithFile(string.Empty, "dl/Broken.zip", "not an archive");
-        var broken = new InstallationFile("dl/Broken.zip", null, 14, "#broken", [new HashedEntry("a.txt", Original)]);
-
-        var result = Handler.UpdateManifest([ModFrom("Broken", broken), ModFrom("Fine")], Instance());
-
-        var refused = Assert.Single(result.Refused);
-        Assert.Equal(("Broken", UpdateManifestRefusal.ModFilesUnreadable), (refused.Item, refused.Refusal));
-        Assert.Contains("Broken.zip", refused.Message);
-        Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
-    }
-
-    [Fact]
-    public void ACopyLargerThanAnArrayCanHold_IsTheBaseOfADelta()
-    {
-        const long Size = (1L << 31) + 4096;
-        const uint CrcOfTheZeros = 0x5c7b2279;
-        var edited = new string('\0', 4096) + "edited";
-        _folders.WithFile(Mod, "big.bin", edited).WithStream(string.Empty, "dl/Big.zip", () => StoredZipOfZeros("big.bin", Size, CrcOfTheZeros));
-
-        Landed(ModFrom("Mod", new InstallationFile("dl/Big.zip", null, Size, "#zip", [new HashedEntry("big.bin", "#zeros")])));
-
-        Assert.Equal(new FileProvider.InstallationFileDelta("Big.zip", "big.bin", "#zeros"), FileOf(Mod, "big.bin").Provider);
-    }
-
-    [Fact]
-    public void AModWhoseDeltaCannotBeWritten_IsRefusedSayingSo_AndTheOthersLand()
-    {
-        _folders.WithFile("mods/Locked", "a.txt", Edited).WithFile("mods/Fine", "a.txt", "hello");
-        _folders.UnwritableBuildFolders.Add(BuildFolder);
-
-        var result = Handler.UpdateManifest([ModFrom("Locked", Downloaded("dl/Locked.zip", ("a.txt", Original))), ModFrom("Fine")], Instance());
-
-        var refused = Assert.Single(result.Refused);
-        Assert.Equal(("Locked", UpdateManifestRefusal.NotWritten), (refused.Item, refused.Refusal));
-        Assert.StartsWith("'Locked' was not updated: a delta could not be written:", refused.Message, StringComparison.Ordinal);
-        Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
+        Assert.True(updated.ManifestWritten);
+        Assert.Empty(_folders.Provided[Mod]);
     }
 
     [Fact]
@@ -273,7 +125,7 @@ public sealed class UpdateManifestHandlerTests
 
         var line = FileOf(Mod, "meshes/a.nif");
         Assert.IsType<FileProvider.FirstInstallationFile>(line.Provider);
-        Assert.Equal(("hello", 5L, 7L), (line.Hash, line.Stamp?.Size, line.Stamp?.Modified));
+        Assert.Equal((5L, 7L), (line.Stamp?.Size, line.Stamp?.Modified));
         var installationFile = Assert.Single(_folders.Manifests[Mod].InstallationFiles);
         Assert.Equal(("Mod.zip", 7L, "#dl/Mod.zip", "nexus:1"), (installationFile.Name, installationFile.Size, installationFile.Hash, installationFile.Source));
     }
@@ -317,7 +169,6 @@ public sealed class UpdateManifestHandlerTests
         var updated = Landed(ModFrom("Mod", Downloaded("dl/Mod.zip", ("other/a.txt", "hello"), ("b.txt", "hello"))));
 
         Assert.IsType<FileProvider.NoProvider>(FileOf(Mod, "a.txt").Provider);
-        Assert.Equal("hellO", FileOf(Mod, "a.txt").Hash);
         Assert.Equal(["a.txt"], updated.NoProvider);
     }
 
@@ -326,7 +177,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "game.esm", "hello");
 
-        Landed([ModFrom("Mod")], Instance(new OverriddenGameFile("Game.esm", 5, "hello")));
+        Landed([ModFrom("Mod")], [new OverriddenGameFile("Game.esm", 5, "hello")]);
 
         Assert.Equal(new FileProvider.GameFile("Game.esm"), FileOf(Mod, "game.esm").Provider);
         var gameFile = Assert.Single(_folders.Manifests[Mod].GameFiles);
@@ -339,7 +190,7 @@ public sealed class UpdateManifestHandlerTests
         _folders.WithFile("mods/Lost", "a.txt", "hello").WithFile("mods/Found", "a.txt", "hello");
         var lost = new InstallationFile("dl/Lost.zip", null, 7, "#lost", [new HashedEntry("a.txt", "hello")]);
 
-        var result = Handler.UpdateManifest([ModFrom("Lost", lost), ModFrom("Found", Downloaded("dl/Found.zip", ("a.txt", "hello")))], Instance());
+        var result = Handler.UpdateManifest([ModFrom("Lost", lost), ModFrom("Found", Downloaded("dl/Found.zip", ("a.txt", "hello")))], []);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Lost", UpdateManifestRefusal.InstallationFileMissing), (refused.Item, refused.Refusal));
@@ -351,7 +202,7 @@ public sealed class UpdateManifestHandlerTests
     [Fact]
     public void AModWhoseFolderIsGone_IsRefused()
     {
-        var refused = Assert.Single(Handler.UpdateManifest([ModFrom("Gone")], Instance()).Refused);
+        var refused = Assert.Single(Handler.UpdateManifest([ModFrom("Gone")], []).Refused);
 
         Assert.Equal(UpdateManifestRefusal.ModFolderMissing, refused.Refusal);
     }
@@ -374,7 +225,7 @@ public sealed class UpdateManifestHandlerTests
         _folders.WithFile("mods/Held", "held.txt", "hello").WithFile("mods/Fine", "a.txt", "hello");
         _folders.Unreadable.Add(("mods/Held", "held.txt"));
 
-        var result = Handler.UpdateManifest([ModFrom("Held"), ModFrom("Fine")], Instance());
+        var result = Handler.UpdateManifest([ModFrom("Held"), ModFrom("Fine")], []);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Held", UpdateManifestRefusal.ModFilesUnreadable), (refused.Item, refused.Refusal));
@@ -388,7 +239,7 @@ public sealed class UpdateManifestHandlerTests
         _folders.WithFile("mods/Locked", "a.txt", "hello").WithFile("mods/Fine", "a.txt", "hello");
         _folders.UnwritableManifests.Add("mods/Locked");
 
-        var result = Handler.UpdateManifest([ModFrom("Locked"), ModFrom("Fine")], Instance());
+        var result = Handler.UpdateManifest([ModFrom("Locked"), ModFrom("Fine")], []);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Locked", UpdateManifestRefusal.NotWritten), (refused.Item, refused.Refusal));
@@ -411,20 +262,20 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "a.txt", "hello");
 
-        var result = Handler.UpdateManifest([ModFrom("Mod"), ModFrom("MOD")], Instance());
+        var result = Handler.UpdateManifest([ModFrom("Mod"), ModFrom("MOD")], []);
 
         Assert.Single(result.Landed);
     }
 
     [Fact]
-    public void ProgressNamesEachModInFlight_ThenGoesIdle()
+    public void ProgressNamesItsGestureAndEachModInFlight_ThenGoesIdle()
     {
         _folders.WithFile("mods/A", "a.txt", "hello").WithFile("mods/B", "a.txt", "hello");
 
-        Handler.UpdateManifest([ModFrom("A"), ModFrom("B")], Instance());
+        Handler.UpdateManifest([ModFrom("A"), ModFrom("B")], [], "g");
 
         Assert.Equal(
-            [new ModlistProgress("A", 0, 2), new ModlistProgress("B", 1, 2), new ModlistProgress(null, 0, 0)],
+            [new ModlistProgress("g", "A", 0, 2), new ModlistProgress("g", "B", 1, 2), new ModlistProgress("g", null, 0, 0)],
             Progress);
     }
 
@@ -435,11 +286,11 @@ public sealed class UpdateManifestHandlerTests
         using var cancel = new CancellationTokenSource();
         _notifications.OnPublish = _ => cancel.Cancel();
 
-        var result = Handler.UpdateManifest([ModFrom("A"), ModFrom("B")], Instance(), cancel.Token);
+        var result = Handler.UpdateManifest([ModFrom("A"), ModFrom("B")], [], cancel: cancel.Token);
 
         Assert.Equal(["A"], result.Landed.Select(landed => landed.Item));
         Assert.Empty(result.Refused);
-        Assert.Equal(new ModlistProgress(null, 0, 0), Progress.Last());
+        Assert.Equal(new ModlistProgress(null, null, 0, 0), Progress.Last());
     }
 
     [Fact]
@@ -447,10 +298,10 @@ public sealed class UpdateManifestHandlerTests
     {
         var handler = Handler;
         _folders.WithFile(Mod, "a.txt", "hello").WithFile(Mod, "b.txt", "hello");
-        handler.UpdateManifest([ModFrom("Mod")], Instance());
+        handler.UpdateManifest([ModFrom("Mod")], []);
 
         _folders.Without(Mod, "b.txt");
-        handler.UpdateManifest([ModFrom("Mod")], Instance());
+        handler.UpdateManifest([ModFrom("Mod")], []);
 
         Assert.Equal(["a.txt"], _folders.Manifests[Mod].Files.Select(f => f.Path));
     }

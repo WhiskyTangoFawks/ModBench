@@ -4,8 +4,8 @@ using MEditService.RepositoriesLib;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
-/// <summary>The Mod folder adapter's second implementation: every file held in memory, a file's hash its text, a
-/// manifest written only when it differs from the one there, and each delta held by its key.</summary>
+/// <summary>The Mod folder adapter's second implementation: every file held in memory, a file's hash its text, and a
+/// manifest written only when it differs from the one there.</summary>
 internal sealed class FakeModFolders : IModFolderRepository
 {
     private readonly Dictionary<(string Folder, string Path), (byte[] Bytes, FileStamp? Stamp)> _files = [];
@@ -19,11 +19,10 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public HashSet<string> UnwritableManifests { get; } = [];
 
-    public HashSet<string> UnwritableBuildFolders { get; } = [];
-
     public Dictionary<string, Manifest> Manifests { get; } = [];
 
-    public Dictionary<(string BuildFolder, string Path, string BaseHash, string FileHash), byte[]> Deltas { get; } = [];
+    /// <summary>The hashes each folder's last listing was handed for its files that match their lines.</summary>
+    public Dictionary<string, IReadOnlyDictionary<string, string>> Provided { get; } = [];
 
     public FakeModFolders WithFile(string folder, string path, string text, long modified = 0, long changed = 0) =>
         WithBytes(folder, path, Encoding.ASCII.GetBytes(text), modified, changed);
@@ -44,9 +43,11 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public void Without(string folder, string path) => _files.Remove((folder, path));
 
-    public IReadOnlyList<HashedFile> Files(string modFolder, string modName, IReadOnlySet<string> leftOut)
+    public IReadOnlyList<HashedFile> Files(
+        string modFolder, string modName, IReadOnlySet<string> leftOut, IReadOnlyDictionary<string, string> provided)
     {
         if (!_folders.Contains(modFolder)) throw new DirectoryNotFoundException(modFolder);
+        Provided[modFolder] = provided;
         var files = _files.Where(f => f.Key.Folder == modFolder && !leftOut.Contains(f.Key.Path)).ToList();
         if (files.FirstOrDefault(f => Unreadable.Contains(f.Key)) is { Key.Path: { } held }) throw new IOException($"{held} is held by another process");
         return [.. files.Select(f => new HashedFile(f.Key.Path, f.Value.Bytes.Length, Encoding.ASCII.GetString(f.Value.Bytes), f.Value.Stamp))];
@@ -75,26 +76,10 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public HashSet<string> UnreadableManifests { get; } = [];
 
-    public string Hash(Stream content)
-    {
-        using var reader = new StreamReader(content, Encoding.ASCII, leaveOpen: true);
-        return reader.ReadToEnd();
-    }
-
     public Manifest? ReadManifest(string modFolder, string modName)
     {
         if (UnreadableManifests.Contains(modFolder)) throw new InvalidDataException("its manifest cannot be read at line 1");
         return Manifests.GetValueOrDefault(modFolder);
-    }
-
-    public string DeltaName(string path, string baseHash, string fileHash) => $"{path[(path.LastIndexOf('/') + 1)..]}.{baseHash}_{fileHash}.octodiff";
-
-    public Stream? OpenDelta(string buildFolder, string? downloadsFolder, string path, string baseHash, string fileHash)
-    {
-        if (Deltas.TryGetValue((buildFolder, path, baseHash, fileHash), out var built)) return new MemoryStream(built);
-        return downloadsFolder is not null && _files.TryGetValue((downloadsFolder, DeltaName(path, baseHash, fileHash)), out var loose)
-            ? new MemoryStream(loose.Bytes)
-            : null;
     }
 
     public bool WriteFile(string folder, string path, Action<Stream> write)
@@ -120,20 +105,6 @@ internal sealed class FakeModFolders : IModFolderRepository
         _manifests[modFolder] = text;
         return true;
     }
-
-    public long? DeltaSize(string buildFolder, string path, string baseHash, string fileHash) =>
-        Deltas.TryGetValue((buildFolder, path, baseHash, fileHash), out var delta) ? delta.Length : null;
-
-    public bool WriteDelta(string buildFolder, string path, string baseHash, string fileHash, Func<Stream, bool> write)
-    {
-        if (UnwritableBuildFolders.Contains(buildFolder)) throw new UnauthorizedAccessException($"{buildFolder} is read-only");
-        using var delta = new MemoryStream();
-        if (!write(delta)) return false;
-        Deltas[(buildFolder, path, baseHash, fileHash)] = delta.ToArray();
-        return true;
-    }
-
-    public Stream CreateScratchFile(string buildFolder) => new SparseStream();
 
     private Stream Open(string folder, string path)
     {

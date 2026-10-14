@@ -21,7 +21,7 @@ public sealed class ModlistGestureCancelApiTests : HostedTests
 
     private string FolderOf(string mod) => Path.Combine(_instance, "mods", mod);
 
-    private object Request(string route, string gesture)
+    private object Request(string gesture)
     {
         foreach (var mod in new[] { "ModA", "ModB" })
         {
@@ -29,16 +29,12 @@ public sealed class ModlistGestureCancelApiTests : HostedTests
             File.WriteAllText(Path.Combine(FolderOf(mod), "a.txt"), mod);
         }
         object[] mods = [.. new[] { "ModA", "ModB" }.Select(mod => new { name = mod, folder = FolderOf(mod), installationFiles = Array.Empty<object>(), committedFiles = Array.Empty<string>() })];
-        var dataFolder = Path.Combine(_instance, "game", "Data");
-        var buildFolder = Path.Combine(_instance, "build");
-        return route == "/update-manifest"
-            ? new { mods, gameFiles = Array.Empty<object>(), dataFolder, buildFolder, deltaShare = 0.5, gesture }
-            : new { mods, gameFiles = Array.Empty<object>(), dataFolder, buildFolder, downloadsFolder = (string?)null, downloadedFiles = Array.Empty<object>(), gesture };
+        return new { mods, gameFiles = Array.Empty<object>(), dataFolder = Path.Combine(_instance, "game", "Data"), gesture };
     }
 
     private async Task<JsonElement> Post(string route, string gesture)
     {
-        var response = await Client.PostAsJsonAsync(route, Request(route, gesture));
+        var response = await Client.PostAsJsonAsync(route, Request(gesture));
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }

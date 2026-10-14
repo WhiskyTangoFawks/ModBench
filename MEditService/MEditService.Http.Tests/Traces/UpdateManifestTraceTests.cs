@@ -15,6 +15,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
     private const string HashOfOriginal = "PclCUmd0Z4s=";
     private const string HashOfVanilla = "/Qk9lLVYbZs=";
     private const string HashOfTheZip = "AAECAwQFBgc=";
+    private const string Gesture = "a-gesture";
 
     private readonly ScratchDirectory _instance = new("trace-update-manifest-");
 
@@ -24,15 +25,13 @@ public sealed class UpdateManifestTraceTests : HostedTests
 
     private string Downloads => Path.Combine(_instance, "downloads");
 
-    private string BuildFolder => Path.Combine(_instance, "build");
-
     private static string Original => string.Concat(Enumerable.Range(0, 1000).Select(line => $"{line:D7}\n"));
 
     private void ModInstalledFromADownload(bool edited)
     {
         Directory.CreateDirectory(ModFolder);
         File.WriteAllText(Path.Combine(ModFolder, "kept.txt"), "kept");
-        File.WriteAllText(Path.Combine(ModFolder, "edited.txt"), edited ? Original.Replace("0000500", "edited!", StringComparison.Ordinal) : Original);
+        File.WriteAllText(Path.Combine(ModFolder, "edited.txt"), edited ? "edited" : Original);
         File.WriteAllText(Path.Combine(ModFolder, "Game.esm"), "vanilla");
         Directory.CreateDirectory(Downloads);
         using var zip = ZipFile.Open(Path.Combine(Downloads, "Mod.zip"), ZipArchiveMode.Create);
@@ -59,9 +58,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
         {
             ["mods"] = new JsonArray(new JsonObject { ["name"] = Mod, ["folder"] = ModFolder, ["installationFiles"] = new JsonArray(installationFile) }),
             ["gameFiles"] = new JsonArray(gameFile),
-            ["dataFolder"] = Path.Combine(_instance, "game", "Data"),
-            ["buildFolder"] = BuildFolder,
-            ["deltaShare"] = 0.5,
+            ["gesture"] = Gesture,
         };
         return (whole, installationFile, entry, gameFile);
     }
@@ -75,11 +72,6 @@ public sealed class UpdateManifestTraceTests : HostedTests
     [InlineData("installationFile", "entries", null)]
     [InlineData("entry", "hash", "\"WHOLE\"")]
     [InlineData("request", "gameFiles", null)]
-    [InlineData("request", "dataFolder", null)]
-    [InlineData("request", "buildFolder", null)]
-    [InlineData("request", "deltaShare", null)]
-    [InlineData("request", "deltaShare", "-0.1")]
-    [InlineData("request", "deltaShare", "1.1")]
     [InlineData("gameFile", "path", null)]
     [InlineData("gameFile", "size", null)]
     [InlineData("gameFile", "hash", null)]
@@ -104,7 +96,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task UpdatingTheManifestOfAMod_AnswersItLanded_WritesItsManifestAndEachDelta_AndReportsItsProgress()
+    public async Task UpdatingTheManifestOfAMod_AnswersItLanded_WritesItsManifest_AndReportsItsProgressUnderItsGesture()
     {
         ModInstalledFromADownload(edited: true);
         using var stream = await Client.NotificationStream();
@@ -115,7 +107,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         var updated = Assert.Single(body.GetProperty("applied").EnumerateArray());
         Assert.Equal((Mod, true), (updated.GetProperty("mod").GetString(), updated.GetProperty("manifestWritten").GetBoolean()));
-        Assert.Empty(updated.GetProperty("noProvider").EnumerateArray());
+        Assert.Equal(["edited.txt"], updated.GetProperty("noProvider").EnumerateArray().Select(path => path.GetString()));
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
         var manifest = File.ReadAllLines(Path.Combine(ModFolder, Mod + ".manifest"));
         Assert.Equal($"{{\"installationFile\":\"Mod.zip\",\"size\":7,\"hash\":\"{HashOfTheZip}\",\"source\":\"nexus:1:2\"}}", manifest[0]);
@@ -123,13 +115,11 @@ public sealed class UpdateManifestTraceTests : HostedTests
         Assert.Equal(
             ["Game.esm", "edited.txt", "kept.txt"],
             manifest.Skip(2).Select(line => JsonDocument.Parse(line).RootElement.GetProperty("path").GetString()));
-        const string Delta = "edited.txt.3dc942526774678b_9de9edf07b967acb.octodiff";
-        Assert.Equal(
-            $"{{\"installationFile\":\"Mod.zip\",\"path\":\"edited.txt\",\"delta\":\"{Delta}\"}}",
-            JsonDocument.Parse(manifest[3]).RootElement.GetProperty("from").GetRawText());
-        Assert.Equal([Delta], Directory.GetFiles(BuildFolder).Select(Path.GetFileName));
+        Assert.Equal(JsonValueKind.Null, JsonDocument.Parse(manifest[3]).RootElement.GetProperty("from").ValueKind);
+        Assert.All(manifest.Skip(2), line => Assert.False(JsonDocument.Parse(line).RootElement.TryGetProperty("hash", out _)));
         var progress = await stream.EventsUntil("update-manifest-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
         Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Mod);
+        Assert.All(progress, e => Assert.Equal(Gesture, e.GetProperty("modlistProgress").GetProperty("gesture").GetString()));
     }
 
     [Fact]

@@ -9,7 +9,7 @@ internal static class ModByMod
 {
     public static SelectionResult<string, TRefusal, TOutcome> Over<TMod, TRefusal, TOutcome>(
         IReadOnlyList<TMod> mods, Func<TMod, string> nameOf, Action<ModlistProgress> publish,
-        Func<TMod, ItemAnswer<TRefusal, TOutcome>> each, CancellationToken cancel)
+        Func<TMod, ItemAnswer<TRefusal, TOutcome>> each, string? gesture, CancellationToken cancel)
     {
         var distinct = mods.DistinctBy(nameOf, StringComparer.OrdinalIgnoreCase).ToList();
         List<ItemLanded<string, TOutcome>> landed = [];
@@ -19,7 +19,7 @@ internal static class ModByMod
             foreach (var (done, mod) in distinct.Index())
             {
                 if (cancel.IsCancellationRequested) break;
-                publish(new ModlistProgress(nameOf(mod), done, distinct.Count));
+                publish(new ModlistProgress(gesture, nameOf(mod), done, distinct.Count));
                 switch (each(mod))
                 {
                     case ItemAnswer<TRefusal, TOutcome>.Wrote wrote:
@@ -33,7 +33,7 @@ internal static class ModByMod
         }
         finally
         {
-            publish(new ModlistProgress(null, 0, 0));
+            publish(new ModlistProgress(gesture, null, 0, 0));
         }
         return SelectionResult<string, TRefusal, TOutcome>.PerItem(landed, refused);
     }

@@ -9,11 +9,12 @@ namespace MEditService.Commands.Build;
 public sealed class UpdateManifestHandler(IModFolderRepository repository, INotificationPublisher notifications)
 {
     public SelectionResult<string, UpdateManifestRefusal, UpdatedMod> UpdateManifest(
-        IReadOnlyList<ModToUpdate> mods, InstanceToUpdate instance, CancellationToken cancel = default) =>
+        IReadOnlyList<ModToUpdate> mods, IReadOnlyList<OverriddenGameFile> gameFiles, string? gesture = null, CancellationToken cancel = default) =>
         ModByMod.Over(
-            mods, mod => mod.Name, progress => notifications.Publish(new UpdateManifestProgressNotification(progress)), mod => UpdateMod(mod, instance), cancel);
+            mods, mod => mod.Name, progress => notifications.Publish(new UpdateManifestProgressNotification(progress)),
+            mod => UpdateMod(mod, gameFiles), gesture, cancel);
 
-    private ItemAnswer<UpdateManifestRefusal, UpdatedMod> UpdateMod(ModToUpdate mod, InstanceToUpdate instance)
+    private ItemAnswer<UpdateManifestRefusal, UpdatedMod> UpdateMod(ModToUpdate mod, IReadOnlyList<OverriddenGameFile> gameFiles)
     {
         var missing = mod.InstallationFiles.Where(file => !repository.InstallationFileExists(file.Path))
             .Select(file => $"'{repository.InstallationFileName(file.Path)}'").ToList();
@@ -24,21 +25,13 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
                 $"'{mod.Name}' was not updated: {string.Join(", ", missing)} not in the downloads folder.");
         }
 
-        List<(string Name, InstallationFile File)> installationFiles =
-            [.. mod.InstallationFiles.Select(file => (repository.InstallationFileName(file.Path), file))];
-        var deltas = new DeltaMaker(repository, instance, mod.Folder, installationFiles);
         Manifest manifest;
         try
         {
-            var files = repository.Files(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal));
-            var builder = new ManifestBuilder(installationFiles, instance.GameFiles);
-            var providers = deltas.Keep([.. files.Select(file => (file, builder.ProviderOf(file)))]);
-            manifest = builder.Manifest([.. files.Zip(providers, (file, provider) => new ManifestFile(file.Path, file.Hash, file.Stamp, provider))]);
-        }
-        catch (Exception e) when (deltas.NotWritten && e is IOException or UnauthorizedAccessException)
-        {
-            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
-                UpdateManifestRefusal.NotWritten, $"'{mod.Name}' was not updated: a delta could not be written: {e.Message}");
+            var files = repository.Files(
+                mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal), ProvidedByTheManifestThere(mod, gameFiles));
+            var builder = new ManifestBuilder(mod.InstallationFiles.Select(file => (repository.InstallationFileName(file.Path), file)), gameFiles);
+            manifest = builder.Manifest([.. files.Select(file => new ManifestFile(file.Path, file.Stamp, builder.ProviderOf(file)))]);
         }
         catch (DirectoryNotFoundException)
         {
@@ -63,5 +56,22 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
 
         return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Landed(new UpdatedMod(
             written, [.. manifest.Files.Where(file => file.Provider is FileProvider.NoProvider).Select(file => file.Path).Order(StringComparer.Ordinal)]));
+    }
+
+    // A manifest that cannot be read, as a merge conflict leaves one, vouches for no file's hash.
+    private Dictionary<string, string> ProvidedByTheManifestThere(ModToUpdate mod, IReadOnlyList<OverriddenGameFile> gameFiles)
+    {
+        Manifest? there;
+        try
+        {
+            there = repository.ReadManifest(mod.Folder, mod.Name);
+        }
+        catch (InvalidDataException)
+        {
+            return [];
+        }
+        if (there is null) return [];
+        return new ManifestSources(repository, there, mod.InstallationFiles, gameFiles).Resolve(there.Files).Sourced
+            .ToDictionary(file => file.File.Path, file => file.Source.Hash, StringComparer.Ordinal);
     }
 }

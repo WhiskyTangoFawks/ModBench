@@ -66,8 +66,6 @@ export interface InstanceAnswers {
   stamps?: ReadonlyMap<string, FileStamp>;
   /** What the installation of each mod answers, by mod name; a mod not there records none. */
   installations?: ReadonlyMap<string, FileRead<readonly InstallationFile[]>>;
-  /** Each downloaded file with its hashes, by its path; a path not there is unreadable. */
-  downloadedFiles?: ReadonlyMap<string, InstallationFile>;
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
   /** The game's files, which a mod's files of the same path, whatever the case, override. */
@@ -146,7 +144,6 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     modFolderPath: (mod) => Promise.resolve(`/mods/${mod}`),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFiles: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: [] }),
-    downloadedFile: (path) => answer(answers.downloadedFiles?.get(path), path),
     managerFilesInModFolder: ['meta.ini'],
     overriddenGameFiles: (_dataFolder, modFilePaths) => overridden(modFilePaths),
     gameFilesOverriddenBy: async (_dataFolder, mod) => {
@@ -154,7 +151,6 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       const found = await overridden((listing?.files ?? []).map((file) => file.relativePath));
       return found.kind === 'read' ? { kind: 'read', answer: { gameFiles: found.answer, notes: listing?.notes ?? [] } } : found;
     },
-    buildFolder: '/build',
     writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, undefined),
     removeIgnoreList: () => record({ verb: 'removeIgnoreList' }, undefined),
     fileStamp: (path) => answer(answers.stamps?.get(path), path),

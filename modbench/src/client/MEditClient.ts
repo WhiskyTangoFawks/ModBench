@@ -195,12 +195,11 @@ export interface BuildOutcome {
  *  commits itself (ADR-0013). */
 export type UpdateManifestMod = components['schemas']['UpdateManifestModRequest'];
 
-/** The instance's facts every mod's manifest needs: the game files its files override, the game's data folder, the
- *  build folder and the share of a file a delta may reach. */
+/** The instance's facts every mod's manifest needs: the game files its files override. */
 export type UpdateManifestFacts = Omit<components['schemas']['UpdateManifestRequest'], 'mods' | 'gesture'>;
 
-/** Where a modlist gesture is: the mod it works on, and how many mods it has done of how many. The mod is none once
- *  it ends. */
+/** Where a modlist gesture is: the gesture it is, the mod it works on, and how many mods it has done of how many. The
+ *  mod is none once it ends. */
 export type ModlistProgress = components['schemas']['ModlistProgress'];
 
 /** An abort stops mEdit after the mod in hand, and the mods done stay done. */
@@ -227,8 +226,7 @@ export interface UpdateManifestOutcome {
 /** A mod to restore from its manifest: its folder and its installation files (ADR-0013). */
 export type RestoreMod = components['schemas']['RestoreFromManifestModRequest'];
 
-/** The instance's facts restore from manifest needs: the game files the mods' files override, the game's data folder, and the
- *  places a delta is looked for. */
+/** The instance's facts restore from manifest needs: the game files the mods' files override, and the game's data folder. */
 export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestRequest'], 'mods' | 'gesture'>;
 
 interface RestoredMod {
@@ -237,12 +235,11 @@ interface RestoredMod {
   written: readonly string[];
 }
 
-/** A skipped mod whose only lacks are game files the call did not name, by their paths under the data folder, and
- *  deltas no place it searched holds: a call that names them brings it back. */
+/** A skipped mod whose only lacks are game files the call did not name, by their paths under the data folder: a call
+ *  that names them brings it back. */
 export interface NotFound {
   mod: string;
   gameFiles: readonly string[];
-  deltas: boolean;
 }
 
 /** Restore from manifest's answer: each mod restored or skipped with its reason, and each skipped mod that is `NotFound`. */

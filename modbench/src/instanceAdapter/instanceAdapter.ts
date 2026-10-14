@@ -382,8 +382,6 @@ export interface InstanceAdapter {
   sourceFolder(mod: string): string | undefined;
   /** The downloaded files the mod manager records `mod` as installed from, in its order. */
   installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
-  /** The downloaded file at `path`, with its hashes. */
-  downloadedFile(path: string): Promise<FileRead<InstallationFile>>;
   /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
   readonly managerFilesInModFolder: readonly string[];
   /** The game files in `dataFolder` that files of a mod, by their paths in it, override, named as the game folder
@@ -392,8 +390,6 @@ export interface InstanceAdapter {
   /** The game files in `dataFolder` that the files in `mod`'s folder override, as `overriddenGameFiles` names them, listed in
    *  any profile or none. */
   gameFilesOverriddenBy(dataFolder: string, mod: string): Promise<FileRead<OverriddenGameFiles>>;
-  /** The folder update manifest writes deltas into. */
-  readonly buildFolder: string;
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds. Rejects, writing nothing,
    *  when an ignore list is already there. */
   writeIgnoreList(): Promise<void>;
