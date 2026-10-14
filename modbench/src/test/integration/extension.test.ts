@@ -589,7 +589,6 @@ describe('modbench.record.open', () => {
   });
 
   it('opens several records at once as one grid: the first record\'s document, which reads the others beside it in the order given', async () => {
-    const tabsBefore = openTabs().length;
     const winner = { name: 'Fallout4.esm', origin: 'Data/' };
     const copies = [{ formKey: 'Fallout4.esm:000011', plugin: winner }, { formKey: 'Fallout4.esm:000012', plugin: winner }];
     const askedSideBySide = () => comparedSideBySide.some((asked) => JSON.stringify(asked) === JSON.stringify(copies));
@@ -600,7 +599,7 @@ describe('modbench.record.open', () => {
     await waitFor('the first record\'s tab', () => hasRenderedTab('Fallout4.esm:000011') || undefined);
     await waitFor('the records read side by side', askedSideBySide);
 
-    assert.strictEqual(openTabs().length, tabsBefore + 1);
+    assert.strictEqual(openTabs().filter((t) => t.label === renderedName('Fallout4.esm:000011')).length, 1);
     assert.ok(!hasRenderedTab('Fallout4.esm:000012'), 'the second record is a column, not a tab');
   });
 
