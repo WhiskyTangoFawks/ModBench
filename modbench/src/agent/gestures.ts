@@ -34,7 +34,8 @@ const MODS = agentGesture(
   })),
 );
 
-/** agent.md, Gestures, story 1: the catalog's `writes` gestures, less those it keeps from the agent, plus those it gives. */
+/** agent.md, Gestures, story 1: the catalog's `writes` gestures, less those it keeps from the agent, plus those it gives.
+ *  @public Read by agentGestures.test, which holds it to commands.md. */
 export const AGENT_GESTURES: ReadonlyMap<string, AgentGesture> = new Map([
   ['modbench.mod.enable', MODS],
   ['modbench.mod.disable', MODS],

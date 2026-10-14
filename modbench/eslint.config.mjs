@@ -330,10 +330,9 @@ export default defineConfig(
 
     // commands.md, "An entry point fires a gesture. A gesture does not fire another.": the only
     // place `vscode.commands.executeCommand('modbench.…')` appears is `src/`, entry-point wiring.
-    // agent.md, Reporting, story 3 excepts the Agent box: its agent gets each gesture's outcome.
     {
         files: ['src/**/*.ts'],
-        ignores: ['src/agent/**'],
+        ignores: ['src/agent/**'], // agent.md, Reporting, story 3: the agent gets each gesture's outcome.
         plugins: { local },
         rules: {
             'local/no-gesture-result-use': 'error',
