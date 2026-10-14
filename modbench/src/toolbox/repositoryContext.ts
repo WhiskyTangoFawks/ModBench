@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 
-export const REPOSITORY_KEY = 'modbench.modlist.hasRepository';
-export const INSTANCE_ROOTS_KEY = 'modbench.modlist.instanceRoots';
+const REPOSITORY_KEY = 'modbench.modlist.hasRepository';
+const INSTANCE_ROOTS_KEY = 'modbench.modlist.instanceRoots';
 
 /** Tells the menus whether the instance holds a repository, again after each value the Instance loader lands, and
  *  which Source Control root is the instance's (modlist-source.md, Menus and keys). */

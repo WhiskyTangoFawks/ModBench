@@ -20,7 +20,7 @@ const DOWNLOADS = 'downloads';
 const HASH_INDEX = 'hash-index';
 const BUILD = 'build';
 const IGNORE_LIST_FILE = '.gitignore';
-const MANIFEST_EXTENSION = '.manifest';
+const MANIFEST_GLOB = '*.manifest';
 const PLUGIN_ORDER_FILE = 'loadorder.txt';
 
 export const profilesDir = (instanceRoot: string): string => join(instanceRoot, PROFILES);
@@ -203,7 +203,7 @@ const heldInEachFolderOf = (folder: string, files: readonly string[]): string[] 
 export const WHITELIST_IGNORE_LIST = `${[
   '/*', `!/${IGNORE_LIST_FILE}`, `!/${SETTINGS_FILE_NAME}`,
   ...heldInEachFolderOf(PROFILES, [MODLIST_FILE_NAME, PLUGINS_FILE_NAME, PLUGIN_ORDER_FILE, `*.${anyCase('ini')}`]),
-  ...heldInEachFolderOf(MODS, [MOD_META_FILE_NAME, `*${MANIFEST_EXTENSION}`]),
+  ...heldInEachFolderOf(MODS, [MOD_META_FILE_NAME, MANIFEST_GLOB]),
 ].join('\n')}\n`;
 
 /** The archives at the root of the Data folder and the files of its strings folder, the Data folder its base. */
