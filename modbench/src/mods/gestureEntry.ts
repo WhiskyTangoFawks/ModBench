@@ -3,7 +3,6 @@ import type { Instance } from '../instanceLoader/instance';
 import { kindGuard, singularArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { argumentOfKind } from '../drivingLib/agentGesture';
-import { Refusal } from '../drivingLib/refusal';
 import type { EntryRef, OriginFileRef } from '../modOrderCommands/modOrderCommands';
 import type { Argument } from '../wire/argument';
 
@@ -19,10 +18,8 @@ export const modNameOf = (argument: Argument): string => argumentOfKind(argument
 export const separatorNameOf = (argument: Argument): string => argumentOfKind(argument, 'separator').name;
 
 export const entryRefOf = (argument: Argument): EntryRef => {
-  if (argument.kind !== 'mod' && argument.kind !== 'separator') {
-    throw new Refusal(`An agent call to a gesture on mods and separators carries those only, and this one carries a ${argument.kind}.`);
-  }
-  return { kind: argument.kind, name: argument.name };
+  const { kind, name } = argumentOfKind(argument, 'mod', 'separator');
+  return { kind, name };
 };
 
 export const fileRefOf = (argument: Argument): OriginFileRef => {
