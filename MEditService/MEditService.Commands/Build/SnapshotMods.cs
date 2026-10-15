@@ -6,7 +6,7 @@ namespace MEditService.Commands.Build;
 public sealed record SnapshotMods(IReadOnlyList<ModByFolder> Mods, string StatCache);
 
 /// <summary>A mod by its folder, with its metadata files, which no line names, and when the request asks
-/// about it, the metadata the mod manager holds or why it could not read it. A source mod names its source folder.</summary>
+/// about it, the metadata the mod manager holds or why it could not read it.</summary>
 public sealed record ModByFolder(
     string Name, string Folder, IReadOnlyList<string> MetadataFiles, ModMetadata? Metadata = null, string? MetadataUnreadable = null,
     string? SourceFolder = null)

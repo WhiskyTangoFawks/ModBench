@@ -111,7 +111,7 @@ public sealed class LoadOrderHolderTests
         var holder = new LoadOrderHolder();
         var active = Registered("A.esp") with { Line = new PluginLine(0, NamesIt: true) };
         LoadOrderSnapshot DisabledLineAt(int line) => new(
-            @"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [active, Registered("B.esp") with { Line = new PluginLine(line, NamesIt: true) }], [active.Key], [], [], []);
+            @"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [active, Registered("B.esp") with { Line = new PluginLine(line, NamesIt: true) }], [active.Key], [], [], [], []);
         holder.Apply(DisabledLineAt(1));
         var moved = DisabledLineAt(2);
 
