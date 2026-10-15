@@ -15,7 +15,7 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c>
     /// exists. A <c>.git</c> with no <c>main</c> is init's own, half made, or
     /// <see cref="HoldsAnotherRepository"/>.</summary>
-    internal static bool IsSourceMod(string sourceFolder)
+    internal static bool HoldsRepository(string sourceFolder)
     {
         var gitDir = Path.Combine(sourceFolder, ".git");
         return Directory.Exists(gitDir) && HasMainBranch(gitDir);
