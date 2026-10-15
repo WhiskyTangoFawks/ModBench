@@ -6,7 +6,7 @@ Each mod has one manifest file, and the mod is restored from it: the manifest na
 
 - A file in a mod that is not a source mod, which no installation file or game file yields with its bytes, has no provider, and the manifest says so. The user ships such a change as a patch, in a source mod with a remote, as modding practice ships one.
 - The manifest lives in the mod folder, so it follows the mod through rename and uninstall, and git tracks it in place of the files it cannot hold ([ADR-0007](0007-plugin-edits-are-git-working-tree-changes.md)). A modlist is the manifests of its mods, with the profiles beside them.
-- Restoring makes a mod folder what its manifest says: it writes every file whose bytes differ, from the downloaded files or by building the source, writes the mod manager's record of the mod, and sends every other file to the trash. A mod folder with no manifest is left alone, because it can be a mod the user has not recorded yet.
+- Restoring makes a mod folder what its manifest says: it writes every file whose bytes differ, from the downloaded files or by building the source, writes the mod's metadata, and sends every other file the manifest does not name to the trash. A mod folder with no manifest is left alone, because it can be a mod the user has not recorded yet.
 - A source mod whose repository has a remote is restored by building it: its manifest names the remote and a commit for every file the source provides, and the rebuild clones the source when it is absent and builds it at that commit. It never moves a repository that is at another commit; it names the mod and the commit instead. A source mod with no remote is recorded as any other mod is, because its source cannot be shared.
 
 ## Alternatives rejected
