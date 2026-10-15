@@ -10,7 +10,7 @@ import { EMPTY_MOD_NAME, entryNameRefusal, goneFromDisk, newModNameRefusal, type
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { isRefused, type MEditClient } from '../client';
-import { installMod } from './install';
+import { installMod, type ReadStatus } from './install';
 export type { SelectionResult };
 export type { InstallTarget } from '../instanceAdapter/instanceAdapter';
 export type { ModSource } from './install';
@@ -98,7 +98,7 @@ export interface OriginFileRef {
 
 interface SourceModWriters {
   readonly adapter: InstanceAdapter;
-  readonly mEdit: Pick<MEditClient, 'changeBuildConfiguration' | 'getModStatus'>;
+  readonly mEdit: Pick<MEditClient, 'changeBuildConfiguration'>;
 }
 
 const UNMARK: Record<OriginFileMark, OriginFileMark> = { Excluded: 'Included', Included: 'Excluded' };
@@ -430,7 +430,7 @@ export function modSyncOver(adapter: InstanceAdapter): ModSyncRun {
 }
 
 /** The modlist's commands, bound to one instance: each takes the gesture's arguments only. */
-export function modlistCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['mEdit']) {
+export function modlistCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['mEdit'], readStatus: ReadStatus) {
   const entryKey: EntryKey = (entry) => adapter.entryKey(entry);
   return {
     setModsEnabled: (...args: TailOf<typeof setModsEnabled>) => setModsEnabled(adapter, ...args),
@@ -446,7 +446,7 @@ export function modlistCommands(adapter: InstanceAdapter, mEdit: SourceModWriter
     separatorNameRefusal: (...args: TailOf<typeof separatorNameRefusal>) => separatorNameRefusal(entryKey, ...args),
     renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(entryKey, ...args),
     newModNameRefusal: (...args: TailOf<typeof newModNameRefusal>) => newModNameRefusal(entryKey, ...args),
-    installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, mEdit }, ...args),
+    installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, readStatus }, ...args),
   };
 }
 

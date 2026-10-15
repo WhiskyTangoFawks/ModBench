@@ -3,7 +3,6 @@ import {
   type ModByFolder, type ModStatus, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
-import { byFolder } from '../coreLib/modFolders';
 import type { FileRead, GameFile, GameFolder, InstallationFile, InstanceAdapter, ModMetadata } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
@@ -63,6 +62,15 @@ interface ReadMods {
   readonly gameFiles: readonly GameFile[];
   readonly refused: readonly ItemRefusal<string>[];
   readonly notes: readonly ModNote[];
+}
+
+async function byFolder(adapter: Adapter, mods: readonly string[]): Promise<ModByFolder[]> {
+  const asked: ModByFolder[] = [];
+  for (const mod of mods) {
+    const folder = await adapter.modFolderPath(mod);
+    if (folder !== undefined) asked.push({ name: mod, folder, metadataFiles: [...adapter.metadataFilesInModFolder] });
+  }
+  return asked;
 }
 
 const wireFile = ({ path, source, size, hash, entries }: InstallationFile): UpdateManifestMod['installationFiles'][number] =>

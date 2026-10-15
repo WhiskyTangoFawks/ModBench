@@ -6,10 +6,8 @@ import type {
 } from '../instanceAdapter/instanceAdapter';
 import { EMPTY_MOD_NAME, goneFromDisk, modNameTakenRefusal } from '../coreLib/commandRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
-import { byFolder } from '../coreLib/modFolders';
-import type { MEditClient, ModStatus } from '../client';
-import { withMetadataRead } from '../wire/modByFolder';
-import { failureReason, isReadFailed } from '../wire/readFailed';
+import type { ModStatus } from '../client';
+import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 
 /** What a mod is installed from: an archive or a folder the user picked, or a downloaded file by
  *  its name and path in the instance value, with the Nexus ids and version its metadata holds. */
@@ -50,19 +48,16 @@ const upgradeLoss = (status: ModStatus): string | undefined => {
   return parts.length === 0 ? undefined : parts.join('; ');
 };
 
-type StatusClient = Pick<MEditClient, 'getModStatus'>;
+export type ReadStatus = (mods: readonly string[]) => Promise<readonly ModStatus[] | ReadFailed>;
 
 // What an upgrade over the mod would lose, or why mEdit could not say (agent.md, Any agent, story 7).
-async function upgradeRefusal(
-  adapter: InstanceAdapter, client: StatusClient, target: InstallTarget, force: boolean,
-): Promise<string | undefined> {
+async function upgradeRefusal(readStatus: ReadStatus, target: InstallTarget, force: boolean): Promise<string | undefined> {
   if (force || target.kind !== 'upgrade') return undefined;
   const mod = target.name;
-  const asked = await withMetadataRead(await byFolder(adapter, [mod]), (name) => adapter.modMetadata(name));
-  const answer = asked.length === 0 ? [] : await client.getModStatus(asked, adapter.statCacheFolder);
+  const answer = await readStatus([mod]);
   if (isReadFailed(answer)) return `"${mod}" status could not be read: ${failureReason(answer)}`;
   const status = answer.find((read) => read.mod === mod);
-  if (status === undefined) return `"${mod}" has no status to read.`;
+  if (status === undefined) return undefined;
   if (status.unreadable) return `"${mod}" status could not be read: ${status.unreadable.why}`;
   const loss = upgradeLoss(status);
   return loss === undefined ? undefined : `The upgrade would lose, in "${mod}": ${loss}. Request it again with force to replace them.`;
@@ -77,15 +72,14 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
   }
 }
 
-/** `modbench.mod.install`, then a downloaded file marked installed. An upgrade that would lose files is refused unless
- *  forced. `downloadRefusal` says why the mark failed, so a landed install is not reported as failed (downloads.md,
- *  Reporting, story 1). */
+/** `modbench.mod.install`, then a downloaded file marked installed. `downloadRefusal` says why the
+ *  mark failed, so a landed install is not reported as failed (downloads.md, Reporting, story 1). */
 export async function installMod(
-  { adapter, mEdit }: { adapter: InstanceAdapter; mEdit: StatusClient },
+  { adapter, readStatus }: { adapter: InstanceAdapter; readStatus: ReadStatus },
   source: ModSource, target: InstallTarget, gameName: string, force: boolean,
 ): Promise<CommandResult<{ isFomod: boolean; downloadRefusal?: string }>> {
   if (target.kind === 'new' && target.name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
-  const refusal = await upgradeRefusal(adapter, mEdit, target, force);
+  const refusal = await upgradeRefusal(readStatus, target, force);
   if (refusal !== undefined) return { applied: false, refusal };
   let outcome: InstallOutcome;
   try {

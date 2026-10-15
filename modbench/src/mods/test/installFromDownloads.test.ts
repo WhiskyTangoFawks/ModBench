@@ -1,3 +1,4 @@
+import { unreadStatus } from '../../test/unreadStatus';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const { registerCommand, showQuickPick, createQuickPick, showInputBox } = vi.hoisted(() => ({
@@ -30,8 +31,8 @@ import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { modlistCommands } from '../../modOrderCommands/modOrderCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
-const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')), getModStatus: () => Promise.reject(new Error('unscripted')) };
-const installOver = () => ({ ...modlistCommands(fakeInstanceAdapter().adapter, unscriptedMEdit), installMod });
+const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
+const installOver = () => ({ ...modlistCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), installMod });
 
 const ARCHIVE_PATH = downloadRowFixture('foo.7z').path;
 

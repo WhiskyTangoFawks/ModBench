@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { modlistCommands, type ModSource } from '../modOrderCommands';
 import type { InstallSource, InstallTarget } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { ModStatus } from '../../client';
-import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
+import type { ReadStatus } from '../install';
+import type { ReadFailed } from '../../wire/readFailed';
+import { unreadStatus } from '../../test/unreadStatus';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const MOD = 'Freshly Installed Mod';
@@ -13,20 +15,16 @@ const NEW_MOD: InstallTarget = { kind: 'new', name: MOD };
 const UPGRADED = { kind: 'upgrade', name: 'Harder VATS' } as const;
 const DOWNLOADED = { kind: 'downloadedFile', name: 'Freshly-1-0.7z', path: '/downloads/Freshly-1-0.7z' } as const;
 
-function install(source: ModSource, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, client = new InMemoryMEditClient()) {
+function install(source: ModSource, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, readStatus: ReadStatus = unreadStatus) {
   const fake = fakeInstanceAdapter(undefined, answers);
-  const outcome = modlistCommands(fake.adapter, client).installMod(source, target, GAME_NAME, force);
-  return outcome.then((result) => ({ result, calls: fake.calls, client }));
+  const outcome = modlistCommands(fake.adapter, new InMemoryMEditClient(), readStatus).installMod(source, target, GAME_NAME, force);
+  return outcome.then((result) => ({ result, calls: fake.calls }));
 }
 
 const statusOf = (over: Partial<ModStatus> = {}): ModStatus =>
   ({ mod: UPGRADED.name, noManifest: false, differing: [], namedByNoLine: [], gone: [], noProvider: [], metadataDiffers: false, ...over });
 
-const clientAnswering = (answer: ModStatus[] | ReadFailed): InMemoryMEditClient => {
-  const client = new InMemoryMEditClient();
-  if (isReadFailed(answer)) client.setQueryFailure('getModStatus', answer); else client.setQueryAnswer('getModStatus', answer);
-  return client;
-};
+const reading = (answer: readonly ModStatus[] | ReadFailed) => vi.fn<ReadStatus>().mockResolvedValue(answer);
 
 describe('installMod', () => {
   describe('an upgrade without force', () => {
@@ -37,7 +35,7 @@ describe('installMod', () => {
       ['has no manifest', { noManifest: true }, 'it has no manifest'],
       ['has a file with no provider', { noProvider: ['c.dds'] }, 'files with no provider: c.dds'],
     ])('refuses a mod that %s, listing the loss and naming force, and installs nothing', async (_, over, loss) => {
-      const { result, calls } = await install(ARCHIVE, UPGRADED, {}, false, clientAnswering([statusOf(over)]));
+      const { result, calls } = await install(ARCHIVE, UPGRADED, {}, false, reading([statusOf(over)]));
 
       expect(result).toEqual({
         applied: false,
@@ -49,42 +47,44 @@ describe('installMod', () => {
     it.each<[string, ModStatus[] | ReadFailed, string]>([
       ['a status read that failed', { failed: 'unreachable' }, 'mEdit could not be reached.'],
       ['a status mEdit could not read', [statusOf({ unreadable: { manifest: true, why: 'bad manifest' } })], 'bad manifest'],
-      ['no status for the mod', [], 'has no status to read'],
     ])('refuses on %s and installs nothing', async (_, answer, why) => {
-      const { result, calls } = await install(ARCHIVE, UPGRADED, {}, false, clientAnswering(answer));
+      const { result, calls } = await install(ARCHIVE, UPGRADED, {}, false, reading(answer));
 
       expect(result).toMatchObject({ applied: false, refusal: expect.stringContaining(why) as unknown });
       expect(calls).toEqual([]);
     });
 
-    it('asks mEdit for the mod by its folder, with its metadata files and the stat cache', async () => {
-      const { client } = await install(ARCHIVE, UPGRADED, {}, false, clientAnswering([statusOf()]));
+    it('asks for the status of the target mod alone', async () => {
+      const readStatus = reading([statusOf()]);
 
-      expect(client.calls).toEqual([{
-        method: 'getModStatus',
-        args: [[{ name: 'Harder VATS', folder: '/mods/Harder VATS', metadataFiles: ['meta.ini'], metadata: { installationFiles: [] } }], '/instance/stat-cache'],
-      }]);
+      await install(ARCHIVE, UPGRADED, {}, false, readStatus);
+
+      expect(readStatus.mock.calls).toEqual([[['Harder VATS']]]);
+    });
+
+    it('leaves a mod with no status to the adapter, whose claim refuses a mod no folder holds', async () => {
+      const { result } = await install(ARCHIVE, { kind: 'upgrade', name: 'Vanished Mod' }, { installed: { landed: false } }, false, reading([]));
+
+      expect(result).toEqual({ applied: false, refusal: 'Cannot upgrade "Vanished Mod": there is no folder by that name under mods/.' });
     });
 
     it('installs over a mod whose status shows nothing to lose', async () => {
-      const { result } = await install(ARCHIVE, UPGRADED, {}, false, clientAnswering([statusOf()]));
+      const { result } = await install(ARCHIVE, UPGRADED, {}, false, reading([statusOf()]));
 
       expect(result).toEqual({ applied: true, isFomod: false });
     });
   });
 
-  it('installs over a mod that would lose files when forced, reading no status', async () => {
-    const { result, client } = await install(ARCHIVE, UPGRADED, {}, true, clientAnswering([statusOf({ noManifest: true })]));
+  it.each([
+    ['an upgrade that would lose files, forced', UPGRADED, true],
+    ['a new mod, unforced', NEW_MOD, false],
+  ] as const)('installs %s, reading no status', async (_, target, force) => {
+    const readStatus = reading([statusOf({ noManifest: true })]);
+
+    const { result } = await install(ARCHIVE, target, {}, force, readStatus);
 
     expect(result).toEqual({ applied: true, isFomod: false });
-    expect(client.calls).toEqual([]);
-  });
-
-  it('reads no status for a new mod, forced or not', async () => {
-    const { result, client } = await install(ARCHIVE, NEW_MOD, {}, false);
-
-    expect(result).toEqual({ applied: true, isFomod: false });
-    expect(client.calls).toEqual([]);
+    expect(readStatus).not.toHaveBeenCalled();
   });
 
   it.each([

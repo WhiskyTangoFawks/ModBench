@@ -1,3 +1,4 @@
+import { unreadStatus } from '../../test/unreadStatus';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile } from '../../test/vscodeMock';
 
@@ -48,8 +49,8 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 }
 
 const GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE ='Skyrim Special Edition';
-const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')), getModStatus: () => Promise.reject(new Error('unscripted')) };
-const COMMANDS = { ...modlistCommands(fakeInstanceAdapter().adapter, unscriptedMEdit), installMod };
+const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
+const COMMANDS = { ...modlistCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), installMod };
 
 type ModInstallDeps = Parameters<typeof registerModInstallCommands>[0];
 

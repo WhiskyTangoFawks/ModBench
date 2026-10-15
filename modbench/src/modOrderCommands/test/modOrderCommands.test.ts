@@ -1,3 +1,4 @@
+import { unreadStatus } from '../../test/unreadStatus';
 import { describe, it, expect } from 'vitest';
 import { modSyncOver, modlistCommands } from '../modOrderCommands';
 import type {
@@ -19,7 +20,7 @@ const NO_TRASH = () => Promise.resolve();
 
 function over(order: readonly ModlistEntry[] = FIXTURE_ORDER, answers: InstanceAnswers = {}, mEdit = new InMemoryMEditClient()) {
   const fake = fakeInstanceAdapter(readingFixture({ mods: order }), answers);
-  return { fake, mEdit, commands: modlistCommands(fake.adapter, mEdit) };
+  return { fake, mEdit, commands: modlistCommands(fake.adapter, mEdit, unreadStatus) };
 }
 
 const orderWrite = (changes: readonly ModOrderChange[], profile = 'Default'): AdapterCall => ({ verb: 'changeModOrder', profile, changes });
