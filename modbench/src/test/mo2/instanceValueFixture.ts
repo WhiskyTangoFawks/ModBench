@@ -6,7 +6,7 @@ import { GAME_FOLDER_NOT_FOUND } from './gameFolderNotFound';
 /** A whole `InstanceValue` at its neutral value, every field overridable — so a test caring
  *  about one field (`.plugins`, `.downloads`, …) states only that one, typed, with no cast. */
 export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): InstanceValue {
-  const base: Omit<InstanceValue, 'modSyncArguments' | 'pluginSyncArguments'> = {
+  const base: Omit<InstanceValue, 'modNames' | 'modSyncArguments' | 'pluginSyncArguments'> = {
     mods: [],
     modFolders: [],
     trackedMods: new Set(),
@@ -32,10 +32,15 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map(), sourceDirs: new Map() },
   };
   const value = { ...base, ...overrides };
+  const modNames = overrides.modNames ?? new Map(value.mods.flatMap((entry) => {
+    const folder = value.modFolders?.find(({ kind, name }) => kind === entry.kind && name === entry.name);
+    const modName = folder?.modName ?? (entry.kind === 'mod' ? entry.name : undefined);
+    return modName === undefined ? [] : [[`${entry.kind}:${entry.name}`, modName] as const];
+  }));
   const pluginOrder = value.plugins.filter((plugin) => plugin.line !== null && plugin.winning)
     .sort((a, b) => (a.line ?? 0) - (b.line ?? 0))
     .map(({ name, enabled }) => ({ name, enabled }));
   return {
-    ...value, modSyncArguments: modSyncArgumentsOf(value), pluginSyncArguments: pluginSyncArgumentsOf({ ...value, pluginOrder }), ...overrides,
+    ...value, modNames, modSyncArguments: modSyncArgumentsOf(value), pluginSyncArguments: pluginSyncArgumentsOf({ ...value, pluginOrder }), ...overrides,
   };
 }

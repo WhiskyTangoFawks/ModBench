@@ -111,6 +111,9 @@ export function statusDescription(status: ModStatus): string | undefined {
   return [state, unprovided].filter((part) => part !== undefined).join(' · ') || undefined;
 }
 
+/** What a separator row's description says of its status (mods.md, A row, Separator). */
+export const separatorDescription = ({ noManifest }: ModStatus): string | undefined => (noManifest ? 'no manifest' : undefined);
+
 /** What a mod row's tooltip says of the files its folder lacks (modlist-source.md, Status, story 4). */
 export const lackedLine = ({ gone }: ModStatus): string | undefined =>
   (gone.length > 0 ? `its folder lacks ${counted(gone.length, 'file', 'files')} its manifest names` : undefined);

@@ -443,6 +443,21 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
     await vi.waitFor(() => { expect(view.badge).toEqual({ value: 1, tooltip: 'Mods that differ from their manifests or have none: 1' }); });
   });
 
+  it('asks for the status of each mod and each separator, a separator by its folder\'s name, when the stream opens again', async () => {
+    const push = new InMemoryMEditClient();
+    const instance = new FakeInstance(instanceValueFixture({
+      holdsRepository: true,
+      mods: [{ kind: 'separator', name: 'Weapons', enabled: true }, mod('ModA')],
+      modFolders: [{ kind: 'separator', name: 'Weapons', path: '/instance/mods/Weapons_separator', modName: 'Weapons_separator' }],
+    }));
+    const read = vi.fn((_mods: readonly string[]) => Promise.resolve([]));
+    createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync(), modStatus: { push, read } });
+
+    push.reconnected();
+
+    await vi.waitFor(() => { expect(read).toHaveBeenCalledWith(['Weapons_separator', 'ModA']); });
+  });
+
   it('says on the message line that a status read failed, while the instance holds a repository', async () => {
     const push = new InMemoryMEditClient();
     const instance = new FakeInstance(instanceValueFixture({ holdsRepository: true, mods: [mod('ModA')] }));

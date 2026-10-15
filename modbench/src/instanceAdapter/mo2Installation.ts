@@ -1,5 +1,6 @@
 // What MO2 records of a mod's installation: the downloaded file meta.ini names, and meta.ini itself.
 
+import { entryNamed } from './codecs/modlistText';
 import { basename, dirname, isAbsolute } from 'node:path';
 import { gamePathInfoForRelease, gameReleaseForMetaGame, gameReleaseForNexusDomain } from '../tables/gamePaths';
 import { changeOwnedKeysInText, MOD_META_FILE_NAME, parseMetaIni } from './codecs/metaIni';
@@ -60,6 +61,7 @@ async function sourceChanges(carried: ModMeta, source: string, context: Mo2Conte
 async function planMetadata(context: Mo2Context, mod: string, { version, installationFiles }: ModMetadata): Promise<MetadataPlan> {
   const folder = (await folderHolding(context, { kind: 'mod', name: mod }))?.path ?? newModFolder(context, mod);
   const file = modMetaFileIn(folder);
+  if (entryNamed(mod).kind === 'separator') return { file, held: '', changes: {} };
   const held = await get(file, '');
   const carried = parseMetaIni(held);
   const heldName = carried.archiveFilename === undefined ? undefined : basename(carried.archiveFilename);

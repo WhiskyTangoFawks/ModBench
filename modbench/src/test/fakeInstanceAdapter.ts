@@ -111,10 +111,10 @@ const entryKey = (entry: EntryRef): string => (entry.kind === 'separator' ? `${e
 const originKey = (origin: FileOrigin): string => (origin.kind === 'mod' ? `mod:${origin.name}` : origin.kind);
 
 /** The folders of the given entries, a bare name being a mod, held as the fake's `entryKey` folds names. */
-export function modFoldersOf(...entries: readonly (string | EntryRef)[]): ModFolders {
+export function modFoldersOf(...entries: readonly (string | (EntryRef & { modName?: string }))[]): ModFolders {
   const all: ModFolder[] = entries.map((entry) => {
-    const ref: EntryRef = typeof entry === 'string' ? { kind: 'mod', name: entry } : entry;
-    return { ...ref, path: `/mods/${ref.name}` };
+    const ref = typeof entry === 'string' ? { kind: 'mod' as const, name: entry } : entry;
+    return { kind: ref.kind, name: ref.name, path: `/mods/${ref.name}`, modName: ref.modName ?? ref.name };
   });
   return { all, holding: (entry) => all.find((folder) => entryKey(folder) === entryKey(entry)) };
 }

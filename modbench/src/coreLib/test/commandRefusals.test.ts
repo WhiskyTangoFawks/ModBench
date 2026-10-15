@@ -3,7 +3,7 @@ import { entryNameRefusal, newModNameRefusal, type TakenNames } from '../command
 
 const mod = (name: string) => ({ kind: 'mod', name } as const);
 const separator = (name: string) => ({ kind: 'separator', name } as const);
-const folder = (kind: 'mod' | 'separator', name: string) => ({ kind, name, path: `/instance/mods/${name}` });
+const folder = (kind: 'mod' | 'separator', name: string) => ({ kind, name, path: `/instance/mods/${name}`, modName: name });
 
 const key = (entry: { kind: string; name: string }): string =>
   (entry.kind === 'separator' ? `${entry.name.trim().replace(/\.+$/, '')}_separator` : entry.name).toLowerCase();

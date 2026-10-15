@@ -13,6 +13,7 @@ import type { Sync } from '../drivingLib/syncFailureReport';
 import { modsKeyContext } from './gestureEntry';
 import { onModCheckboxChanged } from './modCheckboxHandler';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
+import { modNameOf } from '../instanceLoader/modName';
 import { ModStatuses, type ReadStatus } from './modStatuses';
 import type { MEditClient } from '../client';
 import { registerModDecorations } from './modDecorations';
@@ -135,7 +136,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
 // modlist-source.md, Status, story 1: status shows while the instance holds a repository.
 function modStatusesOf({ instance, modStatus, log }: Pick<ModsViewDeps, 'instance' | 'modStatus' | 'log'>) {
   const statuses = new ModStatuses(
-    modStatus.push, modStatus.read, log, () => instance.value.mods.flatMap((entry) => (entry.kind === 'mod' ? [entry.name] : [])));
+    modStatus.push, modStatus.read, log, () => instance.value.mods.flatMap((entry) => modNameOf(instance.value.modNames, entry) ?? []));
   return { statuses, statusMessage: () => (instance.value.holdsRepository ? statuses.message() : undefined) };
 }
 
