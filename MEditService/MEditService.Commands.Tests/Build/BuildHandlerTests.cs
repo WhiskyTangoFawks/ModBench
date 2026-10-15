@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Text;
 using MEditService.Commands.Build;
 using MEditService.Commands.Edits;
@@ -419,17 +418,7 @@ public sealed class BuildHandlerTests : IDisposable
         return TestEditService.BuildHandler(_holder).BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, installed, [MetaIni], null)], instance);
     }
 
-    private InstallationFile Download(params (string Path, string Text)[] entries)
-    {
-        var extracted = Directory.CreateDirectory(Path.Combine(_root, "extracted")).FullName;
-        foreach (var (path, text) in entries) Write(extracted, path, Encoding.UTF8.GetBytes(text));
-        Directory.CreateDirectory(Path.GetDirectoryName(Downloaded).Require());
-        ZipFile.CreateFromDirectory(extracted, Downloaded);
-        var hashedAsAModsFiles = new ModFolderRepository(TimeProvider.System).Files(extracted, "installed", new HashSet<string>(), statCache: null).Files;
-        return new InstallationFile(
-            Downloaded, Source: null, Size: new FileInfo(Downloaded).Length, Hash: "AAAAAAAAAAA=",
-            [.. hashedAsAModsFiles.Select(entry => new HashedEntry(entry.Path, entry.Hash))]);
-    }
+    private InstallationFile Download(params (string Path, string Text)[] entries) => DownloadedZip.At(Downloaded, _root, entries);
 
     private void WriteSource(string configuration, params (string Path, string Text)[] assets)
     {

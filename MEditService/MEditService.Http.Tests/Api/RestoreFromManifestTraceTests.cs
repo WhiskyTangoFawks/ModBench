@@ -60,7 +60,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         File.WriteAllText(Path.Combine(ModFolder, "untracked.txt"), "mine");
     }
 
-    private JsonObject Request(string gesture, string downloadName)
+    private JsonObject Request(string gesture, string downloadName, bool handsTheDownload = true)
     {
         var installationFile = new JsonObject
         {
@@ -74,7 +74,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         {
             ["name"] = Mod,
             ["folder"] = ModFolder,
-            ["installationFiles"] = new JsonArray(installationFile),
+            ["installationFiles"] = handsTheDownload ? new JsonArray(installationFile) : new JsonArray(),
             ["committedFiles"] = new JsonArray("meta.ini"),
         };
         var request = new JsonObject
@@ -163,6 +163,18 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         var progress = await stream.EventsUntil("restore-from-manifest-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
         Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Mod);
         Assert.All(progress, e => Assert.Equal(Gesture, e.GetProperty("modlistProgress").GetProperty("gesture").GetString()));
+    }
+
+    [Fact]
+    public async Task RestoringAModWhoseRequestHandsNoInstallationFile_NamesEachItsManifestNames_SoARequestHandingThemBringsItBack()
+    {
+        ModInstalledFromADownload();
+        await Post("update-manifest");
+        var response = await Client.PostAsJsonAsync("/restore-from-manifest", Request("restore-from-manifest", "Mod.zip", handsTheDownload: false));
+
+        var skipped = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
+        Assert.Equal("NotFound", skipped.GetProperty("refusal").GetString());
+        Assert.Equal(["Mod.zip"], skipped.GetProperty("installationFilesNotFound").EnumerateArray().Select(name => name.GetString()));
     }
 
     [Fact]

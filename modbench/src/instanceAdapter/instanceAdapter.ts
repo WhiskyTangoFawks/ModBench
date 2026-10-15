@@ -308,8 +308,8 @@ export interface GameFile extends HashedFile {
   readonly path: string;
 }
 
-/** The game files a mod's files override, and each entry of its folder the listing skipped, one line apiece. */
-export interface OverriddenGameFiles {
+// The game files a mod's files override, and each entry of its folder the listing skipped, one line apiece.
+interface OverriddenGameFiles {
   readonly gameFiles: readonly GameFile[];
   readonly notes: readonly string[];
 }
@@ -387,6 +387,8 @@ export interface InstanceAdapter {
   sourceFolder(mod: string): string | undefined;
   /** The downloaded files the mod manager records `mod` as installed from, in its order. */
   installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
+  /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
+  downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The version the mod manager's metadata gives `mod`; undefined when it gives none. */
   modVersion(mod: string): Promise<string | undefined>;
   /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */

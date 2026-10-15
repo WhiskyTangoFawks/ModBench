@@ -172,7 +172,7 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Theory]
-    [InlineData("installation file not handed", RestoreRefusal.Lacking, "the mod manager records no installation file 'Mod.zip' for it")]
+    [InlineData("installation file not handed", RestoreRefusal.NotFound, "installation file 'Mod.zip' is missing")]
     [InlineData("installation file gone", RestoreRefusal.Lacking, "installation file 'Mod.zip' is not in the downloads folder")]
     [InlineData("installation file changed", RestoreRefusal.Lacking, "installation file 'Mod.zip' has other bytes")]
     [InlineData("game file not found", RestoreRefusal.NotFound, "game file 'Game.esm' is missing")]
@@ -222,16 +222,18 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
-    public async Task AModLackingOnlyGameFilesNotHanded_NamesEach_SoARequestNamingThemBringsItBack()
+    public async Task AModLackingFilesNotHanded_NamesEach_SoARequestHandingThemBringsItBack()
     {
         _folders.WithFile(Mod, "meta.ini", "[General]");
         _folders.Manifests[Mod] = new Manifest(
-            [], [new ManifestSource("Game.esm", 7, "vanilla"), new ManifestSource("Other.esm", 5, "other")],
+            [new ManifestSource("Mod.zip", 7, "#dl/Mod.zip"), new ManifestSource("Patch.zip", 7, "#dl/Patch.zip")],
+            [new ManifestSource("Game.esm", 7, "vanilla"), new ManifestSource("Other.esm", 5, "other")],
             [Line("Game.esm", new FileProvider.GameFile("Game.esm")), Line("Other.esm", new FileProvider.GameFile("Other.esm"))]);
 
         var skipped = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Refused);
 
         Assert.Equal(RestoreRefusal.NotFound, skipped.Refusal.Kind);
+        Assert.Equal(["Mod.zip", "Patch.zip"], skipped.Refusal.InstallationFilesNotFound);
         Assert.Equal(["Game.esm", "Other.esm"], skipped.Refusal.GameFilesNotFound);
     }
 
@@ -248,7 +250,7 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Theory]
-    [InlineData("installation file", "the mod manager records no installation file 'Patch.zip' for it")]
+    [InlineData("installation file", "installation file 'Patch.zip' is missing")]
     [InlineData("game file", "game file 'Game.esm' has other bytes")]
     public async Task AModIsSkipped_WhenASourceItsManifestNamesThatNoLineUses_IsMissingOrHasOtherBytes(string source, string lack)
     {
@@ -307,7 +309,7 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
-    public async Task AModLackingAGameFileWithOtherBytesToo_IsLacking_AndNamesNothingToSendAgain()
+    public async Task AModLackingAFileNotHandedAndAnotherSource_NamesTheFileToHand_SoTheRequestThatHandsItNamesEveryLack()
     {
         _folders.WithFile(Mod, "meta.ini", "[General]");
         _folders.Manifests[Mod] = new Manifest(
@@ -316,8 +318,8 @@ public sealed class RestoreFromManifestHandlerTests
 
         var skipped = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance(new OverriddenGameFile("Game.esm", 7, "patched")))).Refused);
 
-        Assert.Equal(RestoreRefusal.Lacking, skipped.Refusal.Kind);
-        Assert.Empty(skipped.Refusal.GameFilesNotFound);
+        Assert.Equal(RestoreRefusal.NotFound, skipped.Refusal.Kind);
+        Assert.Equal(["Other.esm"], skipped.Refusal.GameFilesNotFound);
     }
 
     [Fact]
@@ -330,7 +332,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var skipped = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Refused);
 
-        Assert.Equal("'Mod' was skipped: the mod manager records no installation file 'Mod.zip' for it; 'c.nif' has no provider.", skipped.Message);
+        Assert.Equal("'Mod' was skipped: installation file 'Mod.zip' is missing; 'c.nif' has no provider.", skipped.Message);
     }
 
     [Fact]

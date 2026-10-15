@@ -236,9 +236,10 @@ describe('modlistSourceCommands update manifest', () => {
 
 describe('modlistSourceCommands restore from manifest', () => {
   const RESTORED = { landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [], notFound: [] };
+  const INSTALLATION_FILE_MISSING = "'ModA' was skipped: installation file 'ModA-1.0.7z' is missing.";
   const sentNames = (client: InMemoryMEditClient): string[][] => client.calls.map((call) => sentNamesOf(call.args[0]));
 
-  it('hands mEdit each mod with its folder, its installation files, the files the repository commits itself and the folder its source is in or is cloned into, the game files its files override, the stat cache\'s folder and what a build needs', async () => {
+  it('hands mEdit each mod with its folder and no installation file its metadata names, the files the repository commits itself and the folder its source is in or is cloned into, the game files its files override, the stat cache\'s folder and what a build needs', async () => {
     const { commands, client } = commandsOver(
       { installations: new Map([['ModA', recording([INSTALLED])]]), gameFiles: [VANILLA], versions: new Map([['ModA', '1.2.3']]) }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.esm')] });
     client.setCommandResult('restoreFromManifest', RESTORED);
@@ -249,7 +250,7 @@ describe('modlistSourceCommands restore from manifest', () => {
       method: 'restoreFromManifest',
       args: [
         [
-          { name: 'ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], committedFiles: ['meta.ini'], sourceFolder: '/source/ModA' },
+          { name: 'ModA', folder: '/mods/ModA', installationFiles: [], committedFiles: ['meta.ini'], sourceFolder: '/source/ModA' },
           { name: 'ModB', folder: '/mods/ModB', installationFiles: [], committedFiles: ['meta.ini'], sourceFolder: '/source/Old ModB' },
         ],
         { gameFiles: [VANILLA], dataFolder: '/game/Data', statCache: '/instance/stat-cache', excludedSuffix: '.excluded', archives: null },
@@ -275,7 +276,7 @@ describe('modlistSourceCommands restore from manifest', () => {
     const { commands, client } = commandsOver({ gameFiles: [VANILLA] });
     const gameFileMissing = "'ModA' was skipped: game file 'Game.esm' is missing.";
     client.setCommandHandler('restoreFromManifest', (_mods, facts) => Promise.resolve(facts.gameFiles.length === 0
-      ? { landed: [], refused: [{ item: 'ModA', reason: gameFileMissing }], notFound: [{ mod: 'ModA', gameFiles: ['Game.esm'] }] }
+      ? { landed: [], refused: [{ item: 'ModA', reason: gameFileMissing }], notFound: [{ mod: 'ModA', gameFiles: ['Game.esm'], installationFiles: [] }] }
       : { landed: [{ mod: 'ModA', written: ['Game.esm'], namedByNoLine: [] }], refused: [], notFound: [] }));
 
     const outcome = await commands.restoreFromManifest(['ModA'], instanceOf());
@@ -284,10 +285,33 @@ describe('modlistSourceCommands restore from manifest', () => {
     expect(outcome).toEqual({ applied: true, landed: [{ mod: 'ModA', written: ['Game.esm'], namedByNoLine: [] }], refused: [] });
   });
 
+  it('sends a mod skipped for an installation file the call did not hand again, with the downloaded file of that name, and answers both sends as one', async () => {
+    const { commands, client } = commandsOver({ downloads: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
+    client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods[0]?.installationFiles.length === 0
+      ? { landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', gameFiles: [], installationFiles: ['ModA-1.0.7z'] }] }
+      : RESTORED));
+
+    const outcome = await commands.restoreFromManifest(['ModA'], instanceOf());
+
+    expect(client.calls.map((call) => call.args[0])).toMatchObject([[{ installationFiles: [] }], [{ installationFiles: [INSTALLED] }]]);
+    expect(outcome).toEqual({ applied: true, landed: RESTORED.landed, refused: [] });
+  });
+
+  it('says why beside a mod still skipped for an installation file the Instance adapter could not read', async () => {
+    const { commands, client } = commandsOver({ downloads: new Map([['ModA-1.0.7z', { kind: 'unreadable', reason: 'EACCES' }]]) });
+    client.setCommandResult('restoreFromManifest', {
+      landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', gameFiles: [], installationFiles: ['ModA-1.0.7z'] }],
+    });
+
+    const outcome = await commands.restoreFromManifest(['ModA'], instanceOf());
+
+    expect(outcome).toEqual({ applied: true, landed: [], refused: [{ item: 'ModA', reason: `${INSTALLATION_FILE_MISSING} 'ModA-1.0.7z' could not be read: EACCES.` }] });
+  });
+
   it('names a game file still not found once the call names every game file it could', async () => {
     const { commands, client } = commandsOver();
     const gameFileMissing = "'ModA' was skipped: game file 'Gone.esm' is missing.";
-    client.setCommandResult('restoreFromManifest', { landed: [], refused: [{ item: 'ModA', reason: gameFileMissing }], notFound: [{ mod: 'ModA', gameFiles: ['Gone.esm'] }] });
+    client.setCommandResult('restoreFromManifest', { landed: [], refused: [{ item: 'ModA', reason: gameFileMissing }], notFound: [{ mod: 'ModA', gameFiles: ['Gone.esm'], installationFiles: [] }] });
 
     const outcome = await commands.restoreFromManifest(['ModA'], instanceOf());
 
@@ -304,7 +328,7 @@ describe('modlistSourceCommands restore from manifest', () => {
       instanceRoot: '/instance', makeRepository: () => Promise.resolve(), trash: () => Promise.resolve(),
     });
     const gameFileMissing = "'ModA' was skipped: game file 'Game.esm' is missing.";
-    client.setCommandResult('restoreFromManifest', { landed: [], refused: [{ item: 'ModA', reason: gameFileMissing }], notFound: [{ mod: 'ModA', gameFiles: ['Game.esm'] }] });
+    client.setCommandResult('restoreFromManifest', { landed: [], refused: [{ item: 'ModA', reason: gameFileMissing }], notFound: [{ mod: 'ModA', gameFiles: ['Game.esm'], installationFiles: [] }] });
 
     const outcome = await commands.restoreFromManifest(['ModA'], instanceOf());
 
@@ -318,12 +342,42 @@ describe('modlistSourceCommands restore from manifest', () => {
     const { commands, client } = commandsOver({ gameFiles: [VANILLA] });
     client.setCommandHandler('restoreFromManifest', () => {
       cancel.abort();
-      return Promise.resolve({ landed: [], refused: [], notFound: [{ mod: 'ModA', gameFiles: ['Game.esm'] }] });
+      return Promise.resolve({ landed: [], refused: [], notFound: [{ mod: 'ModA', gameFiles: ['Game.esm'], installationFiles: [] }] });
     });
 
     await commands.restoreFromManifest(['ModA'], instanceOf(), { signal: cancel.signal });
 
     expect(client.calls.map((call) => call.args[2])).toMatchObject([{ signal: cancel.signal }]);
+  });
+
+  it('names each mod a cancel left unfinished, the one it never sent again and the one mEdit never reached, beside the mod that landed', async () => {
+    const cancel = new AbortController();
+    const { commands, client } = commandsOver();
+    client.setCommandHandler('restoreFromManifest', () => {
+      cancel.abort();
+      return Promise.resolve({
+        landed: RESTORED.landed, refused: [{ item: 'ModB', reason: "'ModB' was skipped: installation file 'ModB.7z' is missing." }],
+        notFound: [{ mod: 'ModB', gameFiles: [], installationFiles: ['ModB.7z'] }],
+      });
+    });
+
+    const outcome = await commands.restoreFromManifest(['ModA', 'ModB', 'ModC'], instanceOf(), { signal: cancel.signal });
+
+    expect(outcome).toEqual({
+      applied: true, landed: RESTORED.landed,
+      refused: ['ModB', 'ModC'].map((mod) => ({ item: mod, reason: `'${mod}' was not finished: the restore was cancelled. Restoring it again finishes it.` })),
+    });
+  });
+
+  it('names each mod a cancel stopped before it was read as unfinished', async () => {
+    const cancel = new AbortController();
+    const { commands } = commandsOver();
+
+    const outcome = await commands.restoreFromManifest(['ModA'], instanceOf(), { signal: cancel.signal, onProgress: () => { cancel.abort(); } });
+
+    expect(outcome).toEqual({
+      applied: true, landed: [], refused: [{ item: 'ModA', reason: "'ModA' was not finished: the restore was cancelled. Restoring it again finishes it." }],
+    });
   });
 
   it('answers the refusal of the user\'s cancel beside what mEdit restored', async () => {
@@ -336,20 +390,27 @@ describe('modlistSourceCommands restore from manifest', () => {
   it('answers the refusal of a cancel during the second send beside what both sends restored', async () => {
     const { commands, client } = commandsOver({ gameFiles: [VANILLA] });
     client.setCommandHandler('restoreFromManifest', (_mods, facts) => Promise.resolve(facts.gameFiles.length === 0
-      ? { landed: [], refused: [], notFound: [{ mod: 'ModA', gameFiles: ['Game.esm'] }] }
+      ? { landed: [], refused: [], notFound: [{ mod: 'ModA', gameFiles: ['Game.esm'], installationFiles: [] }] }
       : { landed: [{ mod: 'ModA', written: ['Game.esm'], namedByNoLine: [] }], refused: [], notFound: [], cancelRefusal: 'Could not cancel — not running.' }));
 
     expect(await commands.restoreFromManifest(['ModA'], instanceOf())).toMatchObject({ cancelRefusal: 'Could not cancel — not running.' });
   });
 
   it('refuses a mod the Instance adapter cannot answer, naming why, and restores the rest', async () => {
-    const { commands, client } = commandsOver({ installations: new Map([['ModA', { kind: 'unreadable', reason: 'not indexed' }]]) });
+    const adapter = fakeInstanceAdapter().adapter;
+    const client = new InMemoryMEditClient();
+    const commands = modlistSourceCommands({
+      client, adapter: { ...adapter, gameFilesOverriddenBy: (dataFolder, mod) => (mod === 'ModA'
+        ? Promise.resolve({ kind: 'unreadable', reason: 'Game.esm is locked' })
+        : adapter.gameFilesOverriddenBy(dataFolder, mod)) },
+      instanceRoot: '/instance', makeRepository: () => Promise.resolve(), trash: () => Promise.resolve(),
+    });
     client.setCommandResult('restoreFromManifest', { landed: [{ mod: 'ModB', written: [], namedByNoLine: [] }], refused: [], notFound: [] });
 
     const outcome = await commands.restoreFromManifest(['ModA', 'ModB'], instanceOf());
 
     expect([sentNames(client), outcome]).toEqual([
-      [['ModB']], { applied: true, landed: [{ mod: 'ModB', written: [], namedByNoLine: [] }], refused: [{ item: 'ModA', reason: 'not indexed' }] },
+      [['ModB']], { applied: true, landed: [{ mod: 'ModB', written: [], namedByNoLine: [] }], refused: [{ item: 'ModA', reason: 'Game.esm is locked' }] },
     ]);
   });
 
@@ -369,7 +430,7 @@ describe('modlistSourceCommands restore from manifest', () => {
   it('trashes the files no line names of each mod the first call landed when the second call fails, and names the second call\'s mods', async () => {
     const { commands, client, adapter } = commandsOver({ gameFiles: [VANILLA] });
     client.setCommandHandler('restoreFromManifest', (_mods, facts) => Promise.resolve(facts.gameFiles.length === 0
-      ? { landed: [{ mod: 'ModA', written: [], namedByNoLine: ['mine.txt'] }], refused: [], notFound: [{ mod: 'ModB', gameFiles: ['Game.esm'] }] }
+      ? { landed: [{ mod: 'ModA', written: [], namedByNoLine: ['mine.txt'] }], refused: [], notFound: [{ mod: 'ModB', gameFiles: ['Game.esm'], installationFiles: [] }] }
       : { refused: true as const, message: 'Could not restore 1 mod — mEdit stopped.' }));
 
     const outcome = await commands.restoreFromManifest(['ModA', 'ModB'], instanceOf());
