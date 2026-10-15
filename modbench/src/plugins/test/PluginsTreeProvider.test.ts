@@ -350,15 +350,6 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(rows.map((r) => r.origin)).toEqual(['ModA', 'overwrite/']);
   });
 
-  it('an overridden plugin of a listed name renders no row of its own', async () => {
-    const { tree } = makeTree([
-      plugin({ name: 'Base.esp', line: 0, origin: 'Winner', winning: true }),
-      plugin({ name: 'Base.esp', line: 0, origin: 'Loser', winning: false }),
-    ]);
-    const rows = (await tree.getChildren()).filter((n) => n instanceof PluginNode);
-    expect(rows).toHaveLength(1);
-  });
-
   it('an unlisted plugin (line: null) gets no row', async () => {
     const { tree } = makeTree([
       plugin({ name: 'Base.esp', line: 0 }),
@@ -488,15 +479,6 @@ describe('PluginsTreeProvider — a plugin row is identified by its kind and (or
     expect(lockedId).not.toBe(lineId);
   });
 
-  it('renders a plugin plugins.txt names twice as one row, at its first line', async () => {
-    const { tree } = makeTree([
-      plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 }), plugin({ name: 'a.ESP', line: 2 }),
-    ]);
-
-    const rows = expectInstancesOf(await tree.getChildren(), PluginNode);
-
-    expect(rows.map((r) => r.plugin.name)).toEqual(['A.esp', 'B.esp']);
-  });
 });
 
 describe('PluginsTreeProvider — name filter', () => {

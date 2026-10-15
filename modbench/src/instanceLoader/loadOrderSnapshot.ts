@@ -7,6 +7,7 @@ import {
   fileInFolder, isPluginFile, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
   type ModFolders, type ModlistEntry, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
+import { pluginOrderOf } from './pluginOrder';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile, pluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
@@ -280,7 +281,6 @@ export function loadOrderSnapshotOf(value: {
   const { dataFolder } = value.gameFolder;
   // The filter states a found game folder's own guarantee, never an unchecked cast.
   const rows = value.plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined);
-  const rowAt = new Map(rows.map((p) => [exactPluginAddressKey(p), p] as const));
   const whatProvides = (origin: string) => byOrigin<SnapshotProvider | undefined>(origin, {
     overwrite: { kind: 'None' },
     data: { kind: 'Game' },
@@ -291,18 +291,12 @@ export function loadOrderSnapshotOf(value: {
       return sourceFolder === undefined ? { kind: 'Mod', mod: name, folder: folder.path } : { kind: 'Mod', mod: name, folder: folder.path, sourceFolder };
     },
   });
-  const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p) =>
-    rowAt.get(exactPluginAddressKey(p)) ?? { ...p, path: fileInFolder(dataFolder, p.name), line: null, winning: true });
-  const placed = new Set(loadedWithNoLine.map((p) => foldPath(p.name)));
-  const fromLines = rows
-    .filter((p): p is LoadOrderPlugin & { line: number } => p.line !== null && p.enabled && p.winning)
-    .sort((a, b) => a.line - b.line)
-    .filter((p) => {
-      const folded = foldPath(p.name);
-      if (placed.has(folded)) return false;
-      placed.add(folded);
-      return true;
-    });
+  const order = pluginOrderOf(
+    { plugins: rows, pluginsLoadedWithNoLine: value.pluginsLoadedWithNoLine },
+    (p) => ({ ...p, path: fileInFolder(dataFolder, p.name), line: null, enabled: true, winning: true }),
+  );
+  const { loadedWithNoLine } = order;
+  const fromLines = order.fromLines.filter((p) => p.enabled);
   const sent = new Map<string, SnapshotPlugin<string>>();
   const unprovided = new Map<string, string[]>();
   for (const { name, path, origin, line, winning } of [...loadedWithNoLine, ...rows]) {

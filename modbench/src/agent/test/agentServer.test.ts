@@ -25,6 +25,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { SILENT_LOG } from '../../ports/log';
 import { present } from '../../ports/present';
+import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 import { localFailure } from '../../wire/readFailed';
 import type { ReadModStatus } from '../modStatuses';
 
@@ -150,10 +151,34 @@ describe('the agent server, given an instance value', () => {
   it('reads the plugin order by line, each plugin with its origin and whether it is enabled', async () => {
     const client = await clientOf(new FakeInstance(VALUE));
 
-    expect(await read(client, 'list_plugins')).toEqual([
+    expect(await read(client, 'list_plugins')).toMatchObject({ plugins: [
       { name: 'A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: true },
       { name: 'B.esp', origin: 'Big Rocks', line: 1, enabled: false, winning: true },
-    ]);
+    ] });
+  });
+
+  it('refuses in part when the game folder is not found, answering the lines with why the plugins loaded with no line are missing, in the Output', async () => {
+    const { bound, warned } = await serve(new FakeInstance(VALUE));
+    const client = new Client({ name: 'test', version: '0' });
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
+    clients.push(client);
+
+    const { isError, text } = await call(client, 'list_plugins');
+
+    expect({ isError, answer: JSON.parse(text) as unknown, warned }).toMatchObject({
+      isError: true, answer: { noLineMissing: 'The game folder was not found.', plugins: [{ name: 'A.esp' }, { name: 'B.esp' }] },
+      warned: ['[agent] list_plugins: The game folder was not found.'],
+    });
+  });
+
+  it('reads the plugins the game loads with no line first, with no line', async () => {
+    const client = await clientOf(new FakeInstance({ ...VALUE, pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN }] }));
+
+    expect(await read(client, 'list_plugins')).toEqual({ plugins: [
+      { name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, line: null, enabled: true, winning: true },
+      { name: 'A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: true },
+      { name: 'B.esp', origin: 'Big Rocks', line: 1, enabled: false, winning: true },
+    ] });
   });
 
   describe('reading each mod\'s status against its manifest', () => {
