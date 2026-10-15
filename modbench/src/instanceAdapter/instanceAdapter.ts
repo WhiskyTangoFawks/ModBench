@@ -349,7 +349,7 @@ export interface ManagerNames {
   readonly downloadMetadataFile: string;
 }
 
-/** The game as the mod manager's configuration names it, and Mutagen's release of it. */
+// The game as the mod manager's configuration names it, and Mutagen's release of it.
 interface InstanceGame {
   readonly gameName: string;
   /** Undefined when the tables hold none for the game. */
