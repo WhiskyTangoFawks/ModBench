@@ -131,11 +131,32 @@ describe('a status read that fails (common.md, Reporting)', () => {
     expect(logged).toEqual(['The mods\' status could not be read: mEdit could not be reached.', 'The status of "ModA" could not be read: EACCES']);
   });
 
-  it('logs a stat cache mEdit could not write, and shows the status it read', async () => {
-    const { statuses, logged, pushed } = statusesOver(() => Promise.resolve([status('ModA', { statCacheNotWritten: 'EROFS' })]));
+  it('shows the status of a mod whose stat cache mEdit could not write, and says so on the message line until it writes', async () => {
+    const read = vi.fn<ReadStatus>()
+      .mockResolvedValueOnce([status('ModA', { noManifest: true, statCacheNotWritten: 'EROFS' })])
+      .mockResolvedValueOnce([status('ModA')]);
+    const { statuses, pushed } = statusesOver(read);
 
     await pushed('ModA');
+    const unwritten = [statuses.of('ModA'), statuses.message()];
+    await pushed('ModA');
 
-    expect([logged, statuses.message()]).toEqual([['"ModA": the stat cache could not be written: EROFS'], undefined]);
+    expect([...unwritten, statuses.message()]).toEqual([
+      status('ModA', { noManifest: true, statCacheNotWritten: 'EROFS' }), 'The stat cache of "ModA" could not be written: EROFS.', undefined,
+    ]);
+  });
+
+  it('logs a stat cache mEdit could not write once in the Output, and again only when the reason changes', async () => {
+    const read = vi.fn<ReadStatus>()
+      .mockResolvedValueOnce([status('ModA', { statCacheNotWritten: 'EROFS' })])
+      .mockResolvedValueOnce([status('ModA', { statCacheNotWritten: 'EROFS' })])
+      .mockResolvedValueOnce([status('ModA', { statCacheNotWritten: 'ENOSPC' })]);
+    const { logged, pushed } = statusesOver(read);
+
+    await pushed('ModA');
+    await pushed('ModA');
+    await pushed('ModA');
+
+    expect(logged).toEqual(['"ModA": the stat cache could not be written: EROFS', '"ModA": the stat cache could not be written: ENOSPC']);
   });
 });

@@ -3,7 +3,7 @@
 
 import * as vscode from 'vscode';
 import type { MEditClient, ModStatus } from '../client';
-import type { SyncMessage } from '../drivingLib/nameFilter';
+import { messageLine, type SyncMessage } from '../drivingLib/nameFilter';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 
 export type ReadStatus = (mods: readonly string[]) => Promise<readonly ModStatus[] | ReadFailed>;
@@ -16,6 +16,7 @@ export class ModStatuses implements SyncMessage, vscode.Disposable {
   private asks = 0;
   private readFailure: string | undefined;
   private readonly unreadable = new Map<string, string>();
+  private readonly statCacheNotWritten = new Map<string, string>();
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChange = this.changed.event;
   private readonly messageChanged = new vscode.EventEmitter<void>();
@@ -40,7 +41,8 @@ export class ModStatuses implements SyncMessage, vscode.Disposable {
       ...(this.readFailure === undefined ? [] : [`the mods' status could not be read: ${this.readFailure}`]),
       ...[...this.unreadable].map(([mod, why]) => `the status of "${mod}" could not be read: ${why}.`),
     ];
-    return failures.length === 0 ? undefined : `Showing the last good read: ${failures.join(' ')}`;
+    const unwritten = [...this.statCacheNotWritten].map(([mod, why]) => `The stat cache of "${mod}" could not be written: ${why}.`);
+    return messageLine(failures.length === 0 ? undefined : `Showing the last good read: ${failures.join(' ')}`, ...unwritten);
   }
 
   onMessageChanged(listener: () => void): vscode.Disposable {
@@ -79,7 +81,10 @@ export class ModStatuses implements SyncMessage, vscode.Disposable {
     this.unreadable.delete(mod);
     if (status === undefined) this.byMod.delete(mod);
     else this.byMod.set(mod, status);
-    if (status?.statCacheNotWritten) this.log(`"${mod}": the stat cache could not be written: ${status.statCacheNotWritten}`);
+    const unwritten = status?.statCacheNotWritten ?? undefined;
+    if (unwritten !== undefined && this.statCacheNotWritten.get(mod) !== unwritten) this.log(`"${mod}": the stat cache could not be written: ${unwritten}`);
+    if (unwritten === undefined) this.statCacheNotWritten.delete(mod);
+    else this.statCacheNotWritten.set(mod, unwritten);
   }
 
   dispose(): void {
