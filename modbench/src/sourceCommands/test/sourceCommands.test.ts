@@ -20,7 +20,7 @@ describe('sourceCommands build', () => {
   it('hands mEdit each mod with the source folder that builds it, its folder, its installation files and the files the repository commits itself, the release\'s archive variants and the stat cache\'s folder', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
-    const adapter = fakeAdapter({ installations: new Map([['ModA', recording([INSTALLED])]]), versions: new Map([['ModA', '1.2.3']]) });
+    const adapter = fakeAdapter({ installations: new Map([['ModA', recording([INSTALLED])]]), metadata: new Map([['ModA', { version: '1.2.3', installationFiles: [] }]]) });
 
     await sourceCommands({ client, adapter }).build(['ModA', 'ModB'], 'Fallout4', SOURCES);
 
@@ -32,6 +32,17 @@ describe('sourceCommands build', () => {
         { name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', installationFiles: [], committedFiles: ['meta.ini'] },
       ], { excludedSuffix: '.excluded', archives: { general: ba2, textures: ba2 }, statCache: '/instance/stat-cache' }],
     }]);
+  });
+
+  it('refuses a mod whose metadata cannot be read, naming why, and builds the rest', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('build', BUILT);
+    const adapter = fakeAdapter({ unreadableMetadata: new Map([['ModA', 'EISDIR: meta.ini']]) });
+
+    const outcome = await sourceCommands({ client, adapter }).build(['ModA', 'ModB'], undefined, SOURCES);
+
+    expect(client.calls.map(({ args }) => (Array.isArray(args[0]) ? args[0].map((mod: { name: string }) => mod.name) : []))).toEqual([['ModB']]);
+    expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: 'EISDIR: meta.ini' }] });
   });
 
   it('hands mEdit no archive variant for a release the table names none for', async () => {

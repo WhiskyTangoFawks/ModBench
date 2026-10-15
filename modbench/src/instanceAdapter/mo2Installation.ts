@@ -6,7 +6,7 @@ import { MOD_META_FILE_NAME, parseMetaIni, setOwnedKeysInText } from './codecs/m
 import { readGameName } from './codecs/modOrganizerIni';
 import { ensureDir, exists, get, readOrReason, withLock, write } from './files';
 import type { HashIndex } from './hashIndex';
-import type { FileRead, InstallationFile, InstanceAdapter, ModMeta, OwnedMetaKeys } from './instanceAdapter';
+import { MetadataNotWritable, type FileRead, type InstallationFile, type InstanceAdapter, type ModMeta, type OwnedMetaKeys } from './instanceAdapter';
 import { downloadFile, modMetaFileIn, settingsFile } from './layout';
 import { currentDownloadsDir, folderHolding, newModFolder, type Mo2Context } from './mo2Context';
 import type { ReadingSource } from './mo2Reads';
@@ -32,7 +32,7 @@ async function nexusSourceOf(
 // The instance's own spelling when its game has the domain, else the manager's short name for the first game that does.
 async function metaGameOf(domain: string, { instanceRoot }: Mo2Context): Promise<string> {
   const release = gameReleaseForNexusDomain(domain);
-  if (release === undefined) throw new Error(`its source names the Nexus game '${domain}', which Modbench has no game for`);
+  if (release === undefined) throw new MetadataNotWritable(`its source names the Nexus game '${domain}', which Modbench has no game for`);
   const instanceGame = readGameName(await get(settingsFile(instanceRoot)));
   const own = gameReleaseForMetaGame(instanceGame);
   return own !== undefined && gamePathInfoForRelease(own)?.nexusSlug === domain ? instanceGame : release;
@@ -49,18 +49,14 @@ async function nexusKeysOver(
 
 export function mo2Installation(
   context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>, { modMeta }: Pick<ReadingSource, 'modMeta'>,
-): Pick<InstanceAdapter, 'installationFiles' | 'downloadedFile' | 'modVersion' | 'modMetadata' | 'writeModMetadata' | 'managerFilesInModFolder'> {
+): Pick<InstanceAdapter, 'installationFiles' | 'downloadedFile' | 'modMetadata' | 'writeModMetadata' | 'managerFilesInModFolder'> {
   return {
-    async modVersion(mod) {
-      return (await modMeta(mod)).version;
-    },
-
-    async modMetadata(mod) {
+    modMetadata: (mod) => readOrReason(async () => {
       const meta = await modMeta(mod);
       const { archiveFilename } = meta;
       const { source } = await nexusSourceOf(meta, context);
       return { version: meta.version, installationFiles: archiveFilename === undefined ? [] : [{ name: basename(archiveFilename), source }] };
-    },
+    }),
 
     writeModMetadata: (mod, { version, installationFiles: [first] }) => withLock(context.instanceRoot, async () => {
       if (version === undefined && first === undefined) return;

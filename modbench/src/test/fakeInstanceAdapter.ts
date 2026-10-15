@@ -3,6 +3,7 @@ import type {
   InstallOutcome, InstallSource, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
   ModFolder, ModFolders, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription,
 } from '../instanceAdapter/instanceAdapter';
+import { MetadataNotWritable } from '../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
 function noFilesFor(mods: readonly ModlistEntry[]): ReadonlyMap<string, OriginFiles> {
@@ -55,7 +56,7 @@ export type AdapterCall =
   | { readonly verb: 'removeIgnoreList' }
   | { readonly verb: 'install'; readonly source: InstallSource; readonly target: InstallTarget; readonly keys: OwnedMetaKeys };
 
-type ModMetadata = Awaited<ReturnType<InstanceAdapter['modMetadata']>>;
+type ModMetadata = Parameters<InstanceAdapter['writeModMetadata']>[1];
 
 export type WriteVerb = AdapterCall['verb'];
 
@@ -72,8 +73,10 @@ export interface InstanceAnswers {
   installations?: ReadonlyMap<string, FileRead<readonly InstallationFile[]>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
   downloads?: ReadonlyMap<string, FileRead<InstallationFile>>;
-  /** Each mod's version, by mod name; a mod not there records none. */
-  versions?: ReadonlyMap<string, string>;
+  /** Why each mod's metadata cannot be read, by mod name. */
+  unreadableMetadata?: ReadonlyMap<string, string>;
+  /** Mods whose metadata write rejects for a cause another write cannot cure. */
+  uncurableMetadata?: ReadonlySet<string>;
   /** What each mod's metadata says, by mod name; a mod not there says none. */
   metadata?: ReadonlyMap<string, ModMetadata>;
   /** Mods whose name gives them no source folder. */
@@ -155,9 +158,14 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFiles: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: [] }),
     downloadedFile: (name) => Promise.resolve(answers.downloads?.get(name) ?? { kind: 'read', answer: undefined }),
-    modVersion: (mod) => Promise.resolve(answers.versions?.get(mod)),
-    modMetadata: (mod) => Promise.resolve(answers.metadata?.get(mod) ?? { installationFiles: [] }),
-    writeModMetadata: (mod, metadata) => record({ verb: 'writeModMetadata', mod, metadata }, undefined),
+    modMetadata: (mod) => {
+      const reason = answers.unreadableMetadata?.get(mod);
+      return Promise.resolve(reason === undefined ? { kind: 'read', answer: answers.metadata?.get(mod) ?? { installationFiles: [] } } : { kind: 'unreadable', reason });
+    },
+    writeModMetadata: async (mod, metadata) => {
+      await record({ verb: 'writeModMetadata', mod, metadata }, undefined);
+      if (answers.uncurableMetadata?.has(mod)) throw new MetadataNotWritable('its source names a game Modbench has none for');
+    },
     managerFilesInModFolder: ['meta.ini'],
     statCacheFolder: '/instance/stat-cache',
     overriddenGameFiles: (_dataFolder, modFilePaths) => overridden(modFilePaths),

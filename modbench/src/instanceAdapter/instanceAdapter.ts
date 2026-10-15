@@ -11,6 +11,9 @@ export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
 
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
 export { OVERWRITE_ORIGIN } from './codecs/modlistText';
+
+/** A metadata write that no repeat of it can make succeed. */
+export class MetadataNotWritable extends Error {}
 export type { ArchiveReader } from './archiveReader';
 export { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, isArchiveName } from './archiveNames';
 export { samePath } from './samePath';
@@ -399,12 +402,10 @@ export interface InstanceAdapter {
   installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
   /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
-  /** The version the mod manager's metadata gives `mod`; undefined when it gives none. */
-  modVersion(mod: string): Promise<string | undefined>;
   /** What the mod manager's metadata says of `mod`'s version and installation files; none when it says none. */
-  modMetadata(mod: string): Promise<ModMetadata>;
+  modMetadata(mod: string): Promise<FileRead<ModMetadata>>;
   /** Sets the version and first installation file of `mod`, in a metadata made when it has none, and keeps every other key
-   *  and every value `metadata` lacks. Rejects, writing nothing, on a source whose game the tables lack. */
+   *  and every value `metadata` lacks. Rejects, writing nothing, with `MetadataNotWritable` on a source whose game the tables lack. */
   writeModMetadata(mod: string, metadata: ModMetadata): Promise<void>;
   /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
   readonly managerFilesInModFolder: readonly string[];

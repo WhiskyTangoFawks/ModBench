@@ -3,7 +3,7 @@ import {
   type ModByFolder, type ModStatus, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
-import type { FileRead, GameFile, GameFolder, InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { MetadataNotWritable, type FileRead, type GameFile, type GameFolder, type InstallationFile, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -12,7 +12,7 @@ import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed
 import { archiveVariants } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
-  'installationFiles' | 'downloadedFile' | 'modVersion' | 'modMetadata' | 'writeModMetadata' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'
+  'installationFiles' | 'downloadedFile' | 'modMetadata' | 'writeModMetadata' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'
   | 'statCacheFolder' | 'trashModFile' | 'sourceFolder' | 'excludedSuffix'>;
 
 interface ModlistSourceCommandsDeps {
@@ -188,12 +188,17 @@ async function withFilesNoLineNamesTrashed(
   for (const mod of landed) {
     const why = await trashedOrWhy(adapter, trash, mod.mod, mod.namedByNoLine) ?? await metadataWrittenOrWhy(adapter, mod.mod, mod.metadata);
     if (why === undefined) finished.push(mod);
-    else unfinished.push({ item: mod.mod, reason: `'${mod.mod}' was not finished: ${why}. Restoring it again finishes it.` });
+    else unfinished.push({ item: mod.mod, reason: `'${mod.mod}' was not finished: ${why.text}.${why.curable ? ' Restoring it again finishes it.' : ''}` });
   }
   return { finished, unfinished };
 }
 
-async function metadataWrittenOrWhy(adapter: Adapter, mod: string, metadata: Restored[number]['metadata']): Promise<string | undefined> {
+interface Unfinished {
+  readonly text: string;
+  readonly curable: boolean;
+}
+
+async function metadataWrittenOrWhy(adapter: Adapter, mod: string, metadata: Restored[number]['metadata']): Promise<Unfinished | undefined> {
   if (metadata === undefined) return undefined;
   try {
     await adapter.writeModMetadata(mod, {
@@ -201,17 +206,17 @@ async function metadataWrittenOrWhy(adapter: Adapter, mod: string, metadata: Res
       installationFiles: metadata.installationFiles.map(({ name, source }) => ({ name, source: source ?? undefined })),
     });
   } catch (err) {
-    return `its metadata could not be written: ${errorMessage(err)}`;
+    return { text: `its metadata could not be written: ${errorMessage(err)}`, curable: !(err instanceof MetadataNotWritable) };
   }
   return undefined;
 }
 
-async function trashedOrWhy(adapter: Adapter, trash: MoveToTrash, mod: string, paths: readonly string[]): Promise<string | undefined> {
+async function trashedOrWhy(adapter: Adapter, trash: MoveToTrash, mod: string, paths: readonly string[]): Promise<Unfinished | undefined> {
   for (const path of paths) {
     try {
       await adapter.trashModFile(mod, path, trash);
     } catch (err) {
-      return `'${path}' could not be moved to the trash: ${errorMessage(err)}`;
+      return { text: `'${path}' could not be moved to the trash: ${errorMessage(err)}`, curable: true };
     }
   }
   return undefined;
@@ -301,12 +306,17 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
     ): Promise<UpdateManifestResult> => {
       const { gameFolder } = instance;
       if (gameFolder.kind !== 'found') return { applied: false, refusal: 'Could not update manifests: the game folder was not found.' };
-      const { sent, gameFiles, refused, notes } = await readMods(
+      const { sent, gameFiles, refused: unread, notes } = await readMods(
         adapter, mods, gameFolder.dataFolder, (mod) => adapter.installationFiles(mod), { onProgress, signal });
+      const refused = [...unread];
       if (sent.length === 0) return { applied: true, landed: [], refused, notes };
-      const versioned = await Promise.all(sent.map(async (mod) => ({
-        ...mod, isSourceMod: instance.paths.sourceDirs.has(mod.name), version: await adapter.modVersion(mod.name),
-      })));
+      const versioned: UpdateManifestMod[] = [];
+      for (const mod of sent) {
+        const metadata = await adapter.modMetadata(mod.name);
+        if (metadata.kind === 'unreadable') refused.push({ item: mod.name, reason: metadata.reason });
+        else versioned.push({ ...mod, isSourceMod: instance.paths.sourceDirs.has(mod.name), version: metadata.answer.version });
+      }
+      if (versioned.length === 0) return { applied: true, landed: [], refused, notes };
       const outcome = await client.updateManifest(
         versioned, { gameFiles: [...gameFiles], statCache: adapter.statCacheFolder }, { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
       return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes };
@@ -315,13 +325,17 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
     /** Asks before anything is written, so a mod the Instance adapter gives no folder, which restore refuses, is not asked. */
     whatRestoreDestroys: async (mods: readonly string[]): Promise<WhatRestoreDestroys> => {
       const folders = await byFolder(adapter, mods);
-      if (folders.length === 0) return { destroys: [], refused: [] };
-      const asked = await Promise.all(folders.map(async (folder) => {
-        const { version, installationFiles } = await adapter.modMetadata(folder.name);
-        return { ...folder, metadata: { version, installationFiles: [...installationFiles] } };
-      }));
+      const asked: ModByFolder[] = [];
+      const unreadable: ItemRefusal<string>[] = [];
+      for (const folder of folders) {
+        const held = await adapter.modMetadata(folder.name);
+        if (held.kind === 'unreadable') unreadable.push({ item: folder.name, reason: `'${folder.name}' was skipped: its metadata could not be read: ${held.reason}.` });
+        else asked.push({ ...folder, metadata: { version: held.answer.version, installationFiles: [...held.answer.installationFiles] } });
+      }
+      if (asked.length === 0) return { destroys: [], refused: unreadable };
       const listing = await client.getWhatRestoreDestroys(asked, adapter.statCacheFolder);
-      return isReadFailed(listing) ? { refusal: `Could not ask what restore from manifest destroys: ${failureReason(listing)}` } : listing;
+      if (isReadFailed(listing)) return { refusal: `Could not ask what restore from manifest destroys: ${failureReason(listing)}` };
+      return { ...listing, refused: [...listing.refused, ...unreadable] };
     },
 
     restoreFromManifest: (

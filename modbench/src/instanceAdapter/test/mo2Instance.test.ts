@@ -30,7 +30,7 @@ import { join, matchesGlob } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import type { Mo2Context } from '../mo2Context';
 import { readingSource, readInstance, type ReadingSource } from '../mo2Reads';
-import { OVERWRITE_ORIGIN, type Subscription } from '../instanceAdapter';
+import { MetadataNotWritable, OVERWRITE_ORIGIN, type Subscription } from '../instanceAdapter';
 import type {
   ArchiveReader, GameFolder, InstallTarget, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
 } from '../instanceAdapter';
@@ -1367,13 +1367,11 @@ describe('the MO2 Instance adapter', () => {
         });
       });
 
-      it('answers the version the metadata says the mod is, and none when it says none', async () => {
-        expect(await adapter.modVersion('Unofficial Fallout 4 Patch')).toBe('2.1.5.0');
-        expect(await adapter.modVersion('ENBoost - 12k')).toBeUndefined();
-        expect(await adapter.modVersion('A mod with no folder')).toBeUndefined();
-      });
-
       describe('its metadata as facts', () => {
+        const metadataOf = async (mod: string): Promise<unknown> => {
+          const answer = await adapter.modMetadata(mod);
+          return answer.kind === 'read' ? answer.answer : answer;
+        };
         const metaOf = (mod: string): string => join(root, 'mods', mod, 'meta.ini');
         const NEXUS = 'nexus:fallout4:4598;4598:77';
         const patchMeta = (general: string): Promise<void> => writeFile(
@@ -1384,18 +1382,27 @@ describe('the MO2 Instance adapter', () => {
         it('answers the version, and each installation file by its name with where it comes from', async () => {
           await patchMeta(`installationFile=${DOWNLOAD}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
 
-          expect(await adapter.modMetadata('Unofficial Fallout 4 Patch'))
+          expect(await metadataOf('Unofficial Fallout 4 Patch'))
             .toEqual({ version: '2.1.5.0', installationFiles: [{ name: DOWNLOAD, source: NEXUS }] });
         });
 
         it('names an installation file recorded by its whole path by its name', async () => {
           await patchMeta('installationFile=/elsewhere/Patch.7z\r\n');
 
-          expect((await adapter.modMetadata('Unofficial Fallout 4 Patch')).installationFiles.map(({ name }) => name)).toEqual(['Patch.7z']);
+          expect(await metadataOf('Unofficial Fallout 4 Patch')).toMatchObject({ installationFiles: [{ name: 'Patch.7z' }] });
         });
 
-        it('answers none for a mod with no metadata', async () => {
-          expect(await adapter.modMetadata('A mod with no folder')).toEqual({ installationFiles: [] });
+        it('answers none for a mod with no metadata, and no version when it says none', async () => {
+          expect(await metadataOf('A mod with no folder')).toEqual({ installationFiles: [] });
+          expect(await metadataOf('ENBoost - 12k')).toMatchObject({ version: undefined });
+        });
+
+        it('answers unreadable, naming why, for metadata that cannot be read', async () => {
+          await rm(metaOf('Unofficial Fallout 4 Patch'));
+          await mkdir(metaOf('Unofficial Fallout 4 Patch'));
+
+          const answer = await adapter.modMetadata('Unofficial Fallout 4 Patch');
+          expect(answer.kind === 'unreadable' && answer.reason).toContain('EISDIR');
         });
 
         it('writes the version, the installation file and where it comes from, and keeps every other key', async () => {
@@ -1421,7 +1428,7 @@ describe('the MO2 Instance adapter', () => {
           await adapter.writeModMetadata('Unofficial Fallout 4 Patch', { version: '3.0', installationFiles: [] });
           await adapter.writeModMetadata('Unofficial Fallout 4 Patch', { installationFiles: [{ name: 'Patch-3.7z' }] });
 
-          expect(await adapter.modMetadata('Unofficial Fallout 4 Patch'))
+          expect(await metadataOf('Unofficial Fallout 4 Patch'))
             .toEqual({ version: '3.0', installationFiles: [{ name: 'Patch-3.7z', source: 'nexus:fallout4:4598' }] });
         });
 
@@ -1452,7 +1459,7 @@ describe('the MO2 Instance adapter', () => {
 
           await expect(adapter.writeModMetadata('Unofficial Fallout 4 Patch', {
             version: '9', installationFiles: [{ name: 'P.7z', source: 'nexus:nowhere:1' }],
-          })).rejects.toThrow('nowhere');
+          })).rejects.toBeInstanceOf(MetadataNotWritable);
 
           expect(await readFile(metaOf('Unofficial Fallout 4 Patch'), 'utf8')).toBe(before);
         });
@@ -1462,7 +1469,7 @@ describe('the MO2 Instance adapter', () => {
 
           await adapter.writeModMetadata('Brand New', written);
 
-          expect(await adapter.modMetadata('Brand New')).toEqual(written);
+          expect(await metadataOf('Brand New')).toEqual(written);
         });
       });
 

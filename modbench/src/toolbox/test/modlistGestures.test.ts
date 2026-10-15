@@ -408,7 +408,7 @@ describe('Restore from manifest', () => {
 
     await run(RESTORE, modRow('ModA'));
 
-    expect(ask.asked.map(({ message }) => message)).toEqual(['Are you sure you want to restore "ModA" from their manifests?']);
+    expect(ask.asked.map(({ message }) => message)).toEqual(['Are you sure you want to restore "ModA" from its manifest?']);
   });
 
   it('asks about the mods it was handed, never whatever else the instance holds', async () => {
