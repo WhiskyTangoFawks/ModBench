@@ -37,7 +37,8 @@ case "${1:-}" in
     (cd "$root" && git ls-files -z -co --exclude-standard | while IFS= read -r -d '' f; do if [[ -f $f ]]; then printf '%s\0' "$f"; fi; done | tar --format=pax --null -cf - -T -) \
       | "$HERE/vm.sh" ssh "Remove-Item -Recurse -Force $STAGE -ErrorAction SilentlyContinue; New-Item -ItemType Directory $STAGE | Out-Null; tar -xf - -C $STAGE"
     # Mirroring keeps the excluded folders, so dependencies and build output survive between runs.
-    exec "$HERE/vm.sh" ssh "robocopy $STAGE $WORK /MIR /XD node_modules bin obj out .vscode-test backend /NFL /NDL /NJH /NJS /NP | Out-Null; exit [int](\$LASTEXITCODE -ge 8)"
+    # sync.ps1 stamps each changed file newer than that output, so an incremental build sees an edit dated before the last build.
+    exec "$HERE/vm.sh" run "$HERE/sync.ps1" "$STAGE" "$WORK"
     ;;
   ssh)
     shift
