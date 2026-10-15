@@ -670,7 +670,7 @@ describe('An agent call', () => {
         applied: true,
         outcome: {
           landed: [],
-          refused: [{ item: 'ModA', reason: "it would overwrite the version or the source of an installation file in its metadata with its manifest's. Request it again with force to overwrite them." }],
+          refused: [{ item: 'ModA', reason: "it would overwrite the version or installation files its metadata names with its manifest's. Request it again with force to overwrite them." }],
         },
       });
     });
@@ -685,7 +685,7 @@ describe('An agent call', () => {
         outcome: {
           refused: [{
             item: 'ModA',
-            reason: "it would overwrite files whose bytes differ from its manifest: a.nif, b.nif; it would overwrite the version or the source of an installation file in its metadata with its manifest's. Request it again with force to overwrite them.",
+            reason: "it would overwrite files whose bytes differ from its manifest: a.nif, b.nif and the version or installation files its metadata names with its manifest's. Request it again with force to overwrite them.",
           }],
         },
       });

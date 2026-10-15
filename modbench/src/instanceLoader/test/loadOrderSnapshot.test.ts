@@ -588,7 +588,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(providers).toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA', sourceFolder: '/mo2/source/ModA' }, { kind: 'Game' }, { kind: 'None' }]);
   });
 
-  it('names each mod of the mod order that has a mod folder, with the files the repository commits, and the stat cache\'s folder', () => {
+  it('names each mod of the mod order that has a mod folder, with its metadata files, and the stat cache\'s folder', () => {
     const outcome = loadOrderSnapshotOf({
       plugins: [], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs, archives: NO_ARCHIVES,
       modlist: {

@@ -17,7 +17,7 @@ const unreadable = (reason: string): FileRead<readonly InstallationFile[]> => ({
 const BUILT = { landed: [{ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [] }], refused: [] };
 
 describe('sourceCommands build', () => {
-  it('hands mEdit each mod with the source folder that builds it, its folder, its installation files and the files the repository commits itself, the release\'s archive variants and the stat cache\'s folder', async () => {
+  it('hands mEdit each mod with the source folder that builds it, its folder, its installation files and its metadata files, the release\'s archive variants and the stat cache\'s folder', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
     const adapter = fakeAdapter({ installations: new Map([['ModA', recording([INSTALLED])]]), metadata: new Map([['ModA', { version: '1.2.3', installationFiles: [] }]]) });

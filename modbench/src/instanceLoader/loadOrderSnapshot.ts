@@ -52,7 +52,7 @@ export interface LoadOrderSnapshotRefusal {
 }
 
 
-/** What the snapshot names of the mod order: its mods, the files the repository commits in each, and the stat cache's
+/** What the snapshot names of the mod order: its mods, its metadata files for each, and the stat cache's
  *  folder. */
 export interface SnapshotModlist {
   readonly mods: readonly ModlistEntry[];

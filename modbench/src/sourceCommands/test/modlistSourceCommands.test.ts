@@ -80,7 +80,7 @@ describe('modlistSourceCommands git init', () => {
 describe('modlistSourceCommands update manifest', () => {
   const UPDATED = { landed: [{ mod: 'ModA', manifestWritten: true, noProvider: [] }], refused: [] };
 
-  it('hands mEdit each mod with its folder, its installation files, the files the repository commits itself and whether it is a source mod, the game files its files override, and the stat cache\'s folder', async () => {
+  it('hands mEdit each mod with its folder, its installation files, its metadata files and whether it is a source mod, the game files its files override, and the stat cache\'s folder', async () => {
     const { commands, client } = commandsOver({
       installations: new Map([['ModA', recording([INSTALLED])]]), gameFiles: [VANILLA, { path: 'Other.esm', size: 1, hash: 'O' }],
       metadata: new Map([['ModA', { version: '1.2.3', installationFiles: [] }]]),
@@ -249,7 +249,7 @@ describe('modlistSourceCommands restore from manifest', () => {
   const INSTALLATION_FILE_MISSING = "'ModA' was skipped: installation file 'ModA-1.0.7z' is missing.";
   const sentNames = (client: InMemoryMEditClient): string[][] => client.calls.map((call) => sentNamesOf(call.args[0]));
 
-  it('hands mEdit each mod with its folder and no installation file its metadata names, the files the repository commits itself and the folder its source is in or is cloned into, the game files its files override, the stat cache\'s folder and what a build needs', async () => {
+  it('hands mEdit each mod with its folder and no installation file its metadata names, its metadata files and the folder its source is in or is cloned into, the game files its files override, the stat cache\'s folder and what a build needs', async () => {
     const { commands, client } = commandsOver(
       { installations: new Map([['ModA', recording([INSTALLED])]]), gameFiles: [VANILLA], metadata: new Map([['ModA', { version: '1.2.3', installationFiles: [] }]]) }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.esm')] });
     client.setCommandResult('restoreFromManifest', RESTORED);
@@ -532,7 +532,7 @@ describe('modlistSourceCommands restore from manifest', () => {
 describe('modlistSourceCommands what restore destroys', () => {
   const DESTROYS = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'], metadataDiffers: false }];
 
-  it('asks mEdit with each mod\'s folder, the files the repository commits itself and the metadata the mod manager holds of it, and the stat cache\'s folder, and answers its listing', async () => {
+  it('asks mEdit with each mod\'s folder, its metadata files and the metadata the mod manager holds of it, and the stat cache\'s folder, and answers its listing', async () => {
     const metadata = { version: '1.0', installationFiles: [{ name: 'ModA-1.0.7z', source: 'nexus:fallout4:1' }] };
     const { commands, client } = commandsOver({ metadata: new Map([['ModA', metadata]]) });
     client.setQueryAnswer('getWhatRestoreDestroys', { destroys: DESTROYS, refused: [{ item: 'ModB', reason: "'ModB' was skipped: a file could not be read" }], manifests: [] });
@@ -592,7 +592,7 @@ describe('modlistSourceCommands what restore destroys', () => {
 describe('modlistSourceCommands mod status', () => {
   const STATUS = [{ mod: 'ModA', noManifest: true, differing: [], namedByNoLine: [], gone: [], noProvider: [], metadataDiffers: false }];
 
-  it('asks mEdit for each mod\'s status by its folder, with the files the repository commits, the metadata the mod manager holds and the stat cache', async () => {
+  it('asks mEdit for each mod\'s status by its folder, with its metadata files, the metadata the mod manager holds and the stat cache', async () => {
     const { commands, client } = commandsOver({ metadata: new Map([['ModA', { version: '1.2.3', installationFiles: [{ name: 'A.7z', source: 'nexus:fallout4:1' }] }]]) });
     client.setQueryAnswer('getModStatus', STATUS);
 

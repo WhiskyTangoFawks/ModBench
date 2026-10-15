@@ -18,8 +18,8 @@ internal static class LoadOrderEndpoints
                 "Reconciles the load order against this snapshot (ADR-0013): every plugin file in " +
                 "the instance, each with its origin, path, provider, strings files and archives, the active plugins in load order, " +
                 "the plugins loaded with no line, the archives the game loads and the loose strings files it reads, as Mod Management decided them. " +
-                "Every archive and strings file carries its stamp. It names each mod, by its folder with the files of it the repository " +
-                "commits, and the stat cache's folder, and each mod whose status then changed is pushed as mod-status-changed. " +
+                "Every archive and strings file carries its stamp. It names each mod, by its folder with its metadata files " +
+                "and the stat cache's folder, and each mod whose status then changed is pushed as mod-status-changed. " +
                 "Plugins new to the snapshot are opened and " +
                 "registered (indexed only if never seen), plugins absent from it are unregistered, " +
                 "plugins whose load index moved are re-registered SQL-only; then one winner sweep. " +

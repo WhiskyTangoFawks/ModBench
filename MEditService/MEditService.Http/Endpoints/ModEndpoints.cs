@@ -149,7 +149,7 @@ internal sealed record BuildConfigurationRequest(
 internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExcludedSuffix, ArchiveVariantsRequest? Archives, string StatCache);
 
 /// <summary>A mod by name, the source folder whose build configuration names it, its folder, its installation files in
-/// the mod manager's order, its version, and its files the repository commits, which its manifest does not name.</summary>
+/// the mod manager's order, its version, and its metadata files, which its manifest does not name.</summary>
 internal sealed record BuildModRequest(
     string Name, string SourceFolder, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> MetadataFiles,
     string? Version);

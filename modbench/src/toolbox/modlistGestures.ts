@@ -252,8 +252,8 @@ async function restoreFromManifestForAgent(
       item: mod,
       reason: `it would overwrite ${[
         ...differing.length > 0 ? [`files whose bytes differ from its manifest: ${differing.join(', ')}`] : [],
-        ...metadataDiffers ? ["the version or the source of an installation file in its metadata with its manifest's"] : [],
-      ].join('; it would overwrite ')}. Request it again with force to overwrite them.`,
+        ...metadataDiffers ? ["the version or installation files its metadata names with its manifest's"] : [],
+      ].join(' and ')}. Request it again with force to overwrite them.`,
     }));
   const refused = [...listing.refused, ...overwrites];
   const notRestored = new Set(refused.map(({ item }) => item));

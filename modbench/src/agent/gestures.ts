@@ -140,7 +140,7 @@ const UPDATE_MANIFEST = gestureInput(
 );
 
 const RESTORE_FROM_MANIFEST = gestureInput(
-  `${MANIFEST_MODS_TAKES}; options: { force?: true to overwrite a file whose bytes differ from its manifest, or a version or installation file source in its metadata, which is otherwise refused for that mod, listing what it would overwrite }`,
+  `${MANIFEST_MODS_TAKES}; options: { force?: true to overwrite a file whose bytes differ from its manifest, or the version or installation files in its metadata, each otherwise refused for that mod, listing what it would overwrite }`,
   MANIFEST_MODS.extend({ options: z.object({ force: z.boolean().optional() }).optional() }),
   (value, { argument, options }) => new AgentCall(entryArguments(value, argument ?? []), { force: options?.force }),
 );

@@ -1,6 +1,6 @@
 import type { components } from './generated/api';
 
-/** A mod by its folder, with the files of it the repository commits. */
+/** A mod by its folder, with its metadata files. */
 export type ModByFolder = components['schemas']['ModByFolder'];
 
 type HeldMetadata =
