@@ -169,8 +169,8 @@ export function gameReleaseForGame(gameName: string): string | undefined {
   return RELEASE_BY_GAME_NAME.get(gameName);
 }
 
-/** Mutagen's release name for a game as a mod's metadata spells it: as the settings do, or as the release is named,
- *  which is the mod manager's short name for most. `undefined` when the table holds none. */
+// Mutagen's release name for a game as a mod's metadata spells it: as the settings do, or as the release is named,
+// which is the mod manager's short name for most. `undefined` when the table holds none. 
 function gameReleaseForMetaGame(gameName: string): string | undefined {
   return gameReleaseForGame(gameName) ?? Object.keys(GAME_PATHS).find((release) => release.toLowerCase() === gameName.toLowerCase());
 }
