@@ -28,7 +28,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. My agent to read any record in my load order, tracked or not: each plugin's copy, and the copy that wins. Source: editor.md; editor-conflicts.md
+1. My agent to read any record in my load order, in a source plugin or not: each plugin's copy, and the copy that wins. Source: editor.md; editor-conflicts.md
 2. My agent to find a record by its EditorID or FormKey, and the records that reference it. Source: plugin-source.md, In the text editor, stories 2 and 4
 3. My agent to query the index with one SQL SELECT, as the record filter does, and to get back the rows it selects. Source: catalog, Record, `filter`
 4. My agent to edit a source plugin by editing its source, so each edit is a working-tree change I review, commit or discard in Source Control. Source: ADR-0007

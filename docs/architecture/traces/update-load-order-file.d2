@@ -7,17 +7,19 @@ instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 activation: @../target-architecture.modbench_drivers.activation
 activation.label: Activation
-client: @../target-architecture.modbench_repositories.client
-client.label: mEdit client
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
+client: @../target-architecture.modbench_repositories.client
+client.label: mEdit client
 instance: @../target-architecture.modbench_data.instance
 instance.label: "Instance\nmod order · plugins.txt · the mod manager's configuration · mods · downloaded files"
 views: "every view" {class: driving}
 
 surfaces -> cmds: "the gesture: its Argument and Options" {class: loadorder}
 instanceloader -> activation: value {class: loadorder}
-activation -> cmds: "a system command: the value" {class: loadorder}
+activation -> cmds: "a system command" {class: signal}
+cmds -> instanceadapter: "get: the files the change rests on" {class: loadorder}
+instanceadapter -> cmds: "mod order · plugins.txt lines · folders" {class: loadorder}
 cmds -> client: "for a move: their masters" {class: query}
 client -> cmds: the masters {class: query}
 cmds -> instanceadapter: "the change: lines, folders and file names" {class: loadorder}

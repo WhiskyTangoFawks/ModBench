@@ -2,21 +2,21 @@
 ...@../styles
 shape: sequence_diagram
 editor: "Plugins · Editor" {class: driving}
-sourcelanguage: @../target-architecture.modbench_driving.sourcelanguage
-sourcelanguage.label: Source language
-textdocuments: @../target-architecture.modbench_repositories.textdocuments
-textdocuments.label: Text documents
 client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
 index: @../target-architecture.medit_readmodel.index
 index.label: Record index
+sourcelanguage: @../target-architecture.modbench_driving.sourcelanguage
+sourcelanguage.label: Source language
+textdocuments: @../target-architecture.modbench_repositories.textdocuments
+textdocuments.label: Text documents
+sourceadapter: @../target-architecture.medit_repositories.sourceadapter
+sourceadapter.label: Source adapter
 commands: @../target-architecture.medit_core.commands
 commands.label: Commands
 source: @../target-architecture.medit_data.source
-sourceadapter: @../target-architecture.medit_repositories.sourceadapter
-sourceadapter.label: Source adapter
 vscode: "VS Code" {class: other}
 instance: @../target-architecture.modbench_data.instance
 instance.label: "the mod's source folder, beside mods/"
