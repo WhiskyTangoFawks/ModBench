@@ -14,8 +14,8 @@ http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
 engine: @../target-architecture.medit_core.commands.engine
 engine.label: Build engine
-edits: @../target-architecture.medit_core.commands.edits
-edits.label: Record edits
+commands: @../target-architecture.medit_core.commands
+commands.label: Commands
 modfolder: @../target-architecture.medit_data.modfolder
 modfolder.label: "Mod folders\nfiles · manifests"
 modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
@@ -37,7 +37,7 @@ instanceadapter -> sourcecommands: "each installation file's path, size, hash an
 sourcecommands -> client: "init: each mod's folder and installation files" {class: track}
 client -> http: envelope {class: track}
 http -> engine: envelope {class: track}
-engine -> edits: "decompile-plugin, every plugin of the mod" {class: track}
+engine -> commands: "decompile-plugin, every plugin of the mod" {class: track}
 modfolder -> modfolderadapter: "the mod's files: bytes" {class: track}
 modfolderadapter -> engine: "bytes" {class: track}
 engine."the files no installation file yields are the assets; the build configuration names this folder"

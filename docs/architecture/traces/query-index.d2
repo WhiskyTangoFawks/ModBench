@@ -6,21 +6,21 @@ client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
-queries: @../target-architecture.medit_readmodel.index.queries
-queries.label: Queries
+index: @../target-architecture.medit_readmodel.index
+index.label: Record index
 store: @../target-architecture.medit_readmodel.index.store
 store.label: Store
 
 views -> client: question {class: query}
 client -> http: question {class: query}
-http -> queries: question {class: query}
-store -> queries: rows {class: query}
-queries -> http: "answer: diff nodes, rows" {class: query}
+http -> index: question {class: query}
+store -> index: rows {class: query}
+index -> http: "answer: diff nodes, rows" {class: query}
 http -> client: answer {class: query}
 client -> views: records, cells, plugin-keyed status {class: query}
 
 refused: "refused: the filter" {
-  queries -> http: "the refusal" {class: query}
+  index -> http: "the refusal" {class: query}
   http -> client: the refusal {class: query}
   client -> views: the refusal {class: query}
 }

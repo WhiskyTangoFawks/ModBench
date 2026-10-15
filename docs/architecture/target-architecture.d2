@@ -32,36 +32,34 @@ modbench_driving: "MODBENCH · Driving adapters — the views and the agent: rea
   editor: "Editor\nowns: a record, opened to read and edit" {class: driving}
   webview: "Webview pages\nowns: the pages a view draws in a webview\nhides: the grid" {class: driving}
   sourcelanguage: "Source language\nowns: VS Code's language features over plugin source\nhides: the map from a text position to a FormKey" {class: driving}
-  agent: "Agent\nowns: what the user's agent reads and runs\nhides: MCP" {class: driving}
+  agent: "Agent\nowns: what the user's agent reads and runs,\nand how a script finds mEdit\nhides: MCP and the terminal's environment" {class: driving}
 }
 
 medit_core: "MEDIT · Core — the write side; it references the kernel and the repositories" {
   class: band; grid-rows: 1
   commands: "Commands\nowns: the write side\nhides: the rules that decide a write" {
-    edits: "Record edits\ncompile, decompile and every edit to plugin source" {class: core}
     engine: "Build engine — one deep module\nowns: a mod folder from its source or its manifest,\nand a manifest from a mod folder\nhides: matching, extraction, packing" {class: core}
   }
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
-  modordercommands: "mod order commands\nowns: the mod order" {class: core}
-  sourcecommands: "source commands\nowns: git init, update manifest, restore from manifest, track, build, decompile and commit\nhides: nothing: it hands the instance's facts to mEdit" {class: core}
-  pluginscommands: "plugins commands\nowns: changes to the plugin order\nhides: the plugin-order rules" {class: core}
-  instancecommands: "instance commands\nowns: changes to the instance as a whole" {class: core}
-  downloadscommands: "downloads commands\nowns: changes to the downloaded files" {class: core}
-  deploy: "deploy commands\nowns: changes to the deployment" {class: core}
+  modordercommands: "mod commands\nowns: changes to mods and separators, their files,\nand the mod order" {class: core}
+  sourcecommands: "source commands\nowns: changes to source mods and the modlist source" {class: core}
+  pluginscommands: "plugin commands\nowns: changes to plugins and the plugin order\nhides: the plugin-order rules" {class: core}
+  instancecommands: "instance commands\nowns: changes to the instance as a whole and its profiles" {class: core}
+  downloadscommands: "downloaded file commands\nowns: changes to the downloaded files" {class: core}
 }
 
 medit_kernel: "MEDIT · Kernel — read by the core, the read model and the repositories; a port lives here; Ports reads Load order state; nothing else in the kernel references anything" {
   class: band; grid-rows: 1
-  loadorder: "Load order state\nowns: the load order Mod Management hands Editing" {class: kernel}
+  loadorder: "Load order state\nowns: the load order Mod Management hands Editing,\nand the strings language" {class: kernel}
   codec: "Codec + schema\nowns: a record as text and as document\nhides: how a document is spelled as text, and each game's types" {class: kernel}
   ports: "Ports\nowns: how mEdit tells its clients what changed" {class: kernel}
 }
 modbench_kernel: "MODBENCH · Kernel — pure; read by the core, the read model and the repositories; a kernel box references nothing" {
   class: band; grid-rows: 1
   loadorderfilecodec: "Load-order file codec\nowns: plugins.txt as text\nhides: its format" {class: kernel}
-  wire: "Wire\nowns: the API types and the webview protocol" {class: kernel}
+  wire: "Wire\nowns: the API types, the webview protocol,\nand the shape of a source mod both processes read" {class: kernel}
   tables: "per-release tables\nowns: what differs per game release\nhides: every game name" {class: kernel}
   ports: "Ports\nowns: how the core reaches the user and VS Code" {class: kernel}
 }
@@ -69,9 +67,8 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by the core, the read model 
 medit_readmodel: "MEDIT · Read model — the record index, a view over the repositories below it" {
   class: band; grid-rows: 1
   index: "Record index — one deep module, rebuildable\nowns: the read model over every plugin\nhides: how records are stored and kept current" {
-    queries: "Queries\nthe face: what the API asks of the read model" {class: readmodel}
-    indexer: "Indexer\nasks the load order and the schema, decides nothing" {class: readmodel}
-    store: "Store\nDuckDB: every plugin's rows" {class: derived}
+    indexer: "Indexer\nowns: every plugin's rows, kept current; it decides nothing\nhides: how records are kept current" {class: readmodel}
+    store: "Store\nowns: every plugin's rows\nhides: DuckDB" {class: derived}
   }
 }
 modbench_readmodel: "MODBENCH · Read model — the instance value, derived from the Instance adapter by watching, and nothing else" {
@@ -81,15 +78,28 @@ modbench_readmodel: "MODBENCH · Read model — the instance value, derived from
 
 medit_repositories: "MEDIT · Repositories — the only boxes that read or write a system of record" {
   class: band; grid-rows: 1
-  sourceadapter: "Source adapter\nowns: a source mod's folder: plugin source, assets,\nbuild configuration and repository\nhides: layout and git" {class: repositories}
+  sourceadapter: "Source adapter\nowns: a source mod's folder: plugin source, assets,\nbuild configuration and repository\nhides: the layout inside plugin source, and git" {
+    layout: "Layout\nowns: where each record's document sits in plugin source\nhides: the folders and leaf names inside plugin source" {class: repositories}
+    repository: "Repository\nowns: a source mod's history\nhides: git" {class: repositories}
+    buildconfiguration: "Build configuration\nowns: what a source mod's build writes\nhides: the configuration's text beyond what Wire holds" {class: repositories}
+    writes: "Writes\nowns: a write to plugin source, whole or rolled back\nhides: the journal" {class: repositories}
+  }
   pluginadapter: "Plugin adapter\nowns: the plugin files\nhides: the binary format" {class: repositories}
   modfolderadapter: "Mod folder adapter\nowns: a mod folder, its manifest and the stat cache,\nand what it reads: downloaded files and the game folder\nhides: the manifest's text" {class: repositories}
 }
 modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the one reader and writer of the mod manager's files" {
   class: band; grid-rows: 1
-  instanceadapter: "Instance adapter — MO2 is one implementation\nowns: the instance\nhides: the mod manager" {class: repositories}
-  deployment: "deployment\nowns: making the game see the instance\nhides: the deployment model" {class: repositories}
-  client: "mEdit client\nowns: Modbench's one reach to mEdit\nhides: the transport and the process" {class: repositories}
+  instanceadapter: "Instance adapter\nowns: the instance\nhides: the mod manager" {
+    mo2: "MO2 — one implementation\nowns: the mod manager's files\nhides: MO2's layout and formats" {class: repositories}
+    gamefolder: "Game folder\nowns: where the game is and what it holds\nhides: Steam, Wine and the platform's Documents folder" {class: repositories}
+    downloadedfilecontents: "Downloaded file contents\nowns: what each downloaded file holds, entry by entry,\nand its hash\nhides: the archive tool and the hash index" {class: repositories}
+  }
+  textdocuments: "Text documents\nowns: plugin source as VS Code holds it, saved and unsaved\nhides: open and unopened documents, and applying\none workspace edit at a time" {class: repositories}
+  client: "mEdit client\nowns: Modbench's one reach to mEdit\nhides: mEdit's process and transport,\nand that it forgets on restart" {
+    process: "Process\nowns: mEdit running beside the extension\nhides: the launch, the bundled binary and its log" {class: repositories}
+    transport: "Transport\nowns: a call and its answer, and the notification stream\nhides: HTTP and SSE" {class: repositories}
+    handover: "Hand-over\nowns: what a fresh mEdit must be told again\nhides: the replay on start and on reconnect" {class: repositories}
+  }
 }
 
 medit_data: "MEDIT · Systems of record" {

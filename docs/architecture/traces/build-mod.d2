@@ -20,8 +20,8 @@ modfolder: @../target-architecture.medit_data.modfolder
 modfolder.label: "Mod folders\nfiles · manifests"
 modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
 modfolderadapter.label: Mod folder adapter
-edits: @../target-architecture.medit_core.commands.edits
-edits.label: Record edits
+commands: @../target-architecture.medit_core.commands
+commands.label: Commands
 port: @../target-architecture.medit_kernel.ports
 port.label: Ports
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
@@ -39,7 +39,7 @@ sourceadapter -> engine: "the output folder, the assets, the archives to pack, t
 modfolder -> modfolderadapter: "installation files: bytes" {class: compile}
 modfolderadapter -> engine: "the base files" {class: compile}
 engine."refused when the output folder is not the mod's"
-engine -> edits: "compile-plugin, per plugin" {class: compile}
+engine -> commands: "compile-plugin, per plugin" {class: compile}
 engine."pack each archive from its loose files"
 engine -> port: "progress, per mod" {class: push}
 engine -> modfolderadapter: "the mod's files, whole · the manifest, last" {class: compile}

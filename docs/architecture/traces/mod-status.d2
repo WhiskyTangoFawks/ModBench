@@ -11,8 +11,8 @@ client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
-edits: @../target-architecture.medit_core.commands.edits
-edits.label: Record edits
+commands: @../target-architecture.medit_core.commands
+commands.label: Commands
 engine: @../target-architecture.medit_core.commands.engine
 engine.label: Build engine
 modfolder: @../target-architecture.medit_data.modfolder
@@ -28,8 +28,8 @@ instanceloader -> activation: value {class: loadorder}
 activation -> instancecommands: "put load order: the snapshot" {class: loadorder}
 instancecommands -> client: snapshot {class: loadorder}
 client -> http: snapshot {class: loadorder}
-http -> edits: put load order {class: loadorder}
-edits -> engine: "the snapshot's mods" {class: loadorder}
+http -> commands: put load order {class: loadorder}
+commands -> engine: "the snapshot's mods" {class: loadorder}
 modfolder -> modfolderadapter: "each manifest · each mod's files: stamps · the stat cache" {class: track}
 modfolderadapter -> engine: "each mod's status" {class: track}
 modfolderadapter -> modfolder: "the stat cache" {class: track}
