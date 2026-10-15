@@ -17,7 +17,7 @@ import { serveAgent, type AgentServer } from '../agentServer';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { FileConflictLookup, modOrigin, RUNTIME_OUTPUT, type ConflictEntry } from '../../instanceLoader/fileConflictIndex';
-import type { MEditClient } from '../../client/MEditClient';
+import type { MEditClient, ModStatus } from '../../client/MEditClient';
 import type { CompareResult } from '../../client/apiClient';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -25,7 +25,6 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { SILENT_LOG } from '../../ports/log';
 import { present } from '../../ports/present';
-import { status } from '../../mods/test/modStatusFixture';
 import { localFailure } from '../../wire/readFailed';
 import type { ReadModStatus } from '../modStatuses';
 
@@ -61,6 +60,8 @@ afterEach(async () => {
 const NO_ENVIRONMENT = { forEach: () => undefined };
 
 const statusRead: { asked: (readonly string[])[]; answer: Awaited<ReturnType<ReadModStatus>> } = { asked: [], answer: [] };
+const status = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
+  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], noProvider: [], ...over });
 const readStatus: ReadModStatus = (mods) => { statusRead.asked.push(mods); return Promise.resolve(statusRead.answer); };
 
 async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT) {

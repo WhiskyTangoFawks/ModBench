@@ -38,16 +38,18 @@ interface ModsToRun {
   readonly view: string;
 }
 
+const isAgentCall = (value: unknown): value is AgentCall => value instanceof AgentCall;
+
 // A view's title bar hands its command nothing, so the Mods view's is an entry point that names every mod and the
 // view (commands.md, Entry points are not gestures).
 export function registerModlistCommands(deps: ModlistGestureDeps): vscode.Disposable[] {
   const everyModHere = (): ModsToRun => ({ mods: everyMod(deps.instance.value), refused: [], everyMod: true, view: deps.modsView });
   return [
-    vscode.commands.registerCommand('modbench.modlist.gitInit', (clicked?: unknown) => (clicked instanceof AgentCall ? gitInitForAgent(deps) : gitInit(deps))),
+    vscode.commands.registerCommand('modbench.modlist.gitInit', (clicked?: unknown) => (isAgentCall(clicked) ? gitInitForAgent(deps) : gitInit(deps))),
     vscode.commands.registerCommand('modbench.mod.updateManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
-      (clicked instanceof AgentCall ? updateManifestForAgent(deps, clicked) : updateManifest(deps, modsToRun(deps, clicked, selected)))),
+      (isAgentCall(clicked) ? updateManifestForAgent(deps, clicked) : updateManifest(deps, modsToRun(deps, clicked, selected)))),
     vscode.commands.registerCommand('modbench.mod.restoreFromManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
-      (clicked instanceof AgentCall ? restoreFromManifestForAgent(deps, clicked) : restoreFromManifest(deps, modsToRun(deps, clicked, selected)))),
+      (isAgentCall(clicked) ? restoreFromManifestForAgent(deps, clicked) : restoreFromManifest(deps, modsToRun(deps, clicked, selected)))),
     vscode.commands.registerCommand('modbench.modList.updateManifestHere', () => updateManifest(deps, everyModHere())),
     vscode.commands.registerCommand('modbench.modList.restoreFromManifestHere', () => restoreFromManifest(deps, everyModHere())),
   ];
