@@ -5,9 +5,8 @@ interface Placed extends PluginAddress {
   readonly winning: boolean;
 }
 
-/** The plugin order (ADR-0013): the plugins the game loads with no line, then the winning lines by
- *  line number. A plugin appears once, at its first place; one loaded with no line is the row `plugins` holds, else `absent`.
- *  `others` are the plugins left out of the order: an overridden copy, or a file no line names. */
+/** The plugin order (ADR-0013): the plugins the game loads with no line, then the winning lines by line.
+ *  A plugin appears once, at its first place. `others` are the plugins outside the order. */
 export function pluginOrderOf<R extends Placed>(
   value: { readonly plugins: readonly R[]; readonly pluginsLoadedWithNoLine: readonly PluginAddress[] },
   absent: (address: PluginAddress) => R,
