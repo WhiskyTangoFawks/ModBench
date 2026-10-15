@@ -18,8 +18,8 @@ import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { FileConflictLookup, modOrigin, RUNTIME_OUTPUT, type ConflictEntry } from '../../instanceLoader/fileConflictIndex';
 import type { MEditClient, ModStatus } from '../../client/MEditClient';
-import type { CompareResult } from '../../client/apiClient';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { comparisonOf } from '../../test/comparison';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -484,18 +484,52 @@ describe('the agent server, selecting records through mEdit', () => {
 
 describe('the agent server, reading a record through mEdit', () => {
   const NPC = [{ formKey: '000800:A.esp', editorId: 'SharedNpc' }];
-  const comparison: CompareResult = { overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Npc' };
 
-  it('answers every active copy and the winner when it names no plugin', async () => {
+  const COPIES = comparisonOf('000800:A.esp', [
+    { plugin: 'A.esp', origin: 'Big Rocks', isWinner: false },
+    { plugin: 'B.esp', origin: 'Big Rocks', isWinner: true },
+  ]);
+
+  it('answers each active plugin\'s copy and marks the winner when it names no plugin', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
-    mEdit.setQueryAnswer('getComparison', comparison);
+    mEdit.setQueryAnswer('getComparison', COPIES);
+    mEdit.setQueryAnswerOnce('getCopyDocument', { kind: 'OwnFile', location: '/s/A.esp/000800.json' });
+    mEdit.setQueryAnswerOnce('getCopyDocument', { kind: 'OwnFile', location: '/s/B.esp/000800.json' });
     const client = await clientOf(new FakeInstance(VALUE), mEdit);
 
     const answered = await read(client, 'read_record', { name: 'SharedNpc' });
 
-    expect(mEdit.calls).toContainEqual({ method: 'getComparison', args: ['000800:A.esp'] });
-    expect(answered).toEqual(comparison);
+    expect(answered).toEqual([
+      { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, kind: 'OwnFile', location: '/s/A.esp/000800.json' },
+      { plugin: { name: 'B.esp', origin: 'Big Rocks' }, isWinner: true, kind: 'OwnFile', location: '/s/B.esp/000800.json' },
+    ]);
+    expect(mEdit.calls.filter(({ method }) => method === 'getCopyDocument').map(({ args }) => args[0])).toEqual([
+      { name: 'A.esp', origin: 'Big Rocks' }, { name: 'B.esp', origin: 'Big Rocks' },
+    ]);
+  });
+
+  it('refuses in part when a copy cannot be read, answering the copies that read and the reason for the one that did not, in the Output', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getComparison', COPIES);
+    mEdit.setQueryAnswerOnce('getCopyDocument', null);
+    mEdit.setQueryAnswerOnce('getCopyDocument', { kind: 'OwnFile', location: '/s/B.esp/000800.json' });
+    const { bound, warned } = await serve(new FakeInstance(VALUE), 0, mEdit);
+    const client = new Client({ name: 'test', version: '0' });
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
+    clients.push(client);
+
+    const { isError, text } = await call(client, 'read_record', { name: 'SharedNpc' });
+
+    expect({ isError, answer: JSON.parse(text) as unknown, warned }).toEqual({
+      isError: true,
+      answer: [
+        { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, reason: 'A.esp in Big Rocks holds no 000800:A.esp.' },
+        { plugin: { name: 'B.esp', origin: 'Big Rocks' }, isWinner: true, kind: 'OwnFile', location: '/s/B.esp/000800.json' },
+      ],
+      warned: ['[agent] read_record: A.esp in Big Rocks holds no 000800:A.esp.'],
+    });
   });
 
   it('answers the one plugin\'s copy when it names the plugin', async () => {
