@@ -30,10 +30,10 @@ instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
-driving -> sourcecommands: "track: the mods, with the instance value" {class: track}
+driving -> sourcecommands: "decompile and commit: the mods" {class: track}
 sourcecommands."the message line shows the phase reading its installation files"
 sourcecommands -> instanceadapter: "get: the mod's installation files" {class: track}
-instanceadapter -> sourcecommands: "each installation file's path, size, hash and entries, or the reason it could not be read: a reason refuses the mod" {class: track}
+instanceadapter -> sourcecommands: "each mod's folder · each installation file's path, size, hash and entries, or the reason it could not be read: a reason refuses the mod" {class: track}
 sourcecommands -> client: "init: each mod's folder and installation files" {class: track}
 client -> http: envelope {class: track}
 http -> engine: envelope {class: track}

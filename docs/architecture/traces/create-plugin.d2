@@ -33,7 +33,7 @@ http -> commands: envelope {class: edit}
 commands -> pluginadapter: "an empty plugin: name, path, release" {class: edit}
 pluginadapter -> plugin: bytes {class: edit}
 pluginadapter -> commands: written or refusal {class: edit}
-tracked: "in a source mod" {
+sourcemod: "in a source mod" {
   commands -> sourceadapter: "the empty plugin's source" {class: edit}
   sourceadapter -> source: documents {class: edit}
 }

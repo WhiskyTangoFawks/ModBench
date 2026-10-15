@@ -13,7 +13,9 @@ instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
-driving -> sourcecommands: "git init, with the instance value" {class: track}
+driving -> sourcecommands: "git init" {class: track}
+sourcecommands -> instanceadapter: "get: the instance folder" {class: track}
+instanceadapter -> sourcecommands: "the instance folder" {class: track}
 sourcecommands."refused when the instance already holds a repository"
 sourcecommands -> instanceadapter: "the ignore list" {class: track}
 instanceadapter -> instance: "the ignore list" {class: track}

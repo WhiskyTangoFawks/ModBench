@@ -7,6 +7,8 @@ instanceloader.label: Instance loader
 modordercommands: @../target-architecture.modbench_core.modordercommands
 modordercommands.label: mod commands
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
+client: @../target-architecture.modbench_repositories.client
+client.label: mEdit client
 instanceadapter.label: Instance adapter
 instance: @../target-architecture.modbench_data.instance
 instance.label: "Instance\nthe mod's folder and meta · the downloaded file's metadata"
@@ -15,6 +17,11 @@ views: "every view" {class: driving}
 instanceloader -> downloads: "value: mods with this Nexus id, their installed files" {class: loadorder}
 downloads."the target pick"
 downloads -> modordercommands: "the source, and the target" {class: loadorder}
+upgrade: "an upgrade over a mod with a manifest" {
+  modordercommands -> client: "the mod's status" {class: query}
+  client -> modordercommands: "differs, or not" {class: query}
+  modordercommands."refused when it differs, unless the target pick forces it"
+}
 modordercommands -> instanceadapter: "install: the source, the target, the mod's metadata" {class: loadorder}
 instanceadapter."a new folder, or the release into the mod's own; the root chosen inside"
 from download: "from a downloaded file" {

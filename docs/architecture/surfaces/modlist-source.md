@@ -23,7 +23,7 @@ A mod's installation files are the downloaded files the mod's metadata names as 
 3. A file's line to say nothing when the first installation file holds it at the same path, so the ordinary case is the short one. Otherwise it names the path inside an installation file, or that it has no provider.
 4. A file to come only from the mod's installation files or from the game folder, with the bytes they hold, so the mod's metadata says why a file has no provider. A file none of them yields with its bytes has no provider. Source: ADR-0022
 5. A file's line to carry no hash, because its provider fixes its bytes, so an upgrade reads in the diff as the installation file's line and the lines of the files it added, moved or dropped.
-6. An excluded file to come back excluded: its line carries its full name, `.mohidden` included. Source: MO2
+6. An excluded file to come back excluded: its line carries its name as the mod manager marks it, as MO2's `.mohidden` suffix. Source: MO2
 7. A source mod's manifest to be what its last build wrote. With a remote, each file the source provides names the remote and the commit. With none, the manifest reads as any other mod's, and a file the installation files do not yield has no provider. Source: ADR-0022
 8. The manifest to hold no path from this machine, so a clone rebuilds anywhere.
 9. Each separator to have a manifest that names nothing, so a clone has the separator. Source: Never break the instance for its owner

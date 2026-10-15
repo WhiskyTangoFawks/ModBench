@@ -25,12 +25,18 @@ commands.label: Commands
 port: @../target-architecture.medit_kernel.ports
 port.label: Ports
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
+textdocuments: @../target-architecture.modbench_repositories.textdocuments
+textdocuments.label: Text documents
 instanceadapter.label: Instance adapter
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
-driving -> sourcecommands: "build: the mods, with the instance value" {class: compile}
+driving -> textdocuments: "save: each mod's unsaved plugin source" {class: compile}
+textdocuments -> driving: "saved, or the file VS Code did not save" {class: compile}
+driving -> sourcecommands: "build: the mods" {class: compile}
+sourcecommands -> instanceadapter: "get: each mod's folder and installation files, the game folder" {class: compile}
+instanceadapter -> sourcecommands: "the folders, the installation files, the game folder" {class: compile}
 sourcecommands -> client: "build: each mod's folder and installation files, the game folder" {class: compile}
 client -> http: envelope {class: compile}
 http -> engine: envelope {class: compile}

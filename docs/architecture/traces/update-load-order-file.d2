@@ -17,7 +17,9 @@ views: "every view" {class: driving}
 
 surfaces -> cmds: "the gesture: its Argument and Options" {class: loadorder}
 instanceloader -> activation: value {class: loadorder}
-activation -> cmds: "a system command: the value" {class: loadorder}
+activation -> cmds: "a system command" {class: signal}
+cmds -> instanceadapter: "get: the files the change rests on" {class: loadorder}
+instanceadapter -> cmds: "mod order · plugins.txt lines · folders" {class: loadorder}
 cmds -> client: "for a move: their masters" {class: query}
 client -> cmds: the masters {class: query}
 cmds -> instanceadapter: "the change: lines, folders and file names" {class: loadorder}
