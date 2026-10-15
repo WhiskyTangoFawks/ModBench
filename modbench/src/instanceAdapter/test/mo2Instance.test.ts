@@ -127,6 +127,25 @@ describe('the MO2 Instance adapter', () => {
       expect(settings.gameRelease).toBe('Fallout4');
     });
 
+    describe('the reads beside the reading', () => {
+      it('answers the active profile, the profiles, the game and the mod folders, each as the reading holds it', async () => {
+        const reading = await adapter.reading();
+
+        expect(await adapter.activeProfile()).toBe(reading.profile);
+        expect(await adapter.profiles()).toEqual(reading.profiles);
+        expect(await adapter.game()).toEqual({ gameName: reading.gameName, gameRelease: reading.gameRelease });
+        expect((await adapter.modFolders())?.all).toEqual(reading.modFolders?.all);
+        expect(reading).toMatchObject({ profile: 'Default', gameRelease: 'Fallout4' });
+      });
+
+      it('answers the profile the settings select now, not the one a read before did', async () => {
+        const before = await adapter.activeProfile();
+        await writeFile(join(root, INI), (await text(root, INI)).replace('selected_profile=@ByteArray(Default)', 'selected_profile=@ByteArray(Other)'));
+
+        expect([before, await adapter.activeProfile()]).toEqual(['Default', 'Other']);
+      });
+    });
+
     describe('the reading', () => {
       it('answers the profile, game, plugin order, downloads and the game folder with what it holds', async () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-reading-'));

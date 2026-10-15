@@ -150,6 +150,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       readings++;
       return readingFailure === undefined ? Promise.resolve(current) : Promise.reject(new Error(readingFailure));
     },
+    activeProfile: () => Promise.resolve(current.profile),
+    profiles: () => Promise.resolve(current.profiles),
+    game: () => Promise.resolve({ gameName: current.gameName, gameRelease: current.gameRelease }),
+    modFolders: () => Promise.resolve(current.modFolders),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
     modFolderPath: (mod) => Promise.resolve(`/mods/${mod}`),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),

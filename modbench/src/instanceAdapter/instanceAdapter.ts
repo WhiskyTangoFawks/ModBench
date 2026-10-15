@@ -349,6 +349,13 @@ export interface ManagerNames {
   readonly downloadMetadataFile: string;
 }
 
+export interface InstanceGame {
+  /** The game as the mod manager's configuration names it. */
+  readonly gameName: string;
+  /** Mutagen's release of that game; undefined when the tables hold none for it. */
+  readonly gameRelease: string | undefined;
+}
+
 /** The instance as parsed facts, every one from the same read of its settings. */
 export interface InstanceReading {
   /** The profile the mod manager's configuration selects. */
@@ -390,6 +397,14 @@ export interface InstanceAdapter {
   /** The whole instance in one generation. A mod order that parses to no entries is read again
    *  after a settle before it is believed: another tool may be half-way through writing it. */
   reading(): Promise<InstanceReading>;
+  /** The profile the mod manager's configuration selects now. */
+  activeProfile(): Promise<string>;
+  /** Every profile's name; none when the instance has no profiles. */
+  profiles(): Promise<readonly string[]>;
+  /** The game as the configuration names it, and Mutagen's release of it. */
+  game(): Promise<InstanceGame>;
+  /** Undefined when there is no folder for mods at all. */
+  modFolders(): Promise<ModFolders | undefined>;
   readonly names: ManagerNames;
 
   // Answers about a mod or a file.
