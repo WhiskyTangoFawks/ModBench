@@ -38,7 +38,7 @@ public sealed class GameDataStringsTests : IDisposable
 
     private LoadOrderSnapshot LoadOrder =>
         new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], [.. _archivesTheGameLoads.Select(HandedStrings.Stamped)],
-            [.. _stringsFilesTheGameReads.Select(HandedStrings.Stamped)]);
+            [.. _stringsFilesTheGameReads.Select(HandedStrings.Stamped)], []);
 
     private RegisteredPlugin Plugin => new(
         PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder, _modFolder), new PluginLine(0, NamesIt: true),
@@ -105,7 +105,7 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     private LoadOrderSnapshot TheGameLoadingOnly(StampedFile archive) =>
-        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], [archive], []);
+        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], [archive], [], []);
 
     private IReadOnlyList<string> StringsPlacesOf(RegisteredPlugin plugin) => StringsPlacesOf(plugin, LoadOrder);
 

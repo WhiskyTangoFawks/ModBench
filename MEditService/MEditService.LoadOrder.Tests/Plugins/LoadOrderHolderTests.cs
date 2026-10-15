@@ -136,7 +136,7 @@ public sealed class LoadOrderHolderTests
 
     private static LoadOrderSnapshot SnapshotActivatingInTheOrderGiven(string? instanceRoot, params string[] active) =>
         new(@"C:\Games\Fallout4\Data", instanceRoot, GameRelease.Fallout4,
-            [.. active.Order(StringComparer.Ordinal).Select(Registered)], [.. active.Select(name => Registered(name).Key)], [], [], []);
+            [.. active.Order(StringComparer.Ordinal).Select(Registered)], [.. active.Select(name => Registered(name).Key)], [], [], [], []);
 
     [Fact]
     public void Apply_WithNoSubscribers_DoesNotThrow()
