@@ -35,7 +35,7 @@ As a user, I want:
 |---|---|---|
 | Label | the mod's name | MO2 |
 | Check box | checked when the mod is enabled | MO2 |
-| Description | the `meta.ini` version, then the mod's status against its manifest ([modlist-source.md](modlist-source.md), Status) | MO2 |
+| Description | the version in the mod's metadata, then the mod's status against its manifest ([modlist-source.md](modlist-source.md), Status) | MO2 |
 | Icon | `$(package)`, or `$(repo)` for a source mod | |
 | Indicators | a badge at the right edge, and a colour on the label, for each indicator that holds ([Indicators](#indicators)) | MO2's Conflicts and Flags columns |
 | Tooltip | name, version, Nexus mod ID and installation file, each only when known, and, for a source mod, its source folder and that the folder is built from it, then the files its folder lacks ([modlist-source.md](modlist-source.md), Status, story 4) | MO2's columns |
@@ -90,7 +90,7 @@ The Badge and Colour columns are the defaults. The grey of a file the game does 
 A source mod's folder is its build's output ([ADR-0007](../../adr/0007-plugin-edits-are-git-working-tree-changes.md)). As a user, I want:
 
 1. Its row to open into the folder's files as any mod's, since they are what the game gets. The source is in the Explorer and Source Control, and `open source` shows it. Source: catalog `open source`
-2. Rename and exclude or include to write the build configuration and the folder together, so the folder already equals the next build's output: rename changes the output folder's name (Rename mod, story 3), and exclude or include its exclusions, which build writes as `.mohidden`. Source: ADR-0007
+2. Rename and exclude or include to write the build configuration and the folder together, so the folder already equals the next build's output: rename changes the output folder's name (Rename mod, story 3), and exclude or include its exclusions, which build writes with the mod manager's exclusion mark. Source: ADR-0007
 3. No gesture that changes content the build makes. A record edit goes to plugin source, a plugin created lands in it, and decompile reads the folder into it. Source: ADR-0006; ADR-0007
 4. A file I change in the folder to show as differing from the manifest, and build to overwrite it and name it. A lock on the folder is mine to add with VS Code's `files.readonlyInclude`. Source: modlist-source.md, Status; VS Code's interaction
 5. Uninstall to send the folder and the source to the trash, and the confirmation to say so. Source: Confirm what destroys
@@ -174,7 +174,7 @@ As a user, I want:
 
 1. A prompt filled with the current name. Esc, an empty name or the same name renames nothing. Source: MO2
 2. A name another mod has, compared without case, refused in the prompt, so Windows and Linux agree. A name with a path separator refused. Source: MO2 compares without case; Refuse, do not repair
-3. The mod to keep its place in mod order, its enabled state and its separator in every profile. Its folder keeps its `meta.ini` and its manifest, and its plugins keep their `plugins.txt` lines. For a source mod, rename changes the output folder in the build configuration and renames the folder; the repository stays where it is. Source: MO2; ADR-0007
+3. The mod to keep its place in mod order, its enabled state and its separator in every profile. Its folder keeps its metadata and its manifest, and its plugins keep their `plugins.txt` lines. For a source mod, rename changes the output folder in the build configuration and renames the folder; the repository stays where it is. Source: MO2; ADR-0007
 4. The folder renamed first. A rename that renamed the folder and then failed on a profile's mod order to say so, naming the profile. That profile loses the mod's place, and `mod sync` places it as a new folder when the profile is active. This is an exception to A failed gesture writes nothing.
 
 ### Build
@@ -211,7 +211,7 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 1. Install never to merge into an existing folder, or to replace one I did not confirm.
 2. A new mod to appear at the winning end of the mod order, disabled, as any folder new in `mods/` does.
 3. An upgrade to replace the mod's files in place, and to keep its folder name and its manifest. Its repository is beside `mods/`, and an upgrade never touches it. Source: ADR-0007; ADR-0022
-4. An upgrade to keep every `meta.ini` value the new file does not know, so an unknown version never blanks a known one. Source: ADR-0017
+4. An upgrade to keep every value in the mod's metadata that the new file does not know, so an unknown version never blanks a known one. Source: ADR-0017
 5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery, and a source mod's plugin source stays in git. This is an exception to A failed gesture writes nothing.
 
 ### Uninstall
@@ -229,7 +229,7 @@ By [common.md](common.md#reporting). As a user, I want:
 1. A FOMOD installed as a plain copy to raise a notification that its files need arranging by hand, because the installer's own steps did not run. Source: ADR-0019
 2. When `mods/` cannot be listed, the mod order untouched, and the reason in the view's message line and the Output.
 3. An uninstall or a separator delete that trashed the folder, and then failed on its line, reported as done, with a line in the Output: `mod sync` drops the line. This is an exception to A failed gesture writes nothing.
-4. An uninstall that landed, and then failed to mark its downloaded file uninstalled, not reported as failed. The failed `.meta` write is a line in the Output.
+4. An uninstall that landed, and then failed to mark its downloaded file uninstalled, not reported as failed. The failed metadata write is a line in the Output.
 
 ## Test seam
 
