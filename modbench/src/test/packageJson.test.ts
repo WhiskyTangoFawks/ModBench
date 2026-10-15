@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import * as path from 'path';
 import { present } from '../ports/present';
 import {
@@ -39,9 +39,13 @@ interface KeybindingEntry { command: string; key: string; when: string; mac?: st
 interface SettingEntry { description?: string; type?: unknown; default?: unknown; enum?: unknown; }
 interface ColorEntry { id: string; }
 interface CustomEditorEntry { viewType: string; }
+interface WalkthroughStep { id: string; title: string; media: { markdown: string }; completionEvents: string[]; }
+interface WalkthroughEntry { id: string; steps: WalkthroughStep[]; }
+interface UntrustedWorkspaces { supported: unknown; description?: string; }
 
 interface PackageManifest {
   activationEvents: string[];
+  capabilities: { untrustedWorkspaces?: UntrustedWorkspaces };
   contributes: {
     viewsWelcome: ViewsWelcomeEntry[];
     views: Record<string, ViewEntry[]>;
@@ -51,6 +55,7 @@ interface PackageManifest {
     configuration: { properties: Record<string, SettingEntry> };
     colors: ColorEntry[];
     customEditors: CustomEditorEntry[];
+    walkthroughs: WalkthroughEntry[];
   };
 }
 
@@ -94,6 +99,23 @@ function isColorEntry(v: unknown): v is ColorEntry {
 function isCustomEditorEntry(v: unknown): v is CustomEditorEntry {
   return isRecord(v) && isString(v.viewType);
 }
+function isWalkthroughStep(v: unknown): v is WalkthroughStep {
+  return isRecord(v) && isString(v.id) && isString(v.title) && isRecord(v.media) && isString(v.media.markdown)
+    && isArrayOf(v.completionEvents, isString);
+}
+function isWalkthroughEntry(v: unknown): v is WalkthroughEntry {
+  return isRecord(v) && isString(v.id) && isArrayOf(v.steps, isWalkthroughStep);
+}
+function capabilitiesOf(raw: unknown): PackageManifest['capabilities'] {
+  if (raw === undefined) return {};
+  if (!isRecord(raw)) throw new Error('Expected package.json capabilities to be an object.');
+  const { untrustedWorkspaces } = raw;
+  if (untrustedWorkspaces === undefined) return {};
+  if (!isRecord(untrustedWorkspaces) || !isOptionalString(untrustedWorkspaces.description)) {
+    throw new Error('Expected capabilities.untrustedWorkspaces to be { supported, description? }.');
+  }
+  return { untrustedWorkspaces: { supported: untrustedWorkspaces.supported, description: untrustedWorkspaces.description } };
+}
 
 function parsePackageManifest(raw: unknown): PackageManifest {
   if (!isRecord(raw) || !isArrayOf(raw.activationEvents, isString)) {
@@ -101,7 +123,7 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   }
   const { contributes } = raw;
   if (!isRecord(contributes)) throw new Error('Expected package.json to have a contributes object.');
-  const { viewsWelcome, views, menus, commands, keybindings, configuration, colors, customEditors } = contributes;
+  const { viewsWelcome, views, menus, commands, keybindings, configuration, colors, customEditors, walkthroughs = [] } = contributes;
   if (!isArrayOf(viewsWelcome, isViewsWelcomeEntry)) {
     throw new Error('Expected contributes.viewsWelcome to be an array of { view, contents, when? }.');
   }
@@ -122,12 +144,16 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   }
   if (!isArrayOf(colors, isColorEntry)) throw new Error('Expected contributes.colors to be an array of { id }.');
   if (!isArrayOf(customEditors, isCustomEditorEntry)) throw new Error('Expected contributes.customEditors to be an array of { viewType }.');
+  if (!isArrayOf(walkthroughs, isWalkthroughEntry)) {
+    throw new Error('Expected contributes.walkthroughs to be an array of { id, steps: { id, title, media: { markdown }, completionEvents }[] }.');
+  }
   const { properties } = configuration;
   return {
     activationEvents: raw.activationEvents,
+    capabilities: capabilitiesOf(raw.capabilities),
     contributes: {
       viewsWelcome, views, menus, commands, keybindings,
-      configuration: { properties }, colors, customEditors,
+      configuration: { properties }, colors, customEditors, walkthroughs,
     },
   };
 }
@@ -166,6 +192,39 @@ const REFERENCED_BY = 'modbench.record.referencedBy';
 describe('package.json activation', () => {
   it('auto-activates on startup so the Activity Bar icon is never stuck hidden', () => {
     expect(pkg.activationEvents).toContain('onStartupFinished');
+  });
+});
+
+describe('package.json getting started (common.md, Getting started)', () => {
+  const steps = pkg.contributes.walkthroughs.flatMap((walkthrough) => walkthrough.steps);
+  const commands = new Set(pkg.contributes.commands.map(({ command }) => command));
+  const views = new Set(Object.values(pkg.contributes.views).flat().map(({ id }) => id));
+  const OWNERS: Record<string, (subject: string) => boolean> = {
+    onCommand: (subject) => commands.has(subject),
+    onView: (subject) => views.has(subject),
+    onContext: (subject) => subject.startsWith('modbench.'),
+    onLink: (subject) => subject.startsWith('https://'),
+  };
+  const owned = (event: string): boolean => {
+    const [kind = '', subject = ''] = event.split(/:(.*)/s);
+    return subject.startsWith('workbench.') || (OWNERS[kind]?.(subject) ?? false);
+  };
+
+  it('is one walkthrough', () => {
+    expect(pkg.contributes.walkthroughs).toHaveLength(1);
+  });
+
+  it('ticks each step on a command, view or context Modbench or VS Code owns, or a link (story 3)', () => {
+    expect(steps.filter((step) => step.completionEvents.length === 0 || !step.completionEvents.every(owned)).map(({ id }) => id)).toEqual([]);
+  });
+
+  it('shows each step a markdown file the extension ships', () => {
+    expect(steps.filter(({ media }) => !existsSync(path.join(__dirname, '..', '..', media.markdown))).map(({ id }) => id)).toEqual([]);
+  });
+
+  it('says, in a folder not trusted, that Modbench needs it trusted (story 4)', () => {
+    expect(pkg.capabilities.untrustedWorkspaces?.supported).toBe(false);
+    expect(pkg.capabilities.untrustedWorkspaces?.description).toBeTruthy();
   });
 });
 
