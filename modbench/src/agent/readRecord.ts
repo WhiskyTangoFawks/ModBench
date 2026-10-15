@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { MEditClient } from '../client/MEditClient';
-import type { PluginAddress } from '../wire/pluginAddress';
+import { pluginAddressOf, type PluginAddress } from '../wire/pluginAddress';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 import { Refusal } from '../drivingLib/refusal';
@@ -28,7 +28,7 @@ const copyOf = async (mEdit: RecordReads, address: PluginAddress, formKey: strin
 
 export const READ_RECORD = {
   name: 'read_record',
-  description: 'A record in the load order, by its EditorID or FormKey: each active plugin\'s copy, as below, with isWinner on the copy that wins. '
+  description: 'A record in the load order, by its EditorID or FormKey: each active plugin\'s copy, as below, as { plugin: { name, origin }, isWinner, ...copy }, or { plugin, isWinner, reason } for a copy that could not be read, which refuses the read in part. '
     + 'With plugin { name, origin? } as list_plugins shows it, that plugin\'s copy alone, whether the plugin is active or not. '
     + 'A copy is { kind: \'OwnFile\' | \'ContainersFile\', location } the path of the source file that holds it, or { kind: \'Rendered\', text } the copy\'s text, for a plugin with no source.',
   input: RECORD,
@@ -43,10 +43,18 @@ export const READ_RECORD = {
     const comparison = await mEdit.getComparison(formKey);
     if (isReadFailed(comparison)) throw new Refusal(failureReason(comparison));
     if (comparison === null) throw new Refusal(`No active plugin holds ${formKey}.`);
-    return Promise.all(comparison.overrides.map(async ({ plugin: copyName, origin, isWinner }) => {
-      const copyAddress = { name: copyName, origin };
-      return { plugin: copyAddress, isWinner, ...await copyOf(mEdit, copyAddress, formKey) };
+    const entries = await Promise.all(comparison.overrides.map(async ({ plugin: copyName, origin, isWinner }) => {
+      const copyAddress = pluginAddressOf({ plugin: copyName, origin });
+      try {
+        return { plugin: copyAddress, isWinner, ...await copyOf(mEdit, copyAddress, formKey) };
+      } catch (error) {
+        if (error instanceof Refusal) return { plugin: copyAddress, isWinner, reason: error.message };
+        throw error;
+      }
     }));
+    const reasons = entries.flatMap((entry) => ('reason' in entry ? [entry.reason] : []));
+    if (reasons.length > 0) throw new Refusal(reasons.join(' '), entries);
+    return entries;
   },
 };
 
