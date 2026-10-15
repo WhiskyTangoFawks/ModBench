@@ -23,8 +23,11 @@ export const INSTANCE_READS: readonly Read[] = [
   },
   {
     name: 'list_plugins',
-    description: 'Every plugin by its line in the plugin order, with its origin, whether it is enabled and whether it wins its file name.',
-    of: ({ plugins }) => [...plugins].sort(byLine).map(({ name, origin, line, enabled, winning }) => ({ name, origin, line, enabled, winning })),
+    description: 'Every plugin in the plugin order, losing first: the plugins the game loads with no line, then each line by its number, each with its origin, its line (null when it has none), whether it is enabled and whether it wins its file name.',
+    of: ({ plugins, pluginsLoadedWithNoLine = [] }) => [
+      ...pluginsLoadedWithNoLine.map(({ name, origin }) => ({ name, origin, line: null, enabled: true, winning: true })),
+      ...[...plugins].sort(byLine).map(({ name, origin, line, enabled, winning }) => ({ name, origin, line, enabled, winning })),
+    ],
   },
   {
     name: 'list_downloads',

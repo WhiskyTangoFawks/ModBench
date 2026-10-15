@@ -156,6 +156,16 @@ describe('the agent server, given an instance value', () => {
     ]);
   });
 
+  it('reads the plugins the game loads with no line first, with no line', async () => {
+    const client = await clientOf(new FakeInstance({ ...VALUE, pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Data' }] }));
+
+    expect(await read(client, 'list_plugins')).toEqual([
+      { name: 'Fallout4.esm', origin: 'Data', line: null, enabled: true, winning: true },
+      { name: 'A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: true },
+      { name: 'B.esp', origin: 'Big Rocks', line: 1, enabled: false, winning: true },
+    ]);
+  });
+
   describe('reading each mod\'s status against its manifest', () => {
     const inRepository = new FakeInstance({
       ...VALUE, holdsRepository: true,
