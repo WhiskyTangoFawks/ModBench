@@ -11,7 +11,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
     private const string Plugin = "Test.esp";
     private const string Document = "plugin-source/Test.esp/npc_/Test.esp/000001.json";
 
-    private static ScratchDirectory TrackedMod()
+    private static ScratchDirectory SourceMod()
     {
         var modFolder = new ScratchDirectory("medit-users-git-");
         PluginBaselines.Init(modFolder, [new TreeFile(Document, "{\"a\":1}"u8.ToArray())]);
@@ -23,7 +23,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
     [Fact]
     public void ReadingTheChanges_LeavesAStatDirtyIndexUnwritten_WhichAPlainGitStatusWouldRewriteUnderIndexLock()
     {
-        using var modFolder = TrackedMod();
+        using var modFolder = SourceMod();
         File.SetLastWriteTimeUtc(Path.Combine(modFolder, Document), new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         var before = File.ReadAllBytes(IndexOf(modFolder));
 
@@ -41,7 +41,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
     [Fact]
     public void ParkingTheBinary_WhileTheUsersCommitHoldsTheIndexLock_RecordsItAndLeavesTheirLock()
     {
-        using var modFolder = TrackedMod();
+        using var modFolder = SourceMod();
         var usersLock = IndexOf(modFolder) + ".lock";
         File.WriteAllText(usersLock, "");
 

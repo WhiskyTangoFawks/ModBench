@@ -85,7 +85,7 @@ public sealed class PersistentFlagEditTests : IDisposable
             SetAt(JsonDocument.Parse(raw.ToString(CultureInfo.InvariantCulture)).RootElement, Member("MajorRecordFlagsRaw")));
 
     private JsonObject Document(string editorId) =>
-        JsonNode.Parse(TrackedTree.Document(_mod.ModFolder, _mod.Plugin, _keys[editorId].ToString()).Require().Body).Require().AsObject();
+        JsonNode.Parse(SourceModTree.Document(_mod.ModFolder, _mod.Plugin, _keys[editorId].ToString()).Require().Body).Require().AsObject();
 
     private List<string> Group(string cell, string group) =>
         [.. (Document(cell)[group] as JsonArray ?? []).Select(placed => placed.Require()["EditorID"].Require().GetValue<string>())];

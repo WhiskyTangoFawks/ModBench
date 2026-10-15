@@ -17,7 +17,7 @@ internal static class GitInit
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets)
     {
-        if (SourceRepositoryGit.IsTracked(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
+        if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
 
         WriteJournal journal = new(sourceFolder);

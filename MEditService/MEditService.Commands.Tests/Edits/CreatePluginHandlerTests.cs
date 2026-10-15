@@ -54,13 +54,13 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.Same(before, _holder.Current);
         Assert.Equal(version, _holder.Held?.Version);
         Assert.Equal(0, changes);
-        Assert.False(TestAdapters.Source().IsTracked(folder));
+        Assert.False(TestAdapters.Source().IsSourceMod(folder));
         Assert.Equal(["NewPlugin.esp"], Directory.EnumerateFileSystemEntries(folder).Select(Path.GetFileName));
         Assert.Empty(Directory.EnumerateFiles(
             _data.InstanceRoot, "plugins.txt", new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, RecurseSubdirectories = true }));
     }
 
-    private async Task<string> TrackedModWith(string name, string existing)
+    private async Task<string> SourceModWith(string name, string existing)
     {
         var folder = ModFolder(name);
         await Create(existing, folder, name);
@@ -78,25 +78,25 @@ public sealed class CreatePluginHandlerTests : IDisposable
         new(name, origin, Path.Combine(folder, name), new PluginProvider.FromMod(origin, folder, folder), Line: null, PluginStrings.None);
 
     [Fact]
-    public async Task CreatePlugin_IntoATrackedMod_LandsItsSourceAsWorkingTreeChanges_AndLeavesTheOthersAsTheyWere()
+    public async Task CreatePlugin_IntoASourceMod_LandsItsSourceAsWorkingTreeChanges_AndLeavesTheOthersAsTheyWere()
     {
-        var folder = await TrackedModWith("TrackedMod", "First.esp");
-        var first = new PluginAddress("First.esp", "TrackedMod");
-        var firstBefore = TrackedTree.Records(folder, first);
+        var folder = await SourceModWith("SourceMod", "First.esp");
+        var first = new PluginAddress("First.esp", "SourceMod");
+        var firstBefore = SourceModTree.Records(folder, first);
         var headBefore = Head(folder);
 
-        var result = await Create("Second.esp", folder, "TrackedMod");
+        var result = await Create("Second.esp", folder, "SourceMod");
 
         Assert.Null(result.Refusal);
-        Assert.Equal(firstBefore, TrackedTree.Records(folder, first));
-        Assert.True(TestAdapters.Source().SourceReads(Registered("Second.esp", "TrackedMod", folder)));
+        Assert.Equal(firstBefore, SourceModTree.Records(folder, first));
+        Assert.True(TestAdapters.Source().SourceReads(Registered("Second.esp", "SourceMod", folder)));
         Assert.Equal(headBefore, Head(folder));
     }
 
     [Fact]
     public async Task CreatePlugin_IntoASourceModTheLoadOrderNamesNoPluginOf_LandsItsSourceInTheSourceFolderItWasHanded()
     {
-        var folder = await TrackedModWith("EmptiedMod", "First.esp");
+        var folder = await SourceModWith("EmptiedMod", "First.esp");
         File.Delete(Path.Combine(folder, "First.esp"));
         _holder.Apply(SnapshotPlugins.Snapshot(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4, _data.Plugins));
 
@@ -109,7 +109,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     [Fact]
     public async Task CreatePlugin_WhoseSourceCannotBeWritten_TakesBackTheFileItWrote_AndWritesNothing()
     {
-        var folder = await TrackedModWith("FailingMod", "First.esp");
+        var folder = await SourceModWith("FailingMod", "First.esp");
         var adapter = new SourceUnreadableAdapter();
 
         var result = await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "FailingMod"), folder, folder);
@@ -126,7 +126,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     [Fact]
     public async Task CreatePlugin_IntoOverwrite_WritesNoSource_EvenWhereTheFolderHoldsARepository()
     {
-        var folder = await TrackedModWith("HostMod", "First.esp");
+        var folder = await SourceModWith("HostMod", "First.esp");
 
         var result = await Create("Second.esp", folder, PluginOrigin.Overwrite);
 
@@ -138,7 +138,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     [Fact]
     public async Task CreatePlugin_WhoseSourceWriteFails_TakesBackTheFile_AndLeavesNoPartialTree()
     {
-        var folder = await TrackedModWith("BlockedMod", "First.esp");
+        var folder = await SourceModWith("BlockedMod", "First.esp");
         var blocker = Path.Combine(folder, "plugin-source", "Second.esp");
         File.WriteAllText(blocker, "not a folder");
 
@@ -152,7 +152,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     [Fact]
     public async Task CreatePlugin_WhoseFileChangedBeforeTheTakeBack_LeavesItAndNamesIt()
     {
-        var folder = await TrackedModWith("ChangedMod", "First.esp");
+        var folder = await SourceModWith("ChangedMod", "First.esp");
         var created = Path.Combine(folder, "Second.esp");
         var adapter = new SourceUnreadableAdapter { Before = () => File.WriteAllText(created, "another tool's file") };
 
@@ -167,7 +167,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     [Fact]
     public async Task CreatePlugin_WhoseTakeBackFails_RefusesWithBothCauses()
     {
-        var folder = await TrackedModWith("LockedMod", "First.esp");
+        var folder = await SourceModWith("LockedMod", "First.esp");
         var takeBackFailure = PluginFailures.Inaccessible();
         var adapter = new SourceUnreadableAdapter { TakeBackFailure = takeBackFailure };
 
@@ -180,9 +180,9 @@ public sealed class CreatePluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task CreatePlugin_IntoATrackedMod_ParksTheBinaryItsSourceWasReadFrom()
+    public async Task CreatePlugin_IntoASourceMod_ParksTheBinaryItsSourceWasReadFrom()
     {
-        var folder = await TrackedModWith("ParkedMod", "First.esp");
+        var folder = await SourceModWith("ParkedMod", "First.esp");
 
         await Create("Second.esp", folder, "ParkedMod");
 

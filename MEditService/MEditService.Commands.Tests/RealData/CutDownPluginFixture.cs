@@ -32,7 +32,7 @@ public static class CutDownPluginFixture
 
     /// <summary>Every document of the plugin's tree, keyed by FormKey.</summary>
     public static Dictionary<string, byte[]> ReadSourceTree(string modFolder) =>
-        DocumentsOf(TrackedTree.Repository(modFolder, Plugin));
+        DocumentsOf(SourceModTree.Repository(modFolder, Plugin));
 
     private static Dictionary<string, byte[]> DocumentsOf(ISourceRepository repository) =>
         TreeDocuments.Of(repository, Plugin).ToDictionary(document => document.FormKey, document => Encoding.UTF8.GetBytes(document.Body));

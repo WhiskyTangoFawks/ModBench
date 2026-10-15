@@ -45,9 +45,9 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         return this;
     }
 
-    public bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && IsTracked(sourceFolder);
+    public bool IsSourceMod(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && IsSourceMod(sourceFolder);
 
-    public bool IsTracked(string modFolder) => _mods.ContainsKey(modFolder);
+    public bool IsSourceMod(string modFolder) => _mods.ContainsKey(modFolder);
 
     public bool SourceReads(RegisteredPlugin plugin) =>
         plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && _mods.TryGetValue(sourceFolder, out var tracked) && tracked.SourceReads;

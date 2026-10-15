@@ -10,9 +10,9 @@ namespace MEditService.Http.Tests.Traces;
 public sealed class DecompilePluginTraceTests : HostedTests
 {
     private const string Plugin = "Tracked.esp";
-    private const string Origin = "TrackedMod";
+    private const string Origin = "SourceMod";
     private const string Npc = "TrackedNpc";
-    private const string UntrackedOrigin = "UntrackedMod";
+    private const string UntrackedOrigin = "NonSourceMod";
 
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("trace-decompile-plugin")
         .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
@@ -72,7 +72,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
 
         response.EnsureSuccessStatusCode();
         var refused = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
-        Assert.Equal("NotInTrackedMod", refused.GetProperty("refusal").GetString());
+        Assert.Equal("NotInSourceMod", refused.GetProperty("refusal").GetString());
         Assert.Equal("Other.esp", refused.GetProperty("item").GetProperty("name").GetString());
     }
 

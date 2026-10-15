@@ -118,7 +118,7 @@ public sealed class CompilePluginLinkTests : IDisposable
     [Fact]
     public async Task Compile_ForALinkIntoATrackedPlugin_ReadsThatPluginsFile_NotItsWorkingTree()
     {
-        TrackedTree.Remove(_targetFolder, _target, new RecordIdentity(_targetKeyword.ToString(), "kywd", TargetKeywordEditorId));
+        SourceModTree.Remove(_targetFolder, _target, new RecordIdentity(_targetKeyword.ToString(), "kywd", TargetKeywordEditorId));
 
         var answer = await CompileHost();
 

@@ -35,7 +35,7 @@ public sealed class FormIdEditFailureTests
             m.Cells.Records.Add(block);
             placed = placedRef.FormKey;
         });
-        var cell = TrackedTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "TwoUnitsRef");
+        var cell = SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "TwoUnitsRef");
         var cellIdentity = new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId);
         var cellFile = TreeTampering.FileOf(mod.ModFolder, mod.Plugin, cellIdentity);
         var impostorFile = TreeTampering.DuplicateInSiblingDirectory(mod.ModFolder, mod.Plugin, cellIdentity);

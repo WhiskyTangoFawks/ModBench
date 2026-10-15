@@ -38,17 +38,17 @@ public sealed class CreateRecordChangesHandlerTests
     public void CreateRecord_WritesNothing_AndAnswersTheNewDocumentAndTheHeaderThatMovesTheNextObjectId()
     {
         using var mod = SourceEditFixture.Tracked();
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var (outcome, changes) = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.Equal(FixtureNextObjectId, outcome.NewFormKey);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
         Assert.Equal(0x807u, mod.NextObjectId());
         Assert.Empty(changes.Moves);
         Assert.Empty(changes.Deletions);
         Assert.Contains(changes.Documents, document => document.Text.Contains(FixtureNextObjectId, StringComparison.Ordinal));
-        var header = Assert.Single(changes.Documents, document => document.Path == Path.Combine(mod.ModFolder, TrackedTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin)));
+        var header = Assert.Single(changes.Documents, document => document.Path == Path.Combine(mod.ModFolder, SourceModTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin)));
         Assert.Equal(0x808u, HeaderDocument.NextObjectId(Encoding.UTF8.GetBytes(header.Text), GameRelease.Fallout4));
     }
 
@@ -56,7 +56,7 @@ public sealed class CreateRecordChangesHandlerTests
     public void CreateRecord_OverAnUnsavedHeader_TakesTheNextObjectIdItHolds()
     {
         using var mod = SourceEditFixture.Tracked();
-        var headerFile = Path.Combine(mod.ModFolder, TrackedTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin));
+        var headerFile = Path.Combine(mod.ModFolder, SourceModTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin));
         var unsavedHeader = Encoding.UTF8.GetString(
             HeaderDocument.WithNextObjectId(File.ReadAllBytes(headerFile), GameRelease.Fallout4, 0x900));
 
@@ -73,12 +73,12 @@ public sealed class CreateRecordChangesHandlerTests
         using var mod = SourceEditFixture.Tracked();
         const string newFormKey = "000807:Fixture.esp";
         TreeTampering.BlockWrite(mod.ModFolder, mod.Plugin, new RecordIdentity(newFormKey, "npc_", null));
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
 
         Assert.Equal(RecordEditRefusal.SourceAccessFailed, result.Refusal);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public sealed class CreateRecordChangesHandlerTests
         var created = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
         Assert.True(created.Applied, created.Message);
 
-        var npcs = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var npcs = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         Assert.DoesNotContain(npcs, n => n.Contains(SourceEditFixture.NpcEditorId, StringComparison.Ordinal));
         Assert.Contains(npcs, n => n.Contains("\"EditorID\": \"UntouchedNpc\"", StringComparison.Ordinal));
@@ -208,7 +208,7 @@ public sealed class CreateRecordChangesHandlerTests
     public void CreateRecord_SkipsAFormKeyAtTheNextObjectIdThatARecordUses()
     {
         using var mod = SourceEditFixture.Tracked();
-        TrackedTree.Seed(mod.ModFolder, mod.Plugin, FixtureNextObjectId);
+        SourceModTree.Seed(mod.ModFolder, mod.Plugin, FixtureNextObjectId);
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
 
@@ -246,7 +246,7 @@ public sealed class CreateRecordChangesHandlerTests
     {
         using var mod = SourceEditFixture.Tracked();
         const string masterKey = "F00000:Master.esm";
-        TrackedTree.Repository(mod.ModFolder, mod.Plugin).Put(
+        SourceModTree.Repository(mod.ModFolder, mod.Plugin).Put(
             mod.Plugin,
             new SourceDocument(masterKey, "npc_", "Overridden", $"{{\n  \"FormKey\": \"{masterKey}\",\n  \"EditorID\": \"Overridden\"\n}}")).Wrote();
 
@@ -261,7 +261,7 @@ public sealed class CreateRecordChangesHandlerTests
 
     private static void Commit(SourceEditFixture mod)
     {
-        TrackedTree.Commit(mod.ModFolder);
+        SourceModTree.Commit(mod.ModFolder);
     }
 
     private static uint LocalId(string formKey) =>
@@ -306,12 +306,12 @@ public sealed class CreateRecordChangesHandlerTests
     {
         using var mod = SourceEditFixture.Tracked();
         File.Delete(Path.Combine(mod.ModFolder, TreeTampering.HeaderDocumentOf(mod.Plugin.Name)));
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
 
         Assert.Equal(RecordEditRefusal.PluginSourceUnreadable, result.Refusal);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]
@@ -328,8 +328,8 @@ public sealed class CreateRecordChangesHandlerTests
 
     private static void TakeTheNextObjectId(SourceEditFixture mod, string formKey)
     {
-        TrackedTree.SetNextObjectId(mod.ModFolder, mod.Plugin, LocalId(formKey));
-        TrackedTree.Seed(mod.ModFolder, mod.Plugin, formKey);
+        SourceModTree.SetNextObjectId(mod.ModFolder, mod.Plugin, LocalId(formKey));
+        SourceModTree.Seed(mod.ModFolder, mod.Plugin, formKey);
     }
 
 

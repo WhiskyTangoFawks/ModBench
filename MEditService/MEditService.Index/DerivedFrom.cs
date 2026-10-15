@@ -11,7 +11,7 @@ internal enum DerivedFrom
 
 internal static class DerivedFromReads
 {
-    /// <summary>Whether the plugin's mod was tracked when the Index read it.</summary>
-    public static bool IsTracked(this DerivedFrom derivedFrom) =>
+    /// <summary>Whether the plugin's mod was a source mod when the Index read it.</summary>
+    public static bool IsSourceMod(this DerivedFrom derivedFrom) =>
         derivedFrom is DerivedFrom.SourceTree or DerivedFrom.BinaryForUnreadableSource;
 }

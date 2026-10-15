@@ -125,7 +125,7 @@ public sealed class EditRecordTraceTests : HostedTests
     }
 
     private const string UntrackedPlugin = "Untracked.esp";
-    private const string UntrackedOrigin = "UntrackedMod";
+    private const string UntrackedOrigin = "NonSourceMod";
 
     [Fact]
     public async Task EditingAnUntrackedPlugin_IsRefusedWithATypedRefusal()

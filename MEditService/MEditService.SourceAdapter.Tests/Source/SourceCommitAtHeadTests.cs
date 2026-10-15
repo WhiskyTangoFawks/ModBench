@@ -53,7 +53,7 @@ public sealed class SourceCommitAtHeadTests : IDisposable
         CommitAtHead(_remote, _commits["second"]).Value();
 
         Assert.Equal(_commits["first"], Git(SourceFolder, "rev-parse", "main").Trim());
-        Assert.True(TestAdapters.Source().IsTracked(SourceFolder));
+        Assert.True(TestAdapters.Source().IsSourceMod(SourceFolder));
     }
 
     [Fact]

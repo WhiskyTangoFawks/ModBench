@@ -99,7 +99,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
     private void RunSweep(IReadOnlyList<Gesture> gestures)
     {
 
-        var trackedTree = TrackedTree();
+        var trackedTree = SourceModTree();
         var befores = gestures.Select(g => g.Record.FormKey).Distinct().ToDictionary(formKey => formKey, formKey =>
         {
             var document = trackedTree.RecordByFormKey(_plugin, formKey).Value()
@@ -114,7 +114,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
             var named = $"{identity.RecordType} {identity.FormKey} {gesture.Envelope.Op} {gesture.Path}";
             var result = _editHandler.Edit(_plugin, identity.FormKey, gesture.Envelope);
             if (!result.Applied) { failures.Add($"{named}: {result.Refusal} {result.Message}"); continue; }
-            var treeAsTheEditLeftIt = TrackedTree();
+            var treeAsTheEditLeftIt = SourceModTree();
             var after = treeAsTheEditLeftIt.RecordOf(_plugin, identity).Value()?.Body
                 ?? throw new InvalidOperationException($"Expected an applied edit on {identity.FormKey} to read back a document.");
             failures.AddRange(Strays(named, before, after, gesture.Path));
@@ -125,7 +125,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
         Assert.True(failures.Count == 0, $"{failures.Count} gestures did not land as exactly their path:\n{string.Join("\n", failures.Take(20))}");
     }
 
-    private ISourceRepository TrackedTree() => TestAdapters.Source().Open(TestMod.Of(_plugin, _modFolder), GameRelease.Fallout4)
+    private ISourceRepository SourceModTree() => TestAdapters.Source().Open(TestMod.Of(_plugin, _modFolder), GameRelease.Fallout4)
         ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private static IEnumerable<(RecordEditEnvelope Gesture, string Path)> EveryGestureWithThePathItMayChange(RecordTableSchema schema, JsonElement root)

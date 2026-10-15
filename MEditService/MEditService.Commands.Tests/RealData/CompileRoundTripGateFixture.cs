@@ -23,7 +23,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
     public string PluginPath => Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
     public LoadOrderHolder Holder { get; } = new();
 
-    public Dictionary<string, byte[]> TrackedTree { get; }
+    public Dictionary<string, byte[]> SourceModTree { get; }
     public Dictionary<string, byte[]> EditedTree { get; }
     public IReadOnlyList<string> EditedDocuments { get; }
 
@@ -40,7 +40,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
         CutDownPluginFixture.TrackedInto(ModFolder);
         Holder.Apply(SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, PluginPath, Plugin.Origin, Line: 0, Enabled: true, Winning: true)]));
-        TrackedTree = CutDownPluginFixture.ReadSourceTree(ModFolder);
+        SourceModTree = CutDownPluginFixture.ReadSourceTree(ModFolder);
 
         using (var original = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),

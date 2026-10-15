@@ -49,7 +49,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
     private OpenedIndex Reconciled() => Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
 
     [Fact]
-    public void APluginInATrackedModWithNoPluginSource_ReadsItsPluginFile_MarkedAsSuch()
+    public void APluginInASourceModWithNoPluginSource_ReadsItsPluginFile_MarkedAsSuch()
     {
         Directory.Delete(SourceRoot, recursive: true);
 

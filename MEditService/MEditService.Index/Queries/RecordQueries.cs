@@ -48,7 +48,7 @@ internal sealed class RecordQueries(
             return new(plugin, snapshot.LoadOrderIndex(plugin.Key), IsImmutable: snapshot.ProviderOf(plugin.Key) == PluginProvider.Game, opened[plugin.Key],
                 masterIssues?.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
                 parseFailures.Contains(plugin.Key),
-                IsTracked: derivedFrom?.IsTracked() ?? false,
+                IsTracked: derivedFrom?.IsSourceMod() ?? false,
                 PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource ? WhyUnreadable(plugin) : null,
                 _index.LaterReadFailure(plugin.Key)?.Select(SourceProblem.StoppedAt).ToList());
         }
@@ -346,7 +346,7 @@ internal sealed class RecordQueries(
     private Answer<string, SourceFailure> RenderedFileName(PluginAddress plugin, RecordIdentity identity)
     {
         var snapshot = _loadOrder.Require();
-        if (snapshot.Plugin(plugin) is not { } registered || !source.IsTracked(registered)
+        if (snapshot.Plugin(plugin) is not { } registered || !source.IsSourceMod(registered)
             || source.Over(registered, snapshot.GameRelease) is not { } tracked)
         {
             return source.FileNameOf(identity);

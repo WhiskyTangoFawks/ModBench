@@ -411,7 +411,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
         var created = Tree.GetCellAt(Address(Override), World.ToString(), 9, 9).Value().Require();
         Assert.Equal("000805:Override.esp", created.FormKey);
-        Assert.Equal(0x806u, TrackedTree.NextObjectId(_plugins.FolderOf(Override), Address(Override)));
+        Assert.Equal(0x806u, SourceModTree.NextObjectId(_plugins.FolderOf(Override), Address(Override)));
     }
 
     [Fact]
@@ -422,6 +422,6 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         SetFlags("Mover", Persistent);
 
         Assert.Equal("000805:Override.esp", Document(World)["TopCell"].Require()["FormKey"].Require().GetValue<string>());
-        Assert.Equal(0x806u, TrackedTree.NextObjectId(_plugins.FolderOf(Override), Address(Override)));
+        Assert.Equal(0x806u, SourceModTree.NextObjectId(_plugins.FolderOf(Override), Address(Override)));
     }
 }

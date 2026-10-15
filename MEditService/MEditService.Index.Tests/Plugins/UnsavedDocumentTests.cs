@@ -34,11 +34,11 @@ public sealed class UnsavedDocumentTests : IDisposable
                 var added = mod.Npcs.AddNew("TrackedNpc");
                 added.Race.SetTo(race);
                 npc = added.FormKey;
-            }, origin: "TrackedMod")
+            }, origin: "SourceMod")
             .BuildScattered();
         _tracked = _fixture.Plugins.Single(p => p.Name == Tracked);
         (_npc, _race) = (npc.ToString(), race.ToString());
-        TrackedMods.Track(_tracked);
+        SourceMods.Track(_tracked);
         _index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, notifications: _notifications);
         _file = _tracked.SourceFileOf(_index.DocumentOf(_npc, _tracked.KeyOf()));
     }

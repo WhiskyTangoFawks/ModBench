@@ -22,7 +22,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
             _modFolder, [Baseline("A.esp"), BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp"), Baseline("C.esp")]);
 
         Assert.StartsWith("Bad.esp's source could not be written: ", failure.Require().Reason, StringComparison.Ordinal);
-        Assert.False(TestAdapters.Source().IsTracked(_modFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(_modFolder));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
         Assert.False(File.Exists(Path.Combine(_modFolder, ".gitignore")));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
@@ -38,7 +38,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         ]);
 
         Assert.Contains("textures/held.dds is held by another process", failure.Require().Reason, StringComparison.Ordinal);
-        Assert.False(TestAdapters.Source().IsTracked(_modFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(_modFolder));
         Assert.Empty(Directory.EnumerateFileSystemEntries(_modFolder));
     }
 
@@ -185,7 +185,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         Assert.Null(TestAdapters.Source().Init(_modFolder, [Baseline("A.esp")]));
 
         Assert.Equal(["Init SomeMod"], SubjectsOnMain());
-        Assert.True(TestAdapters.Source().IsTracked(_modFolder));
+        Assert.True(TestAdapters.Source().IsSourceMod(_modFolder));
         Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
     }
 

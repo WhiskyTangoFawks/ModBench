@@ -3,7 +3,7 @@ using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-public sealed class SourceRepositoryIsTrackedTests : IDisposable
+public sealed class SourceRepositoryIsSourceModTests : IDisposable
 {
     private static readonly PluginAddress PluginAt = new("Mine.esp", "Mod");
 
@@ -20,11 +20,11 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
     }
 
     [Fact]
-    public void IsTracked_PluginOfAModWhoseOwnFolderHoldsARepository_IsFalse()
+    public void IsSourceMod_PluginOfAModWhoseOwnFolderHoldsARepository_IsFalse()
     {
         CommitOnMain(_modFolder);
 
-        Assert.False(TestAdapters.Source().IsTracked(Registered));
+        Assert.False(TestAdapters.Source().IsSourceMod(Registered));
     }
 
     [Fact]
@@ -37,60 +37,60 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
     }
 
     [Fact]
-    public void IsTracked_FolderWithNoGitDirectory_IsFalse()
+    public void IsSourceMod_FolderWithNoGitDirectory_IsFalse()
     {
-        Assert.False(TestAdapters.Source().IsTracked(_sourceFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(_sourceFolder));
     }
 
     [Fact]
-    public void IsTracked_RepositoryWithNoMain_IsFalse()
+    public void IsSourceMod_RepositoryWithNoMain_IsFalse()
     {
         Git(_sourceFolder, "init", "-q", "-b", "main");
 
-        Assert.False(TestAdapters.Source().IsTracked(_sourceFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(_sourceFolder));
     }
 
     [Fact]
-    public void IsTracked_RepositoryWithMain_IsTrue()
+    public void IsSourceMod_RepositoryWithMain_IsTrue()
     {
         CommitOnMain();
 
-        Assert.True(TestAdapters.Source().IsTracked(_sourceFolder));
+        Assert.True(TestAdapters.Source().IsSourceMod(_sourceFolder));
     }
 
     [Fact]
-    public void IsTracked_RepositoryWhoseMainGitPacked_IsTrue()
+    public void IsSourceMod_RepositoryWhoseMainGitPacked_IsTrue()
     {
         CommitOnMain();
         Git(_sourceFolder, "pack-refs", "--all");
 
-        Assert.True(TestAdapters.Source().IsTracked(_sourceFolder));
+        Assert.True(TestAdapters.Source().IsSourceMod(_sourceFolder));
     }
 
     [Fact]
-    public void IsTracked_FolderThatDoesNotExist_IsFalseNotAThrow()
+    public void IsSourceMod_FolderThatDoesNotExist_IsFalseNotAThrow()
     {
-        Assert.False(TestAdapters.Source().IsTracked(Path.Combine(_sourceFolder, "Gone")));
+        Assert.False(TestAdapters.Source().IsSourceMod(Path.Combine(_sourceFolder, "Gone")));
     }
 
     [Fact]
-    public void IsTracked_PluginOfATrackedMod_IsTrue()
+    public void IsSourceMod_PluginOfASourceMod_IsTrue()
     {
         CommitOnMain();
 
-        Assert.True(TestAdapters.Source().IsTracked(Registered));
+        Assert.True(TestAdapters.Source().IsSourceMod(Registered));
     }
 
     [Fact]
-    public void IsTracked_PluginOfAModWithNoRepository_IsFalse()
+    public void IsSourceMod_PluginOfAModWithNoRepository_IsFalse()
     {
-        Assert.False(TestAdapters.Source().IsTracked(Registered));
+        Assert.False(TestAdapters.Source().IsSourceMod(Registered));
     }
 
     [Fact]
-    public void IsTracked_PluginTheGameProvides_IsFalse()
+    public void IsSourceMod_PluginTheGameProvides_IsFalse()
     {
-        Assert.False(TestAdapters.Source().IsTracked(Registered with { Provider = PluginProvider.Game }));
+        Assert.False(TestAdapters.Source().IsSourceMod(Registered with { Provider = PluginProvider.Game }));
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
     {
         CommitOnMain();
 
-        Assert.True(TestAdapters.Source().IsTracked(Registered));
+        Assert.True(TestAdapters.Source().IsSourceMod(Registered));
         Assert.False(TestAdapters.Source().SourceReads(Registered));
     }
 

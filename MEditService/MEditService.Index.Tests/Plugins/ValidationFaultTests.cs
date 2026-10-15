@@ -13,7 +13,7 @@ public sealed class ValidationFaultTests : IDisposable
     private const string PluginName = "Untracked.esp";
 
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("validation-fault")
-        .WithPlugin(PluginName, mod => mod.Npcs.AddNew("UntrackedNpc"), origin: "UntrackedMod")
+        .WithPlugin(PluginName, mod => mod.Npcs.AddNew("UntrackedNpc"), origin: "NonSourceMod")
         .BuildScattered();
     private readonly LoadOrderHolder _holder = new();
     private readonly List<LogEntry> _log = [];

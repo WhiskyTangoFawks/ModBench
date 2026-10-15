@@ -162,13 +162,13 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
             referenced = npc.FormKey;
         });
 
-        var before = TrackedTree.DocumentCarrying(referencer.ModFolder, referencer.Plugin, "ReferencerRef").Body;
+        var before = SourceModTree.DocumentCarrying(referencer.ModFolder, referencer.Plugin, "ReferencerRef").Body;
         Assert.Contains(referenced.ToString(), before, StringComparison.Ordinal);
 
         var result = referencer.EditHandler.SetFormId(referencer.Plugin, referenced.ToString(), $"000F00:{pluginName}");
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(before, TrackedTree.DocumentCarrying(referencer.ModFolder, referencer.Plugin, "ReferencerRef").Body);
+        Assert.Equal(before, SourceModTree.DocumentCarrying(referencer.ModFolder, referencer.Plugin, "ReferencerRef").Body);
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
             m.Cells.Records.Add(block);
             enabler = first.FormKey;
         });
-        var before = TrackedTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "EnablerRef").Body;
+        var before = SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "EnablerRef").Body;
         var formKeyLine = $"\"FormKey\": \"{enabler}\"";
         Assert.Contains(formKeyLine, before, StringComparison.Ordinal);
         Assert.Contains($"\"Reference\": \"{enabler}\"", before, StringComparison.Ordinal);
@@ -205,7 +205,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             before.Replace(formKeyLine, $"\"FormKey\": \"{result.NewFormKey.Require()}\"", StringComparison.Ordinal),
-            TrackedTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "EnablerRef").Body);
+            SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "EnablerRef").Body);
     }
 
     [Fact]

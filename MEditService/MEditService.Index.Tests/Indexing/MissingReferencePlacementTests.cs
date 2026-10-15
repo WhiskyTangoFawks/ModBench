@@ -9,7 +9,7 @@ namespace MEditService.Index.Tests.Indexing;
 public sealed class MissingReferencePlacementTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("missing-ref-placement")
-        .WithPlugin("Tracked.esp", mod => mod.Npcs.AddNew("Referrer").Race.SetTo(FormKey.Factory("000ABC:Absent.esp")), origin: "TrackedMod")
+        .WithPlugin("Tracked.esp", mod => mod.Npcs.AddNew("Referrer").Race.SetTo(FormKey.Factory("000ABC:Absent.esp")), origin: "SourceMod")
         .BuildScattered()
         .Tracked();
 

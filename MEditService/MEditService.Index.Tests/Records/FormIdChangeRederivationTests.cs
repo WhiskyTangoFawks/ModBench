@@ -33,7 +33,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
 
     private void ChangeFormIdWithATwoSidedPutAndRemoveThenNextSnapshot(string oldFormKey, string newFormKey, string newBody)
     {
-        var repository = TrackedMods.RepositoryOf(_mod.Entry);
+        var repository = SourceMods.RepositoryOf(_mod.Entry);
         var current = Index.DocumentOf(oldFormKey, _mod.Plugin);
         repository.Put(_mod.Plugin, new SourceDocument(newFormKey, current.RecordType, current.EditorId, newBody)).Wrote();
         repository.Remove(_mod.Plugin, new RecordIdentity(oldFormKey, current.RecordType, current.EditorId)).Wrote();
@@ -85,7 +85,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         var document = Index.DocumentOf(cellKey, _mod.Plugin);
         var newBody = Index.BodyOf(cellKey, _mod.Plugin).Replace(oldNavmeshKey, newNavmeshKey, StringComparison.Ordinal);
 
-        TrackedMods.RepositoryOf(_mod.Entry).Put(_mod.Plugin, new SourceDocument(cellKey, document.RecordType, document.EditorId, newBody)).Wrote();
+        SourceMods.RepositoryOf(_mod.Entry).Put(_mod.Plugin, new SourceDocument(cellKey, document.RecordType, document.EditorId, newBody)).Wrote();
 
         Assert.True(HoldsNavmesh(cellKey, oldNavmeshKey));
         Assert.False(HoldsNavmesh(cellKey, newNavmeshKey));
@@ -94,7 +94,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
     private static void RekeyTheWorldspace(OneExteriorCellWorldspaceFixture fixture, string newWorldspaceKey)
     {
         var current = fixture.Index.DocumentOf(fixture.Worldspace, fixture.Plugin);
-        var repository = TrackedMods.RepositoryOf(fixture.Entry);
+        var repository = SourceMods.RepositoryOf(fixture.Entry);
         var identity = new RecordIdentity(fixture.Worldspace, current.RecordType, current.EditorId);
         repository.SaveChanges(repository.ChangesToRekey(fixture.Plugin, identity, newWorldspaceKey)).Wrote();
     }
