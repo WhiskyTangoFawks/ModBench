@@ -23,7 +23,7 @@ class SelectGates(unittest.TestCase):
         ])
 
     def test_scripts_and_the_fixture_instance_their_harness_loads_select_scripts(self):
-        self.assertEqual(selected('scripts/medit/__init__.py'), ['--scripts scripts/medit/__init__.py'])
+        self.assertEqual(selected('scripts/medit.py'), ['--scripts scripts/medit.py'])
         self.assertEqual(selected('DevList/profiles/Dev/plugins.txt'), ['--scripts DevList/profiles/Dev/plugins.txt'])
 
     def test_another_fixture_instance_selects_nothing(self):
