@@ -4,10 +4,23 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass
+from typing import NamedTuple
 
 
 class MEditError(Exception):
     pass
+
+
+class Plugin(NamedTuple):
+    name: str
+    origin: str
+
+
+@dataclass(frozen=True)
+class RecordName:
+    form_key: str
+    editor_id: str | None
 
 
 def select(sql):
@@ -18,12 +31,14 @@ def select(sql):
 def resolve(*names):
     """What each name means: a plugin file name, or a record's EditorID or FormKey; (name, origin) picks a plugin."""
     queries = [{'name': name} if isinstance(name, str) else {'name': name[0], 'origin': name[1]} for name in names]
-    return [_resolved(named) for named in _call('POST', '/names/resolve', {'names': queries})['named']]
+    return [_named(named) for named in _call('POST', '/names/resolve', {'names': queries})['named']]
 
 
-def _resolved(named):
-    plugin = named['plugin'] or {'name': None, 'origin': None}
-    return {'plugin': plugin['name'], 'origin': plugin['origin'], 'form_key': named['formKey'], 'editor_id': named['editorId']}
+def _named(named):
+    plugin = named['plugin']
+    if plugin is None:
+        return RecordName(named['formKey'], named['editorId'])
+    return Plugin(plugin['name'], plugin['origin'])
 
 
 def read(plugin, form_key):
@@ -81,9 +96,9 @@ def delete(plugin, form_key):
 
 def _plugin(plugin):
     [named] = resolve(plugin)
-    if named['plugin'] is None:
+    if not isinstance(named, Plugin):
         raise MEditError(f'{plugin} is not a plugin.')
-    return named['plugin'], named['origin']
+    return named
 
 
 _FIELD_PATH = re.compile(r'[^.\[\]]+(\[\d+\])*(\.[^.\[\]]+(\[\d+\])*)*')

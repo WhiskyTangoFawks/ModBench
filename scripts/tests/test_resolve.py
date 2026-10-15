@@ -19,19 +19,19 @@ class ResolveAgainstTheFixtureInstance(unittest.TestCase):
     def test_names_a_plugin_by_its_file_name_with_its_origin(self):
         with window_of(self.url):
             [light] = medit.resolve('MBDevLight.esl')
-        self.assertEqual(light, {'plugin': 'MBDevLight.esl', 'origin': 'MB-DEV Light', 'form_key': None, 'editor_id': None})
+        self.assertEqual(light, medit.Plugin('MBDevLight.esl', 'MB-DEV Light'))
 
     def test_names_a_record_by_its_editor_id_or_form_key_and_several_names_in_one_call(self):
         with window_of(self.url):
             by_editor_id, by_form_key = medit.resolve('10mmFromA', '004822:Fallout4.esm')
-        record = {'plugin': None, 'origin': None, 'form_key': '004822:Fallout4.esm', 'editor_id': '10mmFromA'}
+        record = medit.RecordName('004822:Fallout4.esm', '10mmFromA')
         self.assertEqual(by_editor_id, record)
         self.assertEqual(by_form_key, record)
 
     def test_picks_a_plugin_by_the_origin_given_with_its_name(self):
         with window_of(self.url):
             [light] = medit.resolve(('MBDevLight.esl', 'MB-DEV Light'))
-        self.assertEqual(light['origin'], 'MB-DEV Light')
+        self.assertEqual(light.origin, 'MB-DEV Light')
 
     def test_raises_for_a_plugin_that_is_not_in_the_origin_given(self):
         with window_of(self.url), self.assertRaises(medit.MEditError) as raised:
