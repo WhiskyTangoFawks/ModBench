@@ -33,7 +33,7 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
         {
             read = repository.Files(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
             var builder = new ManifestBuilder(mod.InstallationFiles.Select(file => (repository.InstallationFileName(file.Path), file)), instance.GameFiles);
-            manifest = builder.Manifest([.. read.Files.Select(file => new ManifestFile(file.Path, builder.ProviderOf(file)))]);
+            manifest = builder.Manifest([.. read.Files.Select(file => new ManifestFile(file.Path, builder.ProviderOf(file)))], mod.Version);
         }
         catch (DirectoryNotFoundException)
         {

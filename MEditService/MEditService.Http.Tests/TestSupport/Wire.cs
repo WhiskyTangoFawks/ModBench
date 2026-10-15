@@ -87,7 +87,7 @@ internal static class Wire
     /// <summary>Each mod by name and folder, with the source folder its load order sent, no installation file and MO2's
     /// meta.ini committed, under MO2's suffix for an excluded file.</summary>
     internal static Task<HttpResponseMessage> Build(
-        this HttpClient client, IEnumerable<(string Name, string Folder)> mods, string statCache, object? archives = null) =>
+        this HttpClient client, IEnumerable<(string Name, string Folder)> mods, string statCache, object? archives = null, string? version = null) =>
         client.PostAsJsonAsync("/build", new
         {
             mods = mods.Select(mod => new
@@ -97,6 +97,7 @@ internal static class Wire
                 folder = mod.Folder,
                 installationFiles = Array.Empty<object>(),
                 committedFiles = new[] { "meta.ini" },
+                version,
             }),
             excludedSuffix = ".mohidden",
             archives,

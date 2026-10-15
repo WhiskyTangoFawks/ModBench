@@ -1328,8 +1328,43 @@ describe('the MO2 Instance adapter', () => {
 
         expect(answer).toEqual({
           kind: 'read',
-          answer: [{ path: join(root, 'downloads', DOWNLOAD), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: ENTRY, hash: 'q7ZLRnu1+Os=' }] }],
+          answer: [{ path: join(root, 'downloads', DOWNLOAD), source: 'nexus:Fallout4:4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: ENTRY, hash: 'q7ZLRnu1+Os=' }] }],
         });
+      });
+
+      describe('where the mod manager says the file comes from', () => {
+        const recording = (general: string, installedFiles = ''): Promise<void> =>
+          writeFile(join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\n${general}installationFile=${DOWNLOAD}\r\n${installedFiles}`);
+        const sourceOf = async (): Promise<string | undefined> => {
+          const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
+          return answer.kind === 'read' ? answer.answer[0]?.source : undefined;
+        };
+
+        it('names the game, the Nexus mod and each Nexus file installed', async () => {
+          await recording(
+            'gameName=Fallout4\r\nmodid=4598\r\n', '\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\n2\\modid=4598\r\n2\\fileid=78\r\nsize=2\r\n',
+          );
+
+          expect(await sourceOf()).toBe('nexus:Fallout4:4598:77,4598:78');
+        });
+
+        it('names the game and the Nexus mod when no file id is recorded', async () => {
+          await recording('gameName=Fallout4\r\nmodid=4598\r\n');
+
+          expect(await sourceOf()).toBe('nexus:Fallout4:4598');
+        });
+
+        it('names nothing when the metadata holds no Nexus mod', async () => {
+          await recording('gameName=Fallout4\r\n');
+
+          expect(await sourceOf()).toBeUndefined();
+        });
+      });
+
+      it('answers the version the metadata says the mod is, and none when it says none', async () => {
+        expect(await adapter.modVersion('Unofficial Fallout 4 Patch')).toBe('2.1.5.0');
+        expect(await adapter.modVersion('ENBoost - 12k')).toBeUndefined();
+        expect(await adapter.modVersion('A mod with no folder')).toBeUndefined();
       });
 
       describe('installed from a file outside the downloads folder, which MO2 records by its whole path', () => {

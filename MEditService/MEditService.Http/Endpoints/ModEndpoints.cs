@@ -125,7 +125,7 @@ internal static class ModEndpoints
             buildHandler.BuildAsync(
                 [.. mods.Select(mod => new ModToBuild(
                     mod.Name, mod.SourceFolder, mod.Folder, [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())],
-                    mod.CommittedFiles ?? []))],
+                    mod.CommittedFiles ?? [], mod.Version))],
                 new InstanceToBuild(req.ExcludedSuffix, variants, req.StatCache)),
             EndpointMapping.Refusal,
             landed => new BuiltModResponse(
@@ -151,7 +151,8 @@ internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string 
 /// <summary>A mod by name, the source folder whose build configuration names it, its folder, its installation files in
 /// the mod manager's order, and its files the repository commits, which its manifest does not name.</summary>
 internal sealed record BuildModRequest(
-    string Name, string SourceFolder, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles);
+    string Name, string SourceFolder, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles,
+    string? Version);
 
 /// <summary>The variant an archive of textures packs as, and the one every other archive packs as.</summary>
 internal sealed record ArchiveVariantsRequest(ArchiveVariantRequest General, ArchiveVariantRequest Textures)

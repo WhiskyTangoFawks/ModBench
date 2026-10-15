@@ -112,6 +112,16 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
+    public async Task TheModsVersion_IsInItsManifest()
+    {
+        _folders.WithFile(Mod, "a.txt", "hello");
+
+        await Landed(ModFrom("Mod") with { Version = "1.2.3" });
+
+        Assert.Equal("1.2.3", _folders.Manifests[Mod].Version);
+    }
+
+    [Fact]
     public async Task AFileAnotherInstallationFileHoldsUnderAnotherPath_NamesThatFileAndPath()
     {
         _folders.WithFile(Mod, "a.nif", "hello");

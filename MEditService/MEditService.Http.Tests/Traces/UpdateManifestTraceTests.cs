@@ -59,7 +59,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
         var gameFile = new JsonObject { ["path"] = "Game.esm", ["size"] = 7, ["hash"] = HashOfVanilla };
         var whole = new JsonObject
         {
-            ["mods"] = new JsonArray(new JsonObject { ["name"] = Mod, ["folder"] = ModFolder, ["installationFiles"] = new JsonArray(installationFile) }),
+            ["mods"] = new JsonArray(new JsonObject { ["name"] = Mod, ["folder"] = ModFolder, ["version"] = "1.2.3", ["installationFiles"] = new JsonArray(installationFile) }),
             ["gameFiles"] = new JsonArray(gameFile),
             ["statCache"] = Path.Combine(_instance, "stat-cache"),
             ["gesture"] = Gesture,
@@ -115,13 +115,14 @@ public sealed class UpdateManifestTraceTests : HostedTests
         Assert.Equal(["edited.txt"], updated.GetProperty("noProvider").EnumerateArray().Select(path => path.GetString()));
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
         var manifest = File.ReadAllLines(Path.Combine(ModFolder, Mod + ".manifest"));
-        Assert.Equal($"{{\"installationFile\":\"Mod.zip\",\"size\":7,\"hash\":\"{HashOfTheZip}\",\"source\":\"nexus:1:2\"}}", manifest[0]);
-        Assert.Equal($"{{\"gameFile\":\"Game.esm\",\"size\":7,\"hash\":\"{HashOfVanilla}\"}}", manifest[1]);
+        Assert.Equal("{\"version\":\"1.2.3\"}", manifest[0]);
+        Assert.Equal($"{{\"installationFile\":\"Mod.zip\",\"size\":7,\"hash\":\"{HashOfTheZip}\",\"source\":\"nexus:1:2\"}}", manifest[1]);
+        Assert.Equal($"{{\"gameFile\":\"Game.esm\",\"size\":7,\"hash\":\"{HashOfVanilla}\"}}", manifest[2]);
         Assert.Equal(
             ["Game.esm", "edited.txt", "kept.txt"],
-            manifest.Skip(2).Select(line => JsonDocument.Parse(line).RootElement.GetProperty("path").GetString()));
-        Assert.Equal(JsonValueKind.Null, JsonDocument.Parse(manifest[3]).RootElement.GetProperty("from").ValueKind);
-        Assert.All(manifest.Skip(2), line => Assert.False(JsonDocument.Parse(line).RootElement.TryGetProperty("hash", out _)));
+            manifest.Skip(3).Select(line => JsonDocument.Parse(line).RootElement.GetProperty("path").GetString()));
+        Assert.Equal(JsonValueKind.Null, JsonDocument.Parse(manifest[4]).RootElement.GetProperty("from").ValueKind);
+        Assert.All(manifest.Skip(3), line => Assert.False(JsonDocument.Parse(line).RootElement.TryGetProperty("hash", out _)));
         var progress = await stream.EventsUntil("update-manifest-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
         Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Mod);
         Assert.All(progress, e => Assert.Equal(Gesture, e.GetProperty("modlistProgress").GetProperty("gesture").GetString()));

@@ -83,6 +83,7 @@ describe('modlistSourceCommands update manifest', () => {
   it('hands mEdit each mod with its folder, its installation files, the files the repository commits itself and whether it is a source mod, the game files its files override, and the stat cache\'s folder', async () => {
     const { commands, client } = commandsOver({
       installations: new Map([['ModA', recording([INSTALLED])]]), gameFiles: [VANILLA, { path: 'Other.esm', size: 1, hash: 'O' }],
+      versions: new Map([['ModA', '1.2.3']]),
     }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.ESM')], ModB: [fileIn('/mods/ModB', 'a.nif')] });
     client.setCommandResult('updateManifest', UPDATED);
 
@@ -92,7 +93,7 @@ describe('modlistSourceCommands update manifest', () => {
       method: 'updateManifest',
       args: [
         [
-          { name: 'ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], committedFiles: ['meta.ini'], isSourceMod: false },
+          { name: 'ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], committedFiles: ['meta.ini'], isSourceMod: false, version: '1.2.3' },
           { name: 'ModB', folder: '/mods/ModB', installationFiles: [], committedFiles: ['meta.ini'], isSourceMod: true },
         ],
         { gameFiles: [VANILLA], statCache: '/instance/stat-cache' },

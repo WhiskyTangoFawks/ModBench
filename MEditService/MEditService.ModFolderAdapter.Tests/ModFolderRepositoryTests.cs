@@ -432,6 +432,26 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void AManifestsVersion_IsItsFirstLine_AndIsReadBack()
+    {
+        var manifest = new Manifest([new ManifestSource("Mod.7z", 100, "AAAA")], [], [new ManifestFile("a.nif", new FileProvider.FirstInstallationFile())], "1.2.3");
+
+        _repository.WriteManifest(_root, "mod", manifest);
+
+        Assert.StartsWith("{\"version\":\"1.2.3\"}\n{\"installationFile\"", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+        Assert.Equal("1.2.3", _repository.ReadManifest(_root, "mod")?.Version);
+    }
+
+    [Fact]
+    public void AManifestWithoutAVersion_WritesNoVersionLine()
+    {
+        _repository.WriteManifest(_root, "mod", new Manifest([], [], [new ManifestFile("a.nif", new FileProvider.NoProvider())]));
+
+        Assert.DoesNotContain("version", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+        Assert.Null(_repository.ReadManifest(_root, "mod")?.Version);
+    }
+
+    [Fact]
     public void ReadManifest_OfAModWithNone_IsNull()
     {
         Write("a.txt", "abc");

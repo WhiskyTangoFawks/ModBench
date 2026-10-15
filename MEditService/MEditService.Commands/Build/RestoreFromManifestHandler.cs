@@ -35,7 +35,7 @@ public sealed class RestoreFromManifestHandler(
 
         var resolved = new ManifestSources(repository, manifest, mod.InstallationFiles, instance.GameFiles).Resolve();
         if (resolved.Lacks.Count > 0) return Lacked(mod, resolved.Lacks);
-        if (resolved.Built is { } built) return await RebuildAsync(mod, instance, built, cancel);
+        if (resolved.Built is { } built) return await RebuildAsync(mod, instance, built, manifest.Version, cancel);
 
         IReadOnlyList<string> namedByNoLine;
         ModFolderFiles read;
@@ -74,7 +74,7 @@ public sealed class RestoreFromManifestHandler(
     // modlist-source.md, Restore from manifest, stories 3 and 5: what the build makes comes back as the build makes it,
     // and only at the commit the manifest names.
     private async Task<ItemAnswer<RestoreSkip, RestoredMod>> RebuildAsync(
-        ModToRestore mod, InstanceToRestore instance, SharedSource built, CancellationToken cancel)
+        ModToRestore mod, InstanceToRestore instance, SharedSource built, string? version, CancellationToken cancel)
     {
         if (mod.SourceFolder is not { } sourceFolder) return Skipped(mod, RestoreRefusal.SourceUnavailable, "its name gives it no source folder");
         if (!source.CommitAtHead(sourceFolder, built, cancel).Holds(out var head, out var failure))
@@ -94,7 +94,7 @@ public sealed class RestoreFromManifestHandler(
         }
 
         var answer = await build.BuildOneAsync(
-            new ModToBuild(mod.Name, sourceFolder, mod.Folder, mod.InstallationFiles, mod.CommittedFiles),
+            new ModToBuild(mod.Name, sourceFolder, mod.Folder, mod.InstallationFiles, mod.CommittedFiles, version),
             new InstanceToBuild(instance.ExcludedSuffix, instance.Archives, instance.StatCache));
         if (answer is ItemAnswer<BuildRefusal, BuiltMod>.Refusing refusing)
             return ItemAnswer<RestoreSkip, RestoredMod>.Refused(new RestoreSkip(RestoreRefusal.NotBuilt, [], refusing.Refusal), refusing.Message);

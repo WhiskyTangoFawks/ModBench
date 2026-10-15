@@ -11,7 +11,7 @@ export type DecompileAndCommitProgress = InitStatus | { readonly mod: string; re
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'init'>;
   adapter: Pick<InstanceAdapter,
-    'installationFiles' | 'managerFilesInModFolder' | 'sourceFolder' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder'>;
+    'installationFiles' | 'modVersion' | 'managerFilesInModFolder' | 'sourceFolder' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder'>;
 }
 
 /** The source mod gestures, bound to the mEdit client and handing it the instance's facts. */
@@ -31,7 +31,12 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
         if (sourceFolder === undefined) refused.push({ item: mod, reason: 'no repository in the source folder builds it' });
         else if (folder === undefined) refused.push({ item: mod, reason: 'its name gives it no folder' });
         else if (installed.kind === 'unreadable') refused.push({ item: mod, reason: installed.reason });
-        else sent.push({ name: mod, sourceFolder, folder, installationFiles: installed.answer.map(onTheWire), committedFiles: [...adapter.managerFilesInModFolder] });
+        else {
+          sent.push({
+            name: mod, sourceFolder, folder, installationFiles: installed.answer.map(onTheWire), committedFiles: [...adapter.managerFilesInModFolder],
+            version: await adapter.modVersion(mod),
+          });
+        }
       }
       if (sent.length === 0) return { landed: [], refused };
       const outcome = await client.build(

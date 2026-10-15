@@ -50,6 +50,7 @@ export function parseMetaIni(text: string): ModMeta {
   const present = (key: string): string | undefined => general.get(key) || undefined; // blank == absent
   const modid = present('modid');
   return {
+    gameName: present('gameName'),
     version: present('version'),
     nexusId: modid && modid !== '0' ? modid : undefined,
     archiveFilename: present('installationFile'),

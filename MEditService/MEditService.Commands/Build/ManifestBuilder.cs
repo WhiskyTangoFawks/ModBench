@@ -23,7 +23,7 @@ internal sealed class ManifestBuilder
         ];
     }
 
-    public Manifest Manifest(IReadOnlyList<ManifestFile> files) => new(
+    public Manifest Manifest(IReadOnlyList<ManifestFile> files, string? version) => new(
         [.. _installationFiles.Select(file => new ManifestSource(file.Name, file.File.Size, file.File.Hash, file.File.Source))],
         [
             .. files.Select(file => file.Provider).OfType<FileProvider.GameFile>()
@@ -32,7 +32,8 @@ internal sealed class ManifestBuilder
                 .Select(path => _gameFiles[path])
                 .Select(game => new ManifestSource(game.Path, game.Size, game.Hash)),
         ],
-        files);
+        files,
+        version);
 
     public FileProvider ProviderOf(HashedFile file)
     {

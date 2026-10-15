@@ -134,7 +134,7 @@ public sealed class BuildHandler
             var builder = new ManifestBuilder(mod.InstallationFiles.Select(file => (_modFolders.InstallationFileName(file.Path), file)), []);
             var files = read.Files.Where(file => made.ContainsKey(file.Path)).ToList();
             var manifest = builder.Manifest([.. files.Select(file => new ManifestFile(file.Path,
-                made[file.Path].FromSource && shared is { } source ? new FileProvider.Source(source.Remote, source.Commit) : builder.ProviderOf(file)))]);
+                made[file.Path].FromSource && shared is { } source ? new FileProvider.Source(source.Remote, source.Commit) : builder.ProviderOf(file)))], mod.Version);
             _modFolders.WriteManifest(mod.Folder, mod.Name, manifest);
             // A stat cache that cannot be written leaves each file to be read again, and the mod's status says why.
             _ = _modFolders.KeepInStatCache(

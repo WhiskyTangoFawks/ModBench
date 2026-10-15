@@ -3,9 +3,11 @@ using System.Text.Json.Serialization;
 namespace MEditService.Commands.Build;
 
 /// <summary>A mod to update the manifest of, with its installation files in the mod manager's order, its files the
-/// repository commits, which no line names, and whether it is a source mod, whose build writes its manifest.</summary>
+/// repository commits, which no line names, whether it is a source mod, whose build writes its manifest, and its version
+/// as the mod manager's metadata says.</summary>
 public sealed record ModToUpdate(
-    string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> CommittedFiles, bool IsSourceMod);
+    string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> CommittedFiles, bool IsSourceMod,
+    string? Version = null);
 
 /// <summary>The instance's facts beyond its mods: the game files the mods' files override, and the folder of the stat
 /// cache.</summary>

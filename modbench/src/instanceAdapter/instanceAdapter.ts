@@ -55,6 +55,7 @@ export interface InstalledFileId {
 
 /** What a mod's metadata says; a field is undefined when absent or empty. */
 export interface ModMeta {
+  gameName?: string;
   version?: string;
   nexusId?: string;
   archiveFilename?: string;
@@ -322,6 +323,8 @@ export interface HashedDownload extends HashedFile {
 /** A downloaded file the mod manager records a mod as installed from, with its hashes. */
 export interface InstallationFile extends HashedDownload {
   readonly path: string;
+  /** Where the mod manager's metadata says the file comes from, as one line of text. */
+  readonly source?: string;
 }
 
 /** How a message names the mod manager, the file it keeps mod order in, and the file it keeps beside a downloaded file. */
@@ -382,6 +385,8 @@ export interface InstanceAdapter {
   sourceFolder(mod: string): string | undefined;
   /** The downloaded files the mod manager records `mod` as installed from, in its order. */
   installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
+  /** The version the mod manager's metadata gives `mod`; undefined when it gives none. */
+  modVersion(mod: string): Promise<string | undefined>;
   /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
   readonly managerFilesInModFolder: readonly string[];
   /** The folder in the instance, outside every mod folder, where mEdit keeps what it last read of each mod's files

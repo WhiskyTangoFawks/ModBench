@@ -55,11 +55,12 @@ public sealed class BuildModTraceTests : HostedTests
         File.AppendAllText(Path.Combine(_builtFolder, Plugin), "changed outside Modbench");
         using var stream = await Client.NotificationStream();
 
-        var answer = await Answer(await Client.Build([(Origin, _builtFolder)], StatCache));
+        var answer = await Answer(await Client.Build([(Origin, _builtFolder)], StatCache, version: "1.2.3"));
 
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
         var built = Assert.Single(answer.GetProperty("applied").EnumerateArray());
         Assert.Equal(Origin, built.GetProperty("mod").GetString());
+        Assert.Equal("{\"version\":\"1.2.3\"}", File.ReadLines(Path.Combine(_builtFolder, $"{Origin}.manifest")).First());
         Assert.Empty(built.GetProperty("refused").EnumerateArray());
         Assert.Equal(
             [SecondPlugin, Plugin],

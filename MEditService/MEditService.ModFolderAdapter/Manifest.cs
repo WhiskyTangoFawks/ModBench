@@ -1,11 +1,13 @@
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>What a mod's manifest says: the installation files and game files its files come from, then each
-/// file's provider. A source's hash is the Instance adapter's text, kept as written (ADR-0013).</summary>
+/// file's provider. A source's hash is the Instance adapter's text, kept as written (ADR-0013). Version is the mod's, as
+/// its metadata says, or null.</summary>
 public sealed record Manifest(
     IReadOnlyList<ManifestSource> InstallationFiles,
     IReadOnlyList<ManifestSource> GameFiles,
-    IReadOnlyList<ManifestFile> Files)
+    IReadOnlyList<ManifestFile> Files,
+    string? Version = null)
 {
     /// <summary>The provider of <paramref name="file"/>, by its source's hash, or the commit its source builds at, and the
     /// path in it: what fixes the file's bytes. Null when the line names none.</summary>

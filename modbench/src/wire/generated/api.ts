@@ -1025,6 +1025,7 @@ export interface components {
             folder: string;
             installationFiles: components["schemas"]["InstallationFileRequest"][];
             committedFiles: string[];
+            version?: string | null;
         };
         BuildProgress: {
             mod?: string | null;
@@ -1821,6 +1822,7 @@ export interface components {
             installationFiles: components["schemas"]["InstallationFileRequest"][];
             committedFiles: string[];
             isSourceMod: boolean;
+            version?: string | null;
         };
         /** @enum {string} */
         UpdateManifestRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "NotWritten" | "LeftToItsBuild";

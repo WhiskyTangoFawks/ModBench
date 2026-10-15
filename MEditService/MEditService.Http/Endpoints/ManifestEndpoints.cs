@@ -75,7 +75,7 @@ internal static class ManifestEndpoints
         using var running = cancels.Run(req.Gesture, aborted);
         var result = await handler.UpdateManifestAsync(
             [.. mods.Select(mod => new ModToUpdate(
-                mod.Name, mod.Folder, InstallationFilesOf(mod.InstallationFiles), mod.CommittedFiles ?? [], mod.IsSourceMod))],
+                mod.Name, mod.Folder, InstallationFilesOf(mod.InstallationFiles), mod.CommittedFiles ?? [], mod.IsSourceMod, mod.Version))],
             new InstanceToUpdate(GameFilesOf(req.GameFiles), req.StatCache), req.Gesture, running.Token);
 
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
@@ -186,9 +186,9 @@ internal interface IModRequest
     IReadOnlyList<InstallationFileRequest> InstallationFiles { get; }
 }
 
-/// <summary>A mod, and whether it is a source mod, whose build writes its manifest.</summary>
+/// <summary>A mod, whether it is a source mod, whose build writes its manifest, and its version as its metadata says.</summary>
 internal sealed record UpdateManifestModRequest(
-    string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles, bool IsSourceMod)
+    string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles, bool IsSourceMod, string? Version)
     : IModRequest;
 
 /// <summary>A game file by its forward-slash path under the game's data folder.</summary>
