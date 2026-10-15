@@ -72,7 +72,7 @@ internal static class Wire
                 name,
                 sourceFolder = client.SourceFolderSentFor(name),
                 installationFiles = Array.Empty<object>(),
-                modManagerFiles = Array.Empty<string>(),
+                metadataFiles = Array.Empty<string>(),
             }),
         });
 
@@ -96,7 +96,7 @@ internal static class Wire
                 sourceFolder = client.SourceFolderSentFor(mod.Name),
                 folder = mod.Folder,
                 installationFiles = Array.Empty<object>(),
-                committedFiles = new[] { "meta.ini" },
+                metadataFiles = new[] { "meta.ini" },
                 version,
             }),
             excludedSuffix = ".mohidden",

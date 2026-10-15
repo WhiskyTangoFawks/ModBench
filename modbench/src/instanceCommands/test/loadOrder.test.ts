@@ -15,7 +15,7 @@ const SENT_ACTIVE = [{ name: 'Master.esm', origin: 'Base Mod' }, { name: PLUGIN.
 const SENT_LOADED_WITH_NO_LINE = [{ name: 'Master.esm', origin: 'Base Mod' }];
 const SENT_ARCHIVES = [{ path: '/game/Data/Master - Main.ba2', stamp: '1/2/3' }];
 const SENT_STRINGS_FILES = [{ path: '/instance/mods/TestMod/Strings/TestMod_en.STRINGS', stamp: '4/5/6' }];
-const SENT_MODS = [{ name: 'TestMod', folder: '/instance/mods/TestMod', committedFiles: ['meta.ini'] }];
+const SENT_MODS = [{ name: 'TestMod', folder: '/instance/mods/TestMod', metadataFiles: ['meta.ini'] }];
 
 const VALUE: LoadOrderSource = {
   gameName: 'Fallout 4',

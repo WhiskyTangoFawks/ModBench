@@ -11,7 +11,7 @@ export type DecompileAndCommitProgress = InitStatus | { readonly mod: string; re
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'init'>;
   adapter: Pick<InstanceAdapter,
-    'installationFiles' | 'modMetadata' | 'managerFilesInModFolder' | 'sourceFolder' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder'>;
+    'installationFiles' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder'>;
 }
 
 export const metadataUnreadable = (reason: string): string => `its metadata could not be read: ${reason}`;
@@ -37,7 +37,7 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
         else if (metadata.kind === 'unreadable') refused.push({ item: mod, reason: metadataUnreadable(metadata.reason) });
         else {
           sent.push({
-            name: mod, sourceFolder, folder, installationFiles: installed.answer.map(onTheWire), committedFiles: [...adapter.managerFilesInModFolder],
+            name: mod, sourceFolder, folder, installationFiles: installed.answer.map(onTheWire), metadataFiles: [...adapter.metadataFilesInModFolder],
             version: metadata.answer.version,
           });
         }
@@ -66,7 +66,7 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
             name: mod,
             sourceFolder,
             installationFiles: installed.answer.map(onTheWire),
-            modManagerFiles: [...adapter.managerFilesInModFolder],
+            metadataFiles: [...adapter.metadataFilesInModFolder],
           });
         }
       }

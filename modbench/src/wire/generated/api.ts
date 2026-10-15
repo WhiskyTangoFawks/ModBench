@@ -1024,7 +1024,7 @@ export interface components {
             sourceFolder: string;
             folder: string;
             installationFiles: components["schemas"]["InstallationFileRequest"][];
-            committedFiles: string[];
+            metadataFiles: string[];
             version?: string | null;
         };
         BuildProgress: {
@@ -1291,7 +1291,7 @@ export interface components {
             name: string;
             sourceFolder: string;
             installationFiles: components["schemas"]["InstallationFileRequest"][];
-            modManagerFiles: string[];
+            metadataFiles: string[];
         };
         /** @enum {string} */
         InitPhase: "Idle" | "Parsing" | "Serializing" | "ReadingFiles" | "Committing";
@@ -1399,7 +1399,7 @@ export interface components {
         ModByFolder: {
             name: string;
             folder: string;
-            committedFiles: string[];
+            metadataFiles: string[];
             metadata?: components["schemas"]["ModMetadata"] | null;
             metadataUnreadable?: string | null;
         };
@@ -1766,7 +1766,7 @@ export interface components {
             name: string;
             folder: string;
             installationFiles: components["schemas"]["InstallationFileRequest"][];
-            committedFiles: string[];
+            metadataFiles: string[];
             sourceFolder?: string | null;
         };
         RestoreFromManifestRequest: {
@@ -1838,7 +1838,7 @@ export interface components {
             name: string;
             folder: string;
             installationFiles: components["schemas"]["InstallationFileRequest"][];
-            committedFiles: string[];
+            metadataFiles: string[];
             isSourceMod: boolean;
             version?: string | null;
         };

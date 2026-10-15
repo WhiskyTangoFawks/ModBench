@@ -31,7 +31,7 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
         ModFolderFiles read;
         try
         {
-            read = repository.Files(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
+            read = repository.Files(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
             var builder = new ManifestBuilder(mod.InstallationFiles.Select(file => (repository.InstallationFileName(file.Path), file)), instance.GameFiles);
             manifest = builder.Manifest([.. read.Files.Select(file => new ManifestFile(file.Path, builder.ProviderOf(file)))], mod.Version);
         }
@@ -77,7 +77,7 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
 
     private ItemAnswer<UpdateManifestRefusal, UpdatedMod> LeftToItsBuild(ModToUpdate mod, InstanceToUpdate instance)
     {
-        var status = repository.Status(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
+        var status = repository.Status(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
         if (status.Unreadable is { } unreadable)
             return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(UpdateManifestRefusal.ModFilesUnreadable, $"'{mod.Name}' was not updated: {unreadable.Why}.");
         if (status.NoManifest)

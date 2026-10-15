@@ -5,7 +5,7 @@ namespace MEditService.Commands.Build;
 /// <summary>A mod to update the manifest of, with its installation files in the mod manager's order, its version, the
 /// files the repository commits, which no line names, and whether its build writes its manifest.</summary>
 public sealed record ModToUpdate(
-    string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> CommittedFiles, bool IsSourceMod,
+    string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> MetadataFiles, bool IsSourceMod,
     string? Version);
 
 /// <summary>The instance's facts beyond its mods: the game files the mods' files override, and the folder of the stat

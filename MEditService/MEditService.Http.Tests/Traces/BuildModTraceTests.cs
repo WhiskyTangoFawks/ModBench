@@ -96,7 +96,7 @@ public sealed class BuildModTraceTests : HostedTests
             {
                 new
                 {
-                    name = Origin, folder = _builtFolder, installationFiles = Array.Empty<object>(), committedFiles = new[] { "meta.ini" },
+                    name = Origin, folder = _builtFolder, installationFiles = Array.Empty<object>(), metadataFiles = new[] { "meta.ini" },
                     sourceFolder = absent,
                 },
             },

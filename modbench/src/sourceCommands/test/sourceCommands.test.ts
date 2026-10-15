@@ -28,8 +28,8 @@ describe('sourceCommands build', () => {
     expect(client.calls).toEqual([{
       method: 'build',
       args: [[
-        { name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], committedFiles: ['meta.ini'], version: '1.2.3' },
-        { name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', installationFiles: [], committedFiles: ['meta.ini'] },
+        { name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], metadataFiles: ['meta.ini'], version: '1.2.3' },
+        { name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', installationFiles: [], metadataFiles: ['meta.ini'] },
       ], { excludedSuffix: '.excluded', archives: { general: ba2, textures: ba2 }, statCache: '/instance/stat-cache' }],
     }]);
   });
@@ -80,8 +80,8 @@ describe('sourceCommands decompileAndCommit', () => {
     expect(client.calls).toEqual([{
       method: 'init',
       args: [[
-        { name: 'ModA', sourceFolder: '/source/ModA', installationFiles: [INSTALLED], modManagerFiles: ['meta.ini'] },
-        { name: 'ModB', sourceFolder: '/source/ModB', installationFiles: [], modManagerFiles: ['meta.ini'] },
+        { name: 'ModA', sourceFolder: '/source/ModA', installationFiles: [INSTALLED], metadataFiles: ['meta.ini'] },
+        { name: 'ModB', sourceFolder: '/source/ModB', installationFiles: [], metadataFiles: ['meta.ini'] },
       ], {}],
     }]);
   });
@@ -93,7 +93,7 @@ describe('sourceCommands decompileAndCommit', () => {
 
     const outcome = await sourceCommands({ client, adapter }).decompileAndCommit(['ModA', 'ModB']);
 
-    expect(client.calls.map((call) => call.args[0])).toEqual([[{ name: 'ModB', sourceFolder: '/source/ModB', installationFiles: [], modManagerFiles: ['meta.ini'] }]]);
+    expect(client.calls.map((call) => call.args[0])).toEqual([[{ name: 'ModB', sourceFolder: '/source/ModB', installationFiles: [], metadataFiles: ['meta.ini'] }]]);
     expect(outcome).toEqual({ landed: [{ mod: 'ModB', plugins: [] }], refused: [{ item: 'ModA', reason: 'its installation file is not indexed' }] });
   });
 

@@ -1316,7 +1316,7 @@ describe('the MO2 Instance adapter', () => {
 
       it('answers no installation file for a mod whose meta records none, and its meta as the mod manager\'s own file', async () => {
         expect(await adapter.installationFiles('DragIn Manual Extract')).toEqual({ kind: 'read', answer: [] });
-        expect(adapter.managerFilesInModFolder).toEqual(['meta.ini']);
+        expect(adapter.metadataFilesInModFolder).toEqual(['meta.ini']);
       });
     });
 

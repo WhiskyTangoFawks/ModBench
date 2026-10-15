@@ -93,8 +93,8 @@ describe('modlistSourceCommands update manifest', () => {
       method: 'updateManifest',
       args: [
         [
-          { name: 'ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], committedFiles: ['meta.ini'], isSourceMod: false, version: '1.2.3' },
-          { name: 'ModB', folder: '/mods/ModB', installationFiles: [], committedFiles: ['meta.ini'], isSourceMod: true },
+          { name: 'ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], metadataFiles: ['meta.ini'], isSourceMod: false, version: '1.2.3' },
+          { name: 'ModB', folder: '/mods/ModB', installationFiles: [], metadataFiles: ['meta.ini'], isSourceMod: true },
         ],
         { gameFiles: [VANILLA], statCache: '/instance/stat-cache' },
         { onProgress: expect.any(Function) as unknown, signal: undefined },
@@ -260,8 +260,8 @@ describe('modlistSourceCommands restore from manifest', () => {
       method: 'restoreFromManifest',
       args: [
         [
-          { name: 'ModA', folder: '/mods/ModA', installationFiles: [], committedFiles: ['meta.ini'], sourceFolder: '/source/ModA' },
-          { name: 'ModB', folder: '/mods/ModB', installationFiles: [], committedFiles: ['meta.ini'], sourceFolder: '/source/Old ModB' },
+          { name: 'ModA', folder: '/mods/ModA', installationFiles: [], metadataFiles: ['meta.ini'], sourceFolder: '/source/ModA' },
+          { name: 'ModB', folder: '/mods/ModB', installationFiles: [], metadataFiles: ['meta.ini'], sourceFolder: '/source/Old ModB' },
         ],
         { gameFiles: [VANILLA], dataFolder: '/game/Data', statCache: '/instance/stat-cache', excludedSuffix: '.excluded', archives: null },
         { onProgress: expect.any(Function) as unknown, signal: undefined },
@@ -540,7 +540,7 @@ describe('modlistSourceCommands what restore destroys', () => {
     const listing = await commands.whatRestoreDestroys(['ModA']);
 
     expect([client.calls, listing]).toEqual([
-      [{ method: 'getWhatRestoreDestroys', args: [[{ name: 'ModA', folder: '/mods/ModA', committedFiles: ['meta.ini'], metadata }], '/instance/stat-cache'] }],
+      [{ method: 'getWhatRestoreDestroys', args: [[{ name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], metadata }], '/instance/stat-cache'] }],
       { destroys: DESTROYS, refused: [{ item: 'ModB', reason: "'ModB' was skipped: a file could not be read" }] },
     ]);
   });
@@ -602,7 +602,7 @@ describe('modlistSourceCommands mod status', () => {
       [{
         method: 'getModStatus',
         args: [[{
-          name: 'ModA', folder: '/mods/ModA', committedFiles: ['meta.ini'],
+          name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'],
           metadata: { version: '1.2.3', installationFiles: [{ name: 'A.7z', source: 'nexus:fallout4:1' }] },
         }], '/instance/stat-cache'],
       }], STATUS,
@@ -617,7 +617,7 @@ describe('modlistSourceCommands mod status', () => {
 
     expect(client.calls).toEqual([{
       method: 'getModStatus',
-      args: [[{ name: 'ModA', folder: '/mods/ModA', committedFiles: ['meta.ini'], metadataUnreadable: 'EACCES' }], '/instance/stat-cache'],
+      args: [[{ name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], metadataUnreadable: 'EACCES' }], '/instance/stat-cache'],
     }]);
   });
 });

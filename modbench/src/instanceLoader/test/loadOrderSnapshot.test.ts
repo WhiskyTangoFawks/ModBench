@@ -350,7 +350,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     gameRelease: 'Fallout4', listed: [], inData: { kind: 'listed', archives: [], stringsFiles: [] }, files: new FileConflictLookup(),
     filesByOrigin: new Map(),
   };
-  const NO_MODLIST = { mods: [], committedFiles: ['meta.ini'], statCache: '/mo2/stat-cache' };
+  const NO_MODLIST = { mods: [], metadataFiles: ['meta.ini'], statCache: '/mo2/stat-cache' };
   const outcomeOf = (plugins: LoadOrderPluginRow[], folders: ModFolders = modFolders) =>
     loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: folders, sourceDirs, modlist: NO_MODLIST, archives: NO_ARCHIVES });
   const snapshotOf = (plugins: LoadOrderPluginRow[], pluginsLoadedWithNoLine: readonly PluginAddress[] = [], archives = NO_ARCHIVES) => {
@@ -598,7 +598,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     });
 
     expect(outcome !== undefined && 'mods' in outcome ? [outcome.mods, outcome.statCache] : []).toEqual([
-      [{ name: 'ModA', folder: '/mo2/mod-folders/ModA', committedFiles: ['meta.ini'] }], '/mo2/stat-cache',
+      [{ name: 'ModA', folder: '/mo2/mod-folders/ModA', metadataFiles: ['meta.ini'] }], '/mo2/stat-cache',
     ]);
   });
 

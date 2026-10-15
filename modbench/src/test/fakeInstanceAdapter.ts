@@ -163,7 +163,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       Promise.resolve({ version, installationFiles: archiveFilename === undefined ? [] : [{ name: archiveFilename }] }),
     unwritableMetadata: (mod) => Promise.resolve(answers.unwritableMetadata?.get(mod)),
     writeModMetadata: (mod, metadata) => record({ verb: 'writeModMetadata', mod, metadata }, undefined),
-    managerFilesInModFolder: ['meta.ini'],
+    metadataFilesInModFolder: ['meta.ini'],
     statCacheFolder: '/instance/stat-cache',
     overriddenGameFiles: (_dataFolder, modFilePaths) => overridden(modFilePaths),
     gameFilesOverriddenBy: async (_dataFolder, mod) => {

@@ -409,8 +409,8 @@ export interface InstanceAdapter {
   /** Sets the version of `mod` and its installation file, in a metadata made when it has none. Changes only a
    *  value that differs, and gives no file another's source. Rejects, writing nothing, when `unwritableMetadata` says why. */
   writeModMetadata(mod: string, metadata: ModMetadata): Promise<void>;
-  /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
-  readonly managerFilesInModFolder: readonly string[];
+  /** The files in every mod's folder where the mod manager keeps its metadata, by path in it, which no build makes. */
+  readonly metadataFilesInModFolder: readonly string[];
   /** The folder in the instance, outside every mod folder, where mEdit keeps what it last read of each mod's files
    *  (modlist-source.md, Status, story 3). The repository never commits it. */
   readonly statCacheFolder: string;

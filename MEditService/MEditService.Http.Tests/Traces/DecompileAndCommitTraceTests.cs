@@ -71,7 +71,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
                             entries = new[] { new { path = "textures/yielded.dds", hash = HashOfHello } },
                         },
                     },
-                    modManagerFiles = new[] { "meta.ini" },
+                    metadataFiles = new[] { "meta.ini" },
                 },
             },
         });
@@ -111,7 +111,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
 
         var response = await Client.PostAsJsonAsync("/init", new
         {
-            mods = new[] { new { name = Origin, installationFiles = Array.Empty<object>(), modManagerFiles = Array.Empty<string>() } },
+            mods = new[] { new { name = Origin, installationFiles = Array.Empty<object>(), metadataFiles = Array.Empty<string>() } },
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -130,7 +130,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
                 {
                     name = Origin,
                     installationFiles = new[] { new { path = "/downloads/Mod.7z", size = 1, entries = Array.Empty<object>() } },
-                    modManagerFiles = new[] { "meta.ini" },
+                    metadataFiles = new[] { "meta.ini" },
                 },
             },
         });
@@ -145,7 +145,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
 
         var response = await Client.PostAsJsonAsync("/init", new
         {
-            mods = new[] { new { name = Origin, installationFiles = Array.Empty<object>(), modManagerFiles = new[] { " " } } },
+            mods = new[] { new { name = Origin, installationFiles = Array.Empty<object>(), metadataFiles = new[] { " " } } },
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

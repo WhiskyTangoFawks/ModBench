@@ -76,7 +76,7 @@ internal static class ManifestEndpoints
         using var running = cancels.Run(req.Gesture, aborted);
         var result = await handler.UpdateManifestAsync(
             [.. mods.Select(mod => new ModToUpdate(
-                mod.Name, mod.Folder, InstallationFilesOf(mod.InstallationFiles), mod.CommittedFiles ?? [], mod.IsSourceMod, mod.Version))],
+                mod.Name, mod.Folder, InstallationFilesOf(mod.InstallationFiles), mod.MetadataFiles ?? [], mod.IsSourceMod, mod.Version))],
             new InstanceToUpdate(GameFilesOf(req.GameFiles), req.StatCache), req.Gesture, running.Token);
 
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
@@ -102,7 +102,7 @@ internal static class ManifestEndpoints
         using var running = cancels.Run(req.Gesture, aborted);
         var result = await handler.RestoreAsync(
             [.. mods.Select(mod => new ModToRestore(
-                mod.Name, mod.Folder, InstallationFilesOf(mod.InstallationFiles), mod.CommittedFiles ?? [], mod.SourceFolder))],
+                mod.Name, mod.Folder, InstallationFilesOf(mod.InstallationFiles), mod.MetadataFiles ?? [], mod.SourceFolder))],
             new InstanceToRestore(GameFilesOf(req.GameFiles), req.DataFolder, req.StatCache, req.ExcludedSuffix, variants), req.Gesture, running.Token);
 
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
@@ -145,7 +145,7 @@ internal static class ManifestEndpoints
     private static IResult? MalformedFolders(ModFoldersRequest req)
     {
         if (req.Mods is not { Count: > 0 } || !ModsByFolder.AreWhole(req.Mods))
-            return Results.Problem("At least one mod is required, and every mod needs a name, a folder and its committed files, and either its metadata or why it is unreadable.", statusCode: 400);
+            return Results.Problem("At least one mod is required, and every mod needs a name, a folder and its metadata files, and either its metadata or why it is unreadable.", statusCode: 400);
         return string.IsNullOrWhiteSpace(req.StatCache) ? Results.Problem("The folder of the stat cache is required.", statusCode: 400) : null;
     }
 
@@ -194,7 +194,7 @@ internal interface IModRequest
 
 /// <summary>A mod, whether it is a source mod, whose build writes its manifest, and its version as its metadata says.</summary>
 internal sealed record UpdateManifestModRequest(
-    string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles, bool IsSourceMod, string? Version)
+    string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> MetadataFiles, bool IsSourceMod, string? Version)
     : IModRequest;
 
 /// <summary>A game file by its forward-slash path under the game's data folder.</summary>
@@ -216,7 +216,7 @@ internal sealed record RestoreFromManifestRequest(
 
 /// <summary>A mod, with the folder its source is in or is cloned into, none when its name gives it none.</summary>
 internal sealed record RestoreFromManifestModRequest(
-    string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles, string? SourceFolder)
+    string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> MetadataFiles, string? SourceFolder)
     : IModRequest;
 
 /// <summary>A mod whose files are as its manifest says: Written each file written, NamedByNoLine each file no line names,
@@ -229,10 +229,10 @@ internal sealed record ModFoldersRequest(IReadOnlyList<ModByFolder> Mods, string
 
 internal static class ModsByFolder
 {
-    /// <summary>Whether a request's mods each name a mod, its folder and its committed files.</summary>
+    /// <summary>Whether a request's mods each name a mod, its folder and its metadata files.</summary>
     internal static bool AreWhole(IReadOnlyList<ModByFolder>? mods) =>
         mods is not null
-        && mods.All(mod => mod is not null && !string.IsNullOrWhiteSpace(mod.Name) && !string.IsNullOrWhiteSpace(mod.Folder) && mod.CommittedFiles is not null
+        && mods.All(mod => mod is not null && !string.IsNullOrWhiteSpace(mod.Name) && !string.IsNullOrWhiteSpace(mod.Folder) && mod.MetadataFiles is not null
             && (mod.Metadata is null || mod.MetadataUnreadable is null));
 }
 

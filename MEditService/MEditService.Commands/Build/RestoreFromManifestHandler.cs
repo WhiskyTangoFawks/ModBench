@@ -41,9 +41,9 @@ public sealed class RestoreFromManifestHandler(
         ModFolderFiles read;
         try
         {
-            var committed = mod.CommittedFiles.ToHashSet(StringComparer.Ordinal);
-            namedByNoLine = repository.NamedByNoLine(mod.Folder, mod.Name, manifest, committed);
-            read = repository.Files(mod.Folder, mod.Name, committed.Union(namedByNoLine).ToHashSet(StringComparer.Ordinal), instance.StatCache);
+            var metadataFiles = mod.MetadataFiles.ToHashSet(StringComparer.Ordinal);
+            namedByNoLine = repository.NamedByNoLine(mod.Folder, mod.Name, manifest, metadataFiles);
+            read = repository.Files(mod.Folder, mod.Name, metadataFiles.Union(namedByNoLine).ToHashSet(StringComparer.Ordinal), instance.StatCache);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -83,11 +83,11 @@ public sealed class RestoreFromManifestHandler(
         if (head != built.Commit)
             return Skipped(mod, RestoreRefusal.SourceAtAnotherCommit, $"its source is at {head}, not at {built.Commit}, the commit its manifest names");
 
-        var committed = mod.CommittedFiles.ToHashSet(StringComparer.Ordinal);
+        var metadataFiles = mod.MetadataFiles.ToHashSet(StringComparer.Ordinal);
         Dictionary<string, string> before;
         try
         {
-            before = HashesIn(mod, committed, instance);
+            before = HashesIn(mod, metadataFiles, instance);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -95,7 +95,7 @@ public sealed class RestoreFromManifestHandler(
         }
 
         var answer = await build.BuildOneAsync(
-            new ModToBuild(mod.Name, sourceFolder, mod.Folder, installationFiles, mod.CommittedFiles, version),
+            new ModToBuild(mod.Name, sourceFolder, mod.Folder, installationFiles, mod.MetadataFiles, version),
             new InstanceToBuild(instance.ExcludedSuffix, instance.Archives, instance.StatCache));
         if (answer is ItemAnswer<BuildRefusal, BuiltMod>.Refusing refusing)
             return ItemAnswer<RestoreSkip, RestoredMod>.Refused(new RestoreSkip(RestoreRefusal.NotBuilt, refusing.Refusal), refusing.Message);
@@ -111,11 +111,11 @@ public sealed class RestoreFromManifestHandler(
 
         try
         {
-            var after = HashesIn(mod, committed, instance);
+            var after = HashesIn(mod, metadataFiles, instance);
             var manifest = outcome.Manifest ?? throw new InvalidOperationException("A build that stopped nowhere wrote its manifest.");
             return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod(
                 [.. after.Where(file => before.GetValueOrDefault(file.Key) != file.Value).Select(file => file.Key).Order(StringComparer.Ordinal)],
-                repository.NamedByNoLine(mod.Folder, mod.Name, manifest, committed), StatCacheNotWritten: null, ModMetadata.Of(manifest), outcome.Uncommitted));
+                repository.NamedByNoLine(mod.Folder, mod.Name, manifest, metadataFiles), StatCacheNotWritten: null, ModMetadata.Of(manifest), outcome.Uncommitted));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
         {
@@ -124,8 +124,8 @@ public sealed class RestoreFromManifestHandler(
         }
     }
 
-    private Dictionary<string, string> HashesIn(ModToRestore mod, IReadOnlySet<string> committed, InstanceToRestore instance) =>
-        repository.Files(mod.Folder, mod.Name, committed, instance.StatCache).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
+    private Dictionary<string, string> HashesIn(ModToRestore mod, IReadOnlySet<string> metadataFiles, InstanceToRestore instance) =>
+        repository.Files(mod.Folder, mod.Name, metadataFiles, instance.StatCache).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
 
     private static ItemAnswer<RestoreSkip, RestoredMod> Lacked(ModToRestore mod, IReadOnlyList<ManifestSources.Lack> lacks)
     {

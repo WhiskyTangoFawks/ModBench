@@ -56,7 +56,7 @@ export interface LoadOrderSnapshotRefusal {
  *  folder. */
 export interface SnapshotModlist {
   readonly mods: readonly ModlistEntry[];
-  readonly committedFiles: readonly string[];
+  readonly metadataFiles: readonly string[];
   readonly statCache: string;
 }
 
@@ -329,10 +329,10 @@ export function loadOrderSnapshotOf(value: {
   };
 }
 
-function snapshotModsOf({ mods, committedFiles }: SnapshotModlist, folders: ModFolders | undefined): ModByFolder[] {
+function snapshotModsOf({ mods, metadataFiles }: SnapshotModlist, folders: ModFolders | undefined): ModByFolder[] {
   return mods.flatMap((entry) => {
     const folder = entry.kind === 'mod' ? folders?.holding(entry) : undefined;
-    return folder === undefined ? [] : [{ name: entry.name, folder: folder.path, committedFiles: [...committedFiles] }];
+    return folder === undefined ? [] : [{ name: entry.name, folder: folder.path, metadataFiles: [...metadataFiles] }];
   });
 }
 

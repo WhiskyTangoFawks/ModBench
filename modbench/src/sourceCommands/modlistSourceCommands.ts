@@ -13,7 +13,7 @@ import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
-  'installationFiles' | 'downloadedFile' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'
+  'installationFiles' | 'downloadedFile' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'
   | 'statCacheFolder' | 'trashModFile' | 'sourceFolder' | 'excludedSuffix'>;
 
 interface ModlistSourceCommandsDeps {
@@ -65,7 +65,7 @@ async function byFolder(adapter: Adapter, mods: readonly string[]): Promise<ModB
   const asked: ModByFolder[] = [];
   for (const mod of mods) {
     const folder = await adapter.modFolderPath(mod);
-    if (folder !== undefined) asked.push({ name: mod, folder, committedFiles: [...adapter.managerFilesInModFolder] });
+    if (folder !== undefined) asked.push({ name: mod, folder, metadataFiles: [...adapter.metadataFilesInModFolder] });
   }
   return asked;
 }
@@ -83,7 +83,7 @@ async function readMod(
   const overridden = await adapter.gameFilesOverriddenBy(dataFolder, mod);
   if (overridden.kind === 'unreadable') return { refusal: overridden.reason };
   return {
-    read: { name: mod, folder, installationFiles: installed.answer.map(wireFile), committedFiles: [...adapter.managerFilesInModFolder] },
+    read: { name: mod, folder, installationFiles: installed.answer.map(wireFile), metadataFiles: [...adapter.metadataFilesInModFolder] },
     gameFiles: overridden.answer.gameFiles,
     notes: [
       ...overridden.answer.notes,
