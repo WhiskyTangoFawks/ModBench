@@ -127,6 +127,31 @@ describe('the MO2 Instance adapter', () => {
       expect(settings.gameRelease).toBe('Fallout4');
     });
 
+    describe('the reads beside the reading', () => {
+      it('answers the profile the settings select', async () => {
+        expect(await adapter.activeProfile()).toBe('Default');
+      });
+
+      it('answers every profile folder', async () => {
+        expect((await adapter.profiles()).toSorted()).toEqual(['Default', 'Secondary']);
+      });
+
+      it('answers the game the settings name and its release', async () => {
+        expect(await adapter.game()).toEqual({ gameName: 'Fallout 4', gameRelease: 'Fallout4' });
+      });
+
+      it('answers the folder of a mod the instance holds', async () => {
+        expect((await adapter.modFolders())?.holding({ kind: 'mod', name: 'Harder VATS' })).toMatchObject({ path: join(root, 'mods', 'Harder VATS') });
+      });
+
+      it('answers the profile the settings select now, not the one a read before did', async () => {
+        const before = await adapter.activeProfile();
+        await writeFile(join(root, INI), (await text(root, INI)).replace('selected_profile=@ByteArray(Default)', 'selected_profile=@ByteArray(Other)'));
+
+        expect([before, await adapter.activeProfile()]).toEqual(['Default', 'Other']);
+      });
+    });
+
     describe('the reading', () => {
       it('answers the profile, game, plugin order, downloads and the game folder with what it holds', async () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-reading-'));
