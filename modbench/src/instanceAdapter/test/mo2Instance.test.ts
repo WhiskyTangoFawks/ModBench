@@ -128,14 +128,20 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('the reads beside the reading', () => {
-      it('answers the active profile, the profiles, the game and the mod folders, each as the reading holds it', async () => {
-        const reading = await adapter.reading();
+      it('answers the profile the settings select', async () => {
+        expect(await adapter.activeProfile()).toBe('Default');
+      });
 
-        expect(await adapter.activeProfile()).toBe(reading.profile);
-        expect(await adapter.profiles()).toEqual(reading.profiles);
-        expect(await adapter.game()).toEqual({ gameName: reading.gameName, gameRelease: reading.gameRelease });
-        expect((await adapter.modFolders())?.all).toEqual(reading.modFolders?.all);
-        expect(reading).toMatchObject({ profile: 'Default', gameRelease: 'Fallout4' });
+      it('answers every profile folder', async () => {
+        expect((await adapter.profiles()).toSorted()).toEqual(['Default', 'Secondary']);
+      });
+
+      it('answers the game the settings name and its release', async () => {
+        expect(await adapter.game()).toEqual({ gameName: 'Fallout 4', gameRelease: 'Fallout4' });
+      });
+
+      it('answers the folder of a mod the instance holds', async () => {
+        expect((await adapter.modFolders())?.holding({ kind: 'mod', name: 'Harder VATS' })).toMatchObject({ path: join(root, 'mods', 'Harder VATS') });
       });
 
       it('answers the profile the settings select now, not the one a read before did', async () => {
