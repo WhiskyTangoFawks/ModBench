@@ -604,6 +604,15 @@ describe('the agent server, running a gesture', () => {
       expect(fired.calls).toEqual([['modbench.plugin.decompile', new AgentCall([{ kind: 'plugin', plugin: { name: 'Same.esp', origin: 'ModB' } }], {})]]);
     });
 
+    it('fires decompile with force as an Option', async () => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const { client } = await served(PLUGGED);
+
+      await call(client, 'run_gesture', { command: 'modbench.plugin.decompile', argument: [{ name: 'Solo.esp' }], options: { force: true } });
+
+      expect(fired.calls).toEqual([['modbench.plugin.decompile', new AgentCall([SOLO], { force: true })]]);
+    });
+
     it('logs a refusal with its detail joined on', async () => {
       fired.outcome = { applied: false, refusal: 'Could not move plugins.', detail: 'A.esp is a master.' };
       const { client, lines } = await served(PLUGGED);
@@ -801,6 +810,12 @@ describe('the agent server, running a gesture', () => {
       await fire({ command: 'modbench.mod.install', argument: [outside], options: { target: 'B' } });
 
       expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([outside], { target: 'B' })]]);
+    });
+
+    it('fires install with force as an Option', async () => {
+      await fire({ command: 'modbench.mod.install', argument: [outside], options: { target: 'B', force: true } });
+
+      expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([outside], { target: 'B', force: true })]]);
     });
 
     it('refuses an install over a mod nothing is named, firing nothing', async () => {

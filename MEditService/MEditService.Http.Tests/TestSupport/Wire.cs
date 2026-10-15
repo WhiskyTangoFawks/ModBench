@@ -77,8 +77,8 @@ internal static class Wire
         });
 
     internal static Task<HttpResponseMessage> Decompile(
-        this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins) =>
-        client.PostAsJsonAsync("/plugins/decompile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }) });
+        this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins, bool force = false) =>
+        client.PostAsJsonAsync("/plugins/decompile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }), force });
 
     internal static Task<HttpResponseMessage> Compile(
         this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins) =>

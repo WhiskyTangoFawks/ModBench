@@ -57,7 +57,7 @@ const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDe
 
 const installDownloaded = async (file: DownloadFile, listed: readonly DownloadFile[], deps: DownloadInstallDeps): Promise<void> => {
   registerModInstallCommands({
-    commands: installOver(), instance: fakeInstance(listed), reporterFor: () => recordingReporter(),
+    commands: installOver(), instance: fakeInstance(listed), reporterFor: () => recordingReporter(), readStatus: () => Promise.reject(new Error('a view call reads no status')),
     warnIfFomod: deps.warnIfFomod, downloadInstall: deps,
   });
   const handler = registerCommand.mock.calls.findLast((call) => call[0] === 'modbench.mod.install')?.[1];

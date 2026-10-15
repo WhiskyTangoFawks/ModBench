@@ -114,16 +114,17 @@ const INSTALL_SOURCE = z.union([
 
 const INSTALL = gestureInput(
   'argument: the one source, { kind: \'downloadedFile\', name } as list_downloads names it, or { kind: \'archive\' | \'folder\', path } for one outside the downloads; '
-    + 'options: { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, not both',
+    + 'options: { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, not both; '
+    + 'force?: true to upgrade a mod that differs from its manifest, has no manifest or has a file with no provider, which is otherwise refused',
   z.object({
     argument: z.array(INSTALL_SOURCE),
-    options: z.object({ name: z.string().optional(), target: z.string().optional() }),
+    options: z.object({ name: z.string().optional(), target: z.string().optional(), force: z.boolean().optional() }),
   }),
-  (value, { argument, options: { name, target } }) => new AgentCall(
+  (value, { argument, options: { name, target, force } }) => new AgentCall(
     argument.map((source) => (source.kind === 'downloadedFile'
       ? { kind: source.kind, name: downloadsNamed(value.downloads, [source.name])[0] ?? source.name }
       : source)),
-    { name, target: target === undefined ? undefined : modsNamed(value.mods, [{ name: target, kind: 'mod' }])[0]?.name },
+    { name, target: target === undefined ? undefined : modsNamed(value.mods, [{ name: target, kind: 'mod' }])[0]?.name, force },
   ),
 );
 
@@ -143,10 +144,10 @@ const LINES = gestureInput(
   (value, { argument }) => new AgentCall(linesCall(value, argument), {}),
 );
 
-const PLUGINS = gestureInput(
-  `argument: the plugins, ${PLUGIN_TAKES}`,
-  z.object({ argument: z.array(PLUGIN_NAME) }),
-  (value, { argument }) => new AgentCall(pluginsCall(value, argument), {}),
+const DECOMPILE = gestureInput(
+  `argument: the plugins, ${PLUGIN_TAKES}; options: { force?: true to replace a plugin source that has working-tree changes, which is otherwise refused }`,
+  z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ force: z.boolean().optional() }).optional() }),
+  (value, { argument, options }) => new AgentCall(pluginsCall(value, argument), { force: options?.force }),
 );
 
 const DROP = z.union([
@@ -211,7 +212,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.separator.delete', DELETE_SEPARATORS],
   ['modbench.plugin.enable', LINES],
   ['modbench.plugin.disable', LINES],
-  ['modbench.plugin.decompile', PLUGINS],
+  ['modbench.plugin.decompile', DECOMPILE],
   ['modbench.plugin.move', MOVE_PLUGINS],
   ['modbench.plugin.create', CREATE_PLUGIN],
   ['modbench.plugin.rename', RENAME_PLUGIN],

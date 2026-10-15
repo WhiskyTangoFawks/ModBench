@@ -169,23 +169,28 @@ export interface DecompileDeps {
   ask: AskQuestion;
 }
 
+interface DecompileGiven {
+  readonly plugins: readonly PluginAddress[];
+  readonly force: boolean;
+}
+
 /** commands.md, `decompile`: the plugins of Plugins rows, the selection included, of a record tab's
  *  column header, or of the palette's Plugins selection, asked once. */
 export function registerDecompileCommand(
   deps: DecompileDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  const gesture: AgentGesture<PluginsTreeNode, readonly PluginAddress[], SelectionResult<PluginAddress>> = {
+  const gesture: AgentGesture<PluginsTreeNode, DecompileGiven, SelectionResult<PluginAddress>, { force?: boolean }> = {
     fromView: async (entry, _option, clicked) => {
       const header = columnHeaderOf(clicked);
       const plugins = header ? [header] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
-      return plugins.length > 0 && await confirmDecompile(deps.ask, plugins) ? plugins : undefined;
+      return plugins.length > 0 && await confirmDecompile(deps.ask, plugins) ? { plugins, force: true } : undefined;
     },
-    fromAgent: ({ argument }) => argument.map(pluginOf),
-    run: (plugins) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
-      const outcome = await deps.client.decompile(plugins);
+    fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true }),
+    run: ({ plugins, force }) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
+      const outcome = await deps.client.decompile(plugins, force);
       return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, outcome };
     }),
-    report: (result, plugins) => {
+    report: (result, { plugins }) => {
       if (result.applied) reportDecompiled(deps.reporter, result.outcome, plugins.length);
       else deps.reporter.report('error', result.refusal);
     },
