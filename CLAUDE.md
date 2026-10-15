@@ -38,7 +38,7 @@ principle > ADR > spec (`docs/architecture/`) > code. The higher level wins. An 
 
 @docs/principles.md
 
-- Strategy is the maintainer's; tactics are yours. Code that disagrees with a document is a defect: fix it. Everything the list below does not name is tactical: decide it, and give the reason in the commit message.
+- Strategy is the maintainer's; tactics are yours. Code that disagrees with a document is a defect: fix it. A defect an open epic already tracks is left to that epic. Everything the list below does not name is tactical: decide it, and give the reason in the commit message.
 - Stop and ask when the work does one of these:
   - It adds or changes a gesture, an entry point, or a state, row or status that a view shows and no spec draws.
   - It needs a module or port that `docs/architecture/` does not draw.
