@@ -13,7 +13,7 @@ public sealed record BuildConfigurationChange(string? Output, IReadOnlyList<stri
 public sealed record ArchiveToPack(string Path, IReadOnlyList<string> Files);
 
 /// <summary>What a source mod's build writes over the base, as its working tree says. Shared is none with no remote.
-/// Uncommitted: its working tree holds changes no commit holds. Unpushed: its remote, as last fetched, lacks the commit.</summary>
+/// Uncommitted: its working tree holds changes no commit holds. Unpushed: its remote, as last fetched, lacks HEAD.</summary>
 public sealed record SourceToBuild(
     string Output, IReadOnlyList<string> Exclude, IReadOnlyList<ArchiveToPack> Archives, IReadOnlyList<string> Plugins,
     IReadOnlyList<Asset> Assets, SharedSource? Shared = null, bool Uncommitted = false, bool Unpushed = false);

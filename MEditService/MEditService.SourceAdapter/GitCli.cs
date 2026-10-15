@@ -27,9 +27,8 @@ internal static class GitCli
         }
     }
 
-    /// <summary>Clones <paramref name="remote"/> into <paramref name="folder"/>, which is not there, with each of
-    /// <paramref name="settings"/>. A clone that fails leaves no folder. Asks for no credentials, as no one can answer, and
-    /// stops when <paramref name="cancel"/> does.</summary>
+    /// <summary>Clones <paramref name="remote"/> into <paramref name="folder"/> with each of <paramref name="settings"/>.
+    /// Asks for no credentials, as no one can answer, and stops when <paramref name="cancel"/> does.</summary>
     internal static void Clone(string remote, string folder, IEnumerable<(string Key, string Value)> settings, CancellationToken cancel)
     {
         var parent = Directory.CreateDirectory(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(folder)) ?? folder).FullName;
