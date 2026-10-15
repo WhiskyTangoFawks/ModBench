@@ -1373,6 +1373,99 @@ describe('the MO2 Instance adapter', () => {
         expect(await adapter.modVersion('A mod with no folder')).toBeUndefined();
       });
 
+      describe('its metadata as facts', () => {
+        const metaOf = (mod: string): string => join(root, 'mods', mod, 'meta.ini');
+        const NEXUS = 'nexus:fallout4:4598;4598:77';
+        const patchMeta = (general: string): Promise<void> => writeFile(
+          metaOf('Unofficial Fallout 4 Patch'),
+          `[General]\r\ngameName=Fallout4\r\nmodid=4598\r\nversion=2.1.5.0\r\ncomments=mine\r\ncolor=@Variant(\\0\\0\\0\\x43\\x1\\xff\\xff\\0\\0\\0\\0\\0\\0\\0\\0)\r\n${general}`,
+        );
+
+        it('answers the version, and each installation file by its name with where it comes from', async () => {
+          await patchMeta(`installationFile=${DOWNLOAD}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
+
+          expect(await adapter.modMetadata('Unofficial Fallout 4 Patch'))
+            .toEqual({ version: '2.1.5.0', installationFiles: [{ name: DOWNLOAD, source: NEXUS }] });
+        });
+
+        it('names an installation file recorded by its whole path by its name', async () => {
+          await patchMeta('installationFile=/elsewhere/Patch.7z\r\n');
+
+          expect((await adapter.modMetadata('Unofficial Fallout 4 Patch')).installationFiles.map(({ name }) => name)).toEqual(['Patch.7z']);
+        });
+
+        it('answers none for a mod with no metadata', async () => {
+          expect(await adapter.modMetadata('A mod with no folder')).toEqual({ installationFiles: [] });
+        });
+
+        it('writes the version, the installation file and where it comes from, and keeps every other key', async () => {
+          await patchMeta('');
+
+          await adapter.writeModMetadata('Unofficial Fallout 4 Patch', {
+            version: '3.0', installationFiles: [{ name: 'Patch-3.7z', source: 'nexus:skyrimspecialedition:12;12:99' }],
+          });
+
+          const text = await readFile(metaOf('Unofficial Fallout 4 Patch'), 'utf8');
+          expect(text).toContain('version=3.0');
+          expect(text).toContain('installationFile=Patch-3.7z');
+          expect(text).toContain('gameName=SkyrimSE');
+          expect(text).toContain('modid=12');
+          expect(text).toContain('1\\fileid=99');
+          expect(text).toContain('comments=mine');
+          expect(text).toContain('color=@Variant');
+        });
+
+        it('keeps the values the manifest lacks', async () => {
+          await patchMeta(`installationFile=${DOWNLOAD}\r\n`);
+
+          await adapter.writeModMetadata('Unofficial Fallout 4 Patch', { version: '3.0', installationFiles: [] });
+          await adapter.writeModMetadata('Unofficial Fallout 4 Patch', { installationFiles: [{ name: 'Patch-3.7z' }] });
+
+          expect(await adapter.modMetadata('Unofficial Fallout 4 Patch'))
+            .toEqual({ version: '3.0', installationFiles: [{ name: 'Patch-3.7z', source: 'nexus:fallout4:4598' }] });
+        });
+
+        it('writes the instance\'s own spelling of its game for a domain the instance\'s game has', async () => {
+          await writeFile(join(root, INI), (await readFile(join(root, INI), 'utf8')).replace(/gameName=.*/, 'gameName=Fallout 4 VR'));
+          await patchMeta('');
+
+          await adapter.writeModMetadata('Unofficial Fallout 4 Patch', { installationFiles: [{ name: 'P.7z', source: 'nexus:fallout4:1' }] });
+
+          expect(await readFile(metaOf('Unofficial Fallout 4 Patch'), 'utf8')).toContain('gameName=Fallout 4 VR');
+        });
+
+        it('writes nothing for metadata that says nothing', async () => {
+          await adapter.writeModMetadata('Brand New', { installationFiles: [] });
+
+          await expect(access(metaOf('Brand New'))).rejects.toThrow();
+        });
+
+        it('makes the metadata of a mod with none, in its folder', async () => {
+          await adapter.writeModMetadata('Brand New', { version: '1.0', installationFiles: [] });
+
+          expect(await readFile(metaOf('Brand New'), 'utf8')).toContain('version=1.0');
+        });
+
+        it('rejects, writing nothing, a source naming a Nexus domain with no game', async () => {
+          await patchMeta('');
+          const before = await readFile(metaOf('Unofficial Fallout 4 Patch'), 'utf8');
+
+          await expect(adapter.writeModMetadata('Unofficial Fallout 4 Patch', {
+            version: '9', installationFiles: [{ name: 'P.7z', source: 'nexus:nowhere:1' }],
+          })).rejects.toThrow('nowhere');
+
+          expect(await readFile(metaOf('Unofficial Fallout 4 Patch'), 'utf8')).toBe(before);
+        });
+
+        it('reads back as what it was handed', async () => {
+          const written = { version: '3.0', installationFiles: [{ name: 'Patch-3.7z', source: 'nexus:newvegas:5;5:6;7:8' }] };
+
+          await adapter.writeModMetadata('Brand New', written);
+
+          expect(await adapter.modMetadata('Brand New')).toEqual(written);
+        });
+      });
+
       describe('installed from a file outside the downloads folder, which MO2 records by its whole path', () => {
         const recordingInstalledFrom = (path: string): Promise<void> =>
           writeFile(join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\ninstallationFile=${path}\r\n`);

@@ -109,7 +109,7 @@ internal static class ManifestEndpoints
         foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Restore from manifest", item.Refusal.Kind, item.Message, item.Item);
         return Results.Ok(new RestoreFromManifestResponse(
             [.. result.Landed.Select(landed => new RestoredModResponse(
-                landed.Item, landed.Outcome.Written, landed.Outcome.NamedByNoLine, landed.Outcome.StatCacheNotWritten, landed.Outcome.Uncommitted))],
+                landed.Item, landed.Outcome.Written, landed.Outcome.NamedByNoLine, landed.Outcome.StatCacheNotWritten, landed.Outcome.Metadata, landed.Outcome.Uncommitted))],
             [.. result.Refused.Select(refused => new ModRestoreRefusal(
                 refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.GameFilesNotFound, refused.Refusal.InstallationFilesNotFound,
                 refused.Refusal.Build))]));
@@ -121,16 +121,19 @@ internal static class ManifestEndpoints
 
         List<ModRestoreDestroys> destroying = [];
         List<ModRestoreRefusal> refused = [];
-        foreach (var status in StatusOf(req, repository))
+        foreach (var (mod, status) in req.Mods.Zip(StatusOf(req, repository)))
         {
             if (status.Unreadable is { } unreadable)
             {
                 refused.Add(new ModRestoreRefusal(
                     status.Mod, unreadable.Manifest ? RestoreRefusal.ManifestUnreadable : RestoreRefusal.Unreadable,
                     $"'{status.Mod}' was skipped: {unreadable.Why}.", [], []));
+                continue;
             }
-            else if (status.Differing.Count + status.NamedByNoLine.Count > 0)
-                destroying.Add(new ModRestoreDestroys(status.Mod, status.Differing, status.NamedByNoLine));
+            var metadataDiffers = mod.Metadata is { } held && repository.ReadManifest(mod.Folder, mod.Name) is { } manifest
+                && held.DiffersFrom(ModMetadata.Of(manifest));
+            if (status.Differing.Count + status.NamedByNoLine.Count > 0 || metadataDiffers)
+                destroying.Add(new ModRestoreDestroys(status.Mod, status.Differing, status.NamedByNoLine, metadataDiffers));
         }
         return Results.Ok(new WhatRestoreDestroysResponse(destroying, refused));
     }
@@ -215,10 +218,10 @@ internal sealed record RestoreFromManifestModRequest(
     string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles, string? SourceFolder)
     : IModRequest;
 
-/// <summary>A mod whose files are as its manifest says: Written each file written to make it so, NamedByNoLine each file
-/// no line names, for the trash, StatCacheNotWritten why the stat cache did not keep the read.</summary>
+/// <summary>A mod whose files are as its manifest says: Written each file written, NamedByNoLine each file no line names,
+/// StatCacheNotWritten why the stat cache did not keep the read, Metadata its manifest's version and sources.</summary>
 internal sealed record RestoredModResponse(
-    string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, bool Uncommitted);
+    string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, ModMetadata Metadata, bool Uncommitted);
 
 /// <summary>The mods to read the folders of against their manifests, and the stat cache's folder.</summary>
 internal sealed record ModFoldersRequest(IReadOnlyList<ModByFolder> Mods, string StatCache);
@@ -233,9 +236,9 @@ internal static class ModsByFolder
 
 internal sealed record ModStatusResponse(IReadOnlyList<ModStatus> Mods);
 
-/// <summary>A mod restore would destroy files in, by forward-slash path: each file whose bytes differ from what its
-/// provider fixes, and each file no line names.</summary>
-internal sealed record ModRestoreDestroys(string Mod, IReadOnlyList<string> Differing, IReadOnlyList<string> NamedByNoLine);
+/// <summary>A mod restore would destroy files in, by forward-slash path: each file whose bytes differ from its provider's,
+/// each file no line names, and whether it replaces a version or source in the metadata.</summary>
+internal sealed record ModRestoreDestroys(string Mod, IReadOnlyList<string> Differing, IReadOnlyList<string> NamedByNoLine, bool MetadataDiffers);
 
 /// <summary>Only the mods restore would destroy a file in, and each mod skipped because a file of it could not be read
 /// (ADR-0019).</summary>

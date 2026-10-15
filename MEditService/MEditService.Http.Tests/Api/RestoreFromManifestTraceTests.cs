@@ -20,6 +20,8 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
 
     private readonly ScratchDirectory _instance = new("restore-from-manifest-");
 
+    private string? _versionUpdated;
+
     protected override MEditHost CreateHost() => new(services => services.AddSingleton<TimeProvider>(new ADayAhead()));
 
     protected override void DisposeFixtures() => _instance.Dispose();
@@ -76,6 +78,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
             ["folder"] = ModFolder,
             ["installationFiles"] = handsTheDownload ? new JsonArray(installationFile) : new JsonArray(),
             ["committedFiles"] = new JsonArray("meta.ini"),
+            ["version"] = _versionUpdated,
         };
         var request = new JsonObject
         {
@@ -99,11 +102,26 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    private JsonObject WhatRestoreDestroysRequest() => new()
+    private JsonObject WhatRestoreDestroysRequest(JsonObject? metadata = null) => new()
     {
-        ["mods"] = new JsonArray(new JsonObject { ["name"] = Mod, ["folder"] = ModFolder, ["committedFiles"] = new JsonArray("meta.ini") }),
+        ["mods"] = new JsonArray(new JsonObject
+        {
+            ["name"] = Mod,
+            ["folder"] = ModFolder,
+            ["committedFiles"] = new JsonArray("meta.ini"),
+            ["metadata"] = metadata,
+        }),
         ["statCache"] = StatCache,
     };
+
+    private static JsonObject Metadata(string? version) => new() { ["version"] = version, ["installationFiles"] = new JsonArray() };
+
+    private async Task<JsonElement> WhatRestoreDestroys(JsonObject? metadata)
+    {
+        var response = await Client.PostAsJsonAsync("/what-restore-destroys", WhatRestoreDestroysRequest(metadata));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("mods");
+    }
 
     private async Task<JsonElement> WhatRestoreDestroys()
     {
@@ -130,6 +148,34 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         Assert.Equal(Mod, restored.GetProperty("mod").GetString());
         Assert.Empty(restored.GetProperty("written").EnumerateArray());
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task AModWhoseMetadataVersionDiffersFromItsManifests_IsListed_ButNotOneWhoseMetadataAgreesOrHoldsNone()
+    {
+        ModInstalledFromADownload();
+        _versionUpdated = "1.0";
+        await Post("update-manifest");
+
+        var differing = Assert.Single((await WhatRestoreDestroys(Metadata("2.0"))).EnumerateArray());
+
+        Assert.True(differing.GetProperty("metadataDiffers").GetBoolean());
+        Assert.Empty(Paths(differing, "differing"));
+        Assert.Empty((await WhatRestoreDestroys(Metadata("1.0"))).EnumerateArray());
+        Assert.Empty((await WhatRestoreDestroys(Metadata(null))).EnumerateArray());
+        Assert.Empty((await WhatRestoreDestroys(null)).EnumerateArray());
+    }
+
+    [Fact]
+    public async Task RestoringAMod_AnswersTheVersionItsManifestSays()
+    {
+        ModInstalledFromADownload();
+        _versionUpdated = "1.0";
+        await Post("update-manifest");
+
+        var restored = Assert.Single((await Post("restore-from-manifest")).GetProperty("applied").EnumerateArray());
+
+        Assert.Equal("1.0", restored.GetProperty("metadata").GetProperty("version").GetString());
     }
 
     [Fact]

@@ -12,7 +12,7 @@ import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed
 import { archiveVariants } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
-  'installationFiles' | 'downloadedFile' | 'modVersion' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'
+  'installationFiles' | 'downloadedFile' | 'modVersion' | 'modMetadata' | 'writeModMetadata' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'
   | 'statCacheFolder' | 'trashModFile' | 'sourceFolder' | 'excludedSuffix'>;
 
 interface ModlistSourceCommandsDeps {
@@ -178,18 +178,32 @@ function cancelledBefore(mods: readonly string[], { landed, refused }: Extract<R
     .map((mod) => ({ item: mod, reason: `'${mod}' was not finished: the restore was cancelled. Restoring it again finishes it.` }));
 }
 
-// modlist-source.md, Restore from manifest, story 1: mEdit names each file no line names, and the trash is the host's.
+// modlist-source.md, Restore from manifest, stories 1 and 9: mEdit names each file no line names, and the trash is the
+// host's. It also names the metadata, and the mod manager's is the Instance adapter's.
 async function withFilesNoLineNamesTrashed(
   { adapter, trash }: ModlistSourceCommandsDeps, landed: Restored,
 ): Promise<{ finished: Restored; unfinished: readonly ItemRefusal<string>[] }> {
   const finished: Restored[number][] = [];
   const unfinished: ItemRefusal<string>[] = [];
   for (const mod of landed) {
-    const why = await trashedOrWhy(adapter, trash, mod.mod, mod.namedByNoLine);
+    const why = await trashedOrWhy(adapter, trash, mod.mod, mod.namedByNoLine) ?? await metadataWrittenOrWhy(adapter, mod.mod, mod.metadata);
     if (why === undefined) finished.push(mod);
     else unfinished.push({ item: mod.mod, reason: `'${mod.mod}' was not finished: ${why}. Restoring it again finishes it.` });
   }
   return { finished, unfinished };
+}
+
+async function metadataWrittenOrWhy(adapter: Adapter, mod: string, metadata: Restored[number]['metadata']): Promise<string | undefined> {
+  if (metadata === undefined) return undefined;
+  try {
+    await adapter.writeModMetadata(mod, {
+      version: metadata.version ?? undefined,
+      installationFiles: metadata.installationFiles.map(({ name, source }) => ({ name, source: source ?? undefined })),
+    });
+  } catch (err) {
+    return `its metadata could not be written: ${errorMessage(err)}`;
+  }
+  return undefined;
 }
 
 async function trashedOrWhy(adapter: Adapter, trash: MoveToTrash, mod: string, paths: readonly string[]): Promise<string | undefined> {
@@ -300,8 +314,12 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
 
     /** Asks before anything is written, so a mod the Instance adapter gives no folder, which restore refuses, is not asked. */
     whatRestoreDestroys: async (mods: readonly string[]): Promise<WhatRestoreDestroys> => {
-      const asked = await byFolder(adapter, mods);
-      if (asked.length === 0) return { destroys: [], refused: [] };
+      const folders = await byFolder(adapter, mods);
+      if (folders.length === 0) return { destroys: [], refused: [] };
+      const asked = await Promise.all(folders.map(async (folder) => {
+        const { version, installationFiles } = await adapter.modMetadata(folder.name);
+        return { ...folder, metadata: { version, installationFiles: [...installationFiles] } };
+      }));
       const listing = await client.getWhatRestoreDestroys(asked, adapter.statCacheFolder);
       return isReadFailed(listing) ? { refusal: `Could not ask what restore from manifest destroys: ${failureReason(listing)}` } : listing;
     },

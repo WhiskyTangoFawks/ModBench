@@ -1383,6 +1383,10 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        MetadataInstallationFile: {
+            name: string;
+            source?: string | null;
+        };
         ModBuildRefusal: {
             item: string;
             refusal: components["schemas"]["BuildRefusal"];
@@ -1392,6 +1396,7 @@ export interface components {
             name: string;
             folder: string;
             committedFiles: string[];
+            metadata?: components["schemas"]["ModMetadata"] | null;
         };
         ModFoldersRequest: {
             mods: components["schemas"]["ModByFolder"][];
@@ -1402,10 +1407,15 @@ export interface components {
             refusal: components["schemas"]["InitRefusal"];
             message: string;
         };
+        ModMetadata: {
+            version?: string | null;
+            installationFiles: components["schemas"]["MetadataInstallationFile"][];
+        };
         ModRestoreDestroys: {
             mod: string;
             differing: string[];
             namedByNoLine: string[];
+            metadataDiffers: boolean;
         };
         ModRestoreRefusal: {
             item: string;
@@ -1773,6 +1783,7 @@ export interface components {
             written: string[];
             namedByNoLine: string[];
             statCacheNotWritten?: string | null;
+            metadata: components["schemas"]["ModMetadata"];
             uncommitted: boolean;
         };
         ScriptCopyRequest: {

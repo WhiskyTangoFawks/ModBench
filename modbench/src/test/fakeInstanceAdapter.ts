@@ -50,9 +50,12 @@ export type AdapterCall =
   | { readonly verb: 'trashEntryFolder'; readonly entry: EntryRef }
   | { readonly verb: 'trashModFile'; readonly mod: string; readonly relativePath: string }
   | { readonly verb: 'trashSourceFolder'; readonly mod: string }
+  | { readonly verb: 'writeModMetadata'; readonly mod: string; readonly metadata: ModMetadata }
   | { readonly verb: 'writeIgnoreList' }
   | { readonly verb: 'removeIgnoreList' }
   | { readonly verb: 'install'; readonly source: InstallSource; readonly target: InstallTarget; readonly keys: OwnedMetaKeys };
+
+type ModMetadata = Awaited<ReturnType<InstanceAdapter['modMetadata']>>;
 
 export type WriteVerb = AdapterCall['verb'];
 
@@ -71,6 +74,8 @@ export interface InstanceAnswers {
   downloads?: ReadonlyMap<string, FileRead<InstallationFile>>;
   /** Each mod's version, by mod name; a mod not there records none. */
   versions?: ReadonlyMap<string, string>;
+  /** What each mod's metadata says, by mod name; a mod not there says none. */
+  metadata?: ReadonlyMap<string, ModMetadata>;
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
   /** The game's files, which a mod's files of the same path, whatever the case, override. */
@@ -151,6 +156,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     installationFiles: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: [] }),
     downloadedFile: (name) => Promise.resolve(answers.downloads?.get(name) ?? { kind: 'read', answer: undefined }),
     modVersion: (mod) => Promise.resolve(answers.versions?.get(mod)),
+    modMetadata: (mod) => Promise.resolve(answers.metadata?.get(mod) ?? { installationFiles: [] }),
+    writeModMetadata: (mod, metadata) => record({ verb: 'writeModMetadata', mod, metadata }, undefined),
     managerFilesInModFolder: ['meta.ini'],
     statCacheFolder: '/instance/stat-cache',
     overriddenGameFiles: (_dataFolder, modFilePaths) => overridden(modFilePaths),

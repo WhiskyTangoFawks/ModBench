@@ -121,6 +121,21 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
+    public async Task ALandedMod_AnswersTheVersionAndSourcesItsManifestSays_ForTheExtensionToWrite()
+    {
+        var download = Downloaded("dl/Mod.zip", ("a.nif", "a"));
+        _folders.WithFile(Mod, "a.nif", "a");
+        _folders.Manifests[Mod] = new Manifest(
+            [SourceOf(download) with { Source = "nexus:fallout4:7;7:9" }], [], [Line("a.nif", new FileProvider.FirstInstallationFile())], "1.2");
+
+        var result = await Handler.RestoreAsync([ModFrom(Mod, download)], Instance());
+
+        var metadata = Assert.Single(result.Landed).Outcome.Metadata;
+        Assert.Equal("1.2", metadata.Version);
+        Assert.Equal(new MetadataInstallationFile("Mod.zip", "nexus:fallout4:7;7:9"), Assert.Single(metadata.InstallationFiles));
+    }
+
+    [Fact]
     public async Task AModWhoseFilesAllMatch_LandsHavingWrittenNothing_AndOpensNoInstallationFile()
     {
         var download = Downloaded("dl/Mod.zip", ("a.nif", "a"));

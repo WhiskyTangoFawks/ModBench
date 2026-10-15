@@ -329,6 +329,16 @@ export interface InstallationFile extends HashedDownload {
   readonly unsourcedGame?: string;
 }
 
+interface MetadataInstallationFile {
+  readonly name: string;
+  readonly source?: string;
+}
+
+interface ModMetadata {
+  readonly version?: string;
+  readonly installationFiles: readonly MetadataInstallationFile[];
+}
+
 /** How a message names the mod manager, the file it keeps mod order in, and the file it keeps beside a downloaded file. */
 export interface ManagerNames {
   readonly manager: string;
@@ -391,6 +401,11 @@ export interface InstanceAdapter {
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The version the mod manager's metadata gives `mod`; undefined when it gives none. */
   modVersion(mod: string): Promise<string | undefined>;
+  /** What the mod manager's metadata says of `mod`'s version and installation files; none when it says none. */
+  modMetadata(mod: string): Promise<ModMetadata>;
+  /** Sets the version and first installation file of `mod`, in a metadata made when it has none, and keeps every other key
+   *  and every value `metadata` lacks. Rejects, writing nothing, on a source whose game the tables lack. */
+  writeModMetadata(mod: string, metadata: ModMetadata): Promise<void>;
   /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
   readonly managerFilesInModFolder: readonly string[];
   /** The folder in the instance, outside every mod folder, where mEdit keeps what it last read of each mod's files
