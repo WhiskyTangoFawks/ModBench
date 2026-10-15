@@ -300,6 +300,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
 
         var skipped = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
         Assert.Equal(("Torn", "ManifestUnreadable"), (skipped.GetProperty("item").GetString(), skipped.GetProperty("refusal").GetString()));
+        Assert.StartsWith("was skipped: its manifest cannot be read", skipped.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
     [PosixFact]

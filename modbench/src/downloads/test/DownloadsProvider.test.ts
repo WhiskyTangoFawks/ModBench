@@ -148,6 +148,11 @@ describe('DownloadNode', () => {
     expect(downloadNodeFixture(row({ modID: '123' })).nexusModId).toBe('123');
     expect(downloadNodeFixture(row()).nexusModId).toBeUndefined();
   });
+
+  it('carries its sidecar\'s game as the game view on Nexus opens the page of, and none without one', () => {
+    expect(downloadNodeFixture(row({ gameName: 'SkyrimSE' })).nexusGame).toBe('SkyrimSE');
+    expect(downloadNodeFixture(row()).nexusGame).toBeUndefined();
+  });
 });
 
 describe('DownloadsProvider — rows come from the Instance value', () => {

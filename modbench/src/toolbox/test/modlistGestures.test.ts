@@ -321,7 +321,7 @@ describe('Update manifest', () => {
     updateManifest.mockResolvedValueOnce({
       applied: true, notes: [],
       landed: [{ mod: 'ModA', manifestWritten: false, noProvider: ['a.nif'] }],
-      refused: [{ item: 'ModB', reason: "'ModB' was not updated: 'B.zip' not in the downloads folder." }],
+      refused: [{ item: 'ModB', reason: "was not updated: 'B.zip' not in the downloads folder." }],
     });
     const { reporter, run } = register();
 
@@ -329,12 +329,12 @@ describe('Update manifest', () => {
 
     expect(reporter.reports).toEqual([{
       severity: 'error', message: 'Update manifest: 1 mod unchanged, 0 updated, 1 refused; 1 file has no provider.',
-      detail: `"ModB" ('ModB' was not updated: 'B.zip' not in the downloads folder.)\nModA: a.nif`,
+      detail: `"ModB" (was not updated: 'B.zip' not in the downloads folder.)\nModA: a.nif`,
     }]);
   });
 
   it('warns in that line when a mod folder\'s listing skipped an entry, naming each in the Output', async () => {
-    updateManifest.mockResolvedValueOnce({ applied: true, notes: ['ModA: broken link "a.nif", skipped'], landed: [{ mod: 'ModA', manifestWritten: false, noProvider: [] }], refused: [] });
+    updateManifest.mockResolvedValueOnce({ applied: true, notes: [{ mod: 'ModA', note: 'broken link "a.nif", skipped' }], landed: [{ mod: 'ModA', manifestWritten: false, noProvider: [] }], refused: [] });
     const { reporter, run } = register();
 
     await run(UPDATE, modRow('ModA'));
@@ -420,7 +420,7 @@ describe('Restore from manifest', () => {
   });
 
   it('restores only the mods it could ask about, naming each it skipped in its one line', async () => {
-    const skipped = "'ModB' was skipped: a file could not be read: denied";
+    const skipped = "was skipped: a file could not be read: denied";
     whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [{ item: 'ModB', reason: skipped }] });
     restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [] });
     const { reporter, run } = register();
@@ -518,14 +518,14 @@ describe('Restore from manifest', () => {
 
   it('names each skipped mod with what it lacks, and does not call the mods that landed failed', async () => {
     restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [{ item: 'ModB', reason: "'ModB' was skipped: 'b.nif' has no provider." }],
+      applied: true, landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [{ item: 'ModB', reason: "was skipped: 'b.nif' has no provider." }],
     });
     const { reporter, run } = register();
 
     await run(RESTORE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
 
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"ModB" ('ModB' was skipped: 'b.nif' has no provider.)`,
+      severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"ModB" (was skipped: 'b.nif' has no provider.)`,
     }]);
     expect(reporter.landings).toEqual([]);
   });
@@ -546,7 +546,7 @@ describe('Restore from manifest', () => {
   it('names a skipped mod and a stat cache it could not write in its one line', async () => {
     restoreFromManifest.mockResolvedValueOnce({
       applied: true, landed: [{ mod: 'ModA', written: [], namedByNoLine: [], statCacheNotWritten: 'read-only' }],
-      refused: [{ item: 'ModB', reason: "'ModB' was skipped: it has no manifest." }],
+      refused: [{ item: 'ModB', reason: "was skipped: it has no manifest." }],
     });
     const { reporter, run } = register();
 
@@ -554,7 +554,7 @@ describe('Restore from manifest', () => {
 
     expect(reporter.reports).toEqual([{
       severity: 'error', message: 'Could not restore 1 of 2 mods.',
-      detail: `"ModB" ('ModB' was skipped: it has no manifest.)\nModA: the stat cache could not be written: read-only`,
+      detail: `"ModB" (was skipped: it has no manifest.)\nModA: the stat cache could not be written: read-only`,
     }]);
   });
 
@@ -579,6 +579,80 @@ describe('Restore from manifest', () => {
     await expect(run(RESTORE)).rejects.toThrow('boom');
 
     expect(said).toEqual(['Restore from manifest — reading what it would destroy…', ...givenBack]);
+  });
+});
+
+describe('A separator in a report or an outcome', () => {
+  const separator = { kind: 'separator' as const, name: 'Weapons' };
+  const WIRE = 'Weapons_separator';
+  const NAMED = 'separator Weapons';
+
+  it('update manifest keeps it apart from a mod of the same name', async () => {
+    updateManifest.mockResolvedValueOnce({
+      applied: true, notes: [],
+      landed: [{ mod: 'Weapons', manifestWritten: true, noProvider: ['b.nif'] }, { mod: WIRE, manifestWritten: true, noProvider: ['a.nif'] }],
+      refused: [{ item: WIRE, reason: 'was not updated: its folder does not exist.' }, { item: 'Weapons', reason: 'was not updated: its folder does not exist.' }],
+    });
+    const sharing = instanceValueFixture({
+      modFolders: [...(value.modFolders ?? []), { kind: 'mod', name: 'Weapons', path: '/instance/mods/Weapons', modName: 'Weapons' }],
+    });
+    const { reporter, run } = register({ instance: { value: sharing, refresh: () => Promise.resolve(undefined) } });
+
+    await run(UPDATE);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Update manifest: 0 mods unchanged, 2 updated, 2 refused; 2 files have no provider.',
+      detail: `"${NAMED}" (was not updated: its folder does not exist.)\n"Weapons" (was not updated: its folder does not exist.)\nWeapons: b.nif\n${NAMED}: a.nif`,
+    }]);
+  });
+
+  it('restore from manifest names it as a separator in its progress, its report and what it left unfinished', async () => {
+    restoreFromManifest.mockImplementationOnce((_mods, _instance, options) => {
+      options?.onProgress?.({ phase: 'Restoring', mod: WIRE, modsDone: 0, modsTotal: 1 });
+      return Promise.resolve({ applied: true, landed: [], refused: [{ item: WIRE, reason: 'was skipped: it has no manifest.' }] });
+    });
+    const { reporter, said, run } = register();
+
+    await run(RESTORE, separatorRow('Weapons'));
+
+    expect(said).toContain(`Restore from manifest — "${NAMED}", 0 of 1 mods done…`);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"${NAMED}" (was skipped: it has no manifest.)` }]);
+  });
+
+  it('restore from manifest names it as a separator among the mods not finished', async () => {
+    restoreFromManifest.mockResolvedValueOnce({ applied: false, refusal: 'Could not restore 1 mod — mEdit stopped.', unfinished: [WIRE] });
+    const { reporter, run } = register();
+
+    await run(RESTORE, separatorRow('Weapons'));
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not restore 1 mod — mEdit stopped.', detail: `Not finished: "${NAMED}". Restoring again finishes them.`,
+    }]);
+  });
+
+  it('an agent reads it as a separator in what landed and what was refused', async () => {
+    updateManifest.mockResolvedValueOnce({
+      applied: true, notes: [], landed: [{ mod: WIRE, manifestWritten: true, noProvider: ['a.nif'] }],
+      refused: [{ item: 'ModB', reason: 'was not updated.' }],
+    });
+    const { run } = register();
+
+    const answer = await run(UPDATE, new AgentCall([separator], {}));
+
+    expect(answer).toEqual({
+      applied: true,
+      outcome: { landed: [{ mod: NAMED, manifestWritten: true, noProvider: ['a.nif'] }], refused: [{ item: 'ModB', reason: 'was not updated.' }] },
+      partial: [{ message: 'Update manifest:', detail: `${NAMED}: a.nif has no provider`, severity: 'warning' }],
+    });
+  });
+
+  it('an agent reads it as a separator in a restore it refused', async () => {
+    whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [{ item: WIRE, reason: 'was skipped: it has no manifest.' }] });
+    const { run } = register();
+
+    const answer = await run(RESTORE, new AgentCall([separator], {}));
+
+    expect(answer).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: NAMED, reason: 'was skipped: it has no manifest.' }] }, partial: [] });
   });
 });
 
@@ -621,9 +695,9 @@ describe('An agent call', () => {
 
   it('update manifest answers what landed and what was refused, each file with no provider and each note as a part that failed, and reports nothing', async () => {
     updateManifest.mockResolvedValueOnce({
-      applied: true, notes: ['ModA: a game file was unreadable'],
+      applied: true, notes: [{ mod: 'ModA', note: 'a game file was unreadable' }],
       landed: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif'] }],
-      refused: [{ item: 'ModB', reason: "'ModB' was not updated." }],
+      refused: [{ item: 'ModB', reason: "was not updated." }],
     });
     const { reporter, run } = register();
 
@@ -631,7 +705,7 @@ describe('An agent call', () => {
 
     expect(answer).toEqual({
       applied: true,
-      outcome: { landed: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif'] }], refused: [{ item: 'ModB', reason: "'ModB' was not updated." }] },
+      outcome: { landed: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif'] }], refused: [{ item: 'ModB', reason: "was not updated." }] },
       partial: [
         { message: 'Update manifest:', detail: 'ModA: a.nif has no provider', severity: 'warning' },
         { message: 'Update manifest:', detail: 'ModA: a game file was unreadable', severity: 'warning' },

@@ -12,7 +12,7 @@ import { modNameOf, modNamesOf } from './modName';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { present } from '../ports/present';
 import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './downloadRows';
-import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
+import { gameMastersOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ManagerNames, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
@@ -91,8 +91,9 @@ export interface InstanceValue {
   readonly gameName: string;
   /** Mutagen's release of that game; undefined when the tables hold none for it. */
   readonly gameRelease: string | undefined;
-  /** The Nexus domain for that release, so a view linking to a mod page names no game itself. */
-  readonly nexusSlug: string;
+  /** The Nexus domain of a game as a mod's or a download's metadata names it, so a view linking to a mod page holds no
+   *  game table; undefined when the tables hold none. */
+  readonly nexusDomainOf: (game: string) => string | undefined;
   /** The setting, then the mod manager's configuration, then detection; or each place looked when
    *  none answered. */
   readonly gameFolder: GameFolder;
@@ -188,7 +189,7 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   managerNames,
   gameName: '',
   gameRelease: undefined,
-  nexusSlug: '',
+  nexusDomainOf: nexusDomainForMetaGame,
   // Not read yet reads as not found, so a view that says not found waits for sequence 1.
   gameFolder: { kind: 'notFound', looked: [], setting: GAME_FOLDER_SETTING },
   dataFolderPlugins: { kind: 'unresolved' },
@@ -440,8 +441,8 @@ export class Instance implements Subscription {
       activeProfile: profile,
       managerNames: adapter.names,
       gameName,
+      nexusDomainOf: nexusDomainForMetaGame,
       gameRelease,
-      nexusSlug: nexusSlugFor(gameRelease, gameName),
       gameFolder,
       dataFolderPlugins,
       pluginsLoadedWithNoLine,

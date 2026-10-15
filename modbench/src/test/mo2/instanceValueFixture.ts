@@ -1,6 +1,7 @@
 import { FileConflictLookup } from '../../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { modSyncArgumentsOf, pluginSyncArgumentsOf } from '../../instanceLoader/syncArguments';
+import { nexusDomainForMetaGame } from '../../tables/gamePaths';
 import { GAME_FOLDER_NOT_FOUND } from './gameFolderNotFound';
 
 /** A whole `InstanceValue` at its neutral value, every field overridable — so a test caring
@@ -22,7 +23,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     managerNames: { manager: 'MO2', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
     gameName: 'Fallout 4',
     gameRelease: 'Fallout4',
-    nexusSlug: 'fallout4',
+    nexusDomainOf: nexusDomainForMetaGame,
     gameFolder: GAME_FOLDER_NOT_FOUND,
     dataFolderPlugins: { kind: 'unresolved' },
     pluginsLoadedWithNoLine: undefined,

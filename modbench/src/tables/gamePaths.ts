@@ -169,9 +169,9 @@ export function gameReleaseForGame(gameName: string): string | undefined {
   return RELEASE_BY_GAME_NAME.get(gameName);
 }
 
-/** Mutagen's release name for a game as a mod's metadata spells it: as the settings do, or as the release is named,
- *  which is the mod manager's short name for most. `undefined` when the table holds none. */
-export function gameReleaseForMetaGame(gameName: string): string | undefined {
+// Mutagen's release name for a game as a mod's metadata spells it: as the settings do, or as the release is named,
+// which is the mod manager's short name for most. `undefined` when the table holds none.
+function gameReleaseForMetaGame(gameName: string): string | undefined {
   return gameReleaseForGame(gameName) ?? Object.keys(GAME_PATHS).find((release) => release.toLowerCase() === gameName.toLowerCase());
 }
 
@@ -180,11 +180,11 @@ export function gameReleaseForNexusDomain(domain: string): string | undefined {
   return Object.keys(GAME_PATHS).find((release) => GAME_PATHS[release]?.nexusSlug === domain);
 }
 
-/** Nexus slug for a release; a game with none falls back to its lowercased, space-stripped name
- *  (a best guess that matches most Nexus domains). */
-export function nexusSlugFor(gameRelease: string | undefined, gameName: string): string {
-  const info = gameRelease === undefined ? undefined : GAME_PATHS[gameRelease];
-  return info?.nexusSlug ?? gameName.toLowerCase().replace(/\s+/g, '');
+/** The Nexus domain of a game as a mod's or a download's metadata spells it; `undefined` when the table holds none.
+ *  Never a guess from the name: a wrong domain opens another game's page. */
+export function nexusDomainForMetaGame(gameName: string): string | undefined {
+  const release = gameReleaseForMetaGame(gameName);
+  return release === undefined ? undefined : GAME_PATHS[release]?.nexusSlug;
 }
 
 /** The install-location facts for a release, or `undefined` when the table holds none for it —

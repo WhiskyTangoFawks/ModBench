@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  archiveListsOf, ba2VersionsOf, creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
+  archiveListsOf, ba2VersionsOf, creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusDomainForMetaGame, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
 describe('gameReleaseForGame', () => {
@@ -43,30 +43,20 @@ describe('ba2VersionsOf', () => {
   });
 });
 
-describe('nexusSlugFor', () => {
-  it('maps a release to its Nexus slug', () => {
-    expect(nexusSlugFor('Fallout4', 'Fallout 4')).toBe('fallout4');
-    expect(nexusSlugFor('SkyrimSE', 'Skyrim Special Edition')).toBe('skyrimspecialedition');
-    expect(nexusSlugFor('Fallout3', 'Fallout 3')).toBe('fallout3');
-    expect(nexusSlugFor('FalloutNV', 'Fallout New Vegas')).toBe('newvegas');
-    expect(nexusSlugFor('SkyrimLE', 'Skyrim')).toBe('skyrim');
-    expect(nexusSlugFor('EnderalLE', 'Enderal')).toBe('enderal');
-    expect(nexusSlugFor('Oblivion', 'Oblivion')).toBe('oblivion');
-    expect(nexusSlugFor('Starfield', 'Starfield')).toBe('starfield');
+describe('nexusDomainForMetaGame', () => {
+  it.each([
+    ['Fallout 4', 'fallout4'],
+    ['SkyrimSE', 'skyrimspecialedition'],
+    ['Skyrim Special Edition', 'skyrimspecialedition'],
+    ['Fallout New Vegas', 'newvegas'],
+    ['Fallout 4 VR', 'fallout4'],
+    ['SkyrimVR', 'skyrimspecialedition'],
+  ])('maps %s, as a mod\'s or a download\'s metadata spells it, to its Nexus domain', (game, domain) => {
+    expect(nexusDomainForMetaGame(game)).toBe(domain);
   });
 
-  it('maps VR variants to their non-VR Nexus domain', () => {
-    expect(nexusSlugFor('Fallout4VR', 'Fallout 4 VR')).toBe('fallout4');
-    expect(nexusSlugFor('SkyrimVR', 'Skyrim VR')).toBe('skyrimspecialedition');
-  });
-
-  it('keys on the release, not on the name as the instance\'s settings spell it', () => {
-    expect(nexusSlugFor('SkyrimSE', 'Fallout 4')).toBe('skyrimspecialedition');
-  });
-
-  it('falls back to a lowercased, space-stripped name for a game with no release, which for Morrowind happens to match Nexus\'s own slug', () => {
-    expect(nexusSlugFor(undefined, 'Morrowind')).toBe('morrowind');
-    expect(nexusSlugFor(undefined, 'Some Game')).toBe('somegame');
+  it.each(['EnderalSE', 'Enderal Special Edition', 'Morrowind', 'Some Game'])('gives %s no domain, never a guess from its name', (game) => {
+    expect(nexusDomainForMetaGame(game)).toBeUndefined();
   });
 });
 

@@ -2,6 +2,7 @@
 // read of ModOrganizer.ini, the watch, and the reads and name rules more than one part uses.
 
 import { errnoCode } from '../ports/errno';
+import { errorMessage } from '../ports/errorMessage';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
 import { exists, get, listDir, listFolders, rename, type Undo } from './files';
@@ -101,7 +102,11 @@ export async function renameFolderWithManifest(from: ModFolder, toPath: string, 
   try {
     await rename(old, renamed);
   } catch (err) {
-    await undoFolder();
+    try {
+      await undoFolder();
+    } catch (undoErr) {
+      throw new Error(`${errorMessage(err)}; the folder now sits at ${toPath} because putting it back failed: ${errorMessage(undoErr)}`);
+    }
     throw err;
   }
   return async () => { await rename(renamed, old); await undoFolder(); };

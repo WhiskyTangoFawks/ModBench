@@ -7,6 +7,8 @@ type OwnDisposable = (disposable: vscode.Disposable) => unknown;
  *  downloaded file row reach the same gesture. */
 export interface NexusModRow {
   readonly nexusModId?: string;
+  /** The game the row's metadata names; none is the instance's game. */
+  readonly nexusGame?: string;
 }
 
 const hasNexusModId = (row: unknown): row is { nexusModId: string } =>

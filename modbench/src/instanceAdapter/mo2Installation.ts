@@ -2,7 +2,7 @@
 
 import { entryNamed } from './codecs/modlistText';
 import { basename, dirname, isAbsolute } from 'node:path';
-import { gamePathInfoForRelease, gameReleaseForMetaGame, gameReleaseForNexusDomain } from '../tables/gamePaths';
+import { gameReleaseForNexusDomain, nexusDomainForMetaGame } from '../tables/gamePaths';
 import { changeOwnedKeysInText, MOD_META_FILE_NAME, parseMetaIni } from './codecs/metaIni';
 import { readGameName } from './codecs/modOrganizerIni';
 import { ensureDir, exists, get, readOrReason, withLock, write } from './files';
@@ -25,22 +25,16 @@ async function nexusSourceOf(
 ): Promise<Pick<InstallationFile, 'source' | 'unsourcedGame'>> {
   if (nexusId === undefined && installedFiles.length === 0) return {};
   const game = gameName ?? readGameName(await get(settingsFile(instanceRoot)));
-  const release = gameReleaseForMetaGame(game);
-  const domain = release === undefined ? undefined : gamePathInfoForRelease(release)?.nexusSlug;
+  const domain = nexusDomainForMetaGame(game);
   return domain === undefined ? { unsourcedGame: game } : { source: formatNexusSource({ game: domain, modId: nexusId, files: installedFiles }) };
 }
 
 const sameFiles = (a: readonly InstalledFileId[], b: readonly InstalledFileId[]): boolean =>
   formatNexusSource({ game: '', modId: undefined, files: a }) === formatNexusSource({ game: '', modId: undefined, files: b });
 
-const domainOfGame = (game: string): string | undefined => {
-  const release = gameReleaseForMetaGame(game);
-  return release === undefined ? undefined : gamePathInfoForRelease(release)?.nexusSlug;
-};
-
 async function metaGameFor(domain: string, { instanceRoot }: Mo2Context): Promise<string | undefined> {
   const instanceGame = readGameName(await get(settingsFile(instanceRoot)));
-  return domainOfGame(instanceGame) === domain ? instanceGame : gameReleaseForNexusDomain(domain);
+  return nexusDomainForMetaGame(instanceGame) === domain ? instanceGame : gameReleaseForNexusDomain(domain);
 }
 
 type MetadataPlan = { readonly unwritable: string } | { readonly file: string; readonly held: string; readonly changes: Partial<OwnedMetaKeys> };
@@ -51,7 +45,7 @@ async function sourceChanges(carried: ModMeta, source: string, context: Mo2Conte
   const gameName = await metaGameFor(nexus.game, context);
   if (gameName === undefined) return { unwritable: `its source names the Nexus game '${nexus.game}', which Modbench has no game for` };
   return {
-    ...(carried.gameName !== undefined && domainOfGame(carried.gameName) === nexus.game ? {} : { gameName }),
+    ...(carried.gameName !== undefined && nexusDomainForMetaGame(carried.gameName) === nexus.game ? {} : { gameName }),
     ...(nexus.modId === carried.nexusId ? {} : { nexusId: nexus.modId }),
     ...(sameFiles(nexus.files, carried.installedFiles ?? []) ? {} : { installedFiles: nexus.files }),
   };

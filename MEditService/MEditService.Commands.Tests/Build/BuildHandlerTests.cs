@@ -67,7 +67,7 @@ public sealed class BuildHandlerTests : IDisposable
 
         Assert.True(refused.Refusal == BuildRefusal.BaseNotKnown, layout);
         Assert.Equal(
-            $"'{ModName}' was not built: '{Installed}' installs '{entry}', which its folder does not hold at that path, so build cannot yet tell where its files come from.",
+            $"was not built: '{Installed}' installs '{entry}', which its folder does not hold at that path, so build cannot yet tell where its files come from.",
             refused.Message);
         Assert.Equal([(inFolder, "installed a")], FilesIn(ModFolder));
     }
@@ -82,7 +82,7 @@ public sealed class BuildHandlerTests : IDisposable
         var refused = Assert.Single((await Build(_noArchives, installed)).Refused);
 
         Assert.Equal(BuildRefusal.InstallationFileMissing, refused.Refusal);
-        Assert.Equal($"'{ModName}' was not built: its installation file '{Downloaded}' is gone.", refused.Message);
+        Assert.Equal($"was not built: its installation file '{Downloaded}' is gone.", refused.Message);
         Assert.False(Directory.Exists(ModFolder));
     }
 
@@ -235,7 +235,7 @@ public sealed class BuildHandlerTests : IDisposable
         var refused = Assert.Single((await Build(_noArchives)).Refused);
 
         Assert.Equal(BuildRefusal.SourceUnreadable, refused.Refusal);
-        Assert.Equal($"'{ModName}' was not built: '{SourceFolder}' holds no build configuration.", refused.Message);
+        Assert.Equal($"was not built: '{SourceFolder}' holds no build configuration.", refused.Message);
         Assert.False(Directory.Exists(ModFolder));
     }
 
@@ -254,7 +254,7 @@ public sealed class BuildHandlerTests : IDisposable
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(refusal, refused.Refusal);
-        Assert.StartsWith($"'{ModName}' was not built: ", refused.Message, StringComparison.Ordinal);
+        Assert.StartsWith("was not built: ", refused.Message, StringComparison.Ordinal);
         Assert.EndsWith(why, refused.Message, StringComparison.Ordinal);
         Assert.False(Directory.Exists(ModFolder));
     }

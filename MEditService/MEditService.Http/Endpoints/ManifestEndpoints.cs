@@ -128,7 +128,7 @@ internal static class ManifestEndpoints
             {
                 refused.Add(new ModRestoreRefusal(
                     status.Mod, unreadable.Manifest ? RestoreRefusal.ManifestUnreadable : RestoreRefusal.Unreadable,
-                    $"'{status.Mod}' was skipped: {unreadable.Why}.", [], []));
+                    $"was skipped: {unreadable.Why}.", [], []));
                 continue;
             }
             var overwritesMetadata = status.ManifestMetadata is { } says && mod.Metadata?.IsOverwrittenBy(says) == true;

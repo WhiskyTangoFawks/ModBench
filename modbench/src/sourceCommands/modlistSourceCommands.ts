@@ -33,9 +33,12 @@ export interface ModlistInstance {
   readonly paths: { readonly sourceDirs: ReadonlyMap<string, string> };
 }
 
+/** What update manifest could not read of a mod, which a person or an agent reads by the mod's label. */
+export interface ModNote { readonly mod: string; readonly note: string }
+
 /** What update manifest answers: each mod updated or refused, and each entry a mod folder's listing skipped, or the
  *  whole gesture refused, as a message to show. */
-export type UpdateManifestResult = ({ applied: true; notes: readonly string[] } & UpdateManifestOutcome) | { applied: false; refusal: string };
+export type UpdateManifestResult = ({ applied: true; notes: readonly ModNote[] } & UpdateManifestOutcome) | { applied: false; refusal: string };
 
 /** Where update manifest is: the Instance adapter reading a mod's files, or mEdit updating manifests. */
 export type UpdateManifestStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Updating' } & ModlistProgress);
@@ -58,7 +61,7 @@ interface ReadMods {
   readonly sent: readonly ReadMod[];
   readonly gameFiles: readonly GameFile[];
   readonly refused: readonly ItemRefusal<string>[];
-  readonly notes: readonly string[];
+  readonly notes: readonly ModNote[];
 }
 
 async function byFolder(adapter: Adapter, mods: readonly string[]): Promise<ModByFolder[]> {
@@ -100,7 +103,7 @@ async function readMods(
   const sent: ReadMod[] = [];
   const gameFiles = new Map<string, GameFile>();
   const refused: ItemRefusal<string>[] = [];
-  const notes: string[] = [];
+  const notes: ModNote[] = [];
   for (const mod of mods) {
     if (signal?.aborted) break;
     onProgress?.({ phase: 'ReadingFiles', mod });
@@ -108,7 +111,7 @@ async function readMods(
     if ('refusal' in read) { refused.push({ item: mod, reason: read.refusal }); continue; }
     sent.push(read.read);
     for (const file of read.gameFiles) gameFiles.set(file.path.toLowerCase(), file);
-    notes.push(...read.notes.map((note) => `${mod}: ${note}`));
+    notes.push(...read.notes.map((note) => ({ mod, note })));
   }
   return { sent: signal?.aborted ? [] : sent, gameFiles: [...gameFiles.values()], refused, notes };
 }
@@ -176,7 +179,7 @@ async function restoreFromManifest(
 function cancelledBefore(mods: readonly string[], { landed, refused }: Extract<RestoreResult, { applied: true }>): ItemRefusal<string>[] {
   const answered = new Set([...landed.map(({ mod }) => mod), ...refused.map(({ item }) => item)]);
   return mods.filter((mod) => !answered.has(mod))
-    .map((mod) => ({ item: mod, reason: `'${mod}' was not finished: the restore was cancelled. Restoring it again finishes it.` }));
+    .map((mod) => ({ item: mod, reason: 'was not finished: the restore was cancelled. Restoring it again finishes it.' }));
 }
 
 async function withFilesNoLineNamesTrashed(
@@ -187,7 +190,7 @@ async function withFilesNoLineNamesTrashed(
   for (const mod of landed) {
     const why = await trashedOrWhy(adapter, trash, mod.mod, mod.namedByNoLine) ?? await metadataWrittenOrWhy(adapter, mod.mod, mod.metadata);
     if (why === undefined) finished.push(mod);
-    else unfinished.push({ item: mod.mod, reason: `'${mod.mod}' was not finished: ${why}. Restoring it again finishes it.` });
+    else unfinished.push({ item: mod.mod, reason: `was not finished: ${why}. Restoring it again finishes it.` });
   }
   return { finished, unfinished };
 }
@@ -323,7 +326,7 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
       const skipped: ItemRefusal<string>[] = [];
       for (const folder of folders) {
         const held = await adapter.modMetadata(folder.name);
-        if (held.kind === 'unreadable') skipped.push({ item: folder.name, reason: `'${folder.name}' was skipped: ${metadataUnreadable(held.reason)}.` });
+        if (held.kind === 'unreadable') skipped.push({ item: folder.name, reason: `was skipped: ${metadataUnreadable(held.reason)}.` });
         else asked.push(modWithMetadata(folder, held));
       }
       if (asked.length === 0) return { destroys: [], refused: skipped };
@@ -331,7 +334,7 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
       if (isReadFailed(listing)) return { refusal: `Could not ask what restore from manifest destroys: ${failureReason(listing)}` };
       for (const { mod, metadata } of listing.manifests) {
         const why = await adapter.unwritableMetadata(mod, heldByAdapter(metadata));
-        if (why !== undefined) skipped.push({ item: mod, reason: `'${mod}' was skipped: ${why}.` });
+        if (why !== undefined) skipped.push({ item: mod, reason: `was skipped: ${why}.` });
       }
       const unrestorable = new Set(skipped.map(({ item }) => item));
       return { destroys: listing.destroys.filter(({ mod }) => !unrestorable.has(mod)), refused: [...listing.refused, ...skipped] };
