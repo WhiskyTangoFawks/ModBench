@@ -46,7 +46,7 @@ class ReadAgainstTheFixtureInstance(unittest.TestCase):
 
     def test_finds_no_record_that_references_a_record_nothing_references(self):
         with window_of(self.url):
-            self.assertEqual(medit.references('000800:MBDevLight.esl'), [])
+            self.assertEqual(medit.referenced_by('000800:MBDevLight.esl'), [])
 
 
 class ReferencesAnswered(unittest.TestCase):
@@ -55,10 +55,9 @@ class ReferencesAnswered(unittest.TestCase):
             'formKey': '000800:Mod.esp', 'plugin': 'Mod.esp', 'origin': 'Some Mod', 'fieldPath': 'Conditions[0].Data.ParameterOneRecord',
             'recordType': 'cobj', 'recordTypeName': 'Constructible Object', 'editorId': 'Recipe'}]
         with medit_answering(200, answer) as url, window_of(url):
-            referrers = medit.references('000800:Other.esp')
-        self.assertEqual(referrers, [{
-            'form_key': '000800:Mod.esp', 'plugin': 'Mod.esp', 'origin': 'Some Mod',
-            'field_path': 'Conditions[0].Data.ParameterOneRecord', 'record_type': 'cobj', 'editor_id': 'Recipe'}])
+            referrers = medit.referenced_by('000800:Other.esp')
+        self.assertEqual(referrers, [medit.Referrer(
+            medit.Plugin('Mod.esp', 'Some Mod'), '000800:Mod.esp', 'Conditions[0].Data.ParameterOneRecord', 'cobj', 'Recipe')])
 
 
 if __name__ == '__main__':

@@ -23,6 +23,15 @@ class RecordName:
     editor_id: str | None
 
 
+@dataclass(frozen=True)
+class Referrer:
+    plugin: Plugin
+    form_key: str
+    field_path: str
+    record_type: str
+    editor_id: str | None
+
+
 def select(sql):
     """The rows of one SQL SELECT over the record views, each a dict of its columns."""
     return _call('POST', '/records/select', {'sql': sql})['rows']
@@ -113,12 +122,12 @@ def _hops(path):
         for member, index in _HOP.findall(path)]
 
 
-def references(form_key):
+def referenced_by(form_key):
     """The records that reference a record, each with its plugin and the field that holds the reference."""
     return [
-        {
-            'form_key': referrer['formKey'], 'plugin': referrer['plugin'], 'origin': referrer['origin'],
-            'field_path': referrer['fieldPath'], 'record_type': referrer['recordType'], 'editor_id': referrer['editorId']}
+        Referrer(
+            Plugin(referrer['plugin'], referrer['origin']), referrer['formKey'], referrer['fieldPath'],
+            referrer['recordType'], referrer['editorId'])
         for referrer in _call('GET', f'/records/{_quoted(form_key)}/references')]
 
 
