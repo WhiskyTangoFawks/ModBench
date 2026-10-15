@@ -58,6 +58,13 @@ class EditAgainstTheFixtureInstance(unittest.TestCase):
             medit.edit('MBDevConditions.esp', RECIPE, 'set', 'Conditions[0].ComparisonValue')
         self.assertIn('set takes a value', str(raised.exception))
 
+    def test_raises_naming_a_malformed_field_path_and_writes_nothing(self):
+        saved = self.recipe_file.read_text()
+        with window_of(self.fixture.url), self.assertRaises(medit.MEditError) as raised:
+            medit.edit('MBDevConditions.esp', RECIPE, 'set', 'Conditions[0]].ComparisonValue', 9.5)
+        self.assertIn('Conditions[0]].ComparisonValue', str(raised.exception))
+        self.assertEqual(self.recipe_file.read_text(), saved)
+
     def hold_unsaved(self, path, text):
         call('PUT', self.fixture.url + '/unsaved-documents', {'documents': [{'path': str(path), 'text': text}]})
         self.addCleanup(call, 'PUT', self.fixture.url + '/unsaved-documents', {'documents': []})

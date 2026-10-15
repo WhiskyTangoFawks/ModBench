@@ -86,10 +86,16 @@ def _plugin(plugin):
     return named['plugin'], named['origin']
 
 
+_FIELD_PATH = re.compile(r'[^.\[\]]+(\[\d+\])*(\.[^.\[\]]+(\[\d+\])*)*')
+_HOP = re.compile(r'([^.\[\]]+)|\[(\d+)\]')
+
+
 def _hops(path):
+    if not _FIELD_PATH.fullmatch(path):
+        raise MEditError(f'{path} is not a field path.')
     return [
         {'kind': 'member', 'name': member} if member else {'kind': 'index', 'index': int(index)}
-        for member, index in re.findall(r'([^.\[\]]+)|\[(\d+)\]', path)]
+        for member, index in _HOP.findall(path)]
 
 
 def references(form_key):
