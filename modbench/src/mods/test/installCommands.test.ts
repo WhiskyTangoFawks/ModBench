@@ -32,7 +32,6 @@ const { installMod } = vi.hoisted(() => ({ installMod: vi.fn() }));
 
 import { registerModInstallCommands } from '../installCommands';
 import { AgentCall } from '../../drivingLib/agentGesture';
-import type { ModStatus } from '../../client';
 import { Refusal } from '../../drivingLib/refusal';
 import { modlistCommands } from '../../modOrderCommands/modOrderCommands';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
@@ -49,20 +48,16 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 }
 
 const GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE ='Skyrim Special Edition';
-const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
+const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')), getModStatus: () => Promise.reject(new Error('unscripted')) };
 const COMMANDS = { ...modlistCommands(fakeInstanceAdapter().adapter, unscriptedMEdit), installMod };
 
 type ModInstallDeps = Parameters<typeof registerModInstallCommands>[0];
-
-const statusOf = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], noProvider: [], metadataDiffers: false, ...over });
 
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
     commands: COMMANDS,
     instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE, downloads: { kind: 'listed', rows: [downloadRowFixture('foo.7z')] } }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
-    readStatus: () => Promise.resolve([statusOf('Harder VATS')]),
     warnIfFomod: vi.fn(),
     downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     ...over,
@@ -135,7 +130,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
 
     expect(installMod).toHaveBeenCalledWith(
       { kind: 'downloadedFile', name: 'foo.7z', path: row.path, modID: '111', fileID: '222', version: '2.0' },
-      { kind: 'new', name: 'New Mod' }, GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE,
+      { kind: 'new', name: 'New Mod' }, GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE, true,
     );
   });
 
@@ -170,7 +165,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
 
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'foo' }));
     expect(installMod).toHaveBeenCalledWith(
-      { kind: 'archive', path: '/archive/foo.7z' }, { kind: 'new', name: 'New Mod' }, GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE,
+      { kind: 'archive', path: '/archive/foo.7z' }, { kind: 'new', name: 'New Mod' }, GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE, true,
     );
   });
 
@@ -209,7 +204,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     }));
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'Loose Files' }));
     expect(installMod).toHaveBeenCalledWith(
-      { kind: 'folder', path: '/somewhere/Loose Files' }, { kind: 'new', name: 'New Mod' }, GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE,
+      { kind: 'folder', path: '/somewhere/Loose Files' }, { kind: 'new', name: 'New Mod' }, GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE, true,
     );
   });
 });
@@ -248,7 +243,7 @@ describe('modbench.mod.install: a downloaded file is its source', () => {
     await invoke('modbench.mod.install', { argument: { kind: 'download', row } });
 
     expect(installMod).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'downloadedFile', name: 'foo.7z', path: row.path, modID: row.modID }), { kind: 'new', name: 'Foo' }, expect.any(String));
+      expect.objectContaining({ kind: 'downloadedFile', name: 'foo.7z', path: row.path, modID: row.modID }), { kind: 'new', name: 'Foo' }, expect.any(String), true);
     expect(showQuickPick).not.toHaveBeenCalled();
     expect(showOpenDialog).not.toHaveBeenCalled();
   });
@@ -305,7 +300,7 @@ describe('modbench.mod.install called by the agent', () => {
     const answered = await install([{ kind: 'downloadedFile', name: 'foo.7z' }], { name: 'Foo' });
 
     expect(installMod).toHaveBeenCalledWith(
-      { kind: 'downloadedFile', name: 'foo.7z', path: row.path, modID: '111', fileID: '222', version: '2.0' }, { kind: 'new', name: 'Foo' }, KEPT);
+      { kind: 'downloadedFile', name: 'foo.7z', path: row.path, modID: '111', fileID: '222', version: '2.0' }, { kind: 'new', name: 'Foo' }, KEPT, false);
     expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Foo', isFomod: false }], refused: [] }, partial: [] });
     expect(warnIfFomod).not.toHaveBeenCalled();
     expect(reporter.reports).toEqual([]);
@@ -319,8 +314,8 @@ describe('modbench.mod.install called by the agent', () => {
     await install([outsideArchive], { name: 'Bar' });
     await install([{ kind: 'folder', path: '/elsewhere/Loose' }], { name: 'Loose' });
 
-    expect(installMod).toHaveBeenNthCalledWith(1, outsideArchive, { kind: 'new', name: 'Bar' }, KEPT);
-    expect(installMod).toHaveBeenNthCalledWith(2, { kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'new', name: 'Loose' }, KEPT);
+    expect(installMod).toHaveBeenNthCalledWith(1, outsideArchive, { kind: 'new', name: 'Bar' }, KEPT, false);
+    expect(installMod).toHaveBeenNthCalledWith(2, { kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'new', name: 'Loose' }, KEPT, false);
     nothingAsked();
   });
 
@@ -331,7 +326,7 @@ describe('modbench.mod.install called by the agent', () => {
     registerModInstallCommands(deps());
     await install([{ kind: 'archive', path: row.path }], { name: 'Foo' });
 
-    expect(installMod).toHaveBeenCalledWith(expect.objectContaining({ kind: 'downloadedFile', name: 'foo.7z' }), { kind: 'new', name: 'Foo' }, KEPT);
+    expect(installMod).toHaveBeenCalledWith(expect.objectContaining({ kind: 'downloadedFile', name: 'foo.7z' }), { kind: 'new', name: 'Foo' }, KEPT, false);
   });
 
   it('installs over the target mod named, as an upgrade', async () => {
@@ -340,70 +335,26 @@ describe('modbench.mod.install called by the agent', () => {
     registerModInstallCommands(deps());
     const answered = await install([outsideArchive], { target: 'Harder VATS' });
 
-    expect(installMod).toHaveBeenCalledWith(outsideArchive, { kind: 'upgrade', name: 'Harder VATS' }, KEPT);
+    expect(installMod).toHaveBeenCalledWith(outsideArchive, { kind: 'upgrade', name: 'Harder VATS' }, KEPT, false);
     expect(answered).toMatchObject({ outcome: { landed: [{ name: 'Harder VATS' }] } });
   });
 
-  describe('an upgrade over a mod git would not overwrite', () => {
-    const upgrade = (readStatus: ModInstallDeps['readStatus'], options: object = { target: 'Harder VATS' }) => {
-      registerModInstallCommands(deps({ readStatus }));
-      return install([outsideArchive], options);
-    };
+  it('hands the install the force the options carry', async () => {
+    installMod.mockResolvedValue({ applied: true, isFomod: false });
 
-    it.each([
-      ['differs from its manifest', statusOf('Harder VATS', { differing: ['a.esp'] }), 'files whose bytes differ from its manifest: a.esp'],
-      ['holds a file no line names', statusOf('Harder VATS', { namedByNoLine: ['stray.txt'] }), 'files no line of its manifest names: stray.txt'],
-      ['lacks a file its manifest names', statusOf('Harder VATS', { gone: ['b.nif'] }), 'files its manifest names that its folder lacks: b.nif'],
-      ['has no manifest', statusOf('Harder VATS', { noManifest: true }), 'it has no manifest'],
-      ['has a file with no provider', statusOf('Harder VATS', { noProvider: ['c.dds'] }), 'files with no provider: c.dds'],
-    ])('refuses a mod that %s, listing the loss and naming force, and installs nothing', async (_, status, loss) => {
-      const answered = await upgrade(() => Promise.resolve([status]));
+    registerModInstallCommands(deps());
+    await install([outsideArchive], { target: 'Harder VATS', force: true });
 
-      expect(answered).toEqual({
-        applied: false, refusal: 'Failed to install "Harder VATS".',
-        detail: `The upgrade would lose, in "Harder VATS": ${loss}. Request it again with force to replace them.`,
-      });
-      expect(installMod).not.toHaveBeenCalled();
-    });
+    expect(installMod).toHaveBeenCalledWith(outsideArchive, { kind: 'upgrade', name: 'Harder VATS' }, KEPT, true);
+  });
 
-    it.each([
-      ['a status read that failed', () => Promise.resolve({ failed: 'unreachable' as const }), 'mEdit could not be reached.'],
-      ['a status mEdit could not read', () => Promise.resolve([statusOf('Harder VATS', { unreadable: { manifest: true, why: 'bad manifest' } })]), 'bad manifest'],
-      ['no status for the mod', () => Promise.resolve([]), undefined],
-    ])('refuses on %s', async (_, readStatus, why) => {
-      const answered = await upgrade(readStatus);
+  it('answers the refusal the install gives, as the failed install\'s detail', async () => {
+    installMod.mockResolvedValueOnce({ applied: false, refusal: 'would lose files' });
 
-      expect(answered).toMatchObject({ applied: false, refusal: 'Failed to install "Harder VATS".' });
-      if (why !== undefined) expect(answered).toMatchObject({ detail: expect.stringContaining(why) as unknown });
-      expect(installMod).not.toHaveBeenCalled();
-    });
+    registerModInstallCommands(deps());
+    const answered = await install([outsideArchive], { target: 'Harder VATS' });
 
-    it('installs over the mod when the options say force, reading no status', async () => {
-      installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
-      const readStatus = vi.fn();
-
-      await upgrade(readStatus, { target: 'Harder VATS', force: true });
-
-      expect(installMod).toHaveBeenCalledWith(outsideArchive, { kind: 'upgrade', name: 'Harder VATS' }, KEPT);
-      expect(readStatus).not.toHaveBeenCalled();
-    });
-
-    it('installs over a mod whose status shows nothing to lose', async () => {
-      installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
-
-      await upgrade(() => Promise.resolve([statusOf('Harder VATS')]));
-
-      expect(installMod).toHaveBeenCalled();
-    });
-
-    it('reads no status for a new mod', async () => {
-      installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
-      const readStatus = vi.fn();
-
-      await upgrade(readStatus, { name: 'Bar' });
-
-      expect(readStatus).not.toHaveBeenCalled();
-    });
+    expect(answered).toEqual({ applied: false, refusal: 'Failed to install "Harder VATS".', detail: 'would lose files' });
   });
 
   it('answers a FOMOD archive as one, warning nothing itself', async () => {

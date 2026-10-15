@@ -57,7 +57,7 @@ const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDe
 
 const installDownloaded = async (file: DownloadFile, listed: readonly DownloadFile[], deps: DownloadInstallDeps): Promise<void> => {
   registerModInstallCommands({
-    commands: installOver(), instance: fakeInstance(listed), reporterFor: () => recordingReporter(), readStatus: () => Promise.reject(new Error('a view call reads no status')),
+    commands: installOver(), instance: fakeInstance(listed), reporterFor: () => recordingReporter(),
     warnIfFomod: deps.warnIfFomod, downloadInstall: deps,
   });
   const handler = registerCommand.mock.calls.findLast((call) => call[0] === 'modbench.mod.install')?.[1];
@@ -88,7 +88,7 @@ describe('modbench.mod.install over a downloaded file', () => {
     await vi.waitFor(() => {
       expect(installMod).toHaveBeenCalledWith(
         { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: undefined, fileID: undefined, version: undefined },
-        { kind: 'new', name: 'foo' }, 'Fallout 4');
+        { kind: 'new', name: 'foo' }, 'Fallout 4', true);
     });
   });
 
@@ -100,7 +100,7 @@ describe('modbench.mod.install over a downloaded file', () => {
     await vi.waitFor(() => {
       expect(installMod).toHaveBeenCalledWith(
         { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: '123', fileID: '456', version: '2.0' },
-        { kind: 'new', name: 'foo' }, 'Fallout 4');
+        { kind: 'new', name: 'foo' }, 'Fallout 4', true);
     });
   });
 
@@ -119,7 +119,7 @@ describe('modbench.mod.install over a downloaded file', () => {
     expect(report.shownFailures).toEqual([]);
     expect(installMod).toHaveBeenCalledWith(
         { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: undefined, fileID: undefined, version: undefined },
-        { kind: 'new', name: 'foo' }, 'Fallout 4');
+        { kind: 'new', name: 'foo' }, 'Fallout 4', true);
   });
 
   it('install: cancelling the name prompt installs nothing', async () => {
@@ -210,7 +210,7 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
 
     expect(installMod).toHaveBeenCalledWith(
         { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: '111', fileID: '999', version: undefined },
-        { kind: 'upgrade', name: 'Harder VATS' }, 'Fallout 4');
+        { kind: 'upgrade', name: 'Harder VATS' }, 'Fallout 4', true);
     expect(showInputBox).not.toHaveBeenCalled();
   });
 
@@ -221,7 +221,7 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
 
     expect(installMod).toHaveBeenCalledWith(
         { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: '111', fileID: '999', version: undefined },
-        { kind: 'new', name: 'foo' }, 'Fallout 4');
+        { kind: 'new', name: 'foo' }, 'Fallout 4', true);
   });
 
   it('Esc installs nothing', async () => {
@@ -247,7 +247,7 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
 
     expect(installMod).toHaveBeenCalledWith(
         { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: undefined, fileID: undefined, version: undefined },
-        { kind: 'new', name: 'foo' }, 'Fallout 4');
+        { kind: 'new', name: 'foo' }, 'Fallout 4', true);
     expect(createQuickPick).not.toHaveBeenCalled();
   });
 });

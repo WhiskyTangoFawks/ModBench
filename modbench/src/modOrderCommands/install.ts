@@ -6,6 +6,10 @@ import type {
 } from '../instanceAdapter/instanceAdapter';
 import { EMPTY_MOD_NAME, goneFromDisk, modNameTakenRefusal } from '../coreLib/commandRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
+import { byFolder } from '../coreLib/modFolders';
+import type { MEditClient, ModStatus } from '../client';
+import { withMetadataRead } from '../wire/modByFolder';
+import { failureReason, isReadFailed } from '../wire/readFailed';
 
 /** What a mod is installed from: an archive or a folder the user picked, or a downloaded file by
  *  its name and path in the instance value, with the Nexus ids and version its metadata holds. */
@@ -32,6 +36,38 @@ const claimRefusal = (target: InstallTarget): string => (target.kind === 'new'
   ? modNameTakenRefusal(target.name)
   : `Cannot upgrade "${target.name}": there is no folder by that name under mods/.`);
 
+const listed = (what: string, files: readonly string[]): string | undefined =>
+  (files.length > 0 ? `${what}: ${files.join(', ')}` : undefined);
+
+const upgradeLoss = (status: ModStatus): string | undefined => {
+  const parts = [
+    status.noManifest ? 'it has no manifest' : undefined,
+    listed('files whose bytes differ from its manifest', status.differing),
+    listed('files no line of its manifest names', status.namedByNoLine),
+    listed('files its manifest names that its folder lacks', status.gone),
+    listed('files with no provider', status.noProvider),
+  ].filter((part) => part !== undefined);
+  return parts.length === 0 ? undefined : parts.join('; ');
+};
+
+type StatusClient = Pick<MEditClient, 'getModStatus'>;
+
+/** What an upgrade over the mod would lose, or why mEdit could not say (agent.md, Any agent, story 7). */
+async function upgradeRefusal(
+  adapter: InstanceAdapter, client: StatusClient, target: InstallTarget, force: boolean,
+): Promise<string | undefined> {
+  if (force || target.kind !== 'upgrade') return undefined;
+  const mod = target.name;
+  const asked = await withMetadataRead(await byFolder(adapter, [mod]), (name) => adapter.modMetadata(name));
+  const answer = asked.length === 0 ? [] : await client.getModStatus(asked, adapter.statCacheFolder);
+  if (isReadFailed(answer)) return `"${mod}" status could not be read: ${failureReason(answer)}`;
+  const status = answer.find((read) => read.mod === mod);
+  if (status === undefined) return `"${mod}" has no status to read.`;
+  if (status.unreadable) return `"${mod}" status could not be read: ${status.unreadable.why}`;
+  const loss = upgradeLoss(status);
+  return loss === undefined ? undefined : `The upgrade would lose, in "${mod}": ${loss}. Request it again with force to replace them.`;
+}
+
 async function markInstalled(adapter: InstanceAdapter, name: string): Promise<string | undefined> {
   try {
     const marked = await adapter.markDownloadedFile(name, 'Installed');
@@ -41,12 +77,16 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
   }
 }
 
-/** `modbench.mod.install`, then a downloaded file marked installed. `downloadRefusal` says why the
- *  mark failed, so a landed install is not reported as failed (downloads.md, Reporting, story 1). */
+/** `modbench.mod.install`, then a downloaded file marked installed. An upgrade that would lose files is refused unless
+ *  forced. `downloadRefusal` says why the mark failed, so a landed install is not reported as failed (downloads.md,
+ *  Reporting, story 1). */
 export async function installMod(
-  adapter: InstanceAdapter, source: ModSource, target: InstallTarget, gameName: string,
+  { adapter, mEdit }: { adapter: InstanceAdapter; mEdit: StatusClient },
+  source: ModSource, target: InstallTarget, gameName: string, force: boolean,
 ): Promise<CommandResult<{ isFomod: boolean; downloadRefusal?: string }>> {
   if (target.kind === 'new' && target.name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
+  const refusal = await upgradeRefusal(adapter, mEdit, target, force);
+  if (refusal !== undefined) return { applied: false, refusal };
   let outcome: InstallOutcome;
   try {
     const extracted = source.kind === 'downloadedFile' ? { kind: 'archive' as const, path: source.path } : source;

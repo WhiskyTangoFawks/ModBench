@@ -31,7 +31,7 @@ describe('the Downloads-Mods seam: modbench.mod.install given a Downloads row', 
     createQuickPick.mockReturnValue(qp);
     registerModInstallCommands({
       commands: modlistCommands(fakeInstanceAdapter().adapter, new InMemoryMEditClient()), instance,
-      reporterFor: () => recordingReporter(), warnIfFomod: vi.fn(), readStatus: () => Promise.reject(new Error('a view call reads no status')),
+      reporterFor: () => recordingReporter(), warnIfFomod: vi.fn(),
       downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     });
     const node = new DownloadNode(downloadRowFixture('foo.7z'));

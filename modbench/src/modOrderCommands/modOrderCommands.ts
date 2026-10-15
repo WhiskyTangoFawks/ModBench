@@ -98,7 +98,7 @@ export interface OriginFileRef {
 
 interface SourceModWriters {
   readonly adapter: InstanceAdapter;
-  readonly mEdit: Pick<MEditClient, 'changeBuildConfiguration'>;
+  readonly mEdit: Pick<MEditClient, 'changeBuildConfiguration' | 'getModStatus'>;
 }
 
 const UNMARK: Record<OriginFileMark, OriginFileMark> = { Excluded: 'Included', Included: 'Excluded' };
@@ -446,7 +446,7 @@ export function modlistCommands(adapter: InstanceAdapter, mEdit: SourceModWriter
     separatorNameRefusal: (...args: TailOf<typeof separatorNameRefusal>) => separatorNameRefusal(entryKey, ...args),
     renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(entryKey, ...args),
     newModNameRefusal: (...args: TailOf<typeof newModNameRefusal>) => newModNameRefusal(entryKey, ...args),
-    installMod: (...args: TailOf<typeof installMod>) => installMod(adapter, ...args),
+    installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, mEdit }, ...args),
   };
 }
 

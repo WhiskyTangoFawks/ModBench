@@ -2,21 +2,91 @@ import { describe, it, expect } from 'vitest';
 import { modlistCommands, type ModSource } from '../modOrderCommands';
 import type { InstallSource, InstallTarget } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import type { ModStatus } from '../../client';
+import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const MOD = 'Freshly Installed Mod';
 const GAME_NAME = 'Fallout 4';
 const ARCHIVE: InstallSource = { kind: 'archive', path: '/elsewhere/Freshly-1-0.7z' };
 const NEW_MOD: InstallTarget = { kind: 'new', name: MOD };
+const UPGRADED = { kind: 'upgrade', name: 'Harder VATS' } as const;
 const DOWNLOADED = { kind: 'downloadedFile', name: 'Freshly-1-0.7z', path: '/downloads/Freshly-1-0.7z' } as const;
 
-function install(source: ModSource, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}) {
+function install(source: ModSource, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, client = new InMemoryMEditClient()) {
   const fake = fakeInstanceAdapter(undefined, answers);
-  const outcome = modlistCommands(fake.adapter, new InMemoryMEditClient()).installMod(source, target, GAME_NAME);
-  return outcome.then((result) => ({ result, calls: fake.calls }));
+  const outcome = modlistCommands(fake.adapter, client).installMod(source, target, GAME_NAME, force);
+  return outcome.then((result) => ({ result, calls: fake.calls, client }));
 }
 
+const statusOf = (over: Partial<ModStatus> = {}): ModStatus =>
+  ({ mod: UPGRADED.name, noManifest: false, differing: [], namedByNoLine: [], gone: [], noProvider: [], metadataDiffers: false, ...over });
+
+const clientAnswering = (answer: ModStatus[] | ReadFailed): InMemoryMEditClient => {
+  const client = new InMemoryMEditClient();
+  if (isReadFailed(answer)) client.setQueryFailure('getModStatus', answer); else client.setQueryAnswer('getModStatus', answer);
+  return client;
+};
+
 describe('installMod', () => {
+  describe('an upgrade without force', () => {
+    it.each([
+      ['differs from its manifest', { differing: ['a.esp'] }, 'files whose bytes differ from its manifest: a.esp'],
+      ['holds a file no line names', { namedByNoLine: ['stray.txt'] }, 'files no line of its manifest names: stray.txt'],
+      ['lacks a file its manifest names', { gone: ['b.nif'] }, 'files its manifest names that its folder lacks: b.nif'],
+      ['has no manifest', { noManifest: true }, 'it has no manifest'],
+      ['has a file with no provider', { noProvider: ['c.dds'] }, 'files with no provider: c.dds'],
+    ] as const)('refuses a mod that %s, listing the loss and naming force, and installs nothing', async (_, over, loss) => {
+      const { result, calls } = await install(ARCHIVE, UPGRADED, {}, false, clientAnswering([statusOf(over)]));
+
+      expect(result).toEqual({
+        applied: false,
+        refusal: `The upgrade would lose, in "Harder VATS": ${loss}. Request it again with force to replace them.`,
+      });
+      expect(calls).toEqual([]);
+    });
+
+    it.each([
+      ['a status read that failed', { failed: 'unreachable' }, 'mEdit could not be reached.'],
+      ['a status mEdit could not read', [statusOf({ unreadable: { manifest: true, why: 'bad manifest' } })], 'bad manifest'],
+      ['no status for the mod', [], 'has no status to read'],
+    ])('refuses on %s and installs nothing', async (_, answer, why) => {
+      const { result, calls } = await install(ARCHIVE, UPGRADED, {}, false, clientAnswering(answer));
+
+      expect(result).toMatchObject({ applied: false, refusal: expect.stringContaining(why) as unknown });
+      expect(calls).toEqual([]);
+    });
+
+    it('asks mEdit for the mod by its folder, with its metadata files and the stat cache', async () => {
+      const { client } = await install(ARCHIVE, UPGRADED, {}, false, clientAnswering([statusOf()]));
+
+      expect(client.calls).toEqual([{
+        method: 'getModStatus',
+        args: [[{ name: 'Harder VATS', folder: '/mods/Harder VATS', metadataFiles: ['meta.ini'], metadata: { installationFiles: [] } }], '/instance/stat-cache'],
+      }]);
+    });
+
+    it('installs over a mod whose status shows nothing to lose', async () => {
+      const { result } = await install(ARCHIVE, UPGRADED, {}, false, clientAnswering([statusOf()]));
+
+      expect(result).toEqual({ applied: true, isFomod: false });
+    });
+  });
+
+  it('installs over a mod that would lose files when forced, reading no status', async () => {
+    const { result, client } = await install(ARCHIVE, UPGRADED, {}, true, clientAnswering([statusOf({ noManifest: true })]));
+
+    expect(result).toEqual({ applied: true, isFomod: false });
+    expect(client.calls).toEqual([]);
+  });
+
+  it('reads no status for a new mod, forced or not', async () => {
+    const { result, client } = await install(ARCHIVE, NEW_MOD, {}, false);
+
+    expect(result).toEqual({ applied: true, isFomod: false });
+    expect(client.calls).toEqual([]);
+  });
+
   it.each([
     ['a new mod whose name a folder holds, in the words create empty mod uses', { kind: 'new', name: 'Harder VATS' }, 'A mod named "Harder VATS" already exists — install its next release from the Downloads view instead.'],
     ['an upgrade of a mod no folder holds', { kind: 'upgrade', name: 'Vanished Mod' }, 'Cannot upgrade "Vanished Mod": there is no folder by that name under mods/.'],
