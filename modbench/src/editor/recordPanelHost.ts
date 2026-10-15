@@ -68,7 +68,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     // No new tab took them, so VS Code showed the document's tab already open in the group, which
     // is active now (editor.md, Opening, story 3).
     for (const tab of this.deps.tabs) {
-      if (tab.copy && tab.document.toString() === key && tab.panel.active) tab.postOnceListening({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: [...untaken] });
+      if (tab.document.toString() === key && tab.panel.active) tab.postOnceListening({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: [...untaken] });
     }
   }
 

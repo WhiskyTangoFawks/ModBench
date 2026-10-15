@@ -1478,7 +1478,7 @@ describe('several records opened at once', () => {
     expect(columnsPosted(tab)).toHaveLength(1);
   });
 
-  it('leave alone a file\'s tab that shows no record yet, whose page asks its first read only once it does', async () => {
+  it('show their columns on a file\'s tab already open, once mEdit says which record its file holds', async () => {
     const GUN_FILE = '/source/ModA/plugin-source/A.esp/Weapons/Gun.json';
     const client = severalClient();
     client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
@@ -1493,11 +1493,14 @@ describe('several records opened at once', () => {
       loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1 },
     });
     await settle();
+    expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
+    expect(columnsPosted(tab)).toEqual([]);
     tab.receive(firstRead);
     await settle();
 
-    expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
-    expect(columnsPosted(tab)).toEqual([]);
+    expect(columnsPosted(tab)).toEqual([[{
+      type: 'showColumns', columns: [{ formKey: AMMO, plugin: winner }, { formKey: KNIFE, plugin: knifeIn }],
+    }]]);
   });
 
   it('leave the tab they opened to show every active plugin\'s copy again when its record is opened alone onto it', async () => {

@@ -1,5 +1,5 @@
 import { defineConfig } from '@vscode/test-cli';
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
@@ -16,7 +16,6 @@ const freePort = () => new Promise((resolve, reject) => {
 const port = await freePort();
 const agentPort = await freePort();
 const runDir = mkdtempSync(path.join(tmpdir(), 'modbench-it-'));
-process.on('exit', () => rmSync(runDir, { recursive: true, force: true, maxRetries: 5 }));
 
 // Named by the setting so the instance never falls back to detecting this machine's own install.
 const gameDirectory = path.join(runDir, 'game');
@@ -33,6 +32,14 @@ const workspace = (name, fixture) => {
 };
 
 const logs = path.join(runDir, 'logs');
+// A failed run keeps its logs, where the suite leaves the mock backend's requests.
+process.on('exit', (code) => {
+  if (code !== 0 && existsSync(logs)) {
+    renameSync(logs, `${runDir}-logs`);
+    console.error(`The failed run's logs: ${runDir}-logs`);
+  }
+  rmSync(runDir, { recursive: true, force: true, maxRetries: 5 });
+});
 
 // test-cli hands cachePath through to test-electron's download, so one install serves every
 // worktree. The download makes only the last folder of the path, so a first run makes the rest.

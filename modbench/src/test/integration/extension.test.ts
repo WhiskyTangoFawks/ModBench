@@ -472,6 +472,11 @@ before(async function () {
   await waitFor('Modbench to launch mEdit and open its notification stream', () => sseClients.length > 0);
 });
 
+afterEach(function () {
+  if (this.currentTest?.state !== 'failed') return;
+  writeFileSync(path.join(LOGS, 'mock-backend.json'), JSON.stringify({ requestLog, comparedSideBySide, comparedTexts }, null, 1));
+});
+
 after(async () => {
   mockBackend.closeAllConnections();
   await new Promise<void>((resolve, reject) =>
