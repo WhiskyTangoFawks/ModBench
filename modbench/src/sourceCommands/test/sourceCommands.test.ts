@@ -20,7 +20,7 @@ describe('sourceCommands build', () => {
   it('hands mEdit each mod with the source folder that builds it, its folder, its installation files and the files the repository commits itself, the release\'s archive variants and the stat cache\'s folder', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
-    const adapter = fakeAdapter({ installations: new Map([['ModA', recording([INSTALLED])]]) });
+    const adapter = fakeAdapter({ installations: new Map([['ModA', recording([INSTALLED])]]), versions: new Map([['ModA', '1.2.3']]) });
 
     await sourceCommands({ client, adapter }).build(['ModA', 'ModB'], 'Fallout4', SOURCES);
 
@@ -28,7 +28,7 @@ describe('sourceCommands build', () => {
     expect(client.calls).toEqual([{
       method: 'build',
       args: [[
-        { name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], committedFiles: ['meta.ini'] },
+        { name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], committedFiles: ['meta.ini'], version: '1.2.3' },
         { name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', installationFiles: [], committedFiles: ['meta.ini'] },
       ], { excludedSuffix: '.excluded', archives: { general: ba2, textures: ba2 }, statCache: '/instance/stat-cache' }],
     }]);

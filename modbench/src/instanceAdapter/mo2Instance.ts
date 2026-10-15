@@ -56,7 +56,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter
   return {
     names,
     reading: () => readInstance(source),
-    ...mo2Reads(context), ...mo2Installation(context, hashes), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives), ...mo2Repository(context, hashes),
+    ...mo2Reads(context), ...mo2Installation(context, hashes, source), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives), ...mo2Repository(context, hashes),
     originFileHash: hashes.originFileHash,
     statCacheFolder: statCacheDir(instanceRoot),
     subscribe: (listener) => context.watch.subscribe(listener),

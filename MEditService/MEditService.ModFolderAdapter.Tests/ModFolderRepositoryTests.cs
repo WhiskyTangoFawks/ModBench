@@ -359,7 +359,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void WriteManifest_WritesOneLinePerSourceAndFile_InPathOrder_AFileLineNamingOnlyItsProvider()
     {
         var manifest = new Manifest(
-            [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
+            [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:fallout4:1;1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
             [new ManifestSource("Data/Game.esm", 9, "CCCC")],
             [
                 new ManifestFile("z.txt", new FileProvider.NoProvider()),
@@ -372,7 +372,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.True(_repository.WriteManifest(_root, "mod", manifest));
 
         Assert.Equal(
-            "{\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"source\":\"nexus:1:2\"}\n"
+            "{\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"source\":\"nexus:fallout4:1;1:2\"}\n"
             + "{\"installationFile\":\"Patch.zip\",\"size\":7,\"hash\":\"BBBB\"}\n"
             + "{\"gameFile\":\"Data/Game.esm\",\"size\":9,\"hash\":\"CCCC\"}\n"
             + "{\"path\":\"a.nif\"}\n"
@@ -412,7 +412,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void ReadManifest_ReadsWhatWriteManifestWrote()
     {
         var manifest = new Manifest(
-            [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
+            [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:fallout4:1;1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
             [new ManifestSource("Data/Game.esm", 9, "CCCC")],
             [
                 new ManifestFile("a.nif", new FileProvider.FirstInstallationFile()),
@@ -429,6 +429,26 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal(manifest.InstallationFiles, read.InstallationFiles);
         Assert.Equal(manifest.GameFiles, read.GameFiles);
         Assert.Equal(manifest.Files, read.Files);
+    }
+
+    [Fact]
+    public void AManifestsVersion_IsItsFirstLine_AndIsReadBack()
+    {
+        var manifest = new Manifest([new ManifestSource("Mod.7z", 100, "AAAA")], [], [new ManifestFile("a.nif", new FileProvider.FirstInstallationFile())], "1.2.3");
+
+        _repository.WriteManifest(_root, "mod", manifest);
+
+        Assert.StartsWith("{\"version\":\"1.2.3\"}\n{\"installationFile\"", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+        Assert.Equal("1.2.3", _repository.ReadManifest(_root, "mod")?.Version);
+    }
+
+    [Fact]
+    public void AManifestWithoutAVersion_WritesNoVersionLine()
+    {
+        _repository.WriteManifest(_root, "mod", new Manifest([], [], [new ManifestFile("a.nif", new FileProvider.NoProvider())]));
+
+        Assert.DoesNotContain("version", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+        Assert.Null(_repository.ReadManifest(_root, "mod")?.Version);
     }
 
     [Fact]

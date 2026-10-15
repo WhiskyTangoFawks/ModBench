@@ -163,8 +163,19 @@ public sealed class RestoreASourceModTests : IDisposable
             (unfinished.Refusal.Kind, unfinished.Message));
     }
 
-    private void ManifestedAt(string commit, string? remote = null) =>
-        _folders.WriteManifest(ModFolder, ModName, new Manifest([], [], [new ManifestFile("meshes/c.nif", new FileProvider.Source(remote ?? RemoteFolder, commit))]));
+    [Fact]
+    public async Task TheRebuild_KeepsTheVersionItsManifestNames()
+    {
+        ManifestedAt(_first, version: "1.2.3");
+
+        await Restore();
+
+        Assert.Equal("1.2.3", _folders.ReadManifest(ModFolder, ModName)?.Version);
+    }
+
+    private void ManifestedAt(string commit, string? remote = null, string? version = null) =>
+        _folders.WriteManifest(
+            ModFolder, ModName, new Manifest([], [], [new ManifestFile("meshes/c.nif", new FileProvider.Source(remote ?? RemoteFolder, commit))], version));
 
     private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore() => Restore(new InMemoryNotificationPublisher(), CancellationToken.None);
 

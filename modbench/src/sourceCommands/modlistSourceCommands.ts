@@ -12,7 +12,7 @@ import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed
 import { archiveVariants } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
-  'installationFiles' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'
+  'installationFiles' | 'modVersion' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'
   | 'statCacheFolder' | 'trashModFile' | 'sourceFolder' | 'excludedSuffix'>;
 
 interface ModlistSourceCommandsDeps {
@@ -49,7 +49,7 @@ export type WhatRestoreDestroys = { destroys: readonly ModRestoreDestroys[]; ref
 
 export type RestoreStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Restoring' } & ModlistProgress);
 
-type ReadMod = Omit<UpdateManifestMod, 'isSourceMod'>;
+type ReadMod = Omit<UpdateManifestMod, 'isSourceMod' | 'version'>;
 
 interface ReadMods {
   readonly sent: readonly ReadMod[];
@@ -67,7 +67,8 @@ async function byFolder(adapter: Adapter, mods: readonly string[]): Promise<ModB
   return asked;
 }
 
-const wireFile = (file: InstallationFile): ReadMod['installationFiles'][number] => ({ ...file, entries: [...file.entries] });
+const wireFile = ({ path, source, size, hash, entries }: InstallationFile): ReadMod['installationFiles'][number] =>
+  ({ path, source, size, hash, entries: [...entries] });
 
 async function readMod(
   adapter: Adapter, mod: string, dataFolder: string,
@@ -80,7 +81,14 @@ async function readMod(
   if (overridden.kind === 'unreadable') return { refusal: overridden.reason };
   return {
     read: { name: mod, folder, installationFiles: installed.answer.map(wireFile), committedFiles: [...adapter.managerFilesInModFolder] },
-    overridden: overridden.answer,
+    overridden: {
+      ...overridden.answer,
+      notes: [
+        ...overridden.answer.notes,
+        ...installed.answer.flatMap(({ unsourcedGame }) =>
+          unsourcedGame === undefined ? [] : [`its installation file comes from '${unsourcedGame}', which has no Nexus domain here, so its manifest names no source`]),
+      ],
+    },
   };
 }
 
@@ -243,8 +251,11 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
       if (gameFolder.kind !== 'found') return { applied: false, refusal: 'Could not update manifests: the game folder was not found.' };
       const { sent, gameFiles, refused, notes } = await readMods(adapter, mods, gameFolder.dataFolder, { onProgress, signal });
       if (sent.length === 0) return { applied: true, landed: [], refused, notes };
+      const versioned = await Promise.all(sent.map(async (mod) => ({
+        ...mod, isSourceMod: instance.paths.sourceDirs.has(mod.name), version: await adapter.modVersion(mod.name),
+      })));
       const outcome = await client.updateManifest(
-        sent.map((mod) => ({ ...mod, isSourceMod: instance.paths.sourceDirs.has(mod.name) })), { gameFiles: [...gameFiles], statCache: adapter.statCacheFolder }, { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
+        versioned, { gameFiles: [...gameFiles], statCache: adapter.statCacheFolder }, { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
       return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes };
     },
 

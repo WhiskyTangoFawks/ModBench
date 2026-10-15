@@ -321,7 +321,7 @@ public sealed class BuildHandlerTests : IDisposable
         File.WriteAllText(stringsFiles[0], "changed outside Modbench");
 
         var built = Assert.Single((await TestEditService.BuildHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [], [MetaIni])], _noArchives)).Landed).Outcome;
+            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [], [MetaIni], null)], _noArchives)).Landed).Outcome;
 
         Assert.Equal(["Fixture.esp", $"Strings/{Path.GetFileName(stringsFiles[0])}"], built.Overwritten);
     }
@@ -334,7 +334,7 @@ public sealed class BuildHandlerTests : IDisposable
         var commit = GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "rev-parse", "HEAD").Trim();
 
         Assert.Single((await TestEditService.BuildHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [], [MetaIni])], _noArchives)).Landed);
+            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [], [MetaIni], null)], _noArchives)).Landed);
 
         var stringsFiles = Directory.GetFiles(Path.Combine(ModFolder, "Strings")).Select(file => $"Strings/{Path.GetFileName(file)}");
         Assert.Equal(
@@ -352,7 +352,7 @@ public sealed class BuildHandlerTests : IDisposable
         _holder.Apply(SnapshotPlugins.Snapshot(Path.Combine(_root, "game"), _root, GameRelease.Fallout4, []));
 
         var built = Assert.Single((await TestEditService.BuildHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [], [MetaIni])], _noArchives)).Landed).Outcome;
+            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [], [MetaIni], null)], _noArchives)).Landed).Outcome;
 
         Assert.Equal(["Fixture.esp"], built.Compiled.Select(plugin => plugin.Item.Name));
         Assert.True(File.Exists(Path.Combine(ModFolder, "Fixture.esp")));
@@ -371,6 +371,24 @@ public sealed class BuildHandlerTests : IDisposable
         await Landed(installed);
 
         Assert.Equal([(MetaIni, "[General]"), ("textures/a.dds", "installed a"), ("textures/b.dds", "edited b")], FilesIn(ModFolder));
+    }
+
+    [Fact]
+    public async Task TheModsVersionAndInstallationSources_AreInTheManifestTheBuildWrites()
+    {
+        var installed = Download(("textures/a.dds", "installed a")) with { Source = "nexus:fallout4:1;1:2" };
+        WriteSource("{\"output\": \"Mod\"}");
+        WriteInFolder("textures/a.dds", "installed a");
+        WriteInFolder(MetaIni, "[General]");
+
+        _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
+        var built = await TestEditService.BuildHandler(_holder)
+            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [installed], [MetaIni], "1.2.3")], _noArchives);
+
+        Assert.Empty(built.Refused);
+
+        var manifest = new ModFolderRepository(TimeProvider.System).ReadManifest(ModFolder, ModName).Require();
+        Assert.Equal(("1.2.3", "nexus:fallout4:1;1:2"), (manifest.Version, manifest.InstallationFiles.Single().Source));
     }
 
     private async Task InitializedWithALocalizedPlugin()
@@ -398,7 +416,7 @@ public sealed class BuildHandlerTests : IDisposable
     private Task<SelectionResult<string, BuildRefusal, BuiltMod>> Build(InstanceToBuild instance, params InstallationFile[] installed)
     {
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
-        return TestEditService.BuildHandler(_holder).BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, installed, [MetaIni])], instance);
+        return TestEditService.BuildHandler(_holder).BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, installed, [MetaIni], null)], instance);
     }
 
     private InstallationFile Download(params (string Path, string Text)[] entries)

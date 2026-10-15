@@ -5,7 +5,8 @@ namespace MEditService.ModFolderAdapter;
 public sealed record Manifest(
     IReadOnlyList<ManifestSource> InstallationFiles,
     IReadOnlyList<ManifestSource> GameFiles,
-    IReadOnlyList<ManifestFile> Files)
+    IReadOnlyList<ManifestFile> Files,
+    string? Version = null)
 {
     /// <summary>The provider of <paramref name="file"/>, by its source's hash, or the commit its source builds at, and the
     /// path in it: what fixes the file's bytes. Null when the line names none.</summary>

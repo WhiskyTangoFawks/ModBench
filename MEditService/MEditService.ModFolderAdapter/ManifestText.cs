@@ -13,6 +13,7 @@ internal static class ManifestText
     public static string Of(Manifest manifest)
     {
         var text = new StringBuilder();
+        if (manifest.Version is { } version) Line(text, writer => { writer.WriteStartObject(); writer.WriteString("version", version); writer.WriteEndObject(); });
         foreach (var source in manifest.InstallationFiles) Line(text, writer => Source(writer, "installationFile", source));
         foreach (var source in manifest.GameFiles.OrderBy(s => s.Name, StringComparer.Ordinal))
             Line(text, writer => Source(writer, "gameFile", source));
@@ -26,6 +27,7 @@ internal static class ManifestText
     {
         List<ManifestSource> installationFiles = [], gameFiles = [];
         List<ManifestFile> files = [];
+        string? version = null;
         foreach (var (at, line) in text.Split('\n').Index())
         {
             if (line.Length == 0) continue;
@@ -34,6 +36,7 @@ internal static class ManifestText
                 using var parsed = JsonDocument.Parse(line);
                 var root = parsed.RootElement;
                 if (root.TryGetProperty("path", out var path)) files.Add(FileOf(Text(path), root));
+                else if (root.TryGetProperty("version", out var held)) version = Text(held);
                 else if (root.TryGetProperty("installationFile", out var name)) installationFiles.Add(SourceOf(name, root));
                 else if (root.TryGetProperty("gameFile", out var game)) gameFiles.Add(SourceOf(game, root));
                 else throw new FormatException();
@@ -43,7 +46,7 @@ internal static class ManifestText
                 throw new InvalidDataException($"its manifest cannot be read at line {at + 1}", e);
             }
         }
-        return new Manifest(installationFiles, gameFiles, files);
+        return new Manifest(installationFiles, gameFiles, files, version);
     }
 
     private static string Text(JsonElement value) => value.GetString() ?? throw new FormatException();
