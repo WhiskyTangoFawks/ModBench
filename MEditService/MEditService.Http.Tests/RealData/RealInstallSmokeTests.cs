@@ -71,27 +71,28 @@ public sealed class RealInstallSmokeTests(RealInstallSmokeTests.OneGameLoadedAtA
         private static readonly TimeSpan LongerThanStarfieldsMastersTakeToIndex = TimeSpan.FromMinutes(30);
 
         private GameRelease? _release;
-        private ScratchDirectory? _instanceRoot;
+        private readonly Dictionary<GameRelease, ScratchDirectory> _instanceRoots = [];
         private MEditHost? _host;
         private HttpClient? _client;
 
         public async Task<HttpClient> LoadedWithItsMasters(GameRelease release)
         {
             if (_release == release && _client is { } held) return held;
-            await DisposeAsync();
+            await StopHost();
 
             if (!new GameLocator().TryGetDataDirectory(release, out var dataDir))
                 throw new InvalidOperationException($"{release} has a row but no install.");
             var entries = MastersIn(release, dataDir.Path)
                 .Select((name, line) => new LoadOrderEntry(name, Path.Combine(dataDir.Path, name), PluginOrigin.DataDirectory, line, Enabled: true, Winning: true))
                 .ToList();
-            _instanceRoot = new ScratchDirectory("medit-smoke-");
+            if (!_instanceRoots.TryGetValue(release, out var instanceRoot))
+                _instanceRoots[release] = instanceRoot = new ScratchDirectory("medit-smoke-");
             _host = new MEditHost();
             var client = _host.CreateClient();
             client.Timeout = LongerThanStarfieldsMastersTakeToIndex;
 
             var load = await client.PutLoadOrderAndAwaitReady(
-                SnapshotPlugins.Body(dataDir.Path, _instanceRoot.Path, entries, release.ToString()), LongerThanStarfieldsMastersTakeToIndex);
+                SnapshotPlugins.Body(dataDir.Path, instanceRoot.Path, entries, release.ToString()), LongerThanStarfieldsMastersTakeToIndex);
             Assert.True(load.StatusCode == HttpStatusCode.OK,
                 $"{release}: PUT /load-order answered {load.StatusCode}: {await load.Content.ReadAsStringAsync()}");
             (_release, _client) = (release, client);
@@ -104,10 +105,16 @@ public sealed class RealInstallSmokeTests(RealInstallSmokeTests.OneGameLoadedAtA
 
         public async Task DisposeAsync()
         {
+            await StopHost();
+            foreach (var root in _instanceRoots.Values) root.Dispose();
+            _instanceRoots.Clear();
+        }
+
+        private async Task StopHost()
+        {
             _client?.Dispose();
             if (_host is not null) await _host.DisposeAsync();
-            _instanceRoot?.Dispose();
-            (_release, _client, _host, _instanceRoot) = (null, null, null, null);
+            (_release, _client, _host) = (null, null, null);
         }
     }
 }
