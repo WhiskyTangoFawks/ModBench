@@ -486,16 +486,24 @@ describe('the agent server, reading a record through mEdit', () => {
   const NPC = [{ formKey: '000800:A.esp', editorId: 'SharedNpc' }];
   const comparison: CompareResult = { overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Npc' };
 
-  it('answers every active copy and the winner when it names no plugin', async () => {
+  it('answers each active plugin\'s copy and marks the winner when it names no plugin', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
-    mEdit.setQueryAnswer('getComparison', comparison);
+    const override = { formKey: '000800:A.esp', fields: [], recordType: 'Npc', isPartialForm: false, isInOverwrite: false };
+    mEdit.setQueryAnswer('getComparison', { ...comparison, overrides: [
+      { ...override, plugin: 'A.esp', origin: 'Big Rocks', isWinner: false },
+      { ...override, plugin: 'B.esp', origin: 'Big Rocks', isWinner: true },
+    ] });
+    mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/000800.json' });
     const client = await clientOf(new FakeInstance(VALUE), mEdit);
 
     const answered = await read(client, 'read_record', { name: 'SharedNpc' });
 
     expect(mEdit.calls).toContainEqual({ method: 'getComparison', args: ['000800:A.esp'] });
-    expect(answered).toEqual(comparison);
+    expect(answered).toEqual([
+      { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, kind: 'OwnFile', location: '/s/000800.json' },
+      { plugin: { name: 'B.esp', origin: 'Big Rocks' }, isWinner: true, kind: 'OwnFile', location: '/s/000800.json' },
+    ]);
   });
 
   it('answers the one plugin\'s copy when it names the plugin', async () => {
