@@ -33,11 +33,11 @@ export interface ModlistInstance {
   readonly paths: { readonly sourceDirs: ReadonlyMap<string, string> };
 }
 
-/** What update manifest answers: each mod updated or refused, and each entry a mod folder's listing skipped, or the
- *  whole gesture refused, as a message to show. */
 /** What update manifest could not read of a mod, which a person or an agent reads by the mod's label. */
 export interface ModNote { readonly mod: string; readonly note: string }
 
+/** What update manifest answers: each mod updated or refused, and each entry a mod folder's listing skipped, or the
+ *  whole gesture refused, as a message to show. */
 export type UpdateManifestResult = ({ applied: true; notes: readonly ModNote[] } & UpdateManifestOutcome) | { applied: false; refusal: string };
 
 /** Where update manifest is: the Instance adapter reading a mod's files, or mEdit updating manifests. */

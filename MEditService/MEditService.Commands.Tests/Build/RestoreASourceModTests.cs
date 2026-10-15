@@ -134,7 +134,7 @@ public sealed class RestoreASourceModTests : IDisposable
 
         Assert.Equal(
             (RestoreRefusal.NotBuilt, BuildRefusal.OutputNotThisMod,
-                $"'{ModName}' was not built: its build configuration names the output folder 'Other', not its folder 'Mod'."),
+                "was not built: its build configuration names the output folder 'Other', not its folder 'Mod'."),
             (skipped.Refusal.Kind, skipped.Refusal.Build, skipped.Message));
     }
 
@@ -147,7 +147,7 @@ public sealed class RestoreASourceModTests : IDisposable
 
         var skipped = Assert.Single((await Restore(notifications, cancelling.Token)).Refused);
 
-        Assert.Equal($"was skipped: its source could not be cloned or read: the clone was cancelled.", skipped.Message);
+        Assert.Equal("was skipped: its source could not be cloned or read: the clone was cancelled.", skipped.Message);
         Assert.False(Directory.Exists(SourceFolder));
     }
 

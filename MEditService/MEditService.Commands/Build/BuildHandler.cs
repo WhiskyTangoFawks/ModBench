@@ -57,17 +57,17 @@ public sealed class BuildHandler
     internal async Task<ItemAnswer<BuildRefusal, BuiltMod>> BuildOneAsync(ModToBuild mod, InstanceToBuild instance) =>
         _loadOrder.Held is { Snapshot: var loadOrder }
             ? await BuildModAsync(loadOrder, mod, instance)
-            : Refused(mod, BuildRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
+            : Refused(BuildRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
 
     // Everything that refuses the mod is checked before its first write (mods.md, Build, story 4).
     private async Task<ItemAnswer<BuildRefusal, BuiltMod>> BuildModAsync(LoadOrderSnapshot loadOrder, ModToBuild mod, InstanceToBuild instance)
     {
         if (!_source.SourceToBuild(mod.SourceFolder).Holds(out var source, out var unread))
-            return Refused(mod, BuildRefusal.SourceUnreadable, unread.Reason);
+            return Refused(BuildRefusal.SourceUnreadable, unread.Reason);
         var folderName = _modFolders.FolderName(mod.Folder);
         if (!string.Equals(source.Output, folderName, StringComparison.OrdinalIgnoreCase))
         {
-            return Refused(mod, BuildRefusal.OutputNotThisMod,
+            return Refused(BuildRefusal.OutputNotThisMod,
                 $"its build configuration names the output folder '{source.Output}', not its folder '{folderName}'.");
         }
 
@@ -78,7 +78,7 @@ public sealed class BuildHandler
         var notAnAsset = source.Archives.SelectMany(archive => archive.Files.Select(file => (Archive: archive.Path, File: file)))
             .FirstOrDefault(packed => !assets.ContainsKey(packed.File));
         if (notAnAsset.File is not null)
-            return Refused(mod, BuildRefusal.ArchiveFileNotAnAsset, $"'{notAnAsset.Archive}' takes '{notAnAsset.File}', which is not an asset of its source.");
+            return Refused(BuildRefusal.ArchiveFileNotAnAsset, $"'{notAnAsset.Archive}' takes '{notAnAsset.File}', which is not an asset of its source.");
 
         var written = new FolderWrite(_modFolders, mod.Folder, source.Exclude, instance.ExcludedSuffix);
         var overridden = installed.Where(entry => compiled.Contains(entry.Entry) || assets.ContainsKey(entry.Entry)).ToHashSet();
@@ -184,14 +184,14 @@ public sealed class BuildHandler
     {
         if (mod.InstallationFiles.FirstOrDefault(file => !_modFolders.InstallationFileExists(file.Path)) is { } missing)
         {
-            return Refused(mod, BuildRefusal.InstallationFileMissing,
+            return Refused(BuildRefusal.InstallationFileMissing,
                 $"its installation file '{missing.Path}' is gone.");
         }
 
         var inFolder = _modFolders.FilePaths(mod.Folder).Concat(PathsTheManifestNames(mod)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (installed.FirstOrDefault(entry => !inFolder.Contains(written.PathOf(entry.Entry))) is { File: { } file, Entry: { } entry })
         {
-            return Refused(mod, BuildRefusal.BaseNotKnown,
+            return Refused(BuildRefusal.BaseNotKnown,
                 $"'{_modFolders.InstallationFileName(file.Path)}' installs '{entry}', which its folder does not hold at that path, " +
                 "so build cannot yet tell where its files come from.");
         }
@@ -289,6 +289,6 @@ public sealed class BuildHandler
         return refused;
     }
 
-    private static ItemAnswer<BuildRefusal, BuiltMod> Refused(ModToBuild mod, BuildRefusal refusal, string why) =>
-        ItemAnswer<BuildRefusal, BuiltMod>.Refused(refusal, $"'{mod.Name}' was not built: {why}");
+    private static ItemAnswer<BuildRefusal, BuiltMod> Refused(BuildRefusal refusal, string why) =>
+        ItemAnswer<BuildRefusal, BuiltMod>.Refused(refusal, $"was not built: {why}");
 }

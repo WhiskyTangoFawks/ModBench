@@ -1205,7 +1205,7 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
     await invoke('modbench.mod.viewOnNexus', row);
 
     expect([openExternal.mock.calls, reporter.reports]).toEqual([[], [
-      { severity: 'error', message: 'Failed to open the Nexus page of mod 42.', detail: "Nexus has no domain here for the game 'EnderalSE'." },
+      { severity: 'error', message: 'Failed to open the Nexus page of mod 42.', detail: "Nexus has no domain for the game 'EnderalSE'." },
     ]]);
   });
 

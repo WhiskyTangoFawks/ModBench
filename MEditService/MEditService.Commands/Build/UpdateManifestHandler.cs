@@ -37,7 +37,7 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
         }
         catch (DirectoryNotFoundException)
         {
-            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(UpdateManifestRefusal.ModFolderMissing, $"was not updated: its folder does not exist.");
+            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(UpdateManifestRefusal.ModFolderMissing, "was not updated: its folder does not exist.");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -83,12 +83,12 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
         if (status.NoManifest)
         {
             return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
-                UpdateManifestRefusal.LeftToItsBuild, $"was not updated: its build writes its manifest, and it has not written one.");
+                UpdateManifestRefusal.LeftToItsBuild, "was not updated: its build writes its manifest, and it has not written one.");
         }
         if (status.Differing.Count + status.NamedByNoLine.Count + status.Gone.Count > 0)
         {
             return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
-                UpdateManifestRefusal.LeftToItsBuild, $"was not updated: its build writes its manifest, and its folder differs from what the build wrote.");
+                UpdateManifestRefusal.LeftToItsBuild, "was not updated: its build writes its manifest, and its folder differs from what the build wrote.");
         }
         return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Landed(new UpdatedMod(ManifestWritten: false, status.NoProvider, status.StatCacheNotWritten));
     }
