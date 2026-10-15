@@ -19,7 +19,7 @@ public sealed class UpdateManifestHandlerTests
     private UpdateManifestHandler Handler => new(_folders, _notifications);
 
     private static ModToUpdate ModFrom(string name, params InstallationFile[] installationFiles) =>
-        new(name, $"mods/{name}", installationFiles, [], IsSourceMod: false);
+        new(name, $"mods/{name}", installationFiles, [], IsSourceMod: false, Version: null);
 
     private Manifest BuiltSourceMod()
     {
@@ -33,7 +33,7 @@ public sealed class UpdateManifestHandlerTests
         return built;
     }
 
-    private static ModToUpdate SourceMod => new("Mod", Mod, [], [], IsSourceMod: true);
+    private static ModToUpdate SourceMod => new("Mod", Mod, [], [], IsSourceMod: true, Version: null);
 
     private InstallationFile Downloaded(string path, params (string Path, string Hash)[] entries)
     {
@@ -101,14 +101,14 @@ public sealed class UpdateManifestHandlerTests
     public async Task AFileTheFirstInstallationFileHoldsAtItsPath_IsTheShortLine_AndTheInstallationFileIsAsTheRequestSays()
     {
         _folders.WithFile(Mod, "meshes/a.nif", "hello");
-        var download = Downloaded("dl/Mod.zip", ("meshes/a.nif", "hello")) with { Source = "nexus:1" };
+        var download = Downloaded("dl/Mod.zip", ("meshes/a.nif", "hello")) with { Source = "nexus:fallout4:1" };
 
-        await Landed(new ModToUpdate("Mod", Mod, [download], [], IsSourceMod: false));
+        await Landed(new ModToUpdate("Mod", Mod, [download], [], IsSourceMod: false, Version: null));
 
         var line = FileOf(Mod, "meshes/a.nif");
         Assert.IsType<FileProvider.FirstInstallationFile>(line.Provider);
         var installationFile = Assert.Single(_folders.Manifests[Mod].InstallationFiles);
-        Assert.Equal(("Mod.zip", 7L, "#dl/Mod.zip", "nexus:1"), (installationFile.Name, installationFile.Size, installationFile.Hash, installationFile.Source));
+        Assert.Equal(("Mod.zip", 7L, "#dl/Mod.zip", "nexus:fallout4:1"), (installationFile.Name, installationFile.Size, installationFile.Hash, installationFile.Source));
     }
 
     [Fact]

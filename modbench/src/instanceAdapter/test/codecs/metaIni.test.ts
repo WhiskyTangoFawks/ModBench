@@ -16,6 +16,10 @@ describe('parseMetaIni', () => {
     });
   });
 
+  it('treats modid=-1, MO2\'s default, as no Nexus id', () => {
+    expect(parseMetaIni('[General]\r\nmodid=-1\r\n').nexusId).toBeUndefined();
+  });
+
   it('treats modid=0 and empty fields as undefined, not empty strings', () => {
     expect(parseMetaIni(meta('ENBoost - 12k'))).toEqual({
       gameName: 'Fallout4',

@@ -230,7 +230,7 @@ describe('modlistSourceCommands restore from manifest', () => {
 
   it('hands mEdit each mod with its folder, its installation files, the files the repository commits itself and the folder its source is in or is cloned into, the game files its files override, the stat cache\'s folder and what a build needs', async () => {
     const { commands, client } = commandsOver(
-      { installations: new Map([['ModA', recording([INSTALLED])]]), gameFiles: [VANILLA] }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.esm')] });
+      { installations: new Map([['ModA', recording([INSTALLED])]]), gameFiles: [VANILLA], versions: new Map([['ModA', '1.2.3']]) }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.esm')] });
     client.setCommandResult('restoreFromManifest', RESTORED);
 
     await commands.restoreFromManifest(['ModA', 'ModB'], instanceOf(FOUND, new Map([['ModB', '/source/Old ModB']])));

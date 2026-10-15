@@ -1328,36 +1328,31 @@ describe('the MO2 Instance adapter', () => {
 
         expect(answer).toEqual({
           kind: 'read',
-          answer: [{ path: join(root, 'downloads', DOWNLOAD), source: 'nexus:Fallout4:4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: ENTRY, hash: 'q7ZLRnu1+Os=' }] }],
+          answer: [{ path: join(root, 'downloads', DOWNLOAD), source: 'nexus:fallout4:4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: ENTRY, hash: 'q7ZLRnu1+Os=' }] }],
         });
       });
 
-      describe('where the mod manager says the file comes from', () => {
-        const recording = (general: string, installedFiles = ''): Promise<void> =>
-          writeFile(join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\n${general}installationFile=${DOWNLOAD}\r\n${installedFiles}`);
-        const sourceOf = async (): Promise<string | undefined> => {
+      describe('where the metadata says the file comes from', () => {
+        const FILES = '\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\n2\\modid=9\r\n2\\fileid=78\r\nsize=2\r\n';
+        const sourceOf = async (general: string, installedFiles = ''): Promise<string | undefined> => {
+          await writeFile(
+            join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\n${general}installationFile=${DOWNLOAD}\r\n${installedFiles}`,
+          );
           const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
           return answer.kind === 'read' ? answer.answer[0]?.source : undefined;
         };
 
-        it('names the game, the Nexus mod and each Nexus file installed', async () => {
-          await recording(
-            'gameName=Fallout4\r\nmodid=4598\r\n', '\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\n2\\modid=4598\r\n2\\fileid=78\r\nsize=2\r\n',
-          );
-
-          expect(await sourceOf()).toBe('nexus:Fallout4:4598:77,4598:78');
-        });
-
-        it('names the game and the Nexus mod when no file id is recorded', async () => {
-          await recording('gameName=Fallout4\r\nmodid=4598\r\n');
-
-          expect(await sourceOf()).toBe('nexus:Fallout4:4598');
-        });
-
-        it('names nothing when the metadata holds no Nexus mod', async () => {
-          await recording('gameName=Fallout4\r\n');
-
-          expect(await sourceOf()).toBeUndefined();
+        it.each([
+          ['names the Nexus domain of MO2\'s short name for the game, the mod and each file installed', 'gameName=SkyrimSE\r\nmodid=4598\r\n', FILES, 'nexus:skyrimspecialedition:4598;4598:77;9:78'],
+          ['keeps the mod id when files are recorded', 'gameName=Fallout4\r\nmodid=4598\r\n', FILES, 'nexus:fallout4:4598;4598:77;9:78'],
+          ['keeps the files of a mod whose id is blank', 'gameName=Fallout4\r\n', FILES, 'nexus:fallout4:;4598:77;9:78'],
+          ['names the mod when no file is recorded', 'gameName=Fallout4\r\nmodid=4598\r\n', '', 'nexus:fallout4:4598'],
+          ['takes the instance\'s game for a mod with none, as MO2 does', 'modid=4598\r\n', '', 'nexus:fallout4:4598'],
+          ['reads the game as the instance\'s settings spell it', 'gameName=Fallout 4\r\nmodid=4598\r\n', '', 'nexus:fallout4:4598'],
+          ['names nothing for a mod with no Nexus id', 'gameName=Fallout4\r\n', '', undefined],
+          ['names nothing for MO2\'s default id', 'gameName=Fallout4\r\nmodid=-1\r\n', '', undefined],
+        ])('%s', async (_name, general, installedFiles, expected) => {
+          expect(await sourceOf(general, installedFiles)).toBe(expected);
         });
       });
 

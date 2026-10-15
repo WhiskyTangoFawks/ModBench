@@ -6,10 +6,10 @@ using MEditService.SourceAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>A mod to build, by name, with the source folder whose build configuration names its folder, the folder, its
-/// installation files in the mod manager's order, and its files the repository commits, which no manifest line names.</summary>
+/// installation files in the mod manager's order, its version, and its files the repository commits, which no manifest line names.</summary>
 public sealed record ModToBuild(
     string Name, string SourceFolder, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> CommittedFiles,
-    string? Version = null);
+    string? Version);
 
 /// <summary>The instance's facts a build needs: the suffix the mod manager gives an excluded file's name, the game's
 /// archive variants, none when the per-release table names none, and the stat cache's folder.</summary>

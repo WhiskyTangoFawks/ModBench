@@ -52,7 +52,7 @@ export function parseMetaIni(text: string): ModMeta {
   return {
     gameName: present('gameName'),
     version: present('version'),
-    nexusId: modid && modid !== '0' ? modid : undefined,
+    nexusId: modid && modid !== '0' && modid !== '-1' ? modid : undefined,
     archiveFilename: present('installationFile'),
     installedFiles: parseInstalledFiles(text),
   };

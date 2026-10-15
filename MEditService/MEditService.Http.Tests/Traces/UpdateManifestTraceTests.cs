@@ -51,7 +51,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
         var installationFile = new JsonObject
         {
             ["path"] = Path.Combine(Downloads, downloadName),
-            ["source"] = "nexus:1:2",
+            ["source"] = "nexus:fallout4:1;1:2",
             ["size"] = 7,
             ["hash"] = HashOfTheZip,
             ["entries"] = new JsonArray(entry, new JsonObject { ["path"] = "edited.txt", ["hash"] = HashOfOriginal }),
@@ -115,8 +115,8 @@ public sealed class UpdateManifestTraceTests : HostedTests
         Assert.Equal(["edited.txt"], updated.GetProperty("noProvider").EnumerateArray().Select(path => path.GetString()));
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
         var manifest = File.ReadAllLines(Path.Combine(ModFolder, Mod + ".manifest"));
-        Assert.Equal("{\"version\":\"1.2.3\"}", manifest[0]);
-        Assert.Equal($"{{\"installationFile\":\"Mod.zip\",\"size\":7,\"hash\":\"{HashOfTheZip}\",\"source\":\"nexus:1:2\"}}", manifest[1]);
+        Assert.Equal("1.2.3", new MEditService.ModFolderAdapter.ModFolderRepository(TimeProvider.System).ReadManifest(ModFolder, Mod)?.Version);
+        Assert.Equal($"{{\"installationFile\":\"Mod.zip\",\"size\":7,\"hash\":\"{HashOfTheZip}\",\"source\":\"nexus:fallout4:1;1:2\"}}", manifest[1]);
         Assert.Equal($"{{\"gameFile\":\"Game.esm\",\"size\":7,\"hash\":\"{HashOfVanilla}\"}}", manifest[2]);
         Assert.Equal(
             ["Game.esm", "edited.txt", "kept.txt"],

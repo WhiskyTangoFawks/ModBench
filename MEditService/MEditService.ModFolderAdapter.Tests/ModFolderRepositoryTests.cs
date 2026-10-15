@@ -359,7 +359,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void WriteManifest_WritesOneLinePerSourceAndFile_InPathOrder_AFileLineNamingOnlyItsProvider()
     {
         var manifest = new Manifest(
-            [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
+            [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:fallout4:1;1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
             [new ManifestSource("Data/Game.esm", 9, "CCCC")],
             [
                 new ManifestFile("z.txt", new FileProvider.NoProvider()),
@@ -372,7 +372,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.True(_repository.WriteManifest(_root, "mod", manifest));
 
         Assert.Equal(
-            "{\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"source\":\"nexus:1:2\"}\n"
+            "{\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"source\":\"nexus:fallout4:1;1:2\"}\n"
             + "{\"installationFile\":\"Patch.zip\",\"size\":7,\"hash\":\"BBBB\"}\n"
             + "{\"gameFile\":\"Data/Game.esm\",\"size\":9,\"hash\":\"CCCC\"}\n"
             + "{\"path\":\"a.nif\"}\n"
@@ -412,7 +412,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void ReadManifest_ReadsWhatWriteManifestWrote()
     {
         var manifest = new Manifest(
-            [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
+            [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:fallout4:1;1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
             [new ManifestSource("Data/Game.esm", 9, "CCCC")],
             [
                 new ManifestFile("a.nif", new FileProvider.FirstInstallationFile()),
