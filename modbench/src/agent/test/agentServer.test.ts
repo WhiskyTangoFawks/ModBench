@@ -157,6 +157,20 @@ describe('the agent server, given an instance value', () => {
     ] });
   });
 
+  it('answers each plugin once when a mod provides a plugin the game loads with no line, or a line names one', async () => {
+    const provided = { name: 'Fallout4.esm', path: '/m/Fallout4.esm', origin: 'Big Rocks', line: null, enabled: false, winning: true };
+    const lined = { name: 'DLCRobot.esm', path: '/g/DLCRobot.esm', origin: DATA_DIRECTORY_ORIGIN, line: 0, enabled: true, winning: true };
+    const client = await clientOf(new FakeInstance({
+      ...VALUE, plugins: [provided, lined],
+      pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Big Rocks' }, { name: 'DLCRobot.esm', origin: DATA_DIRECTORY_ORIGIN }],
+    }));
+
+    expect(await read(client, 'list_plugins')).toEqual({ plugins: [
+      { name: 'Fallout4.esm', origin: 'Big Rocks', line: null, enabled: true, winning: true },
+      { name: 'DLCRobot.esm', origin: DATA_DIRECTORY_ORIGIN, line: null, enabled: true, winning: true },
+    ] });
+  });
+
   it('names why the plugins the game loads with no line are missing when the game folder is not found', async () => {
     const client = await clientOf(new FakeInstance(VALUE));
 

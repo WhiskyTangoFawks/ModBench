@@ -1,4 +1,5 @@
 import type { InstanceValue } from '../instanceLoader/instance';
+import { pluginOrderOf } from '../instanceLoader/pluginOrder';
 import { Refusal } from '../drivingLib/refusal';
 
 export interface Read {
@@ -6,9 +7,6 @@ export interface Read {
   readonly description: string;
   readonly of: (value: InstanceValue) => unknown;
 }
-
-const byLine = (a: { line: number | null }, b: { line: number | null }): number =>
-  (a.line ?? Infinity) - (b.line ?? Infinity);
 
 const noLineMissingReason = ({ kind }: InstanceValue['gameFolder'], inData: InstanceValue['dataFolderPlugins']): string =>
   kind === 'notFound' ? 'The game folder was not found.'
@@ -27,14 +25,20 @@ export const INSTANCE_READS: readonly Read[] = [
   },
   {
     name: 'list_plugins',
-    description: 'The plugin order, losing first: the plugins the game loads with no line, then each line by its number. Each plugin has its origin, its line (null when it has none), whether it is enabled and whether it wins its file name. noLineMissing gives the reason the plugins the game loads with no line are not listed, when it cannot name them.',
-    of: ({ plugins, pluginsLoadedWithNoLine, gameFolder, dataFolderPlugins }) => ({
-      plugins: [
-        ...(pluginsLoadedWithNoLine ?? []).map(({ name, origin }) => ({ name, origin, line: null, enabled: true, winning: true })),
-        ...[...plugins].sort(byLine).map(({ name, origin, line, enabled, winning }) => ({ name, origin, line, enabled, winning })),
-      ],
-      ...(pluginsLoadedWithNoLine === undefined && { noLineMissing: noLineMissingReason(gameFolder, dataFolderPlugins) }),
-    }),
+    description: 'The plugin order, losing first: the plugins the game loads with no line, then each line by its number, then the plugins outside the order (an overridden copy, a file no line names). Each plugin has its origin, its line (null when it has none), whether it is enabled and whether it wins its file name. noLineMissing gives the reason the plugins the game loads with no line are not listed, when it cannot name them.',
+    of: ({ plugins, pluginsLoadedWithNoLine, gameFolder, dataFolderPlugins }) => {
+      const { loadedWithNoLine, fromLines, others } = pluginOrderOf(
+        { plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] },
+        (address) => ({ ...address, path: '', line: null, enabled: true, winning: true }),
+      );
+      return {
+        plugins: [
+          ...loadedWithNoLine.map(({ name, origin }) => ({ name, origin, line: null, enabled: true, winning: true })),
+          ...[...fromLines, ...others].map(({ name, origin, line, enabled, winning }) => ({ name, origin, line, enabled, winning })),
+        ],
+        ...(pluginsLoadedWithNoLine === undefined && { noLineMissing: noLineMissingReason(gameFolder, dataFolderPlugins) }),
+      };
+    },
   },
   {
     name: 'list_downloads',
