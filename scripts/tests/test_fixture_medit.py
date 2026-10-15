@@ -60,7 +60,8 @@ def medit_whose_put_takes(seconds):
 
         def do_PUT(self):
             self.rfile.read(int(self.headers['Content-Length']))
-            time.sleep(seconds)
+            if stopped.wait(seconds):
+                return
             self.reply({'version': 1})
 
         def do_GET(self):
@@ -69,12 +70,14 @@ def medit_whose_put_takes(seconds):
         def log_message(self, *_):
             pass
 
+    stopped = threading.Event()
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         yield f'http://127.0.0.1:{server.server_port}'
     finally:
+        stopped.set()
         server.shutdown()
         server.server_close()
 
