@@ -157,24 +157,18 @@ describe('the agent server, given an instance value', () => {
     ] });
   });
 
-  it('answers each plugin once when a mod provides a plugin the game loads with no line, or a line names one', async () => {
-    const provided = { name: 'Fallout4.esm', path: '/m/Fallout4.esm', origin: 'Big Rocks', line: null, enabled: false, winning: true };
-    const lined = { name: 'DLCRobot.esm', path: '/g/DLCRobot.esm', origin: DATA_DIRECTORY_ORIGIN, line: 0, enabled: true, winning: true };
-    const client = await clientOf(new FakeInstance({
-      ...VALUE, plugins: [provided, lined],
-      pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Big Rocks' }, { name: 'DLCRobot.esm', origin: DATA_DIRECTORY_ORIGIN }],
-    }));
+  it('refuses in part when the game folder is not found, answering the lines with why the plugins loaded with no line are missing, in the Output', async () => {
+    const { bound, warned } = await serve(new FakeInstance(VALUE));
+    const client = new Client({ name: 'test', version: '0' });
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
+    clients.push(client);
 
-    expect(await read(client, 'list_plugins')).toEqual({ plugins: [
-      { name: 'Fallout4.esm', origin: 'Big Rocks', line: null, enabled: true, winning: true },
-      { name: 'DLCRobot.esm', origin: DATA_DIRECTORY_ORIGIN, line: null, enabled: true, winning: true },
-    ] });
-  });
+    const { isError, text } = await call(client, 'list_plugins');
 
-  it('names why the plugins the game loads with no line are missing when the game folder is not found', async () => {
-    const client = await clientOf(new FakeInstance(VALUE));
-
-    expect(await read(client, 'list_plugins')).toMatchObject({ noLineMissing: 'The game folder was not found.' });
+    expect({ isError, answer: JSON.parse(text), warned }).toMatchObject({
+      isError: true, answer: { noLineMissing: 'The game folder was not found.', plugins: [{ name: 'A.esp' }, { name: 'B.esp' }] },
+      warned: ['[agent] list_plugins: The game folder was not found.'],
+    });
   });
 
   it('reads the plugins the game loads with no line first, with no line', async () => {

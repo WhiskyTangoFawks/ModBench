@@ -10,7 +10,7 @@ export interface Read {
 
 const noLineMissingReason = ({ kind }: InstanceValue['gameFolder'], inData: InstanceValue['dataFolderPlugins']): string =>
   kind === 'notFound' ? 'The game folder was not found.'
-    : inData.kind === 'unreadable' ? `The game folder's Data folder could not be listed: ${inData.reason}` : 'The game folder holds no listable plugins.';
+    : inData.kind === 'unreadable' ? `The game folder's Data folder could not be listed: ${inData.reason}` : 'The game folder\'s Data folder has not been read yet.';
 
 export const INSTANCE_READS: readonly Read[] = [
   {
@@ -25,19 +25,21 @@ export const INSTANCE_READS: readonly Read[] = [
   },
   {
     name: 'list_plugins',
-    description: 'The plugin order, losing first: the plugins the game loads with no line, then each line by its number, then the plugins outside the order (an overridden copy, a file no line names). Each plugin has its origin, its line (null when it has none), whether it is enabled and whether it wins its file name. noLineMissing gives the reason the plugins the game loads with no line are not listed, when it cannot name them.',
+    description: 'The plugin order, losing first: the plugins the game loads with no line, then each line by its number, then the plugins outside the order (an overridden copy, a file no line names). Each plugin has its origin, its line (null when it has none), whether it is enabled and whether it wins its file name. When it cannot name the plugins the game loads with no line, it refuses in part: noLineMissing is the reason, and the rest is answered.',
     of: ({ plugins, pluginsLoadedWithNoLine, gameFolder, dataFolderPlugins }) => {
       const { loadedWithNoLine, fromLines, others } = pluginOrderOf(
         { plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] },
         (address) => ({ ...address, path: '', line: null, enabled: true, winning: true }),
       );
-      return {
+      const answer = {
         plugins: [
           ...loadedWithNoLine.map(({ name, origin }) => ({ name, origin, line: null, enabled: true, winning: true })),
           ...[...fromLines, ...others].map(({ name, origin, line, enabled, winning }) => ({ name, origin, line, enabled, winning })),
         ],
-        ...(pluginsLoadedWithNoLine === undefined && { noLineMissing: noLineMissingReason(gameFolder, dataFolderPlugins) }),
       };
+      if (pluginsLoadedWithNoLine !== undefined) return answer;
+      const noLineMissing = noLineMissingReason(gameFolder, dataFolderPlugins);
+      throw new Refusal(noLineMissing, { ...answer, noLineMissing });
     },
   },
   {

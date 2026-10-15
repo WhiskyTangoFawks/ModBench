@@ -30,9 +30,9 @@ describe('pluginOrderOf', () => {
 
   it('answers the plugin row a mod provides for one the game loads with no line, and no second row for it', () => {
     const provided = row('Fallout4.esm', 'Mod', null, false);
-    const { loadedWithNoLine, fromLines } = orderOf([provided], [{ name: 'Fallout4.esm', origin: 'Mod' }]);
+    const { loadedWithNoLine, fromLines, others } = orderOf([provided], [{ name: 'Fallout4.esm', origin: 'Mod' }]);
 
-    expect({ loadedWithNoLine, fromLines }).toEqual({ loadedWithNoLine: [provided], fromLines: [] });
+    expect({ loadedWithNoLine, fromLines, others }).toEqual({ loadedWithNoLine: [provided], fromLines: [], others: [] });
   });
 
   it('drops a line that names a Data folder master, whatever its case', () => {
