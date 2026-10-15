@@ -1,4 +1,4 @@
-# Ship only the bundled runtime (out/ + the published backend/ + the medit Python package in scripts/) — not sources.
+# Ship only the bundled runtime (out/ + the published backend/ + the medit Python module in scripts/) — not sources.
 .vscode/**
 .vscode-test/**
 .vscode-test.mjs

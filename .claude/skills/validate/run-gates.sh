@@ -151,8 +151,8 @@ if $FRONTEND; then
 fi
 
 if $SCRIPTS; then
-  echo "=== Gate 3: Scripts tests ==="
-  (cd "$ROOT/scripts" && python3 -m unittest discover -q) \
+  echo "=== Gate 3: Scripts lint, types and tests ==="
+  (cd "$ROOT/scripts" && uvx ruff@0.17.0 check . && uvx ty@0.0.88 check . && python3 -m unittest discover -q) \
   || { echo "--- SCRIPTS GATE FAILED ---"; FAILED=true; }
 fi
 

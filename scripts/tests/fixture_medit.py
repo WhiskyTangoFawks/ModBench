@@ -1,39 +1,53 @@
-import collections
 import contextlib
+import http.server
 import json
+import os
 import pathlib
 import shutil
 import socket
 import subprocess
 import tempfile
+import threading
 import time
 import urllib.request
+from collections.abc import Generator
+from typing import Any, NamedTuple
+from unittest import mock
+from urllib.parse import urlparse
+
+from medit import JsonRecord, Plugin
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 HTTP_PROJECT = REPO / 'MEditService' / 'MEditService.Http'
 INSTANCE = REPO / 'DevList'
-# DevList's plugins.txt in its order, each enabled, with the mod that provides it.
-PLUGINS = [
-    ('MBDevConflictB.esp', 'MB-DEV Conflict B'),
-    ('MBDevConflictA.esp', 'MB-DEV Conflict A'),
-    ('MBDevLight.esl', 'MB-DEV Light'),
-    ('MBDevConditions.esp', 'MB-DEV Conditions'),
-    ('MBDevMissingMaster.esp', 'MB-DEV Missing Master'),
-]
+CONDITIONS = Plugin('MBDevConditions.esp', 'MB-DEV Conditions')
+LIGHT = Plugin('MBDevLight.esl', 'MB-DEV Light')
+CONFLICT_A = Plugin('MBDevConflictA.esp', 'MB-DEV Conflict A')
+CONFLICT_B = Plugin('MBDevConflictB.esp', 'MB-DEV Conflict B')
+# DevList's plugins.txt in its order, each enabled.
+PLUGINS = [CONFLICT_B, CONFLICT_A, LIGHT, CONDITIONS, Plugin('MBDevMissingMaster.esp', 'MB-DEV Missing Master')]
+RECIPE = '000800:MBDevConditions.esp'
+RECIPE_FILE = 'MBDevConditionedRecipe - *.json'
+LIGHT_RECORD = '000800:MBDevLight.esl'
+CONFLICTED_RECORD = '004822:Fallout4.esm'
 BOOT_TIMEOUT_S = 180
 LOAD_ORDER_TIMEOUT_S = 120
 REQUEST_TIMEOUT_S = 10
 STOP_GRACE_S = 5
 POLL_S = 0.1
 
-Fixture = collections.namedtuple('Fixture', 'url instance load_order')
+
+class Fixture(NamedTuple):
+    url: str
+    instance: pathlib.Path
+    load_order: JsonRecord
 
 
 @contextlib.contextmanager
-def fixture_medit():
+def fixture_medit() -> Generator[Fixture]:
     executable = built_medit()
-    with tempfile.TemporaryDirectory() as scratch:
-        scratch = pathlib.Path(scratch)
+    with tempfile.TemporaryDirectory() as temporary:
+        scratch = pathlib.Path(temporary)
         instance = scratch / 'instance'
         shutil.copytree(INSTANCE, instance)
         # DevList has no game folder; an empty one stands in, so the game loads no plugin of its own.
@@ -54,7 +68,7 @@ def fixture_medit():
                 stop(process)
 
 
-def stop(process):
+def stop(process: subprocess.Popen[bytes]) -> None:
     process.terminate()
     try:
         process.wait(timeout=STOP_GRACE_S)
@@ -63,22 +77,22 @@ def stop(process):
         process.wait()
 
 
-def built_medit():
+def built_medit() -> str:
     build = subprocess.run(
         ['dotnet', 'build', str(HTTP_PROJECT), '-nologo', '-v', 'quiet', '-t:Build', '-getProperty:TargetPath'],
-        capture_output=True, text=True)
+        check=False, capture_output=True, text=True)
     if build.returncode != 0:
         raise RuntimeError(f'mEdit did not build:\n{build.stdout}{build.stderr}')
     return build.stdout.strip()
 
 
-def free_port():
+def free_port() -> int:
     with socket.socket() as probe:
         probe.bind(('127.0.0.1', 0))
         return probe.getsockname()[1]
 
 
-def await_health(process, url, output):
+def await_health(process: subprocess.Popen[bytes], url: str, output: pathlib.Path) -> None:
     deadline = time.monotonic() + BOOT_TIMEOUT_S
     while time.monotonic() < deadline:
         if process.poll() is not None:
@@ -91,10 +105,10 @@ def await_health(process, url, output):
     raise TimeoutError(f'mEdit did not answer /health within {BOOT_TIMEOUT_S}s:\n{output.read_text(errors="replace")}')
 
 
-def snapshot(instance, game):
+def snapshot(instance: pathlib.Path, game: pathlib.Path) -> JsonRecord:
     return {
-        'plugins': [plugin_entry(instance, name, mod, line) for line, (name, mod) in enumerate(PLUGINS)],
-        'active': [{'name': name, 'origin': mod} for name, mod in PLUGINS],
+        'plugins': [plugin_entry(instance, plugin, line) for line, plugin in enumerate(PLUGINS)],
+        'active': [plugin._asdict() for plugin in PLUGINS],
         'loadedWithNoLine': [],
         'archives': [],
         'stringsFiles': [],
@@ -106,31 +120,42 @@ def snapshot(instance, game):
     }
 
 
-def plugin_entry(instance, name, mod, line):
-    folder = instance / 'mods' / mod
+def plugin_entry(instance: pathlib.Path, plugin: Plugin, line: int | None) -> JsonRecord:
+    folder = instance / 'mods' / plugin.origin
     return {
-        'name': name, 'path': str(folder / name), 'origin': mod,
-        'provider': {'kind': 'Mod', 'mod': mod, 'folder': str(folder), 'sourceFolder': str(source_folder(instance, mod))},
+        'name': plugin.name, 'path': str(folder / plugin.name), 'origin': plugin.origin,
+        'provider': {
+            'kind': 'Mod', 'mod': plugin.origin, 'folder': str(folder),
+            'sourceFolder': str(source_folder(instance, plugin.origin))},
         'line': line, 'lineNamesIt': line is not None, 'archives': [], 'stringsFiles': [],
     }
 
 
-def source_folder(instance, mod):
+def source_folder(instance: pathlib.Path, mod: str) -> pathlib.Path:
     return instance / 'source' / mod
 
 
-def track(fixture, mod):
+def track(fixture: Fixture, mod: str) -> None:
     call('POST', fixture.url + '/init', {'mods': [
         {'name': mod, 'sourceFolder': str(source_folder(fixture.instance, mod)), 'installationFiles': [], 'modManagerFiles': []}]})
 
 
-def watcher_resends_load_order(fixture, *created):
+def watcher_resends_load_order(fixture: Fixture, *created: Plugin) -> None:
     """Modbench's watcher, which sends the load order again once the instance changed; a created plugin joins it with no line."""
-    plugins = fixture.load_order['plugins'] + [plugin_entry(fixture.instance, name, mod, None) for name, mod in created]
+    plugins = fixture.load_order['plugins'] + [plugin_entry(fixture.instance, plugin, None) for plugin in created]
     call('PUT', fixture.url + '/load-order', {**fixture.load_order, 'plugins': plugins})
 
 
-def hand_load_order(url, body):
+@contextlib.contextmanager
+def holding_unsaved(fixture: Fixture, path: pathlib.Path) -> Generator[None]:
+    call('PUT', fixture.url + '/unsaved-documents', {'documents': [{'path': str(path), 'text': path.read_text() + ' '}]})
+    try:
+        yield
+    finally:
+        call('PUT', fixture.url + '/unsaved-documents', {'documents': []})
+
+
+def hand_load_order(url: str, body: JsonRecord) -> None:
     deadline = time.monotonic() + LOAD_ORDER_TIMEOUT_S
     version = call('PUT', url + '/load-order', body, timeout=deadline - time.monotonic())['version']
     while time.monotonic() < deadline:
@@ -143,14 +168,68 @@ def hand_load_order(url, body):
     raise TimeoutError(f'mEdit did not index the load order within {LOAD_ORDER_TIMEOUT_S}s')
 
 
-def within(deadline):
+def within(deadline: float) -> float:
     return max(POLL_S, min(REQUEST_TIMEOUT_S, deadline - time.monotonic()))
 
 
-def call(method, url, body=None, timeout=REQUEST_TIMEOUT_S):
+def call(method: str, url: str, body: JsonRecord | None = None, timeout: float = REQUEST_TIMEOUT_S) -> Any:
     request = urllib.request.Request(
         url, method=method, data=None if body is None else json.dumps(body).encode(),
         headers={'Content-Type': 'application/json'})
     with urllib.request.urlopen(request, timeout=timeout) as response:
         answer = response.read()
     return json.loads(answer) if answer else None
+
+
+@contextlib.contextmanager
+def window_of(url: str) -> Generator[None]:
+    with mock.patch.dict(os.environ, {'MEDIT_PORT': str(urlparse(url).port)}):
+        yield
+
+
+@contextlib.contextmanager
+def medit_answering(status: int, body: object, put_delay_s: float = 0) -> Generator[str]:
+    payload = body if isinstance(body, bytes) else json.dumps(body).encode()
+    stopped = threading.Event()
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.answer()
+
+        def do_POST(self) -> None:
+            self.rfile.read(int(self.headers['Content-Length']))
+            self.answer()
+
+        def do_PUT(self) -> None:
+            self.rfile.read(int(self.headers['Content-Length']))
+            if not stopped.wait(put_delay_s):
+                self.answer()
+
+        def answer(self) -> None:
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, format: str, *args: Any) -> None:
+            pass
+
+    server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        yield f'http://127.0.0.1:{server.server_port}'
+    finally:
+        stopped.set()
+        server.shutdown()
+        server.server_close()
+
+
+def files_and_bytes(folder: pathlib.Path) -> list[tuple[str, bytes]]:
+    return sorted((str(path), path.read_bytes()) for path in folder.rglob('*') if path.is_file())
+
+
+def changed(folder: pathlib.Path) -> list[str]:
+    return subprocess.run(
+        ['git', 'status', '--porcelain', '-z'], cwd=folder, capture_output=True, text=True, check=True).stdout.split('\0')[:-1]
