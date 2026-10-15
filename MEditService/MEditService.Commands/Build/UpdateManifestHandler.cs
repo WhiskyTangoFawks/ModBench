@@ -24,7 +24,7 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
         {
             return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
                 UpdateManifestRefusal.InstallationFileMissing,
-                $"'{mod.Name}' was not updated: {string.Join(", ", missing)} not in the downloads folder.");
+                $"was not updated: {string.Join(", ", missing)} not in the downloads folder.");
         }
 
         Manifest manifest;
@@ -37,12 +37,12 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
         }
         catch (DirectoryNotFoundException)
         {
-            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(UpdateManifestRefusal.ModFolderMissing, $"'{mod.Name}' was not updated: its folder does not exist.");
+            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(UpdateManifestRefusal.ModFolderMissing, $"was not updated: its folder does not exist.");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
-                UpdateManifestRefusal.ModFilesUnreadable, $"'{mod.Name}' was not updated: a file could not be read: {e.Message}");
+                UpdateManifestRefusal.ModFilesUnreadable, $"was not updated: a file could not be read: {e.Message}");
         }
 
         bool written;
@@ -53,7 +53,7 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
-                UpdateManifestRefusal.NotWritten, $"'{mod.Name}' was not updated: its manifest could not be written: {e.Message}");
+                UpdateManifestRefusal.NotWritten, $"was not updated: its manifest could not be written: {e.Message}");
         }
 
         var statCacheNotWritten = repository.KeepInStatCache(
@@ -79,16 +79,16 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
     {
         var status = repository.Status(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
         if (status.Unreadable is { } unreadable)
-            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(UpdateManifestRefusal.ModFilesUnreadable, $"'{mod.Name}' was not updated: {unreadable.Why}.");
+            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(UpdateManifestRefusal.ModFilesUnreadable, $"was not updated: {unreadable.Why}.");
         if (status.NoManifest)
         {
             return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
-                UpdateManifestRefusal.LeftToItsBuild, $"'{mod.Name}' was not updated: its build writes its manifest, and it has not written one.");
+                UpdateManifestRefusal.LeftToItsBuild, $"was not updated: its build writes its manifest, and it has not written one.");
         }
         if (status.Differing.Count + status.NamedByNoLine.Count + status.Gone.Count > 0)
         {
             return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
-                UpdateManifestRefusal.LeftToItsBuild, $"'{mod.Name}' was not updated: its build writes its manifest, and its folder differs from what the build wrote.");
+                UpdateManifestRefusal.LeftToItsBuild, $"was not updated: its build writes its manifest, and its folder differs from what the build wrote.");
         }
         return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Landed(new UpdatedMod(ManifestWritten: false, status.NoProvider, status.StatCacheNotWritten));
     }

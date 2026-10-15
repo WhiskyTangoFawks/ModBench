@@ -219,7 +219,7 @@ public sealed class UpdateManifestHandlerTests
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Lost", UpdateManifestRefusal.InstallationFileMissing), (refused.Item, refused.Refusal));
-        Assert.Equal("'Lost' was not updated: 'Lost.zip' not in the downloads folder.", refused.Message);
+        Assert.Equal("was not updated: 'Lost.zip' not in the downloads folder.", refused.Message);
         Assert.False(_folders.Manifests.ContainsKey("mods/Lost"));
         Assert.Equal(["Found"], result.Landed.Select(l => l.Item));
     }
@@ -351,7 +351,7 @@ public sealed class UpdateManifestHandlerTests
         var refused = Assert.Single((await Update([SourceMod], [])).Refused);
 
         Assert.Equal(
-            (UpdateManifestRefusal.LeftToItsBuild, "'Mod' was not updated: its build writes its manifest, and its folder differs from what the build wrote."),
+            (UpdateManifestRefusal.LeftToItsBuild, "was not updated: its build writes its manifest, and its folder differs from what the build wrote."),
             (refused.Refusal, refused.Message));
         Assert.Same(built, _folders.Manifests[Mod]);
     }
@@ -364,7 +364,7 @@ public sealed class UpdateManifestHandlerTests
         var refused = Assert.Single((await Update([SourceMod], [])).Refused);
 
         Assert.Equal(
-            (UpdateManifestRefusal.LeftToItsBuild, "'Mod' was not updated: its build writes its manifest, and it has not written one."),
+            (UpdateManifestRefusal.LeftToItsBuild, "was not updated: its build writes its manifest, and it has not written one."),
             (refused.Refusal, refused.Message));
         Assert.Empty(_folders.Manifests);
     }

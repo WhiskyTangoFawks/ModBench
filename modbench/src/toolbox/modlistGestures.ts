@@ -6,14 +6,13 @@ import type { FocusedView } from '../drivingLib/focusedView';
 import { groupModlist } from '../drivingLib/modlistTree';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { EntryRef, Instance, InstanceValue } from '../instanceLoader/instance';
-import { modNameOf } from '../instanceLoader/modName';
-
+import { modLabelsOf, modNameOf } from '../instanceLoader/modName';
 import type { AskQuestion } from '../ports/dialog';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Argument } from '../wire/argument';
 import type { Reporter } from '../ports/reporter';
 import type {
-  ModlistSourceCommands, RestoreResult, RestoreStatus, UpdateManifestResult, UpdateManifestStatus,
+  ModlistSourceCommands, ModNote, RestoreResult, RestoreStatus, UpdateManifestResult, UpdateManifestStatus,
 } from '../sourceCommands/modlistSourceCommands';
 
 const TOOLBOX_VIEW = 'modbench.toolbox';
@@ -66,6 +65,15 @@ async function gitInit(deps: ModlistGestureDeps): Promise<void> {
   const result = await gitInitInToolbox(deps);
   if (!result.applied) deps.reporter.report('error', 'Could not git init.', result.refusal);
 }
+
+type Label = (modName: string) => string;
+const labelsOf = ({ value }: Pick<ModlistGestureDeps['instance'], 'value'>): Label => modLabelsOf(value.modFolders);
+
+const named = <Outcome extends { landed: readonly { mod: string }[]; refused: readonly ItemRefusal<string>[] }>(label: Label, outcome: Outcome): Outcome => ({
+  ...outcome,
+  landed: outcome.landed.map((landed) => ({ ...landed, mod: label(landed.mod) })),
+  refused: outcome.refused.map((refused) => ({ ...refused, item: label(refused.item) })),
+});
 
 type AgentOutcome<Landed> = GestureResult<Landed, string>;
 type Restored = Extract<RestoreResult, { applied: true }>['landed'];
@@ -143,36 +151,42 @@ function withProgressAndCancel<T>(
 
 async function updateManifest(deps: ModlistGestureDeps, { mods, refused, view }: ModsToRun): Promise<void> {
   const { commands, instance, reporter } = deps;
+  const label = labelsOf(instance);
   await runWritingGesture(view, instance, async () => {
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
-      commands.updateManifest(mods, instance.value, { onProgress: (status) => { show(updateMessage(status)); }, signal }));
+      commands.updateManifest(mods, instance.value, { onProgress: (status) => { show(updateMessage(status, label)); }, signal }));
     if (!outcome.applied) { reporter.report('error', outcome.refusal); return; }
     reportCancelRefused(reporter, outcome);
-    reportUpdated(reporter, { ...outcome, refused: [...outcome.refused, ...refused] });
+    const answered = named(label, outcome);
+    reportUpdated(reporter, label, { ...answered, refused: [...answered.refused, ...refused] });
   });
 }
 
 async function updateManifestForAgent(
   { commands, instance, modsView }: ModlistGestureDeps, { argument }: ModlistCall,
 ): Promise<AgentOutcome<Extract<UpdateManifestResult, { applied: true }>['landed'][number]>> {
+  const label = labelsOf(instance);
   const mods = modsOfAgent(argument, instance.value);
-  const outcome = await runWritingGesture(modsView, instance, () => commands.updateManifest(mods, instance.value));
-  if (!outcome.applied) return { applied: false, refusal: outcome.refusal };
+  const result = await runWritingGesture(modsView, instance, () => commands.updateManifest(mods, instance.value));
+  if (!result.applied) return { applied: false, refusal: result.refusal };
+  const outcome = named(label, result);
   const unprovided = outcome.landed.flatMap(({ mod, noProvider }) => noProvider.map((path) => `${mod}: ${path} has no provider`));
   return {
     applied: true,
     outcome: { landed: outcome.landed, refused: outcome.refused },
-    partial: warned('Update manifest:', [...unprovided, ...outcome.notes, ...statCacheNotWritten(outcome.landed)]),
+    partial: warned('Update manifest:', [...unprovided, ...notesOf(label, result.notes), ...statCacheNotWritten(outcome.landed)]),
   };
 }
 
 const warned = (message: string, lines: readonly string[]): PartialFailure[] =>
   lines.map((detail) => ({ message, detail, severity: 'warning' }));
 
-function updateMessage(status: UpdateManifestStatus): string {
+const notesOf = (label: Label, notes: readonly ModNote[]): string[] => notes.map(({ mod, note }) => `${label(mod)}: ${note}`);
+
+function updateMessage(status: UpdateManifestStatus, label: Label): string {
   return status.phase === 'ReadingFiles'
-    ? `Update manifest — reading the files of "${status.mod}"…`
-    : `Update manifest — "${status.mod ?? ''}", ${status.modsDone} of ${status.modsTotal} mods done…`;
+    ? `Update manifest — reading the files of "${label(status.mod)}"…`
+    : `Update manifest — "${label(status.mod ?? '')}", ${status.modsDone} of ${status.modsTotal} mods done…`;
 }
 
 const counted = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
@@ -182,13 +196,13 @@ const statCacheNotWritten = (landed: readonly { mod: string; statCacheNotWritten
 
 // modlist-source.md, Update manifest, story 8: one line, the modlist's validation, with each refused mod and each
 // file with no provider in the Output.
-function reportUpdated(reporter: Reporter, outcome: Omit<Extract<UpdateManifestResult, { applied: true }>, 'applied'>): void {
+function reportUpdated(reporter: Reporter, label: Label, outcome: Omit<Extract<UpdateManifestResult, { applied: true }>, 'applied'>): void {
   const unprovided = outcome.landed.flatMap(({ mod, noProvider }) => noProvider.map((path) => `${mod}: ${path}`));
   const updated = outcome.landed.filter(({ manifestWritten }) => manifestWritten).length;
   const unchanged = outcome.landed.length - updated;
   const line = `Update manifest: ${unchanged} mod${unchanged === 1 ? '' : 's'} unchanged, ${updated} updated, `
     + `${outcome.refused.length} refused; ${counted(unprovided.length, 'file has', 'files have')} no provider.`;
-  const warnings = [...unprovided, ...outcome.notes, ...statCacheNotWritten(outcome.landed)];
+  const warnings = [...unprovided, ...notesOf(label, outcome.notes), ...statCacheNotWritten(outcome.landed)];
   const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...warnings].join('\n');
   if (outcome.refused.length > 0) reporter.report('error', line, detail);
   else if (warnings.length > 0) reporter.report('warning', line, detail);
@@ -199,14 +213,14 @@ function reportCancelRefused(reporter: Reporter, { cancelRefusal }: { readonly c
   if (cancelRefusal !== undefined) reporter.report('error', cancelRefusal);
 }
 
-const quoted = (mods: readonly string[]): string => mods.map((mod) => `"${mod}"`).join(', ');
+const quoted = (label: Label, mods: readonly string[]): string => mods.map((mod) => `"${label(mod)}"`).join(', ');
 
 const uncommittedWarnings = (landed: Restored): string[] => landed.filter(({ uncommitted }) => uncommitted === true)
   .map(({ mod }) => `${mod}: its source holds changes no commit holds, so its manifest's commit does not rebuild these bytes`);
 
-async function confirmRestore(ask: AskQuestion, { mods, everyMod: all }: ModsToRun): Promise<boolean> {
+async function confirmRestore(ask: AskQuestion, label: Label, { mods, everyMod: all }: ModsToRun): Promise<boolean> {
   const manifests = mods.length === 1 ? 'its manifest' : 'their manifests';
-  const target = all ? 'every mod from its manifest' : `${quoted(mods)} from ${manifests}`;
+  const target = all ? 'every mod from its manifest' : `${quoted(label, mods)} from ${manifests}`;
   const question = `Are you sure you want to restore ${target}?`;
   return (await ask(question, { modal: true, detail: 'A change no manifest holds is lost.' }, RESTORE)) === RESTORE;
 }
@@ -215,8 +229,9 @@ async function confirmRestore(ask: AskQuestion, { mods, everyMod: all }: ModsToR
 async function restoreFromManifest(deps: ModlistGestureDeps, toRun: ModsToRun): Promise<void> {
   const { commands, instance, reporter } = deps;
   const { mods, refused, view } = toRun;
+  const label = labelsOf(instance);
   if (mods.length === 0) {
-    reportRestored(reporter, refused.length, { landed: [], refused });
+    reportRestored(reporter, refused.length, named(label, { landed: [], refused }));
     return;
   }
   deps.say('Restore from manifest — reading what it would destroy…');
@@ -226,21 +241,21 @@ async function restoreFromManifest(deps: ModlistGestureDeps, toRun: ModsToRun): 
   const toRestore = mods.filter((mod) => !skipped.has(mod));
   const notAsked = [...listing.refused, ...refused];
   if (toRestore.length === 0) {
-    reportRestored(reporter, mods.length + refused.length, { landed: [], refused: notAsked });
+    reportRestored(reporter, mods.length + refused.length, named(label, { landed: [], refused: notAsked }));
     return;
   }
-  if (listing.destroys.length > 0 && !(await confirmRestore(deps.ask, toRun))) return;
+  if (listing.destroys.length > 0 && !(await confirmRestore(deps.ask, label, toRun))) return;
   await runWritingGesture(view, instance, async () => {
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
-      commands.restoreFromManifest(toRestore, instance.value, { onProgress: (status) => { show(restoreMessage(status)); }, signal }));
+      commands.restoreFromManifest(toRestore, instance.value, { onProgress: (status) => { show(restoreMessage(status, label)); }, signal }));
     if (!outcome.applied) {
       reporter.report('error', outcome.refusal, outcome.unfinished.length === 0
         ? undefined
-        : `Not finished: ${quoted(outcome.unfinished)}. Restoring again finishes them.`);
+        : `Not finished: ${quoted(label, outcome.unfinished)}. Restoring again finishes them.`);
       return;
     }
     reportCancelRefused(reporter, outcome);
-    reportRestored(reporter, mods.length + refused.length, { landed: outcome.landed, refused: [...outcome.refused, ...notAsked] });
+    reportRestored(reporter, mods.length + refused.length, named(label, { landed: outcome.landed, refused: [...outcome.refused, ...notAsked] }));
   });
 }
 
@@ -249,6 +264,7 @@ async function restoreFromManifest(deps: ModlistGestureDeps, toRun: ModsToRun): 
 async function restoreFromManifestForAgent(
   { commands, instance, modsView }: ModlistGestureDeps, { argument, options }: ModlistCall,
 ): Promise<AgentOutcome<Restored[number]>> {
+  const label = labelsOf(instance);
   const mods = modsOfAgent(argument, instance.value);
   const listing = await commands.whatRestoreDestroys(mods);
   if ('refusal' in listing) return { applied: false, refusal: listing.refusal };
@@ -264,22 +280,23 @@ async function restoreFromManifestForAgent(
   const refused = [...listing.refused, ...overwrites];
   const notRestored = new Set(refused.map(({ item }) => item));
   const toRestore = mods.filter((mod) => !notRestored.has(mod));
-  if (toRestore.length === 0) return { applied: true, outcome: { landed: [], refused } };
+  if (toRestore.length === 0) return { applied: true, outcome: named(label, { landed: [], refused }) };
   const outcome = await runWritingGesture(modsView, instance, () => commands.restoreFromManifest(toRestore, instance.value));
   if (!outcome.applied) {
-    return { applied: false, refusal: outcome.refusal, ...(outcome.unfinished.length === 0 ? {} : { detail: `Not finished: ${quoted(outcome.unfinished)}. Restoring again finishes them.` }) };
+    return { applied: false, refusal: outcome.refusal, ...(outcome.unfinished.length === 0 ? {} : { detail: `Not finished: ${quoted(label, outcome.unfinished)}. Restoring again finishes them.` }) };
   }
+  const answered = named(label, { landed: outcome.landed, refused: [...outcome.refused, ...refused] });
   return {
     applied: true,
-    outcome: { landed: outcome.landed, refused: [...outcome.refused, ...refused] },
-    partial: warned('Restore from manifest:', [...statCacheNotWritten(outcome.landed), ...uncommittedWarnings(outcome.landed)]),
+    outcome: answered,
+    partial: warned('Restore from manifest:', [...statCacheNotWritten(answered.landed), ...uncommittedWarnings(answered.landed)]),
   };
 }
 
-function restoreMessage(status: RestoreStatus): string {
+function restoreMessage(status: RestoreStatus, label: Label): string {
   switch (status.phase) {
-    case 'ReadingFiles': return `Restore from manifest — reading the files of "${status.mod}"…`;
-    case 'Restoring': return `Restore from manifest — "${status.mod ?? ''}", ${status.modsDone} of ${status.modsTotal} mods done…`;
+    case 'ReadingFiles': return `Restore from manifest — reading the files of "${label(status.mod)}"…`;
+    case 'Restoring': return `Restore from manifest — "${label(status.mod ?? '')}", ${status.modsDone} of ${status.modsTotal} mods done…`;
   }
 }
 

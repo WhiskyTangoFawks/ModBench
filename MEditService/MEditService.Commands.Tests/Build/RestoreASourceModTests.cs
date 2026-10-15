@@ -108,7 +108,7 @@ public sealed class RestoreASourceModTests : IDisposable
         var skipped = Assert.Single((await Restore()).Refused);
 
         Assert.Equal(
-            (RestoreRefusal.SourceAtAnotherCommit, $"'{ModName}' was skipped: its source is at {_second}, not at {_first}, the commit its manifest names."),
+            (RestoreRefusal.SourceAtAnotherCommit, $"was skipped: its source is at {_second}, not at {_first}, the commit its manifest names."),
             (skipped.Refusal.Kind, skipped.Message));
         Assert.False(File.Exists(Path.Combine(ModFolder, "meshes", "c.nif")));
     }
@@ -121,7 +121,7 @@ public sealed class RestoreASourceModTests : IDisposable
         var skipped = Assert.Single((await Restore()).Refused);
 
         Assert.Equal(
-            (RestoreRefusal.SourceUnavailable, $"'{ModName}' was skipped: its source could not be cloned or read: git clone failed (128)."),
+            (RestoreRefusal.SourceUnavailable, $"was skipped: its source could not be cloned or read: git clone failed (128)."),
             (skipped.Refusal.Kind, skipped.Message));
     }
 
@@ -147,7 +147,7 @@ public sealed class RestoreASourceModTests : IDisposable
 
         var skipped = Assert.Single((await Restore(notifications, cancelling.Token)).Refused);
 
-        Assert.Equal($"'{ModName}' was skipped: its source could not be cloned or read: the clone was cancelled.", skipped.Message);
+        Assert.Equal($"was skipped: its source could not be cloned or read: the clone was cancelled.", skipped.Message);
         Assert.False(Directory.Exists(SourceFolder));
     }
 
@@ -159,7 +159,7 @@ public sealed class RestoreASourceModTests : IDisposable
         var unfinished = Assert.Single((await Restore()).Refused);
 
         Assert.Equal(
-            (RestoreRefusal.NotFinished, $"'{ModName}' was not finished: 'Mod - Main.ba2' was not packed: Modbench packs no archive for this game."),
+            (RestoreRefusal.NotFinished, $"was not finished: 'Mod - Main.ba2' was not packed: Modbench packs no archive for this game."),
             (unfinished.Refusal.Kind, unfinished.Message));
     }
 

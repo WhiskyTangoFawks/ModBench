@@ -243,7 +243,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var skipped = Assert.Single(result.Refused);
         Assert.Equal(("Mod", refusal), (skipped.Item, skipped.Refusal.Kind));
-        Assert.Equal($"'Mod' was skipped: {lack}.", skipped.Message);
+        Assert.Equal($"was skipped: {lack}.", skipped.Message);
         Assert.Empty(WrittenIn(Mod));
         Assert.Equal("Other", Assert.Single(result.Landed).Item);
     }
@@ -273,7 +273,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var skipped = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod, download with { Path = "dl/Gone/Mod.zip" })], Instance())).Refused);
 
-        Assert.Equal("'Mod' was skipped: installation file 'Mod.zip' is not in the downloads folder.", skipped.Message);
+        Assert.Equal("was skipped: installation file 'Mod.zip' is not in the downloads folder.", skipped.Message);
     }
 
     [Theory]
@@ -291,7 +291,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var skipped = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod, download)], Instance(new OverriddenGameFile("Game.esm", 7, "patched")))).Refused);
 
-        Assert.Equal($"'Mod' was skipped: {lack}.", skipped.Message);
+        Assert.Equal($"was skipped: {lack}.", skipped.Message);
     }
 
     [Fact]
@@ -330,7 +330,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var unfinished = Assert.Single(result.Refused);
         Assert.Equal(RestoreRefusal.NotFinished, unfinished.Refusal.Kind);
-        Assert.StartsWith("'Mod' was not finished: 'Mod.zip' is not an archive restore from manifest can read:", unfinished.Message, StringComparison.Ordinal);
+        Assert.StartsWith("was not finished: 'Mod.zip' is not an archive restore from manifest can read:", unfinished.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("again", unfinished.Message, StringComparison.Ordinal);
         Assert.Equal("Other", Assert.Single(result.Landed).Item);
     }
@@ -359,7 +359,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var skipped = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Refused);
 
-        Assert.Equal("'Mod' was skipped: installation file 'Mod.zip' is missing; 'c.nif' has no provider.", skipped.Message);
+        Assert.Equal("was skipped: installation file 'Mod.zip' is missing; 'c.nif' has no provider.", skipped.Message);
     }
 
     [Fact]
@@ -369,7 +369,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var skipped = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Refused);
 
-        Assert.Equal((RestoreRefusal.NoManifest, "'Mod' was skipped: it has no manifest."), (skipped.Refusal.Kind, skipped.Message));
+        Assert.Equal((RestoreRefusal.NoManifest, "was skipped: it has no manifest."), (skipped.Refusal.Kind, skipped.Message));
     }
 
     [Fact]
@@ -380,7 +380,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var skipped = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Refused);
 
-        Assert.Equal((RestoreRefusal.ManifestUnreadable, "'Mod' was skipped: its manifest cannot be read at line 1."), (skipped.Refusal.Kind, skipped.Message));
+        Assert.Equal((RestoreRefusal.ManifestUnreadable, "was skipped: its manifest cannot be read at line 1."), (skipped.Refusal.Kind, skipped.Message));
     }
 
     [Fact]
@@ -395,7 +395,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var unfinished = Assert.Single(result.Refused);
         Assert.Equal(
-            (RestoreRefusal.NotFinished, "'Mod' was not finished: b.nif is held by another process. Restoring it again finishes it."),
+            (RestoreRefusal.NotFinished, "was not finished: b.nif is held by another process. Restoring it again finishes it."),
             (unfinished.Refusal.Kind, unfinished.Message));
         Assert.Equal("a", WrittenText(Mod, "a.nif"));
         Assert.Equal("Other", Assert.Single(result.Landed).Item);
