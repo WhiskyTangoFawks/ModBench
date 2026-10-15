@@ -241,6 +241,18 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal(differs, Status().Differing.Contains("a.nif"));
     }
 
+    [Theory]
+    [InlineData("0123abc", false)]
+    [InlineData("4567def", true)]
+    public void AFileItsSourceProvides_Differs_UnlessItHoldsTheBytesTheBuildAtTheLinesCommitKept(string commit, bool differs)
+    {
+        Write("a.esp", "hello");
+        KeepAsRestored(ManifestedFromSource("0123abc"));
+        ManifestedFromSource(commit);
+
+        Assert.Equal(differs, Status().Differing.Contains("a.esp"));
+    }
+
     [Fact]
     public void AStatus_KeepsWhatItReadInTheStatCache_SoTheNextOpensNoFileItRead()
     {
@@ -348,6 +360,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
                 new ManifestFile("b.nif", new FileProvider.InstallationFileEntry("Patch.zip", "Data/b.nif")),
                 new ManifestFile("a.nif", new FileProvider.FirstInstallationFile()),
                 new ManifestFile("c.esm", new FileProvider.GameFile("Data/Game.esm")),
+                new ManifestFile("d.esp", new FileProvider.Source("https://example.com/mod.git", "0123abc")),
             ]);
 
         Assert.True(_repository.WriteManifest(_root, "mod", manifest));
@@ -359,6 +372,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
             + "{\"path\":\"a.nif\"}\n"
             + "{\"path\":\"b.nif\",\"from\":{\"installationFile\":\"Patch.zip\",\"path\":\"Data/b.nif\"}}\n"
             + "{\"path\":\"c.esm\",\"from\":{\"gameFile\":\"Data/Game.esm\"}}\n"
+            + "{\"path\":\"d.esp\",\"from\":{\"remote\":\"https://example.com/mod.git\",\"commit\":\"0123abc\"}}\n"
             + "{\"path\":\"z.txt\",\"from\":null}\n",
             File.ReadAllText(Path.Combine(_root, "mod.manifest")));
     }
@@ -398,6 +412,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
                 new ManifestFile("a.nif", new FileProvider.FirstInstallationFile()),
                 new ManifestFile("b.nif", new FileProvider.InstallationFileEntry("Patch.zip", "Data/b.nif")),
                 new ManifestFile("c.esm", new FileProvider.GameFile("Data/Game.esm")),
+                new ManifestFile("d.esp", new FileProvider.Source("https://example.com/mod.git", "0123abc")),
                 new ManifestFile("z.txt", new FileProvider.NoProvider()),
             ]);
         _repository.WriteManifest(_root, "mod", manifest);
@@ -423,6 +438,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [InlineData("<<<<<<< HEAD")]
     [InlineData("{\"path\":7}")]
     [InlineData("{\"path\":\"a.txt\",\"from\":{\"installationFile\":\"A.zip\"}}")]
+    [InlineData("{\"path\":\"a.txt\",\"from\":{\"remote\":\"https://example.com/mod.git\"}}")]
     public void ReadManifest_WithALineItCannotRead_RefusesNamingTheLine(string line)
     {
         Write("mod.manifest", "{\"path\":\"b.txt\"}\n" + line + "\n");
@@ -550,6 +566,13 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         var manifest = new Manifest(
             [new ManifestSource("Mod.zip", 7, "#Mod.zip"), new ManifestSource("Upgraded.zip", 7, "#Upgraded.zip")], [], [line]);
+        _repository.WriteManifest(_root, "mod", manifest);
+        return manifest;
+    }
+
+    private Manifest ManifestedFromSource(string commit)
+    {
+        var manifest = new Manifest([], [], [new ManifestFile("a.esp", new FileProvider.Source("https://example.com/mod.git", commit))]);
         _repository.WriteManifest(_root, "mod", manifest);
         return manifest;
     }

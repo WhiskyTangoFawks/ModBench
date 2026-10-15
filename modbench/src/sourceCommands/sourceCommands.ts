@@ -3,7 +3,7 @@ import {
 } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
-import { ba2VersionsOf, type Ba2Versions } from '../tables/gamePaths';
+import { ba2VersionsOf } from '../tables/gamePaths';
 
 /** mEdit's phases of decompile and commit, and before them the Instance adapter's reading of each mod's installation files. */
 export type DecompileAndCommitProgress = InitStatus | { readonly mod: string; readonly phase: 'ReadingInstallationFiles' };
@@ -11,7 +11,7 @@ export type DecompileAndCommitProgress = InitStatus | { readonly mod: string; re
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'init'>;
   adapter: Pick<InstanceAdapter,
-    'installationFiles' | 'managerFilesInModFolder' | 'sourceFolder' | 'modFolderPath' | 'excludedSuffix'>;
+    'installationFiles' | 'managerFilesInModFolder' | 'sourceFolder' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder'>;
 }
 
 /** The source mod gestures, bound to the mEdit client and handing it the instance's facts. */
@@ -31,10 +31,11 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
         if (sourceFolder === undefined) refused.push({ item: mod, reason: 'no repository in the source folder builds it' });
         else if (folder === undefined) refused.push({ item: mod, reason: 'its name gives it no folder' });
         else if (installed.kind === 'unreadable') refused.push({ item: mod, reason: installed.reason });
-        else sent.push({ name: mod, sourceFolder, folder, installationFiles: installed.answer.map(onTheWire) });
+        else sent.push({ name: mod, sourceFolder, folder, installationFiles: installed.answer.map(onTheWire), committedFiles: [...adapter.managerFilesInModFolder] });
       }
       if (sent.length === 0) return { landed: [], refused };
-      const outcome = await client.build(sent, { excludedSuffix: adapter.excludedSuffix, archives: archiveVariants(ba2VersionsOf(gameRelease)) });
+      const outcome = await client.build(
+        sent, { excludedSuffix: adapter.excludedSuffix, archives: archiveVariants(gameRelease), statCache: adapter.statCacheFolder });
       return isRefused(outcome) ? outcome : { landed: outcome.landed, refused: [...outcome.refused, ...refused] };
     },
 
@@ -69,8 +70,9 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
 
 export type SourceCommands = ReturnType<typeof sourceCommands>;
 
-// Modbench packs a BA2 compressed, as the game's own are.
-function archiveVariants(versions: Ba2Versions | undefined): BuildFacts['archives'] {
+/** The release's archive variants, none when the table names none. Modbench packs a BA2 compressed, as the game's own are. */
+export function archiveVariants(gameRelease: string | undefined): BuildFacts['archives'] {
+  const versions = ba2VersionsOf(gameRelease);
   return versions === undefined
     ? null
     : { general: { ba2: { version: versions.general, compressed: true } }, textures: { ba2: { version: versions.textures, compressed: true } } };

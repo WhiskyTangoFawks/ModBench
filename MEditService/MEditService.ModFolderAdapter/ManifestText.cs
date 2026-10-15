@@ -59,6 +59,7 @@ internal static class ManifestText
     {
         if (from.ValueKind == JsonValueKind.Null) return new FileProvider.NoProvider();
         if (from.TryGetProperty("gameFile", out var game)) return new FileProvider.GameFile(Text(game));
+        if (from.TryGetProperty("remote", out var remote)) return new FileProvider.Source(Text(remote), Text(from.GetProperty("commit")));
         return new FileProvider.InstallationFileEntry(Text(from.GetProperty("installationFile")), Text(from.GetProperty("path")));
     }
 
@@ -94,6 +95,12 @@ internal static class ManifestText
             case FileProvider.GameFile game:
                 writer.WriteStartObject("from");
                 writer.WriteString("gameFile", game.Path);
+                writer.WriteEndObject();
+                break;
+            case FileProvider.Source source:
+                writer.WriteStartObject("from");
+                writer.WriteString("remote", source.Remote);
+                writer.WriteString("commit", source.Commit);
                 writer.WriteEndObject();
                 break;
             case FileProvider.NoProvider:

@@ -2,10 +2,10 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to update the manifest of, with its installation files in the mod manager's order and the paths of its files
-/// the repository commits itself, which the manifest does not name.</summary>
+/// <summary>A mod to update the manifest of, with its installation files in the mod manager's order, its files the
+/// repository commits, which no line names, and whether it is a source mod, whose build writes its manifest.</summary>
 public sealed record ModToUpdate(
-    string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> CommittedFiles);
+    string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> CommittedFiles, bool IsSourceMod);
 
 /// <summary>The instance's facts beyond its mods: the game files the mods' files override, and the folder of the stat
 /// cache.</summary>
@@ -30,6 +30,10 @@ public enum UpdateManifestRefusal
 
     /// <summary>The mod's manifest could not be written.</summary>
     NotWritten,
+
+    /// <summary>A source mod whose folder differs from what its build wrote, or that its build wrote no manifest for
+    /// (modlist-source.md, Update manifest, story 5).</summary>
+    LeftToItsBuild,
 }
 
 /// <summary>A mod whose manifest is as its folder says. ManifestWritten is false when the manifest was already so.

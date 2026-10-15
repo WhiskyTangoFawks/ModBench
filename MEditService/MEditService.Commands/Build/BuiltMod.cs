@@ -3,13 +3,14 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to build, by name, with the source folder whose build configuration names its folder, the folder,
-/// and its installation files in the mod manager's order.</summary>
-public sealed record ModToBuild(string Name, string SourceFolder, string Folder, IReadOnlyList<InstallationFile> InstallationFiles);
+/// <summary>A mod to build, by name, with the source folder whose build configuration names its folder, the folder, its
+/// installation files in the mod manager's order, and its files the repository commits, which no manifest line names.</summary>
+public sealed record ModToBuild(
+    string Name, string SourceFolder, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> CommittedFiles);
 
-/// <summary>The instance's facts a build needs: the suffix the mod manager gives an excluded file's name, and the
-/// variants of the game's archives from the per-release table, none when it names none.</summary>
-public sealed record InstanceToBuild(string ExcludedSuffix, ArchiveVariants? Archives);
+/// <summary>The instance's facts a build needs: the suffix the mod manager gives an excluded file's name, the game's
+/// archive variants, none when the per-release table names none, and the stat cache's folder.</summary>
+public sealed record InstanceToBuild(string ExcludedSuffix, ArchiveVariants? Archives, string StatCache);
 
 /// <summary>The variant an archive of textures packs as, and the one every other archive packs as.</summary>
 public sealed record ArchiveVariants(IArchiveVariant General, IArchiveVariant Textures);

@@ -357,7 +357,7 @@ describe('modbench.mod.build', () => {
           progressSteps.push('build');
           builds.push([mods, gameRelease]);
           expect(sourceDirs).toBe(SOURCE_DIRS);
-          return client.build([], { excludedSuffix: '', archives: null });
+          return client.build([], { excludedSuffix: '', archives: null, statCache: '' });
         },
       },
       instance: instanceThatReads, gameRelease: () => 'Fallout4',

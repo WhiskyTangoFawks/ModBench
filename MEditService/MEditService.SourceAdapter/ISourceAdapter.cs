@@ -65,6 +65,10 @@ public interface ISourceAdapter
     /// <summary>What the build of the source in <paramref name="sourceFolder"/> writes, as its working tree says now.</summary>
     Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder);
 
+    /// <summary>The commit at HEAD of the repository in <paramref name="sourceFolder"/>. A folder that is not there is first
+    /// cloned from <paramref name="cloneFrom"/>'s remote at its commit; a clone that fails leaves none.</summary>
+    Answer<string, SourceFailure> CommitAtHead(string sourceFolder, SharedSource cloneFrom);
+
     /// <summary>Writes <paramref name="change"/> into the build configuration in <paramref name="sourceFolder"/>, keeping all
     /// else it says, in the working tree.</summary>
     SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change);

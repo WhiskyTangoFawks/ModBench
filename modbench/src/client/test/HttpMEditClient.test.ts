@@ -168,12 +168,15 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
 }
 
 const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, installationFiles: [], modManagerFiles: ['meta.ini'] });
-const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, installationFiles: [] });
-const modToUpdate = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], committedFiles: ['meta.ini'] });
+const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, installationFiles: [], committedFiles: ['meta.ini'] });
+const modToUpdate = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], committedFiles: ['meta.ini'], isSourceMod: false });
 const updateFacts = { gameFiles: [{ path: 'Game.esm', size: 7, hash: 'AAECAwQFBgc=' }], statCache: '/instance/stat-cache' };
-const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], committedFiles: ['meta.ini'] });
-const restoreFacts = { gameFiles: [], dataFolder: '/game/Data', statCache: '/instance/stat-cache' };
-const buildFacts = { excludedSuffix: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } } };
+const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], committedFiles: ['meta.ini'], sourceFolder: `/instance/source/${name}` });
+const restoreFacts = { gameFiles: [], dataFolder: '/game/Data', statCache: '/instance/stat-cache', excludedSuffix: '.mohidden', archives: null };
+const buildFacts = {
+  excludedSuffix: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } },
+  statCache: '/instance/stat-cache',
+};
 
 describe('HttpMEditClient — what each verb sends and reads', () => {
   const myPatch = { name: 'MyPatch.esp', origin: 'ModA' };

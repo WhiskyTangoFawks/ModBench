@@ -17,7 +17,7 @@ const unreadable = (reason: string): FileRead<readonly InstallationFile[]> => ({
 const BUILT = { landed: [{ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [] }], refused: [] };
 
 describe('sourceCommands build', () => {
-  it('hands mEdit each mod with the source folder that builds it, its folder and its installation files, and the release\'s archive variants', async () => {
+  it('hands mEdit each mod with the source folder that builds it, its folder, its installation files and the files the repository commits itself, the release\'s archive variants and the stat cache\'s folder', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
     const adapter = fakeAdapter({ installations: new Map([['ModA', recording([INSTALLED])]]) });
@@ -28,9 +28,9 @@ describe('sourceCommands build', () => {
     expect(client.calls).toEqual([{
       method: 'build',
       args: [[
-        { name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', installationFiles: [INSTALLED] },
-        { name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', installationFiles: [] },
-      ], { excludedSuffix: '.excluded', archives: { general: ba2, textures: ba2 } }],
+        { name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], committedFiles: ['meta.ini'] },
+        { name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', installationFiles: [], committedFiles: ['meta.ini'] },
+      ], { excludedSuffix: '.excluded', archives: { general: ba2, textures: ba2 }, statCache: '/instance/stat-cache' }],
     }]);
   });
 
@@ -40,7 +40,7 @@ describe('sourceCommands build', () => {
 
     await sourceCommands({ client, adapter: fakeAdapter() }).build(['ModA'], undefined, SOURCES);
 
-    expect(client.calls.map((call) => call.args[1])).toEqual([{ excludedSuffix: '.excluded', archives: null }]);
+    expect(client.calls.map((call) => call.args[1])).toEqual([{ excludedSuffix: '.excluded', archives: null, statCache: '/instance/stat-cache' }]);
   });
 
   it('refuses a mod no repository builds, or whose installation files cannot be answered, naming why, and builds the rest', async () => {

@@ -27,6 +27,18 @@ internal static class GitCli
         }
     }
 
+    /// <summary>Clones <paramref name="remote"/> into <paramref name="folder"/>, which is not there, set as init sets a
+    /// repository. A clone that fails leaves no folder. Asks for no credentials, as no one can answer.</summary>
+    internal static void Clone(string remote, string folder)
+    {
+        var parent = Directory.CreateDirectory(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(folder)) ?? folder).FullName;
+        string[] args = ["clone", "-q", "-c", "core.autocrlf=false", "-c", "core.longpaths=true", "-c", "core.quotePath=false", remote, folder];
+        var psi = StartInfo(args, parent);
+        psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        var (exitCode, _, stderr) = Execute(psi, parent);
+        if (exitCode != 0) throw Failed(args, exitCode, stderr);
+    }
+
     internal static string Run(string gitDir, string workTree, params string[] args)
     {
         var (exitCode, stdout, stderr) = Execute(gitDir, workTree, args);
@@ -56,16 +68,22 @@ internal static class GitCli
         return SourceStopException.GitFailed($"git {args[0]} failed ({exitCode})");
     }
 
-    private static ProcessStartInfo StartInfo(string gitDir, string workTree, string[] args)
+    private static ProcessStartInfo StartInfo(string[] args, string workingDirectory)
     {
         var psi = new ProcessStartInfo("git")
         {
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            WorkingDirectory = workTree,
+            WorkingDirectory = workingDirectory,
         };
         foreach (var arg in args) psi.ArgumentList.Add(arg);
+        return psi;
+    }
+
+    private static ProcessStartInfo StartInfo(string gitDir, string workTree, string[] args)
+    {
+        var psi = StartInfo(args, workTree);
         psi.Environment["GIT_DIR"] = gitDir;
         psi.Environment["GIT_WORK_TREE"] = workTree;
         // A read that refreshes the index takes index.lock, which fails the commit or rebase the
@@ -74,9 +92,12 @@ internal static class GitCli
         return psi;
     }
 
-    private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string[] args)
+    private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string[] args) =>
+        Execute(StartInfo(gitDir, workTree, args), workTree);
+
+    private static (int ExitCode, string Stdout, string Stderr) Execute(ProcessStartInfo psi, string workTree)
     {
-        using var process = Start(StartInfo(gitDir, workTree, args), workTree);
+        using var process = Start(psi, workTree);
         // Closed at once: git otherwise inherits this process's stdin, and a socket never reaches EOF.
         process.StandardInput.Close();
 

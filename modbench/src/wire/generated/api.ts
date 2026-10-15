@@ -126,7 +126,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each mod's manifest from the mod as it is (ADR-0022). A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification, which names the request's gesture. */
+        /** @description Writes each mod's manifest from the mod as it is (ADR-0022), but a source mod's, which its build writes: that one is refused when its folder differs from what the build wrote. A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification, which names the request's gesture. */
         post: operations["UpdateManifest"];
         delete?: never;
         options?: never;
@@ -143,7 +143,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), and names each file no line names, for the extension's trash; it writes no other file. A mod lands, is skipped naming what it lacks, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, which names the request's gesture. */
+        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), or builds a mod whose manifest names its source at the commit it names, cloning the source when it is absent and skipping it at another commit, and names each file no line names, for the extension's trash; it writes no other file. A mod lands, is skipped naming what it lacks, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, which names the request's gesture. */
         post: operations["RestoreFromManifest"];
         delete?: never;
         options?: never;
@@ -211,7 +211,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each source mod's folder from its source as its build configuration says: the base from its installation files, its assets over it, each plugin compiled, each archive packed. A file the build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and what failed when a read or write stopped it part way. Progress is the build-progress notification. */
+        /** @description Writes each source mod's folder from its source as its build configuration says: the base from its installation files, its assets over it, each plugin compiled, each archive packed, and its manifest last. A file the build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and what failed when a read or write stopped it part way. Progress is the build-progress notification. */
         post: operations["BuildMod"];
         delete?: never;
         options?: never;
@@ -1024,6 +1024,7 @@ export interface components {
             sourceFolder: string;
             folder: string;
             installationFiles: components["schemas"]["InstallationFileRequest"][];
+            committedFiles: string[];
         };
         BuildProgress: {
             mod?: string | null;
@@ -1038,6 +1039,7 @@ export interface components {
             mods: components["schemas"]["BuildModRequest"][];
             excludedSuffix: string;
             archives?: components["schemas"]["ArchiveVariantsRequest"] | null;
+            statCache: string;
         };
         BuildResponse: {
             applied: components["schemas"]["BuiltModResponse"][];
@@ -1743,12 +1745,15 @@ export interface components {
             folder: string;
             installationFiles: components["schemas"]["InstallationFileRequest"][];
             committedFiles: string[];
+            sourceFolder?: string | null;
         };
         RestoreFromManifestRequest: {
             mods: components["schemas"]["RestoreFromManifestModRequest"][];
             gameFiles: components["schemas"]["OverriddenGameFileRequest"][];
             dataFolder: string;
             statCache: string;
+            excludedSuffix: string;
+            archives?: components["schemas"]["ArchiveVariantsRequest"] | null;
             gesture?: string | null;
         };
         RestoreFromManifestResponse: {
@@ -1756,7 +1761,7 @@ export interface components {
             refused: components["schemas"]["ModRestoreRefusal"][];
         };
         /** @enum {string} */
-        RestoreRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "NotFound" | "Unreadable" | "NotFinished";
+        RestoreRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "NotFound" | "Unreadable" | "NotFinished" | "SourceUnavailable" | "SourceAtAnotherCommit" | "NotBuilt";
         RestoredModResponse: {
             mod: string;
             written: string[];
@@ -1810,9 +1815,10 @@ export interface components {
             folder: string;
             installationFiles: components["schemas"]["InstallationFileRequest"][];
             committedFiles: string[];
+            isSourceMod: boolean;
         };
         /** @enum {string} */
-        UpdateManifestRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "NotWritten";
+        UpdateManifestRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "NotWritten" | "LeftToItsBuild";
         UpdateManifestRequest: {
             mods: components["schemas"]["UpdateManifestModRequest"][];
             gameFiles: components["schemas"]["OverriddenGameFileRequest"][];

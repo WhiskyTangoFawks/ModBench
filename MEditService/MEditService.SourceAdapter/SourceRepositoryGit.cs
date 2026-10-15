@@ -69,6 +69,8 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
 
     internal bool TryRun(out string stdout, params string[] args) => GitCli.TryRun(_gitDir, _sourceFolder, out stdout, args);
 
+    internal string HeadCommit() => Run("rev-parse", "HEAD").Trim();
+
     // git speaks forward slashes on every platform, Windows included, while the layout builds
     // its paths with Path.Combine.
     internal static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
@@ -119,7 +121,7 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
 
     internal bool WriteBinary(string pluginFileName, string binarySha256, Action write)
     {
-        var headSha = Run("rev-parse", "HEAD").Trim();
+        var headSha = HeadCommit();
         var earlier = LastWrittenBinarySha256s(pluginFileName);
         ParkTrailers("Compile", pluginFileName, headSha, [$"{BinaryTrailer}: {binarySha256}",
             .. earlier.Select(sha => $"{EarlierBinaryTrailer}: {sha}")]);
@@ -144,7 +146,7 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     /// <summary>What the working tree now holds was made from this binary, as a landed compile's is.</summary>
     internal void ParkDecompiled(string pluginFileName, string binarySha256)
     {
-        var headSha = Run("rev-parse", "HEAD").Trim();
+        var headSha = HeadCommit();
         ParkTrailers("Decompile", pluginFileName, headSha, [$"{BinaryTrailer}: {binarySha256}"]);
     }
 

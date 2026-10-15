@@ -32,6 +32,25 @@ public sealed class SourceToBuildTests : IDisposable
         Assert.Empty(source.Archives);
     }
 
+    [Theory]
+    [InlineData(new[] { "fork", "origin" }, "origin")]
+    [InlineData(new[] { "upstream", "fork" }, "fork")]
+    public void ASourceWithARemote_IsSharedThroughOrigin_ElseTheFirstRemote_AtTheCommitAtHead(string[] remotes, string sharedThrough)
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], []));
+        foreach (var remote in remotes) Git("remote", "add", remote, $"https://example.com/{remote}.git");
+
+        Assert.Equal(new SharedSource($"https://example.com/{sharedThrough}.git", Git("rev-parse", "HEAD").Trim()), Built().Shared);
+    }
+
+    [Fact]
+    public void ASourceWithNoRemote_IsSharedThroughNone()
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], []));
+
+        Assert.Null(Built().Shared);
+    }
+
     [Fact]
     public void AConfiguration_NamesTheExclusionsAndEachArchiveToPackWithItsFiles()
     {
@@ -99,6 +118,8 @@ public sealed class SourceToBuildTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
         File.WriteAllText(file, path);
     }
+
+    private string Git(params string[] args) => GitProbe.Run(Path.Combine(_sourceFolder, ".git"), _sourceFolder, args);
 
     private SourceToBuild Built() => TestAdapters.Source().SourceToBuild(_sourceFolder).Value();
 

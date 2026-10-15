@@ -52,8 +52,16 @@ public sealed class BuildHandler
         }
     }
 
+    /// <summary>The mod built for restore from manifest, whose manifest says the base, so a folder that does not hold the
+    /// installation files' entries, as a fresh clone's does not, is no refusal.</summary>
+    internal async Task<ItemAnswer<BuildRefusal, BuiltMod>> RebuildAsync(ModToBuild mod, InstanceToBuild instance) =>
+        _loadOrder.Held is { Snapshot: var loadOrder }
+            ? await BuildModAsync(loadOrder, mod, instance, baseIsKnown: true)
+            : Refused(mod, BuildRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
+
     // Everything that refuses the mod is checked before its first write (mods.md, Build, story 4).
-    private async Task<ItemAnswer<BuildRefusal, BuiltMod>> BuildModAsync(LoadOrderSnapshot loadOrder, ModToBuild mod, InstanceToBuild instance)
+    private async Task<ItemAnswer<BuildRefusal, BuiltMod>> BuildModAsync(
+        LoadOrderSnapshot loadOrder, ModToBuild mod, InstanceToBuild instance, bool baseIsKnown = false)
     {
         if (!_source.SourceToBuild(mod.SourceFolder).Holds(out var source, out var unread))
             return Refused(mod, BuildRefusal.SourceUnreadable, unread.Reason);
@@ -74,7 +82,7 @@ public sealed class BuildHandler
             return Refused(mod, BuildRefusal.ArchiveFileNotAnAsset, $"'{notAnAsset.Archive}' takes '{notAnAsset.File}', which is not an asset of its source.");
 
         var written = new FolderWrite(_modFolders, mod.Folder, source.Exclude, instance.ExcludedSuffix);
-        if (WhyTheBaseIsNotKnown(mod, installed, written) is { } unknown) return unknown;
+        if (!baseIsKnown && WhyTheBaseIsNotKnown(mod, installed, written) is { } unknown) return unknown;
 
         var packed = source.Archives.SelectMany(archive => archive.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var looseBase = installed.Where(entry => !compiled.Contains(entry.Entry) && !assets.ContainsKey(entry.Entry))
@@ -101,8 +109,52 @@ public sealed class BuildHandler
 
         var (landed, refused) = await CompileAsync(loadOrder, mod, plugins, written);
         var archivesRefused = Pack(mod, source.Archives, assets, instance.Archives, written);
+
+        Dictionary<string, Made> made = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in looseBase.SelectMany(fromOne => fromOne)) made[written.PathOf(path)] = new Made(FromSource: false, Vouched: true);
+        foreach (var asset in assets.Values.Where(asset => !packed.Contains(asset.Path))) made[written.PathOf(asset.Path)] = new Made(FromSource: true, Vouched: true);
+        foreach (var (path, vouched) in CompiledFiles(loadOrder, mod, plugins, landed)) made[path] = new Made(FromSource: true, vouched);
+        foreach (var archive in source.Archives.Select(archive => archive.Path))
+            made[written.PathOf(archive)] = new Made(FromSource: true, Vouched: archivesRefused.All(refusal => refusal.Item != archive));
+
         return ItemAnswer<BuildRefusal, BuiltMod>.Landed(new BuiltMod(
-            landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)], Failure: null));
+            landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)], WriteManifest(mod, instance, source.Shared, made)));
+    }
+
+    // A refused plugin's or archive's bytes are not as this build made them.
+    private readonly record struct Made(bool FromSource, bool Vouched);
+
+    // The manifest is written last (mods.md, Build, story 1), and names only the files the build made (story 3).
+    private string? WriteManifest(ModToBuild mod, InstanceToBuild instance, SharedSource? shared, Dictionary<string, Made> made)
+    {
+        try
+        {
+            var read = _modFolders.Files(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
+            var builder = new ManifestBuilder(mod.InstallationFiles.Select(file => (_modFolders.InstallationFileName(file.Path), file)), []);
+            var files = read.Files.Where(file => made.ContainsKey(file.Path)).ToList();
+            var manifest = builder.Manifest([.. files.Select(file => new ManifestFile(file.Path,
+                made[file.Path].FromSource && shared is { } source ? new FileProvider.Source(source.Remote, source.Commit) : builder.ProviderOf(file)))]);
+            _modFolders.WriteManifest(mod.Folder, mod.Name, manifest);
+            // A stat cache that cannot be written leaves each file to be read again, and the mod's status says why.
+            _ = _modFolders.KeepInStatCache(
+                read, manifest, files.Where(file => made[file.Path].Vouched).ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal));
+            return null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return $"The build could not write its manifest: {e.Message}";
+        }
+    }
+
+    // Each file compile writes for the mod's plugins that the folder holds, as this build made it when its plugin compiled.
+    private IEnumerable<(string Path, bool Vouched)> CompiledFiles(
+        LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<PluginAddress> plugins,
+        IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> landed)
+    {
+        var inFolder = _modFolders.FilePaths(mod.Folder);
+        var compiled = landed.Select(item => item.Item).ToHashSet(PluginAddress.Comparer);
+        return plugins.Select(loadOrder.Plugin).OfType<RegisteredPlugin>()
+            .SelectMany(plugin => _plugins.WrittenByCompile(plugin, inFolder, loadOrder.GameRelease).Select(path => (path, compiled.Contains(plugin.Key))));
     }
 
     private HashSet<string> CompiledPaths(LoadOrderSnapshot loadOrder, IReadOnlyList<PluginAddress> plugins, IReadOnlyList<string> paths) =>

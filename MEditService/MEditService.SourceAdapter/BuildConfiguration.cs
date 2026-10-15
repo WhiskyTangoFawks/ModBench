@@ -13,10 +13,13 @@ public sealed record BuildConfigurationChange(string? Output, IReadOnlyList<stri
 public sealed record ArchiveToPack(string Path, IReadOnlyList<string> Files);
 
 /// <summary>What a source mod's build writes over the base, as its working tree says: the output folder's name, its
-/// exclusions, each archive to pack, the plugins its plugin source holds and its assets.</summary>
+/// exclusions, each archive to pack, its plugins and assets. Shared is none with no remote.</summary>
 public sealed record SourceToBuild(
     string Output, IReadOnlyList<string> Exclude, IReadOnlyList<ArchiveToPack> Archives, IReadOnlyList<string> Plugins,
-    IReadOnlyList<Asset> Assets);
+    IReadOnlyList<Asset> Assets, SharedSource? Shared = null);
+
+/// <summary>A source's remote, by the URL git fetches it from, and a commit of it.</summary>
+public sealed record SharedSource(string Remote, string Commit);
 
 /// <summary>A source mod's build configuration: the output folder's name, its exclusions and each archive to pack. The
 /// mod manager's record says the installation files.</summary>
@@ -48,7 +51,8 @@ internal static class BuildConfiguration
             InTheMod(sourceFolder, ExcludeKey, ExclusionsIn(sourceFolder, configuration)),
             ArchivesIn(sourceFolder, configuration),
             SourceRepositoryLayout.PluginsIn(sourceFolder),
-            AssetsIn(sourceFolder));
+            AssetsIn(sourceFolder),
+            SharedSources.SharedOf(sourceFolder));
     }
 
     private static IReadOnlyList<Asset> AssetsIn(string sourceFolder)
