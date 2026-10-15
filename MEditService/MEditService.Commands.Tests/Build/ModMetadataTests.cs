@@ -1,4 +1,5 @@
 using MEditService.Commands.Build;
+using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Tests.Build;
 
@@ -25,6 +26,16 @@ public sealed class ModMetadataTests
 
     [Theory]
     [MemberData(nameof(Cases))]
-    public void WritingTheManifestsMetadata_ReplacesAValueHeld_OnlyWhenTheyDiffer(ModMetadata held, ModMetadata manifest, bool differs) =>
-        Assert.Equal(differs, held.DiffersFrom(manifest));
+    public void WritingTheManifestsMetadata_ReplacesAValueHeld_OnlyWhenTheyDiffer(ModMetadata held, ModMetadata manifest, bool differs)
+    {
+        var sources = manifest.InstallationFiles.Select(file => new ManifestSource(file.Name, 1, "hash", file.Source)).ToList();
+
+        var metadata = RestoreMetadata.Of(new ModByFolder("Mod", "mods/Mod", [], held), new Manifest(sources, [], [], manifest.Version));
+
+        Assert.Equal(differs, metadata?.Differs);
+    }
+
+    [Fact]
+    public void AModWithNoManifest_SaysNothing() =>
+        Assert.Null(RestoreMetadata.Of(new ModByFolder("Mod", "mods/Mod", [], Metadata("1.0")), manifest: null));
 }

@@ -6,13 +6,13 @@ namespace MEditService.Commands.Build;
 /// by name and where it comes from, in the Instance adapter's text (ADR-0013).</summary>
 public sealed record ModMetadata(string? Version, IReadOnlyList<MetadataInstallationFile> InstallationFiles)
 {
-    public static ModMetadata Of(Manifest manifest) =>
+    internal static ModMetadata Of(Manifest manifest) =>
         new(manifest.Version, [.. manifest.InstallationFiles.Select(file => new MetadataInstallationFile(file.Name, file.Source))]);
 
     /// <summary>Whether writing <paramref name="manifest"/>'s metadata replaces a value this one holds: another version,
     /// another source for a file both name, or files none of which the manifest names. A value either side lacks replaces
     /// nothing.</summary>
-    public bool DiffersFrom(ModMetadata manifest) =>
+    internal bool DiffersFrom(ModMetadata manifest) =>
         (manifest.Version is { } version && Version is { } held && held != version) || InstallationFilesDifferFrom(manifest.InstallationFiles);
 
     private bool InstallationFilesDifferFrom(IReadOnlyList<MetadataInstallationFile> manifestFiles)
