@@ -21,6 +21,7 @@ As a user, I want:
 3. To find the records that reference a record. Source: editor-referenced-by.md
 4. To name a plugin and a record as my agent does, and a name that means more than one thing to be refused, listing each match. Source: agent.md, Names, stories 1 and 2; ADR-0012
 5. Every field named as plugin source and the index name it. Source: Mutagen's data
+6. A SELECT to read the records of every plugin the index holds, each row saying whether its plugin is active, so a script sees the patch plugin it builds before I enable it. The record filter shows only the active plugins. Source: ADR-0012; Writing, story 4
 
 ## Writing
 
