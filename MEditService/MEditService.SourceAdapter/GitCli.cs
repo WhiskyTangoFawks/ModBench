@@ -32,7 +32,7 @@ internal static class GitCli
     internal static void Clone(string remote, string folder, IEnumerable<(string Key, string Value)> settings, CancellationToken cancel)
     {
         var parent = Directory.CreateDirectory(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(folder)) ?? folder).FullName;
-        string[] args = ["clone", "-q", .. settings.SelectMany(setting => new[] { "-c", $"{setting.Key}={setting.Value}" }), "--", remote, folder];
+        string[] args = ["clone", "-q", "-o", "origin", .. settings.SelectMany(setting => new[] { "-c", $"{setting.Key}={setting.Value}" }), "--", remote, folder];
         var psi = StartInfo(args, parent);
         psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
         var (exitCode, _, stderr) = Execute(psi, parent, cancel);

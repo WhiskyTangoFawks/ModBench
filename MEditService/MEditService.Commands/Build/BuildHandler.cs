@@ -247,7 +247,6 @@ public sealed class BuildHandler
         return (compiled.Landed, [.. twins.SelectMany(TwinsRefused), .. compiled.Refused]);
     }
 
-    // mods.md, Build, story 8: each such plugin is refused by name, and the rest of the mod builds.
     private static IEnumerable<ItemRefused<PluginAddress, CompileRefusal>> TwinsRefused(IEnumerable<RegisteredPlugin> twins)
     {
         var named = string.Join(" and ", twins.Select(plugin => $"'{plugin.Name}'"));
