@@ -41,7 +41,7 @@ medit_core: "MEDIT · Core — the write side; it references the kernel and the 
     engine: "Build engine — one deep module\nowns: a mod folder from its source or its manifest,\nand a manifest from a mod folder\nhides: matching, extraction, packing" {class: core}
   }
 }
-modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
+modbench_core: "MODBENCH · Core — one command per gesture; each writes through a repository and forgets" {
   class: band; grid-rows: 1
   modordercommands: "mod commands\nowns: changes to mods and separators, their files,\nand the mod order" {class: core}
   sourcecommands: "source commands\nowns: changes to source mods and the modlist source" {class: core}
@@ -61,7 +61,7 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by the core, the read model 
   loadorderfilecodec: "Load-order file codec\nowns: plugins.txt as text\nhides: its format" {class: kernel}
   wire: "Wire\nowns: the API types, the webview protocol,\nand the shape of a source mod both processes read" {class: kernel}
   tables: "per-release tables\nowns: what differs per game release\nhides: every game name" {class: kernel}
-  ports: "Ports\nowns: how the core reaches the user and VS Code" {class: kernel}
+  ports: "Ports\nowns: how the core reaches the user and VS Code,\nand the idioms every band shares" {class: kernel}
 }
 
 medit_readmodel: "MEDIT · Read model — the record index, a view over the repositories below it" {
@@ -78,12 +78,7 @@ modbench_readmodel: "MODBENCH · Read model — the instance value, derived from
 
 medit_repositories: "MEDIT · Repositories — the only boxes that read or write a system of record" {
   class: band; grid-rows: 1
-  sourceadapter: "Source adapter\nowns: a source mod's folder: plugin source, assets,\nbuild configuration and repository\nhides: the layout inside plugin source, and git" {
-    layout: "Layout\nowns: where each record's document sits in plugin source\nhides: the folders and leaf names inside plugin source" {class: repositories}
-    repository: "Repository\nowns: a source mod's history\nhides: git" {class: repositories}
-    buildconfiguration: "Build configuration\nowns: what a source mod's build writes\nhides: the configuration's text beyond what Wire holds" {class: repositories}
-    writes: "Writes\nowns: a write to plugin source, whole or rolled back\nhides: the journal" {class: repositories}
-  }
+  sourceadapter: "Source adapter\nowns: a source mod's folder: plugin source, assets,\nbuild configuration and repository\nhides: the layout inside plugin source, and git" {class: repositories}
   pluginadapter: "Plugin adapter\nowns: the plugin files\nhides: the binary format" {class: repositories}
   modfolderadapter: "Mod folder adapter\nowns: a mod folder, its manifest and the stat cache,\nand what it reads: downloaded files and the game folder\nhides: the manifest's text" {class: repositories}
 }
@@ -95,11 +90,7 @@ modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the
     downloadedfilecontents: "Downloaded file contents\nowns: what each downloaded file holds, entry by entry,\nand its hash\nhides: the archive tool and the hash index" {class: repositories}
   }
   textdocuments: "Text documents\nowns: plugin source as VS Code holds it, saved and unsaved\nhides: open and unopened documents, and applying\none workspace edit at a time" {class: repositories}
-  client: "mEdit client\nowns: Modbench's one reach to mEdit\nhides: mEdit's process and transport,\nand that it forgets on restart" {
-    process: "Process\nowns: mEdit running beside the extension\nhides: the launch, the bundled binary and its log" {class: repositories}
-    transport: "Transport\nowns: a call and its answer, and the notification stream\nhides: HTTP and SSE" {class: repositories}
-    handover: "Hand-over\nowns: what a fresh mEdit must be told again\nhides: the replay on start and on reconnect" {class: repositories}
-  }
+  client: "mEdit client\nowns: Modbench's one reach to mEdit\nhides: mEdit's process and transport,\nand that it forgets on restart" {class: repositories}
 }
 
 medit_data: "MEDIT · Systems of record" {

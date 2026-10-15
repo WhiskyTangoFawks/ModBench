@@ -24,7 +24,7 @@ As a user, I want:
 6. A separator with no mods to show no expander. Source: VS Code
 7. A mod or Overwrite to open into its files as a folder tree: folders first, then files, each by name. A disabled mod opens too. One with no files shows no expander. Source: VS Code's Explorer
 8. The name of a file the game does not get to be greyed. The game does not get a file when another copy wins its path, when it is excluded, or when its mod is disabled. Source: MO2
-9. Only the files Modbench deploys from the mod to show: not `meta.ini` or the manifest. An excluded file shows its full name, `.mohidden` included. A folder with that suffix is excluded with everything in it, and is greyed. Source: MO2
+9. Only the mod's own files to show: not `meta.ini` or the manifest. An excluded file shows its full name, `.mohidden` included. A folder with that suffix is excluded with everything in it, and is greyed. Source: MO2
 10. The same grey and badges on the same files in VS Code's Explorer. Source: VS Code
 
 ## A row
