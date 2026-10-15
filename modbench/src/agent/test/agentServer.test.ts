@@ -103,7 +103,24 @@ describe('the agent server, given an instance value', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mod_statuses', 'list_mods', 'list_plugins', 'list_profiles', 'list_references', 'list_source_problems', 'read_record', 'resolve_instance_names', 'resolve_names', 'run_gesture', 'script_environment', 'select_rows']);
+    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(['list_downloads', 'list_file_conflicts', 'list_mod_statuses', 'list_mods', 'list_plugins', 'list_profiles', 'list_references', 'list_source_problems', 'read_record', 'resolve_instance_names', 'resolve_names', 'script_environment', 'select_rows']));
+  });
+
+  it('lists no tool for a gesture kept from the agent', async () => {
+    const client = await clientOf(new FakeInstance(VALUE));
+
+    const { tools } = await client.listTools();
+
+    expect(tools.map((tool) => tool.name)).not.toContain('profile_switch');
+  });
+
+  it('lists each gesture as a tool of its own, whose input says the JSON type of its argument and options', async () => {
+    const client = await clientOf(new FakeInstance(VALUE));
+
+    const { tools } = await client.listTools();
+
+    const move = present(tools.find((tool) => tool.name === 'plugin_move'), 'the plugin_move tool');
+    expect(move.inputSchema.properties).toMatchObject({ argument: { type: 'array' }, options: { type: 'object' } });
   });
 
   it('hands the client its instructions on initialize', async () => {
@@ -561,7 +578,7 @@ describe('the agent server, running a gesture', () => {
     fired.outcome = { applied: true, outcome: { landed: ['A', 'Textures'], refused: [] } };
     const { client } = await served();
 
-    const answer = await call(client, 'run_gesture', { command: 'modbench.mod.disable', argument: [{ name: 'A' }, { name: 'Textures', kind: 'mod' }] });
+    const answer = await call(client, 'mod_disable', { argument: [{ name: 'A' }, { name: 'Textures', kind: 'mod' }] });
 
     expect(fired.calls).toEqual([['modbench.mod.disable', new AgentCall([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'Textures' }], {})]]);
     expect(answer).toEqual({ isError: false, text: JSON.stringify(fired.outcome) });
@@ -571,7 +588,7 @@ describe('the agent server, running a gesture', () => {
     fired.outcome = { applied: true, outcome: { landed: ['A'], refused: [{ item: 'B', reason: 'Mod not found in modlist: B' }] } };
     const { client, lines, reporter } = await served();
 
-    const answer = await call(client, 'run_gesture', { command: 'modbench.mod.enable', argument: [{ name: 'A' }, { name: 'B' }] });
+    const answer = await call(client, 'mod_enable', { argument: [{ name: 'A' }, { name: 'B' }] });
 
     expect(answer).toEqual({ isError: true, text: JSON.stringify(fired.outcome) });
     expect(lines.join('\n')).toContain('"B" (Mod not found in modlist: B)');
@@ -582,19 +599,19 @@ describe('the agent server, running a gesture', () => {
     const { client, warned, errored } = await served();
 
     fired.failure = new Refusal('carries mods only');
-    await call(client, 'run_gesture', { command: 'modbench.mod.enable', argument: [{ name: 'A' }] });
+    await call(client, 'mod_enable', { argument: [{ name: 'A' }] });
     fired.failure = new Error('disk gone');
-    await call(client, 'run_gesture', { command: 'modbench.mod.enable', argument: [{ name: 'A' }] });
+    await call(client, 'mod_enable', { argument: [{ name: 'A' }] });
 
-    expect(warned).toEqual(['[agent] run_gesture: carries mods only']);
-    expect(errored).toEqual(['[agent] run_gesture: disk gone']);
+    expect(warned).toEqual(['[agent] mod_enable: carries mods only']);
+    expect(errored).toEqual(['[agent] mod_enable: disk gone']);
   });
 
   it('refuses in whole with the outcome, which holds the command\'s refusal', async () => {
     fired.outcome = { applied: false, refusal: 'ENOENT: modlist.txt' };
     const { client, lines } = await served();
 
-    expect(await call(client, 'run_gesture', { command: 'modbench.mod.enable', argument: [{ name: 'A' }] })).toEqual({ isError: true, text: JSON.stringify(fired.outcome) });
+    expect(await call(client, 'mod_enable', { argument: [{ name: 'A' }] })).toEqual({ isError: true, text: JSON.stringify(fired.outcome) });
     expect(lines.join('\n')).toContain('ENOENT: modlist.txt');
   });
 
@@ -610,7 +627,7 @@ describe('the agent server, running a gesture', () => {
       fired.outcome = { applied: true, outcome: { landed: ['Solo.esp'], refused: [] } };
       const { client } = await served(PLUGGED);
 
-      await call(client, 'run_gesture', { command: 'modbench.plugin.enable', argument: [{ name: 'solo.ESP' }, { name: 'Same.esp', origin: 'ModA' }] });
+      await call(client, 'plugin_enable', { argument: [{ name: 'solo.ESP' }, { name: 'Same.esp', origin: 'ModA' }] });
 
       expect(fired.calls).toEqual([['modbench.plugin.enable', new AgentCall([SOLO, { kind: 'plugin' as const, plugin: { name: 'Same.esp', origin: 'ModA' } }], {})]]);
     });
@@ -618,7 +635,7 @@ describe('the agent server, running a gesture', () => {
     it('refuses a file name two plugins share, listing both, and a plugin nothing holds', async () => {
       const { client } = await served(PLUGGED);
 
-      const answer = await call(client, 'run_gesture', { command: 'modbench.plugin.decompile', argument: [{ name: 'Same.esp' }, { name: 'Gone.esp' }] });
+      const answer = await call(client, 'plugin_decompile', { argument: [{ name: 'Same.esp' }, { name: 'Gone.esp' }] });
 
       expect(answer.text).toContain('"Same.esp" means more than one plugin: Same.esp in ModA; Same.esp in ModB. Name it with its origin.');
       expect(answer.text).toContain('No plugin is named "Gone.esp".');
@@ -626,14 +643,14 @@ describe('the agent server, running a gesture', () => {
     });
 
     it.each([
-      ['modbench.plugin.enable', { argument: [{ name: 'Same.esp', origin: 'ModB' }] }],
-      ['modbench.plugin.disable', { argument: [{ name: 'Same.esp', origin: 'ModB' }] }],
-      ['modbench.plugin.move', { argument: [{ name: 'Same.esp', origin: 'ModB' }], options: { drop: { kind: 'winningEnd' } } }],
-      ['modbench.plugin.rename', { argument: { name: 'Same.esp', origin: 'ModB' }, options: { name: 'Other.esp' } }],
-    ])('refuses %s on an overridden copy, naming the copy its line belongs to, firing nothing', async (command, args) => {
+      ['plugin_enable', { argument: [{ name: 'Same.esp', origin: 'ModB' }] }],
+      ['plugin_disable', { argument: [{ name: 'Same.esp', origin: 'ModB' }] }],
+      ['plugin_move', { argument: [{ name: 'Same.esp', origin: 'ModB' }], options: { drop: { kind: 'winningEnd' } } }],
+      ['plugin_rename', { argument: { name: 'Same.esp', origin: 'ModB' }, options: { name: 'Other.esp' } }],
+    ])('refuses %s on an overridden copy, naming the copy its line belongs to, firing nothing', async (tool, args) => {
       const { client, lines } = await served(PLUGGED);
 
-      const answer = await call(client, 'run_gesture', { command, ...args });
+      const answer = await call(client, tool, args);
 
       expect(answer.isError).toBe(true);
       expect(answer.text).toContain('Same.esp in ModB is overridden, and the line for "Same.esp" is Same.esp in ModA\'s. Name that one.');
@@ -645,7 +662,7 @@ describe('the agent server, running a gesture', () => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const { client } = await served(PLUGGED);
 
-      await call(client, 'run_gesture', { command: 'modbench.plugin.decompile', argument: [{ name: 'Same.esp', origin: 'ModB' }] });
+      await call(client, 'plugin_decompile', { argument: [{ name: 'Same.esp', origin: 'ModB' }] });
 
       expect(fired.calls).toEqual([['modbench.plugin.decompile', new AgentCall([{ kind: 'plugin', plugin: { name: 'Same.esp', origin: 'ModB' } }], {})]]);
     });
@@ -654,7 +671,7 @@ describe('the agent server, running a gesture', () => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const { client } = await served(PLUGGED);
 
-      await call(client, 'run_gesture', { command: 'modbench.plugin.decompile', argument: [{ name: 'Solo.esp' }], options: { force: true } });
+      await call(client, 'plugin_decompile', { argument: [{ name: 'Solo.esp' }], options: { force: true } });
 
       expect(fired.calls).toEqual([['modbench.plugin.decompile', new AgentCall([SOLO], { force: true })]]);
     });
@@ -663,7 +680,7 @@ describe('the agent server, running a gesture', () => {
       fired.outcome = { applied: false, refusal: 'Could not move plugins.', detail: 'A.esp is a master.' };
       const { client, lines } = await served(PLUGGED);
 
-      const answer = await call(client, 'run_gesture', { command: 'modbench.plugin.decompile', argument: [{ name: 'Solo.esp' }] });
+      const answer = await call(client, 'plugin_decompile', { argument: [{ name: 'Solo.esp' }] });
 
       expect(answer).toEqual({ isError: true, text: JSON.stringify(fired.outcome) });
       expect(lines.join('\n')).toContain('Could not move plugins. A.esp is a master.');
@@ -673,7 +690,7 @@ describe('the agent server, running a gesture', () => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const { client } = await served(PLUGGED);
 
-      await call(client, 'run_gesture', { command: 'modbench.plugin.move', argument: [{ name: 'Solo.esp' }], options: { drop: { kind: 'before', name: 'Same.esp' } } });
+      await call(client, 'plugin_move', { argument: [{ name: 'Solo.esp' }], options: { drop: { kind: 'before', name: 'Same.esp' } } });
 
       expect(fired.calls).toEqual([['modbench.plugin.move', new AgentCall([SOLO], { drop: { kind: 'before', name: 'Same.esp' } })]]);
     });
@@ -682,7 +699,7 @@ describe('the agent server, running a gesture', () => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const { client } = await served(PLUGGED);
 
-      await call(client, 'run_gesture', { command: 'modbench.plugin.create', options: { name: 'New.esp', place: 'ModA' } });
+      await call(client, 'plugin_create', { options: { name: 'New.esp', place: 'ModA' } });
 
       expect(fired.calls).toEqual([['modbench.plugin.create', new AgentCall([], { name: 'New.esp', place: 'ModA' })]]);
     });
@@ -691,7 +708,7 @@ describe('the agent server, running a gesture', () => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const { client } = await served(PLUGGED);
 
-      await call(client, 'run_gesture', { command: 'modbench.plugin.rename', argument: { name: 'Solo.esp' }, options: { name: 'Lone.esp' } });
+      await call(client, 'plugin_rename', { argument: { name: 'Solo.esp' }, options: { name: 'Lone.esp' } });
 
       expect(fired.calls).toEqual([['modbench.plugin.rename', new AgentCall([SOLO], { name: 'Lone.esp' })]]);
     });
@@ -699,7 +716,7 @@ describe('the agent server, running a gesture', () => {
     it('refuses a create that leaves out its place, naming it', async () => {
       const { client } = await served(PLUGGED);
 
-      const answer = await call(client, 'run_gesture', { command: 'modbench.plugin.create', options: { name: 'New.esp' } });
+      const answer = await call(client, 'plugin_create', { options: { name: 'New.esp' } });
 
       expect(answer.text).toContain('place');
       expect(fired.calls).toEqual([]);
@@ -708,35 +725,35 @@ describe('the agent server, running a gesture', () => {
 
   describe('the separator gestures', () => {
     const textures = { kind: 'separator' as const, name: 'Textures' };
-    const fire = async (args: Record<string, unknown>) => {
+    const fire = async (tool: string, args: Record<string, unknown> = {}) => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const { client } = await served();
-      return call(client, 'run_gesture', args);
+      return call(client, tool, args);
     };
 
     it.each([
       ['a mod', { name: 'B' }, { kind: 'mod', name: 'B' }],
       ['a separator', { name: 'Textures', kind: 'separator' }, textures],
     ] as const)('fires add with %s as the anchor Argument and the name as an Option', async (_, anchor, argument) => {
-      await fire({ command: 'modbench.separator.add', argument: [anchor], options: { name: 'New' } });
+      await fire('separator_add', { argument: [anchor], options: { name: 'New' } });
 
       expect(fired.calls).toEqual([['modbench.separator.add', new AgentCall([argument], { name: 'New' })]]);
     });
 
     it('fires rename with the one separator as its Argument and the new name as an Option', async () => {
-      await fire({ command: 'modbench.separator.rename', argument: [{ name: 'Textures' }], options: { name: 'Skins' } });
+      await fire('separator_rename', { argument: [{ name: 'Textures' }], options: { name: 'Skins' } });
 
       expect(fired.calls).toEqual([['modbench.separator.rename', new AgentCall([textures], { name: 'Skins' })]]);
     });
 
     it('fires delete with the separators named as its Argument', async () => {
-      await fire({ command: 'modbench.separator.delete', argument: [{ name: 'Textures' }] });
+      await fire('separator_delete', { argument: [{ name: 'Textures' }] });
 
       expect(fired.calls).toEqual([['modbench.separator.delete', new AgentCall([textures], {})]]);
     });
 
     it('refuses a name that is a mod, not a separator, firing nothing', async () => {
-      const answer = await fire({ command: 'modbench.separator.delete', argument: [{ name: 'B' }] });
+      const answer = await fire('separator_delete', { argument: [{ name: 'B' }] });
 
       expect(answer.text).toContain('Nothing is named "B" as a separator.');
       expect(fired.calls).toEqual([]);
@@ -745,22 +762,22 @@ describe('the agent server, running a gesture', () => {
 
   describe('the mod gestures', () => {
     const B = { kind: 'mod' as const, name: 'B' };
-    const fire = async (args: Record<string, unknown>) => {
+    const fire = async (tool: string, args: Record<string, unknown> = {}) => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const { client } = await served();
-      return call(client, 'run_gesture', args);
+      return call(client, tool, args);
     };
 
     it('fires move with the mods named as its Argument and the place and end as Options', async () => {
       const options = { place: { kind: 'separator', name: 'Textures' }, end: 'winning' };
 
-      await fire({ command: 'modbench.mod.move', argument: [{ name: 'B' }], options });
+      await fire('mod_move', { argument: [{ name: 'B' }], options });
 
       expect(fired.calls).toEqual([['modbench.mod.move', new AgentCall([B], options)]]);
     });
 
     it('refuses a place nothing is named, firing nothing', async () => {
-      const answer = await fire({ command: 'modbench.mod.move', argument: [{ name: 'B' }], options: { place: { kind: 'mod', name: 'Gone' }, end: 'winning' } });
+      const answer = await fire('mod_move', { argument: [{ name: 'B' }], options: { place: { kind: 'mod', name: 'Gone' }, end: 'winning' } });
 
       expect(answer.text).toContain('Nothing is named "Gone" as a mod.');
       expect(fired.calls).toEqual([]);
@@ -770,33 +787,33 @@ describe('the agent server, running a gesture', () => {
       fired.outcome = { applied: true, outcome: { landed: ['Bee'], refused: [] }, partial: [{ message: '"B" was renamed, but a line could not be renamed.', detail: 'disk full', severity: 'warning' }] };
       const { client, lines } = await served();
 
-      const answer = await call(client, 'run_gesture', { command: 'modbench.mod.rename', argument: [{ name: 'B' }], options: { name: 'Bee' } });
+      const answer = await call(client, 'mod_rename', { argument: [{ name: 'B' }], options: { name: 'Bee' } });
 
       expect(answer.isError).toBe(true);
       expect(lines.join('\n')).toContain('"B" was renamed, but a line could not be renamed. disk full');
     });
 
     it('refuses a move that leaves out its place, naming it', async () => {
-      const answer = await fire({ command: 'modbench.mod.move', argument: [{ name: 'B' }], options: { end: 'losing' } });
+      const answer = await fire('mod_move', { argument: [{ name: 'B' }], options: { end: 'losing' } });
 
       expect(answer.text).toContain('place');
       expect(fired.calls).toEqual([]);
     });
 
     it('fires uninstall with the mods named as its Argument', async () => {
-      await fire({ command: 'modbench.mod.uninstall', argument: [{ name: 'B' }, { name: 'C' }] });
+      await fire('mod_uninstall', { argument: [{ name: 'B' }, { name: 'C' }] });
 
       expect(fired.calls).toEqual([['modbench.mod.uninstall', new AgentCall([B, { kind: 'mod', name: 'C' }], {})]]);
     });
 
     it('fires rename with the one mod as its Argument and the new name as an Option', async () => {
-      await fire({ command: 'modbench.mod.rename', argument: [{ name: 'B' }], options: { name: 'Bee' } });
+      await fire('mod_rename', { argument: [{ name: 'B' }], options: { name: 'Bee' } });
 
       expect(fired.calls).toEqual([['modbench.mod.rename', new AgentCall([B], { name: 'Bee' })]]);
     });
 
     it('fires create empty mod with the name as an Option and no Argument', async () => {
-      await fire({ command: 'modbench.mod.createEmpty', options: { name: 'New' } });
+      await fire('mod_create_empty', { options: { name: 'New' } });
 
       expect(fired.calls).toEqual([['modbench.mod.createEmpty', new AgentCall([], { name: 'New' })]]);
     });
@@ -804,13 +821,16 @@ describe('the agent server, running a gesture', () => {
     it('fires move with separators named as separators, so they are not taken for the mods of that name', async () => {
       const options = { place: { kind: 'modOrder' }, end: 'winning' };
 
-      await fire({ command: 'modbench.mod.move', argument: [{ name: 'Textures', kind: 'separator' }], options });
+      await fire('mod_move', { argument: [{ name: 'Textures', kind: 'separator' }], options });
 
       expect(fired.calls).toEqual([['modbench.mod.move', new AgentCall([{ kind: 'separator', name: 'Textures' }], options)]]);
     });
 
-    it.each(['modbench.mod.excludeFile', 'modbench.mod.includeFile'])('fires %s with each file by its path in its mod, in the mod\'s own casing', async (command) => {
-      await fire({ command, argument: [{ mod: { name: 'C' }, path: 'meshes/X.NIF' }, { mod: { name: 'B' }, path: 'textures/rock.dds' }] });
+    it.each([
+      ['mod_exclude_file', 'modbench.mod.excludeFile'],
+      ['mod_include_file', 'modbench.mod.includeFile'],
+    ])('%s fires %s with each file by its path in its mod, in the mod\'s own casing', async (tool, command) => {
+      await fire(tool, { argument: [{ mod: { name: 'C' }, path: 'meshes/X.NIF' }, { mod: { name: 'B' }, path: 'textures/rock.dds' }] });
 
       expect(fired.calls).toEqual([[command, new AgentCall([
         { kind: 'file', origin: { kind: 'mod', name: 'C' }, relativePath: 'MESHES/x.nif' },
@@ -820,34 +840,36 @@ describe('the agent server, running a gesture', () => {
   });
 
   describe('the modlist gestures', () => {
-    const fire = async (args: Record<string, unknown>) => {
+    const fire = async (tool: string, args: Record<string, unknown> = {}) => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const { client } = await served();
-      return call(client, 'run_gesture', args);
+      return call(client, tool, args);
     };
 
     it('fires git init with nothing', async () => {
-      await fire({ command: 'modbench.modlist.gitInit' });
+      await fire('modlist_git_init');
 
       expect(fired.calls).toEqual([['modbench.modlist.gitInit', new AgentCall([], {})]]);
     });
 
-    it.each(['modbench.mod.updateManifest', 'modbench.mod.restoreFromManifest'])(
-      'fires %s with the mods and the separators named as its Argument', async (command) => {
-        await fire({ command, argument: [{ name: 'B' }, { name: 'Textures', kind: 'separator' }] });
+    const MANIFEST_GESTURES = [['mod_update_manifest', 'modbench.mod.updateManifest'], ['mod_restore_from_manifest', 'modbench.mod.restoreFromManifest']];
+
+    it.each(MANIFEST_GESTURES)(
+      '%s fires %s with the mods and the separators named as its Argument', async (tool, command) => {
+        await fire(tool, { argument: [{ name: 'B' }, { name: 'Textures', kind: 'separator' }] });
 
         expect(fired.calls).toEqual([[command, new AgentCall([{ kind: 'mod', name: 'B' }, { kind: 'separator', name: 'Textures' }], {})]]);
       });
 
-    it.each(['modbench.mod.updateManifest', 'modbench.mod.restoreFromManifest'])(
-      'fires %s with no Argument for every mod', async (command) => {
-        await fire({ command });
+    it.each(MANIFEST_GESTURES)(
+      '%s fires %s with no Argument for every mod', async (tool, command) => {
+        await fire(tool);
 
         expect(fired.calls).toEqual([[command, new AgentCall([], {})]]);
       });
 
     it('fires restore from manifest with force as an Option', async () => {
-      await fire({ command: 'modbench.mod.restoreFromManifest', argument: [{ name: 'B' }], options: { force: true } });
+      await fire('mod_restore_from_manifest', { argument: [{ name: 'B' }], options: { force: true } });
 
       expect(fired.calls).toEqual([['modbench.mod.restoreFromManifest', new AgentCall([{ kind: 'mod', name: 'B' }], { force: true })]]);
     });
@@ -856,21 +878,25 @@ describe('the agent server, running a gesture', () => {
   describe('the downloaded file gestures and install', () => {
     const rocks = { kind: 'downloadedFile' as const, name: 'rocks.7z' };
     const outside = { kind: 'archive' as const, path: '/elsewhere/a.7z' };
-    const fire = async (args: Record<string, unknown>) => {
+    const fire = async (tool: string, args: Record<string, unknown> = {}) => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const { client } = await served(CONFLICTED_WITH_DOWNLOADS);
-      return call(client, 'run_gesture', args);
+      return call(client, tool, args);
     };
 
-    it.each(['modbench.downloadedFile.exclude', 'modbench.downloadedFile.include', 'modbench.downloadedFile.delete'])(
-      'fires %s with the downloaded files named as its Argument', async (command) => {
-        await fire({ command, argument: [{ name: 'rocks.7z' }] });
+    it.each([
+      ['downloaded_file_exclude', 'modbench.downloadedFile.exclude'],
+      ['downloaded_file_include', 'modbench.downloadedFile.include'],
+      ['downloaded_file_delete', 'modbench.downloadedFile.delete'],
+    ])(
+      '%s fires %s with the downloaded files named as its Argument', async (tool, command) => {
+        await fire(tool, { argument: [{ name: 'rocks.7z' }] });
 
         expect(fired.calls).toEqual([[command, new AgentCall([rocks], {})]]);
       });
 
     it('refuses a downloaded file nothing is named, firing nothing', async () => {
-      const answer = await fire({ command: 'modbench.downloadedFile.delete', argument: [{ name: 'gone.7z' }] });
+      const answer = await fire('downloaded_file_delete', { argument: [{ name: 'gone.7z' }] });
 
       expect(answer.text).toContain('Nothing is named "gone.7z" among the downloaded files.');
       expect(fired.calls).toEqual([]);
@@ -881,25 +907,25 @@ describe('the agent server, running a gesture', () => {
       ['an archive outside the downloads', outside],
       ['a folder outside the downloads', { kind: 'folder' as const, path: '/elsewhere/a' }],
     ])('fires install with %s as the source and the new mod\'s name as an Option', async (_, source) => {
-      await fire({ command: 'modbench.mod.install', argument: [source], options: { name: 'New' } });
+      await fire('mod_install', { argument: [source], options: { name: 'New' } });
 
       expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([source], { name: 'New' })]]);
     });
 
     it('fires install with the target mod named as list_mods names it, to upgrade it', async () => {
-      await fire({ command: 'modbench.mod.install', argument: [outside], options: { target: 'B' } });
+      await fire('mod_install', { argument: [outside], options: { target: 'B' } });
 
       expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([outside], { target: 'B' })]]);
     });
 
     it('fires install with force as an Option', async () => {
-      await fire({ command: 'modbench.mod.install', argument: [outside], options: { target: 'B', force: true } });
+      await fire('mod_install', { argument: [outside], options: { target: 'B', force: true } });
 
       expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([outside], { target: 'B', force: true })]]);
     });
 
     it('refuses an install over a mod nothing is named, firing nothing', async () => {
-      const answer = await fire({ command: 'modbench.mod.install', argument: [outside], options: { target: 'Gone' } });
+      const answer = await fire('mod_install', { argument: [outside], options: { target: 'Gone' } });
 
       expect(answer.text).toContain('Nothing is named "Gone" as a mod.');
       expect(fired.calls).toEqual([]);
@@ -913,7 +939,7 @@ describe('the agent server, running a gesture', () => {
       const mEdit = new InMemoryMEditClient();
       mEdit.setQueryAnswer('resolveNames', answer);
       const client = await clientOf(new FakeInstance({ ...CONFLICTED, plugins: VALUE.plugins }), mEdit);
-      return { mEdit, answer: await call(client, 'run_gesture', { command: 'modbench.record.open', ...args }) };
+      return { mEdit, answer: await call(client, 'record_open', args) };
     };
 
     it('resolves each record by EditorID or FormKey through mEdit, and fires the FormKeys as record Arguments with the pinned Option', async () => {
@@ -956,14 +982,13 @@ describe('the agent server, running a gesture', () => {
   });
 
   it.each([
-    ['a gesture kept from the agent', { command: 'modbench.profile.switch', argument: [] }, 'modbench.profile.switch is not a gesture your agent runs.'],
-    ['a name that means a mod and a separator', { command: 'modbench.mod.enable', argument: [{ name: 'Textures' }] }, '"Textures" means more than one thing: separator Textures; mod Textures. Name it with its kind.'],
-    ['a separator', { command: 'modbench.mod.enable', argument: [{ name: 'Textures', kind: 'separator' }] }, '"Textures" is a separator, not a mod.'],
-    ['no Argument', { command: 'modbench.mod.enable' }, 'argument'],
+    ['a name that means a mod and a separator', { argument: [{ name: 'Textures' }] }, '"Textures" means more than one thing: separator Textures; mod Textures. Name it with its kind.'],
+    ['a separator', { argument: [{ name: 'Textures', kind: 'separator' }] }, '"Textures" is a separator, not a mod.'],
+    ['no Argument', {}, 'argument'],
   ])('refuses %s, firing nothing', async (_case, args, refusal) => {
     const { client, lines } = await served();
 
-    const answer = await call(client, 'run_gesture', args);
+    const answer = await call(client, 'mod_enable', args);
 
     expect(answer.isError).toBe(true);
     expect(answer.text).toContain(refusal);
@@ -978,7 +1003,7 @@ describe('the agent server, given an input its tool does not take', () => {
     ['resolve_instance_names', { downloads: 'rocks.7z' }, 'downloads'],
     ['resolve_names', {}, 'names'],
     ['select_rows', { sql: 5 }, 'sql'],
-    ['run_gesture', { argument: [] }, 'command'],
+    ['mod_enable', { argument: '[{"name":"A"}]' }, 'argument'],
   ])('%s refuses it, naming the input, in the Output and in no notification', async (name, args, input) => {
     const { bound, lines, reporter } = await serve(new FakeInstance(CONFLICTED_WITH_DOWNLOADS));
     const client = new Client({ name: 'test', version: '0' });

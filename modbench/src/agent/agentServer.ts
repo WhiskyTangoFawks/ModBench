@@ -10,7 +10,7 @@ import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { MEditClient } from '../client/MEditClient';
 import { FILE_CONFLICTS } from './fileConflicts';
-import { RUN_GESTURE } from './gestures';
+import { GESTURE_TOOLS } from './gestures';
 import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
 import { INSTANCE_READS } from './instanceReads';
 import { Refusal } from '../drivingLib/refusal';
@@ -80,7 +80,7 @@ const NO_INPUT = {};
 
 const INSTRUCTIONS = `Name objects as Modbench's views do: a plugin by its file name, a mod or a separator by its name, a record by its EditorID or FormKey, a downloaded file by its file name, an archive or a folder outside the downloads by its path, a file in a mod by its path in the mod. A name that means more than one thing is refused with each match listed as you can name it; name the one you mean that way.
 
-A plugin with source is a text file in a repository: edit it with your file tools, and the user reviews the change in Source Control. A plugin with no source is a binary: never edit it. Mod manager files change only through run_gesture. A change to many records by a rule is a script: write a Python file with import medit and run it in your shell with the variables script_environment returns.
+A plugin with source is a text file in a repository: edit it with your file tools, and the user reviews the change in Source Control. A plugin with no source is a binary: never edit it. Mod manager files change only through the gesture tools. A gesture runs on the argument and options given, never on the selection, with no picker, prompt or confirmation, and answers once Modbench's views show its change: with its outcome, or with what landed and each item refused and why. A change to many records by a rule is a script: write a Python file with import medit and run it in your shell with the variables script_environment returns. help(medit) lists its functions.
 
 Ask Modbench what the files cannot answer.`;
 
@@ -94,7 +94,7 @@ function mcpServerOf({ instance, mEdit, terminalEnvironment, modStatus, log }: A
   register(server, log, READ_RECORD, (args) => READ_RECORD.of(mEdit, currentValue(instance), args));
   register(server, log, LIST_REFERENCES, (args) => LIST_REFERENCES.of(mEdit, args));
   register(server, log, SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
-  register(server, log, RUN_GESTURE, (args) => RUN_GESTURE.of(currentValue(instance), mEdit, args));
+  for (const gesture of GESTURE_TOOLS) register(server, log, gesture, (args) => gesture.of(currentValue(instance), mEdit, args));
   register(server, log, { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
   register(server, log, { ...SOURCE_PROBLEMS, input: NO_INPUT }, SOURCE_PROBLEMS.of);
   return server;

@@ -575,7 +575,7 @@ describe('a gesture the agent runs', () => {
   });
 
   it('writes as the user\'s does, and answers once the agent\'s next read sees the change', async () => {
-    const answer = await callTool('run_gesture', { command: 'modbench.mod.enable', argument: [{ name: 'Agent Mod' }] });
+    const answer = await callTool('mod_enable', { argument: [{ name: 'Agent Mod' }] });
 
     assert.strictEqual(answer.isError, false, answer.text);
     assert.strictEqual(await agentModEnabled(), true);
