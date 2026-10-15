@@ -148,7 +148,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
-| enable / disable | writes | `modbench.mod.enable`, `modbench.mod.disable` | mods | - | MO2 mod list | Flip each mod's line in `modlist.txt`. Enable all is select all, then this gesture. | update-load-order-file |
+| enable / disable | writes | `modbench.mod.enable`, `modbench.mod.disable` | mods | - | MO2 mod list | Flip each mod in the active profile's mod order. Enable all is select all, then this gesture. | update-load-order-file |
 | move | writes | `modbench.mod.move` | mods or separators | target: a separator, above a mod, or the view's end | MO2 mod list | Move mods in mod order. | update-load-order-file |
 | uninstall | writes | `modbench.mod.uninstall` | mods | - | MO2 mod list | Move a mod folder to the trash and remove its line. | update-load-order-file |
 | create empty mod | writes | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
@@ -160,12 +160,12 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | sort direction | reads | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
 | open folder | reads | `modbench.mod.openFolder` | mod, or overwrite, or a file or folder in one | - | MO2 mod list, Overwrite row | Show a mod's folder, or a file or folder in it, in VS Code's Explorer. The Overwrite row opens the overwrite folder. | none |
 | open source | reads | `modbench.mod.openSource` | mod | - | none | Show a source mod's source folder in VS Code's Explorer. | none |
-| view on Nexus | reads | `modbench.mod.viewOnNexus` | mod, or downloaded file | - | MO2 mod list; MO2 Downloads | Open the mod's Nexus page. The address comes from the mod's `meta.ini`, or from the downloaded file's `.meta`. | none |
+| view on Nexus | reads | `modbench.mod.viewOnNexus` | mod, or downloaded file | - | MO2 mod list; MO2 Downloads | Open the mod's Nexus page. The address comes from the mod's metadata, or from the downloaded file's. | none |
 | open conflicts | reads | `modbench.mod.openConflicts` | mod | - | MO2 Information dialog, Conflicts tab | Open a mod's conflict table in an editor tab. | open-conflicts |
 | compare file | reads | `modbench.mod.compareFile` | a copy of a file in a mod or Overwrite | - | none | Open VS Code's diff editor on a mod's copy of a file and the winning copy. | none |
 | go to mod | reads | `modbench.mod.goToMod` | a copy of a file in a mod or Overwrite | other mod: a pick, when the copy wins over several | MO2 Information dialog, Conflicts tab, Go to... | Select, in Mods, the mod or Overwrite whose copy wins the file, or a mod whose copy it wins over. | none |
 | exclude / include file | writes | `modbench.mod.excludeFile`, `modbench.mod.includeFile` | files in mods or Overwrite | - | MO2 Information dialog, Conflicts tab, Hide; MO2 mod list, Restore hidden files | Keep each file from the game with the mod manager's exclusion mark, as MO2's `.mohidden` suffix, or clear the mark, and, in a source mod, the build configuration's exclusion with it. | update-load-order-file |
-| rename | writes | `modbench.mod.rename` | mod | name | MO2 mod list | Rename a mod's folder and its name in every profile's `modlist.txt`, and, for a source mod, its output folder in the build configuration. | update-load-order-file |
+| rename | writes | `modbench.mod.rename` | mod | name | MO2 mod list | Rename a mod's folder and its name in every profile's mod order, and, for a source mod, its output folder in the build configuration. | update-load-order-file |
 
 ## Separator
 
@@ -214,7 +214,7 @@ A field gesture from the palette acts on the focused cell of the record tab in f
 | exclude / include | writes | `modbench.downloadedFile.exclude`, `modbench.downloadedFile.include` | downloaded files | - | MO2 Downloads | Mark downloaded files excluded in the metadata the mod manager keeps for them, as MO2's `.meta`, or clear the mark. `show excluded` decides whether the list shows them. | update-load-order-file |
 | delete | writes | `modbench.downloadedFile.delete` | downloaded files | - | MO2 Downloads | Delete downloaded files. | update-load-order-file |
 | open | reads | `modbench.downloadedFile.open` | downloaded file | - | MO2 Downloads | Open a downloaded file in its system application. | none |
-| open `.meta` | reads | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open a downloaded file's `.meta` in an editor tab. | none |
+| open metadata | reads | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open the file that holds a downloaded file's metadata, as MO2's `.meta`, in an editor tab. | none |
 | sort | reads | `modbench.downloadedFile.sort` | - | field | MO2 Downloads | Choose the field the downloaded files sort by. | none |
 | show excluded | reads | `modbench.downloadedFile.showExcluded`, `modbench.downloadedFile.hideExcluded` | - | - | MO2 Downloads | Show or hide the excluded downloaded files. | none |
 
@@ -225,5 +225,5 @@ Commands Modbench runs itself. No user starts them and no surface owns them, so 
 | Trigger | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
 | The Instance loader recomputed the instance value ([load-instance](traces/load-instance.d2)) | writes | `modbench.instance.putLoadOrder` | snapshot: the game release, every plugin in the instance and what provides it, the active plugins in load order, every mod with its folder, and the stat cache's folder | - | none | Hand mEdit the whole snapshot at every recompute. | index-load-order; mod-status |
-| The active profile's `modlist.txt` disagrees with `mods/`: a folder with no line, or a line whose folder is gone | writes | `modbench.mod.sync` | - | - | MO2 refresh | Bring the active profile's `modlist.txt` into line with `mods/`: add a line for each folder that has none, and drop each line whose folder is gone. One write. | update-load-order-file |
+| The active profile's mod order disagrees with the mod folders: a folder with no entry, or an entry whose folder is gone | writes | `modbench.mod.sync` | - | - | MO2 refresh | Bring the active profile's mod order into line with the mod folders: add an entry for each folder that has none, and drop each entry whose folder is gone. One write. | update-load-order-file |
 | The active profile's `plugins.txt` disagrees with the plugins provided, a plugin file where the game can load it from: an enabled mod, Overwrite or the game folder: a plugin with no line, or a line that nothing provides | writes | `modbench.plugin.sync` | - | - | MO2 refresh | Bring `plugins.txt` into line with the plugins provided: add a line at the winning end, disabled, for each plugin that has none, and drop each line that nothing provides. One write. | update-load-order-file |

@@ -14,19 +14,19 @@ As a user, I want:
 
 1. One row for each file directly in the instance's downloads folder: the folder MO2's configuration names, resolved as MO2 resolves it, `%BASE_DIR%` included, even when it lies outside the instance. `downloads/` unless I moved it. Source: MO2
 2. Only a file install can take to be a row. Install owns the list of extensions. A subfolder, a readme or any other file is not a row. Source: MO2 lists files by the installers' extensions, never folders
-3. A file's `.meta` sidecar never to be a row. It is the data behind its file's row. Source: MO2
-4. A file with no `.meta` to be an ordinary row, Downloaded, with none of its fields. Source: MO2
-5. A `.meta` whose file is gone to show nothing, and to stay on disk. MO2 deletes it on refresh; Modbench never deletes a file silently. Source: ADR-0003; mo2.md
+3. A file's metadata, which MO2 keeps in a `.meta` sidecar, never to be a row. It is the data behind its file's row. Source: MO2
+4. A file with no metadata to be an ordinary row, Downloaded, with none of its fields. Source: MO2
+5. Metadata whose file is gone to show nothing, and to stay on disk. MO2 deletes it on refresh; Modbench never deletes a file silently. Source: ADR-0003; mo2.md
 
 ## A row
 
 | Part | What it shows | Source |
 |---|---|---|
-| Label | the `.meta` `name`, or the file name when that is missing or empty. Never blank. | MO2 |
-| Description | the `.meta` version, then the status word, which is left out for Downloaded | common, A view, story 3 |
+| Label | the name in its metadata, or the file name when that is missing or empty. Never blank. | MO2 |
+| Description | the version in its metadata, then the status word, which is left out for Downloaded | common, A view, story 3 |
 | Icon | the status: Downloaded `$(archive)` green, Installed `$(check)` uncoloured, Uninstalled `$(circle-slash)` yellow. No file-type icon: the icon carries the status. | MO2's status colours |
 | Tooltip | file name, mod name, version, Nexus mod ID, size, file time, game and author, each only when known. A tree has no columns, so size and file time live here. | MO2's columns |
-| Identity | the file name, never the label, so an edit to the `.meta` `name` keeps the row selected | |
+| Identity | the file name, never the label, so an edit to the name in its metadata keeps the row selected | |
 | Excluded | shown only while show excluded is on, dimmed, among the other rows in sort order | mo2.md, divergence 5 |
 
 A Nexus mod ID or file ID of `0` is no ID. Source: MO2
@@ -64,7 +64,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: show excluded, or hide excluded while shown. Overflow: sort. |
-| Row menu | install · view on Nexus (the file has a Nexus mod ID) · open · open `.meta` (the file has one) · exclude or include · copy value · delete |
+| Row menu | install · view on Nexus (the file has a Nexus mod ID) · open · open metadata (the file has one) · exclude or include · copy value · delete |
 | Keys | Ctrl+C: copy value. Delete: delete. |
 
 As a user, I want:
@@ -89,7 +89,7 @@ There is no file picker: the row supplies the source (commands.md, The surface s
 1. A pick whenever an installed mod shares the file's Nexus mod ID: one item for each such mod, showing its name and version, and a last item, "Install as a new mod…".
 2. No pick when no installed mod shares the ID, or the file has none: the file installs as a new mod.
 3. An upgrade only when I choose it, even when one item is pre-selected.
-4. The mod whose installed files record this file's Nexus file ID named "File ID match", listed first and pre-selected. With no such mod, the mod whose `meta.ini` records this file as its installation file named "Installed from this file", listed first and pre-selected. With neither, "Install as a new mod…" is pre-selected. Never a guess from the file's name.
+4. The mod whose installed files record this file's Nexus file ID named "File ID match", listed first and pre-selected. With no such mod, the mod whose metadata records this file as its installation file named "Installed from this file", listed first and pre-selected. With neither, "Install as a new mod…" is pre-selected. Never a guess from the file's name.
 5. Esc to install nothing. Source: Esc changes nothing
 6. A new mod to go on to the name prompt, and an upgrade not to.
 
@@ -99,8 +99,8 @@ What install then does is in [mods.md](mods.md#what-install-does).
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. An install that landed, and then failed to write the `.meta` flag, not reported as failed: the row still shows Installed, and the failed `.meta` write is a line in the Output. A gesture reported as failed is one I would retry.
-2. A delete that moved the file to the trash and then failed on its `.meta` reported as done, with a line in the Output naming the `.meta` left behind. The row is gone and a lone `.meta` shows nothing, so no view is untrue. Source: Which files are rows, story 5
+1. An install that landed, and then failed to write its metadata, not reported as failed: the row still shows Installed, and the failed metadata write is a line in the Output. A gesture reported as failed is one I would retry.
+2. A delete that moved the file to the trash and then failed on its metadata reported as done, with a line in the Output naming the metadata left behind. The row is gone and lone metadata shows nothing, so no view is untrue. Source: Which files are rows, story 5
 
 ## Test seam
 
