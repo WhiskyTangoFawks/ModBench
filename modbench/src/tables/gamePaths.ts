@@ -180,11 +180,11 @@ export function gameReleaseForNexusDomain(domain: string): string | undefined {
   return Object.keys(GAME_PATHS).find((release) => GAME_PATHS[release]?.nexusSlug === domain);
 }
 
-/** Nexus slug for a release; a game with none falls back to its lowercased, space-stripped name
- *  (a best guess that matches most Nexus domains). */
-export function nexusSlugFor(gameRelease: string | undefined, gameName: string): string {
-  const info = gameRelease === undefined ? undefined : GAME_PATHS[gameRelease];
-  return info?.nexusSlug ?? gameName.toLowerCase().replace(/\s+/g, '');
+/** The Nexus domain of a game as a mod's or a download's metadata spells it; `undefined` when the table holds none.
+ *  Never a guess from the name: a wrong domain opens another game's page. */
+export function nexusDomainForMetaGame(gameName: string): string | undefined {
+  const release = gameReleaseForMetaGame(gameName);
+  return release === undefined ? undefined : GAME_PATHS[release]?.nexusSlug;
 }
 
 /** The install-location facts for a release, or `undefined` when the table holds none for it —

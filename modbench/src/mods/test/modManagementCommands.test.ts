@@ -1169,7 +1169,7 @@ describe('open folder: one command for a mod, the Overwrite row, a file and a fo
 describe('view on Nexus: one command for a mod and for a downloaded file', () => {
   beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
 
-  const instance = { ...instanceThatReads, value: instanceValueFixture({ nexusSlug: 'skyrimspecialedition' }) };
+  const instance = { ...instanceThatReads, value: instanceValueFixture({ gameName: 'Skyrim Special Edition' }) };
   const opened = (): string[] => openExternal.mock.calls.map((c) => String(c[0]));
   const downloadedFileRow = (nexusModId?: string): NexusModRow => ({ nexusModId });
 
@@ -1185,6 +1185,28 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
     await invoke('modbench.mod.viewOnNexus', downloadedFileRow('123'));
 
     expect(opened()).toEqual(['https://www.nexusmods.com/skyrimspecialedition/mods/123']);
+  });
+
+  it('takes the domain from the game the mod\'s metadata names, not the instance\'s', async () => {
+    registerViewOnNexusCommand(instance, recordingReporter(), () => undefined);
+    await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, nexusId: '42', gameName: 'FalloutNV' }));
+    await invoke('modbench.mod.viewOnNexus', { nexusModId: '123', nexusGame: 'Fallout 4' });
+
+    expect(opened()).toEqual(['https://www.nexusmods.com/newvegas/mods/42', 'https://www.nexusmods.com/fallout4/mods/123']);
+  });
+
+  it.each([
+    ['a mod', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, nexusId: '42', gameName: 'EnderalSE' })],
+    ['a downloaded file', { nexusModId: '42', nexusGame: 'EnderalSE' }],
+  ])('opens no page for %s of a game the registry holds no domain for, and names the game', async (_row, row) => {
+    const reporter = recordingReporter();
+
+    registerViewOnNexusCommand(instance, reporter, () => undefined);
+    await invoke('modbench.mod.viewOnNexus', row);
+
+    expect([openExternal.mock.calls, reporter.reports]).toEqual([[], [
+      { severity: 'error', message: 'Failed to open the Nexus page of mod 42.', detail: "Nexus has no domain here for the game 'EnderalSE'." },
+    ]]);
   });
 
   it('reports a page that fails to open', async () => {

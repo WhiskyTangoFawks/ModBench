@@ -507,11 +507,12 @@ export function registerViewOnNexusCommand(
   instance: Pick<Instance, 'value'>, reporter: Reporter, selectedRow: () => NexusModRow | undefined,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.mod.viewOnNexus', async (row: NexusModRow | undefined) => {
-    const nexusModId = (row ?? selectedRow())?.nexusModId;
+    const { nexusModId, nexusGame = instance.value.gameName } = (row ?? selectedRow()) ?? {};
     if (!nexusModId) return;
     await reportFailure(reporter, `Failed to open the Nexus page of mod ${nexusModId}.`, async () => {
-      await vscode.env.openExternal(
-        vscode.Uri.parse(`https://www.nexusmods.com/${instance.value.nexusSlug}/mods/${nexusModId}`));
+      const domain = instance.value.nexusDomainOf(nexusGame);
+      if (domain === undefined) throw new Error(`Nexus has no domain here for the game '${nexusGame}'.`);
+      await vscode.env.openExternal(vscode.Uri.parse(`https://www.nexusmods.com/${domain}/mods/${nexusModId}`));
     });
   });
 }

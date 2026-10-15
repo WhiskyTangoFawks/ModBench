@@ -54,11 +54,13 @@ export class DownloadNode extends vscode.TreeItem {
   readonly kind = 'download' as const;
   /** The Argument view on Nexus reads, which the Mods row supplies under the same name. */
   readonly nexusModId: string | undefined;
+  readonly nexusGame: string | undefined;
   readonly argument: DownloadArgument;
   constructor(row: DownloadFile) {
     super(row.displayName, vscode.TreeItemCollapsibleState.None);
     this.argument = { kind: 'download', row };
     this.nexusModId = row.modID;
+    this.nexusGame = row.gameName;
     this.id = row.name;
     this.iconPath = downloadStatusIcon(row.status);
     this.description = downloadDescription(row);
