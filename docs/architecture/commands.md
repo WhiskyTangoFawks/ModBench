@@ -148,7 +148,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
-| enable / disable | writes | `modbench.mod.enable`, `modbench.mod.disable` | mods | - | MO2 mod list | Flip each mod in the active profile's mod order. Enable all is select all, then this gesture. | update-load-order-file |
+| enable / disable | writes | `modbench.mod.enable`, `modbench.mod.disable` | mods | - | MO2 mod list | Flip each mod's enabled state in the active profile. Enable all is select all, then this gesture. | update-load-order-file |
 | move | writes | `modbench.mod.move` | mods or separators | target: a separator, above a mod, or the view's end | MO2 mod list | Move mods in mod order. | update-load-order-file |
 | uninstall | writes | `modbench.mod.uninstall` | mods | - | MO2 mod list | Move a mod folder to the trash and remove its line. | update-load-order-file |
 | create empty mod | writes | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
@@ -225,5 +225,5 @@ Commands Modbench runs itself. No user starts them and no surface owns them, so 
 | Trigger | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
 | The Instance loader recomputed the instance value ([load-instance](traces/load-instance.d2)) | writes | `modbench.instance.putLoadOrder` | snapshot: the game release, every plugin in the instance and what provides it, the active plugins in load order, every mod with its folder, and the stat cache's folder | - | none | Hand mEdit the whole snapshot at every recompute. | index-load-order; mod-status |
-| The active profile's mod order disagrees with the mod folders: a folder with no entry, or an entry whose folder is gone | writes | `modbench.mod.sync` | - | - | MO2 refresh | Bring the active profile's mod order into line with the mod folders: add an entry for each folder that has none, and drop each entry whose folder is gone. One write. | update-load-order-file |
+| The active profile's mod order disagrees with `mods/`: a folder with no line, or a line whose folder is gone | writes | `modbench.mod.sync` | - | - | MO2 refresh | Bring the active profile's mod order into line with `mods/`: add a line for each folder that has none, and drop each line whose folder is gone. One write. | update-load-order-file |
 | The active profile's `plugins.txt` disagrees with the plugins provided, a plugin file where the game can load it from: an enabled mod, Overwrite or the game folder: a plugin with no line, or a line that nothing provides | writes | `modbench.plugin.sync` | - | - | MO2 refresh | Bring `plugins.txt` into line with the plugins provided: add a line at the winning end, disabled, for each plugin that has none, and drop each line that nothing provides. One write. | update-load-order-file |
