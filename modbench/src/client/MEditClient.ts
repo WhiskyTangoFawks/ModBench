@@ -252,6 +252,8 @@ export type ModRestoreDestroys = components['schemas']['ModRestoreDestroys'];
 export interface WhatRestoreDestroys {
   destroys: readonly ModRestoreDestroys[];
   refused: readonly ItemRefusal<string>[];
+  /** What each manifest says of its mod's version and installation files. */
+  manifests: readonly components['schemas']['ManifestMetadataResponse'][];
 }
 
 interface RestoredMod {

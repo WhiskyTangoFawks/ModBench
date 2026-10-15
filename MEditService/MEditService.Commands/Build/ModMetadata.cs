@@ -9,15 +9,31 @@ public sealed record ModMetadata(string? Version, IReadOnlyList<MetadataInstalla
     public static ModMetadata Of(Manifest manifest) =>
         new(manifest.Version, [.. manifest.InstallationFiles.Select(file => new MetadataInstallationFile(file.Name, file.Source))]);
 
-    /// <summary>Whether writing <paramref name="manifest"/>'s metadata over this one replaces a value this one holds. A value
-    /// either side lacks replaces nothing.</summary>
+    /// <summary>Whether writing <paramref name="manifest"/>'s metadata replaces a value this one holds: another version,
+    /// another source for a file both name, or files none of which the manifest names. A value either side lacks replaces
+    /// nothing.</summary>
     public bool DiffersFrom(ModMetadata manifest) =>
-        (manifest.Version is { } version && Version is { } held && held != version)
-        || (manifest.InstallationFiles is [var first, ..] && InstallationFiles.Any(file => !file.Agrees(first)));
+        (manifest.Version is { } version && Version is { } held && held != version) || InstallationFilesDifferFrom(manifest.InstallationFiles);
+
+    private bool InstallationFilesDifferFrom(IReadOnlyList<MetadataInstallationFile> manifestFiles)
+    {
+        if (InstallationFiles.Count == 0 || manifestFiles.Count == 0) return false;
+        var named = InstallationFiles.Select(file => (Held: file, Manifest: manifestFiles.FirstOrDefault(other => other.Name == file.Name))).ToList();
+        return named.All(pair => pair.Manifest is null)
+            || named.Any(pair => pair.Manifest is { } other && pair.Held.Source is { } heldSource && other.Source is { } source && heldSource != source);
+    }
 }
 
-public sealed record MetadataInstallationFile(string Name, string? Source)
+public sealed record MetadataInstallationFile(string Name, string? Source);
+
+/// <summary>What a mod's manifest says of its metadata, and whether writing it replaces a value the request's metadata holds.</summary>
+public sealed record RestoreMetadata(ModMetadata Manifest, bool Differs)
 {
-    internal bool Agrees(MetadataInstallationFile other) =>
-        Name == other.Name && (Source is null || other.Source is null || Source == other.Source);
+    /// <summary>Null when the mod has no manifest.</summary>
+    public static RestoreMetadata? Of(ModByFolder mod, Manifest? manifest)
+    {
+        if (manifest is null) return null;
+        var says = ModMetadata.Of(manifest);
+        return new RestoreMetadata(says, mod.Metadata is { } held && held.DiffersFrom(says));
+    }
 }

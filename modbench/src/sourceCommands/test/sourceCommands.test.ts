@@ -41,8 +41,8 @@ describe('sourceCommands build', () => {
 
     const outcome = await sourceCommands({ client, adapter }).build(['ModA', 'ModB'], undefined, SOURCES);
 
-    expect(client.calls.map(({ args }) => (Array.isArray(args[0]) ? args[0].map((mod: { name: string }) => mod.name) : []))).toEqual([['ModB']]);
-    expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: 'EISDIR: meta.ini' }] });
+    expect(client.calls).toMatchObject([{ args: [[{ name: 'ModB' }], expect.anything()] }]);
+    expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: 'its metadata could not be read: EISDIR: meta.ini' }] });
   });
 
   it('hands mEdit no archive variant for a release the table names none for', async () => {

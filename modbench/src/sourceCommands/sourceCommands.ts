@@ -14,6 +14,8 @@ interface SourceCommandsDeps {
     'installationFiles' | 'modMetadata' | 'managerFilesInModFolder' | 'sourceFolder' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder'>;
 }
 
+export const metadataUnreadable = (reason: string): string => `its metadata could not be read: ${reason}`;
+
 /** The source mod gestures, bound to the mEdit client and handing it the instance's facts. */
 export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
   return {
@@ -32,7 +34,7 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
         if (sourceFolder === undefined) refused.push({ item: mod, reason: 'no repository in the source folder builds it' });
         else if (folder === undefined) refused.push({ item: mod, reason: 'its name gives it no folder' });
         else if (installed.kind === 'unreadable') refused.push({ item: mod, reason: installed.reason });
-        else if (metadata.kind === 'unreadable') refused.push({ item: mod, reason: metadata.reason });
+        else if (metadata.kind === 'unreadable') refused.push({ item: mod, reason: metadataUnreadable(metadata.reason) });
         else {
           sent.push({
             name: mod, sourceFolder, folder, installationFiles: installed.answer.map(onTheWire), committedFiles: [...adapter.managerFilesInModFolder],

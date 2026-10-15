@@ -12,8 +12,6 @@ export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
 export { OVERWRITE_ORIGIN } from './codecs/modlistText';
 
-/** A metadata write that no repeat of it can make succeed. */
-export class MetadataNotWritable extends Error {}
 export type { ArchiveReader } from './archiveReader';
 export { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, isArchiveName } from './archiveNames';
 export { samePath } from './samePath';
@@ -332,12 +330,12 @@ export interface InstallationFile extends HashedDownload {
   readonly unsourcedGame?: string;
 }
 
-interface MetadataInstallationFile {
+export interface MetadataInstallationFile {
   readonly name: string;
   readonly source?: string;
 }
 
-interface ModMetadata {
+export interface ModMetadata {
   readonly version?: string;
   readonly installationFiles: readonly MetadataInstallationFile[];
 }
@@ -404,8 +402,11 @@ export interface InstanceAdapter {
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
   /** What the mod manager's metadata says of `mod`'s version and installation files; none when it says none. */
   modMetadata(mod: string): Promise<FileRead<ModMetadata>>;
-  /** Sets the version and first installation file of `mod`, in a metadata made when it has none, and keeps every other key
-   *  and every value `metadata` lacks. Rejects, writing nothing, with `MetadataNotWritable` on a source whose game the tables lack. */
+  /** Why `metadata` cannot be written into the metadata of `mod`, as a reason; undefined when it can. */
+  unwritableMetadata(mod: string, metadata: ModMetadata): Promise<string | undefined>;
+  /** Sets the version of `mod` and the installation file its metadata holds, else the first, in a metadata made when it has none.
+   *  Changes only a value that differs, and never gives a file another's source. Rejects, writing nothing, when
+   *  `unwritableMetadata` says why. */
   writeModMetadata(mod: string, metadata: ModMetadata): Promise<void>;
   /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
   readonly managerFilesInModFolder: readonly string[];

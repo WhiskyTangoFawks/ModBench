@@ -1383,6 +1383,10 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        ManifestMetadataResponse: {
+            mod: string;
+            metadata: components["schemas"]["ModMetadata"];
+        };
         MetadataInstallationFile: {
             name: string;
             source?: string | null;
@@ -1857,6 +1861,7 @@ export interface components {
         WhatRestoreDestroysResponse: {
             mods: components["schemas"]["ModRestoreDestroys"][];
             refused: components["schemas"]["ModRestoreRefusal"][];
+            manifests: components["schemas"]["ManifestMetadataResponse"][];
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";

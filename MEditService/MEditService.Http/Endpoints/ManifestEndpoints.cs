@@ -121,6 +121,7 @@ internal static class ManifestEndpoints
 
         List<ModRestoreDestroys> destroying = [];
         List<ModRestoreRefusal> refused = [];
+        List<ManifestMetadataResponse> manifests = [];
         foreach (var (mod, status) in req.Mods.Zip(StatusOf(req, repository)))
         {
             if (status.Unreadable is { } unreadable)
@@ -130,12 +131,12 @@ internal static class ManifestEndpoints
                     $"'{status.Mod}' was skipped: {unreadable.Why}.", [], []));
                 continue;
             }
-            var metadataDiffers = mod.Metadata is { } held && repository.ReadManifest(mod.Folder, mod.Name) is { } manifest
-                && held.DiffersFrom(ModMetadata.Of(manifest));
-            if (status.Differing.Count + status.NamedByNoLine.Count > 0 || metadataDiffers)
-                destroying.Add(new ModRestoreDestroys(status.Mod, status.Differing, status.NamedByNoLine, metadataDiffers));
+            var metadata = RestoreMetadata.Of(mod, repository.ReadManifest(mod.Folder, mod.Name));
+            if (metadata is not null) manifests.Add(new ManifestMetadataResponse(status.Mod, metadata.Manifest));
+            if (status.Differing.Count + status.NamedByNoLine.Count > 0 || metadata?.Differs == true)
+                destroying.Add(new ModRestoreDestroys(status.Mod, status.Differing, status.NamedByNoLine, metadata?.Differs == true));
         }
-        return Results.Ok(new WhatRestoreDestroysResponse(destroying, refused));
+        return Results.Ok(new WhatRestoreDestroysResponse(destroying, refused, manifests));
     }
 
     internal static IResult ModStatusOf(ModFoldersRequest req, IModFolderRepository repository) =>
@@ -240,9 +241,12 @@ internal sealed record ModStatusResponse(IReadOnlyList<ModStatus> Mods);
 /// each file no line names, and whether it replaces a version or source in the metadata.</summary>
 internal sealed record ModRestoreDestroys(string Mod, IReadOnlyList<string> Differing, IReadOnlyList<string> NamedByNoLine, bool MetadataDiffers);
 
-/// <summary>Only the mods restore would destroy a file in, and each mod skipped because a file of it could not be read
-/// (ADR-0019).</summary>
-internal sealed record WhatRestoreDestroysResponse(IReadOnlyList<ModRestoreDestroys> Mods, IReadOnlyList<ModRestoreRefusal> Refused);
+/// <summary>Only the mods restore would destroy a file or metadata in, each mod skipped because a file of it could not be
+/// read (ADR-0019), and the metadata each manifest says.</summary>
+internal sealed record WhatRestoreDestroysResponse(
+    IReadOnlyList<ModRestoreDestroys> Mods, IReadOnlyList<ModRestoreRefusal> Refused, IReadOnlyList<ManifestMetadataResponse> Manifests);
+
+internal sealed record ManifestMetadataResponse(string Mod, ModMetadata Metadata);
 
 /// <summary>A skipped mod. A NotFound mod names each game file it lacks, by its path under the data folder, and each
 /// installation file by name, for a request to hand. A NotBuilt mod names its build's refusal.</summary>

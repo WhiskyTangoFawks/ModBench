@@ -21,5 +21,5 @@ export function parseNexusSource(text: string): NexusSource | undefined {
   };
 }
 
-export const formatNexusSource =({ game, modId, files }: NexusSource): string =>
+export const formatNexusSource = ({ game, modId, files }: NexusSource): string =>
   `nexus:${game}:${modId ?? ''}${files.map(({ nexusId, fileId }) => `;${nexusId}:${fileId}`).join('')}`;

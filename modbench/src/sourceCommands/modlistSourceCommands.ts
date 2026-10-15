@@ -3,16 +3,16 @@ import {
   type ModByFolder, type ModStatus, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
-import { MetadataNotWritable, type FileRead, type GameFile, type GameFolder, type InstallationFile, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import type { FileRead, GameFile, GameFolder, InstallationFile, InstanceAdapter, ModMetadata } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
-import { archiveVariants } from './sourceCommands';
+import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
-  'installationFiles' | 'downloadedFile' | 'modMetadata' | 'writeModMetadata' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'
+  'installationFiles' | 'downloadedFile' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'managerFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'
   | 'statCacheFolder' | 'trashModFile' | 'sourceFolder' | 'excludedSuffix'>;
 
 interface ModlistSourceCommandsDeps {
@@ -178,8 +178,6 @@ function cancelledBefore(mods: readonly string[], { landed, refused }: Extract<R
     .map((mod) => ({ item: mod, reason: `'${mod}' was not finished: the restore was cancelled. Restoring it again finishes it.` }));
 }
 
-// modlist-source.md, Restore from manifest, stories 1 and 9: mEdit names each file no line names, and the trash is the
-// host's. It also names the metadata, and the mod manager's is the Instance adapter's.
 async function withFilesNoLineNamesTrashed(
   { adapter, trash }: ModlistSourceCommandsDeps, landed: Restored,
 ): Promise<{ finished: Restored; unfinished: readonly ItemRefusal<string>[] }> {
@@ -188,35 +186,30 @@ async function withFilesNoLineNamesTrashed(
   for (const mod of landed) {
     const why = await trashedOrWhy(adapter, trash, mod.mod, mod.namedByNoLine) ?? await metadataWrittenOrWhy(adapter, mod.mod, mod.metadata);
     if (why === undefined) finished.push(mod);
-    else unfinished.push({ item: mod.mod, reason: `'${mod.mod}' was not finished: ${why.text}.${why.curable ? ' Restoring it again finishes it.' : ''}` });
+    else unfinished.push({ item: mod.mod, reason: `'${mod.mod}' was not finished: ${why}. Restoring it again finishes it.` });
   }
   return { finished, unfinished };
 }
 
-interface Unfinished {
-  readonly text: string;
-  readonly curable: boolean;
-}
+const heldByAdapter = ({ version, installationFiles }: NonNullable<Restored[number]['metadata']>): ModMetadata =>
+  ({ version: version ?? undefined, installationFiles: installationFiles.map(({ name, source }) => ({ name, source: source ?? undefined })) });
 
-async function metadataWrittenOrWhy(adapter: Adapter, mod: string, metadata: Restored[number]['metadata']): Promise<Unfinished | undefined> {
+async function metadataWrittenOrWhy(adapter: Adapter, mod: string, metadata: Restored[number]['metadata']): Promise<string | undefined> {
   if (metadata === undefined) return undefined;
   try {
-    await adapter.writeModMetadata(mod, {
-      version: metadata.version ?? undefined,
-      installationFiles: metadata.installationFiles.map(({ name, source }) => ({ name, source: source ?? undefined })),
-    });
+    await adapter.writeModMetadata(mod, heldByAdapter(metadata));
   } catch (err) {
-    return { text: `its metadata could not be written: ${errorMessage(err)}`, curable: !(err instanceof MetadataNotWritable) };
+    return `its metadata could not be written: ${errorMessage(err)}`;
   }
   return undefined;
 }
 
-async function trashedOrWhy(adapter: Adapter, trash: MoveToTrash, mod: string, paths: readonly string[]): Promise<Unfinished | undefined> {
+async function trashedOrWhy(adapter: Adapter, trash: MoveToTrash, mod: string, paths: readonly string[]): Promise<string | undefined> {
   for (const path of paths) {
     try {
       await adapter.trashModFile(mod, path, trash);
     } catch (err) {
-      return { text: `'${path}' could not be moved to the trash: ${errorMessage(err)}`, curable: true };
+      return `'${path}' could not be moved to the trash: ${errorMessage(err)}`;
     }
   }
   return undefined;
@@ -313,7 +306,7 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
       const versioned: UpdateManifestMod[] = [];
       for (const mod of sent) {
         const metadata = await adapter.modMetadata(mod.name);
-        if (metadata.kind === 'unreadable') refused.push({ item: mod.name, reason: metadata.reason });
+        if (metadata.kind === 'unreadable') refused.push({ item: mod.name, reason: metadataUnreadable(metadata.reason) });
         else versioned.push({ ...mod, isSourceMod: instance.paths.sourceDirs.has(mod.name), version: metadata.answer.version });
       }
       if (versioned.length === 0) return { applied: true, landed: [], refused, notes };
@@ -326,16 +319,21 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
     whatRestoreDestroys: async (mods: readonly string[]): Promise<WhatRestoreDestroys> => {
       const folders = await byFolder(adapter, mods);
       const asked: ModByFolder[] = [];
-      const unreadable: ItemRefusal<string>[] = [];
+      const skipped: ItemRefusal<string>[] = [];
       for (const folder of folders) {
         const held = await adapter.modMetadata(folder.name);
-        if (held.kind === 'unreadable') unreadable.push({ item: folder.name, reason: `'${folder.name}' was skipped: its metadata could not be read: ${held.reason}.` });
+        if (held.kind === 'unreadable') skipped.push({ item: folder.name, reason: `'${folder.name}' was skipped: ${metadataUnreadable(held.reason)}.` });
         else asked.push({ ...folder, metadata: { version: held.answer.version, installationFiles: [...held.answer.installationFiles] } });
       }
-      if (asked.length === 0) return { destroys: [], refused: unreadable };
+      if (asked.length === 0) return { destroys: [], refused: skipped };
       const listing = await client.getWhatRestoreDestroys(asked, adapter.statCacheFolder);
       if (isReadFailed(listing)) return { refusal: `Could not ask what restore from manifest destroys: ${failureReason(listing)}` };
-      return { ...listing, refused: [...listing.refused, ...unreadable] };
+      for (const { mod, metadata } of listing.manifests) {
+        const why = await adapter.unwritableMetadata(mod, heldByAdapter(metadata));
+        if (why !== undefined) skipped.push({ item: mod, reason: `'${mod}' was skipped: ${why}.` });
+      }
+      const unrestorable = new Set(skipped.map(({ item }) => item));
+      return { destroys: listing.destroys.filter(({ mod }) => !unrestorable.has(mod)), refused: [...listing.refused, ...skipped] };
     },
 
     restoreFromManifest: (

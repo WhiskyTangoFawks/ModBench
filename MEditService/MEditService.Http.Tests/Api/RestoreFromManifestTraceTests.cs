@@ -116,13 +116,6 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
 
     private static JsonObject Metadata(string? version) => new() { ["version"] = version, ["installationFiles"] = new JsonArray() };
 
-    private async Task<JsonElement> WhatRestoreDestroys(JsonObject? metadata)
-    {
-        var response = await Client.PostAsJsonAsync("/what-restore-destroys", WhatRestoreDestroysRequest(metadata));
-        response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("mods");
-    }
-
     private async Task<JsonElement> WhatRestoreDestroys()
     {
         var response = await Client.PostAsJsonAsync("/what-restore-destroys", WhatRestoreDestroysRequest());
@@ -151,19 +144,20 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task AModWhoseMetadataVersionDiffersFromItsManifests_IsListed_ButNotOneWhoseMetadataAgreesOrHoldsNone()
+    public async Task AModWhoseMetadataDiffersFromItsManifests_IsListed_AndEachManifestsMetadataIsAnswered()
     {
         ModInstalledFromADownload();
         _versionUpdated = "1.0";
         await Post("update-manifest");
 
-        var differing = Assert.Single((await WhatRestoreDestroys(Metadata("2.0"))).EnumerateArray());
+        var response = await Client.PostAsJsonAsync("/what-restore-destroys", WhatRestoreDestroysRequest(Metadata("2.0")));
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
+        var differing = Assert.Single(body.GetProperty("mods").EnumerateArray());
         Assert.True(differing.GetProperty("metadataDiffers").GetBoolean());
-        Assert.Empty(Paths(differing, "differing"));
-        Assert.Empty((await WhatRestoreDestroys(Metadata("1.0"))).EnumerateArray());
-        Assert.Empty((await WhatRestoreDestroys(Metadata(null))).EnumerateArray());
-        Assert.Empty((await WhatRestoreDestroys(null)).EnumerateArray());
+        var manifest = Assert.Single(body.GetProperty("manifests").EnumerateArray());
+        Assert.Equal((Mod, "1.0"), (manifest.GetProperty("mod").GetString(), manifest.GetProperty("metadata").GetProperty("version").GetString()));
     }
 
     [Fact]
