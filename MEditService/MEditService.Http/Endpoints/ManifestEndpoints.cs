@@ -242,7 +242,7 @@ internal sealed record ModRestoreDestroys(string Mod, IReadOnlyList<string> Diff
 internal sealed record WhatRestoreDestroysResponse(IReadOnlyList<ModRestoreDestroys> Mods, IReadOnlyList<ModRestoreRefusal> Refused);
 
 /// <summary>A skipped mod. A NotFound mod names each game file it lacks, by its path under the data folder, and each
-/// installation file, by its name; a request that hands them brings it back. A NotBuilt mod names its build's refusal.</summary>
+/// installation file by name, for a request to hand. A NotBuilt mod names its build's refusal.</summary>
 internal sealed record ModRestoreRefusal(
     string Item, RestoreRefusal Refusal, string Message, IReadOnlyList<string> GameFilesNotFound, IReadOnlyList<string> InstallationFilesNotFound,
     BuildRefusal BuildRefusal = BuildRefusal.None);
