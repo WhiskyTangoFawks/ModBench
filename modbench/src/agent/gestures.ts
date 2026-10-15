@@ -256,7 +256,7 @@ function refusalIn(outcome: GestureOutcome): string | undefined {
 const toolName = (command: string): string =>
   command.replace(/^modbench\./, '').replaceAll('.', '_').replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 
-/** One tool for each gesture, so each advertises its own typed input and a description short enough for any client. */
+/** Claude Code shows the first 2,048 characters of a tool's description, and sends an input with no JSON type as a string. */
 export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, gesture]) => ({
   name: toolName(command),
   description: `Runs ${command}. ${gesture.takes}`.trim(),

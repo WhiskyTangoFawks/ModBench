@@ -106,21 +106,16 @@ describe('the agent server, given an instance value', () => {
     expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(['list_downloads', 'list_file_conflicts', 'list_mod_statuses', 'list_mods', 'list_plugins', 'list_profiles', 'list_references', 'list_source_problems', 'read_record', 'resolve_instance_names', 'resolve_names', 'script_environment', 'select_rows']));
   });
 
-  it('lists no tool for a gesture kept from the agent', async () => {
+  it('advertises the JSON type of every input of every tool, so a client sends JSON and never a string', async () => {
     const client = await clientOf(new FakeInstance(VALUE));
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name)).not.toContain('profile_switch');
-  });
-
-  it('lists each gesture as a tool of its own, whose input says the JSON type of its argument and options', async () => {
-    const client = await clientOf(new FakeInstance(VALUE));
-
-    const { tools } = await client.listTools();
-
-    const move = present(tools.find((tool) => tool.name === 'plugin_move'), 'the plugin_move tool');
-    expect(move.inputSchema.properties).toMatchObject({ argument: { type: 'array' }, options: { type: 'object' } });
+    const untyped = tools.flatMap(({ name, inputSchema }) => Object.entries(inputSchema.properties ?? {})
+      .filter(([, property]) => !('type' in property))
+      .map(([input]) => `${name}.${input}`));
+    expect(tools.map((tool) => tool.name)).toContain('plugin_move');
+    expect(untyped).toEqual([]);
   });
 
   it('hands the client its instructions on initialize', async () => {
