@@ -61,7 +61,7 @@ const NO_ENVIRONMENT = { forEach: () => undefined };
 
 const statusRead: { asked: (readonly string[])[]; answer: Awaited<ReturnType<ReadModStatus>> } = { asked: [], answer: [] };
 const status = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], noProvider: [], ...over });
+  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], noProvider: [], metadataDiffers: false, ...over });
 const readStatus: ReadModStatus = (mods) => { statusRead.asked.push(mods); return Promise.resolve(statusRead.answer); };
 
 async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT) {

@@ -590,15 +590,34 @@ describe('modlistSourceCommands what restore destroys', () => {
 });
 
 describe('modlistSourceCommands mod status', () => {
-  it('asks mEdit for each mod\'s status by its folder, with the files the repository commits and the stat cache', async () => {
-    const { commands, client } = commandsOver();
-    const status = [{ mod: 'ModA', noManifest: true, differing: [], namedByNoLine: [], gone: [], noProvider: [] }];
-    client.setQueryAnswer('getModStatus', status);
+  const STATUS = [{ mod: 'ModA', noManifest: true, differing: [], namedByNoLine: [], gone: [], noProvider: [], metadataDiffers: false }];
+
+  it('asks mEdit for each mod\'s status by its folder, with the files the repository commits, the metadata the mod manager holds and the stat cache', async () => {
+    const { commands, client } = commandsOver({ metadata: new Map([['ModA', { version: '1.2.3', installationFiles: [{ name: 'A.7z', source: 'nexus:fallout4:1' }] }]]) });
+    client.setQueryAnswer('getModStatus', STATUS);
 
     const answer = await commands.modStatus(['ModA']);
 
     expect([client.calls, answer]).toEqual([
-      [{ method: 'getModStatus', args: [[{ name: 'ModA', folder: '/mods/ModA', committedFiles: ['meta.ini'] }], '/instance/stat-cache'] }], status,
+      [{
+        method: 'getModStatus',
+        args: [[{
+          name: 'ModA', folder: '/mods/ModA', committedFiles: ['meta.ini'],
+          metadata: { version: '1.2.3', installationFiles: [{ name: 'A.7z', source: 'nexus:fallout4:1' }] },
+        }], '/instance/stat-cache'],
+      }], STATUS,
     ]);
+  });
+
+  it('says why a mod\'s metadata could not be read, and sends none of it', async () => {
+    const { commands, client } = commandsOver({ unreadableMetadata: new Map([['ModA', 'EACCES']]) });
+    client.setQueryAnswer('getModStatus', STATUS);
+
+    await commands.modStatus(['ModA']);
+
+    expect(client.calls).toEqual([{
+      method: 'getModStatus',
+      args: [[{ name: 'ModA', folder: '/mods/ModA', committedFiles: ['meta.ini'], metadataUnreadable: 'EACCES' }], '/instance/stat-cache'],
+    }]);
   });
 });

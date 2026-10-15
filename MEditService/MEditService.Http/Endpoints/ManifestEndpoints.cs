@@ -122,7 +122,7 @@ internal static class ManifestEndpoints
         List<ModRestoreDestroys> destroying = [];
         List<ModRestoreRefusal> refused = [];
         List<ManifestMetadataResponse> manifests = [];
-        foreach (var (mod, status) in req.Mods.Zip(StatusOf(req, repository)))
+        foreach (var status in StatusOf(req, repository))
         {
             if (status.Unreadable is { } unreadable)
             {
@@ -131,10 +131,9 @@ internal static class ManifestEndpoints
                     $"'{status.Mod}' was skipped: {unreadable.Why}.", [], []));
                 continue;
             }
-            var metadata = RestoreMetadata.Of(mod, repository.ReadManifest(mod.Folder, mod.Name));
-            if (metadata is not null) manifests.Add(new ManifestMetadataResponse(status.Mod, metadata.Manifest));
-            if (status.Differing.Count + status.NamedByNoLine.Count > 0 || metadata?.Differs == true)
-                destroying.Add(new ModRestoreDestroys(status.Mod, status.Differing, status.NamedByNoLine, metadata?.Differs == true));
+            if (status.ManifestMetadata is not null) manifests.Add(new ManifestMetadataResponse(status.Mod, status.ManifestMetadata));
+            if (status.Differing.Count + status.NamedByNoLine.Count > 0 || status.MetadataDiffers)
+                destroying.Add(new ModRestoreDestroys(status.Mod, status.Differing, status.NamedByNoLine, status.MetadataDiffers));
         }
         return Results.Ok(new WhatRestoreDestroysResponse(destroying, refused, manifests));
     }
@@ -150,7 +149,7 @@ internal static class ManifestEndpoints
     }
 
     private static List<ModStatus> StatusOf(ModFoldersRequest req, IModFolderRepository repository) =>
-        [.. req.Mods.Select(mod => repository.Status(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal), req.StatCache))];
+        [.. req.Mods.Select(mod => mod.StatusIn(repository, req.StatCache))];
 
     private static IResult? Malformed(IReadOnlyList<IModRequest> mods, IReadOnlyList<OverriddenGameFileRequest>? gameFiles, string? statCache)
     {

@@ -96,8 +96,8 @@ export class ModStatuses implements SyncMessage, vscode.Disposable {
 
 const counted = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
 
-// modlist-source.md, Status, story 1.
-const differs = ({ differing, namedByNoLine, gone }: ModStatus): boolean => differing.length + namedByNoLine.length + gone.length > 0;
+// modlist-source.md, Status, stories 1 and 6.
+const differs = ({ differing, namedByNoLine, gone, metadataDiffers }: ModStatus): boolean => differing.length + namedByNoLine.length + gone.length > 0 || metadataDiffers;
 
 function stateOf(status: ModStatus): string | undefined {
   if (status.noManifest) return 'no manifest';

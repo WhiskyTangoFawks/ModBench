@@ -102,7 +102,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    private JsonObject WhatRestoreDestroysRequest(JsonObject? metadata = null) => new()
+    private JsonObject WhatRestoreDestroysRequest(JsonObject? metadata = null, string? metadataUnreadable = null) => new()
     {
         ["mods"] = new JsonArray(new JsonObject
         {
@@ -110,6 +110,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
             ["folder"] = ModFolder,
             ["committedFiles"] = new JsonArray("meta.ini"),
             ["metadata"] = metadata,
+            ["metadataUnreadable"] = metadataUnreadable,
         }),
         ["statCache"] = StatCache,
     };
@@ -158,6 +159,37 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         Assert.True(differing.GetProperty("metadataDiffers").GetBoolean());
         var manifest = Assert.Single(body.GetProperty("manifests").EnumerateArray());
         Assert.Equal((Mod, "1.0"), (manifest.GetProperty("mod").GetString(), manifest.GetProperty("metadata").GetProperty("version").GetString()));
+    }
+
+    private async Task<JsonElement> ModStatus(JsonObject request)
+    {
+        var response = await Client.PostAsJsonAsync("/mod-status", request);
+        response.EnsureSuccessStatusCode();
+        return Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("mods").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task AModWhoseMetadataDiffersFromItsManifests_SaysSoInItsStatus_AndAnswersNoManifestMetadata()
+    {
+        ModInstalledFromADownload();
+        _versionUpdated = "1.0";
+        await Post("update-manifest");
+
+        var status = await ModStatus(WhatRestoreDestroysRequest(Metadata("2.0")));
+
+        Assert.True(status.GetProperty("metadataDiffers").GetBoolean());
+        Assert.False(status.TryGetProperty("manifestMetadata", out _));
+    }
+
+    [Fact]
+    public async Task AModWhoseMetadataCouldNotBeRead_IsUnreadableInItsStatus_NamingWhy()
+    {
+        ModInstalledFromADownload();
+        await Post("update-manifest");
+
+        var status = await ModStatus(WhatRestoreDestroysRequest(metadataUnreadable: "access denied"));
+
+        Assert.Contains("access denied", status.GetProperty("unreadable").GetProperty("why").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
