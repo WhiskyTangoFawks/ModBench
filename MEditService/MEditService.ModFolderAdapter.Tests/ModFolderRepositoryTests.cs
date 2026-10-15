@@ -145,6 +145,12 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Empty(status.Differing);
     }
 
+    private Func<string, bool> FileSystemMatchingNames(StringComparison comparison) =>
+        path => Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories)
+            .Any(file => string.Equals(Normalized(file), Normalized(path), comparison));
+
+    private static string Normalized(string path) => path.Replace('\\', '/');
+
     [Theory]
     [InlineData(StringComparison.OrdinalIgnoreCase, false)]
     [InlineData(StringComparison.Ordinal, true)]
@@ -155,7 +161,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         var manifest = Manifested(Line("meshes/a.nif", "Mod.zip"));
         var repository = new ModFolderRepository(
             TimeProvider.System,
-            path => Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories).Any(file => string.Equals(file, path, fileSystemMatchesNames)));
+            FileSystemMatchingNames(fileSystemMatchesNames));
 
         var status = repository.Status(_root, "mod", new HashSet<string>(), _statCache);
 
@@ -174,7 +180,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Manifested(Line("meshes/a.nif", "Mod.zip"));
         var repository = new ModFolderRepository(
             TimeProvider.System,
-            path => Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories).Any(file => string.Equals(file, path, fileSystemMatchesNames)));
+            FileSystemMatchingNames(fileSystemMatchesNames));
 
         Assert.Equal(differing is null ? [] : [differing], repository.Status(_root, "mod", new HashSet<string>(), _statCache).Differing);
     }
