@@ -102,6 +102,16 @@ describe('modlistSourceCommands update manifest', () => {
     }]);
   });
 
+  it('names a mod whose installation file comes from a game without a Nexus domain, and sends the file without that fact', async () => {
+    const { commands, client } = commandsOver({ installations: new Map([['ModA', recording([{ ...INSTALLED, unsourcedGame: 'EnderalSE' }])]]) });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModA'], instanceOf());
+
+    expect(outcome).toMatchObject({ notes: [expect.stringContaining("ModA: its installation file comes from 'EnderalSE'")] });
+    expect(client.calls[0]?.args[0]).toEqual([expect.objectContaining({ installationFiles: [INSTALLED] })]);
+  });
+
   it('reports the phase of reading each mod\'s files, then mEdit\'s progress updating them', async () => {
     const { commands, client } = commandsOver();
     client.setCommandHandler('updateManifest', (_mods, _facts, options) => {

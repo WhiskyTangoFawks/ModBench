@@ -1,7 +1,7 @@
 // What MO2 records of a mod's installation: the downloaded file meta.ini names, and meta.ini itself.
 
 import { basename, isAbsolute } from 'node:path';
-import { nexusSlugFor, gameReleaseForMetaGame } from '../tables/gamePaths';
+import { gamePathInfoForRelease, gameReleaseForMetaGame } from '../tables/gamePaths';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { readGameName } from './codecs/modOrganizerIni';
 import { exists, get, readOrReason } from './files';
@@ -19,10 +19,14 @@ async function reinstallPath(context: Mo2Context, recorded: string): Promise<str
 }
 
 // A mod with no game of its own is the instance's game's.
-async function nexusSourceOf({ gameName, nexusId, installedFiles = [] }: ModMeta, { instanceRoot }: Mo2Context): Promise<string | undefined> {
-  if (nexusId === undefined && installedFiles.length === 0) return undefined;
+async function nexusSourceOf(
+  { gameName, nexusId, installedFiles = [] }: ModMeta, { instanceRoot }: Mo2Context,
+): Promise<Pick<InstallationFile, 'source' | 'unsourcedGame'>> {
+  if (nexusId === undefined && installedFiles.length === 0) return {};
   const game = gameName ?? readGameName(await get(settingsFile(instanceRoot)));
-  return formatNexusSource({ game: nexusSlugFor(gameReleaseForMetaGame(game), game), modId: nexusId, files: installedFiles });
+  const release = gameReleaseForMetaGame(game);
+  const domain = release === undefined ? undefined : gamePathInfoForRelease(release)?.nexusSlug;
+  return domain === undefined ? { unsourcedGame: game } : { source: formatNexusSource({ game: domain, modId: nexusId, files: installedFiles }) };
 }
 
 export function mo2Installation(
@@ -43,7 +47,7 @@ export function mo2Installation(
       if (located.kind === 'unreadable') return refused(located.reason);
       const path = located.answer;
       const hashed = await downloadedFileHash(path);
-      return hashed.kind === 'read' ? { kind: 'read', answer: [{ path, source: await nexusSourceOf(meta, context), ...hashed.answer }] } : refused(hashed.reason);
+      return hashed.kind === 'read' ? { kind: 'read', answer: [{ path, ...(await nexusSourceOf(meta, context)), ...hashed.answer }] } : refused(hashed.reason);
     },
 
     managerFilesInModFolder: [MOD_META_FILE_NAME],

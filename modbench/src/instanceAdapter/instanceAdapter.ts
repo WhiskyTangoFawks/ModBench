@@ -325,6 +325,8 @@ export interface InstallationFile extends HashedDownload {
   readonly path: string;
   /** Where the mod manager's metadata says the file comes from, as one line of text. */
   readonly source?: string;
+  /** The game the metadata names when the registry has no Nexus domain for it, so the file carries no source. */
+  readonly unsourcedGame?: string;
 }
 
 /** How a message names the mod manager, the file it keeps mod order in, and the file it keeps beside a downloaded file. */

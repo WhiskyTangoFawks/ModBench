@@ -67,7 +67,8 @@ async function byFolder(adapter: Adapter, mods: readonly string[]): Promise<ModB
   return asked;
 }
 
-const wireFile = (file: InstallationFile): ReadMod['installationFiles'][number] => ({ ...file, entries: [...file.entries] });
+const wireFile = ({ path, source, size, hash, entries }: InstallationFile): ReadMod['installationFiles'][number] =>
+  ({ path, source, size, hash, entries: [...entries] });
 
 async function readMod(
   adapter: Adapter, mod: string, dataFolder: string,
@@ -80,7 +81,14 @@ async function readMod(
   if (overridden.kind === 'unreadable') return { refusal: overridden.reason };
   return {
     read: { name: mod, folder, installationFiles: installed.answer.map(wireFile), committedFiles: [...adapter.managerFilesInModFolder] },
-    overridden: overridden.answer,
+    overridden: {
+      ...overridden.answer,
+      notes: [
+        ...overridden.answer.notes,
+        ...installed.answer.flatMap(({ unsourcedGame }) =>
+          unsourcedGame === undefined ? [] : [`its installation file comes from '${unsourcedGame}', which has no Nexus domain here, so its manifest names no source`]),
+      ],
+    },
   };
 }
 

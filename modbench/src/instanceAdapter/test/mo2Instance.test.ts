@@ -1342,6 +1342,17 @@ describe('the MO2 Instance adapter', () => {
           return answer.kind === 'read' ? answer.answer[0]?.source : undefined;
         };
 
+        it('names no source for a game the registry has no Nexus domain for, and says which game', async () => {
+          await writeFile(
+            join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\ngameName=EnderalSE\r\nmodid=4598\r\ninstallationFile=${DOWNLOAD}\r\n`,
+          );
+
+          const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
+
+          const file = answer.kind === 'read' ? answer.answer[0] : undefined;
+          expect([file?.source, file?.unsourcedGame]).toEqual([undefined, 'EnderalSE']);
+        });
+
         it.each([
           ['names the Nexus domain of MO2\'s short name for the game, the mod and each file installed', 'gameName=SkyrimSE\r\nmodid=4598\r\n', FILES, 'nexus:skyrimspecialedition:4598;4598:77;9:78'],
           ['keeps the mod id when files are recorded', 'gameName=Fallout4\r\nmodid=4598\r\n', FILES, 'nexus:fallout4:4598;4598:77;9:78'],
