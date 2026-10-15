@@ -378,14 +378,15 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', committedFiles: ['meta.ini'] }];
     const destroys = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'] }];
     const skipped = "'ModB' was skipped: a file could not be read: denied";
+    const manifests = [{ mod: 'ModA', metadata: { version: '1.0', installationFiles: [{ name: 'A.7z', source: 'nexus:fallout4:1' }] } }];
     const { result, request } = await exchange(
       (c) => c.getWhatRestoreDestroys(mods, '/instance/stat-cache'),
-      answers(200, { mods: destroys, refused: [{ item: 'ModB', refusal: 'Unreadable', message: skipped, gameFilesNotFound: [], installationFilesNotFound: [] }] }),
+      answers(200, { mods: destroys, refused: [{ item: 'ModB', refusal: 'Unreadable', message: skipped, gameFilesNotFound: [], installationFilesNotFound: [] }], manifests }),
     );
 
     expect(new URL(request.url).pathname).toBe('/what-restore-destroys');
     expect(await request.json()).toEqual({ mods, statCache: '/instance/stat-cache' });
-    expect(result).toEqual({ destroys, refused: [{ item: 'ModB', reason: skipped }] });
+    expect(result).toEqual({ destroys, refused: [{ item: 'ModB', reason: skipped }], manifests });
   });
 
   it('getModStatus posts the mods and the stat cache and reads each mod\'s status', async () => {

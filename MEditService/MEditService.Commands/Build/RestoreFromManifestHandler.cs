@@ -68,7 +68,7 @@ public sealed class RestoreFromManifestHandler(
         }
         var statCacheNotWritten = repository.KeepInStatCache(
             read, manifest, resolved.Files.ToDictionary(file => file.Path, file => file.Source.Hash, StringComparer.Ordinal));
-        return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod([.. differing.Select(file => file.Path)], namedByNoLine, statCacheNotWritten));
+        return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod([.. differing.Select(file => file.Path)], namedByNoLine, statCacheNotWritten, ModMetadata.Of(manifest)));
     }
 
     // modlist-source.md, Restore from manifest, stories 3 and 5: what the build makes comes back as the build makes it,
@@ -115,7 +115,7 @@ public sealed class RestoreFromManifestHandler(
             var manifest = outcome.Manifest ?? throw new InvalidOperationException("A build that stopped nowhere wrote its manifest.");
             return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod(
                 [.. after.Where(file => before.GetValueOrDefault(file.Key) != file.Value).Select(file => file.Key).Order(StringComparer.Ordinal)],
-                repository.NamedByNoLine(mod.Folder, mod.Name, manifest, committed), StatCacheNotWritten: null, outcome.Uncommitted));
+                repository.NamedByNoLine(mod.Folder, mod.Name, manifest, committed), StatCacheNotWritten: null, ModMetadata.Of(manifest), outcome.Uncommitted));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
         {

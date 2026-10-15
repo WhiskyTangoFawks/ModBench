@@ -245,13 +245,15 @@ export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestReques
 export type ModStatus = components['schemas']['ModStatus'];
 
 /** A mod restore would destroy files in: each file whose bytes differ from what its provider fixes, and each file no line
- *  names, by its path in the mod folder. */
+ *  names, by its path in the mod folder, or a version or source in its metadata. */
 export type ModRestoreDestroys = components['schemas']['ModRestoreDestroys'];
 
 /** Each mod restore from manifest would destroy files in, and each mod skipped because a file of it could not be read. */
 export interface WhatRestoreDestroys {
   destroys: readonly ModRestoreDestroys[];
   refused: readonly ItemRefusal<string>[];
+  /** What each manifest says of its mod's version and installation files. */
+  manifests: readonly components['schemas']['ManifestMetadataResponse'][];
 }
 
 interface RestoredMod {
@@ -264,6 +266,8 @@ interface RestoredMod {
   statCacheNotWritten?: string | null;
   /** As a built mod's. */
   uncommitted?: boolean;
+  /** What its manifest says of the mod's version and installation files, for the mod manager's metadata. */
+  metadata?: components['schemas']['ModMetadata'];
 }
 
 /** A skipped mod lacking files the call did not hand: game files by path under the data folder, installation files by

@@ -1367,10 +1367,149 @@ describe('the MO2 Instance adapter', () => {
         });
       });
 
-      it('answers the version the metadata says the mod is, and none when it says none', async () => {
-        expect(await adapter.modVersion('Unofficial Fallout 4 Patch')).toBe('2.1.5.0');
-        expect(await adapter.modVersion('ENBoost - 12k')).toBeUndefined();
-        expect(await adapter.modVersion('A mod with no folder')).toBeUndefined();
+      describe('its metadata as facts', () => {
+        const read = (answer: unknown): unknown => ({ kind: 'read', answer });
+        const PATCH = 'Unofficial Fallout 4 Patch';
+        const metaOf = (mod: string): string => join(root, 'mods', mod, 'meta.ini');
+        const NEXUS = 'nexus:fallout4:4598;4598:77';
+        const CHROME = 'comments=mine\r\ncolor=@Variant(\\0\\0\\0\\x43\\x1\\xff\\xff\\0\\0\\0\\0\\0\\0\\0\\0)\r\n';
+        const patchMeta = (general: string): Promise<void> => writeFile(metaOf(PATCH), `[General]\r\ngameName=Fallout4\r\nmodid=4598\r\nversion=2.1.5.0\r\n${CHROME}${general}`);
+        const mo2Written = (version: string): string =>
+          `[General]\r\ngameName=Fallout4\r\nmodid=0\r\nversion=${version}\r\nnewestVersion=\r\ncategory="-1,"\r\ninstallationFile=${DOWNLOAD}\r\n${CHROME}\r\n[installedFiles]\r\nsize=0\r\n`;
+        const holding = async (text: string): Promise<string> => {
+          await writeFile(metaOf(PATCH), text);
+          return text;
+        };
+
+        it('answers the version, and each installation file by its name with where it comes from', async () => {
+          await patchMeta(`installationFile=${DOWNLOAD}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
+
+          expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFiles: [{ name: DOWNLOAD, source: NEXUS }] }));
+        });
+
+        it('names an installation file recorded by its whole path by its name', async () => {
+          await patchMeta('installationFile=/elsewhere/Patch.7z\r\n');
+
+          expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFiles: [{ name: 'Patch.7z', source: 'nexus:fallout4:4598' }] }));
+        });
+
+        it('answers none for a mod with no metadata', async () => {
+          expect(await adapter.modMetadata('A mod with no folder')).toEqual(read({ installationFiles: [] }));
+        });
+
+        it('answers unreadable, naming why, for metadata that cannot be read', async () => {
+          await rm(metaOf(PATCH));
+          await mkdir(metaOf(PATCH));
+
+          expect(await adapter.modMetadata(PATCH)).toEqual({ kind: 'unreadable', reason: 'EISDIR: illegal operation on a directory, read' });
+        });
+
+        it('writes the version, the installation file and where it comes from, and keeps every other key', async () => {
+          await patchMeta('');
+
+          await adapter.writeModMetadata(PATCH, {
+            version: '3.0', installationFiles: [{ name: 'Patch-3.7z', source: 'nexus:skyrimspecialedition:12;12:99' }],
+          });
+
+          const text = await readFile(metaOf(PATCH), 'utf8');
+          expect(text).toContain('version=3.0');
+          expect(text).toContain('installationFile=Patch-3.7z');
+          expect(text).toContain('gameName=SkyrimSE');
+          expect(text).toContain('modid=12');
+          expect(text).toContain('1\\fileid=99');
+          expect(text).toContain(CHROME);
+        });
+
+        it.each([
+          ['no version and the installation file it holds', { installationFiles: [{ name: DOWNLOAD }] }],
+          ['a source it holds no id for', { installationFiles: [{ name: DOWNLOAD, source: 'nexus:fallout4:' }] }],
+          ['the file it holds among others', { installationFiles: [{ name: 'Other.7z' }, { name: DOWNLOAD }] }],
+        ])('leaves metadata MO2 wrote byte for byte when the manifest says %s', async (_name, metadata) => {
+          const held = await holding(mo2Written(''));
+
+          await adapter.writeModMetadata(PATCH, metadata);
+
+          expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
+        });
+
+        it('leaves metadata byte for byte when the manifest says the version it holds', async () => {
+          const held = await holding(mo2Written('2.0'));
+
+          await adapter.writeModMetadata(PATCH, { version: '2.0', installationFiles: [{ name: DOWNLOAD }] });
+
+          expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
+        });
+
+        it('changes only the value that differs', async () => {
+          const held = await holding(mo2Written('1.0'));
+
+          await adapter.writeModMetadata(PATCH, { version: '2.0', installationFiles: [{ name: DOWNLOAD }] });
+
+          expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held.replace('version=1.0', 'version=2.0'));
+        });
+
+        it('keeps the version the manifest lacks', async () => {
+          await patchMeta(`installationFile=${DOWNLOAD}\r\n`);
+
+          await adapter.writeModMetadata(PATCH, { installationFiles: [{ name: DOWNLOAD }] });
+
+          expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFiles: [{ name: DOWNLOAD, source: 'nexus:fallout4:4598' }] }));
+        });
+
+        it('gives a file the manifest names another name no source of the file it replaces, and keeps every other key', async () => {
+          await patchMeta(`installationFile=${DOWNLOAD}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
+
+          await adapter.writeModMetadata(PATCH, { installationFiles: [{ name: 'Patch-3.7z' }] });
+
+          expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFiles: [{ name: 'Patch-3.7z' }] }));
+          expect(await readFile(metaOf(PATCH), 'utf8')).toContain(CHROME);
+        });
+
+        it('writes the instance\'s own spelling of its game for a domain the instance\'s game has', async () => {
+          await writeFile(join(root, INI), (await readFile(join(root, INI), 'utf8')).replace(/gameName=.*/, 'gameName=Fallout 4 VR'));
+          await holding(`[General]\r\ngameName=SkyrimSE\r\n`);
+
+          await adapter.writeModMetadata(PATCH, { installationFiles: [{ name: 'P.7z', source: 'nexus:fallout4:1' }] });
+
+          expect(await readFile(metaOf(PATCH), 'utf8')).toContain('gameName=Fallout 4 VR');
+        });
+
+        it('writes nothing for metadata that says nothing', async () => {
+          await adapter.writeModMetadata('Brand New', { installationFiles: [] });
+
+          await expect(access(metaOf('Brand New'))).rejects.toThrow();
+        });
+
+        it('makes the metadata of a mod with none, in its folder', async () => {
+          await adapter.writeModMetadata('Brand New', { version: '1.0', installationFiles: [] });
+
+          expect(await readFile(metaOf('Brand New'), 'utf8')).toContain('version=1.0');
+        });
+
+        it.each([
+          ['a Nexus domain with no game', 'nexus:nowhere:1', 'nowhere'],
+          ['a source that is not a Nexus one', 'gitlab:a/b', 'gitlab:a/b'],
+        ])('cannot write a source naming %s, says why, and writes nothing', async (_name, source, mentioned) => {
+          const held = await holding(mo2Written('1.0'));
+          const metadata = { version: '9', installationFiles: [{ name: 'P.7z', source }] };
+
+          expect(await adapter.unwritableMetadata(PATCH, metadata)).toContain(mentioned);
+          await expect(adapter.writeModMetadata(PATCH, metadata)).rejects.toThrow(mentioned);
+
+          expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
+        });
+
+        it('can write a source naming a game the tables hold', async () => {
+          expect(await adapter.unwritableMetadata(PATCH, { installationFiles: [{ name: 'P.7z', source: 'nexus:fallout4:1' }] })).toBeUndefined();
+        });
+
+        it('reads back as what it was handed', async () => {
+          const written = { version: '3.0', installationFiles: [{ name: 'Patch-3.7z', source: 'nexus:newvegas:5;5:6;7:8' }] };
+
+          await adapter.writeModMetadata('Brand New', written);
+
+          expect(await adapter.modMetadata('Brand New')).toEqual(read(written));
+        });
       });
 
       describe('installed from a file outside the downloads folder, which MO2 records by its whole path', () => {

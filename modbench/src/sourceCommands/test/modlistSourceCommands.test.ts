@@ -83,7 +83,7 @@ describe('modlistSourceCommands update manifest', () => {
   it('hands mEdit each mod with its folder, its installation files, the files the repository commits itself and whether it is a source mod, the game files its files override, and the stat cache\'s folder', async () => {
     const { commands, client } = commandsOver({
       installations: new Map([['ModA', recording([INSTALLED])]]), gameFiles: [VANILLA, { path: 'Other.esm', size: 1, hash: 'O' }],
-      versions: new Map([['ModA', '1.2.3']]),
+      metadata: new Map([['ModA', { version: '1.2.3', installationFiles: [] }]]),
     }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.ESM')], ModB: [fileIn('/mods/ModB', 'a.nif')] });
     client.setCommandResult('updateManifest', UPDATED);
 
@@ -100,6 +100,16 @@ describe('modlistSourceCommands update manifest', () => {
         { onProgress: expect.any(Function) as unknown, signal: undefined },
       ],
     }]);
+  });
+
+  it('refuses a mod whose metadata cannot be read, naming why, and updates the rest', async () => {
+    const { commands, client } = commandsOver({ unreadableMetadata: new Map([['ModA', 'EISDIR: meta.ini']]) });
+    client.setCommandResult('updateManifest', { landed: [{ mod: 'ModB', manifestWritten: true, noProvider: [] }], refused: [] });
+
+    const outcome = await commands.updateManifest(['ModA', 'ModB'], instanceOf());
+
+    expect(client.calls.map((call) => sentNamesOf(call.args[0]))).toEqual([['ModB']]);
+    expect(outcome).toMatchObject({ applied: true, refused: [{ item: 'ModA', reason: 'its metadata could not be read: EISDIR: meta.ini' }] });
   });
 
   it('names a mod whose installation file comes from a game without a Nexus domain, and sends the file without that fact', async () => {
@@ -241,7 +251,7 @@ describe('modlistSourceCommands restore from manifest', () => {
 
   it('hands mEdit each mod with its folder and no installation file its metadata names, the files the repository commits itself and the folder its source is in or is cloned into, the game files its files override, the stat cache\'s folder and what a build needs', async () => {
     const { commands, client } = commandsOver(
-      { installations: new Map([['ModA', recording([INSTALLED])]]), gameFiles: [VANILLA], versions: new Map([['ModA', '1.2.3']]) }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.esm')] });
+      { installations: new Map([['ModA', recording([INSTALLED])]]), gameFiles: [VANILLA], metadata: new Map([['ModA', { version: '1.2.3', installationFiles: [] }]]) }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.esm')] });
     client.setCommandResult('restoreFromManifest', RESTORED);
 
     await commands.restoreFromManifest(['ModA', 'ModB'], instanceOf(FOUND, new Map([['ModB', '/source/Old ModB']])));
@@ -462,6 +472,54 @@ describe('modlistSourceCommands restore from manifest', () => {
     });
   });
 
+  it('writes each landed mod\'s metadata as its manifest says, through the Instance adapter, after its files no line names went to the trash', async () => {
+    const { commands, client, adapter } = commandsOver();
+    const metadata = { version: '1.0', installationFiles: [{ name: 'ModA-1.0.7z', source: 'nexus:fallout4:1' }] };
+    client.setCommandResult('restoreFromManifest', { landed: [{ mod: 'ModA', written: [], namedByNoLine: ['mine.txt'], metadata }], refused: [], notFound: [] });
+
+    await commands.restoreFromManifest(['ModA'], instanceOf());
+
+    expect(adapter.calls).toEqual([
+      { verb: 'trashModFile', mod: 'ModA', relativePath: 'mine.txt' }, { verb: 'writeModMetadata', mod: 'ModA', metadata },
+    ]);
+  });
+
+  it('writes the metadata of a mod the second call landed, and of no mod that was skipped', async () => {
+    const { commands, client, adapter } = commandsOver({ gameFiles: [VANILLA] });
+    const metadata = { version: '2.0', installationFiles: [] };
+    client.setCommandHandler('restoreFromManifest', (_mods, facts) => Promise.resolve(facts.gameFiles.length === 0
+      ? { landed: [], refused: [{ item: 'ModA', reason: 'missing' }, { item: 'ModB', reason: 'no provider' }], notFound: [{ mod: 'ModA', gameFiles: ['Game.esm'], installationFiles: [] }] }
+      : { landed: [{ mod: 'ModA', written: [], namedByNoLine: [], metadata }], refused: [], notFound: [] }));
+
+    await commands.restoreFromManifest(['ModA', 'ModB'], instanceOf());
+
+    expect(adapter.calls).toEqual([{ verb: 'writeModMetadata', mod: 'ModA', metadata }]);
+  });
+
+  it('answers a mod whose metadata could not be written as not finished, naming why', async () => {
+    const { commands, client } = commandsOver({ refusals: refusing('writeModMetadata', 'its source names the Nexus game \'x\'') });
+    client.setCommandResult('restoreFromManifest', {
+      landed: [{ mod: 'ModA', written: [], namedByNoLine: [], metadata: { version: '1', installationFiles: [] } }], refused: [], notFound: [],
+    });
+
+    expect(await commands.restoreFromManifest(['ModA'], instanceOf())).toEqual({
+      applied: true, landed: [],
+      refused: [{ item: 'ModA', reason: "'ModA' was not finished: its metadata could not be written: its source names the Nexus game 'x'. Restoring it again finishes it." }],
+    });
+  });
+
+  it('finds no file by the metadata it writes', async () => {
+    const { commands, client } = commandsOver({
+      metadata: new Map([['ModA', { version: '1.0', installationFiles: [{ name: 'ModA-1.0.7z', source: 'nexus:fallout4:1' }] }]]),
+      downloads: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]),
+    });
+    client.setCommandResult('restoreFromManifest', RESTORED);
+
+    await commands.restoreFromManifest(['ModA'], instanceOf());
+
+    expect(client.calls.map((call) => call.args[0])).toMatchObject([[{ installationFiles: [] }]]);
+  });
+
   it('refuses the whole gesture when the game folder is not found, because a game file cannot be matched', async () => {
     const { commands, client } = commandsOver();
 
@@ -472,16 +530,17 @@ describe('modlistSourceCommands restore from manifest', () => {
 });
 
 describe('modlistSourceCommands what restore destroys', () => {
-  const DESTROYS = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'] }];
+  const DESTROYS = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'], metadataDiffers: false }];
 
-  it('asks mEdit with each mod\'s folder and the files the repository commits itself, and the stat cache\'s folder, and answers its listing', async () => {
-    const { commands, client } = commandsOver();
-    client.setQueryAnswer('getWhatRestoreDestroys', { destroys: DESTROYS, refused: [{ item: 'ModB', reason: "'ModB' was skipped: a file could not be read" }] });
+  it('asks mEdit with each mod\'s folder, the files the repository commits itself and the metadata the mod manager holds of it, and the stat cache\'s folder, and answers its listing', async () => {
+    const metadata = { version: '1.0', installationFiles: [{ name: 'ModA-1.0.7z', source: 'nexus:fallout4:1' }] };
+    const { commands, client } = commandsOver({ metadata: new Map([['ModA', metadata]]) });
+    client.setQueryAnswer('getWhatRestoreDestroys', { destroys: DESTROYS, refused: [{ item: 'ModB', reason: "'ModB' was skipped: a file could not be read" }], manifests: [] });
 
     const listing = await commands.whatRestoreDestroys(['ModA']);
 
     expect([client.calls, listing]).toEqual([
-      [{ method: 'getWhatRestoreDestroys', args: [[{ name: 'ModA', folder: '/mods/ModA', committedFiles: ['meta.ini'] }], '/instance/stat-cache'] }],
+      [{ method: 'getWhatRestoreDestroys', args: [[{ name: 'ModA', folder: '/mods/ModA', committedFiles: ['meta.ini'], metadata }], '/instance/stat-cache'] }],
       { destroys: DESTROYS, refused: [{ item: 'ModB', reason: "'ModB' was skipped: a file could not be read" }] },
     ]);
   });
@@ -494,6 +553,32 @@ describe('modlistSourceCommands what restore destroys', () => {
     });
 
     expect([await commands.whatRestoreDestroys(['ModA']), client.calls]).toEqual([{ destroys: [], refused: [] }, []]);
+  });
+
+  it('refuses a mod whose metadata cannot be read, naming why, and asks mEdit about the rest', async () => {
+    const { commands, client } = commandsOver({ unreadableMetadata: new Map([['ModA', 'EISDIR: meta.ini']]) });
+    client.setQueryAnswer('getWhatRestoreDestroys', { destroys: [], refused: [], manifests: [] });
+
+    const listing = await commands.whatRestoreDestroys(['ModA', 'ModB']);
+
+    expect(sentNamesOf(client.calls[0]?.args[0])).toEqual(['ModB']);
+    expect(listing).toEqual({ destroys: [], refused: [{ item: 'ModA', reason: "'ModA' was skipped: its metadata could not be read: EISDIR: meta.ini." }] });
+  });
+
+  it('skips a mod whose manifest says metadata the mod manager cannot hold, naming why, and does not list it as destroying', async () => {
+    const { commands, client } = commandsOver({ unwritableMetadata: new Map([['ModA', "its source names the Nexus game 'x', which Modbench has no game for"]]) });
+    const manifest = { version: '1', installationFiles: [{ name: 'A.7z', source: 'nexus:x:1' }] };
+    client.setQueryAnswer('getWhatRestoreDestroys', {
+      destroys: [{ mod: 'ModA', differing: [], namedByNoLine: [], metadataDiffers: true }, { mod: 'ModB', differing: ['b.nif'], namedByNoLine: [], metadataDiffers: false }],
+      refused: [], manifests: [{ mod: 'ModA', metadata: manifest }, { mod: 'ModB', metadata: { installationFiles: [] } }],
+    });
+
+    const listing = await commands.whatRestoreDestroys(['ModA', 'ModB']);
+
+    expect(listing).toEqual({
+      destroys: [{ mod: 'ModB', differing: ['b.nif'], namedByNoLine: [], metadataDiffers: false }],
+      refused: [{ item: 'ModA', reason: "'ModA' was skipped: its source names the Nexus game 'x', which Modbench has no game for." }],
+    });
   });
 
   it('refuses with mEdit\'s reason when it cannot answer', async () => {

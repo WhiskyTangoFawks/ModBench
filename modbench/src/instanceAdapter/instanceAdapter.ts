@@ -11,6 +11,7 @@ export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
 
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
 export { OVERWRITE_ORIGIN } from './codecs/modlistText';
+
 export type { ArchiveReader } from './archiveReader';
 export { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, isArchiveName } from './archiveNames';
 export { samePath } from './samePath';
@@ -329,6 +330,16 @@ export interface InstallationFile extends HashedDownload {
   readonly unsourcedGame?: string;
 }
 
+interface MetadataInstallationFile {
+  readonly name: string;
+  readonly source?: string;
+}
+
+export interface ModMetadata {
+  readonly version?: string;
+  readonly installationFiles: readonly MetadataInstallationFile[];
+}
+
 /** How a message names the mod manager, the file it keeps mod order in, and the file it keeps beside a downloaded file. */
 export interface ManagerNames {
   readonly manager: string;
@@ -389,8 +400,13 @@ export interface InstanceAdapter {
   installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
   /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
-  /** The version the mod manager's metadata gives `mod`; undefined when it gives none. */
-  modVersion(mod: string): Promise<string | undefined>;
+  /** What the mod manager's metadata says of `mod`'s version and installation files; none when it says none. */
+  modMetadata(mod: string): Promise<FileRead<ModMetadata>>;
+  /** Why `metadata` cannot be written into the metadata of `mod`, as a reason; undefined when it can. */
+  unwritableMetadata(mod: string, metadata: ModMetadata): Promise<string | undefined>;
+  /** Sets the version of `mod` and its installation file, in a metadata made when it has none. Changes only a
+   *  value that differs, and gives no file another's source. Rejects, writing nothing, when `unwritableMetadata` says why. */
+  writeModMetadata(mod: string, metadata: ModMetadata): Promise<void>;
   /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
   readonly managerFilesInModFolder: readonly string[];
   /** The folder in the instance, outside every mod folder, where mEdit keeps what it last read of each mod's files

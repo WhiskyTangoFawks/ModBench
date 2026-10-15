@@ -11,8 +11,10 @@ export type DecompileAndCommitProgress = InitStatus | { readonly mod: string; re
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'init'>;
   adapter: Pick<InstanceAdapter,
-    'installationFiles' | 'modVersion' | 'managerFilesInModFolder' | 'sourceFolder' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder'>;
+    'installationFiles' | 'modMetadata' | 'managerFilesInModFolder' | 'sourceFolder' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder'>;
 }
+
+export const metadataUnreadable = (reason: string): string => `its metadata could not be read: ${reason}`;
 
 /** The source mod gestures, bound to the mEdit client and handing it the instance's facts. */
 export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
@@ -28,13 +30,15 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
         const sourceFolder = sourceDirs.get(mod);
         const folder = await adapter.modFolderPath(mod);
         const installed = await adapter.installationFiles(mod);
+        const metadata = await adapter.modMetadata(mod);
         if (sourceFolder === undefined) refused.push({ item: mod, reason: 'no repository in the source folder builds it' });
         else if (folder === undefined) refused.push({ item: mod, reason: 'its name gives it no folder' });
         else if (installed.kind === 'unreadable') refused.push({ item: mod, reason: installed.reason });
+        else if (metadata.kind === 'unreadable') refused.push({ item: mod, reason: metadataUnreadable(metadata.reason) });
         else {
           sent.push({
             name: mod, sourceFolder, folder, installationFiles: installed.answer.map(onTheWire), committedFiles: [...adapter.managerFilesInModFolder],
-            version: await adapter.modVersion(mod),
+            version: metadata.answer.version,
           });
         }
       }

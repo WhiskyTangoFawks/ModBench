@@ -706,7 +706,7 @@ class HttpMEditClient implements MEditClient {
 
   getWhatRestoreDestroys(mods: readonly ModByFolder[], statCache: string): Promise<WhatRestoreDestroys | ReadFailed> {
     return this.read('getWhatRestoreDestroys', (signal) => this.apiClient.POST('/what-restore-destroys', { body: { mods: [...mods], statCache }, signal }),
-      (data) => (data ? { destroys: data.mods, refused: itemRefusals(data.refused) } : NO_ANSWER));
+      (data) => (data ? { destroys: data.mods, refused: itemRefusals(data.refused), manifests: data.manifests } : NO_ANSWER));
   }
 
   getModStatus(mods: readonly ModByFolder[], statCache: string): Promise<ModStatus[] | ReadFailed> {

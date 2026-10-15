@@ -199,7 +199,9 @@ const uncommittedWarnings = (landed: Restored): string[] => landed.filter(({ unc
   .map(({ mod }) => `${mod}: its source holds changes no commit holds, so its manifest's commit does not rebuild these bytes`);
 
 async function confirmRestore(ask: AskQuestion, { mods, everyMod: all }: ModsToRun): Promise<boolean> {
-  const question = `Are you sure you want to restore ${all ? 'every mod from its manifest' : `${quoted(mods)} from their manifests`}?`;
+  const manifests = mods.length === 1 ? 'its manifest' : 'their manifests';
+  const target = all ? 'every mod from its manifest' : `${quoted(mods)} from ${manifests}`;
+  const question = `Are you sure you want to restore ${target}?`;
   return (await ask(question, { modal: true, detail: 'A change no manifest holds is lost.' }, RESTORE)) === RESTORE;
 }
 

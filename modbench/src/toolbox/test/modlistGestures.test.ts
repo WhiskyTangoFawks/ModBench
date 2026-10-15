@@ -95,7 +95,7 @@ beforeEach(() => {
   gitInit.mockResolvedValue({ applied: true });
   updateManifest.mockResolvedValue({ applied: true, notes: [], landed: [], refused: [] });
   restoreFromManifest.mockResolvedValue({ applied: true, landed: [], refused: [] });
-  whatRestoreDestroys.mockResolvedValue({ destroys: [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: [] }], refused: [] });
+  whatRestoreDestroys.mockResolvedValue({ destroys: [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: [], metadataDiffers: false }], refused: [] });
 });
 
 describe('Git init', () => {
@@ -402,6 +402,15 @@ describe('Restore from manifest', () => {
     expect([ask.asked, sentMods(restoreFromManifest)]).toEqual([[], [['ModA']]]);
   });
 
+  it('asks when only the metadata would lose a version or a source its manifest replaces', async () => {
+    whatRestoreDestroys.mockResolvedValueOnce({ destroys: [{ mod: 'ModA', differing: [], namedByNoLine: [], metadataDiffers: true }], refused: [] });
+    const { ask, run } = register();
+
+    await run(RESTORE, modRow('ModA'));
+
+    expect(ask.asked.map(({ message }) => message)).toEqual(['Are you sure you want to restore "ModA" from its manifest?']);
+  });
+
   it('asks about the mods it was handed, never whatever else the instance holds', async () => {
     const { run } = register();
 
@@ -639,15 +648,24 @@ describe('An agent call', () => {
   });
 
   describe('restore from manifest', () => {
-    const differs = { mod: 'ModA', differing: ['a.nif', 'b.nif'], namedByNoLine: ['stray.txt'] };
+    const differs = { mod: 'ModA', differing: ['a.nif', 'b.nif'], namedByNoLine: ['stray.txt'], metadataDiffers: false };
 
     it('restores a mod whose only loss is files no line names, which the trash keeps, and asks nothing', async () => {
-      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [{ mod: 'ModA', differing: [], namedByNoLine: ['stray.txt'] }], refused: [] });
+      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [{ mod: 'ModA', differing: [], namedByNoLine: ['stray.txt'], metadataDiffers: false }], refused: [] });
       const { ask, run } = register();
 
       await run(RESTORE, new AgentCall([mod('ModA')], {}));
 
       expect([sentMods(restoreFromManifest), ask.asked]).toEqual([[['ModA']], []]);
+    });
+
+    it('restores a mod whose only loss is metadata, since force is for a file whose bytes differ', async () => {
+      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [{ mod: 'ModA', differing: [], namedByNoLine: [], metadataDiffers: true }], refused: [] });
+      const { run } = register();
+
+      await run(RESTORE, new AgentCall([mod('ModA')], {}));
+
+      expect(sentMods(restoreFromManifest)).toEqual([['ModA']]);
     });
 
     it('refuses a mod that would overwrite files whose bytes differ, listing them and naming force, and restores the rest', async () => {

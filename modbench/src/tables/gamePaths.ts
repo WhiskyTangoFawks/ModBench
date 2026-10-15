@@ -175,6 +175,11 @@ export function gameReleaseForMetaGame(gameName: string): string | undefined {
   return gameReleaseForGame(gameName) ?? Object.keys(GAME_PATHS).find((release) => release.toLowerCase() === gameName.toLowerCase());
 }
 
+/** The first release whose Nexus domain is `domain`; `undefined` when the table holds none. */
+export function gameReleaseForNexusDomain(domain: string): string | undefined {
+  return Object.keys(GAME_PATHS).find((release) => GAME_PATHS[release]?.nexusSlug === domain);
+}
+
 /** Nexus slug for a release; a game with none falls back to its lowercased, space-stripped name
  *  (a best guess that matches most Nexus domains). */
 export function nexusSlugFor(gameRelease: string | undefined, gameName: string): string {

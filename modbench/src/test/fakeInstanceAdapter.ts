@@ -1,7 +1,7 @@
 import type {
   DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, GameFile, HashedFile, InstallationFile,
   InstallOutcome, InstallSource, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
-  ModFolder, ModFolders, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription,
+  ModFolder, ModFolders, ModMetadata, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
@@ -50,6 +50,7 @@ export type AdapterCall =
   | { readonly verb: 'trashEntryFolder'; readonly entry: EntryRef }
   | { readonly verb: 'trashModFile'; readonly mod: string; readonly relativePath: string }
   | { readonly verb: 'trashSourceFolder'; readonly mod: string }
+  | { readonly verb: 'writeModMetadata'; readonly mod: string; readonly metadata: ModMetadata }
   | { readonly verb: 'writeIgnoreList' }
   | { readonly verb: 'removeIgnoreList' }
   | { readonly verb: 'install'; readonly source: InstallSource; readonly target: InstallTarget; readonly keys: OwnedMetaKeys };
@@ -69,8 +70,12 @@ export interface InstanceAnswers {
   installations?: ReadonlyMap<string, FileRead<readonly InstallationFile[]>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
   downloads?: ReadonlyMap<string, FileRead<InstallationFile>>;
-  /** Each mod's version, by mod name; a mod not there records none. */
-  versions?: ReadonlyMap<string, string>;
+  /** Why each mod's metadata cannot be read, by mod name. */
+  unreadableMetadata?: ReadonlyMap<string, string>;
+  /** Why each mod's metadata cannot hold the metadata a manifest says, by mod name. */
+  unwritableMetadata?: ReadonlyMap<string, string>;
+  /** What each mod's metadata says, by mod name; a mod not there says none. */
+  metadata?: ReadonlyMap<string, ModMetadata>;
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
   /** The game's files, which a mod's files of the same path, whatever the case, override. */
@@ -150,7 +155,12 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFiles: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: [] }),
     downloadedFile: (name) => Promise.resolve(answers.downloads?.get(name) ?? { kind: 'read', answer: undefined }),
-    modVersion: (mod) => Promise.resolve(answers.versions?.get(mod)),
+    modMetadata: (mod) => {
+      const reason = answers.unreadableMetadata?.get(mod);
+      return Promise.resolve(reason === undefined ? { kind: 'read', answer: answers.metadata?.get(mod) ?? { installationFiles: [] } } : { kind: 'unreadable', reason });
+    },
+    unwritableMetadata: (mod) => Promise.resolve(answers.unwritableMetadata?.get(mod)),
+    writeModMetadata: (mod, metadata) => record({ verb: 'writeModMetadata', mod, metadata }, undefined),
     managerFilesInModFolder: ['meta.ini'],
     statCacheFolder: '/instance/stat-cache',
     overriddenGameFiles: (_dataFolder, modFilePaths) => overridden(modFilePaths),
