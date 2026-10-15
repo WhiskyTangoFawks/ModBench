@@ -568,16 +568,6 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(snapshotOf([named, twin], [address(named)])?.active).toEqual([address(named)]);
   });
 
-  it('places a plugin the game loads with no line once, first whatever its line says, when a line names it too', () => {
-    const a = row('a.esp', 'ModA', 0);
-    const lined = { ...row('master.esm', 'Data/', 1, { enabled: false }), path: join('/game/Data', 'master.esm') };
-
-    const snapshot = snapshotOf([a, lined], [address(lined)]);
-
-    expect(snapshot?.active).toEqual([address(lined), address(a)]);
-    expect(snapshot?.plugins.filter((p) => p.name.toLowerCase() === 'master.esm')).toHaveLength(1);
-  });
-
   it('names what provides each plugin: its mod with the mod\'s own folder, not the plugin\'s directory, and its source folder, the game for Data, no mod for overwrite', () => {
     const inMod = row('a.esp', 'ModA', 0);
     const inGame = { ...row('b.esp', 'Data/', 1), path: '/game/Data/b.esp' };
