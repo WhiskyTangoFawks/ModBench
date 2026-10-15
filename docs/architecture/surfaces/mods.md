@@ -46,7 +46,8 @@ As a user, I want:
 | Part | What it shows | Source |
 |---|---|---|
 | Label | the separator's name, without MO2's `_separator` suffix | MO2 |
-| Check box, icon, description | none | MO2 draws a separator as a heading |
+| Check box, icon | none | MO2 draws a separator as a heading |
+| Description | no manifest, when it has none ([modlist-source.md](modlist-source.md), Status, story 7) | |
 | Identity | the row's kind and the separator's name | |
 
 ### Overwrite
