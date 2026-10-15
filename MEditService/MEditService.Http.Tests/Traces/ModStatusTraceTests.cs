@@ -32,7 +32,7 @@ public sealed class ModStatusTraceTests : HostedTests
     private JsonArray Mods() =>
         [.. new[] { Recorded, Unrecorded }.Select(mod => (JsonNode)new JsonObject
         {
-            ["name"] = mod, ["folder"] = FolderOf(mod), ["committedFiles"] = new JsonArray("meta.ini"),
+            ["name"] = mod, ["folder"] = FolderOf(mod), ["metadataFiles"] = new JsonArray("meta.ini"),
         })];
 
     private async Task UpdateManifestOfRecorded() =>
@@ -43,7 +43,7 @@ public sealed class ModStatusTraceTests : HostedTests
                 ["name"] = Recorded,
                 ["folder"] = FolderOf(Recorded),
                 ["installationFiles"] = new JsonArray(),
-                ["committedFiles"] = new JsonArray("meta.ini"),
+                ["metadataFiles"] = new JsonArray("meta.ini"),
             }),
             ["gameFiles"] = new JsonArray(),
             ["statCache"] = StatCache,

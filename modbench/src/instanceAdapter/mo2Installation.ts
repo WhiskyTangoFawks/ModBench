@@ -88,7 +88,7 @@ async function metadataOf(meta: ModMeta, context: Mo2Context): Promise<ModMetada
 
 export function mo2Installation(
   context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>, { modMeta }: Pick<ReadingSource, 'modMeta'>,
-): Pick<InstanceAdapter, 'installationFiles' | 'downloadedFile' | 'modMetadata' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'managerFilesInModFolder'> {
+): Pick<InstanceAdapter, 'installationFiles' | 'downloadedFile' | 'modMetadata' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
   return {
     modMetadata: (mod) => readOrReason(async () => metadataOf(await modMeta(mod), context)),
 
@@ -131,6 +131,6 @@ export function mo2Installation(
       return hashed.kind === 'read' ? { kind: 'read', answer: { path, ...hashed.answer } } : hashed;
     },
 
-    managerFilesInModFolder: [MOD_META_FILE_NAME],
+    metadataFilesInModFolder: [MOD_META_FILE_NAME],
   };
 }

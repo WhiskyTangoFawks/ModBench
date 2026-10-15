@@ -659,11 +659,43 @@ describe('An agent call', () => {
       expect([sentMods(restoreFromManifest), ask.asked]).toEqual([[['ModA']], []]);
     });
 
-    it('restores a mod whose only loss is metadata, since force is for a file whose bytes differ', async () => {
+    it('refuses a mod whose only loss is metadata, naming force, since no history or trash keeps it', async () => {
       whatRestoreDestroys.mockResolvedValueOnce({ destroys: [{ mod: 'ModA', differing: [], namedByNoLine: [], metadataDiffers: true }], refused: [] });
       const { run } = register();
 
-      await run(RESTORE, new AgentCall([mod('ModA')], {}));
+      const answer = await run(RESTORE, new AgentCall([mod('ModA')], {}));
+
+      expect(sentMods(restoreFromManifest)).toEqual([]);
+      expect(answer).toMatchObject({
+        applied: true,
+        outcome: {
+          landed: [],
+          refused: [{ item: 'ModA', reason: "it would overwrite the version or installation files its metadata names with its manifest's. Request it again with force to overwrite them." }],
+        },
+      });
+    });
+
+    it('lists the files and the metadata together when a mod would lose both', async () => {
+      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [{ ...differs, metadataDiffers: true }], refused: [] });
+      const { run } = register();
+
+      const answer = await run(RESTORE, new AgentCall([mod('ModA')], {}));
+
+      expect(answer).toMatchObject({
+        outcome: {
+          refused: [{
+            item: 'ModA',
+            reason: "it would overwrite files whose bytes differ from its manifest: a.nif, b.nif and the version or installation files its metadata names with its manifest's. Request it again with force to overwrite them.",
+          }],
+        },
+      });
+    });
+
+    it('restores a mod whose only loss is metadata when forced', async () => {
+      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [{ mod: 'ModA', differing: [], namedByNoLine: [], metadataDiffers: true }], refused: [] });
+      const { run } = register();
+
+      await run(RESTORE, new AgentCall([mod('ModA')], { force: true }));
 
       expect(sentMods(restoreFromManifest)).toEqual([['ModA']]);
     });

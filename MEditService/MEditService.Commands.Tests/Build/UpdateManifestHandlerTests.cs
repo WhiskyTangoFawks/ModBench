@@ -264,7 +264,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "meta.ini", "hello").WithFile(Mod, "a.txt", "hello");
 
-        var updated = await Landed(ModFrom("Mod") with { CommittedFiles = ["meta.ini"] });
+        var updated = await Landed(ModFrom("Mod") with { MetadataFiles = ["meta.ini"] });
 
         Assert.Equal(["a.txt"], _folders.Manifests[Mod].Files.Select(f => f.Path));
         Assert.Equal(["a.txt"], updated.NoProvider);

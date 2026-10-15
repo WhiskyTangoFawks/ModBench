@@ -350,7 +350,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     gameRelease: 'Fallout4', listed: [], inData: { kind: 'listed', archives: [], stringsFiles: [] }, files: new FileConflictLookup(),
     filesByOrigin: new Map(),
   };
-  const NO_MODLIST = { mods: [], committedFiles: ['meta.ini'], statCache: '/mo2/stat-cache' };
+  const NO_MODLIST = { mods: [], metadataFiles: ['meta.ini'], statCache: '/mo2/stat-cache' };
   const outcomeOf = (plugins: LoadOrderPluginRow[], folders: ModFolders = modFolders) =>
     loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: folders, sourceDirs, modlist: NO_MODLIST, archives: NO_ARCHIVES });
   const snapshotOf = (plugins: LoadOrderPluginRow[], pluginsLoadedWithNoLine: readonly PluginAddress[] = [], archives = NO_ARCHIVES) => {
@@ -588,7 +588,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(providers).toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA', sourceFolder: '/mo2/source/ModA' }, { kind: 'Game' }, { kind: 'None' }]);
   });
 
-  it('names each mod of the mod order that has a mod folder, with the files the repository commits, and the stat cache\'s folder', () => {
+  it('names each mod of the mod order that has a mod folder, with its metadata files, and the stat cache\'s folder', () => {
     const outcome = loadOrderSnapshotOf({
       plugins: [], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs, archives: NO_ARCHIVES,
       modlist: {
@@ -598,7 +598,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     });
 
     expect(outcome !== undefined && 'mods' in outcome ? [outcome.mods, outcome.statCache] : []).toEqual([
-      [{ name: 'ModA', folder: '/mo2/mod-folders/ModA', committedFiles: ['meta.ini'] }], '/mo2/stat-cache',
+      [{ name: 'ModA', folder: '/mo2/mod-folders/ModA', metadataFiles: ['meta.ini'] }], '/mo2/stat-cache',
     ]);
   });
 

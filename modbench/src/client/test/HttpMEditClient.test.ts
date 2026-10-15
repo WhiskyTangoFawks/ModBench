@@ -167,11 +167,11 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
   return { result, log, fetch, request };
 }
 
-const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, installationFiles: [], modManagerFiles: ['meta.ini'] });
-const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, installationFiles: [], committedFiles: ['meta.ini'] });
-const modToUpdate = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], committedFiles: ['meta.ini'], isSourceMod: false });
+const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, installationFiles: [], metadataFiles: ['meta.ini'] });
+const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, installationFiles: [], metadataFiles: ['meta.ini'] });
+const modToUpdate = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], metadataFiles: ['meta.ini'], isSourceMod: false });
 const updateFacts = { gameFiles: [{ path: 'Game.esm', size: 7, hash: 'AAECAwQFBgc=' }], statCache: '/instance/stat-cache' };
-const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], committedFiles: ['meta.ini'], sourceFolder: `/instance/source/${name}` });
+const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], metadataFiles: ['meta.ini'], sourceFolder: `/instance/source/${name}` });
 const restoreFacts = { gameFiles: [], dataFolder: '/game/Data', statCache: '/instance/stat-cache', excludedSuffix: '.mohidden', archives: null };
 const buildFacts = {
   excludedSuffix: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } },
@@ -375,7 +375,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   });
 
   it('getWhatRestoreDestroys posts the mods and the stat cache and reads each mod restore would destroy files in, and each it skipped', async () => {
-    const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', committedFiles: ['meta.ini'] }];
+    const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'] }];
     const destroys = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'] }];
     const skipped = "'ModB' was skipped: a file could not be read: denied";
     const manifests = [{ mod: 'ModA', metadata: { version: '1.0', installationFiles: [{ name: 'A.7z', source: 'nexus:fallout4:1' }] } }];
@@ -390,7 +390,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   });
 
   it('getModStatus posts the mods and the stat cache and reads each mod\'s status', async () => {
-    const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', committedFiles: ['meta.ini'] }];
+    const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'] }];
     const status = [{ mod: 'ModA', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], noProvider: [] }];
     const { result, request } = await exchange((c) => c.getModStatus(mods, '/instance/stat-cache'), answers(200, { mods: status }));
 

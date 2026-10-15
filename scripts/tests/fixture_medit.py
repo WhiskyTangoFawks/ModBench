@@ -137,7 +137,7 @@ def source_folder(instance: pathlib.Path, mod: str) -> pathlib.Path:
 
 def track(fixture: Fixture, mod: str) -> None:
     call('POST', fixture.url + '/init', {'mods': [
-        {'name': mod, 'sourceFolder': str(source_folder(fixture.instance, mod)), 'installationFiles': [], 'modManagerFiles': []}]})
+        {'name': mod, 'sourceFolder': str(source_folder(fixture.instance, mod)), 'installationFiles': [], 'metadataFiles': []}]})
 
 
 def watcher_resends_load_order(fixture: Fixture, *created: Plugin) -> None:

@@ -59,7 +59,7 @@ internal static class ModEndpoints
             return Results.Problem("At least one mod is required.", statusCode: 400);
         if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.SourceFolder)
             || (mod.InstallationFiles ?? []).Any(file => !file.IsWhole)
-            || (mod.ModManagerFiles ?? []).Any(string.IsNullOrWhiteSpace)))
+            || (mod.MetadataFiles ?? []).Any(string.IsNullOrWhiteSpace)))
         {
             return Results.Problem(
                 "Every mod needs a name and a source folder, and every installation file a path, a size, a hash and its entries, each with a path and a hash.",
@@ -69,7 +69,7 @@ internal static class ModEndpoints
         return await EndpointMapping.Answered(
             "Init", logger,
             initHandler.InitAsync([.. mods.Select(mod => new ModToInit(
-                mod.Name, mod.SourceFolder, [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())], mod.ModManagerFiles ?? []))]),
+                mod.Name, mod.SourceFolder, [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())], mod.MetadataFiles ?? []))]),
             EndpointMapping.Refusal,
             landed => new InitializedModResponse(landed.Item, landed.Outcome.Plugins),
             refused => new ModInitRefusal(refused.Item, refused.Refusal, refused.Message),
@@ -125,7 +125,7 @@ internal static class ModEndpoints
             buildHandler.BuildAsync(
                 [.. mods.Select(mod => new ModToBuild(
                     mod.Name, mod.SourceFolder, mod.Folder, [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())],
-                    mod.CommittedFiles ?? [], mod.Version))],
+                    mod.MetadataFiles ?? [], mod.Version))],
                 new InstanceToBuild(req.ExcludedSuffix, variants, req.StatCache)),
             EndpointMapping.Refusal,
             landed => new BuiltModResponse(
@@ -149,9 +149,9 @@ internal sealed record BuildConfigurationRequest(
 internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExcludedSuffix, ArchiveVariantsRequest? Archives, string StatCache);
 
 /// <summary>A mod by name, the source folder whose build configuration names it, its folder, its installation files in
-/// the mod manager's order, its version, and its files the repository commits, which its manifest does not name.</summary>
+/// the mod manager's order, its version, and its metadata files, which its manifest does not name.</summary>
 internal sealed record BuildModRequest(
-    string Name, string SourceFolder, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles,
+    string Name, string SourceFolder, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> MetadataFiles,
     string? Version);
 
 /// <summary>The variant an archive of textures packs as, and the one every other archive packs as.</summary>
@@ -187,7 +187,7 @@ internal sealed record InitRequest(IReadOnlyList<InitModRequest> Mods);
 /// <summary>A mod by name, the folder its repository goes in, its installation files in the mod manager's order, and the
 /// mod manager's own files in its folder, by forward-slash path, which no build makes.</summary>
 internal sealed record InitModRequest(
-    string Name, string SourceFolder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> ModManagerFiles);
+    string Name, string SourceFolder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> MetadataFiles);
 
 /// <summary>A mod of the selection that landed: the plugins whose source its commit holds.</summary>
 internal sealed record InitializedModResponse(string Mod, IReadOnlyList<PluginAddress> Plugins);

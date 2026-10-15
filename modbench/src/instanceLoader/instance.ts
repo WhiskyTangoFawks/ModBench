@@ -412,7 +412,7 @@ export class Instance implements Subscription {
     this.tellArchivesNothingHolds(archiveSources);
     const loadOrderSnapshot = loadOrderSnapshotOf({
       plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs, archives: archiveSources,
-      modlist: { mods: entries, committedFiles: adapter.managerFilesInModFolder, statCache: adapter.statCacheFolder },
+      modlist: { mods: entries, metadataFiles: adapter.metadataFilesInModFolder, statCache: adapter.statCacheFolder },
     });
     return {
       mods: entries,

@@ -4,9 +4,9 @@ using MEditService.ModFolderAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>A mod to restore from its manifest, with the installation files its manifest names that the request found in the
-/// downloads folder, its files the repository commits, and the folder its source is in or is cloned into.</summary>
+/// downloads folder, its metadata files, and the folder its source is in or is cloned into.</summary>
 public sealed record ModToRestore(
-    string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> CommittedFiles, string? SourceFolder);
+    string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> MetadataFiles, string? SourceFolder);
 
 /// <summary>The instance's facts beyond its mods: the game files the mods' files override, under the game's data folder,
 /// the stat cache's folder, and what a build needs, as <see cref="InstanceToBuild"/>.</summary>

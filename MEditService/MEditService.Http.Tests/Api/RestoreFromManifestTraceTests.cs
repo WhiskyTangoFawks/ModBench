@@ -77,7 +77,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
             ["name"] = Mod,
             ["folder"] = ModFolder,
             ["installationFiles"] = handsTheDownload ? new JsonArray(installationFile) : new JsonArray(),
-            ["committedFiles"] = new JsonArray("meta.ini"),
+            ["metadataFiles"] = new JsonArray("meta.ini"),
             ["version"] = _versionUpdated,
         };
         var request = new JsonObject
@@ -108,7 +108,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         {
             ["name"] = Mod,
             ["folder"] = ModFolder,
-            ["committedFiles"] = new JsonArray("meta.ini"),
+            ["metadataFiles"] = new JsonArray("meta.ini"),
             ["metadata"] = metadata,
             ["metadataUnreadable"] = metadataUnreadable,
         }),
@@ -229,7 +229,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task AModChangedSinceItsUpdate_ListsWhatRestoreDestroys_ButTheCommittedFiles()
+    public async Task AModChangedSinceItsUpdate_ListsWhatRestoreDestroys_ButTheMetadataFiles()
     {
         ModInstalledFromADownload();
         await Post("update-manifest");
@@ -294,7 +294,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         Directory.CreateDirectory(torn);
         File.WriteAllText(Path.Combine(torn, "Torn.manifest"), "<<<<<<< HEAD\n");
         var request = WhatRestoreDestroysRequest();
-        request["mods"] = new JsonArray(new JsonObject { ["name"] = "Torn", ["folder"] = torn, ["committedFiles"] = new JsonArray() });
+        request["mods"] = new JsonArray(new JsonObject { ["name"] = "Torn", ["folder"] = torn, ["metadataFiles"] = new JsonArray() });
 
         var response = await Client.PostAsJsonAsync("/what-restore-destroys", request);
 
@@ -313,7 +313,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         File.WriteAllText(Path.Combine(locked, "Locked.manifest"), "");
         FileModes.Set(Path.Combine(locked, "Locked.manifest"), "000");
         var request = WhatRestoreDestroysRequest();
-        Assert.IsType<JsonArray>(request["mods"]).Add(new JsonObject { ["name"] = "Locked", ["folder"] = locked, ["committedFiles"] = new JsonArray() });
+        Assert.IsType<JsonArray>(request["mods"]).Add(new JsonObject { ["name"] = "Locked", ["folder"] = locked, ["metadataFiles"] = new JsonArray() });
 
         var response = await Client.PostAsJsonAsync("/what-restore-destroys", request);
 

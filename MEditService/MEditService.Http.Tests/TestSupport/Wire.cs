@@ -72,7 +72,7 @@ internal static class Wire
                 name,
                 sourceFolder = client.SourceFolderSentFor(name),
                 installationFiles = Array.Empty<object>(),
-                modManagerFiles = Array.Empty<string>(),
+                metadataFiles = Array.Empty<string>(),
             }),
         });
 
@@ -85,7 +85,7 @@ internal static class Wire
         client.PostAsJsonAsync("/plugins/compile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }) });
 
     /// <summary>Each mod by name and folder, with the source folder its load order sent, no installation file and MO2's
-    /// meta.ini committed, under MO2's suffix for an excluded file.</summary>
+    /// meta.ini as its metadata file, under MO2's suffix for an excluded file.</summary>
     internal static Task<HttpResponseMessage> Build(
         this HttpClient client, IEnumerable<(string Name, string Folder)> mods, string statCache, object? archives = null, string? version = null) =>
         client.PostAsJsonAsync("/build", new
@@ -96,7 +96,7 @@ internal static class Wire
                 sourceFolder = client.SourceFolderSentFor(mod.Name),
                 folder = mod.Folder,
                 installationFiles = Array.Empty<object>(),
-                committedFiles = new[] { "meta.ini" },
+                metadataFiles = new[] { "meta.ini" },
                 version,
             }),
             excludedSuffix = ".mohidden",

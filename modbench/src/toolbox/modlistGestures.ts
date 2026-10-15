@@ -238,8 +238,8 @@ async function restoreFromManifest(deps: ModlistGestureDeps, toRun: ModsToRun): 
   });
 }
 
-// agent.md, Any agent, story 7: a mod whose restore would overwrite a file whose bytes differ from its manifest's is
-// refused until the request forces. The files no line names go to the trash, which keeps them.
+// agent.md, Any agent, story 7: a mod whose restore would overwrite what neither git nor the trash keeps is refused
+// until the request forces.
 async function restoreFromManifestForAgent(
   { commands, instance, modsView }: ModlistGestureDeps, { argument, options }: ModlistCall,
 ): Promise<AgentOutcome<Restored[number]>> {
@@ -247,9 +247,13 @@ async function restoreFromManifestForAgent(
   const listing = await commands.whatRestoreDestroys(mods);
   if ('refusal' in listing) return { applied: false, refusal: listing.refusal };
   const overwrites = options.force === true ? [] : listing.destroys
-    .filter(({ differing }) => differing.length > 0)
-    .map(({ mod, differing }) => ({
-      item: mod, reason: `it would overwrite files whose bytes differ from its manifest: ${differing.join(', ')}. Request it again with force to overwrite them.`,
+    .filter(({ differing, metadataDiffers }) => differing.length > 0 || metadataDiffers)
+    .map(({ mod, differing, metadataDiffers }) => ({
+      item: mod,
+      reason: `it would overwrite ${[
+        ...differing.length > 0 ? [`files whose bytes differ from its manifest: ${differing.join(', ')}`] : [],
+        ...metadataDiffers ? ["the version or installation files its metadata names with its manifest's"] : [],
+      ].join(' and ')}. Request it again with force to overwrite them.`,
     }));
   const refused = [...listing.refused, ...overwrites];
   const notRestored = new Set(refused.map(({ item }) => item));

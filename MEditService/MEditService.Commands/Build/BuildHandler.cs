@@ -130,7 +130,7 @@ public sealed class BuildHandler
     {
         try
         {
-            var read = _modFolders.Files(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
+            var read = _modFolders.Files(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
             var builder = new ManifestBuilder(mod.InstallationFiles.Select(file => (_modFolders.InstallationFileName(file.Path), file)), []);
             var files = read.Files.Where(file => made.ContainsKey(file.Path)).ToList();
             var manifest = builder.Manifest([.. files.Select(file => new ManifestFile(file.Path,

@@ -142,7 +142,7 @@ public sealed class InitHandler
     // mod's plugins is a build output, and the mod manager's files are its own.
     private List<Asset> AssetsOf(PluginProvider.FromMod mod, ModToInit toInit, List<RegisteredPlugin> plugins, GameRelease release)
     {
-        var all = _modFolders.Files(mod.Folder, mod.Name, toInit.ModManagerFiles.ToHashSet(StringComparer.Ordinal), statCache: null).Files;
+        var all = _modFolders.Files(mod.Folder, mod.Name, toInit.MetadataFiles.ToHashSet(StringComparer.Ordinal), statCache: null).Files;
         var paths = all.Select(file => file.Path).ToList();
         var compiled = plugins.SelectMany(plugin => _plugins.WrittenByCompile(plugin, paths, release)).ToHashSet(StringComparer.Ordinal);
         var matching = new ManifestBuilder(toInit.InstallationFiles.Select(file => (_modFolders.InstallationFileName(file.Path), file)), []);
