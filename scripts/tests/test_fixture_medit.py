@@ -56,7 +56,8 @@ def medit_whose_put_takes(seconds):
             self.send_response(200)
             self.send_header('Content-Length', str(len(payload)))
             self.end_headers()
-            self.wfile.write(payload)
+            with contextlib.suppress(BrokenPipeError):  # the deadline test's client hangs up before the slow reply
+                self.wfile.write(payload)
 
         def do_PUT(self):
             self.rfile.read(int(self.headers['Content-Length']))
