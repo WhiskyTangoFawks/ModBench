@@ -45,7 +45,7 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
     private bool FoundAt(string modFolder, string line, HashSet<string> onDisk) =>
         !onDisk.Contains(line) && fileExists(Path.Combine(modFolder, line));
 
-    public ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache)
+    public ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache, ModMetadata? held = null)
     {
         try
         {
@@ -63,7 +63,10 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
             }
             var namedByNoLine = NamedByNoLine(modFolder, modName, manifest, leftOut);
             var statCacheNotWritten = cache.Keep([.. onDisk.Where(path => !leftOut.Contains(path))]);
-            return new(modName, NoManifest: false, Ordered(differing), Ordered(namedByNoLine), Ordered(gone), Ordered(noProvider), null, statCacheNotWritten);
+            var says = ModMetadata.Of(manifest);
+            return new(
+                modName, NoManifest: false, Ordered(differing), Ordered(namedByNoLine), Ordered(gone), Ordered(noProvider), null, statCacheNotWritten,
+                held?.DiffersFrom(says) == true, says);
         }
         catch (InvalidDataException e)
         {

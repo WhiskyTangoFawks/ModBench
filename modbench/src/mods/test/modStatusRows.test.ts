@@ -46,6 +46,7 @@ describe('a mod row says its status against its manifest after its version (mods
     ['a file whose bytes differ', status('ModA', { differing: ['a.nif'] }), true, '1.0 · differs'],
     ['a file no line names', status('ModA', { namedByNoLine: ['mine.txt'] }), true, '1.0 · differs'],
     ['a file a line names that is gone', status('ModA', { gone: ['b.nif'] }), true, '1.0 · differs'],
+    ['metadata that differs from its manifest', status('ModA', { metadataDiffers: true }), true, '1.0 · differs'],
     ['files with no provider', status('ModA', { noProvider: ['a.esp', 'b.esp'] }), true, '1.0 · 2 files with no provider'],
     ['a difference and a file with no provider', status('ModA', { differing: ['a.nif'], noProvider: ['a.esp'] }), true, '1.0 · differs · 1 file with no provider'],
     ['no manifest while the instance holds no repository', status('ModA', { noManifest: true }), false, '1.0'],

@@ -49,10 +49,12 @@ public sealed class ModStatusPushTests : IDisposable
         if (entry.Level == LogLevel.Error) _errors.Add(entry);
     }
 
-    private void Put(params string[] mods) =>
-        Assert.True(_handler.Put(
-            _dataFolder, _instanceRoot, GameRelease.Fallout4, [], [], [], [], [],
-            new SnapshotMods([.. mods.Select(mod => new ModByFolder(mod, mod, ["meta.ini"]))], "stat-cache")).Applied);
+    private void Put(params string[] mods) => Put([.. mods.Select(mod => new ModByFolder(mod, mod, ["meta.ini"]))]);
+
+    private void Put(params ModByFolder[] mods) =>
+        Assert.True(_handler.Put(_dataFolder, _instanceRoot, GameRelease.Fallout4, [], [], [], [], [], new SnapshotMods(mods, "stat-cache")).Applied);
+
+    private static ModByFolder Holding(string mod, string version) => new(mod, mod, ["meta.ini"], new ModMetadata(version, []));
 
     private IReadOnlyList<string> NextPush() =>
         _pushes.TryTake(out var mods, Patience) ? mods : throw new TimeoutException("no mod status was pushed");
@@ -107,5 +109,30 @@ public sealed class ModStatusPushTests : IDisposable
         Put("Edited", "Kept");
 
         Assert.Equal(["Edited"], NextPush());
+    }
+
+    [Fact]
+    public void ASnapshot_PushesAModWhoseMetadataNowDiffersFromItsManifest()
+    {
+        Manifested("Mod");
+        Put(Holding("Mod", "1.0"));
+        NextPush();
+
+        _folders.MetadataDiffering.Add("Mod");
+        Put(Holding("Mod", "2.0"));
+
+        Assert.Equal(["Mod"], NextPush());
+    }
+
+    [Fact]
+    public void ASnapshot_PushesAModWhoseMetadataCouldNotBeRead()
+    {
+        Manifested("Mod");
+        Put(Holding("Mod", "1.0"));
+        NextPush();
+
+        Put(new ModByFolder("Mod", "Mod", ["meta.ini"], MetadataUnreadable: "access denied"));
+
+        Assert.Equal(["Mod"], NextPush());
     }
 }

@@ -435,7 +435,7 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
     const push = new InMemoryMEditClient();
     const instance = new FakeInstance(instanceValueFixture({ holdsRepository: true, mods: [mod('ModA'), mod('ModB')] }));
     const read = (mods: readonly string[]) =>
-      Promise.resolve(mods.map((name) => ({ mod: name, noManifest: true, differing: [], namedByNoLine: [], gone: [], noProvider: [] })));
+      Promise.resolve(mods.map((name) => ({ mod: name, noManifest: true, differing: [], namedByNoLine: [], gone: [], noProvider: [], metadataDiffers: false })));
     const { view } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync(), modStatus: { push, read } });
 
     push.emit({ kind: 'mod-status-changed', plugin: '', origin: '', keys: [], sequence: 0, mods: ['ModA'] });
