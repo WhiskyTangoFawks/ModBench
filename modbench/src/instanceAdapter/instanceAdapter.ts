@@ -404,9 +404,8 @@ export interface InstanceAdapter {
   modMetadata(mod: string): Promise<FileRead<ModMetadata>>;
   /** Why `metadata` cannot be written into the metadata of `mod`, as a reason; undefined when it can. */
   unwritableMetadata(mod: string, metadata: ModMetadata): Promise<string | undefined>;
-  /** Sets the version of `mod` and the installation file its metadata holds, else the first, in a metadata made when it has none.
-   *  Changes only a value that differs, and never gives a file another's source. Rejects, writing nothing, when
-   *  `unwritableMetadata` says why. */
+  /** Sets the version of `mod` and its installation file, in a metadata made when it has none. Changes only a
+   *  value that differs, and gives no file another's source. Rejects, writing nothing, when `unwritableMetadata` says why. */
   writeModMetadata(mod: string, metadata: ModMetadata): Promise<void>;
   /** The files the mod manager keeps in every mod's folder, by path in it, which no build makes. */
   readonly managerFilesInModFolder: readonly string[];
