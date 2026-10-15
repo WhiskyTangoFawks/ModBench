@@ -9,7 +9,7 @@ import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from '../../
 
 const ACTIVATION = 'extension.ts';
 const WIRING = ['syncWiring.ts'];
-const PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API = ['dialog.ts', 'instanceRepository.ts', 'reporter.ts', 'trash.ts', 'workspaceConfig.ts', 'terminalEnvironment.ts'];
+const PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API = ['dialog.ts', 'instanceRepository.ts', 'reporter.ts', 'trash.ts', 'workspaceConfig.ts', 'terminalEnvironment.ts', 'walkthrough.ts'];
 const ACTIVATION_EXPORTS = ['activate', 'deactivate'];
 
 const parse = (path: string, text = readFileSync(path, 'utf8')): ts.SourceFile =>

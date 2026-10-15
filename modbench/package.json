@@ -19,11 +19,114 @@
   "activationEvents": [
     "onStartupFinished"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Modbench writes to your MO2 instance and runs its own service, so it needs the folder trusted."
+    }
+  },
   "extensionDependencies": [
     "vscode.git"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "walkthroughs": [
+      {
+        "id": "gettingStarted",
+        "title": "Get started with Modbench",
+        "description": "From an MO2 instance to your first edited plugin.",
+        "steps": [
+          {
+            "id": "openInstance",
+            "title": "Open your MO2 instance",
+            "description": "Open the folder that holds ModOrganizer.ini, mods/ and profiles/, and trust it when VS Code asks.\n[Open Folder](command:workbench.action.files.openFolder)",
+            "media": {
+              "markdown": "walkthrough/getting-started.md"
+            },
+            "completionEvents": [
+              "onContext:modbench.folder == instance"
+            ]
+          },
+          {
+            "id": "views",
+            "title": "Your mods, plugins and downloads",
+            "description": "The Mods, Plugins and Downloads views show your instance as MO2 does: mod order, plugin order and the downloads folder. A change on disk shows up with no refresh.\n[Show the Mods view](command:modbench.modList.focus)",
+            "media": {
+              "markdown": "walkthrough/getting-started.md"
+            },
+            "completionEvents": [
+              "onView:modbench.modList"
+            ]
+          },
+          {
+            "id": "gitInit",
+            "title": "Put your modlist in git",
+            "description": "Git Init Modlist makes the instance a repository, so each mod you edit gets source and history.\n[Git Init Modlist](command:modbench.modlist.gitInit)",
+            "media": {
+              "markdown": "walkthrough/getting-started.md"
+            },
+            "completionEvents": [
+              "onCommand:modbench.modlist.gitInit"
+            ]
+          },
+          {
+            "id": "decompile",
+            "title": "Decompile a mod",
+            "description": "Decompile and Commit Mod turns each plugin of a mod into plugin source: one JSON file for each record, in a repository of its own in source/.\n[Decompile and Commit Mod](command:modbench.mod.decompileAndCommit)",
+            "media": {
+              "markdown": "walkthrough/getting-started.md"
+            },
+            "completionEvents": [
+              "onCommand:modbench.mod.decompileAndCommit"
+            ]
+          },
+          {
+            "id": "edit",
+            "title": "Open a record",
+            "description": "Expand a plugin in the Plugins view and open a record. Edit a field in the record panel, or edit its plugin source file as text.",
+            "media": {
+              "markdown": "walkthrough/getting-started.md"
+            },
+            "completionEvents": [
+              "onCommand:modbench.record.open"
+            ]
+          },
+          {
+            "id": "review",
+            "title": "Review the change",
+            "description": "Each edit is a working-tree change. Diff it, discard it or commit it in Source Control.\n[Open Source Control](command:workbench.view.scm)",
+            "media": {
+              "markdown": "walkthrough/getting-started.md"
+            },
+            "completionEvents": [
+              "onView:workbench.scm"
+            ]
+          },
+          {
+            "id": "build",
+            "title": "Build the plugin",
+            "description": "Build Mod writes each plugin from its plugin source. The game, MO2 and xEdit load the plugin.\n[Build Mod](command:modbench.mod.build)",
+            "media": {
+              "markdown": "walkthrough/getting-started.md"
+            },
+            "completionEvents": [
+              "onCommand:modbench.mod.build"
+            ]
+          },
+          {
+            "id": "agent",
+            "title": "Connect your agent",
+            "description": "Modbench serves an MCP server, so an agent in VS Code reads your instance, runs its gestures and writes scripts.\n[Set up your agent](https://github.com/WhiskyTangoFawks/ModBench#your-agent)",
+            "media": {
+              "markdown": "walkthrough/getting-started.md"
+            },
+            "completionEvents": [
+              "onLink:https://github.com/WhiskyTangoFawks/ModBench#your-agent"
+            ]
+          }
+        ]
+      }
+    ],
     "customEditors": [
       {
         "viewType": "modbench.conflicts",

@@ -46,6 +46,7 @@ import { warnIfFomod } from './mods/fomodWarning';
 import { downloadsCommands } from './downloadsCommands/downloads';
 import { instanceCommands } from './instanceCommands/instanceCommands';
 import { reachMEditFromTerminals } from './terminalEnvironment';
+import { openWalkthroughOnce } from './walkthrough';
 import { instanceSyncs, loadOrderPutHandler, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
@@ -278,6 +279,7 @@ export function activate(context: vscode.ExtensionContext): void {
       client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     }),
   );
+  void openWalkthroughOnce(context.globalState, context.extension.id, (walkthrough) => vscode.commands.executeCommand('workbench.action.openWalkthrough', walkthrough, false));
 }
 
 // Async so VS Code awaits confirmed-dead-child teardown before the extension host finishes
