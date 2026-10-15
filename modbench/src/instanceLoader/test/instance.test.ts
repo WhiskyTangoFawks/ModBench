@@ -533,15 +533,17 @@ describe('Instance — downloads', () => {
 describe('Instance — game folder and the archives the game loads', () => {
   const SUPPLIED = join('/game/Data', 'Fallout4 - Interface.ba2');
 
-  it('hands the snapshot each mod with the metadata the mod manager holds of it', async () => {
-    const { instance } = loader({ ...GAME_FOUND, mods: [mod('Real Mod')], modFolders: modFoldersOf('Real Mod') }, (adapter) => ({
+  it('hands the snapshot each mod with the metadata of the read the instance made, reading no metadata again', async () => {
+    const reread: string[] = [];
+    const { instance } = loader({ ...GAME_FOUND, mods: [mod('Real Mod', true, { version: '2.0' })], modFolders: modFoldersOf('Real Mod') }, (adapter) => ({
       ...adapter,
-      modMetadata: () => Promise.resolve({ kind: 'read', answer: { version: '2.0', installationFiles: [] } }),
+      modMetadata: (name) => { reread.push(name); return adapter.modMetadata(name); },
     }));
 
     await instance.refresh();
 
     expect(instance.value.loadOrderSnapshot).toMatchObject({ mods: [{ name: 'Real Mod', metadata: { version: '2.0', installationFiles: [] } }] });
+    expect(reread).toEqual([]);
   });
 
   it('hands the snapshot the archives the INIs list, and tells once, until it changes, the INIs it did not find', async () => {

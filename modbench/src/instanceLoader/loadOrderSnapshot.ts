@@ -5,13 +5,13 @@ import {
 } from './fileConflictIndex';
 import {
   fileInFolder, isPluginFile, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
-  type ModFolders, type ModlistEntry, type ModMetadata, type OriginFile, type PluginEntry,
+  type ModFolders, type ModlistEntry, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile, pluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
 import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress, type StampedFile } from '../wire/pluginAddress';
-import { modWithMetadata, type ModByFolder } from '../wire/modByFolder';
+import type { ModByFolder } from '../wire/modByFolder';
 
 export { OVERWRITE_ORIGIN };
 export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
@@ -357,13 +357,6 @@ export async function stampedSnapshot(
     stamped(value.stringsFiles),
   ]);
   return { ...value, plugins, archives, stringsFiles };
-}
-
-/** The snapshot with each mod handed with the metadata the mod manager holds of it, or why it could not read it. */
-export async function withHeldMetadata<S extends { readonly mods: ModByFolder[] }>(
-  value: S, metadataOf: (mod: string) => Promise<FileRead<ModMetadata>>,
-): Promise<S> {
-  return { ...value, mods: await Promise.all(value.mods.map(async (mod) => modWithMetadata(mod, await metadataOf(mod.name)))) };
 }
 
 const listed = (names: readonly string[]): string =>

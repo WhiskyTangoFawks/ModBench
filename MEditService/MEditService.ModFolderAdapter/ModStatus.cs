@@ -18,5 +18,5 @@ public sealed record ModStatus(
     public override int GetHashCode() => HashCode.Combine(Mod, NoManifest, Unreadable, Differing.Count, NamedByNoLine.Count, Gone.Count, NoProvider.Count, MetadataDiffers);
 }
 
-/// <summary>Why a mod's status could not be read, its manifest or else one of its files, so it lists nothing.</summary>
+/// <summary>Why a mod's status could not be read, its manifest or else its metadata or one of its files, so it lists nothing.</summary>
 public sealed record ModUnreadable(bool Manifest, string Why);

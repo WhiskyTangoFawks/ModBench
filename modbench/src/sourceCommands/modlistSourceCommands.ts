@@ -8,7 +8,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
-import { modWithMetadata } from '../wire/modByFolder';
+import { modWithMetadata, withMetadataRead } from '../wire/modByFolder';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
@@ -344,7 +344,7 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
     /** Each mod's folder against its manifest (modlist-source.md, Status). */
     modStatus: async (mods: readonly string[]): Promise<readonly ModStatus[] | ReadFailed> => {
       const folders = await byFolder(adapter, mods);
-      const asked = await Promise.all(folders.map(async (folder) => modWithMetadata(folder, await adapter.modMetadata(folder.name))));
+      const asked = await withMetadataRead(folders, (mod) => adapter.modMetadata(mod));
       return asked.length === 0 ? [] : client.getModStatus(asked, adapter.statCacheFolder);
     },
   };

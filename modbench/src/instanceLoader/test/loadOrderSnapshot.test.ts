@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import type { DataFolderPlugins, FileRead, FileStamp, GameFolder, ModFolders, ModMetadata, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
+import type { DataFolderPlugins, FileRead, FileStamp, GameFolder, ModFolders, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { buildFileConflictIndex, FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
 import {
-  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, providedPluginsOf, sourceFiles, stampedSnapshot, withHeldMetadata,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, providedPluginsOf, sourceFiles, stampedSnapshot,
   type ArchiveSources,
   type LoadOrderPlugin, type LoadOrderPluginLine,
 } from '../loadOrderSnapshot';
@@ -495,24 +495,6 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
       stringsFiles: [{ path: '/t/A_en.STRINGS', stamp: 'EACCES /t/A_en.STRINGS' }],
     });
     expect(asked.sort()).toEqual(['/a/A - Main.ba2', '/a/A_en.STRINGS', '/g/Interface.ba2', '/t/A_en.STRINGS']);
-  });
-
-  it('hands each mod with the metadata the mod manager holds of it, or why it could not read it', async () => {
-    const held: Record<string, FileRead<ModMetadata>> = {
-      ModA: { kind: 'read', answer: { version: '1.0', installationFiles: [{ name: 'A.7z', source: 'nexus:fallout4:1' }] } },
-      ModB: { kind: 'unreadable', reason: 'EACCES' },
-    };
-    const value = {
-      statCache: '/mo2/stat-cache',
-      mods: [{ name: 'ModA', folder: '/mods/ModA', committedFiles: ['meta.ini'] }, { name: 'ModB', folder: '/mods/ModB', committedFiles: ['meta.ini'] }],
-    };
-
-    const handed = await withHeldMetadata(value, (mod) => Promise.resolve(present(held[mod], mod)));
-
-    expect(handed.mods).toEqual([
-      { name: 'ModA', folder: '/mods/ModA', committedFiles: ['meta.ini'], metadata: { version: '1.0', installationFiles: [{ name: 'A.7z', source: 'nexus:fallout4:1' }] } },
-      { name: 'ModB', folder: '/mods/ModB', committedFiles: ['meta.ini'], metadataUnreadable: 'EACCES' },
-    ]);
   });
 
   it('carries the game folder\'s dataFolder, and every plugin with its origin and path', () => {

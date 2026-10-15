@@ -7,11 +7,16 @@ public sealed record ModMetadata(string? Version, IReadOnlyList<MetadataInstalla
     public static ModMetadata Of(Manifest manifest) =>
         new(manifest.Version, [.. manifest.InstallationFiles.Select(file => new MetadataInstallationFile(file.Name, file.Source))]);
 
-    /// <summary>Whether writing <paramref name="manifest"/>'s metadata replaces a value this one holds: another version,
+    /// <summary>Whether restoring <paramref name="manifest"/>'s metadata replaces a value this one holds: another version,
     /// another source for a file both name, or files none of which the manifest names. A value either side lacks replaces
     /// nothing.</summary>
-    internal bool DiffersFrom(ModMetadata manifest) =>
+    public bool IsOverwrittenBy(ModMetadata manifest) =>
         (manifest.Version is { } version && Version is { } held && held != version) || InstallationFilesDifferFrom(manifest.InstallationFiles);
+
+    /// <summary>Whether updating the manifest from this metadata would write another version or installation file.</summary>
+    internal bool DiffersFrom(ModMetadata manifest) =>
+        Version != manifest.Version
+        || !InstallationFiles.ToHashSet().SetEquals(manifest.InstallationFiles);
 
     private bool InstallationFilesDifferFrom(IReadOnlyList<MetadataInstallationFile> manifestFiles)
     {

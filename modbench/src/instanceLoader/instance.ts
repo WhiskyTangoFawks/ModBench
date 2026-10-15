@@ -3,11 +3,13 @@
 import type { Log } from '../ports/log';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
-  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, OVERWRITE_ORIGIN, pluginsLoadedWithNoLineOf, stampedSnapshot, withHeldMetadata, type ArchiveSources,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, OVERWRITE_ORIGIN, pluginsLoadedWithNoLineOf, stampedSnapshot, type ArchiveSources,
   type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
   type LoadOrderSnapshotValue,
 } from './loadOrderSnapshot';
+import { withMetadataRead } from '../wire/modByFolder';
 import type { PluginAddress } from '../wire/pluginAddress';
+import { present } from '../ports/present';
 import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './downloadRows';
 import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
 import {
@@ -439,7 +441,7 @@ export class Instance implements Subscription {
       pluginsLoadedWithNoLine,
       loadOrderSnapshot: loadOrderSnapshot === undefined || 'refusal' in loadOrderSnapshot
         ? loadOrderSnapshot
-        : await withHeldMetadata(await stampedSnapshot(loadOrderSnapshot, (path) => adapter.fileStamp(path)), (mod) => adapter.modMetadata(mod)),
+        : await withMetadata(await stampedSnapshot(loadOrderSnapshot, (path) => adapter.fileStamp(path)), entries, adapter),
       overwriteFiles: runtimeOutput.files,
       overwriteFolders: runtimeOutput.folders,
       paths,
@@ -447,4 +449,12 @@ export class Instance implements Subscription {
       pluginSyncArguments: pluginSyncArgumentsOf(syncSource),
     };
   }
+}
+
+async function withMetadata(
+  snapshot: LoadOrderSnapshotValue, entries: readonly ModlistEntry[], { metadataOf }: Pick<InstanceAdapter, 'metadataOf'>,
+): Promise<LoadOrderSnapshotValue> {
+  const metaOf = new Map(entries.flatMap((entry) => (entry.kind === 'mod' ? [[entry.name, entry] as const] : [])));
+  const mods = await withMetadataRead(snapshot.mods, async (name) => ({ kind: 'read' as const, answer: await metadataOf(present(metaOf.get(name), name)) }));
+  return { ...snapshot, mods };
 }

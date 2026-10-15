@@ -182,6 +182,30 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task AVersionTheManifestLacks_MakesAModDiffer_ButRestoreOverwritesNothing()
+    {
+        ModInstalledFromADownload();
+        await Post("update-manifest");
+
+        var status = await ModStatus(WhatRestoreDestroysRequest(Metadata("2.0")));
+        var destroys = await Client.PostAsJsonAsync("/what-restore-destroys", WhatRestoreDestroysRequest(Metadata("2.0")));
+
+        Assert.True(status.GetProperty("metadataDiffers").GetBoolean());
+        var listed = (await destroys.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("mods").EnumerateArray();
+        Assert.Empty(listed);
+    }
+
+    [Fact]
+    public async Task AModHandedBothItsMetadataAndWhyItCouldNotBeRead_IsRefused()
+    {
+        var request = WhatRestoreDestroysRequest(Metadata("2.0"), metadataUnreadable: "access denied");
+
+        var response = await Client.PostAsJsonAsync("/mod-status", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task AModWhoseMetadataCouldNotBeRead_IsUnreadableInItsStatus_NamingWhy()
     {
         ModInstalledFromADownload();

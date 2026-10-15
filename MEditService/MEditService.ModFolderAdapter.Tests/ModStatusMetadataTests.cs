@@ -17,7 +17,7 @@ public sealed class ModStatusMetadataTests : IDisposable
     private static ModMetadata Metadata(string? version, params (string Name, string? Source)[] files) =>
         new(version, [.. files.Select(file => new MetadataInstallationFile(file.Name, file.Source))]);
 
-    public static TheoryData<ModMetadata, ModMetadata, bool> Cases => new()
+    public static TheoryData<ModMetadata, ModMetadata, bool> RestoreCases => new()
     {
         { Metadata("1.0"), Metadata("2.0"), true },
         { Metadata("1.0"), Metadata("1.0"), false },
@@ -41,8 +41,30 @@ public sealed class ModStatusMetadataTests : IDisposable
     }
 
     [Theory]
-    [MemberData(nameof(Cases))]
-    public void AModsMetadata_DiffersFromItsManifests_OnlyInAValueBothHold(ModMetadata held, ModMetadata manifest, bool differs) =>
+    [MemberData(nameof(RestoreCases))]
+    public void RestoringTheManifestsMetadata_OverwritesAValue_OnlyWhereBothHoldOne(ModMetadata held, ModMetadata manifest, bool overwrites) =>
+        Assert.Equal(overwrites, held.IsOverwrittenBy(manifest));
+
+    public static TheoryData<ModMetadata, ModMetadata, bool> StatusCases => new()
+    {
+        { Metadata("1.0"), Metadata("1.0"), false },
+        { Metadata("1.0"), Metadata("2.0"), true },
+        { Metadata(null), Metadata("2.0"), true },
+        { Metadata("1.0"), Metadata(null), true },
+        { Metadata(null, ("a.7z", "nexus:fallout4:1")), Metadata(null, ("a.7z", "nexus:fallout4:1")), false },
+        { Metadata(null, ("a.7z", "nexus:fallout4:1")), Metadata(null, ("a.7z", "nexus:fallout4:2")), true },
+        { Metadata(null, ("a.7z", null)), Metadata(null, ("a.7z", "nexus:fallout4:1")), true },
+        { Metadata(null, ("a.7z", "nexus:fallout4:1")), Metadata(null, ("a.7z", null)), true },
+        { Metadata(null, ("old.7z", null)), Metadata(null, ("new.7z", null)), true },
+        { Metadata(null, ("b.7z", null)), Metadata(null, ("a.7z", null), ("b.7z", null)), true },
+        { Metadata(null, ("a.7z", null)), Metadata(null), true },
+        { Metadata(null), Metadata(null, ("a.7z", null)), true },
+        { Metadata(null), Metadata(null), false },
+    };
+
+    [Theory]
+    [MemberData(nameof(StatusCases))]
+    public void AModsMetadata_DiffersFromItsManifests_WhereUpdatingTheManifestWouldWriteAnother(ModMetadata held, ModMetadata manifest, bool differs) =>
         Assert.Equal(differs, StatusAgainst(manifest, held).MetadataDiffers);
 
     [Fact]

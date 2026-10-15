@@ -122,7 +122,7 @@ internal static class ManifestEndpoints
         List<ModRestoreDestroys> destroying = [];
         List<ModRestoreRefusal> refused = [];
         List<ManifestMetadataResponse> manifests = [];
-        foreach (var status in StatusOf(req, repository))
+        foreach (var (mod, status) in req.Mods.Zip(StatusOf(req, repository)))
         {
             if (status.Unreadable is { } unreadable)
             {
@@ -131,9 +131,10 @@ internal static class ManifestEndpoints
                     $"'{status.Mod}' was skipped: {unreadable.Why}.", [], []));
                 continue;
             }
+            var overwritesMetadata = status.ManifestMetadata is { } says && mod.Metadata?.IsOverwrittenBy(says) == true;
             if (status.ManifestMetadata is not null) manifests.Add(new ManifestMetadataResponse(status.Mod, status.ManifestMetadata));
-            if (status.Differing.Count + status.NamedByNoLine.Count > 0 || status.MetadataDiffers)
-                destroying.Add(new ModRestoreDestroys(status.Mod, status.Differing, status.NamedByNoLine, status.MetadataDiffers));
+            if (status.Differing.Count + status.NamedByNoLine.Count > 0 || overwritesMetadata)
+                destroying.Add(new ModRestoreDestroys(status.Mod, status.Differing, status.NamedByNoLine, overwritesMetadata));
         }
         return Results.Ok(new WhatRestoreDestroysResponse(destroying, refused, manifests));
     }
@@ -144,7 +145,7 @@ internal static class ManifestEndpoints
     private static IResult? MalformedFolders(ModFoldersRequest req)
     {
         if (req.Mods is not { Count: > 0 } || !ModsByFolder.AreWhole(req.Mods))
-            return Results.Problem("At least one mod is required, and every mod needs a name, a folder and its committed files.", statusCode: 400);
+            return Results.Problem("At least one mod is required, and every mod needs a name, a folder and its committed files, and either its metadata or why it is unreadable.", statusCode: 400);
         return string.IsNullOrWhiteSpace(req.StatCache) ? Results.Problem("The folder of the stat cache is required.", statusCode: 400) : null;
     }
 
@@ -231,7 +232,8 @@ internal static class ModsByFolder
     /// <summary>Whether a request's mods each name a mod, its folder and its committed files.</summary>
     internal static bool AreWhole(IReadOnlyList<ModByFolder>? mods) =>
         mods is not null
-        && mods.All(mod => mod is not null && !string.IsNullOrWhiteSpace(mod.Name) && !string.IsNullOrWhiteSpace(mod.Folder) && mod.CommittedFiles is not null);
+        && mods.All(mod => mod is not null && !string.IsNullOrWhiteSpace(mod.Name) && !string.IsNullOrWhiteSpace(mod.Folder) && mod.CommittedFiles is not null
+            && (mod.Metadata is null || mod.MetadataUnreadable is null));
 }
 
 internal sealed record ModStatusResponse(IReadOnlyList<ModStatus> Mods);

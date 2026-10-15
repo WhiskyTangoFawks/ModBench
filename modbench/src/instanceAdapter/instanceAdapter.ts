@@ -402,6 +402,8 @@ export interface InstanceAdapter {
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
   /** What the mod manager's metadata says of `mod`'s version and installation files; none when it says none. */
   modMetadata(mod: string): Promise<FileRead<ModMetadata>>;
+  /** What a meta already read says, as `modMetadata` answers it. */
+  metadataOf(meta: ModMeta): Promise<ModMetadata>;
   /** Why `metadata` cannot be written into the metadata of `mod`, as a reason; undefined when it can. */
   unwritableMetadata(mod: string, metadata: ModMetadata): Promise<string | undefined>;
   /** Sets the version of `mod` and its installation file, in a metadata made when it has none. Changes only a

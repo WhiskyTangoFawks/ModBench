@@ -80,16 +80,19 @@ async function planMetadata(context: Mo2Context, mod: string, { version, install
   return { file, held, changes };
 }
 
+async function metadataOf(meta: ModMeta, context: Mo2Context): Promise<ModMetadata> {
+  const { archiveFilename } = meta;
+  const { source } = await nexusSourceOf(meta, context);
+  return { version: meta.version, installationFiles: archiveFilename === undefined ? [] : [{ name: basename(archiveFilename), source }] };
+}
+
 export function mo2Installation(
   context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>, { modMeta }: Pick<ReadingSource, 'modMeta'>,
-): Pick<InstanceAdapter, 'installationFiles' | 'downloadedFile' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'managerFilesInModFolder'> {
+): Pick<InstanceAdapter, 'installationFiles' | 'downloadedFile' | 'modMetadata' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'managerFilesInModFolder'> {
   return {
-    modMetadata: (mod) => readOrReason(async () => {
-      const meta = await modMeta(mod);
-      const { archiveFilename } = meta;
-      const { source } = await nexusSourceOf(meta, context);
-      return { version: meta.version, installationFiles: archiveFilename === undefined ? [] : [{ name: basename(archiveFilename), source }] };
-    }),
+    modMetadata: (mod) => readOrReason(async () => metadataOf(await modMeta(mod), context)),
+
+    metadataOf: (meta) => metadataOf(meta, context),
 
     unwritableMetadata: async (mod, metadata) => {
       const plan = await planMetadata(context, mod, metadata);

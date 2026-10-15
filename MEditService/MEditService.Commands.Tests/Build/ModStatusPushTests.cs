@@ -59,8 +59,7 @@ public sealed class ModStatusPushTests : IDisposable
     private IReadOnlyList<string> NextPush() =>
         _pushes.TryTake(out var mods, Patience) ? mods : throw new TimeoutException("no mod status was pushed");
 
-    private void Manifested(string mod, string? version = null) =>
-        _folders.WithFile(mod, "a.nif", "a").Manifests[mod] = new Manifest([], [], [new ManifestFile("a.nif", new FileProvider.NoProvider())], version);
+    private void Manifested(string mod) => _folders.WithFile(mod, "a.nif", "a").Manifests[mod] = new Manifest([], [], [new ManifestFile("a.nif", new FileProvider.NoProvider())]);
 
     [Fact]
     public void TheFirstSnapshot_PushesEveryMod()
@@ -115,10 +114,11 @@ public sealed class ModStatusPushTests : IDisposable
     [Fact]
     public void ASnapshot_PushesAModWhoseMetadataNowDiffersFromItsManifest()
     {
-        Manifested("Mod", version: "1.0");
+        Manifested("Mod");
         Put(Holding("Mod", "1.0"));
         NextPush();
 
+        _folders.MetadataDiffering.Add("Mod");
         Put(Holding("Mod", "2.0"));
 
         Assert.Equal(["Mod"], NextPush());
