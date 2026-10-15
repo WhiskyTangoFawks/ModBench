@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { AgentCall, argumentOfKind, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { carriedArgument, rowNameOf } from '../drivingLib/argument';
 import { gestureEntry, isClickedRow } from '../drivingLib/gestureEntry';
 import type { FocusedView } from '../drivingLib/focusedView';
@@ -7,6 +8,7 @@ import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Instance, InstanceValue } from '../instanceLoader/instance';
 import type { AskQuestion } from '../ports/dialog';
 import type { ItemRefusal } from '../ports/selectionOutcome';
+import type { Argument } from '../wire/argument';
 import type { Reporter } from '../ports/reporter';
 import type {
   ModlistSourceCommands, RestoreResult, RestoreStatus, UpdateManifestResult, UpdateManifestStatus,
@@ -36,26 +38,39 @@ interface ModsToRun {
   readonly view: string;
 }
 
+type ModlistCall = AgentCall<{ force?: boolean }>;
+
+const isAgentCall = (value: unknown): value is ModlistCall => value instanceof AgentCall;
+
 // A view's title bar hands its command nothing, so the Mods view's is an entry point that names every mod and the
 // view (commands.md, Entry points are not gestures).
 export function registerModlistCommands(deps: ModlistGestureDeps): vscode.Disposable[] {
   const everyModHere = (): ModsToRun => ({ mods: everyMod(deps.instance.value), refused: [], everyMod: true, view: deps.modsView });
   return [
-    vscode.commands.registerCommand('modbench.modlist.gitInit', () => gitInit(deps)),
-    vscode.commands.registerCommand(
-      'modbench.mod.updateManifest', (clicked?: unknown, selected?: readonly unknown[]) => updateManifest(deps, modsToRun(deps, clicked, selected))),
-    vscode.commands.registerCommand(
-      'modbench.mod.restoreFromManifest', (clicked?: unknown, selected?: readonly unknown[]) => restoreFromManifest(deps, modsToRun(deps, clicked, selected))),
+    vscode.commands.registerCommand('modbench.modlist.gitInit', (clicked?: unknown) => (isAgentCall(clicked) ? gitInitForAgent(deps) : gitInit(deps))),
+    vscode.commands.registerCommand('modbench.mod.updateManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
+      (isAgentCall(clicked) ? updateManifestForAgent(deps, clicked) : updateManifest(deps, modsToRun(deps, clicked, selected)))),
+    vscode.commands.registerCommand('modbench.mod.restoreFromManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
+      (isAgentCall(clicked) ? restoreFromManifestForAgent(deps, clicked) : restoreFromManifest(deps, modsToRun(deps, clicked, selected)))),
     vscode.commands.registerCommand('modbench.modList.updateManifestHere', () => updateManifest(deps, everyModHere())),
     vscode.commands.registerCommand('modbench.modList.restoreFromManifestHere', () => restoreFromManifest(deps, everyModHere())),
   ];
 }
 
-function gitInit({ commands, instance, reporter }: ModlistGestureDeps): Promise<void> {
-  return runWritingGesture(TOOLBOX_VIEW, instance, async () => {
-    const result = await commands.gitInit(instance.value);
-    if (!result.applied) reporter.report('error', 'Could not git init.', result.refusal);
-  });
+const gitInitInToolbox = ({ commands, instance }: ModlistGestureDeps) =>
+  runWritingGesture(TOOLBOX_VIEW, instance, () => commands.gitInit(instance.value));
+
+async function gitInit(deps: ModlistGestureDeps): Promise<void> {
+  const result = await gitInitInToolbox(deps);
+  if (!result.applied) deps.reporter.report('error', 'Could not git init.', result.refusal);
+}
+
+type AgentOutcome<Landed> = GestureResult<Landed, string>;
+type Restored = Extract<RestoreResult, { applied: true }>['landed'];
+
+async function gitInitForAgent(deps: ModlistGestureDeps): Promise<AgentOutcome<never>> {
+  const result = await gitInitInToolbox(deps);
+  return result.applied ? { applied: true, outcome: { landed: [], refused: [] } } : { applied: false, refusal: result.refusal };
 }
 
 const kindOf = (row: unknown): unknown => Reflect.get(carriedArgument(row) ?? {}, 'kind');
@@ -69,12 +84,25 @@ function rowsOf(deps: ModlistGestureDeps, clicked: unknown, selected: readonly u
 // modlist-source.md, Every mod: every mod folder, in every profile, never the Mods view's rows.
 const everyMod = (value: InstanceValue): string[] => (value.modFolders ?? []).flatMap((folder) => (folder.kind === 'mod' ? [folder.name] : []));
 
+function modsHeldBy(kind: unknown, name: string, value: InstanceValue): string[] | undefined {
+  if (kind === 'mod') return [name];
+  if (kind !== 'separator') return undefined;
+  return groupModlist([...value.mods]).groups.find((group) => group.separator.name === name)?.mods.map((mod) => mod.name) ?? [];
+}
+
 function modsOf(row: unknown, value: InstanceValue): string[] | undefined {
   const name: unknown = Reflect.get(carriedArgument(row) ?? {}, 'name');
-  if (typeof name !== 'string') return undefined;
-  if (kindOf(row) === 'mod') return [name];
-  if (kindOf(row) !== 'separator') return undefined;
-  return groupModlist([...value.mods]).groups.find((group) => group.separator.name === name)?.mods.map((mod) => mod.name) ?? [];
+  return typeof name === 'string' ? modsHeldBy(kindOf(row), name, value) : undefined;
+}
+
+// commands.md, The surface supplies the Argument: an agent call may supply all of it, and none is every mod.
+function modsOfAgent(argument: readonly Argument[], value: InstanceValue): string[] {
+  if (argument.length === 0) return everyMod(value);
+  const held = argument.flatMap((entry) => {
+    const { kind, name } = argumentOfKind(entry, 'mod', 'separator');
+    return modsHeldBy(kind, name, value) ?? [];
+  });
+  return [...new Set(held)];
 }
 
 function modsToRun(deps: ModlistGestureDeps, clicked: unknown, selected: readonly unknown[] | undefined): ModsToRun {
@@ -118,6 +146,23 @@ async function updateManifest(deps: ModlistGestureDeps, { mods, refused, view }:
   });
 }
 
+async function updateManifestForAgent(
+  { commands, instance, modsView }: ModlistGestureDeps, { argument }: ModlistCall,
+): Promise<AgentOutcome<Extract<UpdateManifestResult, { applied: true }>['landed'][number]>> {
+  const mods = modsOfAgent(argument, instance.value);
+  const outcome = await runWritingGesture(modsView, instance, () => commands.updateManifest(mods, instance.value));
+  if (!outcome.applied) return { applied: false, refusal: outcome.refusal };
+  const unprovided = outcome.landed.flatMap(({ mod, noProvider }) => noProvider.map((path) => `${mod}: ${path} has no provider`));
+  return {
+    applied: true,
+    outcome: { landed: outcome.landed, refused: outcome.refused },
+    partial: warned('Update manifest:', [...unprovided, ...outcome.notes, ...statCacheNotWritten(outcome.landed)]),
+  };
+}
+
+const warned = (message: string, lines: readonly string[]): PartialFailure[] =>
+  lines.map((detail) => ({ message, detail, severity: 'warning' }));
+
 function updateMessage(status: UpdateManifestStatus): string {
   return status.phase === 'ReadingFiles'
     ? `Update manifest — reading the files of "${status.mod}"…`
@@ -149,6 +194,9 @@ function reportCancelRefused(reporter: Reporter, { cancelRefusal }: { readonly c
 }
 
 const quoted = (mods: readonly string[]): string => mods.map((mod) => `"${mod}"`).join(', ');
+
+const uncommittedWarnings = (landed: Restored): string[] => landed.filter(({ uncommitted }) => uncommitted === true)
+  .map(({ mod }) => `${mod}: its source holds changes no commit holds, so its manifest's commit does not rebuild these bytes`);
 
 async function confirmRestore(ask: AskQuestion, { mods, everyMod: all }: ModsToRun): Promise<boolean> {
   const question = `Are you sure you want to restore ${all ? 'every mod from its manifest' : `${quoted(mods)} from their manifests`}?`;
@@ -188,6 +236,34 @@ async function restoreFromManifest(deps: ModlistGestureDeps, toRun: ModsToRun): 
   });
 }
 
+// agent.md, Any agent, story 7: a mod whose restore would overwrite a file whose bytes differ from its manifest's is
+// refused until the request forces. The files no line names go to the trash, which keeps them.
+async function restoreFromManifestForAgent(
+  { commands, instance, modsView }: ModlistGestureDeps, { argument, options }: ModlistCall,
+): Promise<AgentOutcome<Restored[number]>> {
+  const mods = modsOfAgent(argument, instance.value);
+  const listing = await commands.whatRestoreDestroys(mods);
+  if ('refusal' in listing) return { applied: false, refusal: listing.refusal };
+  const overwrites = options.force === true ? [] : listing.destroys
+    .filter(({ differing }) => differing.length > 0)
+    .map(({ mod, differing }) => ({
+      item: mod, reason: `it would overwrite files whose bytes differ from its manifest: ${differing.join(', ')}. Request it again with force to overwrite them.`,
+    }));
+  const refused = [...listing.refused, ...overwrites];
+  const notRestored = new Set(refused.map(({ item }) => item));
+  const toRestore = mods.filter((mod) => !notRestored.has(mod));
+  if (toRestore.length === 0) return { applied: true, outcome: { landed: [], refused } };
+  const outcome = await runWritingGesture(modsView, instance, () => commands.restoreFromManifest(toRestore, instance.value));
+  if (!outcome.applied) {
+    return { applied: false, refusal: outcome.refusal, ...(outcome.unfinished.length === 0 ? {} : { detail: `Not finished: ${quoted(outcome.unfinished)}. Restoring again finishes them.` }) };
+  }
+  return {
+    applied: true,
+    outcome: { landed: outcome.landed, refused: [...outcome.refused, ...refused] },
+    partial: warned('Restore from manifest:', [...statCacheNotWritten(outcome.landed), ...uncommittedWarnings(outcome.landed)]),
+  };
+}
+
 function restoreMessage(status: RestoreStatus): string {
   switch (status.phase) {
     case 'ReadingFiles': return `Restore from manifest — reading the files of "${status.mod}"…`;
@@ -198,11 +274,7 @@ function restoreMessage(status: RestoreStatus): string {
 // modlist-source.md, Reporting: one line, with each skipped mod, each stat cache not written and each mod built from
 // changes no commit holds in the Output.
 function reportRestored(reporter: Reporter, total: number, outcome: Omit<Extract<RestoreResult, { applied: true }>, 'applied'>): void {
-  const warnings = [
-    ...statCacheNotWritten(outcome.landed),
-    ...outcome.landed.filter(({ uncommitted }) => uncommitted === true)
-      .map(({ mod }) => `${mod}: its source holds changes no commit holds, so its manifest's commit does not rebuild these bytes`),
-  ];
+  const warnings = [...statCacheNotWritten(outcome.landed), ...uncommittedWarnings(outcome.landed)];
   if (outcome.refused.length > 0) {
     const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...warnings].join('\n');
     reporter.report('error', `Could not restore ${outcome.refused.length} of ${total} mods.`, detail);

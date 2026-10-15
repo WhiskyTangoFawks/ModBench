@@ -124,6 +124,20 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Decompile_OfAPluginWhoseWorkingTreeStatusCannotBeRead_RefusesItAsUnreadable_AndWritesNothing()
+    {
+        var before = SourceTextOf("First.esp");
+        File.WriteAllText(Path.Combine(_trackedMod, ".git", "HEAD"), "not a ref");
+        WritePlugin(_trackedMod, "First.esp", "UpgradedNpc");
+
+        var result = await Decompile(Tracked("First.esp"));
+
+        Assert.Empty(result.Landed);
+        Assert.Equal(DecompileRefusal.WorkingTreeStatusUnreadable, Assert.Single(result.Refused).Refusal);
+        Assert.Equal(before, SourceTextOf("First.esp"));
+    }
+
+    [Fact]
     public async Task Decompile_OfASelection_RefusesOnlyThePluginWhoseSourceHasWorkingTreeChanges()
     {
         var first = TreeDocuments.Of(Repository, Tracked("First.esp")).Single(document => document.EditorId == "FirstNpc");
