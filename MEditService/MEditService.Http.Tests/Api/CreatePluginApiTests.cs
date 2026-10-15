@@ -57,6 +57,22 @@ public sealed class CreatePluginApiTests : HostedTests
     }
 
     [Fact]
+    public async Task CreatingAPluginInAModTheSnapshotListsWithNoPlugin_WritesItInThatModsFolder()
+    {
+        var fx = Owned(OneMod());
+        var emptyFolder = NewModFolder(fx, "mod-empty");
+        var body = SnapshotPlugins.Body(
+            fx.GameDirectory, fx.InstanceRoot, fx.Plugins,
+            mods: new[] { new { name = "EmptyMod", folder = emptyFolder, metadataFiles = Array.Empty<string>() } });
+        (await Client.PutLoadOrderAndAwaitReady(body)).EnsureSuccessStatusCode();
+
+        var created = await Client.PostAsJsonAsync("/plugins/create-in-mod", new { origin = "EmptyMod", name = "Patch.esp" });
+
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        Assert.True(File.Exists(Path.Combine(emptyFolder, "Patch.esp")));
+    }
+
+    [Fact]
     public async Task CreatingAPlugin_LeavesThePluginsReadAsItWas_UntilALoadOrderNamesIt()
     {
         var fx = Owned(await Loaded());

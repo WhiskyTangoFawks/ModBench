@@ -20,11 +20,12 @@ public sealed class CreatePluginInModHandler
         var mod = loadOrder.Plugins
             .Select(held => held.Provider)
             .OfType<PluginProvider.FromMod>()
+            .Concat(loadOrder.Mods)
             .FirstOrDefault(provider => string.Equals(provider.Name, origin, StringComparison.OrdinalIgnoreCase));
         if (mod is null)
         {
             return new PluginCreateResult(PluginCreateRefusal.OriginNotAMod,
-                $"'{origin}' is not a mod the load order holds a plugin of, so {name} was not created in it.");
+                $"'{origin}' is not a mod of the load order, so {name} was not created in it.");
         }
 
         var created = new PluginAddress(name, mod.Name);

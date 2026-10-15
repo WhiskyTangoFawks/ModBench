@@ -49,7 +49,8 @@ public sealed class PutLoadOrderHandler
         if (LoadOrderSnapshot.RefusalOf(plugins, active, loadedWithNoLine) is { } invalid)
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InvalidSnapshot, invalid);
 
-        var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active, loadedWithNoLine, archives, stringsFiles);
+        var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active, loadedWithNoLine, archives, stringsFiles,
+            [.. mods.Mods.Select(mod => new PluginProvider.FromMod(mod.Name, mod.Folder, null))]);
         var version = _holder.Apply(snapshot);
         _externalChanges.Check(snapshot);
         _modStatus.Check(mods);

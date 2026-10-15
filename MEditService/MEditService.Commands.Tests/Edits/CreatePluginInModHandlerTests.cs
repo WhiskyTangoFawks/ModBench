@@ -46,6 +46,21 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task CreatePluginIn_AModTheLoadOrderHoldsNoPluginOf_WritesItInThatModsFolder()
+    {
+        var emptyFolder = Directory.CreateDirectory(Path.Combine(_data.DataFolder, "EmptyMod")).FullName;
+        var held = _holder.Current;
+        _holder.Apply(new LoadOrderSnapshot(
+            held.DataFolderPath, held.InstanceRoot, held.GameRelease, held.Plugins, [], [], [], [],
+            mods: [new PluginProvider.FromMod("EmptyMod", emptyFolder, null)]));
+
+        var result = await Handler.CreatePluginIn("EmptyMod", "Patch.esp");
+
+        Assert.Null(result.Refusal);
+        Assert.True(File.Exists(Path.Combine(emptyFolder, "Patch.esp")));
+    }
+
+    [Fact]
     public async Task CreatePluginIn_ThatRefuses_MarksNothing()
     {
         var awaited = _holder.ArrivalAwaited;
@@ -60,7 +75,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     [InlineData("NoSuchMod")]
     [InlineData(PluginOrigin.Overwrite)]
     [InlineData(PluginOrigin.DataDirectory)]
-    public async Task CreatePluginIn_AnOriginThatIsNotAModTheLoadOrderHoldsAPluginOf_RefusesNamingItAndWritesNothing(string origin)
+    public async Task CreatePluginIn_AnOriginThatIsNotAModOfTheLoadOrder_RefusesNamingItAndWritesNothing(string origin)
     {
         var awaited = _holder.ArrivalAwaited;
 

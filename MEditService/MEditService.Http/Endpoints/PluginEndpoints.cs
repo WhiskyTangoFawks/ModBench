@@ -154,8 +154,8 @@ internal static class PluginEndpoints
             .WithName("CreatePluginInMod")
             .WithTags(Tag)
             .WithDescription(
-                "Writes an empty plugin into the folder, and the source folder, of a mod the held load " +
-                "order holds a plugin of, named by its origin. Refuses an origin that is no such mod.")
+                "Writes an empty plugin into the folder, and the source folder, of a mod of the held load " +
+                "order, named by its origin. Refuses an origin that is no such mod.")
             .Produces<PluginCreatedResponse>()
             .ProducesProblem(400)
             .ProducesProblem(404)
