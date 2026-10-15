@@ -9,26 +9,18 @@ import { failurePrefixIcon } from './failurePrefixIcon';
 import { IndexingNode, type RecordBrowser } from './RecordBrowser';
 import { ImplicitMasterNode, PluginNode, rowIdentity, type PluginListNode, type PluginsTreeNode } from './pluginRows';
 import { ErrorNode } from '../drivingLib/errorNode';
-import { pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
+import { samePluginAddress } from '../wire/pluginAddress';
 import { placeOf, type PluginProblem } from './pluginFacts';
 import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
 import { DATA_DIRECTORY_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
+import { pluginOrderOf } from '../instanceLoader/pluginOrder';
 
 export type PluginsInstance = InstanceView & Pick<Instance, 'refresh'>;
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
-
-// One entry per plugins.txt line: the winning plugin of every listed name, in file order
-// (plugins.md, The tree, stories 1 and 3). An overridden plugin carries the same line and is
-// excluded.
-function listedPlugins(value: InstanceValue): (InstanceValue['plugins'][number] & { line: number })[] {
-  return value.plugins
-    .filter((p): p is InstanceValue['plugins'][number] & { line: number } => p.line !== null && p.winning)
-    .sort((a, b) => a.line - b.line);
-}
 
 // `DataTransferItem.value` is `any`, so a dropped payload is checked, not trusted.
 function isDropPayload(value: unknown): value is { plugins: PluginAddress[] } {
@@ -353,29 +345,15 @@ export class PluginsTreeProvider
   }
 
   private buildRows(): PluginListNode[] {
-    // While Mod Management cannot name the plugins the game loads with no line (ADR-0013), a
-    // plugins.txt line for one renders as an ordinary row, which is what the file says.
-    const loadedWithNoLine = this.instanceValue.pluginsLoadedWithNoLine ?? [];
-    const implicitKeys = new Set(loadedWithNoLine.map(pluginAddressKey));
-
-    const listed = listedPlugins(this.instanceValue);
-
-    // A name in both sets renders once, as the implicit row: the game loads it first, wherever its
-    // line sits. A name on two lines renders once, at its first.
-    const shown = new Set(implicitKeys);
-    const dedupedOrder = listed.filter((p) => {
-      const key = pluginAddressKey(p);
-      if (shown.has(key)) return false;
-      shown.add(key);
-      return true;
-    });
+    const { loadedWithNoLine, fromLines } = pluginOrderOf(
+      { plugins: this.instanceValue.plugins, pluginsLoadedWithNoLine: this.instanceValue.pluginsLoadedWithNoLine ?? [] },
+      (address) => ({ ...address, path: '', line: null, enabled: true, winning: true }),
+    );
     const lockedRows = loadedWithNoLine.map(({ name, origin }) => new ImplicitMasterNode(name, origin));
     this.lastLockedRowUris = new Set(lockedRows.map((row) => row.resourceUri.toString()));
     return [
       ...lockedRows,
-      ...dedupedOrder.map((p) => new PluginNode({
-        name: p.name, enabled: p.enabled,
-      }, p.origin)),
+      ...fromLines.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, p.origin)),
     ];
   }
 
