@@ -50,6 +50,6 @@ public enum RestoreRefusal
 /// back with.</summary>
 public sealed record RestoreSkip(RestoreRefusal Kind, IReadOnlyList<string> GameFilesNotFound);
 
-/// <summary>A mod whose files are as its manifest says: the files written to make it so, each file no line names, for the
-/// trash, and why the stat cache could not keep what the restore read, or null.</summary>
-public sealed record RestoredMod(IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten);
+/// <summary>A mod whose files are as its manifest says: the files written, each file no line names, for the trash, why
+/// the stat cache did not keep the read, and Uncommitted as <see cref="BuiltMod"/>'s.</summary>
+public sealed record RestoredMod(IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, bool Uncommitted = false);

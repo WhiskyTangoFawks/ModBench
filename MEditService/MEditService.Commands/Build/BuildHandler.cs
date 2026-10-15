@@ -26,7 +26,7 @@ public sealed class BuildHandler
         IPluginAdapter plugins, INotificationPublisher notifications) =>
         (_compile, _loadOrder, _source, _modFolders, _plugins, _notifications) = (compile, loadOrder, source, modFolders, plugins, notifications);
 
-    /// <summary>Each mod's plugins are its source's, compiled where the held load order puts them. Refuses with
+    /// <summary>Each mod's plugins are its source's, compiled into its folder against the held load order. Refuses with
     /// <see cref="BuildRefusal.NoLoadOrder"/>, writing nothing, when none is held.</summary>
     public async Task<SelectionResult<string, BuildRefusal, BuiltMod>> BuildAsync(IReadOnlyList<ModToBuild> mods, InstanceToBuild instance)
     {
@@ -52,16 +52,14 @@ public sealed class BuildHandler
         }
     }
 
-    /// <summary>The mod built for restore from manifest, whose manifest says the base, so a folder that does not hold the
-    /// installation files' entries, as a fresh clone's does not, is no refusal.</summary>
-    internal async Task<ItemAnswer<BuildRefusal, BuiltMod>> RebuildAsync(ModToBuild mod, InstanceToBuild instance) =>
+    /// <summary>One mod built, as restore from manifest builds a source mod.</summary>
+    internal async Task<ItemAnswer<BuildRefusal, BuiltMod>> BuildOneAsync(ModToBuild mod, InstanceToBuild instance) =>
         _loadOrder.Held is { Snapshot: var loadOrder }
-            ? await BuildModAsync(loadOrder, mod, instance, baseIsKnown: true)
+            ? await BuildModAsync(loadOrder, mod, instance)
             : Refused(mod, BuildRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
 
     // Everything that refuses the mod is checked before its first write (mods.md, Build, story 4).
-    private async Task<ItemAnswer<BuildRefusal, BuiltMod>> BuildModAsync(
-        LoadOrderSnapshot loadOrder, ModToBuild mod, InstanceToBuild instance, bool baseIsKnown = false)
+    private async Task<ItemAnswer<BuildRefusal, BuiltMod>> BuildModAsync(LoadOrderSnapshot loadOrder, ModToBuild mod, InstanceToBuild instance)
     {
         if (!_source.SourceToBuild(mod.SourceFolder).Holds(out var source, out var unread))
             return Refused(mod, BuildRefusal.SourceUnreadable, unread.Reason);
@@ -72,7 +70,7 @@ public sealed class BuildHandler
                 $"its build configuration names the output folder '{source.Output}', not its folder '{folderName}'.");
         }
 
-        var plugins = source.Plugins.Select(plugin => new PluginAddress(plugin, mod.Name)).ToList();
+        var plugins = Placed(loadOrder, mod, source.Plugins);
         var installed = mod.InstallationFiles.SelectMany(file => file.Entries.Select(entry => (File: file, Entry: entry.Path))).ToList();
         var compiled = CompiledPaths(loadOrder, plugins, [.. installed.Select(entry => entry.Entry), .. source.Assets.Select(asset => asset.Path)]);
         var assets = source.Assets.Where(asset => !compiled.Contains(asset.Path)).ToDictionary(asset => asset.Path, StringComparer.OrdinalIgnoreCase);
@@ -82,7 +80,7 @@ public sealed class BuildHandler
             return Refused(mod, BuildRefusal.ArchiveFileNotAnAsset, $"'{notAnAsset.Archive}' takes '{notAnAsset.File}', which is not an asset of its source.");
 
         var written = new FolderWrite(_modFolders, mod.Folder, source.Exclude, instance.ExcludedSuffix);
-        if (!baseIsKnown && WhyTheBaseIsNotKnown(mod, installed, written) is { } unknown) return unknown;
+        if (WhyTheBaseIsNotKnown(mod, installed, written) is { } unknown) return unknown;
 
         var packed = source.Archives.SelectMany(archive => archive.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var looseBase = installed.Where(entry => !compiled.Contains(entry.Entry) && !assets.ContainsKey(entry.Entry))
@@ -118,7 +116,8 @@ public sealed class BuildHandler
             made[written.PathOf(archive)] = new Made(FromSource: true, Vouched: archivesRefused.All(refusal => refusal.Item != archive));
 
         return ItemAnswer<BuildRefusal, BuiltMod>.Landed(new BuiltMod(
-            landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)], WriteManifest(mod, instance, source.Shared, made)));
+            landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)], WriteManifest(mod, instance, source.Shared, made),
+            source.Uncommitted));
     }
 
     // A refused plugin's or archive's bytes are not as this build made them.
@@ -148,22 +147,36 @@ public sealed class BuildHandler
 
     // Each file compile writes for the mod's plugins that the folder holds, as this build made it when its plugin compiled.
     private IEnumerable<(string Path, bool Vouched)> CompiledFiles(
-        LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<PluginAddress> plugins,
+        LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<RegisteredPlugin> plugins,
         IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> landed)
     {
         var inFolder = _modFolders.FilePaths(mod.Folder);
         var compiled = landed.Select(item => item.Item).ToHashSet(PluginAddress.Comparer);
-        return plugins.Select(loadOrder.Plugin).OfType<RegisteredPlugin>()
+        return plugins.Where(plugin => _plugins.Exists(plugin.Path))
             .SelectMany(plugin => _plugins.WrittenByCompile(plugin, inFolder, loadOrder.GameRelease).Select(path => (path, compiled.Contains(plugin.Key))));
     }
 
-    private HashSet<string> CompiledPaths(LoadOrderSnapshot loadOrder, IReadOnlyList<PluginAddress> plugins, IReadOnlyList<string> paths) =>
-        plugins.Select(loadOrder.Plugin).OfType<RegisteredPlugin>()
-            .SelectMany(plugin => _plugins.WrittenByCompile(plugin, paths, loadOrder.GameRelease))
+    // A plugin's file is in the mod's folder whether or not the load order holds it yet, as a fresh clone's does not
+    // (mods.md, Build, story 7). Its source folder is the one this build reads.
+    private List<RegisteredPlugin> Placed(LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<string> names)
+    {
+        var provider = new PluginProvider.FromMod(mod.Name, mod.Folder, mod.SourceFolder);
+        return
+        [
+            .. names.Select(name => loadOrder.Plugin(new PluginAddress(name, mod.Name)) is { } registered
+                ? registered with { Provider = provider }
+                : new RegisteredPlugin(name, mod.Name, _modFolders.FileAt(mod.Folder, name), provider, Line: null, new PluginStrings([], []))),
+        ];
+    }
+
+    // A plugin with no file yet tells nothing of its strings until it compiles.
+    private HashSet<string> CompiledPaths(LoadOrderSnapshot loadOrder, IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<string> paths) =>
+        plugins
+            .SelectMany(plugin => _plugins.Exists(plugin.Path) ? _plugins.WrittenByCompile(plugin, paths, loadOrder.GameRelease) : [plugin.Name])
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-    // The base is each installation file's entries at their own paths (mods.md, Build, story 1). A folder that holds
-    // them elsewhere, or not at all, says nothing of where its files come from, so no base is guessed.
+    // The base is each installation file's entries at their own paths (mods.md, Build, story 1); no other is guessed.
+    // A path the manifest names counts as held, so a fresh clone builds back (story 7).
     private ItemAnswer<BuildRefusal, BuiltMod>? WhyTheBaseIsNotKnown(
         ModToBuild mod, IReadOnlyList<(InstallationFile File, string Entry)> installed, FolderWrite written)
     {
@@ -173,7 +186,7 @@ public sealed class BuildHandler
                 $"its installation file '{missing.Path}' is gone.");
         }
 
-        var inFolder = _modFolders.FilePaths(mod.Folder).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var inFolder = _modFolders.FilePaths(mod.Folder).Concat(PathsTheManifestNames(mod)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (installed.FirstOrDefault(entry => !inFolder.Contains(written.PathOf(entry.Entry))) is { File: { } file, Entry: { } entry })
         {
             return Refused(mod, BuildRefusal.BaseNotKnown,
@@ -182,6 +195,18 @@ public sealed class BuildHandler
         }
 
         return null;
+    }
+
+    private IEnumerable<string> PathsTheManifestNames(ModToBuild mod)
+    {
+        try
+        {
+            return _modFolders.ReadManifest(mod.Folder, mod.Name)?.Files.Select(line => line.Path) ?? [];
+        }
+        catch (InvalidDataException)
+        {
+            return [];
+        }
     }
 
     private void WriteBase(InstallationFile installed, HashSet<string> entries, FolderWrite written)
@@ -194,9 +219,9 @@ public sealed class BuildHandler
     }
 
     private async Task<(IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Landed, IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused)> CompileAsync(
-        LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<PluginAddress> plugins, FolderWrite written)
+        LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<RegisteredPlugin> plugins, FolderWrite written)
     {
-        var changedOutside = plugins.Select(loadOrder.Plugin).OfType<RegisteredPlugin>()
+        var changedOutside = plugins
             .Where(plugin => ChangedOutside(plugin, loadOrder.GameRelease))
             .ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         var before = changedOutside.Count == 0 ? [] : HashesIn(mod);

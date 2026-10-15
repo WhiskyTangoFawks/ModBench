@@ -74,7 +74,7 @@ public sealed class BuildModTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task RestoringAModWhoseSourceIsAbsent_ClonesItFromTheRemoteItsBuildNamed_AndBuildsItAtThatCommit()
+    public async Task RestoringAModWhoseSourceIsAbsent_ClonesItFromTheRemoteItsManifestNames_AndBuildsItAtThatCommit()
     {
         await LoadedWithOneModFolderAndTracked();
         var source = Client.SourceFolderSentFor(Origin);
@@ -85,8 +85,8 @@ public sealed class BuildModTraceTests : HostedTests
             Directory.CreateDirectory(Path.GetDirectoryName(copy).Require());
             File.Copy(file, copy);
         }
-        GitProbe.Run(Path.Combine(source, ".git"), source, "remote", "add", "origin", remote);
-        await Answer(await Client.Build([(Origin, _builtFolder)], StatCache));
+        var line = JsonSerializer.Serialize(new { path = Plugin, from = new { remote, commit = GitProbe.Run(Path.Combine(source, ".git"), source, "rev-parse", "HEAD").Trim() } });
+        File.WriteAllText(Path.Combine(_builtFolder, $"{Origin}.manifest"), line + "\n");
         var absent = Path.Combine(_instance.Root, "source", Origin);
 
         var answer = await Answer(await Client.PostAsJsonAsync("/restore-from-manifest", new

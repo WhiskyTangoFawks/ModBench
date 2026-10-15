@@ -492,6 +492,20 @@ describe('Restore from manifest', () => {
     }]]);
   });
 
+  it('warns in its one line when a mod was built from a source holding changes no commit holds, naming it in the Output', async () => {
+    restoreFromManifest.mockResolvedValueOnce({
+      applied: true, landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: [], uncommitted: true }], refused: [],
+    });
+    const { reporter, run } = register();
+
+    await run(RESTORE, modRow('ModA'));
+
+    expect([reporter.landings, reporter.reports]).toEqual([[], [{
+      severity: 'warning', message: 'Restored "ModA" from its manifest.',
+      detail: 'ModA: its source holds changes no commit holds, so its manifest\'s commit does not rebuild these bytes',
+    }]]);
+  });
+
   it('names each skipped mod with what it lacks, and does not call the mods that landed failed', async () => {
     restoreFromManifest.mockResolvedValueOnce({
       applied: true, landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [{ item: 'ModB', reason: "'ModB' was skipped: 'b.nif' has no provider." }],

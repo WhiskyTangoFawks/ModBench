@@ -283,7 +283,7 @@ async function buildMods(deps: BuildDeps, { mods: named, refusedRows, invokedFro
     return {
       applied: true,
       outcome: { landed: outcome.landed, refused: [...outcome.refused, ...refusedRows, ...notSource] },
-      partial: [...partlyBuilt(outcome), ...overwritten(outcome), ...refusedInMods(outcome)],
+      partial: [...partlyBuilt(outcome), ...overwritten(outcome), ...builtUncommitted(outcome), ...refusedInMods(outcome)],
     };
   });
 }
@@ -355,6 +355,16 @@ function overwritten(outcome: BuildOutcome): PartialFailure[] {
   return paths.length === 0 ? [] : [{
     message: `Build overwrote ${paths.length} ${paths.length === 1 ? 'file' : 'files'} that differed.`,
     detail: paths.map((name) => `"${name}"`).join(', '), severity: 'warning',
+  }];
+}
+
+// mods.md, Build, story 1: the manifest names a commit, so a build from changes no commit holds says so.
+function builtUncommitted(outcome: BuildOutcome): PartialFailure[] {
+  const mods = outcome.landed.filter(({ uncommitted }) => uncommitted === true).map(({ mod }) => `"${mod}"`);
+  return mods.length === 0 ? [] : [{
+    message: `Built ${mods.length === 1 ? '1 mod' : `${mods.length} mods`} from changes no commit holds, so ${mods.length === 1 ? 'its' : 'their'} `
+      + `manifest's commit does not rebuild ${mods.length === 1 ? 'it' : 'them'}.`,
+    detail: mods.join(', '), severity: 'warning',
   }];
 }
 

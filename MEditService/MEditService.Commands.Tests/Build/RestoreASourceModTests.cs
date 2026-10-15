@@ -7,6 +7,8 @@ using MEditService.ModFolderAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Build;
 
@@ -69,6 +71,63 @@ public sealed class RestoreASourceModTests : IDisposable
         Assert.Single((await Restore(installed)).Landed);
 
         Assert.Equal("installed a", File.ReadAllText(Path.Combine(ModFolder, "textures", "a.dds")));
+    }
+
+    [Fact]
+    public async Task AFreshClone_WithNoPluginFile_RestoresEachPluginItsSourceCompiles()
+    {
+        var plugin = await ManifestedPluginSource();
+        File.Delete(plugin);
+        _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
+
+        Assert.Single((await Restore()).Landed);
+
+        Assert.True(File.Exists(plugin));
+    }
+
+    [Fact]
+    public async Task APluginWhoseSourceTheLoadOrderDoesNotKnow_IsCompiledFromTheSourceRestoreCloned()
+    {
+        var plugin = await ManifestedPluginSource();
+        var changed = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        changed.Doors.AddNew("ChangedOutsideModbench");
+        changed.WriteToBinary(plugin);
+        var changedBytes = File.ReadAllBytes(plugin);
+        _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4,
+            [new LoadOrderEntry("Fixture.esp", plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: new PluginProvider.FromMod(ModName, ModFolder, null))]));
+
+        Assert.Single((await Restore()).Landed);
+
+        Assert.NotEqual(changedBytes, File.ReadAllBytes(plugin));
+    }
+
+    private async Task<string> ManifestedPluginSource()
+    {
+        var remote = Path.Combine(_root, "plugin-remote");
+        var plugin = Path.Combine(ModFolder, "Fixture.esp");
+        var written = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        written.Doors.AddNew("FixtureDoor");
+        written.WriteToBinary(plugin);
+        _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4,
+            [new LoadOrderEntry("Fixture.esp", plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: new PluginProvider.FromMod(ModName, ModFolder, remote))]));
+        Assert.Single((await TestEditService.InitHandler(_holder).InitAsync([new ModToInit(ModName, remote, [], [])])).Landed);
+        _folders.WriteManifest(ModFolder, ModName, new Manifest([], [], [new ManifestFile("Fixture.esp", new FileProvider.Source(remote, Git(remote, "rev-parse", "HEAD").Trim()))]));
+        return plugin;
+    }
+
+    [Fact]
+    public async Task ASourceAtTheCommitThatHoldsChangesNoCommitHolds_IsBuilt_AndSaysSo()
+    {
+        const string Shared = "https://example.com/mod.git";
+        Assert.Equal(_first, TestAdapters.Source().CommitAtHead(SourceFolder, new SharedSource(RemoteFolder, _first)).Value());
+        Git(SourceFolder, "remote", "set-url", "origin", Shared);
+        File.WriteAllText(Path.Combine(SourceFolder, "assets", "meshes", "c.nif"), "changed");
+        ManifestedAt(_first, Shared);
+
+        var restored = Assert.Single((await Restore()).Landed).Outcome;
+
+        Assert.True(restored.Uncommitted);
+        Assert.Equal("changed", File.ReadAllText(Path.Combine(ModFolder, "meshes", "c.nif")));
     }
 
     [Fact]

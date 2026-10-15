@@ -134,6 +134,18 @@ public sealed class BuildHandlerTests : IDisposable
             ManifestWritten().Require().Files);
     }
 
+    [Theory]
+    [InlineData("assets/meshes/c.nif", "changed", true)]
+    [InlineData("assets/meshes/c.nif", "c", false)]
+    public async Task ABuildFromASharedSource_SaysWhenItsSourceHoldsChangesNoCommitHolds(string written, string text, bool uncommitted)
+    {
+        WriteSource("{\"output\": \"Mod\"}", ("meshes/c.nif", "c"));
+        Shared();
+        Write(SourceFolder, written, Encoding.UTF8.GetBytes(text));
+
+        Assert.Equal(uncommitted, (await Landed()).Uncommitted);
+    }
+
     [Fact]
     public async Task AJustBuiltMod_DiffersFromItsManifestOnlyByTheFilesTheBuildDidNotMake()
     {
@@ -285,6 +297,36 @@ public sealed class BuildHandlerTests : IDisposable
             [.. new[] { "Fixture.esp" }.Concat(stringsFiles).Order(StringComparer.Ordinal).Select(path => new ManifestFile(path, new FileProvider.Source(Remote, commit)))],
             ManifestWritten().Require().Files);
         Assert.Empty(Status().Differing);
+    }
+
+    [Fact]
+    public async Task AFreshClone_WithNoPluginFile_BuildsEachPluginFromItsSource()
+    {
+        await InitializedWithALocalizedPlugin();
+        Directory.Delete(ModFolder, recursive: true);
+        WriteInFolder(MetaIni, "[General]");
+        _holder.Apply(SnapshotPlugins.Snapshot(Path.Combine(_root, "game"), _root, GameRelease.Fallout4, []));
+
+        var built = Assert.Single((await TestEditService.BuildHandler(_holder)
+            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [], [MetaIni])], _noArchives)).Landed).Outcome;
+
+        Assert.Equal(["Fixture.esp"], built.Compiled.Select(plugin => plugin.Item.Name));
+        Assert.True(File.Exists(Path.Combine(ModFolder, "Fixture.esp")));
+    }
+
+    [Fact]
+    public async Task AFreshClonesFolder_ThatHoldsNoInstallationFile_BuildsTheBaseItsManifestNames()
+    {
+        var installed = Download(("textures/a.dds", "installed a"), ("textures/b.dds", "installed b"));
+        WriteSource("{\"output\": \"Mod\"}", ("textures/b.dds", "edited b"));
+        WriteInFolder(MetaIni, "[General]");
+        new ModFolderRepository(TimeProvider.System).WriteManifest(ModFolder, ModName, new Manifest(
+            [new ManifestSource(Installed, installed.Size, installed.Hash)], [],
+            [new ManifestFile("textures/a.dds", new FileProvider.FirstInstallationFile()), new ManifestFile("textures/b.dds", new FileProvider.NoProvider())]));
+
+        await Landed(installed);
+
+        Assert.Equal([(MetaIni, "[General]"), ("textures/a.dds", "installed a"), ("textures/b.dds", "edited b")], FilesIn(ModFolder));
     }
 
     private async Task InitializedWithALocalizedPlugin()

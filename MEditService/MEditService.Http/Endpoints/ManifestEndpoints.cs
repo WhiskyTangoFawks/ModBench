@@ -108,7 +108,7 @@ internal static class ManifestEndpoints
         foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Restore from manifest", item.Refusal.Kind, item.Message, item.Item);
         return Results.Ok(new RestoreFromManifestResponse(
             [.. result.Landed.Select(landed => new RestoredModResponse(
-                landed.Item, landed.Outcome.Written, landed.Outcome.NamedByNoLine, landed.Outcome.StatCacheNotWritten))],
+                landed.Item, landed.Outcome.Written, landed.Outcome.NamedByNoLine, landed.Outcome.StatCacheNotWritten, landed.Outcome.Uncommitted))],
             [.. result.Refused.Select(refused => new ModRestoreRefusal(refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.GameFilesNotFound))]));
     }
 
@@ -213,8 +213,9 @@ internal sealed record RestoreFromManifestModRequest(
     : IModRequest;
 
 /// <summary>A mod whose files are as its manifest says: Written each file written to make it so, NamedByNoLine each file
-/// no line names, for the trash, and StatCacheNotWritten why the stat cache did not keep the read.</summary>
-internal sealed record RestoredModResponse(string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten);
+/// no line names, for the trash, StatCacheNotWritten why the stat cache did not keep the read.</summary>
+internal sealed record RestoredModResponse(
+    string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, bool Uncommitted);
 
 /// <summary>The mods to read the folders of against their manifests, and the stat cache's folder.</summary>
 internal sealed record ModFoldersRequest(IReadOnlyList<ModByFolder> Mods, string StatCache);

@@ -186,6 +186,8 @@ interface BuiltMod {
   overwritten: readonly string[];
   /** What stopped the build after it began writing; the files it overwrote so far are named. */
   failure?: string;
+  /** Its shared source holds changes no commit holds, so its manifest's commit does not rebuild these bytes. */
+  uncommitted?: true;
 }
 
 /** Build's answer: each mod built, with the plugins it compiled and the plugins it refused, or
@@ -258,6 +260,8 @@ interface RestoredMod {
   namedByNoLine: readonly string[];
   /** Why the stat cache could not keep what the restore read. */
   statCacheNotWritten?: string | null;
+  /** As a built mod's. */
+  uncommitted?: boolean;
 }
 
 /** A skipped mod whose only lacks are game files the call did not name, by their paths under the data folder: a call

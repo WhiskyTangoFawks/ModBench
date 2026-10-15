@@ -1052,6 +1052,7 @@ export interface components {
             archivesRefused: components["schemas"]["ArchivePackRefusal"][];
             overwritten: string[];
             failure?: string | null;
+            uncommitted: boolean;
         };
         CellChildRecords: {
             persistent: components["schemas"]["ChildRecordSummary"][];
@@ -1767,6 +1768,7 @@ export interface components {
             written: string[];
             namedByNoLine: string[];
             statCacheNotWritten?: string | null;
+            uncommitted: boolean;
         };
         ScriptCopyRequest: {
             record: components["schemas"]["RecordAddress"];

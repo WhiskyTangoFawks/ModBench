@@ -114,6 +114,8 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
 
     public string PathIn(string modFolder, string file) => Path.GetRelativePath(modFolder, file).Replace('\\', '/');
 
+    public string FileAt(string modFolder, string path) => Path.Combine(modFolder, path);
+
     public bool WriteFile(string folder, string path, Action<Stream> write)
     {
         var target = Path.Combine(folder, path);

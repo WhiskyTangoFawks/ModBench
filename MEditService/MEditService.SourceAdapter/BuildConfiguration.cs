@@ -12,11 +12,11 @@ public sealed record BuildConfigurationChange(string? Output, IReadOnlyList<stri
 /// <paramref name="Files"/>.</summary>
 public sealed record ArchiveToPack(string Path, IReadOnlyList<string> Files);
 
-/// <summary>What a source mod's build writes over the base, as its working tree says: the output folder's name, its
-/// exclusions, each archive to pack, its plugins and assets. Shared is none with no remote.</summary>
+/// <summary>What a source mod's build writes over the base, as its working tree says. Shared is none with no remote;
+/// Uncommitted, that its working tree holds changes no commit holds.</summary>
 public sealed record SourceToBuild(
     string Output, IReadOnlyList<string> Exclude, IReadOnlyList<ArchiveToPack> Archives, IReadOnlyList<string> Plugins,
-    IReadOnlyList<Asset> Assets, SharedSource? Shared = null);
+    IReadOnlyList<Asset> Assets, SharedSource? Shared = null, bool Uncommitted = false);
 
 /// <summary>A source's remote, by the URL git fetches it from, and a commit of it.</summary>
 public sealed record SharedSource(string Remote, string Commit);
@@ -46,13 +46,15 @@ internal static class BuildConfiguration
         if (!IsPathInTheMod(output) || output.Contains('/', StringComparison.Ordinal))
             throw Unreadable(sourceFolder, $"its output '{output}' is not a folder name");
 
+        var shared = SharedSources.SharedOf(sourceFolder);
         return new SourceToBuild(
             output,
             InTheMod(sourceFolder, ExcludeKey, ExclusionsIn(sourceFolder, configuration)),
             ArchivesIn(sourceFolder, configuration),
             SourceRepositoryLayout.PluginsIn(sourceFolder),
             AssetsIn(sourceFolder),
-            SharedSources.SharedOf(sourceFolder));
+            shared,
+            shared is not null && SharedSources.HoldsUncommittedChanges(sourceFolder));
     }
 
     private static IReadOnlyList<Asset> AssetsIn(string sourceFolder)

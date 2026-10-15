@@ -92,7 +92,7 @@ public sealed class RestoreFromManifestHandler(
             return Skipped(mod, RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
         }
 
-        var answer = await build.RebuildAsync(
+        var answer = await build.BuildOneAsync(
             new ModToBuild(mod.Name, sourceFolder, mod.Folder, mod.InstallationFiles, mod.CommittedFiles),
             new InstanceToBuild(instance.ExcludedSuffix, instance.Archives, instance.StatCache));
         if (answer is ItemAnswer<BuildRefusal, BuiltMod>.Refusing refusing)
@@ -113,7 +113,7 @@ public sealed class RestoreFromManifestHandler(
             var manifest = repository.ReadManifest(mod.Folder, mod.Name) ?? throw new InvalidOperationException("A build that lands writes its manifest.");
             return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod(
                 [.. after.Where(file => before.GetValueOrDefault(file.Key) != file.Value).Select(file => file.Key).Order(StringComparer.Ordinal)],
-                repository.NamedByNoLine(mod.Folder, mod.Name, manifest, committed), StatCacheNotWritten: null));
+                repository.NamedByNoLine(mod.Folder, mod.Name, manifest, committed), StatCacheNotWritten: null, outcome.Uncommitted));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
         {

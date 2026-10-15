@@ -15,11 +15,12 @@ public sealed record InstanceToBuild(string ExcludedSuffix, ArchiveVariants? Arc
 /// <summary>The variant an archive of textures packs as, and the one every other archive packs as.</summary>
 public sealed record ArchiveVariants(IArchiveVariant General, IArchiveVariant Textures);
 
-/// <summary>A mod of the selection that built. Overwritten names each file replaced that held other bytes, a plugin's
-/// only when it changed outside Modbench (A source mod, story 4). Failure is what stopped the build part way.</summary>
+/// <summary>A mod of the selection that built. Overwritten names each replaced file that held other bytes, a plugin's
+/// only when changed outside Modbench (A source mod, story 4). Uncommitted: its source holds changes no commit holds.</summary>
 public sealed record BuiltMod(
     IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Compiled,
     IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused,
     IReadOnlyList<ItemRefused<string, ArchiveRefusal>> ArchivesRefused,
     IReadOnlyList<string> Overwritten,
-    string? Failure);
+    string? Failure,
+    bool Uncommitted = false);

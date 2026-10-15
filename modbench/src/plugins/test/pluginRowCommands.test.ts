@@ -651,6 +651,19 @@ describe('modbench.mod.build', () => {
     }]);
   });
 
+  it('names each mod built from a source holding changes no commit holds, beside the landing', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('build', { landed: [{ ...built('ModA'), uncommitted: true }, built('ModB')], refused: [] });
+    const { handler, reporter } = registered(client);
+    const rows = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
+
+    await handler(rows[0], rows);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'warning', message: 'Built 1 mod from changes no commit holds, so its manifest\'s commit does not rebuild it.', detail: '"ModA"',
+    }]);
+  });
+
   it('reports a refusal of the whole selection once, and lands nothing', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', { refused: true, message: 'Could not build 1 mod — No load order has been received.' });
