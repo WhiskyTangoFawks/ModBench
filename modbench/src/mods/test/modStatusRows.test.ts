@@ -9,6 +9,7 @@ vi.mock('vscode', () => ({
 }));
 
 import type { ModStatus } from '../../client';
+import type { InstanceValue } from '../../instanceLoader/instance';
 import { status } from './modStatusFixture';
 import { ModListProvider, type ModlistNode } from '../ModListProvider';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -19,7 +20,7 @@ const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true, version:
 const file = (relativePath: string): OriginFile =>
   ({ relativePath, path: `/instance/mods/ModA/${relativePath}`, sourcePath: `/instance/mods/ModA/${relativePath}`, excluded: false, excludedByName: false });
 
-function providerOver(statuses: readonly ModStatus[], holdsRepository = true) {
+function providerOver(statuses: readonly ModStatus[], holdsRepository = true, over: Partial<InstanceValue> = {}) {
   const byMod = new Map(statuses.map((held) => [held.mod, held]));
   const changed = new EventEmitter<void>();
   const value = instanceValueFixture({
@@ -27,6 +28,7 @@ function providerOver(statuses: readonly ModStatus[], holdsRepository = true) {
     mods: [mod('ModA'), mod('ModB'), mod('ModC')],
     filesByMod: new Map([['ModA', [file('meshes/a.nif'), file('readme.txt')]]]),
     foldersByMod: new Map([['ModA', [{ relativePath: 'meshes', path: '/instance/mods/ModA/meshes', excluded: false }]]]),
+    ...over,
   });
   const provider = new ModListProvider({ instance: new FakeInstance(value), statuses: { of: (name) => byMod.get(name), onDidChange: changed.event } });
   return { provider, byMod, changed };
@@ -74,17 +76,12 @@ describe('a mod row says its status against its manifest after its version (mods
   });
 });
 
-describe('a separator row says no manifest when it has none, under the name the mod manager gives its folder (mods.md, A row, Separator)', () => {
-  const separatorProvider = (held: ModStatus | undefined, holdsRepository = true) => {
-    const value = instanceValueFixture({
-      holdsRepository,
-      mods: [{ kind: 'separator', name: 'Weapons', enabled: true }, mod('ModA')],
-      modFolders: [{ kind: 'separator', name: 'Weapons', path: '/instance/mods/Weapons_separator', modName: 'Weapons_separator' }],
-    });
-    const asked: string[] = [];
-    const statuses = { of: (name: string) => { asked.push(name); return name === 'Weapons_separator' ? held : undefined; }, onDidChange: new EventEmitter<void>().event };
-    return { provider: new ModListProvider({ instance: new FakeInstance(value), statuses }), asked };
-  };
+describe('a separator row says no manifest when it has none, looked up by the name the mod manager gives its folder (mods.md, A row, Separator)', () => {
+  const separatorProvider = (held: ModStatus | undefined, holdsRepository = true) => providerOver(held ? [held] : [], holdsRepository, {
+    mods: [{ kind: 'separator', name: 'weapons', enabled: true }, mod('ModA')],
+    modFolders: [{ kind: 'separator', name: 'Weapons', path: '/instance/mods/Weapons_separator', modName: 'Weapons_separator' }],
+    modNames: new Map([['separator:weapons', 'Weapons_separator']]),
+  });
 
   it.each([
     ['no manifest', status('Weapons_separator', { noManifest: true }), true, 'no manifest'],
@@ -94,7 +91,7 @@ describe('a separator row says no manifest when it has none, under the name the 
   ])('%s', async (_case, held, holdsRepository, description) => {
     const { provider } = separatorProvider(held, holdsRepository);
 
-    expect((await row(provider, 'Weapons')).description).toBe(description);
+    expect((await row(provider, 'weapons')).description).toBe(description);
   });
 
   it('counts in the view\'s badge with the mods that have none', () => {

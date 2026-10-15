@@ -12,7 +12,6 @@ import { dataFolderFile, pluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
 import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress, type StampedFile } from '../wire/pluginAddress';
 import type { ModByFolder } from '../wire/modByFolder';
-import { modNameIn } from './modName';
 
 export { OVERWRITE_ORIGIN };
 export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
@@ -333,7 +332,7 @@ export function loadOrderSnapshotOf(value: {
 function snapshotModsOf({ mods, metadataFiles }: SnapshotModlist, folders: ModFolders | undefined): ModByFolder[] {
   return mods.flatMap((entry) => {
     const folder = folders?.holding(entry);
-    return folder === undefined ? [] : [{ name: modNameIn(folder, entry), folder: folder.path, metadataFiles: [...metadataFiles] }];
+    return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path, metadataFiles: [...metadataFiles] }];
   });
 }
 

@@ -93,7 +93,7 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
-    public async Task AManifestThatNamesNothing_AsASeparatorsIs_LandsWritingNothing_AndNamesItsMetadataNoFileNoLineNames()
+    public async Task AManifestThatNamesNothing_LandsWritingNothing_AndNamingItsMetadataNowhere()
     {
         _folders.WithFile(Mod, "meta.ini", "[General]");
         Manifested(Mod, []);

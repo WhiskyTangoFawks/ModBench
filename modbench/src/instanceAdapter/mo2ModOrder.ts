@@ -5,14 +5,14 @@ import {
   deleteSeparatorInText, insertModAtWinningEnd, insertSeparatorAtIndexInText, moveModsInText, moveSeparatorsInText,
   parseModlist, removeModFromText, renameModLineInText, renameSeparatorInText, separatorModName, setEnabledInText,
 } from './codecs/modlistText';
-import { ensureDir, get, remove, rename, undoAll, type Undo, withLock, write } from './files';
+import { ensureDir, get, remove, undoAll, type Undo, withLock, write } from './files';
 import {
   entryNotFound, type EntryRef, type InstanceAdapter, type ModlistEntry, type ModOrderChange, type MovePlace,
   type SeparatorsPlace,
 } from './instanceAdapter';
 import { mo2FolderName, modlistFile, separatorDir } from './layout';
 import {
-  entryKey, folderHolding, listedAs, listModFolders, modFoldersOf, refuseFolderTaken, type Mo2Context,
+  entryKey, folderHolding, listedAs, listModFolders, modFoldersOf, refuseFolderTaken, renameFolderWithManifest, type Mo2Context,
 } from './mo2Context';
 
 type Mo2ModOrder = Pick<InstanceAdapter, 'changeModOrder'>;
@@ -142,11 +142,10 @@ export function mo2ModOrder(context: Mo2Context): Mo2ModOrder {
       return () => remove(folder);
     }
     if (change.kind === 'renameSeparator') {
-      const from = (await folderHolding(context, { kind: 'separator', name: change.from }))?.path;
+      const from = await folderHolding(context, { kind: 'separator', name: change.from });
       const to = separatorFolderOf(change.to);
-      if (from === undefined || from === to) return undefined;
-      await rename(from, to);
-      return () => rename(to, from);
+      if (from === undefined || from.path === to) return undefined;
+      return renameFolderWithManifest(from, to, separatorModName(change.to));
     }
     return undefined;
   };

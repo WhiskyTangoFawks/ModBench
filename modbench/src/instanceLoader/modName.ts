@@ -1,12 +1,14 @@
-import type { EntryRef, ModFolder, ModlistEntry } from '../instanceAdapter/instanceAdapter';
+import type { EntryRef, ModFolders, ModlistEntry } from '../instanceAdapter/instanceAdapter';
 
-/** The name mEdit and the gestures know `entry` by, held in `folder`: a mod's own, a separator's folder's, so a mod and a
- *  separator that share a name stay two. */
-export const modNameIn = ({ modName }: ModFolder, { kind, name }: EntryRef): string => (kind === 'mod' ? name : modName);
+const keyOf = ({ kind, name }: EntryRef): string => `${kind}:${name}`;
 
-/** The name of a mod order entry; undefined for a separator with no folder. */
-export function modNameOf(folders: readonly ModFolder[] | undefined, entry: ModlistEntry): string | undefined {
-  if (entry.kind === 'mod') return entry.name;
-  const folder = folders?.find(({ kind, name }) => kind === 'separator' && name === entry.name);
-  return folder === undefined ? undefined : folder.modName;
-}
+/** The name the mod manager knows each entry's folder's mod by, the folder matched as it matches names. */
+export const modNamesOf = (entries: readonly ModlistEntry[], folders: ModFolders | undefined): ReadonlyMap<string, string> =>
+  new Map(entries.flatMap((entry) => {
+    const folder = folders?.holding(entry);
+    return folder === undefined ? [] : [[keyOf(entry), folder.modName] as const];
+  }));
+
+/** The name mEdit and the gestures know `entry` by: its folder's mod name, which a separator's name is not; undefined
+ *  when it has no folder. */
+export const modNameOf = (modNames: ReadonlyMap<string, string>, entry: EntryRef): string | undefined => modNames.get(keyOf(entry));

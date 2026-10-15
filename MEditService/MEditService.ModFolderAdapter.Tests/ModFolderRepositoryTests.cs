@@ -213,7 +213,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void AManifestThatNamesNothing_IsWritten_ReadBack_AndMakesAFolderOfItsMetadataAlone_AsItsManifestSays()
+    public void AManifestThatNamesNothing_IsWritten_ReadBack_AndAgreesWithAFolderOfItsMetadataAlone()
     {
         Write("meta.ini", "[General]");
         var nothing = new Manifest([], [], []);

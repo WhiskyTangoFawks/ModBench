@@ -8,11 +8,11 @@ import {
 import { parseDownloadMeta, setHiddenInText, setInstalledInText, setUninstalledInText } from './codecs/downloads';
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadMeta, trashDownloadMeta } from './downloadMeta';
-import { ensureDir, exists, putIfChanged, rename } from './files';
+import { ensureDir, exists, putIfChanged } from './files';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from './instanceAdapter';
 import { downloadFile, pluginsFile, settingsFile } from './layout';
 import { sourceModsIn } from './sourceMods';
-import { currentDownloadsDir, entryKey, folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
+import { currentDownloadsDir, entryKey, folderHolding, newModFolder, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
 
 type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
@@ -72,7 +72,7 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
       if (entryKey(holding) !== entryKey({ kind: 'mod', name: to })) {
         await refuseFolderTaken(context, { kind: 'mod', name: to }, target);
       }
-      await rename(holding.path, target);
+      await renameFolderWithManifest(holding, target, to);
     },
 
     async trashEntryFolder(entry, trash) {

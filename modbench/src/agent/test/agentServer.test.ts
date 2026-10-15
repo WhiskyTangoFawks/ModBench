@@ -168,11 +168,12 @@ describe('the agent server, given an instance value', () => {
     beforeEach(() => { statusRead.asked = []; });
 
     it('asks for every mod folder and separator folder in every profile, and answers each status', async () => {
-      statusRead.answer = [status('Big Rocks', { differing: ['a.nif'], noProvider: ['b.nif'] })];
+      statusRead.answer = [status('Big Rocks', { differing: ['a.nif'], noProvider: ['b.nif'] }), status('Textures_separator', { noManifest: true })];
       const client = await clientOf(inRepository);
 
       expect(await read(client, 'list_mod_statuses')).toEqual([
-        { mod: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], noProvider: ['b.nif'], metadataDiffers: false },
+        { kind: 'mod', name: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], noProvider: ['b.nif'], metadataDiffers: false },
+        { kind: 'separator', name: 'Textures', noManifest: true, differing: [], namedByNoLine: [], gone: [], noProvider: [], metadataDiffers: false },
       ]);
       expect(statusRead.asked).toEqual([['Big Rocks', 'Textures_separator', 'InAnotherProfile']]);
     });

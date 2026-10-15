@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { FileOrigin, Mod, OriginFile, OriginFolder, Separator } from '../instanceLoader/instance';
+import type { EntryRef, FileOrigin, Mod, OriginFile, OriginFolder, Separator } from '../instanceLoader/instance';
 import { modNameOf } from '../instanceLoader/modName';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { groupModlist, type ModlistGroup, type ModlistTree } from '../drivingLib/modlistTree';
@@ -228,20 +228,15 @@ export class ModListProvider
   /** The modlist's badge: how many mods differ from their manifests or have none (modlist-source.md, Status, story 5). */
   badge(): { value: number; tooltip: string } | undefined {
     const count = this.instanceValue.mods.filter((entry) => {
-      if (entry.kind === 'separator') return this.statusOfSeparator(entry)?.noManifest === true;
-      const status = this.statusOf(entry.name);
-      return status !== undefined && countsInBadge(status);
+      const status = this.statusOf(entry);
+      return status !== undefined && (entry.kind === 'mod' ? countsInBadge(status) : status.noManifest);
     }).length;
     return count === 0 ? undefined : { value: count, tooltip: `Mods that differ from their manifests or have none: ${count}` };
   }
 
-  private statusOf(mod: string): ModStatus | undefined {
-    return this.instanceValue.holdsRepository ? this.statuses.of(mod) : undefined;
-  }
-
-  private statusOfSeparator(separator: Separator): ModStatus | undefined {
-    const name = modNameOf(this.instanceValue.modFolders, separator);
-    return name === undefined ? undefined : this.statusOf(name);
+  private statusOf(entry: EntryRef): ModStatus | undefined {
+    const name = modNameOf(this.instanceValue.modNames, entry);
+    return this.instanceValue.holdsRepository && name !== undefined ? this.statuses.of(name) : undefined;
   }
 
   /** The view's message line while no filter is active. Overwrite is always a row, so an empty
@@ -340,7 +335,7 @@ export class ModListProvider
   }
 
   private separatorNode(separator: Separator, mods: Mod[], shown?: ChildrenShown): SeparatorNode {
-    return new SeparatorNode(separator, mods, shown, this.statusOfSeparator(separator));
+    return new SeparatorNode(separator, mods, shown, this.statusOf(separator));
   }
 
   private overwriteNode(): OverwriteNode {
@@ -366,7 +361,7 @@ export class ModListProvider
     return new ModNode(m, {
       holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked,
       sourceFolder: tracked ? this.instanceValue.paths.sourceDirs.get(m.name) : undefined,
-      status: this.statusOf(m.name),
+      status: this.statusOf(m),
     }, found.files, found.folders, shown);
   }
 
@@ -374,7 +369,7 @@ export class ModListProvider
     const conflict = (origin: FileOrigin, file: OriginFile) =>
       fileOrderConflictOf(this.instanceValue.files.get(file.relativePath), origin);
     const differs = (origin: FileOrigin, relativePath: string) => {
-      const status = origin.kind === 'mod' ? this.statusOf(origin.name) : undefined;
+      const status = origin.kind === 'mod' ? this.statusOf(origin) : undefined;
       return status !== undefined && [...differingFiles(status)].some((path) => path === relativePath || path.startsWith(`${relativePath}/`));
     };
     return { shown: row.shown, matches: this.matches, conflict, differs };

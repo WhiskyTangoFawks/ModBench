@@ -8,6 +8,7 @@ import {
   type LoadOrderSnapshotValue,
 } from './loadOrderSnapshot';
 import { withMetadataRead } from '../wire/modByFolder';
+import { modNameOf, modNamesOf } from './modName';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { present } from '../ports/present';
 import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './downloadRows';
@@ -22,7 +23,7 @@ import { modSyncArgumentsOf, pluginSyncArgumentsOf, type ModSyncArguments, type 
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
-export type { FileOrigin, Mod, ModlistEntry, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
+export type { EntryRef, FileOrigin, Mod, ModlistEntry, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow, UpgradeCandidate, UpgradeTier } from './downloadRows';
 export type { Copy, FileCopies } from './sameCopies';
 export type { ModSyncArguments, PluginSyncArguments } from './syncArguments';
@@ -58,6 +59,8 @@ export interface InstanceValue {
   /** Every mod folder as the entry it holds, listed or not: what mod sync compares mod order
    *  with, and the new-empty-mod refusal's own input. Undefined when there is none to list. */
   readonly modFolders: readonly ModFolder[] | undefined;
+  /** The mod manager's name for the folder of each mod order entry that has one (`modNameOf`). */
+  readonly modNames: ReadonlyMap<string, string>;
   /** The tracked mods (ADR-0007). */
   readonly trackedMods: ReadonlySet<string>;
   /** Every mod a repository in the source folder builds, listed in the mod order or not. */
@@ -171,6 +174,7 @@ function pathsOf(
 const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   mods: [],
   modFolders: [],
+  modNames: new Map(),
   trackedMods: new Set(),
   sourceMods: new Set(),
   holdsRepository: false,
@@ -400,6 +404,7 @@ export class Instance implements Subscription {
       [...reading.folderMeta].map(([name, meta]) => ({ name, archiveFilename: meta.archiveFilename })),
     );
     const modFolderList = modFolders?.all;
+    const modNames = modNamesOf(entries, modFolders);
     const paths = pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders, sourceMods);
     const syncSource = {
       activeProfile: profile, modFolders: modFolderList, files: index.files, dataFolderPlugins, pluginsLoadedWithNoLine,
@@ -417,6 +422,7 @@ export class Instance implements Subscription {
     return {
       mods: entries,
       modFolders: modFolderList,
+      modNames,
       trackedMods: new Set(entries.flatMap((entry) => (entry.kind === 'mod' && paths.sourceDirs.has(entry.name) ? [entry.name] : []))),
       sourceMods: new Set(paths.sourceDirs.keys()),
       holdsRepository: reading.holdsRepository,
@@ -441,7 +447,7 @@ export class Instance implements Subscription {
       pluginsLoadedWithNoLine,
       loadOrderSnapshot: loadOrderSnapshot === undefined || 'refusal' in loadOrderSnapshot
         ? loadOrderSnapshot
-        : await withMetadata(await stampedSnapshot(loadOrderSnapshot, (path) => adapter.fileStamp(path)), entries, adapter),
+        : await withMetadata(await stampedSnapshot(loadOrderSnapshot, (path) => adapter.fileStamp(path)), entries, modNames, adapter),
       overwriteFiles: runtimeOutput.files,
       overwriteFolders: runtimeOutput.folders,
       paths,
@@ -451,14 +457,14 @@ export class Instance implements Subscription {
   }
 }
 
-// A separator has no metadata: its snapshot entry carries none (modlist-source.md, Status, story 7).
 async function withMetadata(
-  snapshot: LoadOrderSnapshotValue, entries: readonly ModlistEntry[], { metadataOf }: Pick<InstanceAdapter, 'metadataOf'>,
+  snapshot: LoadOrderSnapshotValue, entries: readonly ModlistEntry[], modNames: ReadonlyMap<string, string>,
+  { metadataOf }: Pick<InstanceAdapter, 'metadataOf'>,
 ): Promise<LoadOrderSnapshotValue> {
-  const metaOf = new Map(entries.flatMap((entry) => (entry.kind === 'mod' ? [[entry.name, entry] as const] : [])));
-  const read = new Map((await withMetadataRead(
-    snapshot.mods.filter(({ name }) => metaOf.has(name)),
-    async (name) => ({ kind: 'read' as const, answer: await metadataOf(present(metaOf.get(name), name)) }),
-  )).map((mod) => [mod.name, mod]));
-  return { ...snapshot, mods: snapshot.mods.map((mod) => read.get(mod.name) ?? mod) };
+  const metaOf = new Map(entries.flatMap((entry) => {
+    const name = modNameOf(modNames, entry);
+    return name === undefined ? [] : [[name, entry.kind === 'mod' ? entry : {}] as const];
+  }));
+  const mods = await withMetadataRead(snapshot.mods, async (name) => ({ kind: 'read' as const, answer: await metadataOf(present(metaOf.get(name), name)) }));
+  return { ...snapshot, mods };
 }

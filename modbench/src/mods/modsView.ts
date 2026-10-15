@@ -136,7 +136,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
 // modlist-source.md, Status, story 1: status shows while the instance holds a repository.
 function modStatusesOf({ instance, modStatus, log }: Pick<ModsViewDeps, 'instance' | 'modStatus' | 'log'>) {
   const statuses = new ModStatuses(
-    modStatus.push, modStatus.read, log, () => instance.value.mods.flatMap((entry) => modNameOf(instance.value.modFolders, entry) ?? []));
+    modStatus.push, modStatus.read, log, () => instance.value.mods.flatMap((entry) => modNameOf(instance.value.modNames, entry) ?? []));
   return { statuses, statusMessage: () => (instance.value.holdsRepository ? statuses.message() : undefined) };
 }
 

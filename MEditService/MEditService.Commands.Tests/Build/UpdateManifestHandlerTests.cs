@@ -86,7 +86,7 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public async Task AFolderOfItsMetadataAlone_AsASeparatorsIs_GetsAManifestThatNamesNothing()
+    public async Task AFolderOfItsMetadataAlone_GetsAManifestThatNamesNothing()
     {
         _folders.WithFile(Mod, "meta.ini", "[General]");
 
