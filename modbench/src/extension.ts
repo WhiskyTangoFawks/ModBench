@@ -23,6 +23,7 @@ import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { sevenZip, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
+import type { ReadModStatus } from './agent/modStatuses';
 import { agentPort, attachPort, gameDirectoryOverrides, inheritedPythonPath, onGameDirectoryChange, onStringsLanguageChange, onTerminalEnvChange, stringsLanguage } from './workspaceConfig';
 import { createPlugins, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
@@ -74,6 +75,7 @@ interface ViewsDeps {
 interface InstanceSide {
   /** Absent together, on the path with no instance to read. */
   instance?: Instance;
+  modStatus?: ReadModStatus;
   toolboxProvider: ToolboxProvider;
   sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
@@ -179,7 +181,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     commands, nextRefill: plugins.nextRefill, instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
-    instance, toolboxProvider,
+    instance, toolboxProvider, modStatus: (names) => modlist.modStatus(names),
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue],
     downloadsSelection: () => downloadsView.selection,
@@ -269,7 +271,7 @@ export function activate(context: vscode.ExtensionContext): void {
     views,
     plugins,
     editor,
-    serveAgent({ port: agentPort(), instance: views.instance, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel }),
+    serveAgent({ port: agentPort(), instance: views.instance, modStatus: views.modStatus, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel }),
     reachMEditFromTerminals(context.environmentVariableCollection, meditClient, vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath, inheritedPythonPath, onTerminalEnvChange),
     createSourceLanguage({
       client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),

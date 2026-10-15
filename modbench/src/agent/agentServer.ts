@@ -15,6 +15,7 @@ import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
 import { INSTANCE_READS } from './instanceReads';
 import { Refusal } from '../drivingLib/refusal';
 import { parseOrRefuse } from './refusal';
+import { LIST_MOD_STATUSES, type ReadModStatus } from './modStatuses';
 import { LIST_REFERENCES, READ_RECORD } from './readRecord';
 import { RESOLVE_NAMES } from './resolveNames';
 import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironment';
@@ -28,6 +29,8 @@ export interface AgentServerOptions {
   instance: Pick<InstanceView, 'value' | 'sequence'> | undefined;
   mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences'>;
   terminalEnvironment: TerminalEnvironment;
+  /** Absent with the instance. */
+  modStatus: ReadModStatus | undefined;
   reporter: Reporter;
   log: Log;
 }
@@ -81,9 +84,10 @@ A plugin with source is a text file in a repository: edit it with your file tool
 
 Ask Modbench what the files cannot answer.`;
 
-function mcpServerOf({ instance, mEdit, terminalEnvironment, log }: AgentServerOptions): McpServer {
+function mcpServerOf({ instance, mEdit, terminalEnvironment, modStatus, log }: AgentServerOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
   for (const read of INSTANCE_READS) register(server, log, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance)));
+  register(server, log, { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), modStatus));
   register(server, log, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), args));
   register(server, log, RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
   register(server, log, RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));

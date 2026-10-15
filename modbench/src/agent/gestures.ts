@@ -128,6 +128,23 @@ const INSTALL = gestureInput(
   ),
 );
 
+const GIT_INIT = gestureInput('nothing', z.object({}), () => new AgentCall([], {}));
+
+const MANIFEST_MODS_TAKES = 'argument?: the mods or separators, each { name, kind? } as list_mods names it, or none for every mod';
+const MANIFEST_MODS = z.object({ argument: z.array(ENTRY_NAME).optional() });
+
+const UPDATE_MANIFEST = gestureInput(
+  MANIFEST_MODS_TAKES,
+  MANIFEST_MODS,
+  (value, { argument }) => new AgentCall(entryArguments(value, argument ?? []), {}),
+);
+
+const RESTORE_FROM_MANIFEST = gestureInput(
+  `${MANIFEST_MODS_TAKES}; options: { force?: true to overwrite a file whose bytes differ from its manifest, which is otherwise refused for that mod, listing the files }`,
+  MANIFEST_MODS.extend({ options: z.object({ force: z.boolean().optional() }).optional() }),
+  (value, { argument, options }) => new AgentCall(entryArguments(value, argument ?? []), { force: options?.force }),
+);
+
 const PLUGIN_NAME = z.object({ name: z.string(), origin: z.string().optional() });
 const PLUGIN_TAKES = 'each { name, origin? } as list_plugins shows it';
 
@@ -217,6 +234,9 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.plugin.create', CREATE_PLUGIN],
   ['modbench.plugin.rename', RENAME_PLUGIN],
   ['modbench.record.open', OPEN_RECORD],
+  ['modbench.modlist.gitInit', GIT_INIT],
+  ['modbench.mod.updateManifest', UPDATE_MANIFEST],
+  ['modbench.mod.restoreFromManifest', RESTORE_FROM_MANIFEST],
 ]);
 
 type GestureOutcome = GestureResult<unknown>;

@@ -31,6 +31,10 @@ public enum DecompileRefusal
     /// as it was.</summary>
     WriteFailed,
 
+    /// <summary>git could not report whether the plugin source has working-tree changes, so nothing says a decompile
+    /// would lose none. Nothing was written.</summary>
+    WorkingTreeStatusUnreadable,
+
     /// <summary>git is not on PATH (ADR-0007).</summary>
     GitUnavailable,
 

@@ -25,6 +25,9 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { SILENT_LOG } from '../../ports/log';
 import { present } from '../../ports/present';
+import { status } from '../../mods/test/modStatusFixture';
+import { localFailure } from '../../wire/readFailed';
+import type { ReadModStatus } from '../modStatuses';
 
 const PORT_SETTING = 'modbench.agent.port';
 
@@ -57,13 +60,16 @@ afterEach(async () => {
 
 const NO_ENVIRONMENT = { forEach: () => undefined };
 
+const statusRead: { asked: (readonly string[])[]; answer: Awaited<ReturnType<ReadModStatus>> } = { asked: [], answer: [] };
+const readStatus: ReadModStatus = (mods) => { statusRead.asked.push(mods); return Promise.resolve(statusRead.answer); };
+
 async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const warned: string[] = [];
   const errored: string[] = [];
   const server = serveAgent({
-    port, instance, mEdit, terminalEnvironment, reporter,
+    port, instance, mEdit, terminalEnvironment, reporter, modStatus: readStatus,
     log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => { lines.push(line); warned.push(line); }, error: (line) => { lines.push(line); errored.push(line); } },
   });
   running.push(server);
@@ -96,7 +102,7 @@ describe('the agent server, given an instance value', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mods', 'list_plugins', 'list_profiles', 'list_references', 'list_source_problems', 'read_record', 'resolve_instance_names', 'resolve_names', 'run_gesture', 'script_environment', 'select_rows']);
+    expect(tools.map((tool) => tool.name).sort()).toEqual(['list_downloads', 'list_file_conflicts', 'list_mod_statuses', 'list_mods', 'list_plugins', 'list_profiles', 'list_references', 'list_source_problems', 'read_record', 'resolve_instance_names', 'resolve_names', 'run_gesture', 'script_environment', 'select_rows']);
   });
 
   it('hands the client its instructions on initialize', async () => {
@@ -135,6 +141,38 @@ describe('the agent server, given an instance value', () => {
       { name: 'A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: true },
       { name: 'B.esp', origin: 'Big Rocks', line: 1, enabled: false, winning: true },
     ]);
+  });
+
+  describe('reading each mod\'s status against its manifest', () => {
+    const inRepository = new FakeInstance({ ...VALUE, holdsRepository: true });
+    beforeEach(() => { statusRead.asked = []; });
+
+    it('asks for every mod, not the separators, and answers each status', async () => {
+      statusRead.answer = [status('Big Rocks', { differing: ['a.nif'], noProvider: ['b.nif'] })];
+      const client = await clientOf(inRepository);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([
+        { mod: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], noProvider: ['b.nif'] },
+      ]);
+      expect(statusRead.asked).toEqual([['Big Rocks']]);
+    });
+
+    it('refuses an instance that is no repository, which has no manifest to compare', async () => {
+      const client = await clientOf(new FakeInstance(VALUE));
+
+      const refusal = await call(client, 'list_mod_statuses');
+
+      expect(refusal.isError).toBe(true);
+      expect(refusal.text).toContain('repository');
+      expect(statusRead.asked).toEqual([]);
+    });
+
+    it('refuses a read that failed, with why', async () => {
+      statusRead.answer = localFailure('git is gone');
+      const client = await clientOf(inRepository);
+
+      expect(await call(client, 'list_mod_statuses')).toEqual({ isError: true, text: "The mods' status could not be read: git is gone" });
+    });
   });
 
   it('reads the downloaded files by file name', async () => {
@@ -770,6 +808,40 @@ describe('the agent server, running a gesture', () => {
         { kind: 'file', origin: { kind: 'mod', name: 'C' }, relativePath: 'MESHES/x.nif' },
         { kind: 'file', origin: { kind: 'mod', name: 'B' }, relativePath: 'Textures/Rock.DDS' },
       ], {})]]);
+    });
+  });
+
+  describe('the modlist gestures', () => {
+    const fire = async (args: Record<string, unknown>) => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const { client } = await served();
+      return call(client, 'run_gesture', args);
+    };
+
+    it('fires git init with nothing', async () => {
+      await fire({ command: 'modbench.modlist.gitInit' });
+
+      expect(fired.calls).toEqual([['modbench.modlist.gitInit', new AgentCall([], {})]]);
+    });
+
+    it.each(['modbench.mod.updateManifest', 'modbench.mod.restoreFromManifest'])(
+      'fires %s with the mods and the separators named as its Argument', async (command) => {
+        await fire({ command, argument: [{ name: 'B' }, { name: 'Textures', kind: 'separator' }] });
+
+        expect(fired.calls).toEqual([[command, new AgentCall([{ kind: 'mod', name: 'B' }, { kind: 'separator', name: 'Textures' }], {})]]);
+      });
+
+    it.each(['modbench.mod.updateManifest', 'modbench.mod.restoreFromManifest'])(
+      'fires %s with no Argument for every mod', async (command) => {
+        await fire({ command });
+
+        expect(fired.calls).toEqual([[command, new AgentCall([], {})]]);
+      });
+
+    it('fires restore from manifest with force as an Option', async () => {
+      await fire({ command: 'modbench.mod.restoreFromManifest', argument: [{ name: 'B' }], options: { force: true } });
+
+      expect(fired.calls).toEqual([['modbench.mod.restoreFromManifest', new AgentCall([{ kind: 'mod', name: 'B' }], { force: true })]]);
     });
   });
 

@@ -42,6 +42,7 @@ import { registerModlistCommands } from '../modlistGestures';
 import { recordingReporter, scriptedDialog, type ScriptedDialog } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
+import { AgentCall } from '../../drivingLib/agentGesture';
 import type { ModlistSourceCommands } from '../../sourceCommands/modlistSourceCommands';
 
 const gitInit = vi.fn<ModlistSourceCommands['gitInit']>();
@@ -569,5 +570,155 @@ describe('Restore from manifest', () => {
     await expect(run(RESTORE)).rejects.toThrow('boom');
 
     expect(said).toEqual(['Restore from manifest — reading what it would destroy…', ...givenBack]);
+  });
+});
+
+describe('An agent call', () => {
+  const mod = (name: string) => ({ kind: 'mod' as const, name });
+  const separator = (name: string) => ({ kind: 'separator' as const, name });
+  const LANDED_NOTHING = { applied: true, outcome: { landed: [], refused: [] } };
+
+  it('git init makes the repository under the Toolbox\'s progress and answers its outcome, reporting nothing', async () => {
+    const { reporter, run } = register();
+
+    expect(await run('modbench.modlist.gitInit', new AgentCall([], {}))).toEqual(LANDED_NOTHING);
+    expect([progressSteps[0], reporter.reports, reporter.landings]).toEqual(['progress opens on modbench.toolbox', [], []]);
+  });
+
+  it('git init answers a refusal as a refusal, reporting nothing', async () => {
+    gitInit.mockResolvedValueOnce({ applied: false, refusal: '/instance already holds a repository.' });
+    const { reporter, run } = register();
+
+    expect(await run('modbench.modlist.gitInit', new AgentCall([], {}))).toEqual({ applied: false, refusal: '/instance already holds a repository.' });
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('update manifest acts on the mods it is given, a separator for the mods it holds, with no progress notification', async () => {
+    const { run } = register();
+
+    await run(UPDATE, new AgentCall([mod('ModB'), separator('Weapons')], {}));
+
+    expect(sentMods(updateManifest)).toEqual([['ModB', 'ModA']]);
+    expect(notification.cancellable).toEqual([]);
+  });
+
+  it('update manifest acts on every mod given none', async () => {
+    const { run } = register();
+
+    await run(UPDATE, new AgentCall([], {}));
+
+    expect(sentMods(updateManifest)).toEqual([EVERY_MOD]);
+  });
+
+  it('update manifest answers what landed and what was refused, each file with no provider and each note as a part that failed, and reports nothing', async () => {
+    updateManifest.mockResolvedValueOnce({
+      applied: true, notes: ['ModA: a game file was unreadable'],
+      landed: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif'] }],
+      refused: [{ item: 'ModB', reason: "'ModB' was not updated." }],
+    });
+    const { reporter, run } = register();
+
+    const answer = await run(UPDATE, new AgentCall([], {}));
+
+    expect(answer).toEqual({
+      applied: true,
+      outcome: { landed: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif'] }], refused: [{ item: 'ModB', reason: "'ModB' was not updated." }] },
+      partial: [
+        { message: 'Update manifest:', detail: 'ModA: a.nif has no provider', severity: 'warning' },
+        { message: 'Update manifest:', detail: 'ModA: a game file was unreadable', severity: 'warning' },
+      ],
+    });
+    expect([reporter.reports, reporter.landings]).toEqual([[], []]);
+  });
+
+  it('update manifest answers a refusal of the whole as a refusal', async () => {
+    updateManifest.mockResolvedValueOnce({ applied: false, refusal: 'Could not update manifests: the game folder was not found.' });
+    const { run } = register();
+
+    expect(await run(UPDATE, new AgentCall([], {}))).toEqual({ applied: false, refusal: 'Could not update manifests: the game folder was not found.' });
+  });
+
+  describe('restore from manifest', () => {
+    const differs = { mod: 'ModA', differing: ['a.nif', 'b.nif'], namedByNoLine: ['stray.txt'] };
+
+    it('restores a mod whose only loss is files no line names, which the trash keeps, and asks nothing', async () => {
+      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [{ mod: 'ModA', differing: [], namedByNoLine: ['stray.txt'] }], refused: [] });
+      const { ask, run } = register();
+
+      await run(RESTORE, new AgentCall([mod('ModA')], {}));
+
+      expect([sentMods(restoreFromManifest), ask.asked]).toEqual([[['ModA']], []]);
+    });
+
+    it('refuses a mod that would overwrite files whose bytes differ, listing them and naming force, and restores the rest', async () => {
+      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [differs], refused: [] });
+      const { ask, reporter, run } = register();
+
+      const answer = await run(RESTORE, new AgentCall([mod('ModA'), mod('ModB')], {}));
+
+      expect(sentMods(restoreFromManifest)).toEqual([['ModB']]);
+      expect(answer).toEqual({
+        applied: true,
+        outcome: {
+          landed: [],
+          refused: [{ item: 'ModA', reason: 'it would overwrite files whose bytes differ from its manifest: a.nif, b.nif. Request it again with force to overwrite them.' }],
+        },
+        partial: [],
+      });
+      expect([ask.asked, reporter.reports]).toEqual([[], []]);
+    });
+
+    it('writes nothing when every mod is refused', async () => {
+      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [differs], refused: [] });
+      const { run } = register();
+
+      const answer = await run(RESTORE, new AgentCall([mod('ModA')], {}));
+
+      expect([sentMods(restoreFromManifest), progressSteps]).toEqual([[], []]);
+      expect(answer).toMatchObject({ applied: true, outcome: { landed: [], refused: [{ item: 'ModA' }] } });
+    });
+
+    it('restores a mod that differs when forced', async () => {
+      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [differs], refused: [] });
+      const { run } = register();
+
+      await run(RESTORE, new AgentCall([mod('ModA')], { force: true }));
+
+      expect(sentMods(restoreFromManifest)).toEqual([['ModA']]);
+    });
+
+    it('answers what it restored, the mods mEdit would not restore refused with why, and a stat cache it could not write as a part that failed', async () => {
+      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [{ item: 'ModB', reason: 'its name gives it no folder' }] });
+      const landed = { mod: 'ModA', written: [], namedByNoLine: [], statCacheNotWritten: 'disk full' };
+      restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [landed], refused: [] });
+      const { run } = register();
+
+      const answer = await run(RESTORE, new AgentCall([], {}));
+
+      expect(sentMods(restoreFromManifest)).toEqual([['ModA', 'InAnotherProfile']]);
+      expect(answer).toEqual({
+        applied: true,
+        outcome: { landed: [landed], refused: [{ item: 'ModB', reason: 'its name gives it no folder' }] },
+        partial: [{ message: 'Restore from manifest:', detail: 'ModA: the stat cache could not be written: disk full', severity: 'warning' }],
+      });
+    });
+
+    it('answers a restore that stopped as a refusal naming the mods not finished', async () => {
+      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [] });
+      restoreFromManifest.mockResolvedValueOnce({ applied: false, refusal: 'Could not restore 1 mod: mEdit stopped.', unfinished: ['ModA'] });
+      const { run } = register();
+
+      expect(await run(RESTORE, new AgentCall([mod('ModA')], {})))
+        .toEqual({ applied: false, refusal: 'Could not restore 1 mod: mEdit stopped.', detail: 'Not finished: "ModA". Restoring again finishes them.' });
+    });
+
+    it('answers a refusal when mEdit could not say what the restore destroys', async () => {
+      whatRestoreDestroys.mockResolvedValueOnce({ refusal: 'Could not ask what restore from manifest destroys: mEdit gave no answer.' });
+      const { run } = register();
+
+      expect(await run(RESTORE, new AgentCall([mod('ModA')], {})))
+        .toEqual({ applied: false, refusal: 'Could not ask what restore from manifest destroys: mEdit gave no answer.' });
+      expect(sentMods(restoreFromManifest)).toEqual([]);
+    });
   });
 });

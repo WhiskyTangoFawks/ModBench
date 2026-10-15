@@ -56,7 +56,7 @@ public sealed class DecompilePluginHandler
         {
             if (!repository.WorkingTreeChangesOf(key).Holds(out var changes, out var unread))
             {
-                return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.WriteFailed, $"Could not read what changed in {plugin.Name}'s source: {unread.Reason}");
+                return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.WorkingTreeStatusUnreadable, $"Could not read what changed in {plugin.Name}'s source: {unread.Reason}");
             }
 
             if (changes.Count > 0)
