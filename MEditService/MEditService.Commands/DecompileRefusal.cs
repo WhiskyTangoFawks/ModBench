@@ -34,6 +34,10 @@ public enum DecompileRefusal
     /// <summary>git is not on PATH (ADR-0007).</summary>
     GitUnavailable,
 
+    /// <summary>The plugin source has working-tree changes a decompile would replace, and the request did not
+    /// force; the way out is requesting it again with force.</summary>
+    WorkingTreeChanges,
+
     /// <summary>No load order has been received, so the gesture has nothing to act on.</summary>
     NoLoadOrder,
 }

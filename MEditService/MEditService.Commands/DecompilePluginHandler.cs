@@ -18,10 +18,10 @@ public sealed class DecompilePluginHandler
         (_loadOrder, _source, _decompiler) = (loadOrder, source, new PluginDecompiler(logger, adapter, source));
 
     /// <summary>Refuses with <see cref="DecompileRefusal.NoLoadOrder"/>, writing nothing, when none is held; git
-    /// missing refuses the whole selection once, before any write (commands.md, A selection is one
-    /// gesture).</summary>
+    /// missing refuses the whole selection once. A plugin whose source has working-tree changes is refused
+    /// unless <paramref name="force"/>.</summary>
     public Task<SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>> DecompileAsync(
-        IReadOnlyList<PluginAddress> plugins, CancellationToken cancel = default)
+        IReadOnlyList<PluginAddress> plugins, bool force, CancellationToken cancel = default)
     {
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
         {
@@ -32,12 +32,12 @@ public sealed class DecompilePluginHandler
         return ItemWrite.OverAsync(_source, plugins, PluginAddress.Comparer, DecompileRefusal.GitUnavailable, plugin =>
         {
             cancel.ThrowIfCancellationRequested();
-            return DecompileOneAsync(loadOrder, plugin, cancel);
+            return DecompileOneAsync(loadOrder, plugin, force, cancel);
         });
     }
 
     private async Task<ItemAnswer<DecompileRefusal, NoOutcome>> DecompileOneAsync(
-        LoadOrderSnapshot loadOrder, PluginAddress key, CancellationToken cancel)
+        LoadOrderSnapshot loadOrder, PluginAddress key, bool force, CancellationToken cancel)
     {
         if (loadOrder.Plugin(key) is not { } plugin)
         {
@@ -52,6 +52,20 @@ public sealed class DecompilePluginHandler
         }
 
         var repository = _source.OverFolder(mod, loadOrder.GameRelease);
+        if (!force)
+        {
+            if (!repository.WorkingTreeChangesOf(key).Holds(out var changes, out var unread))
+            {
+                return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.WriteFailed, $"Could not read what changed in {plugin.Name}'s source: {unread.Reason}");
+            }
+
+            if (changes.Count > 0)
+            {
+                return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.WorkingTreeChanges,
+                    $"{plugin.Name}'s source has working-tree changes that decompile would replace: {string.Join(", ", changes)}. Request it again with force to replace them.");
+            }
+        }
+
         var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, mod.Folder, onParsed: () => { }, cancel);
         if (decompiled.Source is not { } source) return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(decompiled.Refusal, decompiled.Message);
 

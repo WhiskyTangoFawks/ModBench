@@ -336,7 +336,7 @@ export interface MEditClient {
   ): Promise<CopyChangesOutcome | WriteRefused>;
   // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
   // the call itself refused, with nothing written.
-  decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
+  decompile(plugins: readonly PluginAddress[], force: boolean): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   // Rename's and exclude's half in mEdit: the build configuration in `sourceFolder`, written in its working tree.
   changeBuildConfiguration(sourceFolder: string, change: BuildConfigurationChange): Promise<{ changed: true } | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the

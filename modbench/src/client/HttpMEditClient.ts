@@ -461,11 +461,11 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  async decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
+  async decompile(plugins: readonly PluginAddress[], force: boolean): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
     return this.mutateEach({
       verb: 'decompile', noun: 'plugin', items: plugins,
       op: (counted) => `decompile(${counted})`,
-      post: () => this.apiClient.POST('/plugins/decompile', { body: { plugins: [...plugins] } }),
+      post: () => this.apiClient.POST('/plugins/decompile', { body: { plugins: [...plugins], force } }),
       outcome: selectionOutcome,
     });
   }

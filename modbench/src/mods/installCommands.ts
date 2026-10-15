@@ -15,6 +15,8 @@ import { promptModName } from './promptModName';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 import { MODS_KEY_ARGS } from './gestureEntry';
+import { upgradeLoss, type ReadStatus } from './modStatuses';
+import { failureReason, isReadFailed } from '../wire/readFailed';
 
 interface InstalledMod {
   readonly name: string;
@@ -29,15 +31,18 @@ interface Install {
   readonly source: ModSource;
   readonly target: InstallTarget;
   readonly via: InstallVia;
+  readonly force: boolean;
 }
 
 interface InstallOptions {
   readonly name?: string;
   readonly target?: string;
+  readonly force?: boolean;
 }
 
 interface ModInstallDeps {
   commands: Pick<ModlistCommands, 'installMod' | 'newModNameRefusal'>;
+  readStatus: ReadStatus;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporterFor: (tag: string) => Reporter;
   warnIfFomod: (name: string, isFomod: boolean) => void;
@@ -104,14 +109,27 @@ async function pickSourcePath(): Promise<{ kind: 'archive' | 'folder'; path: str
 // modbench.mod.install: with no source, as from the Mods menu, it asks archive-or-folder first,
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
-  const { commands, instance, reporterFor, warnIfFomod, downloadInstall } = deps;
+  const { commands, instance, reporterFor, warnIfFomod, downloadInstall, readStatus } = deps;
   const reporterOf = (via: InstallVia): Reporter => (via === 'downloadedFile' ? downloadInstall.reporter : reporterFor(via));
   const newModNameRefusal = (name: string) => commands.newModNameRefusal(instance.value, name);
   const failedMessage = ({ source, target, via }: Install): string =>
     `Failed to install "${source.kind === 'downloadedFile' && via === 'downloadedFile' ? source.name : target.name}".`;
 
+  const upgradeRefusal = async ({ target, force }: Install): Promise<string | undefined> => {
+    if (force || target.kind !== 'upgrade') return undefined;
+    const answer = await readStatus([target.name]);
+    if (isReadFailed(answer)) return `"${target.name}" status could not be read: ${failureReason(answer)}`;
+    const status = answer.find(({ mod }) => mod === target.name);
+    if (status === undefined) return `"${target.name}" has no status to read.`;
+    if (status.unreadable) return `"${target.name}" status could not be read: ${status.unreadable.why}`;
+    const loss = upgradeLoss(status);
+    return loss === undefined ? undefined : `The upgrade would lose, in "${target.name}": ${loss}. Request it again with force to replace them.`;
+  };
+
   const installedMod = async (install: Install): Promise<InstallResult> => {
     try {
+      const refusal = await upgradeRefusal(install);
+      if (refusal !== undefined) return { applied: false, refusal: failedMessage(install), detail: refusal };
       const outcome = await commands.installMod(install.source, install.target, instance.value.gameName);
       if (!outcome.applied) return { applied: false, refusal: failedMessage(install), detail: outcome.refusal };
       return {
@@ -126,7 +144,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
 
   const newMod = async (source: ModSource, defaultName: string, via: InstallVia): Promise<Install | undefined> => {
     const name = await promptModName(defaultName, newModNameRefusal);
-    return name ? { source, target: { kind: 'new', name }, via } : undefined;
+    return name ? { source, target: { kind: 'new', name }, via, force: true } : undefined;
   };
 
   const pickedSource = async (): Promise<Install | undefined> => {
@@ -140,7 +158,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
   const downloadedFileInstall = async (name: string): Promise<Install | undefined> => {
     const row = downloadedFileNamed(instance.value.downloads, name);
     const target = await chooseInstallTarget(row, (defaultName) => promptModName(defaultName, newModNameRefusal));
-    return target ? { source: downloadedFileSource(row), target, via: 'downloadedFile' } : undefined;
+    return target ? { source: downloadedFileSource(row), target, via: 'downloadedFile', force: true } : undefined;
   };
 
   const gesture: AgentGesture<KindedRow, Install, InstallResult, InstallOptions> = {
@@ -154,7 +172,8 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         return undefined;
       }
     },
-    fromAgent: ({ argument, options }) => ({ ...sourceOf(instance.value.downloads, argument), target: targetOf(options, newModNameRefusal) }),
+    fromAgent: ({ argument, options }) =>
+      ({ ...sourceOf(instance.value.downloads, argument), target: targetOf(options, newModNameRefusal), force: options.force === true }),
     run: (install) => runWritingGesture(
       install.via === 'downloadedFile' ? downloadInstall.progressViewId : MODS_KEY_ARGS.view, instance, () => installedMod(install)),
     report: (result, install) => {

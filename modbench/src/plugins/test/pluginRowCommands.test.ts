@@ -819,9 +819,9 @@ describe('modbench.plugin.decompile', () => {
     const ask = scriptedDialog(answer);
     registerDecompileCommand({
       client: {
-        decompile: (plugins) => {
+        decompile: (plugins, force) => {
           progressSteps.push('decompile');
-          return client.decompile(plugins);
+          return client.decompile(plugins, force);
         },
       },
       instance: instanceThatReads,
@@ -844,7 +844,7 @@ describe('modbench.plugin.decompile', () => {
 
     assertAskedOnce(ask, { messageContains: '"Second.esp"', buttons: ['Decompile'] });
     expect(ask.asked[0]?.message).toContain('replaces its source in the working tree from its bytes');
-    expect(decompileCalls(client)).toEqual([[[SECOND]]]);
+    expect(decompileCalls(client)).toEqual([[[SECOND], true]]);
     expect(progressSteps).toEqual([
       'progress opens on modbench.pluginListTree', 'decompile', 'Instance loader: read every file again', 'progress closes',
     ]);
@@ -865,7 +865,7 @@ describe('modbench.plugin.decompile', () => {
       detail: 'First.esp (ModA)\nSecond.esp (ModA)',
       buttons: ['Decompile'],
     }]);
-    expect(decompileCalls(client)).toEqual([[[FIRST, SECOND]]]);
+    expect(decompileCalls(client)).toEqual([[[FIRST, SECOND], true]]);
     expect(reporter.landings).toEqual(['Decompiled 2 plugins.']);
   });
 
@@ -890,7 +890,7 @@ describe('modbench.plugin.decompile', () => {
       editable: false, preventDefaultContextMenuItems: true,
     });
 
-    expect(decompileCalls(client)).toEqual([[[SECOND]]]);
+    expect(decompileCalls(client)).toEqual([[[SECOND], true]]);
   });
 
   it('from the palette, decompiles the Plugins view\'s selection', async () => {
@@ -900,7 +900,7 @@ describe('modbench.plugin.decompile', () => {
 
     await handler();
 
-    expect(decompileCalls(client)).toEqual([[[FIRST]]]);
+    expect(decompileCalls(client)).toEqual([[[FIRST], true]]);
   });
 
   it('names each refused plugin and why in one notification while the rest land', async () => {
@@ -952,11 +952,21 @@ describe('modbench.plugin.decompile, called by the agent', () => {
 
     const answered = await handler(calling(FIRST, SECOND));
 
-    expect(client.calls.filter((c) => c.method === 'decompile').map((c) => c.args)).toEqual([[[FIRST, SECOND]]]);
+    expect(client.calls.filter((c) => c.method === 'decompile').map((c) => c.args)).toEqual([[[FIRST, SECOND], false]]);
     expect(answered).toEqual({ applied: true, outcome });
     expect(ask.asked).toEqual([]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
+  });
+
+  it('requests the decompile forced when its options say force', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('decompile', { landed: [SECOND], refused: [] });
+    const { handler } = registered(client);
+
+    await handler(new AgentCall([{ kind: 'plugin', plugin: SECOND }], { force: true }));
+
+    expect(client.calls.filter((c) => c.method === 'decompile').map((c) => c.args)).toEqual([[[SECOND], true]]);
   });
 
   it('answers the refusal of the whole selection', async () => {

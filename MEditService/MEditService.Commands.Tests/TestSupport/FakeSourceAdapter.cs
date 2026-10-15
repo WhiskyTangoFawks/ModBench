@@ -194,6 +194,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin) =>
             throw Unreached();
 
+        public Answer<IReadOnlyList<string>, SourceFailure> WorkingTreeChangesOf(PluginAddress plugin) => throw Unreached();
+
         public SourceFailure? WhyUnreadable(PluginAddress plugin, RecordIdentity identity, string body) => throw Unreached();
 
         public Answer<SourceDocument?, SourceFailure> RecordFromText(PluginAddress plugin, string formKey, string text) =>

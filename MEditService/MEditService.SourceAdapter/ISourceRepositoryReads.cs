@@ -13,6 +13,10 @@ public interface ISourceRepositoryReads
 
     Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin);
 
+    /// <summary>Each file under the plugin's tree that git status names as changed or untracked, relative to the
+    /// source folder; ignored files are not changes.</summary>
+    Answer<IReadOnlyList<string>, SourceFailure> WorkingTreeChangesOf(PluginAddress plugin);
+
     Answer<SourceDocument?, SourceFailure> RecordOf(PluginAddress plugin, RecordIdentity identity);
 
     SourceFailure? WhyUnreadable(PluginAddress plugin, RecordIdentity identity, string body);

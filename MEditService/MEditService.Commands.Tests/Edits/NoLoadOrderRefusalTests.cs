@@ -17,7 +17,7 @@ public sealed class NoLoadOrderRefusalTests
 
     public static TheoryData<string, Func<Task<object?>>> Gestures => new()
     {
-        { "Decompile", async () => (await Handler<DecompilePluginHandler>().DecompileAsync([Plugin])).SelectionRefusal?.Refusal },
+        { "Decompile", async () => (await Handler<DecompilePluginHandler>().DecompileAsync([Plugin], force: false)).SelectionRefusal?.Refusal },
         { "Compile", async () => (await Handler<CompilePluginHandler>().CompileAsync([Plugin])).SelectionRefusal?.Refusal },
         { "Copy", async () => (await Handler<CopyRecordChangesHandler>().CopyRecords([Record], CopyMode.Override, [Plugin], replace: false)).SelectionRefusal?.Refusal },
         { "Delete", async () => (await Handler<DeleteRecordChangesHandler>().DeleteRecords([Record])).SelectionRefusal?.Refusal },

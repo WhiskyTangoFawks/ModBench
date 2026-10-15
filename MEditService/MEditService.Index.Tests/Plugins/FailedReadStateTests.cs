@@ -625,6 +625,9 @@ public sealed class FailedReadStateTests : IDisposable
         public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin) =>
             inner.ChangedSinceLastCommit(plugin);
 
+        public Answer<IReadOnlyList<string>, SourceFailure> WorkingTreeChangesOf(PluginAddress plugin) =>
+            inner.WorkingTreeChangesOf(plugin);
+
         public SourceFailure? WhyUnreadable(PluginAddress plugin, RecordIdentity identity, string body) =>
             inner.WhyUnreadable(plugin, identity, body);
 

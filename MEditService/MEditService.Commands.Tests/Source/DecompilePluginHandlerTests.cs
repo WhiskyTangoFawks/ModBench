@@ -93,13 +93,48 @@ public sealed class DecompilePluginHandlerTests : IDisposable
             _trackedMod, Tracked("First.esp"), identity, first.Body.Replace("FirstNpc", "EditedByHand", StringComparison.Ordinal));
         WritePlugin(_trackedMod, "First.esp", "UpgradedNpc");
 
-        var result = await Decompile(Tracked("First.esp"));
+        var result = await Decompile(force: true, Tracked("First.esp"));
 
         Assert.Equal([Tracked("First.esp")], result.Landed.Select(landed => landed.Item));
         Assert.False(File.Exists(stray));
         var text = SourceTextOf("First.esp");
         Assert.Contains("UpgradedNpc", text, StringComparison.Ordinal);
         Assert.DoesNotContain("EditedByHand", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Decompile_OfAPluginWhoseSourceHasWorkingTreeChanges_RefusesItNamingEachChangedFile_AndWritesNothing()
+    {
+        var first = TreeDocuments.Of(Repository, Tracked("First.esp")).Single(document => document.EditorId == "FirstNpc");
+        var identity = new RecordIdentity(first.FormKey, first.RecordType, first.EditorId);
+        var stray = TreeTampering.Stray(_trackedMod, Tracked("First.esp"), identity, "Stray.json", "{}");
+        TrackedTree.Overwrite(
+            _trackedMod, Tracked("First.esp"), identity, first.Body.Replace("FirstNpc", "EditedByHand", StringComparison.Ordinal));
+        WritePlugin(_trackedMod, "First.esp", "UpgradedNpc");
+
+        var result = await Decompile(Tracked("First.esp"));
+
+        Assert.Empty(result.Landed);
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(DecompileRefusal.WorkingTreeChanges, refused.Refusal);
+        Assert.Contains("Stray.json", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("FirstNpc", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("force", refused.Message, StringComparison.Ordinal);
+        Assert.True(File.Exists(stray));
+    }
+
+    [Fact]
+    public async Task Decompile_OfASelection_RefusesOnlyThePluginWhoseSourceHasWorkingTreeChanges()
+    {
+        var first = TreeDocuments.Of(Repository, Tracked("First.esp")).Single(document => document.EditorId == "FirstNpc");
+        TrackedTree.Overwrite(
+            _trackedMod, Tracked("First.esp"), new RecordIdentity(first.FormKey, first.RecordType, first.EditorId),
+            first.Body.Replace("FirstNpc", "EditedByHand", StringComparison.Ordinal));
+
+        var result = await Decompile(Tracked("First.esp"), Tracked("Second.esp"));
+
+        Assert.Equal([Tracked("Second.esp")], result.Landed.Select(landed => landed.Item));
+        Assert.Equal(Tracked("First.esp"), Assert.Single(result.Refused).Item);
     }
 
     [Fact]
@@ -121,7 +156,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Directory.Move(Path.Combine(sources, "First.esp"), Path.Combine(sources, "FIRST.ESP"));
         Directory.CreateDirectory(Path.Combine(sources, "first.esp"));
 
-        var result = await Decompile(Tracked("First.esp"));
+        var result = await Decompile(force: true, Tracked("First.esp"));
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.AmbiguousSource, refused.Refusal);
@@ -174,10 +209,13 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     private static PluginAddress Tracked(string plugin) => new(plugin, TrackedModName);
 
     private Task<SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>> Decompile(params PluginAddress[] plugins) =>
-        TestEditService.DecompileHandler(_holder).DecompileAsync(plugins);
+        Decompile(force: false, plugins);
+
+    private Task<SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>> Decompile(bool force, params PluginAddress[] plugins) =>
+        TestEditService.DecompileHandler(_holder).DecompileAsync(plugins, force);
 
     private Task<SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>> Decompile(IPluginAdapter adapter, params PluginAddress[] plugins) =>
-        TestEditService.DecompileHandler(_holder, adapter).DecompileAsync(plugins);
+        TestEditService.DecompileHandler(_holder, adapter).DecompileAsync(plugins, force: false);
 
     private static void WritePlugin(string modFolder, string name, string editorId)
     {

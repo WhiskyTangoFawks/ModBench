@@ -340,7 +340,7 @@ internal static class PluginEndpoints
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         return OverPlugins(req.Plugins, plugins => EndpointMapping.Answered(
             "Decompile", logger,
-            decompileHandler.DecompileAsync(plugins),
+            decompileHandler.DecompileAsync(plugins, req.Force),
             EndpointMapping.Refusal,
             landed => landed.Item,
             refused => new PluginDecompileRefusal(refused.Item, refused.Refusal, refused.Message),
@@ -425,7 +425,7 @@ internal sealed record RenameSourceChangesRequest(string Origin, string Name, st
 /// <summary>The plugin, the name its tree was filed under before the rename, and the file name its source took.</summary>
 internal sealed record MoveLastWrittenRequest(string Origin, string Name, string TreeName, string NewName);
 
-internal sealed record DecompileRequest(IReadOnlyList<PluginAddress> Plugins);
+internal sealed record DecompileRequest(IReadOnlyList<PluginAddress> Plugins, bool Force);
 
 /// <summary>Applied or refusal, per plugin (ADR-0019), never the status of the call.</summary>
 internal sealed record DecompileResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginDecompileRefusal> Refused);

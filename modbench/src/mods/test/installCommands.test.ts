@@ -32,6 +32,7 @@ const { installMod } = vi.hoisted(() => ({ installMod: vi.fn() }));
 
 import { registerModInstallCommands } from '../installCommands';
 import { AgentCall } from '../../drivingLib/agentGesture';
+import type { ModStatus } from '../../client';
 import { Refusal } from '../../drivingLib/refusal';
 import { modlistCommands } from '../../modOrderCommands/modOrderCommands';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
@@ -53,11 +54,15 @@ const COMMANDS = { ...modlistCommands(fakeInstanceAdapter().adapter, unscriptedM
 
 type ModInstallDeps = Parameters<typeof registerModInstallCommands>[0];
 
+const statusOf = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
+  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], noProvider: [], ...over });
+
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
     commands: COMMANDS,
     instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE, downloads: { kind: 'listed', rows: [downloadRowFixture('foo.7z')] } }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
+    readStatus: () => Promise.resolve([statusOf('Harder VATS')]),
     warnIfFomod: vi.fn(),
     downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     ...over,
@@ -337,6 +342,68 @@ describe('modbench.mod.install called by the agent', () => {
 
     expect(installMod).toHaveBeenCalledWith(outsideArchive, { kind: 'upgrade', name: 'Harder VATS' }, KEPT);
     expect(answered).toMatchObject({ outcome: { landed: [{ name: 'Harder VATS' }] } });
+  });
+
+  describe('an upgrade over a mod git would not overwrite', () => {
+    const upgrade = (readStatus: ModInstallDeps['readStatus'], options: object = { target: 'Harder VATS' }) => {
+      registerModInstallCommands(deps({ readStatus }));
+      return install([outsideArchive], options);
+    };
+
+    it.each([
+      ['differs from its manifest', statusOf('Harder VATS', { differing: ['a.esp'] }), 'files whose bytes differ from its manifest: a.esp'],
+      ['holds a file no line names', statusOf('Harder VATS', { namedByNoLine: ['stray.txt'] }), 'files no line of its manifest names: stray.txt'],
+      ['lacks a file its manifest names', statusOf('Harder VATS', { gone: ['b.nif'] }), 'files its manifest names that its folder lacks: b.nif'],
+      ['has no manifest', statusOf('Harder VATS', { noManifest: true }), 'it has no manifest'],
+      ['has a file with no provider', statusOf('Harder VATS', { noProvider: ['c.dds'] }), 'files with no provider: c.dds'],
+    ])('refuses a mod that %s, listing the loss and naming force, and installs nothing', async (_, status, loss) => {
+      const answered = await upgrade(() => Promise.resolve([status]));
+
+      expect(answered).toEqual({
+        applied: false, refusal: 'Failed to install "Harder VATS".',
+        detail: `The upgrade would lose, in "Harder VATS": ${loss}. Request it again with force to replace them.`,
+      });
+      expect(installMod).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a status read that failed', () => Promise.resolve({ failed: 'unreachable' as const }), 'mEdit could not be reached.'],
+      ['a status mEdit could not read', () => Promise.resolve([statusOf('Harder VATS', { unreadable: { manifest: true, why: 'bad manifest' } })]), 'bad manifest'],
+      ['no status for the mod', () => Promise.resolve([]), undefined],
+    ])('refuses on %s', async (_, readStatus, why) => {
+      const answered = await upgrade(readStatus);
+
+      expect(answered).toMatchObject({ applied: false, refusal: 'Failed to install "Harder VATS".' });
+      if (why !== undefined) expect(answered).toMatchObject({ detail: expect.stringContaining(why) as unknown });
+      expect(installMod).not.toHaveBeenCalled();
+    });
+
+    it('installs over the mod when the options say force, reading no status', async () => {
+      installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
+      const readStatus = vi.fn();
+
+      await upgrade(readStatus, { target: 'Harder VATS', force: true });
+
+      expect(installMod).toHaveBeenCalledWith(outsideArchive, { kind: 'upgrade', name: 'Harder VATS' }, KEPT);
+      expect(readStatus).not.toHaveBeenCalled();
+    });
+
+    it('installs over a mod whose status shows nothing to lose', async () => {
+      installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
+
+      await upgrade(() => Promise.resolve([statusOf('Harder VATS')]));
+
+      expect(installMod).toHaveBeenCalled();
+    });
+
+    it('reads no status for a new mod', async () => {
+      installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
+      const readStatus = vi.fn();
+
+      await upgrade(readStatus, { name: 'Bar' });
+
+      expect(readStatus).not.toHaveBeenCalled();
+    });
   });
 
   it('answers a FOMOD archive as one, warning nothing itself', async () => {

@@ -312,6 +312,11 @@ public sealed class SourceRepository : ISourceRepository
     public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin) =>
         SourceFailure.Answer(() => LastCommitComparison.Of(_sourceFolder, _release, _git, Locator, Spelled(plugin)));
 
+    public Answer<IReadOnlyList<string>, SourceFailure> WorkingTreeChangesOf(PluginAddress plugin) =>
+        SourceFailure.Answer<IReadOnlyList<string>>(() => _git.WorkingTreeStatus(Spelled(plugin).Name) is { } status
+            ? [.. status.Where(entry => entry.Code != '!').Select(entry => entry.Path)]
+            : throw SourceStopException.GitFailed($"git cannot report what changed in '{_sourceFolder}'."));
+
     public Answer<SourceChanges, SourceFailure> ChangesToPut(PluginAddress plugin, SourceDocument document) =>
         SourceFailure.Answer(() => Writes.ChangesToPut(Spelled(plugin), document));
 

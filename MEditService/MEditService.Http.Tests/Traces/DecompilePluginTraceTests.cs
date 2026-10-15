@@ -49,6 +49,21 @@ public sealed class DecompilePluginTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task DecompilingAPluginWhoseSourceHasWorkingTreeChanges_AnswersItRefusedUntilForced()
+    {
+        await Loaded();
+        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        var sourceFile = Directory.EnumerateFiles(Path.Combine(OtherTool.ModFolderOf(_instance, Origin), "plugin-source"), "*.json", SearchOption.AllDirectories).First();
+        File.AppendAllText(sourceFile, " ");
+
+        var refusedBody = await (await Client.Decompile([(Plugin, Origin)])).EnsureSuccessStatusCode().Body();
+        var forcedBody = await (await Client.Decompile([(Plugin, Origin)], force: true)).EnsureSuccessStatusCode().Body();
+
+        Assert.Equal("WorkingTreeChanges", Assert.Single(refusedBody.GetProperty("refused").EnumerateArray()).GetProperty("refusal").GetString());
+        Assert.Equal([Plugin], forcedBody.GetProperty("applied").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
+    }
+
+    [Fact]
     public async Task DecompilingAPluginInAModWithNoRepository_AnswersItRefused()
     {
         await Loaded();
