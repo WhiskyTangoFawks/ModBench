@@ -104,10 +104,10 @@ export const defaultDownloadsDir = (instanceRoot: string): string => join(instan
 
 export const settingsFile = (instanceRoot: string): string => join(instanceRoot, SETTINGS_FILE_NAME);
 
-/** The meta file of the mod folder `modFolder`, wherever that folder is. */
 /** A mod's manifest, in its folder, named for the mod. */
 export const manifestFileIn = (modFolder: string, modName: string): string => join(modFolder, `${modName}.manifest`);
 
+/** The meta file of the mod folder `modFolder`, wherever that folder is. */
 export const modMetaFileIn = (modFolder: string): string => join(modFolder, MOD_META_FILE_NAME);
 
 export const modMetaFile = (instanceRoot: string, modName: string): string => modMetaFileIn(modDir(instanceRoot, modName));
