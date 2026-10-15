@@ -56,12 +56,12 @@ def medit_whose_put_takes(seconds):
             self.send_response(200)
             self.send_header('Content-Length', str(len(payload)))
             self.end_headers()
-            with contextlib.suppress(BrokenPipeError):  # the deadline test's client hangs up before the slow reply
-                self.wfile.write(payload)
+            self.wfile.write(payload)
 
         def do_PUT(self):
             self.rfile.read(int(self.headers['Content-Length']))
-            time.sleep(seconds)
+            if stopped.wait(seconds):
+                return
             self.reply({'version': 1})
 
         def do_GET(self):
@@ -70,12 +70,14 @@ def medit_whose_put_takes(seconds):
         def log_message(self, *_):
             pass
 
+    stopped = threading.Event()
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         yield f'http://127.0.0.1:{server.server_port}'
     finally:
+        stopped.set()
         server.shutdown()
         server.server_close()
 
