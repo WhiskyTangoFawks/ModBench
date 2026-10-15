@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { FileOrigin, Mod, OriginFile, OriginFolder, Separator } from '../instanceLoader/instance';
+import { modNameOf } from '../instanceLoader/modName';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { groupModlist, type ModlistGroup, type ModlistTree } from '../drivingLib/modlistTree';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
@@ -12,7 +13,7 @@ import {
 } from './modFiles';
 import type { ModArgument } from '../drivingLib/argument';
 import { modRowUri, separatorRowUri } from './modIndicators';
-import { countsInBadge, differingFiles, lackedLine, statusDescription, type ModStatuses } from './modStatuses';
+import { countsInBadge, differingFiles, lackedLine, separatorDescription, statusDescription, type ModStatuses } from './modStatuses';
 import type { ModStatus } from '../client';
 import { blankIcon } from '../drivingLib/blankIcon';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
@@ -65,12 +66,14 @@ export class SeparatorNode extends vscode.TreeItem {
     public readonly separator: Separator,
     public readonly mods: Mod[],
     public readonly shown: ChildrenShown = 'all',
+    status?: ModStatus,
   ) {
     super(separator.name, expanderOver(mods, shown));
     this.id = rowIdentity(this.kind, separator.name);
     this.resourceUri = separatorRowUri(separator.name);
     this.iconPath = blankIcon();
     this.contextValue = 'separator';
+    this.description = status && separatorDescription(status);
   }
 }
 
@@ -225,7 +228,8 @@ export class ModListProvider
   /** The modlist's badge: how many mods differ from their manifests or have none (modlist-source.md, Status, story 5). */
   badge(): { value: number; tooltip: string } | undefined {
     const count = this.instanceValue.mods.filter((entry) => {
-      const status = entry.kind === 'mod' ? this.statusOf(entry.name) : undefined;
+      if (entry.kind === 'separator') return this.statusOfSeparator(entry)?.noManifest === true;
+      const status = this.statusOf(entry.name);
       return status !== undefined && countsInBadge(status);
     }).length;
     return count === 0 ? undefined : { value: count, tooltip: `Mods that differ from their manifests or have none: ${count}` };
@@ -233,6 +237,11 @@ export class ModListProvider
 
   private statusOf(mod: string): ModStatus | undefined {
     return this.instanceValue.holdsRepository ? this.statuses.of(mod) : undefined;
+  }
+
+  private statusOfSeparator(separator: Separator): ModStatus | undefined {
+    const name = modNameOf(this.instanceValue.modFolders, separator);
+    return name === undefined ? undefined : this.statusOf(name);
   }
 
   /** The view's message line while no filter is active. Overwrite is always a row, so an empty
@@ -331,7 +340,7 @@ export class ModListProvider
   }
 
   private separatorNode(separator: Separator, mods: Mod[], shown?: ChildrenShown): SeparatorNode {
-    return new SeparatorNode(separator, mods, shown);
+    return new SeparatorNode(separator, mods, shown, this.statusOfSeparator(separator));
   }
 
   private overwriteNode(): OverwriteNode {

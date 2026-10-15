@@ -213,6 +213,21 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void AManifestThatNamesNothing_IsWritten_ReadBack_AndMakesAFolderOfItsMetadataAlone_AsItsManifestSays()
+    {
+        Write("meta.ini", "[General]");
+        var nothing = new Manifest([], [], []);
+
+        var written = _repository.WriteManifest(_root, "mod", nothing);
+        var writtenAgain = _repository.WriteManifest(_root, "mod", nothing);
+
+        Assert.Equal([true, false, true], [written, writtenAgain, File.Exists(Path.Combine(_root, "mod.manifest"))]);
+        var read = Assert.IsType<Manifest>(_repository.ReadManifest(_root, "mod"));
+        Assert.Empty(read.InstallationFiles.Concat<object>(read.GameFiles).Concat(read.Files));
+        Assert.Equal(new ModStatus("mod", NoManifest: false, [], [], [], []), Status());
+    }
+
+    [Fact]
     public void AfterAFreshClone_EveryFileTheManifestNamesIsGone_AndNoneDiffersOrIsNamedByNoLine()
     {
         Write("meta.ini", "[General]");

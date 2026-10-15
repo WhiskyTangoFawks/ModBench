@@ -114,7 +114,7 @@ const originKey = (origin: FileOrigin): string => (origin.kind === 'mod' ? `mod:
 export function modFoldersOf(...entries: readonly (string | EntryRef)[]): ModFolders {
   const all: ModFolder[] = entries.map((entry) => {
     const ref: EntryRef = typeof entry === 'string' ? { kind: 'mod', name: entry } : entry;
-    return { ...ref, path: `/mods/${ref.name}` };
+    return { ...ref, path: `/mods/${ref.name}`, modName: ref.kind === 'mod' ? ref.name : `${ref.name}_separator` };
   });
   return { all, holding: (entry) => all.find((folder) => entryKey(folder) === entryKey(entry)) };
 }

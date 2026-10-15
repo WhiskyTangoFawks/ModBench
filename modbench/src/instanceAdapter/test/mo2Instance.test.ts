@@ -26,7 +26,7 @@ const actualStat = present(real.stat, 'the real stat');
 const actualReaddir = present(real.readdir, 'the real readdir');
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join, matchesGlob } from 'node:path';
+import { basename, join, matchesGlob } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import type { Mo2Context } from '../mo2Context';
 import { readingSource, readInstance, type ReadingSource } from '../mo2Reads';
@@ -439,16 +439,17 @@ describe('the MO2 Instance adapter', () => {
       await expect(source.modMeta('DragIn Manual Extract')).rejects.toThrow(/EISDIR/);
     });
 
-    it('answers every mod folder as the entry it holds, with its path', async () => {
+    it('answers every mod folder as the entry it holds, with its path and the name MO2 knows its mod by', async () => {
       const folders = (await source.modFolders())?.all;
 
       expect(folders).toContainEqual({
-        kind: 'mod', name: 'Unofficial Fallout 4 Patch', path: join(root, 'mods', 'Unofficial Fallout 4 Patch'),
+        kind: 'mod', name: 'Unofficial Fallout 4 Patch', path: join(root, 'mods', 'Unofficial Fallout 4 Patch'), modName: 'Unofficial Fallout 4 Patch',
       });
       expect(folders).toContainEqual({
         kind: 'separator',
         name: 'Unassigned (Modlist Development)',
         path: join(root, 'mods', 'Unassigned (Modlist Development)_separator'),
+        modName: 'Unassigned (Modlist Development)_separator',
       });
     });
 
@@ -1000,7 +1001,7 @@ describe('the MO2 Instance adapter', () => {
 
   describe('get in mods/', () => {
     it('answers the folder that holds an entry, matched as MO2 matches names, or none', async () => {
-      const harderVats = { kind: 'mod', name: 'Harder VATS', path: join(root, 'mods', 'Harder VATS') };
+      const harderVats = { kind: 'mod', name: 'Harder VATS', path: join(root, 'mods', 'Harder VATS'), modName: 'Harder VATS' };
       const folders = present((await adapter.reading()).modFolders, 'the mod folders');
 
       expect(folders.holding({ kind: 'mod', name: 'Harder VATS' })).toEqual(harderVats);
@@ -1019,6 +1020,25 @@ describe('the MO2 Instance adapter', () => {
       expect((await adapter.reading()).modFolders?.holding({ kind: 'mod', name: 'unassigned (modlist development)_SEPARATOR' })).toMatchObject({
         kind: 'separator', name: 'Unassigned (Modlist Development)',
       });
+    });
+
+    it('answers a separator named by its folder as a mod with no installation files, no metadata and no game files overridden, so its manifest names nothing', async () => {
+      const folder = (await adapter.reading()).modFolders?.holding({ kind: 'separator', name: 'Unassigned (Modlist Development)' });
+      const name = present(folder, 'the separator\'s folder').modName;
+
+      expect(name).toBe(basename(present(folder?.path, 'its path')));
+      expect(await adapter.modFolderPath(name)).toBe(folder?.path);
+      expect(await adapter.installationFiles(name)).toEqual({ kind: 'read', answer: [] });
+      expect(await adapter.modMetadata(name)).toEqual({ kind: 'read', answer: { version: undefined, installationFiles: [] } });
+      expect(await adapter.gameFilesOverriddenBy(join(root, 'game', 'Data'), name)).toEqual({ kind: 'read', answer: { gameFiles: [], notes: [] } });
+    });
+
+    it('writes no metadata for a separator whose manifest names none, so a restore leaves its folder as it was', async () => {
+      await mkdir(join(root, 'mods', 'Cloned_separator'));
+
+      await adapter.writeModMetadata('Cloned_separator', { version: undefined, installationFiles: [] });
+
+      expect(await readdir(join(root, 'mods', 'Cloned_separator'))).toEqual([]);
     });
 
     it('finds a separator\'s folder by the name MO2 would give it, so a name asked for loosely finds it too', async () => {

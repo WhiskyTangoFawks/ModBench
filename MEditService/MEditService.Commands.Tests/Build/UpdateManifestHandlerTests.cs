@@ -86,6 +86,18 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
+    public async Task AFolderOfItsMetadataAlone_AsASeparatorsIs_GetsAManifestThatNamesNothing()
+    {
+        _folders.WithFile(Mod, "meta.ini", "[General]");
+
+        var updated = await Landed(new ModToUpdate("Mod", Mod, [], ["meta.ini"], IsSourceMod: false, Version: null));
+
+        var manifest = _folders.Manifests[Mod];
+        Assert.Empty(manifest.InstallationFiles.Concat<object>(manifest.GameFiles).Concat(manifest.Files));
+        Assert.Empty(updated.NoProvider);
+    }
+
+    [Fact]
     public async Task APluginCleanedFromTheGamesOwn_HasNoProvider_AndTheManifestNamesNoGameFile()
     {
         _folders.WithFile(Mod, "game.esm", "cleaned");

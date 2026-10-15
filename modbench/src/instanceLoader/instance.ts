@@ -451,10 +451,14 @@ export class Instance implements Subscription {
   }
 }
 
+// A separator has no metadata: its snapshot entry carries none (modlist-source.md, Status, story 7).
 async function withMetadata(
   snapshot: LoadOrderSnapshotValue, entries: readonly ModlistEntry[], { metadataOf }: Pick<InstanceAdapter, 'metadataOf'>,
 ): Promise<LoadOrderSnapshotValue> {
   const metaOf = new Map(entries.flatMap((entry) => (entry.kind === 'mod' ? [[entry.name, entry] as const] : [])));
-  const mods = await withMetadataRead(snapshot.mods, async (name) => ({ kind: 'read' as const, answer: await metadataOf(present(metaOf.get(name), name)) }));
-  return { ...snapshot, mods };
+  const read = new Map((await withMetadataRead(
+    snapshot.mods.filter(({ name }) => metaOf.has(name)),
+    async (name) => ({ kind: 'read' as const, answer: await metadataOf(present(metaOf.get(name), name)) }),
+  )).map((mod) => [mod.name, mod]));
+  return { ...snapshot, mods: snapshot.mods.map((mod) => read.get(mod.name) ?? mod) };
 }

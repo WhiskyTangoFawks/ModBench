@@ -60,13 +60,13 @@ const value = instanceValueFixture({
     { kind: 'mod', name: 'ModB', enabled: false },
   ],
   modFolders: [
-    { kind: 'mod', name: 'ModA', path: '/instance/mods/ModA' },
-    { kind: 'separator', name: 'Weapons', path: '/instance/mods/Weapons_separator' },
-    { kind: 'mod', name: 'ModB', path: '/instance/mods/ModB' },
-    { kind: 'mod', name: 'InAnotherProfile', path: '/instance/mods/InAnotherProfile' },
+    { kind: 'mod', name: 'ModA', path: '/instance/mods/ModA', modName: 'ModA' },
+    { kind: 'separator', name: 'Weapons', path: '/instance/mods/Weapons_separator', modName: 'Weapons_separator' },
+    { kind: 'mod', name: 'ModB', path: '/instance/mods/ModB', modName: 'ModB' },
+    { kind: 'mod', name: 'InAnotherProfile', path: '/instance/mods/InAnotherProfile', modName: 'InAnotherProfile' },
   ],
 });
-const EVERY_MOD = ['ModA', 'ModB', 'InAnotherProfile'];
+const EVERY_MOD = ['ModA', 'Weapons_separator', 'ModB', 'InAnotherProfile'];
 
 const modRow = (name: string) => ({ argument: { kind: 'mod', name }, name });
 const separatorRow = (name: string) => ({ argument: { kind: 'separator', name }, name });
@@ -120,7 +120,7 @@ describe('Git init', () => {
 });
 
 describe('Every mod (update manifest and restore from manifest)', () => {
-  it('acts on every mod folder, in every profile, enabled or not, and no separator, from the palette with no Mods selection', async () => {
+  it('acts on every mod folder and every separator, in every profile, enabled or not, from the palette with no Mods selection', async () => {
     const { run } = register();
 
     await run(UPDATE);
@@ -174,12 +174,12 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     expect(sentMods(updateManifest)).toEqual([['ModA', 'ModB']]);
   });
 
-  it('takes a selected separator for the mods it holds, those before it in winning-first mod order, each mod once', async () => {
+  it('takes a selected separator for itself and the mods it holds, those before it in winning-first mod order, each name once', async () => {
     const { run } = register();
 
     await run(UPDATE, separatorRow('Weapons'), [separatorRow('Weapons'), modRow('ModB'), modRow('ModA')]);
 
-    expect(sentMods(updateManifest)).toEqual([['ModA', 'ModB']]);
+    expect(sentMods(updateManifest)).toEqual([['Weapons_separator', 'ModA', 'ModB']]);
   });
 
   it('refuses a selected row that is neither a mod nor a separator, naming it, and acts on the rest', async () => {
@@ -602,12 +602,12 @@ describe('An agent call', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('update manifest acts on the mods it is given, a separator for the mods it holds, with no progress notification', async () => {
+  it('update manifest acts on the mods it is given, a separator for itself and the mods it holds, with no progress notification', async () => {
     const { run } = register();
 
     await run(UPDATE, new AgentCall([mod('ModB'), separator('Weapons')], {}));
 
-    expect(sentMods(updateManifest)).toEqual([['ModB', 'ModA']]);
+    expect(sentMods(updateManifest)).toEqual([['ModB', 'Weapons_separator', 'ModA']]);
     expect(notification.cancellable).toEqual([]);
   });
 
@@ -745,7 +745,7 @@ describe('An agent call', () => {
 
       const answer = await run(RESTORE, new AgentCall([], {}));
 
-      expect(sentMods(restoreFromManifest)).toEqual([['ModA', 'InAnotherProfile']]);
+      expect(sentMods(restoreFromManifest)).toEqual([['ModA', 'Weapons_separator', 'InAnotherProfile']]);
       expect(answer).toEqual({
         applied: true,
         outcome: { landed: [landed], refused: [{ item: 'ModB', reason: 'its name gives it no folder' }] },

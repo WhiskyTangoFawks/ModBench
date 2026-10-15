@@ -74,6 +74,36 @@ describe('a mod row says its status against its manifest after its version (mods
   });
 });
 
+describe('a separator row says no manifest when it has none, under the name the mod manager gives its folder (mods.md, A row, Separator)', () => {
+  const separatorProvider = (held: ModStatus | undefined, holdsRepository = true) => {
+    const value = instanceValueFixture({
+      holdsRepository,
+      mods: [{ kind: 'separator', name: 'Weapons', enabled: true }, mod('ModA')],
+      modFolders: [{ kind: 'separator', name: 'Weapons', path: '/instance/mods/Weapons_separator', modName: 'Weapons_separator' }],
+    });
+    const asked: string[] = [];
+    const statuses = { of: (name: string) => { asked.push(name); return name === 'Weapons_separator' ? held : undefined; }, onDidChange: new EventEmitter<void>().event };
+    return { provider: new ModListProvider({ instance: new FakeInstance(value), statuses }), asked };
+  };
+
+  it.each([
+    ['no manifest', status('Weapons_separator', { noManifest: true }), true, 'no manifest'],
+    ['a manifest', status('Weapons_separator'), true, undefined],
+    ['no status yet', undefined, true, undefined],
+    ['no manifest while the instance holds no repository', status('Weapons_separator', { noManifest: true }), false, undefined],
+  ])('%s', async (_case, held, holdsRepository, description) => {
+    const { provider } = separatorProvider(held, holdsRepository);
+
+    expect((await row(provider, 'Weapons')).description).toBe(description);
+  });
+
+  it('counts in the view\'s badge with the mods that have none', () => {
+    const { provider } = separatorProvider(status('Weapons_separator', { noManifest: true }));
+
+    expect(provider.badge()).toEqual({ value: 1, tooltip: 'Mods that differ from their manifests or have none: 1' });
+  });
+});
+
 describe('a file row says differs when its bytes differ or no line names it, and a folder when a file in it does (mods.md, A row, File and folder)', () => {
   it('says differs on the file and the folder that holds it, and nothing on a file that matches', async () => {
     const { provider } = providerOver([status('ModA', { differing: ['meshes/a.nif'] })]);

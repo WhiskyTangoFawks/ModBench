@@ -6,6 +6,7 @@ import type { FocusedView } from '../drivingLib/focusedView';
 import { groupModlist } from '../drivingLib/modlistTree';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Instance, InstanceValue } from '../instanceLoader/instance';
+import { modNameOf } from '../instanceLoader/modName';
 import type { AskQuestion } from '../ports/dialog';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Argument } from '../wire/argument';
@@ -82,12 +83,15 @@ function rowsOf(deps: ModlistGestureDeps, clicked: unknown, selected: readonly u
 }
 
 // modlist-source.md, Every mod: every mod folder, in every profile, never the Mods view's rows.
-const everyMod = (value: InstanceValue): string[] => (value.modFolders ?? []).flatMap((folder) => (folder.kind === 'mod' ? [folder.name] : []));
+const everyMod = (value: InstanceValue): string[] => (value.modFolders ?? []).map(({ modName }) => modName);
 
+// modlist-source.md, Every mod, story 3: a separator stands for itself and its mods.
 function modsHeldBy(kind: unknown, name: string, value: InstanceValue): string[] | undefined {
   if (kind === 'mod') return [name];
   if (kind !== 'separator') return undefined;
-  return groupModlist([...value.mods]).groups.find((group) => group.separator.name === name)?.mods.map((mod) => mod.name) ?? [];
+  const group = groupModlist([...value.mods]).groups.find(({ separator }) => separator.name === name);
+  const itself = group === undefined ? undefined : modNameOf(value.modFolders, group.separator);
+  return [...(itself === undefined ? [] : [itself]), ...(group?.mods.map((mod) => mod.name) ?? [])];
 }
 
 function modsOf(row: unknown, value: InstanceValue): string[] | undefined {
