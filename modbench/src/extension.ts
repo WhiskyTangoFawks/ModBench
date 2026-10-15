@@ -143,6 +143,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
   const modlist = modlistSourceCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(instanceRoot), trash });
+  const modStatus: ReadModStatus = (names) => modlist.modStatus(names);
   const mods = own(createModsView({
     instance, commands: modlistCommands(adapter, client), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
@@ -151,7 +152,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
       progressViewId: DOWNLOADS_KEY_ARGS.view,
     },
     nexusRow: nexusRowInFocusedView(own, deps.focusedView, ['modbench.modList', 'modbench.downloads'], 'modbench.mod.nexusRowIn'),
-    modStatus: { push: client, read: (names) => modlist.modStatus(names) },
+    modStatus: { push: client, read: modStatus },
   }));
   const { editing } = plugins;
   void editing.enter(instance.landed());
@@ -181,7 +182,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     commands, nextRefill: plugins.nextRefill, instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
-    instance, toolboxProvider, modStatus: (names) => modlist.modStatus(names),
+    instance, toolboxProvider, modStatus,
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue],
     downloadsSelection: () => downloadsView.selection,

@@ -12,7 +12,7 @@ export const LIST_MOD_STATUSES = {
   of: async (value: InstanceValue, read: ReadModStatus | undefined) => {
     if (read === undefined) throw new Refusal('There is no Modbench instance open in this window.');
     if (!value.holdsRepository) throw new Refusal('The instance is not a repository, so no mod has a manifest to compare. Request git init first.');
-    const answer = await read(value.mods.flatMap(({ kind, name }) => (kind === 'mod' ? [name] : [])));
+    const answer = await read((value.modFolders ?? []).flatMap(({ kind, name }) => (kind === 'mod' ? [name] : [])));
     if (isReadFailed(answer)) throw new Refusal(`The mods' status could not be read: ${failureReason(answer)}`);
     return answer;
   },

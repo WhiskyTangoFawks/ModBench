@@ -38,7 +38,9 @@ interface ModsToRun {
   readonly view: string;
 }
 
-const isAgentCall = (value: unknown): value is AgentCall => value instanceof AgentCall;
+type ModlistCall = AgentCall<{ force?: boolean }>;
+
+const isAgentCall = (value: unknown): value is ModlistCall => value instanceof AgentCall;
 
 // A view's title bar hands its command nothing, so the Mods view's is an entry point that names every mod and the
 // view (commands.md, Entry points are not gestures).
@@ -145,7 +147,7 @@ async function updateManifest(deps: ModlistGestureDeps, { mods, refused, view }:
 }
 
 async function updateManifestForAgent(
-  { commands, instance, modsView }: ModlistGestureDeps, { argument }: AgentCall,
+  { commands, instance, modsView }: ModlistGestureDeps, { argument }: ModlistCall,
 ): Promise<AgentOutcome<Extract<UpdateManifestResult, { applied: true }>['landed'][number]>> {
   const mods = modsOfAgent(argument, instance.value);
   const outcome = await runWritingGesture(modsView, instance, () => commands.updateManifest(mods, instance.value));
@@ -237,12 +239,12 @@ async function restoreFromManifest(deps: ModlistGestureDeps, toRun: ModsToRun): 
 // agent.md, Any agent, story 7: a mod whose restore would overwrite a file whose bytes differ from its manifest's is
 // refused until the request forces. The files no line names go to the trash, which keeps them.
 async function restoreFromManifestForAgent(
-  { commands, instance, modsView }: ModlistGestureDeps, { argument, options }: AgentCall,
+  { commands, instance, modsView }: ModlistGestureDeps, { argument, options }: ModlistCall,
 ): Promise<AgentOutcome<Restored[number]>> {
   const mods = modsOfAgent(argument, instance.value);
   const listing = await commands.whatRestoreDestroys(mods);
   if ('refusal' in listing) return { applied: false, refusal: listing.refusal };
-  const overwrites = Reflect.get(options, 'force') === true ? [] : listing.destroys
+  const overwrites = options.force === true ? [] : listing.destroys
     .filter(({ differing }) => differing.length > 0)
     .map(({ mod, differing }) => ({
       item: mod, reason: `it would overwrite files whose bytes differ from its manifest: ${differing.join(', ')}. Request it again with force to overwrite them.`,

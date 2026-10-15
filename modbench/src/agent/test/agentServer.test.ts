@@ -145,17 +145,24 @@ describe('the agent server, given an instance value', () => {
   });
 
   describe('reading each mod\'s status against its manifest', () => {
-    const inRepository = new FakeInstance({ ...VALUE, holdsRepository: true });
+    const inRepository = new FakeInstance({
+      ...VALUE, holdsRepository: true,
+      modFolders: [
+        { kind: 'mod', name: 'Big Rocks', path: '/i/mods/Big Rocks' },
+        { kind: 'separator', name: 'Textures', path: '/i/mods/Textures_separator' },
+        { kind: 'mod', name: 'InAnotherProfile', path: '/i/mods/InAnotherProfile' },
+      ],
+    });
     beforeEach(() => { statusRead.asked = []; });
 
-    it('asks for every mod, not the separators, and answers each status', async () => {
+    it('asks for every mod folder in every profile, not the separators, and answers each status', async () => {
       statusRead.answer = [status('Big Rocks', { differing: ['a.nif'], noProvider: ['b.nif'] })];
       const client = await clientOf(inRepository);
 
       expect(await read(client, 'list_mod_statuses')).toEqual([
         { mod: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], noProvider: ['b.nif'] },
       ]);
-      expect(statusRead.asked).toEqual([['Big Rocks']]);
+      expect(statusRead.asked).toEqual([['Big Rocks', 'InAnotherProfile']]);
     });
 
     it('refuses an instance that is no repository, which has no manifest to compare', async () => {
