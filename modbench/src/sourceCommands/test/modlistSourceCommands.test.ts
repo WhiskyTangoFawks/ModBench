@@ -10,7 +10,8 @@ const VANILLA: GameFile = { path: 'Game.esm', size: 7, hash: 'V' };
 const FOUND: GameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
 
 const recording = (files: readonly InstallationFile[]): FileRead<readonly InstallationFile[]> => ({ kind: 'read', answer: files });
-const instanceOf = (gameFolder: GameFolder = FOUND) => ({ gameFolder });
+const instanceOf = (gameFolder: GameFolder = FOUND, sourceDirs: ReadonlyMap<string, string> = new Map()) =>
+  ({ gameFolder, gameRelease: undefined, paths: { sourceDirs } });
 const filesIn = (filesByMod: Record<string, readonly OriginFile[]>): ReadonlyMap<string, OriginFiles> =>
   new Map(Object.entries(filesByMod).map(([mod, files]) => [mod, { origin: mod, folder: `/mods/${mod}`, files, folders: [], notes: [] }]));
 
@@ -79,20 +80,20 @@ describe('modlistSourceCommands git init', () => {
 describe('modlistSourceCommands update manifest', () => {
   const UPDATED = { landed: [{ mod: 'ModA', manifestWritten: true, noProvider: [] }], refused: [] };
 
-  it('hands mEdit each mod with its folder, its installation files and the files the repository commits itself, the game files its files override, and the stat cache\'s folder', async () => {
+  it('hands mEdit each mod with its folder, its installation files, the files the repository commits itself and whether it is a source mod, the game files its files override, and the stat cache\'s folder', async () => {
     const { commands, client } = commandsOver({
       installations: new Map([['ModA', recording([INSTALLED])]]), gameFiles: [VANILLA, { path: 'Other.esm', size: 1, hash: 'O' }],
     }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.ESM')], ModB: [fileIn('/mods/ModB', 'a.nif')] });
     client.setCommandResult('updateManifest', UPDATED);
 
-    await commands.updateManifest(['ModA', 'ModB'], instanceOf());
+    await commands.updateManifest(['ModA', 'ModB'], instanceOf(FOUND, new Map([['ModB', '/source/Old ModB']])));
 
     expect(client.calls).toEqual([{
       method: 'updateManifest',
       args: [
         [
-          { name: 'ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], committedFiles: ['meta.ini'] },
-          { name: 'ModB', folder: '/mods/ModB', installationFiles: [], committedFiles: ['meta.ini'] },
+          { name: 'ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], committedFiles: ['meta.ini'], isSourceMod: false },
+          { name: 'ModB', folder: '/mods/ModB', installationFiles: [], committedFiles: ['meta.ini'], isSourceMod: true },
         ],
         { gameFiles: [VANILLA], statCache: '/instance/stat-cache' },
         { onProgress: expect.any(Function) as unknown, signal: undefined },
@@ -226,18 +227,21 @@ describe('modlistSourceCommands restore from manifest', () => {
   const RESTORED = { landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [], notFound: [] };
   const sentNames = (client: InMemoryMEditClient): string[][] => client.calls.map((call) => sentNamesOf(call.args[0]));
 
-  it('hands mEdit each mod with its folder, its installation files and the files the repository commits itself, the game files its files override, and the stat cache\'s folder', async () => {
+  it('hands mEdit each mod with its folder, its installation files, the files the repository commits itself and the folder its source is in or is cloned into, the game files its files override, the stat cache\'s folder and what a build needs', async () => {
     const { commands, client } = commandsOver(
       { installations: new Map([['ModA', recording([INSTALLED])]]), gameFiles: [VANILLA] }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.esm')] });
     client.setCommandResult('restoreFromManifest', RESTORED);
 
-    await commands.restoreFromManifest(['ModA'], instanceOf());
+    await commands.restoreFromManifest(['ModA', 'ModB'], instanceOf(FOUND, new Map([['ModB', '/source/Old ModB']])));
 
     expect(client.calls).toEqual([{
       method: 'restoreFromManifest',
       args: [
-        [{ name: 'ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], committedFiles: ['meta.ini'] }],
-        { gameFiles: [VANILLA], dataFolder: '/game/Data', statCache: '/instance/stat-cache' },
+        [
+          { name: 'ModA', folder: '/mods/ModA', installationFiles: [INSTALLED], committedFiles: ['meta.ini'], sourceFolder: '/source/ModA' },
+          { name: 'ModB', folder: '/mods/ModB', installationFiles: [], committedFiles: ['meta.ini'], sourceFolder: '/source/Old ModB' },
+        ],
+        { gameFiles: [VANILLA], dataFolder: '/game/Data', statCache: '/instance/stat-cache', excludedSuffix: '.excluded', archives: null },
         { onProgress: expect.any(Function) as unknown, signal: undefined },
       ],
     }]);

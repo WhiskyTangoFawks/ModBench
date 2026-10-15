@@ -32,6 +32,88 @@ public sealed class SourceToBuildTests : IDisposable
         Assert.Empty(source.Archives);
     }
 
+    [Theory]
+    [InlineData("fork", "origin", "origin")]
+    [InlineData("upstream", "fork", "fork")]
+    public void ASourceWithARemote_IsSharedThroughOrigin_ElseTheFirstRemote_AtTheCommitAtHead(string added, string addedNext, string sharedThrough)
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], []));
+        Git("remote", "add", added, $"https://example.com/{added}.git");
+        Git("remote", "add", addedNext, $"https://example.com/{addedNext}.git");
+
+        Assert.Equal(new SharedSource($"https://example.com/{sharedThrough}.git", Git("rev-parse", "HEAD").Trim()), Built().Shared);
+    }
+
+    [Theory]
+    [InlineData("https://user:token@example.com/mod.git", "https://example.com/mod.git")]
+    [InlineData("ssh://git:secret@example.com/mod.git", "ssh://git@example.com/mod.git")]
+    [InlineData("git@example.com:owner/mod.git", "git@example.com:owner/mod.git")]
+    public void ARemotesURL_IsRecordedWithNoCredential(string url, string recorded)
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], []));
+        Git("remote", "add", "origin", url);
+
+        Assert.Equal(recorded, Built().Shared?.Remote);
+    }
+
+    [Theory]
+    [InlineData("assets/textures/new.dds", true)]
+    [InlineData("notes.txt", false)]
+    public void ASharedSource_SaysWhetherItsWorkingTreeHoldsChangesNoCommitHolds(string written, bool uncommitted)
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], []));
+        Git("remote", "add", "origin", "https://example.com/mod.git");
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(_sourceFolder, written)).Require());
+        File.WriteAllText(Path.Combine(_sourceFolder, written), "new");
+
+        Assert.Equal(uncommitted, Built().Uncommitted);
+    }
+
+    [Theory]
+    [InlineData("https://user:p@ss@example.com/mod.git")]
+    [InlineData("ssh://git:p@ss@example.com/mod.git")]
+    [InlineData("user:secret@example.com:mod.git")]
+    [InlineData("https://exa mple.com/mod.git")]
+    public void ARemoteWhoseCredentialCannotSafelyBeLeftOut_IsSharedThroughNone(string url)
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], []));
+        Git("remote", "add", "origin", url);
+
+        Assert.Null(Built().Shared);
+    }
+
+    [Theory]
+    [InlineData("refs/remotes/origin/main", false)]
+    [InlineData("refs/heads/kept", true)]
+    public void ASharedSource_SaysWhetherItsRemoteHoldsTheCommitAtHead_AsTheLastFetchSaw(string holding, bool unpushed)
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], []));
+        Git("remote", "add", "origin", "https://example.com/mod.git");
+        Git("update-ref", holding, "HEAD");
+
+        Assert.Equal(unpushed, Built().Unpushed);
+    }
+
+    [Fact]
+    public void ASourceWithNoRemote_IsSharedThroughNone()
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], []));
+
+        Assert.Null(Built().Shared);
+    }
+
+    [Theory]
+    [InlineData("../remote")]
+    [InlineData("/srv/remote.git")]
+    [InlineData("file:///srv/remote.git")]
+    public void ASourceWhoseRemoteOnlyThisMachineReaches_IsSharedThroughNone(string url)
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], []));
+        Git("remote", "add", "origin", url);
+
+        Assert.Null(Built().Shared);
+    }
+
     [Fact]
     public void AConfiguration_NamesTheExclusionsAndEachArchiveToPackWithItsFiles()
     {
@@ -99,6 +181,8 @@ public sealed class SourceToBuildTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
         File.WriteAllText(file, path);
     }
+
+    private string Git(params string[] args) => GitProbe.Run(Path.Combine(_sourceFolder, ".git"), _sourceFolder, args);
 
     private SourceToBuild Built() => TestAdapters.Source().SourceToBuild(_sourceFolder).Value();
 

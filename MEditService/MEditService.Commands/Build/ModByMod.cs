@@ -7,9 +7,9 @@ namespace MEditService.Commands.Build;
 /// each mod, and at rest at the end. A cancel stops it after the mod in hand.</summary>
 internal static class ModByMod
 {
-    public static SelectionResult<string, TRefusal, TOutcome> Over<TMod, TRefusal, TOutcome>(
+    public static async Task<SelectionResult<string, TRefusal, TOutcome>> OverAsync<TMod, TRefusal, TOutcome>(
         IReadOnlyList<TMod> mods, Func<TMod, string> nameOf, Action<ModlistProgress> publish,
-        Func<TMod, ItemAnswer<TRefusal, TOutcome>> each, string? gesture, CancellationToken cancel)
+        Func<TMod, Task<ItemAnswer<TRefusal, TOutcome>>> each, string? gesture, CancellationToken cancel)
     {
         var distinct = mods.DistinctBy(nameOf, StringComparer.OrdinalIgnoreCase).ToList();
         List<ItemLanded<string, TOutcome>> landed = [];
@@ -20,7 +20,7 @@ internal static class ModByMod
             {
                 if (cancel.IsCancellationRequested) break;
                 publish(new ModlistProgress(gesture, nameOf(mod), done, distinct.Count));
-                switch (each(mod))
+                switch (await each(mod))
                 {
                     case ItemAnswer<TRefusal, TOutcome>.Wrote wrote:
                         landed.Add(new ItemLanded<string, TOutcome>(nameOf(mod), wrote.Outcome));

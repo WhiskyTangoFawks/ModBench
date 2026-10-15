@@ -22,11 +22,17 @@ internal sealed class PluginCompileService(
     // A source mod refuses init, so decompile is the way back (ADR-0007).
     private const string RegenerateTheSource = "Decompile the plugin to regenerate the source.";
 
-    public async Task<CompileResult> CompileAsync(PluginAddress plugin)
+    public async Task<CompileResult> CompileAsync(PluginAddress plugin) =>
+        loadOrderHolder.Current.Plugin(plugin) is { } registered
+            ? await CompileAsync(registered)
+            : CompileResult.Refused(CompileRefusal.PluginNotInLoadOrder, $"{plugin.Name} is not in the load order.");
+
+    /// <summary>The plugin compiled to its path, which the load order need not hold yet, as a fresh clone's build's does
+    /// not (mods.md, Build, story 7).</summary>
+    public async Task<CompileResult> CompileAsync(RegisteredPlugin registered)
     {
+        var plugin = registered.Key;
         var loadOrder = loadOrderHolder.Current;
-        if (loadOrder.Plugin(plugin) is not { } registered)
-            return CompileResult.Refused(CompileRefusal.PluginNotInLoadOrder, $"{plugin.Name} is not in the load order.");
         if (registered.Provider is not PluginProvider.FromMod mod || !source.IsTracked(registered))
             return CompileResult.Refused(CompileRefusal.PluginNotTracked, $"{plugin.Name} is not tracked, so there is no source to compile.");
 

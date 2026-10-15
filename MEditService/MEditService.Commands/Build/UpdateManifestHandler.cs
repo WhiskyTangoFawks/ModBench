@@ -8,14 +8,16 @@ namespace MEditService.Commands.Build;
 /// its own, and a mod whose manifest is already so changes nothing.</summary>
 public sealed class UpdateManifestHandler(IModFolderRepository repository, INotificationPublisher notifications)
 {
-    public SelectionResult<string, UpdateManifestRefusal, UpdatedMod> UpdateManifest(
+    public Task<SelectionResult<string, UpdateManifestRefusal, UpdatedMod>> UpdateManifestAsync(
         IReadOnlyList<ModToUpdate> mods, InstanceToUpdate instance, string? gesture = null, CancellationToken cancel = default) =>
-        ModByMod.Over(
+        ModByMod.OverAsync(
             mods, mod => mod.Name, progress => notifications.Publish(new UpdateManifestProgressNotification(progress)),
-            mod => UpdateMod(mod, instance), gesture, cancel);
+            mod => Task.FromResult(UpdateMod(mod, instance)), gesture, cancel);
 
     private ItemAnswer<UpdateManifestRefusal, UpdatedMod> UpdateMod(ModToUpdate mod, InstanceToUpdate instance)
     {
+        if (mod.IsSourceMod || NamesASource(mod)) return LeftToItsBuild(mod, instance);
+
         var missing = mod.InstallationFiles.Where(file => !repository.InstallationFileExists(file.Path))
             .Select(file => $"'{repository.InstallationFileName(file.Path)}'").ToList();
         if (missing.Count > 0)
@@ -59,5 +61,35 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
         return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Landed(new UpdatedMod(
             written, [.. manifest.Files.Where(file => file.Provider is FileProvider.NoProvider).Select(file => file.Path).Order(StringComparer.Ordinal)],
             statCacheNotWritten));
+    }
+
+    private bool NamesASource(ModToUpdate mod)
+    {
+        try
+        {
+            return repository.ReadManifest(mod.Folder, mod.Name)?.Files.Any(line => line.Provider is FileProvider.Source) ?? false;
+        }
+        catch (Exception e) when (e is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private ItemAnswer<UpdateManifestRefusal, UpdatedMod> LeftToItsBuild(ModToUpdate mod, InstanceToUpdate instance)
+    {
+        var status = repository.Status(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
+        if (status.Unreadable is { } unreadable)
+            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(UpdateManifestRefusal.ModFilesUnreadable, $"'{mod.Name}' was not updated: {unreadable.Why}.");
+        if (status.NoManifest)
+        {
+            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
+                UpdateManifestRefusal.LeftToItsBuild, $"'{mod.Name}' was not updated: its build writes its manifest, and it has not written one.");
+        }
+        if (status.Differing.Count + status.NamedByNoLine.Count + status.Gone.Count > 0)
+        {
+            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
+                UpdateManifestRefusal.LeftToItsBuild, $"'{mod.Name}' was not updated: its build writes its manifest, and its folder differs from what the build wrote.");
+        }
+        return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Landed(new UpdatedMod(ManifestWritten: false, status.NoProvider, status.StatCacheNotWritten));
     }
 }

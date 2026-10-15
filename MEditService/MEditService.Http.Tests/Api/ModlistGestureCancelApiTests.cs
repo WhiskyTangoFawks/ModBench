@@ -29,7 +29,15 @@ public sealed class ModlistGestureCancelApiTests : HostedTests
             File.WriteAllText(Path.Combine(FolderOf(mod), "a.txt"), mod);
         }
         object[] mods = [.. new[] { "ModA", "ModB" }.Select(mod => new { name = mod, folder = FolderOf(mod), installationFiles = Array.Empty<object>(), committedFiles = Array.Empty<string>() })];
-        return new { mods, gameFiles = Array.Empty<object>(), dataFolder = Path.Combine(_instance, "game", "Data"), statCache = Path.Combine(_instance, "stat-cache"), gesture };
+        return new
+        {
+            mods,
+            gameFiles = Array.Empty<object>(),
+            dataFolder = Path.Combine(_instance, "game", "Data"),
+            statCache = Path.Combine(_instance, "stat-cache"),
+            excludedSuffix = ".mohidden",
+            gesture,
+        };
     }
 
     private async Task<JsonElement> Post(string route, string gesture)

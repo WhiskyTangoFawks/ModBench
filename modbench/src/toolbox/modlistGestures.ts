@@ -195,9 +195,14 @@ function restoreMessage(status: RestoreStatus): string {
   }
 }
 
-// modlist-source.md, Reporting: one line, with each skipped mod and each stat cache not written in the Output.
+// modlist-source.md, Reporting: one line, with each skipped mod, each stat cache not written and each mod built from
+// changes no commit holds in the Output.
 function reportRestored(reporter: Reporter, total: number, outcome: Omit<Extract<RestoreResult, { applied: true }>, 'applied'>): void {
-  const warnings = statCacheNotWritten(outcome.landed);
+  const warnings = [
+    ...statCacheNotWritten(outcome.landed),
+    ...outcome.landed.filter(({ uncommitted }) => uncommitted === true)
+      .map(({ mod }) => `${mod}: its source holds changes no commit holds, so its manifest's commit does not rebuild these bytes`),
+  ];
   if (outcome.refused.length > 0) {
     const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...warnings].join('\n');
     reporter.report('error', `Could not restore ${outcome.refused.length} of ${total} mods.`, detail);

@@ -357,7 +357,7 @@ describe('modbench.mod.build', () => {
           progressSteps.push('build');
           builds.push([mods, gameRelease]);
           expect(sourceDirs).toBe(SOURCE_DIRS);
-          return client.build([], { excludedSuffix: '', archives: null });
+          return client.build([], { excludedSuffix: '', archives: null, statCache: '' });
         },
       },
       instance: instanceThatReads, gameRelease: () => 'Fallout4',
@@ -649,6 +649,22 @@ describe('modbench.mod.build', () => {
     expect(reporter.reports).toEqual([{
       severity: 'warning', message: 'Build overwrote 3 files that differed.', detail: '"MyPatch.esp (ModA)", "textures/a.dds (ModA)", "b.nif (ModB)"',
     }]);
+  });
+
+  it.each([
+    ['uncommitted', ['ModA'], 'Built 1 mod from changes no commit holds, so its manifest\'s commit does not rebuild it.', '"ModA"'],
+    ['uncommitted', ['ModA', 'ModB'], 'Built 2 mods from changes no commit holds, so their manifests\' commits do not rebuild them.', '"ModA", "ModB"'],
+    ['unpushed', ['ModA'], 'Built 1 mod at a commit its remote does not hold, so a clone elsewhere cannot fetch it.', '"ModA"'],
+    ['unpushed', ['ModA', 'ModB'], 'Built 2 mods at commits their remotes do not hold, so a clone elsewhere cannot fetch them.', '"ModA", "ModB"'],
+  ] as const)('names each mod whose manifest\'s commit does not rebuild it, %s, beside the landing', async (flag, mods, message, detail) => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('build', { landed: mods.map((mod) => ({ ...built(mod), [flag]: true })), refused: [] });
+    const { handler, reporter } = registered(client);
+    const rows = mods.map((mod) => new ModsRowStandIn(mod));
+
+    await handler(rows[0], rows);
+
+    expect(reporter.reports).toEqual([{ severity: 'warning', message, detail }]);
   });
 
   it('reports a refusal of the whole selection once, and lands nothing', async () => {

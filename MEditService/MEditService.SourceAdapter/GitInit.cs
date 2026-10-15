@@ -66,20 +66,26 @@ internal static class GitInit
     {
         git.Run("init", "-q", "-b", "main");
         git.Run("config", $"{SourceRepositoryGit.InitMarkSection}.{SourceRepositoryGit.InitMarkKey}", "true");
-        git.Run("config", "core.autocrlf", "false");
-        // Git for Windows refuses a path past 260 characters unless told otherwise, and a source folder's
-        // plugin source nests deep.
-        git.Run("config", "core.longpaths", "true");
-        git.Run("config", "commit.gpgsign", "false");
-        git.Run("config", "gc.autoDetach", "false");
-        // Plugin file names carry spaces, which git's default quotePath C-quotes in porcelain output,
-        // and every porcelain reader here expects the raw path.
-        git.Run("config", "core.quotePath", "false");
+        foreach (var (key, value) in Settings) git.Run("config", key, value);
         EnsureCommitIdentity(git);
     }
 
+    /// <summary>How Modbench sets every source repository it makes, by init or by clone.</summary>
+    internal static readonly (string Key, string Value)[] Settings =
+    [
+        ("core.autocrlf", "false"),
+        // Git for Windows refuses a path past 260 characters unless told otherwise, and a source folder's
+        // plugin source nests deep.
+        ("core.longpaths", "true"),
+        ("commit.gpgsign", "false"),
+        ("gc.autoDetach", "false"),
+        // Plugin file names carry spaces, which git's default quotePath C-quotes in porcelain output,
+        // and every porcelain reader here expects the raw path.
+        ("core.quotePath", "false"),
+    ];
+
     // Pins a repo-local identity only when the global one is unset; never overwrites a real identity.
-    private static void EnsureCommitIdentity(SourceRepositoryGit git)
+    internal static void EnsureCommitIdentity(SourceRepositoryGit git)
     {
         if (!git.TryRun(out _, "config", "--get", "user.name"))
             git.Run("config", "user.name", "Modbench");

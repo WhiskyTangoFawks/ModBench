@@ -84,7 +84,11 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
             ["statCache"] = StatCache,
             ["gesture"] = Gesture,
         };
-        if (gesture == "restore-from-manifest") request["dataFolder"] = Path.Combine(_instance, "game", "Data");
+        if (gesture == "restore-from-manifest")
+        {
+            request["dataFolder"] = Path.Combine(_instance, "game", "Data");
+            request["excludedSuffix"] = ".mohidden";
+        }
         return request;
     }
 
@@ -231,6 +235,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     [InlineData("gameFiles")]
     [InlineData("dataFolder")]
     [InlineData("statCache")]
+    [InlineData("excludedSuffix")]
     public async Task RestoringWithAFieldMissing_Is400(string field)
     {
         var request = Request("restore-from-manifest", "Mod.zip");

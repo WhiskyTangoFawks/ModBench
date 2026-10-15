@@ -25,6 +25,8 @@ public sealed class BuildModTraceTests : HostedTests
 
     private string _builtFolder = string.Empty;
 
+    private string StatCache => Path.Combine(_instance.Root, "stat-cache");
+
     private async Task LoadedWithOneModFolderAndTracked()
     {
         _builtFolder = Path.GetDirectoryName(_instance.Plugins.Single(p => p.Name == Plugin).Path).Require();
@@ -53,7 +55,7 @@ public sealed class BuildModTraceTests : HostedTests
         File.AppendAllText(Path.Combine(_builtFolder, Plugin), "changed outside Modbench");
         using var stream = await Client.NotificationStream();
 
-        var answer = await Answer(await Client.Build([(Origin, _builtFolder)]));
+        var answer = await Answer(await Client.Build([(Origin, _builtFolder)], StatCache));
 
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
         var built = Assert.Single(answer.GetProperty("applied").EnumerateArray());
@@ -72,12 +74,50 @@ public sealed class BuildModTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task RestoringAModWhoseSourceIsAbsent_ClonesItFromTheRemoteItsManifestNames_AndBuildsItAtThatCommit()
+    {
+        await LoadedWithOneModFolderAndTracked();
+        var source = Client.SourceFolderSentFor(Origin);
+        var remote = Path.Combine(_instance.Root, "remote");
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var copy = Path.Combine(remote, Path.GetRelativePath(source, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(copy).Require());
+            File.Copy(file, copy);
+        }
+        var line = JsonSerializer.Serialize(new { path = Plugin, from = new { remote, commit = GitProbe.Run(Path.Combine(source, ".git"), source, "rev-parse", "HEAD").Trim() } });
+        File.WriteAllText(Path.Combine(_builtFolder, $"{Origin}.manifest"), line + "\n");
+        var absent = Path.Combine(_instance.Root, "source", Origin);
+
+        var answer = await Answer(await Client.PostAsJsonAsync("/restore-from-manifest", new
+        {
+            mods = new[]
+            {
+                new
+                {
+                    name = Origin, folder = _builtFolder, installationFiles = Array.Empty<object>(), committedFiles = new[] { "meta.ini" },
+                    sourceFolder = absent,
+                },
+            },
+            gameFiles = Array.Empty<object>(),
+            dataFolder = _instance.GameDirectory,
+            statCache = StatCache,
+            excludedSuffix = ".mohidden",
+        }));
+
+        Assert.Empty(answer.GetProperty("refused").EnumerateArray());
+        Assert.Equal(Origin, Assert.Single(answer.GetProperty("applied").EnumerateArray()).GetProperty("mod").GetString());
+        Assert.Equal(
+            GitProbe.Run(Path.Combine(source, ".git"), source, "rev-parse", "HEAD"), GitProbe.Run(Path.Combine(absent, ".git"), absent, "rev-parse", "HEAD"));
+    }
+
+    [Fact]
     public async Task BuildingAModWhoseSourceHoldsNoBuildConfiguration_RefusesItByName_AndBuildsTheRest()
     {
         await LoadedWithOneModFolderAndTracked();
         var untrackedFolder = Path.GetDirectoryName(_instance.Plugins.Single(p => p.Name == UntrackedPlugin).Path).Require();
 
-        var answer = await Answer(await Client.Build([(UntrackedOrigin, untrackedFolder), (Origin, _builtFolder)]));
+        var answer = await Answer(await Client.Build([(UntrackedOrigin, untrackedFolder), (Origin, _builtFolder)], StatCache));
 
         Assert.Equal([Origin], answer.GetProperty("applied").EnumerateArray().Select(m => m.GetProperty("mod").GetString()));
         var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
@@ -96,7 +136,7 @@ public sealed class BuildModTraceTests : HostedTests
         File.WriteAllText(Path.Combine(source, "build.json"), $"{{\"output\": \"{Path.GetFileName(_builtFolder)}\", \"archives\": {{\"Main.ba2\": [\"meshes/a.nif\"]}}}}");
         var ba2 = new { ba2 = new { version = 1, compressed = true } };
 
-        var answer = await Answer(await Client.Build([(Origin, _builtFolder)], new { general = ba2, textures = ba2 }));
+        var answer = await Answer(await Client.Build([(Origin, _builtFolder)], StatCache, new { general = ba2, textures = ba2 }));
 
         Assert.Empty(Assert.Single(answer.GetProperty("applied").EnumerateArray()).GetProperty("archivesRefused").EnumerateArray());
         Assert.Equal("BTDX", System.Text.Encoding.ASCII.GetString(File.ReadAllBytes(Path.Combine(_builtFolder, "Main.ba2")), 0, 4));
@@ -106,7 +146,7 @@ public sealed class BuildModTraceTests : HostedTests
     [Fact]
     public async Task BuildingBeforeAnyLoadOrder_RefusesTheWholeSelectionOnce_503()
     {
-        var response = await Client.Build([(Origin, Origin)]);
+        var response = await Client.Build([(Origin, Origin)], StatCache);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -117,10 +157,11 @@ public sealed class BuildModTraceTests : HostedTests
     {
         { "no mod", "{\"mods\": [], \"excludedSuffix\": \".mohidden\"}" },
         { "no folder", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"installationFiles\": []}], \"excludedSuffix\": \".mohidden\"}" },
-        { "no suffix", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"installationFiles\": []}]}" },
+        { "no suffix", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"installationFiles\": []}], \"statCache\": \"c\"}" },
+        { "no stat cache", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"installationFiles\": []}], \"excludedSuffix\": \".mohidden\"}" },
         {
             "a variant both a BA2 and a BSA",
-            "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"installationFiles\": []}], \"excludedSuffix\": \".mohidden\", " +
+            "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"installationFiles\": []}], \"excludedSuffix\": \".mohidden\", \"statCache\": \"c\", " +
             "\"archives\": {\"general\": {\"ba2\": {\"version\": 1, \"compressed\": true}, \"bsa\": {\"version\": 105, \"archiveFlags\": 3, \"fileFlags\": 0}}, " +
             "\"textures\": {\"ba2\": {\"version\": 1, \"compressed\": true}}}}"
         },

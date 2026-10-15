@@ -15,8 +15,8 @@ internal static class ModEndpoints
             .WithTags("Mods")
             .WithDescription(
                 "Writes each source mod's folder from its source as its build configuration says: the base from its " +
-                "installation files, its assets over it, each plugin compiled, each archive packed. A file the build did not " +
-                "make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and " +
+                "installation files, its assets over it, each plugin compiled, each archive packed, and its manifest last. A file the " +
+                "build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and " +
                 "what failed when a read or write stopped it part way. " +
                 "Progress is the build-progress notification.")
             .Produces<BuildResponse>()
@@ -116,27 +116,24 @@ internal static class ModEndpoints
         }
         if (string.IsNullOrWhiteSpace(req.ExcludedSuffix))
             return Results.Problem("The suffix the mod manager gives an excluded file's name is required.", statusCode: 400);
-        ArchiveVariants? variants = null;
-        if (req.Archives is { } archives)
-        {
-            if (archives.General?.Variant(Ba2Contents.General) is not { } general || archives.Textures?.Variant(Ba2Contents.Textures) is not { } textures)
-                return Results.Problem("Each archive variant is a BA2 or a BSA, not both.", statusCode: 400);
-            variants = new ArchiveVariants(general, textures);
-        }
+        if (string.IsNullOrWhiteSpace(req.StatCache)) return Results.Problem("The folder of the stat cache is required.", statusCode: 400);
+        var variants = req.Archives?.Variants();
+        if (req.Archives is not null && variants is null) return Results.Problem(ArchiveVariantsRequest.NotOneEach, statusCode: 400);
 
         return await EndpointMapping.Answered(
             "Build", logger,
             buildHandler.BuildAsync(
                 [.. mods.Select(mod => new ModToBuild(
-                    mod.Name, mod.SourceFolder, mod.Folder, [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())]))],
-                new InstanceToBuild(req.ExcludedSuffix, variants)),
+                    mod.Name, mod.SourceFolder, mod.Folder, [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())],
+                    mod.CommittedFiles ?? []))],
+                new InstanceToBuild(req.ExcludedSuffix, variants, req.StatCache)),
             EndpointMapping.Refusal,
             landed => new BuiltModResponse(
                 landed.Item,
                 [.. landed.Outcome.Compiled.Select(c => new CompiledPlugin(c.Item.Name, c.Item.Origin, c.Outcome))],
                 [.. landed.Outcome.Refused.Select(r => new PluginCompileRefusal(r.Item, r.Refusal, r.Message))],
                 [.. landed.Outcome.ArchivesRefused.Select(r => new ArchivePackRefusal(r.Item, r.Refusal, r.Message))],
-                landed.Outcome.Overwritten, landed.Outcome.Failure),
+                landed.Outcome.Overwritten, landed.Outcome.Failure, landed.Outcome.Uncommitted, landed.Outcome.Unpushed),
             refused => new ModBuildRefusal(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new BuildResponse(applied, refused));
     }
@@ -147,17 +144,26 @@ internal static class ModEndpoints
 internal sealed record BuildConfigurationRequest(
     string SourceFolder, string? Output, IReadOnlyList<string>? Exclude, IReadOnlyList<string>? Include);
 
-/// <summary>The mods to build with the instance's facts (ADR-0013): the suffix the mod manager gives an excluded
-/// file's name, and the game's archive variants from the per-release table, none when it names none.</summary>
-internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExcludedSuffix, ArchiveVariantsRequest? Archives);
+/// <summary>The mods to build with the instance's facts (ADR-0013): the mod manager's suffix for an excluded file's
+/// name, the game's archive variants, if any, and the stat cache's folder.</summary>
+internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExcludedSuffix, ArchiveVariantsRequest? Archives, string StatCache);
 
-/// <summary>A mod by name, the source folder whose build configuration names it, its folder, and its installation
-/// files in the mod manager's order.</summary>
+/// <summary>A mod by name, the source folder whose build configuration names it, its folder, its installation files in
+/// the mod manager's order, and its files the repository commits, which its manifest does not name.</summary>
 internal sealed record BuildModRequest(
-    string Name, string SourceFolder, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles);
+    string Name, string SourceFolder, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> CommittedFiles);
 
 /// <summary>The variant an archive of textures packs as, and the one every other archive packs as.</summary>
-internal sealed record ArchiveVariantsRequest(ArchiveVariantRequest General, ArchiveVariantRequest Textures);
+internal sealed record ArchiveVariantsRequest(ArchiveVariantRequest General, ArchiveVariantRequest Textures)
+{
+    internal const string NotOneEach = "Each archive variant is a BA2 or a BSA, not both.";
+
+    /// <summary>The variants; null when either is not one BA2 or one BSA.</summary>
+    internal ArchiveVariants? Variants() =>
+        General?.Variant(Ba2Contents.General) is { } general && Textures?.Variant(Ba2Contents.Textures) is { } textures
+            ? new ArchiveVariants(general, textures)
+            : null;
+}
 
 /// <summary>A BA2 or a BSA variant.</summary>
 internal sealed record ArchiveVariantRequest(Ba2VariantRequest? Ba2, BsaVariantRequest? Bsa)
@@ -193,10 +199,10 @@ internal sealed record ModInitRefusal(string Item, InitRefusal Refusal, string M
 internal sealed record InitResponse(IReadOnlyList<InitializedModResponse> Applied, IReadOnlyList<ModInitRefusal> Refused);
 
 /// <summary>A mod of the selection that built: the plugins that compiled, the plugins and archives refused, which
-/// stay as they were, each file it replaced that held other bytes, and what stopped it part way, if anything did.</summary>
+/// stay as they were, each file it replaced that held other bytes, what stopped it part way, Uncommitted and Unpushed.</summary>
 internal sealed record BuiltModResponse(
     string Mod, IReadOnlyList<CompiledPlugin> Compiled, IReadOnlyList<PluginCompileRefusal> Refused,
-    IReadOnlyList<ArchivePackRefusal> ArchivesRefused, IReadOnlyList<string> Overwritten, string? Failure);
+    IReadOnlyList<ArchivePackRefusal> ArchivesRefused, IReadOnlyList<string> Overwritten, string? Failure, bool Uncommitted, bool Unpushed);
 
 /// <summary>An archive of a built mod that was not packed, by its path in the mod folder.</summary>
 internal sealed record ArchivePackRefusal(string Item, ArchiveRefusal Refusal, string Message);

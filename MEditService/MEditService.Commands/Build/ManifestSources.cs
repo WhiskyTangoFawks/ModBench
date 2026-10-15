@@ -1,9 +1,10 @@
 using MEditService.ModFolderAdapter;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>Each manifest line's provider among what a request hands, with the hash that fixes the file's bytes. A
-/// source the manifest names that is missing, or holds other bytes than the manifest names, is a lack.</summary>
+/// <summary>Each manifest line's provider among what a request hands, with the hash that fixes the file's bytes, and the
+/// source that builds the rest. A source missing or holding other bytes is a lack.</summary>
 internal sealed class ManifestSources(
     IModFolderRepository repository, Manifest manifest, IReadOnlyList<InstallationFile> installationFiles, IReadOnlyList<OverriddenGameFile> gameFiles)
 {
@@ -21,7 +22,8 @@ internal sealed class ManifestSources(
     /// <summary>A file of the mod folder, by its path, and where its line says it comes from.</summary>
     internal sealed record SourcedFile(string Path, Source Source);
 
-    internal sealed record Resolved(IReadOnlyList<SourcedFile> Files, IReadOnlyList<Lack> Lacks);
+    /// <summary>Built is the source and commit that build the files no request hands, none when no line names one.</summary>
+    internal sealed record Resolved(IReadOnlyList<SourcedFile> Files, IReadOnlyList<Lack> Lacks, SharedSource? Built);
 
     private sealed record Handed(InstallationFile File, Dictionary<string, HashedEntry> Entries);
 
@@ -36,13 +38,16 @@ internal sealed class ManifestSources(
             .. manifest.InstallationFiles.Select(source => InstallationFileNamed(source.Name).Lack).OfType<Lack>(),
             .. manifest.GameFiles.Select(source => GameFileOf(source.Name).Lack).OfType<Lack>(),
         ];
-        foreach (var file in manifest.Files)
+        foreach (var file in manifest.Files.Where(file => file.Provider is not FileProvider.Source))
         {
             var (source, lack) = SourceOf(file);
             if (source is not null) sourced.Add(new SourcedFile(file.Path, source));
             if (lack is not null) lacks.Add(lack);
         }
-        return new Resolved(sourced, [.. lacks.Distinct()]);
+        List<SharedSource> built = [.. manifest.Files.Select(file => file.Provider).OfType<FileProvider.Source>()
+            .Select(source => new SharedSource(source.Remote, source.Commit)).Distinct()];
+        if (built.Count > 1) lacks.Add(new Lack("its manifest names its source at more than one commit"));
+        return new Resolved(sourced, [.. lacks.Distinct()], built.Count == 1 ? built[0] : null);
     }
 
     private (Source?, Lack?) SourceOf(ManifestFile file) => file.Provider switch

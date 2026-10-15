@@ -283,7 +283,7 @@ async function buildMods(deps: BuildDeps, { mods: named, refusedRows, invokedFro
     return {
       applied: true,
       outcome: { landed: outcome.landed, refused: [...outcome.refused, ...refusedRows, ...notSource] },
-      partial: [...partlyBuilt(outcome), ...overwritten(outcome), ...refusedInMods(outcome)],
+      partial: [...partlyBuilt(outcome), ...overwritten(outcome), ...builtUncommitted(outcome), ...builtUnpushed(outcome), ...refusedInMods(outcome)],
     };
   });
 }
@@ -356,6 +356,27 @@ function overwritten(outcome: BuildOutcome): PartialFailure[] {
     message: `Build overwrote ${paths.length} ${paths.length === 1 ? 'file' : 'files'} that differed.`,
     detail: paths.map((name) => `"${name}"`).join(', '), severity: 'warning',
   }];
+}
+
+// mods.md, Build, story 1: the manifest names a commit, so a build from changes no commit holds says so.
+function builtUncommitted(outcome: BuildOutcome): PartialFailure[] {
+  return namedBuilt(outcome.landed.filter(({ uncommitted }) => uncommitted === true), {
+    one: 'Built 1 mod from changes no commit holds, so its manifest\'s commit does not rebuild it.',
+    many: (count) => `Built ${count} mods from changes no commit holds, so their manifests' commits do not rebuild them.`,
+  });
+}
+
+// A clone elsewhere fetches the commit the manifest names from the remote.
+function builtUnpushed(outcome: BuildOutcome): PartialFailure[] {
+  return namedBuilt(outcome.landed.filter(({ unpushed }) => unpushed === true), {
+    one: 'Built 1 mod at a commit its remote does not hold, so a clone elsewhere cannot fetch it.',
+    many: (count) => `Built ${count} mods at commits their remotes do not hold, so a clone elsewhere cannot fetch them.`,
+  });
+}
+
+function namedBuilt(mods: readonly { mod: string }[], message: { one: string; many: (count: number) => string }): PartialFailure[] {
+  if (mods.length === 0) return [];
+  return [{ message: mods.length === 1 ? message.one : message.many(mods.length), detail: mods.map(({ mod }) => `"${mod}"`).join(', '), severity: 'warning' }];
 }
 
 function refusedInMods(outcome: BuildOutcome): PartialFailure[] {
