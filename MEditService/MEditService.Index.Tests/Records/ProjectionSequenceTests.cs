@@ -92,7 +92,7 @@ public sealed class ProjectionSequenceTests : IDisposable
         var formKey2 = _npc2.ToString();
         var document1 = _index.DocumentOf(formKey1, _baseKey);
         var document2 = _index.DocumentOf(formKey2, _baseKey);
-        var repository = TrackedMods.RepositoryOf(_base);
+        var repository = SourceMods.RepositoryOf(_base);
         repository.Put(_baseKey, new SourceAdapter.SourceDocument(
             formKey1, document1.RecordType, document1.EditorId, _index.BodyOf(formKey1, _baseKey).Replace("First", "FirstEdited", StringComparison.Ordinal))).Wrote();
         repository.Put(_baseKey, new SourceAdapter.SourceDocument(

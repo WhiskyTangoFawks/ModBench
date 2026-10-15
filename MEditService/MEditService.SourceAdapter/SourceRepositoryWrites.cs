@@ -186,7 +186,7 @@ internal sealed class SourceRepositoryWrites(
     internal void ReplaceSourceFrom(string pluginFileName, IReadOnlyList<TreeFile> files, string binarySha256)
     {
         // A source folder another tool removed is not written back into being.
-        if (!SourceRepositoryGit.IsTracked(_sourceFolder))
+        if (!SourceRepositoryGit.HoldsRepository(_sourceFolder))
             throw SourceStopException.Inaccessible($"'{_sourceFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
 
         var root = SourceRepositoryLayout.RootIn(_sourceFolder, pluginFileName);

@@ -26,7 +26,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
         Assert.Contains("fixed-size-subrecord-short", result.Message);
         Assert.Contains("repairable (lossless)", result.Message);
         Assert.Contains("RDAT is 6 bytes; a REGN RDAT is always 8", result.Message);
-        Assert.False(TestAdapters.Source().IsTracked(scratch.ModFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(scratch.ModFolder));
     }
 
     private sealed class ShortRdatScratch : IDisposable

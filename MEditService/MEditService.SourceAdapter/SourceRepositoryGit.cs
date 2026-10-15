@@ -15,7 +15,7 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c>
     /// exists. A <c>.git</c> with no <c>main</c> is init's own, half made, or
     /// <see cref="HoldsAnotherRepository"/>.</summary>
-    internal static bool IsTracked(string sourceFolder)
+    internal static bool IsSourceMod(string sourceFolder)
     {
         var gitDir = Path.Combine(sourceFolder, ".git");
         return Directory.Exists(gitDir) && HasMainBranch(gitDir);
@@ -88,7 +88,7 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     /// a missing glob-shaped path, show exits 0 with empty output — a lying empty string.</summary>
     internal string? ReadCommittedSourceText(string relativePath)
     {
-        if (!IsTracked(_sourceFolder)) return null;
+        if (!HoldsRepository(_sourceFolder)) return null;
 
         return TryRun(out var stdout, "cat-file", "-p", $"HEAD:{ToGitPath(relativePath)}") ? stdout : null;
     }
@@ -117,7 +117,7 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
 
     internal IReadOnlyList<string> LastWrittenBinarySha256s(string pluginFileName)
     {
-        if (!IsTracked(_sourceFolder)) return [];
+        if (!HoldsRepository(_sourceFolder)) return [];
 
         if (!TryRun(out var body, "log", "-1", "--format=%B", LastCompileRef(pluginFileName)))
             return [];

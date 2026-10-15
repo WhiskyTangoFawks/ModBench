@@ -207,7 +207,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
 
         Assert.Equal(
             $"{npcFile} is under no tracked plugin's source.",
-            WhyRefused(npcFile, LoadOrder(Entry(_modFolder, Origin) with { Winning = false }, Entry(untracked, "UntrackedMod"))));
+            WhyRefused(npcFile, LoadOrder(Entry(_modFolder, Origin) with { Winning = false }, Entry(untracked, "NonSourceMod"))));
     }
 
     [Fact]

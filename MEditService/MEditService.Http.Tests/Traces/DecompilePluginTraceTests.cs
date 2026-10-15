@@ -10,9 +10,9 @@ namespace MEditService.Http.Tests.Traces;
 public sealed class DecompilePluginTraceTests : HostedTests
 {
     private const string Plugin = "Tracked.esp";
-    private const string Origin = "TrackedMod";
+    private const string Origin = "SourceMod";
     private const string Npc = "TrackedNpc";
-    private const string UntrackedOrigin = "UntrackedMod";
+    private const string UntrackedOrigin = "NonSourceMod";
 
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("trace-decompile-plugin")
         .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)

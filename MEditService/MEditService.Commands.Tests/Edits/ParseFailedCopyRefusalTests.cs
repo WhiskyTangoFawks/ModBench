@@ -118,7 +118,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
         public string ModFolderOf(PluginAddress plugin) => plugin == DestinationPlugin ? _destinationModFolder : _sourceModFolder;
 
-        public IReadOnlyList<string> DestinationChangedFormKeys() => TrackedTree.ChangedFormKeys(_destinationModFolder, DestinationPlugin);
+        public IReadOnlyList<string> DestinationChangedFormKeys() => SourceModTree.ChangedFormKeys(_destinationModFolder, DestinationPlugin);
 
         public void Dispose()
         {

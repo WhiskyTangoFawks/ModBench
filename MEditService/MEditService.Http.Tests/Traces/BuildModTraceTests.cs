@@ -13,7 +13,7 @@ public sealed class BuildModTraceTests : HostedTests
     private const string SecondPlugin = "AlsoBuilt.esp";
     private const string Origin = "BuiltMod";
     private const string UntrackedPlugin = "Untracked.esp";
-    private const string UntrackedOrigin = "UntrackedMod";
+    private const string UntrackedOrigin = "NonSourceMod";
 
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("trace-build-mod")
         .WithPlugin(Plugin, mod => mod.Npcs.AddNew("BuiltNpc"), origin: Origin)

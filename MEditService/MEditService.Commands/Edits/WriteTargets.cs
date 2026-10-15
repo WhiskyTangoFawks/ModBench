@@ -104,7 +104,7 @@ internal sealed class WriteTargets(
                 $"{plugin.Name} from '{plugin.Origin}' is not in the load order, so nothing can be written to it.");
         }
 
-        if (!source.IsTracked(registered)) return RefuseUntracked(plugin, registered.Provider);
+        if (!source.IsSourceMod(registered)) return RefuseUntracked(plugin, registered.Provider);
         return source.SourceReads(registered) ? null : RefuseSourceUnreadable(plugin);
     }
 

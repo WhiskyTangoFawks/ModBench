@@ -48,7 +48,7 @@ public sealed class PersistentFlagPartialFormCellTests : TestInstance
     private List<string> Group(string group)
     {
         var cell = JsonNode.Parse(
-            TrackedTree.Document(ModFolderOf(_override), _override, _cell.ToString()).Require().Body).Require();
+            SourceModTree.Document(ModFolderOf(_override), _override, _cell.ToString()).Require().Body).Require();
         return [.. (cell[group] as JsonArray ?? []).Select(placed => placed.Require()["EditorID"].Require().GetValue<string>())];
     }
 

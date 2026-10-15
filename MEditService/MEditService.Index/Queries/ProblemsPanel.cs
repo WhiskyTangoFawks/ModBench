@@ -24,7 +24,7 @@ internal static class ProblemsPanel
         return
         [
             .. snapshot.Plugins
-                .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsTracked() || stopped.Contains(plugin.Key))
+                .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsSourceMod() || stopped.Contains(plugin.Key))
                 .Select(plugin => ProblemsOf(
                     plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
                     [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key])],

@@ -10,9 +10,9 @@ namespace MEditService.Http.Tests.Api;
 public sealed class RenameSourceApiTests : HostedTests
 {
     private const string Plugin = "Tracked.esp";
-    private const string Origin = "TrackedMod";
+    private const string Origin = "SourceMod";
     private const string Npc = "TrackedNpc";
-    private const string UntrackedOrigin = "UntrackedMod";
+    private const string UntrackedOrigin = "NonSourceMod";
 
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("api-rename-source")
         .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
@@ -142,7 +142,7 @@ public sealed class RenameSourceApiTests : HostedTests
 public sealed class RenameSourceWithoutGitApiTests : HostedTests
 {
     private const string Plugin = "Tracked.esp";
-    private const string Origin = "TrackedMod";
+    private const string Origin = "SourceMod";
 
     [Fact]
     public async Task RenamingWithGitMissing_Is500_AndLeavesTheSourceWhereItWas()

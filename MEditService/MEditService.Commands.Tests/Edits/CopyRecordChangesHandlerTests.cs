@@ -54,13 +54,13 @@ public sealed class CopyRecordChangesHandlerTests
         using var mod = CopyFixture.Create(trackSource: true);
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
         LeaveTextTheCodecWouldRespell(mod);
-        var before = TrackedTree.Records(mod.SourceModFolder, mod.SourcePlugin);
+        var before = SourceModTree.Records(mod.SourceModFolder, mod.SourcePlugin);
 
         var result = mod.CopyHandler.CopySync([npc], CopyMode.Override, [mod.SourcePlugin], replace);
 
         Assert.Equal([new CopyItem(npc, mod.SourcePlugin)], result.Landed.Select(landed => landed.Item));
         Assert.Empty(result.Refused);
-        Assert.Equal(before, TrackedTree.Records(mod.SourceModFolder, mod.SourcePlugin));
+        Assert.Equal(before, SourceModTree.Records(mod.SourceModFolder, mod.SourcePlugin));
     }
 
     private static void LeaveTextTheCodecWouldRespell(CopyFixture mod)
@@ -88,13 +88,13 @@ public sealed class CopyRecordChangesHandlerTests
     {
         using var mod = CopyFixture.Create();
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
-        var before = TrackedTree.Records(mod.DestinationModFolder, mod.DestinationPlugin);
+        var before = SourceModTree.Records(mod.DestinationModFolder, mod.DestinationPlugin);
 
         var result = mod.CopyHandler.CopySync([npc], CopyMode.New, [mod.DestinationPlugin], replace: true);
 
         Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.SelectionRefusal?.Refusal);
         Assert.Empty(result.Landed);
-        Assert.Equal(before, TrackedTree.Records(mod.DestinationModFolder, mod.DestinationPlugin));
+        Assert.Equal(before, SourceModTree.Records(mod.DestinationModFolder, mod.DestinationPlugin));
     }
 
     [Theory]
@@ -104,14 +104,14 @@ public sealed class CopyRecordChangesHandlerTests
     {
         using var mod = CopyFixture.Create();
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
-        var before = TrackedTree.Records(mod.DestinationModFolder, mod.DestinationPlugin);
+        var before = SourceModTree.Records(mod.DestinationModFolder, mod.DestinationPlugin);
 
         var result = mod.CopyHandler.CopyChangesSync([npc], mode, [mod.DestinationPlugin], replace: false);
 
         var changes = Assert.Single(result.Landed).Outcome.Changes;
         Assert.NotEmpty(changes.Documents);
         Assert.All(changes.Documents, document => Assert.StartsWith(mod.DestinationModFolder, document.Path, StringComparison.Ordinal));
-        Assert.Equal(before, TrackedTree.Records(mod.DestinationModFolder, mod.DestinationPlugin));
+        Assert.Equal(before, SourceModTree.Records(mod.DestinationModFolder, mod.DestinationPlugin));
     }
 
     [Fact]

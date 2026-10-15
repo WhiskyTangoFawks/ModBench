@@ -32,7 +32,7 @@ public sealed class CreateChildRecordTests : IDisposable
     [Fact]
     public void AChildCreatedOnAnUnsavedContainer_LandsInTheTextItHolds_AndWritesNothing()
     {
-        var file = Path.Combine(_fixture.ModFolder, TrackedTree.DocumentFile(_fixture.ModFolder, _fixture.Plugin, _fixture.Quest.ToString()).Require());
+        var file = Path.Combine(_fixture.ModFolder, SourceModTree.DocumentFile(_fixture.ModFolder, _fixture.Plugin, _fixture.Quest.ToString()).Require());
         var onDisk = JsonNode.Parse(File.ReadAllText(file)).Require().AsObject();
         onDisk["DialogTopics"].Require().AsArray().RemoveAt(0);
         var held = onDisk.ToJsonString();
@@ -83,13 +83,13 @@ public sealed class CreateChildRecordTests : IDisposable
     public void AChildItsContainerCannotHold_IsRefused_AndTheTreeIsAsItWas(string recordType, string container)
     {
         var containerKey = KeyOf(container).ToString();
-        var before = TrackedTree.Records(_fixture.ModFolder, _fixture.Plugin);
+        var before = SourceModTree.Records(_fixture.ModFolder, _fixture.Plugin);
 
         var result = _fixture.CreateHandler.CreateRecordSync(_fixture.Plugin, recordType, containerKey);
 
         Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
         Assert.Contains(containerKey, result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, TrackedTree.Records(_fixture.ModFolder, _fixture.Plugin));
+        Assert.Equal(before, SourceModTree.Records(_fixture.ModFolder, _fixture.Plugin));
     }
 
     [Fact]
@@ -121,13 +121,13 @@ public sealed class CreateChildRecordTests : IDisposable
     {
         using var mod = ExteriorCell(out var cell);
         var held = mod.CreateHandler.CreateRecordSync(mod.Plugin, "land", cell.ToString()).NewFormKey.Require();
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "land", cell.ToString());
 
         Assert.Equal(RecordEditRefusal.ChildSlotHeldByAnotherRecord, result.Refusal);
         Assert.Contains(held, result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]
@@ -140,12 +140,12 @@ public sealed class CreateChildRecordTests : IDisposable
             quest.MajorRecordFlagsRaw = DeletedFlag.Bit;
             questKey = quest.FormKey;
         });
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "dial", questKey.ToString());
 
         Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]
@@ -169,12 +169,12 @@ public sealed class CreateChildRecordTests : IDisposable
         var directory = TreeTampering.DirectoryOf(_fixture.ModFolder, _fixture.Plugin, cell);
         var group = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(directory))).Require();
         Directory.Move(directory, Path.Combine(group, Path.GetFileName(directory)));
-        var before = TrackedTree.Records(_fixture.ModFolder, _fixture.Plugin);
+        var before = SourceModTree.Records(_fixture.ModFolder, _fixture.Plugin);
 
         var result = _fixture.CreateHandler.CreateRecordSync(_fixture.Plugin, "navm", cell.FormKey);
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        Assert.Equal(before, TrackedTree.Records(_fixture.ModFolder, _fixture.Plugin));
+        Assert.Equal(before, SourceModTree.Records(_fixture.ModFolder, _fixture.Plugin));
     }
 
     public static TheoryData<bool, CellPlace> EachCellShape => new()
@@ -273,12 +273,12 @@ public sealed class CreateChildRecordTests : IDisposable
     public void ANavmeshCreatedOnAnInteriorCellCarryingThePersistentFlag_IsRefused_AndTheTreeIsAsItWas()
     {
         using var mod = InteriorCell(out var cell, interior => interior.MajorRecordFlagsRaw = PersistentFlag.Bit);
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "navm", cell.ToString());
 
         Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     private static SourceModFixture CellShaped(CellPlace place, Action<Cell> shape, out FormKey cell) => place switch

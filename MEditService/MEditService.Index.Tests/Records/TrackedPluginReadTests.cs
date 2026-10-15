@@ -8,7 +8,7 @@ namespace MEditService.Index.Tests.Records;
 public sealed class TrackedPluginReadTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("tracked-read")
-        .WithPlugin("Tracked.esp", mod => mod.Npcs.AddNew("FromTracked"), origin: "TrackedMod")
+        .WithPlugin("Tracked.esp", mod => mod.Npcs.AddNew("FromTracked"), origin: "SourceMod")
         .WithPlugin("Plain.esp", mod => mod.Npcs.AddNew("FromPlain"), origin: "PlainMod")
         .BuildScattered();
 
@@ -17,7 +17,7 @@ public sealed class TrackedPluginReadTests : IDisposable
 
     public TrackedPluginReadTests()
     {
-        TrackedMods.Track(_fixture.Plugins.Single(p => p.Name == Tracked.Name));
+        SourceMods.Track(_fixture.Plugins.Single(p => p.Name == Tracked.Name));
         _index = Indexes.Open(_holder);
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
     }
@@ -28,7 +28,7 @@ public sealed class TrackedPluginReadTests : IDisposable
         _fixture.Dispose();
     }
 
-    private static readonly PluginAddress Tracked = new("Tracked.esp", "TrackedMod");
+    private static readonly PluginAddress Tracked = new("Tracked.esp", "SourceMod");
     private static readonly PluginAddress Plain = new("Plain.esp", "PlainMod");
 
     private bool ReadsFromItsTree(PluginAddress plugin) =>

@@ -47,15 +47,15 @@ public sealed class DecompilePluginHandler
 
         if (plugin.Provider is not PluginProvider.FromMod mod)
         {
-            return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.NotInSourceMod,
-                $"{plugin.Name} is not in a mod, so there is no source mod to decompile it into.");
+            return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.NotFromAMod,
+                $"{plugin.Name} comes from the game or from no mod, so no mod can hold its source.");
         }
 
-        if (!_source.IsTracked(plugin))
+        if (!_source.IsSourceMod(plugin))
         {
             return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.NotInSourceMod,
                 $"{plugin.Name} is not in a source mod, so there is no working tree to decompile it into. "
-                + "Run git init on the modlist if the instance is not a repository, then decompile and commit on the mod.");
+                + $"Run decompile and commit on {mod.Name}.");
         }
 
         var repository = _source.OverFolder(mod, loadOrder.GameRelease);

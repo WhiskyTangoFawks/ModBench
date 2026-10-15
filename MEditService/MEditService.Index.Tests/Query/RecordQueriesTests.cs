@@ -111,7 +111,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     {
         var fixture = Built(TwoNpcsPlugin());
         var entry = fixture.Plugins.Single();
-        if (trackTheMod) TrackedMods.Track(entry);
+        if (trackTheMod) SourceMods.Track(entry);
         if (removeThePluginSource) Directory.Delete(PluginSourceRoot.In(entry.ModFolderOf(), PluginName), recursive: true);
 
         var plugin = Reconciled(fixture).PluginRowOf(PluginKey) ?? throw new InvalidOperationException("Expected the plugin's row.");
@@ -123,14 +123,14 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     public void GetPlugins_MarksTrackedPerPlugin_NotPerFilename()
     {
         var fixture = Built(new PluginFixtureBuilder("record-query")
-            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Tracked"), origin: "TrackedMod")
-            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Untracked"), origin: "UntrackedMod"));
-        TrackedMods.Track(fixture.Plugins.Single(p => p.Origin == "TrackedMod"));
+            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Tracked"), origin: "SourceMod")
+            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Untracked"), origin: "NonSourceMod"));
+        SourceMods.Track(fixture.Plugins.Single(p => p.Origin == "SourceMod"));
 
         var plugins = Reconciled(fixture).Queries.GetPlugins().Value();
 
-        Assert.True(plugins.Single(p => p.Plugin.Origin == "TrackedMod").IsTracked);
-        Assert.False(plugins.Single(p => p.Plugin.Origin == "UntrackedMod").IsTracked);
+        Assert.True(plugins.Single(p => p.Plugin.Origin == "SourceMod").IsTracked);
+        Assert.False(plugins.Single(p => p.Plugin.Origin == "NonSourceMod").IsTracked);
     }
 
     private OpenedIndex PatchOfAGhostMaster() => Reconciled(new PluginFixtureBuilder("record-query")
@@ -1058,7 +1058,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
             mod.Npcs.AddNew("Edited");
         }, origin: PluginKey.Origin));
         var entry = fixture.Plugins.Single();
-        TrackedMods.Track(entry);
+        SourceMods.Track(entry);
         var index = Reconciled(fixture);
         var edited = index.DocumentOf(Npc02, PluginKey);
         var body = index.BodyOf(Npc02, PluginKey);

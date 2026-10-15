@@ -66,7 +66,7 @@ public sealed class CopyAsOverrideLocalizedTests : IDisposable
         var result = _handler.CopySync([new RecordAt(new PluginAddress(SourcePluginName, SourceOrigin), _door.ToString())], CopyMode.Override, [destination], replace: false);
 
         result.OnlyLanded();
-        var document = TrackedTree.Document(_destinationModFolder, destination, _door.ToString());
+        var document = SourceModTree.Document(_destinationModFolder, destination, _door.ToString());
         Assert.NotNull(document);
         Assert.Contains(DoorName, document.Body, StringComparison.Ordinal);
     }

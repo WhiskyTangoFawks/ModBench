@@ -44,7 +44,7 @@ internal sealed class DocumentEditFixture : TestInstance
         Repository.Put(Plugin, new SourceDocument(formKey, recordType, editorId, body)).Wrote();
 
     internal string Document(string formKey) =>
-        TrackedTree.Document(ModFolderOf(Plugin), Plugin, formKey)?.Body
+        SourceModTree.Document(ModFolderOf(Plugin), Plugin, formKey)?.Body
             ?? throw new InvalidOperationException($"Expected a document for '{formKey}'.");
 
     /// <summary>Applies <paramref name="envelope"/> through the real handler; on success returns the

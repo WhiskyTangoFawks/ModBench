@@ -43,7 +43,7 @@ public sealed class FormIdEditTests
     {
         using var mod = SourceEditFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, headerFormKey, FreeFormKey);
 
@@ -51,7 +51,7 @@ public sealed class FormIdEditTests
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
         Assert.Equal("FormKey", result.Path);
         Assert.Equal("'FormKey' is read-only: a plugin header's FormID names the plugin itself, not a record in it.", result.Message);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Theory]
@@ -61,27 +61,27 @@ public sealed class FormIdEditTests
     public void EditingTheFormId_ToAValueThatIsNoFormKey_RefusesAsTheCodecsRejection_NamingTheField(string json)
     {
         using var mod = SourceEditFixture.Tracked();
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "FormKey", JsonDocument.Parse(json).RootElement);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
         Assert.Equal("FormKey", result.Path);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]
     public void EditingTheFormId_ToOneAnotherRecordHolds_RefusesItAsTaken()
     {
         using var mod = SourceEditFixture.Tracked();
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), mod.OtherNpc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]
@@ -165,7 +165,7 @@ public sealed class FormIdEditTests
     public void EditingTheFormId_OfAnOverride_Refuses_NamingItsMaster()
     {
         using var two = TwoModReferenceFixture.Create(trackReferencer: true);
-        var before = TrackedTree.Records(two.ReferencerModFolder, two.ReferencerPlugin);
+        var before = SourceModTree.Records(two.ReferencerModFolder, two.ReferencerPlugin);
 
         var result = two.EditHandler.SetFormId(two.ReferencerPlugin, two.Npc.ToString(), "000F00:Winner.esp");
 
@@ -173,7 +173,7 @@ public sealed class FormIdEditTests
         Assert.Equal(RecordEditRefusal.NotNativeRecord, result.Refusal);
         Assert.Equal("FormKey", result.Path);
         Assert.Contains("Base.esm", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, TrackedTree.Records(two.ReferencerModFolder, two.ReferencerPlugin));
+        Assert.Equal(before, SourceModTree.Records(two.ReferencerModFolder, two.ReferencerPlugin));
     }
 
     [Theory]
@@ -192,8 +192,8 @@ public sealed class FormIdEditTests
     }
 
     private static IReadOnlyList<string> ReferencerState(TwoModReferenceFixture two) =>
-        TestAdapters.Source().IsTracked(two.ReferencerModFolder)
-            ? TrackedTree.Records(two.ReferencerModFolder, two.ReferencerPlugin)
+        TestAdapters.Source().IsSourceMod(two.ReferencerModFolder)
+            ? SourceModTree.Records(two.ReferencerModFolder, two.ReferencerPlugin)
             : [Convert.ToHexString(File.ReadAllBytes(Path.Combine(two.ReferencerModFolder, two.ReferencerPlugin.Name)))];
 
     [Fact]
@@ -211,7 +211,7 @@ public sealed class FormIdEditTests
         });
         var oldFormKey = race.ToString();
         var before = mod.Body(race);
-        var referencerBefore = TrackedTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "SamePluginNpc").Body;
+        var referencerBefore = SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "SamePluginNpc").Body;
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, oldFormKey, newFormKey);
 
@@ -222,7 +222,7 @@ public sealed class FormIdEditTests
         Assert.Equal(
             before.Replace(formKeyLine, $"\"FormKey\": \"{newFormKey}\"", StringComparison.Ordinal),
             mod.Body(FormKey.Factory(newFormKey)));
-        Assert.Equal(referencerBefore, TrackedTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "SamePluginNpc").Body);
+        Assert.Equal(referencerBefore, SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "SamePluginNpc").Body);
     }
 
     [Fact]
@@ -253,11 +253,11 @@ public sealed class FormIdEditTests
     {
         using var mod = SourceEditFixture.Tracked();
         File.Delete(Path.Combine(mod.ModFolder, TreeTampering.HeaderDocumentOf(mod.Plugin.Name)));
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), FreeFormKey);
 
         Assert.Equal(RecordEditRefusal.PluginSourceUnreadable, result.Refusal);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 }

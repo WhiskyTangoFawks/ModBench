@@ -63,7 +63,7 @@ public sealed class StarfieldGestureTests : IDisposable
         tracked.Worldspaces.Add(world);
         (_world, _here, _wanderer) = (world.FormKey, here.FormKey, wanderer.FormKey);
         tracked.ModHeader.MasterReferences.AddRange([new MasterReference { Master = light.ModKey }, new MasterReference { Master = medium.ModKey }]);
-        _tracked = _instance.AddPlugin(tracked, "TrackedMod", tracked: true);
+        _tracked = _instance.AddPlugin(tracked, "SourceMod", tracked: true);
     }
 
     public void Dispose() => _instance.Dispose();
