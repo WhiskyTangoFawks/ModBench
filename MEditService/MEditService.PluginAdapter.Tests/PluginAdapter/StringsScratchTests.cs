@@ -36,7 +36,7 @@ public sealed class StringsScratchTests : IDisposable
         _plugin = new RegisteredPlugin(
             PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder, _modFolder), new PluginLine(0, NamesIt: true),
             HandedStrings.Of(_pluginPath));
-        _loadOrder = new LoadOrderSnapshot(dataFolder, null, GameRelease.SkyrimSE, [_plugin], [_plugin.Key], [], [HandedStrings.Stamped(Path.Combine(dataFolder, "Skyrim - Interface.bsa"))], []);
+        _loadOrder = new LoadOrderSnapshot(dataFolder, null, GameRelease.SkyrimSE, [_plugin], [_plugin.Key], [], [HandedStrings.Stamped(Path.Combine(dataFolder, "Skyrim - Interface.bsa"))], [], []);
     }
 
     public void Dispose()

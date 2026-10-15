@@ -58,7 +58,7 @@ public readonly record struct PluginLine(int Place, bool NamesIt);
 public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 {
     /// <summary>No snapshot has arrived.</summary>
-    internal static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, [], [], [], [], []);
+    internal static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, [], [], [], [], [], []);
 
     private readonly Dictionary<PluginAddress, int> _loadOrderIndex;
 
@@ -100,7 +100,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     public LoadOrderSnapshot(
         string dataFolderPath, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<RegisteredPlugin> plugins,
         IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine, IReadOnlyList<StampedFile> archives,
-        IReadOnlyList<StampedFile> stringsFiles, IReadOnlyList<PluginProvider.FromMod>? mods = null)
+        IReadOnlyList<StampedFile> stringsFiles, IReadOnlyList<PluginProvider.FromMod> mods)
     {
         if (RefusalOf(plugins, active, loadedWithNoLine) is { } refusal) throw new ArgumentException(refusal);
         DataFolderPath = dataFolderPath;
@@ -121,7 +121,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         _places = PlacesOf(Plugins, Active, LoadedWithNoLine);
         Archives = [.. archives];
         StringsFiles = [.. stringsFiles];
-        Mods = [.. mods ?? []];
+        Mods = [.. mods];
     }
 
     // A plugin with no line that is not active has no place.

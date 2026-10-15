@@ -578,7 +578,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(providers).toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA', sourceFolder: '/mo2/source/ModA' }, { kind: 'Game' }, { kind: 'None' }]);
   });
 
-  it('names each mod and separator of the mod order that has a folder, a separator by the mod manager\'s name for it, with their metadata files, and the stat cache\'s folder', () => {
+  it('names each mod and separator of the mod order that has a folder, a separator by the mod manager\'s name for it, with their metadata files, a source mod\'s source folder, and the stat cache\'s folder', () => {
     const withSeparator = modFoldersOf('ModA');
     const all = [...withSeparator.all, { kind: 'separator' as const, name: 'Weapons', path: '/mo2/mod-folders/Weapons_separator', modName: 'Weapons_separator' }];
     const outcome = loadOrderSnapshotOf({
@@ -595,7 +595,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
 
     expect(outcome !== undefined && 'mods' in outcome ? [outcome.mods, outcome.statCache] : []).toEqual([
       [
-        { name: 'ModA', folder: '/mo2/mod-folders/ModA', metadataFiles: ['meta.ini'] },
+        { name: 'ModA', folder: '/mo2/mod-folders/ModA', metadataFiles: ['meta.ini'], sourceFolder: '/mo2/source/ModA' },
         { name: 'Weapons_separator', folder: '/mo2/mod-folders/Weapons_separator', metadataFiles: ['meta.ini'] },
       ],
       '/mo2/stat-cache',

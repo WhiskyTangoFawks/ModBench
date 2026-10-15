@@ -40,7 +40,7 @@ public sealed class MachineIniTests : IDisposable
     [PosixFact]
     public void OpenDocuments_AnArchiveThisMachinesGameIniListsBesideThePlugin_IsNotReadWhenTheSnapshotListsNone()
     {
-        var loadOrder = new LoadOrderSnapshot(_modFolder, null, GameRelease.SkyrimSE, [], [], [], [], []);
+        var loadOrder = new LoadOrderSnapshot(_modFolder, null, GameRelease.SkyrimSE, [], [], [], [], [], []);
 
         using var documents = TestAdapters.Mutagen().OpenDocuments(
             new ModPath(ModKey.FromFileName(PluginName), _pluginPath), loadOrder,

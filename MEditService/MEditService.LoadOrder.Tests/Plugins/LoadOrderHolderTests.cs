@@ -16,7 +16,7 @@ public sealed class LoadOrderHolderTests
     public void Require_AfterApply_ReturnsTheAppliedValue()
     {
         var holder = new LoadOrderHolder();
-        var applied = new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, [], [], [], [], []);
+        var applied = new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, [], [], [], [], [], []);
 
         holder.Apply(applied);
 
@@ -27,9 +27,9 @@ public sealed class LoadOrderHolderTests
     public void Require_AfterApplyingTheEmptyValue_RefusesAgain()
     {
         var holder = new LoadOrderHolder();
-        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [], [], [], [], []));
+        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [], [], [], [], [], []));
 
-        holder.Apply(new LoadOrderSnapshot(string.Empty, null, default, [], [], [], [], []));
+        holder.Apply(new LoadOrderSnapshot(string.Empty, null, default, [], [], [], [], [], []));
 
         Assert.Throws<NoLoadOrderException>(() => holder.Require());
     }
@@ -38,7 +38,7 @@ public sealed class LoadOrderHolderTests
     public void Apply_RaisesArrived_WithTheAppliedSnapshot()
     {
         var holder = new LoadOrderHolder();
-        var applied = new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, [], [], [], [], []);
+        var applied = new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, [], [], [], [], [], []);
         LoadOrderSnapshot? seen = null;
         holder.Arrived += (snapshot, _) => seen = snapshot;
 
@@ -54,7 +54,7 @@ public sealed class LoadOrderHolderTests
         var seen = new List<long>();
         holder.Arrived += (_, version) => seen.Add(version);
 
-        var first = holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [], [], [], [], []));
+        var first = holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [], [], [], [], [], []));
         var second = holder.Apply(SnapshotActivatingInTheOrderGiven(null, "A.esp"));
 
         Assert.True(second > first);
@@ -65,7 +65,7 @@ public sealed class LoadOrderHolderTests
     public void Apply_RaisesArrived_OnEverySubscriber()
     {
         var holder = new LoadOrderHolder();
-        var applied = new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, [], [], [], [], []);
+        var applied = new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, [], [], [], [], [], []);
         var firstSeen = false;
         var secondSeen = false;
         holder.Arrived += (_, _) => firstSeen = true;
@@ -143,6 +143,6 @@ public sealed class LoadOrderHolderTests
     {
         var holder = new LoadOrderHolder();
 
-        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, [], [], [], [], []));
+        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, [], [], [], [], [], []));
     }
 }

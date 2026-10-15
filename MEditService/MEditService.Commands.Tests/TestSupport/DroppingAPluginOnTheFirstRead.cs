@@ -26,7 +26,7 @@ internal sealed class DroppingAPluginOnTheFirstRead(LoadOrderHolder holder, Plug
                 [.. held.Plugins.Where(p => !p.Key.Equals(dropped))],
                 [.. held.Active.Select(p => p.Key).Where(a => !a.Equals(dropped))],
                 [.. held.LoadedWithNoLine.Select(p => p.Key).Where(a => !a.Equals(dropped))],
-                held.Archives, held.StringsFiles));
+                held.Archives, held.StringsFiles, []));
         }
         return base.OpenRecordLookup(plugin, loadOrder, schemas);
     }

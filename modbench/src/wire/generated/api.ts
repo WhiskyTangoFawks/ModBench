@@ -497,7 +497,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes an empty plugin into the folder, and the source folder, of a mod the held load order holds a plugin of, named by its origin. Refuses an origin that is no such mod. */
+        /** @description Writes an empty plugin into the folder, and the source folder, of a mod of the held load order, named by its origin. Refuses an origin that is no such mod. */
         post: operations["CreatePluginInMod"];
         delete?: never;
         options?: never;
@@ -1402,6 +1402,7 @@ export interface components {
             metadataFiles: string[];
             metadata?: components["schemas"]["ModMetadata"] | null;
             metadataUnreadable?: string | null;
+            sourceFolder?: string | null;
         };
         ModFoldersRequest: {
             mods: components["schemas"]["ModByFolder"][];

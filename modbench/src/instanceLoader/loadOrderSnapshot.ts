@@ -318,15 +318,19 @@ export function loadOrderSnapshotOf(value: {
     active,
     loadedWithNoLine: loadedWithNoLine.map(({ name, origin }) => ({ name, origin })),
     ...archivesAndStringsOf(value.archives, dataFolder, active),
-    mods: snapshotModsOf(value.modlist, value.modFolders),
+    mods: snapshotModsOf(value.modlist, value.modFolders, value.sourceDirs),
     statCache: value.modlist.statCache,
   };
 }
 
-function snapshotModsOf({ mods, metadataFiles }: SnapshotModlist, folders: ModFolders | undefined): ModByFolder[] {
+function snapshotModsOf(
+  { mods, metadataFiles }: SnapshotModlist, folders: ModFolders | undefined, sourceDirs: ReadonlyMap<string, string>,
+): ModByFolder[] {
   return mods.flatMap((entry) => {
     const folder = folders?.holding(entry);
-    return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path, metadataFiles: [...metadataFiles] }];
+    if (folder === undefined) return [];
+    const sourceFolder = entry.kind === 'mod' ? sourceDirs.get(entry.name) : undefined;
+    return [{ name: folder.modName, folder: folder.path, metadataFiles: [...metadataFiles], ...(sourceFolder === undefined ? {} : { sourceFolder }) }];
   });
 }
 

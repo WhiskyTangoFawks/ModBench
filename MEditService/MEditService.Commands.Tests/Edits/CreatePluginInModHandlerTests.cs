@@ -52,12 +52,30 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
         var held = _holder.Current;
         _holder.Apply(new LoadOrderSnapshot(
             held.DataFolderPath, held.InstanceRoot, held.GameRelease, held.Plugins, [], [], [], [],
-            mods: [new PluginProvider.FromMod("EmptyMod", emptyFolder, null)]));
+            [new PluginProvider.FromMod("EmptyMod", emptyFolder, null)]));
 
         var result = await Handler.CreatePluginIn("EmptyMod", "Patch.esp");
 
         Assert.Null(result.Refusal);
         Assert.True(File.Exists(Path.Combine(emptyFolder, "Patch.esp")));
+    }
+
+    [Fact]
+    public async Task CreatePluginIn_ASourceModTheLoadOrderHoldsNoPluginOf_LandsItsSourceInTheSourceFolderTheSnapshotNamed()
+    {
+        var tracked = await TestEditService.InitHandler(_holder).InitAsync(ToInit.In(_holder.Held?.Snapshot, Mod));
+        Assert.Single(tracked.Landed);
+        File.Delete(Path.Combine(_folder, "First.esp"));
+        var held = _holder.Current;
+        _holder.Apply(new LoadOrderSnapshot(
+            held.DataFolderPath, held.InstanceRoot, held.GameRelease, SnapshotPlugins.Of(_data.Plugins), [], [], [], [],
+            [new PluginProvider.FromMod(Mod, _folder, _folder)]));
+
+        var result = await Handler.CreatePluginIn(Mod, "Patch.esp");
+
+        Assert.Null(result.Refusal);
+        var patch = new RegisteredPlugin("Patch.esp", Mod, Path.Combine(_folder, "Patch.esp"), new PluginProvider.FromMod(Mod, _folder, _folder), Line: null, PluginStrings.None);
+        Assert.True(TestAdapters.Source().SourceReads(patch));
     }
 
     [Fact]

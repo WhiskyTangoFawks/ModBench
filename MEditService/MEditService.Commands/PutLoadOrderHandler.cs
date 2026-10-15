@@ -50,7 +50,7 @@ public sealed class PutLoadOrderHandler
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InvalidSnapshot, invalid);
 
         var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active, loadedWithNoLine, archives, stringsFiles,
-            [.. mods.Mods.Select(mod => new PluginProvider.FromMod(mod.Name, mod.Folder, null))]);
+            [.. mods.Mods.Select(mod => new PluginProvider.FromMod(mod.Name, mod.Folder, mod.SourceFolder))]);
         var version = _holder.Apply(snapshot);
         _externalChanges.Check(snapshot);
         _modStatus.Check(mods);

@@ -73,6 +73,25 @@ public sealed class CreatePluginApiTests : HostedTests
     }
 
     [Fact]
+    public async Task CreatingAPluginInASourceModTheSnapshotListsWithNoPlugin_LandsItsSourceInTheSourceFolderTheSnapshotNamed()
+    {
+        var fx = Owned(OneMod());
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        var modFolder = Path.GetDirectoryName(fx.Plugins.Single(plugin => plugin.Origin == Origin).Path) ?? throw new InvalidOperationException("A mod plugin has a folder.");
+        File.Delete(Path.Combine(modFolder, Held));
+        var body = SnapshotPlugins.Body(
+            fx.GameDirectory, fx.InstanceRoot, fx.Plugins.Where(plugin => plugin.Origin != Origin),
+            mods: new[] { new { name = Origin, folder = modFolder, metadataFiles = Array.Empty<string>(), sourceFolder = modFolder } });
+        (await Client.PutLoadOrderAndAwaitReady(body)).EnsureSuccessStatusCode();
+
+        var created = await Client.PostAsJsonAsync("/plugins/create-in-mod", new { origin = Origin, name = "Patch.esp" });
+
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        Assert.True(Directory.Exists(Path.Combine(modFolder, "plugin-source", "Patch.esp")));
+    }
+
+    [Fact]
     public async Task CreatingAPlugin_LeavesThePluginsReadAsItWas_UntilALoadOrderNamesIt()
     {
         var fx = Owned(await Loaded());
