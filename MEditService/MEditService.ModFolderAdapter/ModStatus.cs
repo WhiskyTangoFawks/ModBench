@@ -3,9 +3,7 @@ using System.Text.Json.Serialization;
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>A mod folder against its manifest (modlist-source.md, Status), each list by path on disk in ordinal order.
-/// Differing holds each file whose bytes the stat cache cannot vouch are its provider's.
-/// MetadataDiffers is whether the manifest's metadata replaces a value the mod manager's holds, and ManifestMetadata what the
-/// manifest says of it, none without a manifest.</summary>
+/// Differing holds each file whose bytes the stat cache cannot vouch are its provider's.</summary>
 public sealed record ModStatus(
     string Mod, bool NoManifest, IReadOnlyList<string> Differing, IReadOnlyList<string> NamedByNoLine, IReadOnlyList<string> Gone,
     IReadOnlyList<string> NoProvider, ModUnreadable? Unreadable = null, string? StatCacheNotWritten = null,

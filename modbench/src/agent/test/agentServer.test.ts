@@ -160,7 +160,7 @@ describe('the agent server, given an instance value', () => {
       const client = await clientOf(inRepository);
 
       expect(await read(client, 'list_mod_statuses')).toEqual([
-        { mod: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], noProvider: ['b.nif'] },
+        { mod: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], noProvider: ['b.nif'], metadataDiffers: false },
       ]);
       expect(statusRead.asked).toEqual([['Big Rocks', 'InAnotherProfile']]);
     });

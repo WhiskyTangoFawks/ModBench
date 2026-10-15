@@ -16,8 +16,7 @@ public interface IModFolderRepository
     IReadOnlyList<string> NamedByNoLine(string modFolder, string modName, Manifest manifest, IReadOnlySet<string> leftOut);
 
     /// <summary>The mod's folder against its manifest, from the manifest, each file's stamp and the stat cache in
-    /// <paramref name="statCache"/>, which keeps what it read, and the metadata <paramref name="held"/> by the mod manager,
-    /// none when the caller holds none.</summary>
+    /// <paramref name="statCache"/>, which keeps what it read, and the metadata the mod manager <paramref name="held"/>.</summary>
     ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache, ModMetadata? held = null);
 
     Stream OpenFile(string modFolder, string path);

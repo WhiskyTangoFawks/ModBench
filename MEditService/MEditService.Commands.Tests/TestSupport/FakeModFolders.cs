@@ -83,7 +83,7 @@ internal sealed class FakeModFolders : IModFolderRepository
             NamedByNoLine(modFolder, modName, manifest, leftOut),
             [.. there[false].Select(line => line.Path)],
             [.. manifest.Files.Where(line => line.Provider is FileProvider.NoProvider).Select(line => line.Path)],
-            MetadataDiffers: held?.DiffersFrom(ModMetadata.Of(manifest)) == true, ManifestMetadata: ModMetadata.Of(manifest));
+            MetadataDiffers: held?.Version is { } version && manifest.Version is { } says && version != says, ManifestMetadata: ModMetadata.Of(manifest));
     }
 
     public Stream OpenFile(string modFolder, string path) => Open(modFolder, path);
