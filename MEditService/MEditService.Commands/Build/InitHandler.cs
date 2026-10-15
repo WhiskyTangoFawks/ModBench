@@ -71,7 +71,7 @@ public sealed class InitHandler
 
         var mod = (PluginProvider.FromMod)plugins[0].Provider;
 
-        if (_source.IsTracked(toInit.SourceFolder))
+        if (_source.IsSourceMod(toInit.SourceFolder))
         {
             return ItemAnswer<InitRefusal, InitializedMod>.Refused(InitRefusal.AlreadyInitialized,
                 $"'{toInit.SourceFolder}' already holds a repository. To put a plugin's source into its working tree, decompile it.");

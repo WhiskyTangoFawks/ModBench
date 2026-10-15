@@ -65,7 +65,7 @@ public sealed class DeleteRecordChangesHandlerTests
         Assert.Equal(npc, refused.Item);
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, refused.Refusal);
         Assert.Contains(mod.Npc.ToString(), refused.Message, StringComparison.Ordinal);
-        Assert.IsType<SourceFailure.Ambiguous>(TrackedTree.Repository(mod.ModFolder, mod.Plugin).RecordByFormKey(mod.Plugin, mod.Npc.ToString()).Stopped());
+        Assert.IsType<SourceFailure.Ambiguous>(SourceModTree.Repository(mod.ModFolder, mod.Plugin).RecordByFormKey(mod.Plugin, mod.Npc.ToString()).Stopped());
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public sealed class DeleteRecordChangesHandlerTests
     public void DeleteChanges_OfARecordWhoseUnsavedTextGivesItAnotherFormKey_DeleteItsFileUnderThatKey()
     {
         using var mod = SourceEditFixture.Tracked();
-        var npc = TrackedTree.DocumentCarrying(mod.ModFolder, mod.Plugin, SourceEditFixture.NpcEditorId);
+        var npc = SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, SourceEditFixture.NpcEditorId);
         var retyped = $"000F00:{mod.Plugin.Name}";
         var file = TreeTampering.FileOf(mod.ModFolder, mod.Plugin, mod.NpcIdentity);
         mod.Unsaved.Apply([new DocumentChange(file, npc.Body.Replace(mod.Npc.ToString(), retyped, StringComparison.Ordinal))]);

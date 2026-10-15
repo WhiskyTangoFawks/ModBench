@@ -146,7 +146,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     }
 
     [Fact]
-    public void ASnapshot_TellsNothing_OfAnUntrackedMod()
+    public void ASnapshot_TellsNothing_OfAnNonSourceMod()
     {
         var loadOrder = WithPlugins((PluginName, "anything"u8.ToArray()));
 
@@ -191,7 +191,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     }
 
     [Fact]
-    public void ASnapshot_NamesAPlugin_OfAnUntrackedModThatGainedARepository()
+    public void ASnapshot_NamesAPlugin_OfAnNonSourceModThatGainedARepository()
     {
         var tracked = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, tracked));

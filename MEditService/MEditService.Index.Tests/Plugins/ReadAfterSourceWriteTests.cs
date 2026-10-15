@@ -25,11 +25,11 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     {
         string npc = "";
         _fixture = new PluginFixtureBuilder("read-after-source-write")
-            .WithPlugin(Tracked, mod => npc = mod.Npcs.AddNew("TrackedNpc").FormKey.ToString(), origin: "TrackedMod")
+            .WithPlugin(Tracked, mod => npc = mod.Npcs.AddNew("TrackedNpc").FormKey.ToString(), origin: "SourceMod")
             .BuildScattered();
         _tracked = _fixture.Plugins.Single(p => p.Name == Tracked);
         _npc = npc;
-        TrackedMods.Track(_tracked);
+        SourceMods.Track(_tracked);
         _index = Indexes.Open(_holder, timeProvider: _clock);
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         _tracked.HandEdit(_index.DocumentOf(_npc, _tracked.KeyOf()), "\"TrackedNpc\"", "\"Written\"");

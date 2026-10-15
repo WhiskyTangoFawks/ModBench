@@ -14,7 +14,7 @@ public sealed class CompilePluginTraceTests : HostedTests
     private const string OtherPlugin = "AlsoCompiled.esp";
     private const string OtherOrigin = "AlsoCompiledMod";
     private const string UntrackedPlugin = "Untracked.esp";
-    private const string UntrackedOrigin = "UntrackedMod";
+    private const string UntrackedOrigin = "NonSourceMod";
 
     private static ScatteredFixtureData ThreeMods() =>
         new PluginFixtureBuilder("trace-compile-a-plugin")

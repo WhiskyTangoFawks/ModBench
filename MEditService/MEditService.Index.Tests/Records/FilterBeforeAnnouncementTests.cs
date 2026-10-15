@@ -31,11 +31,11 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
         var trackedNpc = "";
         _fixture = new PluginFixtureBuilder("filter-before-announcement")
             .WithPlugin(Resident, mod => mod.Npcs.AddNew("ResidentNpc"))
-            .WithPlugin(Tracked, mod => trackedNpc = mod.Npcs.AddNew("TrackedNpc").FormKey.ToString(), origin: "TrackedMod")
+            .WithPlugin(Tracked, mod => trackedNpc = mod.Npcs.AddNew("TrackedNpc").FormKey.ToString(), origin: "SourceMod")
             .WithPlugin(Arriving, mod => mod.Npcs.AddNew("ArrivingNpc"))
             .BuildScattered();
         _trackedNpc = trackedNpc;
-        TrackedMods.Track(Entry(Tracked));
+        SourceMods.Track(Entry(Tracked));
         _loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider([], entry =>
         {
             if (_failingAt is { } logged && entry.Message.StartsWith(logged, StringComparison.Ordinal))

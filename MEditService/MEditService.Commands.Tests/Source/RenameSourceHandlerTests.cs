@@ -12,21 +12,21 @@ namespace MEditService.Commands.Tests.Source;
 
 public sealed class RenameSourceHandlerTests : IDisposable
 {
-    private const string TrackedModName = "TrackedMod";
-    private const string UntrackedModName = "UntrackedMod";
+    private const string SourceModName = "SourceMod";
+    private const string NonSourceModName = "NonSourceMod";
     private const string MasterName = "Master.esm";
-    private static readonly PluginAddress Old = new("Old.esp", TrackedModName);
+    private static readonly PluginAddress Old = new("Old.esp", SourceModName);
     private readonly ScratchDirectory _root = new("medit-rename-source-");
     private readonly string _game;
-    private readonly string _trackedMod;
-    private readonly string _untrackedMod;
+    private readonly string _sourceMod;
+    private readonly string _nonSourceMod;
     private readonly LoadOrderHolder _holder = new();
 
     public RenameSourceHandlerTests()
     {
         _game = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
-        _trackedMod = Directory.CreateDirectory(Path.Combine(_root, "mods", TrackedModName)).FullName;
-        _untrackedMod = Directory.CreateDirectory(Path.Combine(_root, "mods", UntrackedModName)).FullName;
+        _sourceMod = Directory.CreateDirectory(Path.Combine(_root, "mods", SourceModName)).FullName;
+        _nonSourceMod = Directory.CreateDirectory(Path.Combine(_root, "mods", NonSourceModName)).FullName;
 
         var master = new Fallout4Mod(ModKey.FromFileName(MasterName), Fallout4Release.Fallout4);
         var masterNpc = master.Npcs.AddNew("MasterNpc");
@@ -38,13 +38,13 @@ public sealed class RenameSourceHandlerTests : IDisposable
         old.Npcs.AddNew("SelfNpc").Race.SetTo(race);
         old.Npcs.GetOrAddAsOverride(masterNpc).Race.SetTo(race);
         old.WriteToBinary(
-            Path.Combine(_trackedMod, Old.Name),
+            Path.Combine(_sourceMod, Old.Name),
             new BinaryWriteParameters { MastersListContent = MastersListContentOption.Iterate });
-        WritePlugin(_untrackedMod, "Other.esp");
+        WritePlugin(_nonSourceMod, "Other.esp");
 
         Apply(Old.Name);
-        TestEditService.InitHandler(_holder).InitAsync(ToInit.In(_holder.Held?.Snapshot, TrackedModName)).GetAwaiter().GetResult();
-        WritePlugin(_trackedMod, "Loose.esp");
+        TestEditService.InitHandler(_holder).InitAsync(ToInit.In(_holder.Held?.Snapshot, SourceModName)).GetAwaiter().GetResult();
+        WritePlugin(_sourceMod, "Loose.esp");
         Apply(Old.Name);
     }
 
@@ -60,7 +60,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         var result = RenameSource(Old, newName);
 
         Assert.Null(result.Refusal);
-        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null, PluginStrings.None)));
+        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, SourceModName, "", new PluginProvider.FromMod(SourceModName, _sourceMod, _sourceMod), Line: null, PluginStrings.None)));
         TheInstanceAdapterRenamesTheFile(newName);
         Assert.Equal(compiledBefore, await CompiledBytes(Old with { Name = newName }));
     }
@@ -79,13 +79,13 @@ public sealed class RenameSourceHandlerTests : IDisposable
     [Fact]
     public void RenameSource_ToANameThatIsNoPluginFile_RefusesIt_AndWritesNothing()
     {
-        var before = TrackedTree.Records(_trackedMod, Old);
+        var before = SourceModTree.Records(_sourceMod, Old);
 
         var result = RenameSource(Old, "New.txt");
 
         Assert.Equal(RenameSourceRefusal.NotAPluginFile, result.Refusal);
         Assert.Contains("New.txt", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, TrackedTree.Records(_trackedMod, Old));
+        Assert.Equal(before, SourceModTree.Records(_sourceMod, Old));
     }
 
     [Theory]
@@ -104,57 +104,57 @@ public sealed class RenameSourceHandlerTests : IDisposable
     [Fact]
     public void RenameSource_OfAPluginNotInTheLoadOrder_RefusesIt()
     {
-        var result = RenameSource(new PluginAddress("NoSuch.esp", TrackedModName), "New.esp");
+        var result = RenameSource(new PluginAddress("NoSuch.esp", SourceModName), "New.esp");
 
         Assert.Equal(RenameSourceRefusal.PluginNotLoaded, result.Refusal);
         Assert.Contains("NoSuch.esp", result.Message, StringComparison.Ordinal);
     }
 
     [Theory]
-    [InlineData("Other.esp", UntrackedModName)]
-    [InlineData("Loose.esp", TrackedModName)]
+    [InlineData("Other.esp", NonSourceModName)]
+    [InlineData("Loose.esp", SourceModName)]
     public void RenameSource_OfAPluginWithNoPluginSource_RefusesIt_AndWritesNothing(string plugin, string origin)
     {
         var result = RenameSource(new PluginAddress(plugin, origin), "New.esp");
 
         Assert.Equal(RenameSourceRefusal.NotTracked, result.Refusal);
         Assert.Contains(plugin, result.Message, StringComparison.Ordinal);
-        Assert.False(Directory.Exists(PluginSourceRoot.In(_trackedMod, "New.esp")));
-        Assert.False(Directory.Exists(PluginSourceRoot.In(_untrackedMod, "New.esp")));
+        Assert.False(Directory.Exists(PluginSourceRoot.In(_sourceMod, "New.esp")));
+        Assert.False(Directory.Exists(PluginSourceRoot.In(_nonSourceMod, "New.esp")));
     }
 
     [Fact]
     public void RenameSource_ToTheNameOfAPluginSourceTheModHolds_ComparedWithoutCase_RefusesIt_AndWritesNothing()
     {
-        var before = TrackedTree.Records(_trackedMod, Old);
+        var before = SourceModTree.Records(_sourceMod, Old);
 
         var result = RenameSource(Old, "OLD.ESP");
 
         Assert.Equal(RenameSourceRefusal.NameTaken, result.Refusal);
         Assert.Contains("OLD.ESP", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, TrackedTree.Records(_trackedMod, Old));
+        Assert.Equal(before, SourceModTree.Records(_sourceMod, Old));
     }
 
     [Fact]
     public void RenameSource_OfATreeHoldingADocumentThatIsNoJson_RefusesIt_AndWritesNothing()
     {
-        var npc = TrackedTree.DocumentCarrying(_trackedMod, Old, "SelfNpc");
-        TrackedTree.Overwrite(_trackedMod, Old, npc.Identity, "{ \"FormKey\": ");
+        var npc = SourceModTree.DocumentCarrying(_sourceMod, Old, "SelfNpc");
+        SourceModTree.Overwrite(_sourceMod, Old, npc.Identity, "{ \"FormKey\": ");
 
         var result = RenameSource(Old, "New.esp");
 
         Assert.Equal(RenameSourceRefusal.UnreadableSource, result.Refusal);
         Assert.Contains("SelfNpc", result.Message, StringComparison.Ordinal);
-        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null, PluginStrings.None)));
-        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("New.esp", TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null, PluginStrings.None)));
+        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, SourceModName, "", new PluginProvider.FromMod(SourceModName, _sourceMod, _sourceMod), Line: null, PluginStrings.None)));
+        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("New.esp", SourceModName, "", new PluginProvider.FromMod(SourceModName, _sourceMod, _sourceMod), Line: null, PluginStrings.None)));
     }
 
     [Fact]
     public void RenameSource_AnswersTheChangesOverTheUnsavedTexts_AndWritesNothing()
     {
-        var before = TrackedTree.Records(_trackedMod, Old);
-        var npc = TrackedTree.DocumentCarrying(_trackedMod, Old, "SelfNpc");
-        var path = Path.Combine(_trackedMod, TrackedTree.DocumentFile(_trackedMod, Old, npc.FormKey).Require());
+        var before = SourceModTree.Records(_sourceMod, Old);
+        var npc = SourceModTree.DocumentCarrying(_sourceMod, Old, "SelfNpc");
+        var path = Path.Combine(_sourceMod, SourceModTree.DocumentFile(_sourceMod, Old, npc.FormKey).Require());
 
         var unsaved = new UnsavedDocuments();
         unsaved.Apply([new DocumentChange(path, npc.Body.Replace("SelfNpc", "Unsaved", StringComparison.Ordinal))]);
@@ -163,14 +163,14 @@ public sealed class RenameSourceHandlerTests : IDisposable
 
         Assert.Null(result.Refusal);
         Assert.Contains(result.Changes.Require().Documents, document => document.Text.Contains("Unsaved", StringComparison.Ordinal));
-        Assert.Equal(before, TrackedTree.Records(_trackedMod, Old));
-        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), Line: null, PluginStrings.None)));
+        Assert.Equal(before, SourceModTree.Records(_sourceMod, Old));
+        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, SourceModName, "", new PluginProvider.FromMod(SourceModName, _sourceMod, _sourceMod), Line: null, PluginStrings.None)));
     }
 
     [Fact]
     public void MoveLastWritten_WhenGitRefusesTheRefUpdate_RefusesIt()
     {
-        LastWriteRecord.RefuseRefUpdates(_trackedMod);
+        LastWriteRecord.RefuseRefUpdates(_sourceMod);
 
         var result = Moving.MoveLastWritten(Old, Old.Name, "New.esp");
 
@@ -186,7 +186,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
     public void MoveLastWritten_ForATreeSpelledInAnotherCase_MovesTheRefFiledUnderTheTreesSpelling()
     {
         const string sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        Directory.Move(PluginSourceRoot.In(_trackedMod, Old.Name), Path.Combine(_trackedMod, "plugin-source", "OLD.ESP"));
+        Directory.Move(PluginSourceRoot.In(_sourceMod, Old.Name), Path.Combine(_sourceMod, "plugin-source", "OLD.ESP"));
         var recased = Old with { Name = "OLD.ESP" };
         Repository.WriteBinary(recased, sha256, () => { }).Value();
 
@@ -230,12 +230,12 @@ public sealed class RenameSourceHandlerTests : IDisposable
     {
         var compiled = await TestEditService.CompileHandler(_holder).CompileAsync([plugin]);
         Assert.Empty(compiled.Refused);
-        return File.ReadAllBytes(Path.Combine(_trackedMod, plugin.Name));
+        return File.ReadAllBytes(Path.Combine(_sourceMod, plugin.Name));
     }
 
     private void TheInstanceAdapterRenamesTheFile(string newName)
     {
-        File.Move(Path.Combine(_trackedMod, Old.Name), Path.Combine(_trackedMod, newName));
+        File.Move(Path.Combine(_sourceMod, Old.Name), Path.Combine(_sourceMod, newName));
         Apply(newName);
     }
 
@@ -244,11 +244,11 @@ public sealed class RenameSourceHandlerTests : IDisposable
         List<LoadOrderEntry> entries =
         [
             new(MasterName, Path.Combine(_game, MasterName), PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
-            new(trackedPlugin, Path.Combine(_trackedMod, trackedPlugin), TrackedModName, 1, Enabled: true, Winning: true),
-            new("Other.esp", Path.Combine(_untrackedMod, "Other.esp"), UntrackedModName, 2, Enabled: true, Winning: true),
+            new(trackedPlugin, Path.Combine(_sourceMod, trackedPlugin), SourceModName, 1, Enabled: true, Winning: true),
+            new("Other.esp", Path.Combine(_nonSourceMod, "Other.esp"), NonSourceModName, 2, Enabled: true, Winning: true),
         ];
-        if (File.Exists(Path.Combine(_trackedMod, "Loose.esp")))
-            entries.Add(new("Loose.esp", Path.Combine(_trackedMod, "Loose.esp"), TrackedModName, 3, Enabled: true, Winning: true));
+        if (File.Exists(Path.Combine(_sourceMod, "Loose.esp")))
+            entries.Add(new("Loose.esp", Path.Combine(_sourceMod, "Loose.esp"), SourceModName, 3, Enabled: true, Winning: true));
         _holder.Apply(SnapshotPlugins.Snapshot(_game, _root, GameRelease.Fallout4, entries));
     }
 
@@ -260,5 +260,5 @@ public sealed class RenameSourceHandlerTests : IDisposable
     }
 
     private ISourceRepository Repository =>
-        TestAdapters.Source().Open(new PluginProvider.FromMod(TrackedModName, _trackedMod, _trackedMod), GameRelease.Fallout4).Require();
+        TestAdapters.Source().Open(new PluginProvider.FromMod(SourceModName, _sourceMod, _sourceMod), GameRelease.Fallout4).Require();
 }

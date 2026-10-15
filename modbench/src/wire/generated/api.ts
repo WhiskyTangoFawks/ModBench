@@ -1188,7 +1188,7 @@ export interface components {
             sourceFolder?: string | null;
         };
         /** @enum {string} */
-        DecompileRefusal: "None" | "PluginNotLoaded" | "NotInTrackedMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "AmbiguousSource" | "WriteFailed" | "WorkingTreeStatusUnreadable" | "GitUnavailable" | "WorkingTreeChanges" | "NoLoadOrder";
+        DecompileRefusal: "None" | "PluginNotLoaded" | "NotInSourceMod" | "NotFromAMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "AmbiguousSource" | "WriteFailed" | "WorkingTreeStatusUnreadable" | "GitUnavailable" | "WorkingTreeChanges" | "NoLoadOrder";
         DecompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
             force: boolean;

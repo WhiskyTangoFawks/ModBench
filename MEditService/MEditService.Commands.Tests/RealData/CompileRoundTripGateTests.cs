@@ -14,7 +14,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     {
         Assert.Equal(
             fixture.EditedDocuments,
-            fixture.TrackedTree.Where(kv => !kv.Value.AsSpan().SequenceEqual(fixture.EditedTree[kv.Key])).Select(kv => kv.Key).Order(StringComparer.Ordinal));
+            fixture.SourceModTree.Where(kv => !kv.Value.AsSpan().SequenceEqual(fixture.EditedTree[kv.Key])).Select(kv => kv.Key).Order(StringComparer.Ordinal));
 
         var reserialized = CutDownPluginFixture.DeriveSourceTreeFromBinary(fixture.CompiledPluginPath);
 

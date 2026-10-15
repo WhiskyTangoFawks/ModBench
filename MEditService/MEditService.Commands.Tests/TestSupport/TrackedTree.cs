@@ -12,7 +12,7 @@ namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>What a tracked mod folder's tree holds, read back through the repository the write side
 /// wrote through — the whole read model a fixture with no index has.</summary>
-internal static class TrackedTree
+internal static class SourceModTree
 {
     internal static SourceDocument? Document(string modFolder, PluginAddress plugin, string formKey)
     {
@@ -134,34 +134,34 @@ public interface ITrackedPlugin
 public static class TrackedPluginTree
 {
     public static SourceDocument? Document(this ITrackedPlugin tracked, string formKey) =>
-        TrackedTree.Document(tracked.ModFolder, tracked.Plugin, formKey);
+        SourceModTree.Document(tracked.ModFolder, tracked.Plugin, formKey);
 
     public static SourceDocument DocumentCarrying(this ITrackedPlugin tracked, string editorId) =>
-        TrackedTree.DocumentCarrying(tracked.ModFolder, tracked.Plugin, editorId);
+        SourceModTree.DocumentCarrying(tracked.ModFolder, tracked.Plugin, editorId);
 
     /// <summary>The FormKeys the tree changed since the last commit.</summary>
     public static IReadOnlyList<string> ChangedFormKeys(this ITrackedPlugin tracked) =>
-        TrackedTree.ChangedFormKeys(tracked.ModFolder, tracked.Plugin);
+        SourceModTree.ChangedFormKeys(tracked.ModFolder, tracked.Plugin);
 
     public static IReadOnlyList<string> ChangedDocumentFiles(this ITrackedPlugin tracked) =>
-        TrackedTree.ChangedDocumentFiles(tracked.ModFolder, tracked.Plugin);
+        SourceModTree.ChangedDocumentFiles(tracked.ModFolder, tracked.Plugin);
 
     public static string? DocumentFile(this ITrackedPlugin tracked, string formKey) =>
-        TrackedTree.DocumentFile(tracked.ModFolder, tracked.Plugin, formKey);
+        SourceModTree.DocumentFile(tracked.ModFolder, tracked.Plugin, formKey);
 
-    public static uint NextObjectId(this ITrackedPlugin tracked) => TrackedTree.NextObjectId(tracked.ModFolder, tracked.Plugin);
+    public static uint NextObjectId(this ITrackedPlugin tracked) => SourceModTree.NextObjectId(tracked.ModFolder, tracked.Plugin);
 
     public static string HeaderDocumentFile(this ITrackedPlugin tracked) =>
-        TrackedTree.HeaderDocumentFile(tracked.ModFolder, tracked.Plugin);
+        SourceModTree.HeaderDocumentFile(tracked.ModFolder, tracked.Plugin);
 
     public static void Overwrite(this ITrackedPlugin tracked, SourceDocument document) =>
-        TrackedTree.Overwrite(tracked.ModFolder, tracked.Plugin, document);
+        SourceModTree.Overwrite(tracked.ModFolder, tracked.Plugin, document);
 
     public static void Overwrite(this ITrackedPlugin tracked, RecordIdentity identity, string body) =>
-        TrackedTree.Overwrite(tracked.ModFolder, tracked.Plugin, identity, body);
+        SourceModTree.Overwrite(tracked.ModFolder, tracked.Plugin, identity, body);
 
     public static void Remove(this ITrackedPlugin tracked, RecordIdentity identity) =>
-        TrackedTree.Remove(tracked.ModFolder, tracked.Plugin, identity);
+        SourceModTree.Remove(tracked.ModFolder, tracked.Plugin, identity);
 }
 
 /// <summary>A fixture whose plugins sit in several mod folders: the tree reads take the plugin.</summary>
@@ -173,20 +173,20 @@ public interface ITrackedPlugins
 public static class TrackedPluginsTree
 {
     public static SourceDocument? Document(this ITrackedPlugins tracked, PluginAddress plugin, string formKey) =>
-        TrackedTree.Document(tracked.ModFolderOf(plugin), plugin, formKey);
+        SourceModTree.Document(tracked.ModFolderOf(plugin), plugin, formKey);
 
     public static SourceDocument? Document(this ITrackedPlugins tracked, PluginAddress plugin, FormKey formKey) =>
         tracked.Document(plugin, formKey.ToString());
 
     public static SourceDocument DocumentCarrying(this ITrackedPlugins tracked, PluginAddress plugin, string editorId) =>
-        TrackedTree.DocumentCarrying(tracked.ModFolderOf(plugin), plugin, editorId);
+        SourceModTree.DocumentCarrying(tracked.ModFolderOf(plugin), plugin, editorId);
 
     public static uint NextObjectId(this ITrackedPlugins tracked, PluginAddress plugin) =>
-        TrackedTree.NextObjectId(tracked.ModFolderOf(plugin), plugin);
+        SourceModTree.NextObjectId(tracked.ModFolderOf(plugin), plugin);
 
     public static IReadOnlyList<string> ChangedFormKeys(this ITrackedPlugins tracked, PluginAddress plugin) =>
-        TrackedTree.ChangedFormKeys(tracked.ModFolderOf(plugin), plugin);
+        SourceModTree.ChangedFormKeys(tracked.ModFolderOf(plugin), plugin);
 
     public static void Overwrite(this ITrackedPlugins tracked, PluginAddress plugin, SourceDocument document) =>
-        TrackedTree.Overwrite(tracked.ModFolderOf(plugin), plugin, document);
+        SourceModTree.Overwrite(tracked.ModFolderOf(plugin), plugin, document);
 }

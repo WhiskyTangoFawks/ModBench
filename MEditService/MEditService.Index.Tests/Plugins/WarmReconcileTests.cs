@@ -141,7 +141,7 @@ public sealed class WarmReconcileTests
         var holder = new LoadOrderHolder();
         const string plugin = "Tracked.esp";
         using var fixture = new PluginFixtureBuilder("warm-tracked")
-            .WithPlugin(plugin, m => m.Npcs.AddNew("TrackedNpc"), origin: "TrackedMod")
+            .WithPlugin(plugin, m => m.Npcs.AddNew("TrackedNpc"), origin: "SourceMod")
             .BuildScattered()
             .Tracked();
         var entry = fixture.Plugins.Single();

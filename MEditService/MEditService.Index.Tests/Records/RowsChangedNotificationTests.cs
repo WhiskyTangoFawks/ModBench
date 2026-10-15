@@ -112,7 +112,7 @@ public sealed class RowsChangedNotificationTests
     {
         var gained = $"000F00:{entry.Name}";
         var document = index.DocumentOf(template, entry.KeyOf());
-        TrackedMods.RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(
+        SourceMods.RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(
             gained, document.RecordType, "GainedNpc",
             index.BodyOf(template, entry.KeyOf()).Replace(template, gained, StringComparison.Ordinal)
                 .Replace($"\"{document.EditorId}\"", "\"GainedNpc\"", StringComparison.Ordinal))).Wrote();

@@ -22,7 +22,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
         Assert.Contains(MisshapedPerkPlugin.FormKey, result.Message);
         Assert.Contains(MisshapedPerkPlugin.EditorId, result.Message);
         Assert.Contains(PluginDiagnosis.UnknownClass, result.Message);
-        Assert.False(TestAdapters.Source().IsTracked(scratch.ModFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(scratch.ModFolder));
     }
 
     [Fact]

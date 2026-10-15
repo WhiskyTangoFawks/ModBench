@@ -19,7 +19,7 @@ public sealed class MasterPruningRoundTripGateTests
 
         await scratch.InitAsync();
 
-        Assert.True(TestAdapters.Source().IsTracked(scratch.ModFolder));
+        Assert.True(TestAdapters.Source().IsSourceMod(scratch.ModFolder));
     }
 
     private sealed class PrunedMasterScratch : IDisposable

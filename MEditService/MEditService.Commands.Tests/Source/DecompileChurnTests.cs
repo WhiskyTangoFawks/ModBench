@@ -59,8 +59,8 @@ public sealed class DecompileChurnTests : IDisposable
     {
         var created = TestEditService.CreateHandler(_holder).CreateRecordSync(Plugin, "npc_");
         Assert.True(created.Applied, created.Message);
-        var newFile = TrackedTree.DocumentFile(_modFolder, Plugin, created.NewFormKey.Require()).Require();
-        var headerFile = TrackedTree.HeaderDocumentFile(_modFolder, Plugin);
+        var newFile = SourceModTree.DocumentFile(_modFolder, Plugin, created.NewFormKey.Require()).Require();
+        var headerFile = SourceModTree.HeaderDocumentFile(_modFolder, Plugin);
 
         await Compile();
         await Decompile();
@@ -71,8 +71,8 @@ public sealed class DecompileChurnTests : IDisposable
     [Fact]
     public async Task DeleteRecord_Compile_Decompile_LeavesAStatusNamingOnlyTheDeletedRecordsFile()
     {
-        var victim = TreeDocuments.Of(TrackedTree.Repository(_modFolder, Plugin), Plugin).First(document => document.RecordType == "npc_");
-        var victimFile = TrackedTree.DocumentFile(_modFolder, Plugin, victim.FormKey).Require();
+        var victim = TreeDocuments.Of(SourceModTree.Repository(_modFolder, Plugin), Plugin).First(document => document.RecordType == "npc_");
+        var victimFile = SourceModTree.DocumentFile(_modFolder, Plugin, victim.FormKey).Require();
         var deleted = TestEditService.DeleteHandler(_holder).DeleteRecordsSync([new RecordAt(Plugin, victim.FormKey)]);
         Assert.Empty(deleted.Refused);
 
@@ -85,10 +85,10 @@ public sealed class DecompileChurnTests : IDisposable
     [Fact]
     public async Task MovingAListElementInsideOneRecord_Compile_Decompile_ReadsAsAReorderOfThatRecordsFileAlone()
     {
-        var (document, list) = TreeDocuments.Of(TrackedTree.Repository(_modFolder, Plugin), Plugin)
+        var (document, list) = TreeDocuments.Of(SourceModTree.Repository(_modFolder, Plugin), Plugin)
             .SelectMany(document => ListsOf(document).Select(list => (document, list)))
             .First();
-        var file = TrackedTree.DocumentFile(_modFolder, Plugin, document.FormKey).Require();
+        var file = SourceModTree.DocumentFile(_modFolder, Plugin, document.FormKey).Require();
 
         var moved = TestEditService.EditHandler(_holder).Edit(Plugin, document.FormKey, MoveTo(1, Member(list), At(0)));
         Assert.True(moved.Applied, moved.Message);

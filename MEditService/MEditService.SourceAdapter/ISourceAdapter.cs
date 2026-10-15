@@ -11,10 +11,10 @@ public interface ISourceAdapter
 {
     bool SourceReads(RegisteredPlugin plugin);
 
-    bool IsTracked(RegisteredPlugin plugin);
+    bool IsSourceMod(RegisteredPlugin plugin);
 
     /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c> exists.</summary>
-    bool IsTracked(string sourceFolder);
+    bool IsSourceMod(string sourceFolder);
 
     /// <summary>Why the plugin's source does not read though its mod is tracked: no folder, twin folders, or a plugin
     /// source that cannot be listed. Null when it reads, and when its mod is not tracked.</summary>

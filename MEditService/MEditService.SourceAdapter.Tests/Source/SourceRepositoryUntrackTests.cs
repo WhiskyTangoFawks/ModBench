@@ -7,7 +7,7 @@ namespace MEditService.SourceAdapter.Tests.Source;
 public sealed class SourceRepositoryUntrackTests
 {
     [Fact]
-    public void DeletingGit_MakesIsTrackedFalseAgain_WithSourceFilesUntouched()
+    public void DeletingGit_MakesIsSourceModFalseAgain_WithSourceFilesUntouched()
     {
         using var modFolder = new ScratchDirectory("medit-untrack-");
         var relativePath = Path.Combine("plugin-source", "Test.esp", "npc_", "Test.esp", "000001.json");
@@ -17,13 +17,13 @@ public sealed class SourceRepositoryUntrackTests
             [new TreeFile(relativePath, content)]);
 
         var sourceFilePath = Path.Combine(modFolder, relativePath);
-        Assert.True(TestAdapters.Source().IsTracked(modFolder));
+        Assert.True(TestAdapters.Source().IsSourceMod(modFolder));
         Assert.True(File.Exists(sourceFilePath));
         Assert.Equal(content, File.ReadAllBytes(sourceFilePath));
 
         AnotherTool.Delete(Path.Combine(modFolder, ".git"));
 
-        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
         Assert.True(File.Exists(sourceFilePath), "the source text is not registry-backed and must survive .git's deletion");
         Assert.Equal(content, File.ReadAllBytes(sourceFilePath));
     }

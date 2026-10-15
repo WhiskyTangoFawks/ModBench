@@ -43,7 +43,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     [Fact]
     public async Task Compile_WithTheLightFlagAndAnOutOfRangeRecord_IsRefused_NamingTheRecordAndTheRemedies()
     {
-        TrackedTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
+        SourceModTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
         var answer = await CompileService().CompileAsync([_fixture.Plugin]);
@@ -61,7 +61,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     public async Task Compile_OfAnEslWithAnOutOfRangeRecord_NamesRenamingItOffEslAmongTheRemedies()
     {
         using var light = SourceEditFixture.TrackedLight("Fixture.esl");
-        TrackedTree.Seed(light.ModFolder, light.Plugin, "001000:Fixture.esl");
+        SourceModTree.Seed(light.ModFolder, light.Plugin, "001000:Fixture.esl");
 
         var refused = Assert.Single((await CompileServices.Over(light.LoadOrder).CompileAsync([light.Plugin])).Refused);
 
@@ -71,7 +71,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     [Fact]
     public async Task Compile_OfAnOutOfRangeRecord_Succeeds_OnceTheLightFlagIsCleared()
     {
-        TrackedTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
+        SourceModTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false)).Applied);
 
