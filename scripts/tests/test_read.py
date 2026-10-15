@@ -1,56 +1,61 @@
-import contextlib
 import unittest
 
 import medit
-from tests.fixture_medit import fixture_medit
-from tests.test_select import medit_answering, window_of
+from tests.fixture_medit import (
+    CONDITIONS,
+    CONFLICT_A,
+    CONFLICT_B,
+    CONFLICTED_RECORD,
+    LIGHT,
+    LIGHT_RECORD,
+    RECIPE,
+    fixture_medit,
+    medit_answering,
+    window_of,
+)
 
 
 class ReadAgainstTheFixtureInstance(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.medit = contextlib.ExitStack()
-        cls.url = cls.medit.enter_context(fixture_medit()).url
+    url: str
 
     @classmethod
-    def tearDownClass(cls):
-        cls.medit.close()
+    def setUpClass(cls) -> None:
+        cls.url = cls.enterClassContext(fixture_medit()).url
 
-    def test_reads_a_copy_whole_under_the_names_of_plugin_source(self):
+    def test_reads_a_copy_whole_under_the_names_of_plugin_source(self) -> None:
         with window_of(self.url):
-            recipe = medit.read('MBDevConditions.esp', '000800:MBDevConditions.esp')
+            recipe = medit.read(CONDITIONS.name, RECIPE)
         self.assertEqual(recipe['EditorID'], 'MBDevConditionedRecipe')
         self.assertEqual(recipe['Conditions'][0]['Data']['Function'], 'GetLevel')
 
-    def test_reads_the_copy_of_the_plugin_named_with_its_origin(self):
+    def test_reads_the_copy_of_the_plugin_named_with_its_origin(self) -> None:
         with window_of(self.url):
-            a, b = (medit.read(plugin, '004822:Fallout4.esm') for plugin in (
-                ('MBDevConflictA.esp', 'MB-DEV Conflict A'), ('MBDevConflictB.esp', 'MB-DEV Conflict B')))
+            a, b = (medit.read(plugin, CONFLICTED_RECORD) for plugin in (CONFLICT_A, CONFLICT_B))
         self.assertEqual((a['EditorID'], b['EditorID']), ('10mmFromA', '10mmFromB'))
 
-    def test_raises_for_a_plugin_that_holds_no_such_record(self):
+    def test_raises_for_a_plugin_that_holds_no_such_record(self) -> None:
         with window_of(self.url), self.assertRaises(medit.MEditError) as raised:
-            medit.read('MBDevLight.esl', '000801:MBDevLight.esl')
+            medit.read(LIGHT.name, '000801:MBDevLight.esl')
         self.assertIn('no such record', str(raised.exception))
 
-    def test_reads_the_copy_a_row_names(self):
+    def test_reads_the_copy_a_row_names(self) -> None:
         with window_of(self.url):
             [row] = medit.select("SELECT form_key, plugin, origin FROM records WHERE editor_id = '10mmFromB'")
             recipe = medit.read((row['plugin'], row['origin']), row['form_key'])
         self.assertEqual(recipe['EditorID'], '10mmFromB')
 
-    def test_raises_naming_a_record_given_as_a_plugin(self):
+    def test_raises_naming_a_record_given_as_a_plugin(self) -> None:
         with window_of(self.url), self.assertRaises(medit.MEditError) as raised:
-            medit.read('10mmFromA', '004822:Fallout4.esm')
-        self.assertIn("10mmFromA is not a plugin", str(raised.exception))
+            medit.read('10mmFromA', CONFLICTED_RECORD)
+        self.assertIn('10mmFromA is not a plugin', str(raised.exception))
 
-    def test_finds_no_record_that_references_a_record_nothing_references(self):
+    def test_finds_no_record_that_references_a_record_nothing_references(self) -> None:
         with window_of(self.url):
-            self.assertEqual(medit.referenced_by('000800:MBDevLight.esl'), [])
+            self.assertEqual(medit.referenced_by(LIGHT_RECORD), [])
 
 
 class ReferencesAnswered(unittest.TestCase):
-    def test_names_each_referrer_by_the_index_names_with_its_plugin_and_origin(self):
+    def test_names_each_referrer_by_the_index_names_with_its_plugin_and_origin(self) -> None:
         answer = [{
             'formKey': '000800:Mod.esp', 'plugin': 'Mod.esp', 'origin': 'Some Mod', 'fieldPath': 'Conditions[0].Data.ParameterOneRecord',
             'recordType': 'cobj', 'recordTypeName': 'Constructible Object', 'editorId': 'Recipe'}]
