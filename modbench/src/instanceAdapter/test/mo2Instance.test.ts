@@ -1415,6 +1415,20 @@ describe('the MO2 Instance adapter', () => {
         expect(answer.kind === 'unreadable' && answer.reason).toContain(INI);
       });
     });
+
+    describe('a downloaded file by its name', () => {
+      it('answers the file of that name in the downloads folder, with its size and hash and each entry\'s', async () => {
+        const answer = await adapterAt(root, undefined, undefined, fakeArchiveReader(['textures/a.dds'])).downloadedFile(DOWNLOAD);
+
+        expect(answer).toEqual({
+          kind: 'read', answer: { path: join(root, 'downloads', DOWNLOAD), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] },
+        });
+      });
+
+      it('answers none when the downloads folder holds no file of that name', async () => {
+        expect(await adapter.downloadedFile('Gone.7z')).toEqual({ kind: 'read', answer: undefined });
+      });
+    });
   });
 
   describe('put and rename in mods/', () => {

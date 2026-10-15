@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using MEditService.Commands.Build;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -173,15 +174,42 @@ public sealed class RestoreASourceModTests : IDisposable
         Assert.Equal("1.2.3", _folders.ReadManifest(ModFolder, ModName)?.Version);
     }
 
+    [Fact]
+    public async Task TheRebuild_KeepsWhereEachInstallationFileItsManifestNamesComesFrom()
+    {
+        var download = Downloaded(("readme.txt", "r"));
+        File.WriteAllText(Path.Combine(ModFolder, "readme.txt"), "r");
+        var named = new ManifestSource("Mod.zip", download.Size, download.Hash, "nexus:fallout4:4598");
+        _folders.WriteManifest(ModFolder, ModName, new Manifest(
+            [named], [],
+            [new ManifestFile("meshes/c.nif", new FileProvider.Source(RemoteFolder, _first)), new ManifestFile("readme.txt", new FileProvider.FirstInstallationFile())]));
+
+        Assert.Single((await Restore(download)).Landed);
+
+        Assert.Equal([named], _folders.ReadManifest(ModFolder, ModName)?.InstallationFiles);
+    }
+
+    private InstallationFile Downloaded(params (string Path, string Text)[] entries)
+    {
+        var extracted = Directory.CreateDirectory(Path.Combine(_root, "extracted")).FullName;
+        foreach (var (path, text) in entries) File.WriteAllText(Path.Combine(extracted, path), text);
+        var zip = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "downloads")).FullName, "Mod.zip");
+        ZipFile.CreateFromDirectory(extracted, zip);
+        var hashed = _folders.Files(extracted, "extracted", new HashSet<string>(), statCache: null).Files;
+        return new InstallationFile(zip, Source: null, new FileInfo(zip).Length, "AAAAAAAAAAA=", [.. hashed.Select(entry => new HashedEntry(entry.Path, entry.Hash))]);
+    }
+
     private void ManifestedAt(string commit, string? remote = null, string? version = null) =>
         _folders.WriteManifest(
             ModFolder, ModName, new Manifest([], [], [new ManifestFile("meshes/c.nif", new FileProvider.Source(remote ?? RemoteFolder, commit))], version));
 
-    private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore() => Restore(new InMemoryNotificationPublisher(), CancellationToken.None);
+    private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(params InstallationFile[] handed) =>
+        Restore(new InMemoryNotificationPublisher(), CancellationToken.None, handed);
 
-    private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(InMemoryNotificationPublisher notifications, CancellationToken cancel) =>
+    private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(
+        InMemoryNotificationPublisher notifications, CancellationToken cancel, params InstallationFile[] handed) =>
         TestEditService.RestoreHandler(_holder, notifications, TestAdapters.Source(), _folders).RestoreAsync(
-            [new ModToRestore(ModName, ModFolder, [], ["meta.ini"], SourceFolder)],
+            [new ModToRestore(ModName, ModFolder, handed, ["meta.ini"], SourceFolder)],
             new InstanceToRestore([], Path.Combine(_root, "game"), Path.Combine(_root, "stat-cache"), ".mohidden", Archives: null), cancel: cancel);
 
     private string Commit(string configuration, string mesh)

@@ -143,7 +143,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), or builds a mod whose manifest names its source at the commit it names, cloning the source when it is absent and skipping it at another commit, and names each file no line names, for the extension's trash; it writes no other file. A mod lands, is skipped naming what it lacks, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, which names the request's gesture. */
+        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), or builds a mod whose manifest names its source at the commit it names, cloning the source when it is absent and skipping it at another commit, and names each file no line names, for the extension's trash; it writes no other file. A mod lands, is skipped naming what it lacks and each installation file and game file the request did not hand, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, which names the request's gesture. */
         post: operations["RestoreFromManifest"];
         delete?: never;
         options?: never;
@@ -1412,6 +1412,7 @@ export interface components {
             refusal: components["schemas"]["RestoreRefusal"];
             message: string;
             gameFilesNotFound: string[];
+            installationFilesNotFound: string[];
             buildRefusal: components["schemas"]["BuildRefusal"];
         };
         ModStatus: {

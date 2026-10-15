@@ -67,6 +67,8 @@ export interface InstanceAnswers {
   stamps?: ReadonlyMap<string, FileStamp>;
   /** What the installation of each mod answers, by mod name; a mod not there records none. */
   installations?: ReadonlyMap<string, FileRead<readonly InstallationFile[]>>;
+  /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
+  downloads?: ReadonlyMap<string, FileRead<InstallationFile>>;
   /** Each mod's version, by mod name; a mod not there records none. */
   versions?: ReadonlyMap<string, string>;
   /** Mods whose name gives them no source folder. */
@@ -147,6 +149,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     modFolderPath: (mod) => Promise.resolve(`/mods/${mod}`),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFiles: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: [] }),
+    downloadedFile: (name) => Promise.resolve(answers.downloads?.get(name) ?? { kind: 'read', answer: undefined }),
     modVersion: (mod) => Promise.resolve(answers.versions?.get(mod)),
     managerFilesInModFolder: ['meta.ini'],
     statCacheFolder: '/instance/stat-cache',

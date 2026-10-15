@@ -10,7 +10,12 @@ internal sealed class ManifestSources(
 {
     internal record Lack(string Text)
     {
-        internal sealed record GameFileMissing(string Path) : Lack($"game file '{Path}' is missing");
+        /// <summary>A source the request did not hand, so a request that hands it can bring the mod back.</summary>
+        internal abstract record NotHanded(string Text) : Lack(Text);
+
+        internal sealed record InstallationFileMissing(string Name) : NotHanded($"installation file '{Name}' is missing");
+
+        internal sealed record GameFileMissing(string Path) : NotHanded($"game file '{Path}' is missing");
     }
 
     internal abstract record Source(string Hash);
@@ -22,8 +27,10 @@ internal sealed class ManifestSources(
     /// <summary>A file of the mod folder, by its path, and where its line says it comes from.</summary>
     internal sealed record SourcedFile(string Path, Source Source);
 
-    /// <summary>Built is the source and commit that build the files no request hands, none when no line names one.</summary>
-    internal sealed record Resolved(IReadOnlyList<SourcedFile> Files, IReadOnlyList<Lack> Lacks, SharedSource? Built);
+    /// <summary>Built is the source and commit that build the files no request hands, none when no line names one.
+    /// InstallationFiles are the handed files in the manifest's order, each with the source its manifest names.</summary>
+    internal sealed record Resolved(
+        IReadOnlyList<SourcedFile> Files, IReadOnlyList<Lack> Lacks, SharedSource? Built, IReadOnlyList<InstallationFile> InstallationFiles);
 
     private sealed record Handed(InstallationFile File, Dictionary<string, HashedEntry> Entries);
 
@@ -47,7 +54,9 @@ internal sealed class ManifestSources(
         List<SharedSource> built = [.. manifest.Files.Select(file => file.Provider).OfType<FileProvider.Source>()
             .Select(source => new SharedSource(source.Remote, source.Commit)).Distinct()];
         if (built.Count > 1) lacks.Add(new Lack("its manifest names its source at more than one commit"));
-        return new Resolved(sourced, [.. lacks.Distinct()], built.Count == 1 ? built[0] : null);
+        List<InstallationFile> handed = [.. manifest.InstallationFiles
+            .Select(source => InstallationFileNamed(source.Name).Handed is { } found ? found.File with { Source = source.Source } : null).OfType<InstallationFile>()];
+        return new Resolved(sourced, [.. lacks.Distinct()], built.Count == 1 ? built[0] : null, handed);
     }
 
     private (Source?, Lack?) SourceOf(ManifestFile file) => file.Provider switch
@@ -78,7 +87,7 @@ internal sealed class ManifestSources(
         (Handed?, Lack?) Find()
         {
             var handed = installationFiles.FirstOrDefault(file => repository.InstallationFileName(file.Path) == name);
-            if (handed is null) return (null, new Lack($"the mod manager records no installation file '{name}' for it"));
+            if (handed is null) return (null, new Lack.InstallationFileMissing(name));
             if (!repository.InstallationFileExists(handed.Path)) return (null, new Lack($"installation file '{name}' is not in the downloads folder"));
             if (manifest.InstallationFiles.FirstOrDefault(source => source.Name == name)?.Hash != handed.Hash)
                 return (null, new Lack($"installation file '{name}' has other bytes"));

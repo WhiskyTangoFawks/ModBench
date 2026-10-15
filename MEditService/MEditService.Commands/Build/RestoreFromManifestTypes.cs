@@ -2,8 +2,8 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to restore from its manifest, with the installation files the mod manager records it as installed from,
-/// its files the repository commits, and the folder its source is in or is cloned into.</summary>
+/// <summary>A mod to restore from its manifest, with the installation files its manifest names that the request found in the
+/// downloads folder, its files the repository commits, and the folder its source is in or is cloned into.</summary>
 public sealed record ModToRestore(
     string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> CommittedFiles, string? SourceFolder);
 
@@ -25,7 +25,7 @@ public enum RestoreRefusal
     /// has other bytes.</summary>
     Lacking,
 
-    /// <summary>Each lack is a game file the request did not name.</summary>
+    /// <summary>A lack is an installation file or a game file the request did not hand.</summary>
     NotFound,
 
     /// <summary>A file the mod is restored from could not be read: one of its own, an installation file or a game
@@ -47,8 +47,9 @@ public enum RestoreRefusal
 }
 
 /// <summary>Why a mod was skipped. A NotFound mod names the game files it lacks, by the paths a request can bring them
-/// back with; a NotBuilt mod, its build's refusal (ADR-0019).</summary>
-public sealed record RestoreSkip(RestoreRefusal Kind, IReadOnlyList<string> GameFilesNotFound, BuildRefusal Build = BuildRefusal.None);
+/// back with, and the installation files, by their names; a NotBuilt mod, its build's refusal (ADR-0019).</summary>
+public sealed record RestoreSkip(
+    RestoreRefusal Kind, IReadOnlyList<string> GameFilesNotFound, IReadOnlyList<string> InstallationFilesNotFound, BuildRefusal Build = BuildRefusal.None);
 
 /// <summary>A mod whose files are as its manifest says: the files written, each file no line names, for the trash, why
 /// the stat cache did not keep the read, and Uncommitted as <see cref="BuiltMod"/>'s.</summary>

@@ -26,7 +26,8 @@ internal static class ManifestEndpoints
                 "it names (ADR-0022), or builds a mod whose manifest names its source at the commit it names, cloning the source " +
                 "when it is absent and skipping it at another commit, and names each file no line names, for the extension's " +
                 "trash; it writes no other file. A " +
-                "mod lands, is skipped naming what it lacks, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, " +
+                "mod lands, is skipped naming what it lacks and each installation file and game file the request did not hand, or is " +
+                "named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, " +
                 "which names the request's gesture.")
             .Produces<RestoreFromManifestResponse>()
             .ProducesProblem(400);
@@ -110,7 +111,8 @@ internal static class ManifestEndpoints
             [.. result.Landed.Select(landed => new RestoredModResponse(
                 landed.Item, landed.Outcome.Written, landed.Outcome.NamedByNoLine, landed.Outcome.StatCacheNotWritten, landed.Outcome.Uncommitted))],
             [.. result.Refused.Select(refused => new ModRestoreRefusal(
-                refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.GameFilesNotFound, refused.Refusal.Build))]));
+                refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.GameFilesNotFound, refused.Refusal.InstallationFilesNotFound,
+                refused.Refusal.Build))]));
     }
 
     internal static IResult WhatRestoreDestroys(ModFoldersRequest req, IModFolderRepository repository)
@@ -125,7 +127,7 @@ internal static class ManifestEndpoints
             {
                 refused.Add(new ModRestoreRefusal(
                     status.Mod, unreadable.Manifest ? RestoreRefusal.ManifestUnreadable : RestoreRefusal.Unreadable,
-                    $"'{status.Mod}' was skipped: {unreadable.Why}.", []));
+                    $"'{status.Mod}' was skipped: {unreadable.Why}.", [], []));
             }
             else if (status.Differing.Count + status.NamedByNoLine.Count > 0)
                 destroying.Add(new ModRestoreDestroys(status.Mod, status.Differing, status.NamedByNoLine));
@@ -239,10 +241,12 @@ internal sealed record ModRestoreDestroys(string Mod, IReadOnlyList<string> Diff
 /// (ADR-0019).</summary>
 internal sealed record WhatRestoreDestroysResponse(IReadOnlyList<ModRestoreDestroys> Mods, IReadOnlyList<ModRestoreRefusal> Refused);
 
-/// <summary>A skipped mod. A NotFound mod names each game file it lacks, by its path under the data folder; a request that
-/// names them brings it back. A NotBuilt mod names its build's refusal.</summary>
+/// <summary>A skipped mod. A NotFound mod names each game file it lacks, by its path under the data folder, and each
+/// installation file, by its name in the downloads folder; a request that hands them brings it back. A NotBuilt mod names its
+/// build's refusal.</summary>
 internal sealed record ModRestoreRefusal(
-    string Item, RestoreRefusal Refusal, string Message, IReadOnlyList<string> GameFilesNotFound, BuildRefusal BuildRefusal = BuildRefusal.None);
+    string Item, RestoreRefusal Refusal, string Message, IReadOnlyList<string> GameFilesNotFound, IReadOnlyList<string> InstallationFilesNotFound,
+    BuildRefusal BuildRefusal = BuildRefusal.None);
 
 /// <summary>Landed, skipped or not finished, per mod (ADR-0019), never the status of the call.</summary>
 internal sealed record RestoreFromManifestResponse(IReadOnlyList<RestoredModResponse> Applied, IReadOnlyList<ModRestoreRefusal> Refused);

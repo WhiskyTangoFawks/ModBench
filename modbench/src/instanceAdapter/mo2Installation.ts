@@ -31,7 +31,7 @@ async function nexusSourceOf(
 
 export function mo2Installation(
   context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>, { modMeta }: Pick<ReadingSource, 'modMeta'>,
-): Pick<InstanceAdapter, 'installationFiles' | 'modVersion' | 'managerFilesInModFolder'> {
+): Pick<InstanceAdapter, 'installationFiles' | 'downloadedFile' | 'modVersion' | 'managerFilesInModFolder'> {
   return {
     async modVersion(mod) {
       return (await modMeta(mod)).version;
@@ -48,6 +48,15 @@ export function mo2Installation(
       const path = located.answer;
       const hashed = await downloadedFileHash(path);
       return hashed.kind === 'read' ? { kind: 'read', answer: [{ path, ...(await nexusSourceOf(meta, context)), ...hashed.answer }] } : refused(hashed.reason);
+    },
+
+    async downloadedFile(name) {
+      const located = await readOrReason(async () => downloadFile(await currentDownloadsDir(context), name));
+      if (located.kind === 'unreadable') return located;
+      const path = located.answer;
+      if (!(await exists(path))) return { kind: 'read', answer: undefined };
+      const hashed = await downloadedFileHash(path);
+      return hashed.kind === 'read' ? { kind: 'read', answer: { path, ...hashed.answer } } : hashed;
     },
 
     managerFilesInModFolder: [MOD_META_FILE_NAME],

@@ -266,11 +266,12 @@ interface RestoredMod {
   uncommitted?: boolean;
 }
 
-/** A skipped mod whose only lacks are game files the call did not name, by their paths under the data folder: a call
- *  that names them brings it back. */
+/** A skipped mod that lacks files the call did not hand: game files by their paths under the data folder, and installation
+ *  files by their names in the downloads folder. A call that hands them brings it back, or names every other lack. */
 export interface NotFound {
   mod: string;
   gameFiles: readonly string[];
+  installationFiles: readonly string[];
 }
 
 /** Restore from manifest's answer: each mod restored or skipped with its reason, and each skipped mod that is `NotFound`. */

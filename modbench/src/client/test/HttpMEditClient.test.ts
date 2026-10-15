@@ -280,18 +280,19 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         applied: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: ['mine.txt'] }],
         refused: [
           {
-            item: 'ModB', refusal: 'NotFound', message: "'ModB' was skipped: game file 'B.esm' is missing.", gameFilesNotFound: ['B.esm'],
+            item: 'ModB', refusal: 'NotFound', message: "'ModB' was skipped: installation file 'B.7z' is missing; game file 'B.esm' is missing.",
+            gameFilesNotFound: ['B.esm'], installationFilesNotFound: ['B.7z'],
           },
-          { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: 'c.nif' has no provider.", gameFilesNotFound: [] },
+          { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: 'c.nif' has no provider.", gameFilesNotFound: [], installationFilesNotFound: [] },
         ],
       },
       reads: {
         landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: ['mine.txt'] }],
         refused: [
-          { item: 'ModB', reason: "'ModB' was skipped: game file 'B.esm' is missing." },
+          { item: 'ModB', reason: "'ModB' was skipped: installation file 'B.7z' is missing; game file 'B.esm' is missing." },
           { item: 'ModC', reason: "'ModC' was skipped: 'c.nif' has no provider." },
         ],
-        notFound: [{ mod: 'ModB', gameFiles: ['B.esm'] }],
+        notFound: [{ mod: 'ModB', gameFiles: ['B.esm'], installationFiles: ['B.7z'] }],
       },
       path: '/restore-from-manifest', body: { mods: [modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], ...restoreFacts, gesture: expect.any(String) as unknown } },
     { name: 'decompile', verb: (c) => c.decompile([first, second], true),
@@ -379,7 +380,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     const skipped = "'ModB' was skipped: a file could not be read: denied";
     const { result, request } = await exchange(
       (c) => c.getWhatRestoreDestroys(mods, '/instance/stat-cache'),
-      answers(200, { mods: destroys, refused: [{ item: 'ModB', refusal: 'Unreadable', message: skipped, gameFilesNotFound: [] }] }),
+      answers(200, { mods: destroys, refused: [{ item: 'ModB', refusal: 'Unreadable', message: skipped, gameFilesNotFound: [], installationFilesNotFound: [] }] }),
     );
 
     expect(new URL(request.url).pathname).toBe('/what-restore-destroys');
