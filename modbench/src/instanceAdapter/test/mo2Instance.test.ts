@@ -1428,6 +1428,12 @@ describe('the MO2 Instance adapter', () => {
       it('answers none when the downloads folder holds no file of that name', async () => {
         expect(await adapter.downloadedFile('Gone.7z')).toEqual({ kind: 'read', answer: undefined });
       });
+
+      it.each(['../Outside.7z', '..'])('answers none for %s, which is no bare file name, reading nothing outside the downloads folder', async (name) => {
+        await writeFile(join(root, 'Outside.7z'), 'hello');
+
+        expect(await adapter.downloadedFile(name)).toEqual({ kind: 'read', answer: undefined });
+      });
     });
   });
 

@@ -51,6 +51,8 @@ export function mo2Installation(
     },
 
     async downloadedFile(name) {
+      // A manifest is text from the repository: a name with a folder in it would reach outside the downloads folder.
+      if (basename(name) !== name || name === '..') return { kind: 'read', answer: undefined };
       const located = await readOrReason(async () => downloadFile(await currentDownloadsDir(context), name));
       if (located.kind === 'unreadable') return located;
       const path = located.answer;

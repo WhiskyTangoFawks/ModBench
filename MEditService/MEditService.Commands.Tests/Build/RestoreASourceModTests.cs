@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using MEditService.Commands.Build;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -177,7 +176,7 @@ public sealed class RestoreASourceModTests : IDisposable
     [Fact]
     public async Task TheRebuild_KeepsWhereEachInstallationFileItsManifestNamesComesFrom()
     {
-        var download = Downloaded(("readme.txt", "r"));
+        var download = DownloadedZip.At(Path.Combine(_root, "downloads", "Mod.zip"), _root, ("readme.txt", "r"));
         File.WriteAllText(Path.Combine(ModFolder, "readme.txt"), "r");
         var named = new ManifestSource("Mod.zip", download.Size, download.Hash, "nexus:fallout4:4598");
         _folders.WriteManifest(ModFolder, ModName, new Manifest(
@@ -187,16 +186,6 @@ public sealed class RestoreASourceModTests : IDisposable
         Assert.Single((await Restore(download)).Landed);
 
         Assert.Equal([named], _folders.ReadManifest(ModFolder, ModName)?.InstallationFiles);
-    }
-
-    private InstallationFile Downloaded(params (string Path, string Text)[] entries)
-    {
-        var extracted = Directory.CreateDirectory(Path.Combine(_root, "extracted")).FullName;
-        foreach (var (path, text) in entries) File.WriteAllText(Path.Combine(extracted, path), text);
-        var zip = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "downloads")).FullName, "Mod.zip");
-        ZipFile.CreateFromDirectory(extracted, zip);
-        var hashed = _folders.Files(extracted, "extracted", new HashSet<string>(), statCache: null).Files;
-        return new InstallationFile(zip, Source: null, new FileInfo(zip).Length, "AAAAAAAAAAA=", [.. hashed.Select(entry => new HashedEntry(entry.Path, entry.Hash))]);
     }
 
     private void ManifestedAt(string commit, string? remote = null, string? version = null) =>

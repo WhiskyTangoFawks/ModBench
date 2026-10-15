@@ -10,7 +10,6 @@ internal sealed class ManifestSources(
 {
     internal record Lack(string Text)
     {
-        /// <summary>A source the request did not hand, so a request that hands it can bring the mod back.</summary>
         internal abstract record NotHanded(string Text) : Lack(Text);
 
         internal sealed record InstallationFileMissing(string Name) : NotHanded($"installation file '{Name}' is missing");
@@ -27,8 +26,7 @@ internal sealed class ManifestSources(
     /// <summary>A file of the mod folder, by its path, and where its line says it comes from.</summary>
     internal sealed record SourcedFile(string Path, Source Source);
 
-    /// <summary>Built is the source and commit that build the files no request hands, none when no line names one.
-    /// InstallationFiles are the handed files in the manifest's order, each with the source its manifest names.</summary>
+    /// <summary>Built is the source and commit that build the files no request hands, none when no line names one.</summary>
     internal sealed record Resolved(
         IReadOnlyList<SourcedFile> Files, IReadOnlyList<Lack> Lacks, SharedSource? Built, IReadOnlyList<InstallationFile> InstallationFiles);
 

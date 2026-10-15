@@ -337,20 +337,47 @@ describe('modlistSourceCommands restore from manifest', () => {
     });
   });
 
-  it('sends no skipped mod again once its signal aborts, handing mEdit the signal, so a cancel stops after the mod in hand, and names no lack of a file it never looked for', async () => {
+  it('sends no skipped mod again once its signal aborts, handing mEdit the signal, so a cancel stops after the mod in hand', async () => {
     const cancel = new AbortController();
     const { commands, client } = commandsOver({ gameFiles: [VANILLA] });
     client.setCommandHandler('restoreFromManifest', () => {
       cancel.abort();
+      return Promise.resolve({ landed: [], refused: [], notFound: [{ mod: 'ModA', gameFiles: ['Game.esm'], installationFiles: [] }] });
+    });
+
+    await commands.restoreFromManifest(['ModA'], instanceOf(), { signal: cancel.signal });
+
+    expect(client.calls.map((call) => call.args[2])).toMatchObject([{ signal: cancel.signal }]);
+  });
+
+  it('names each mod a cancel left unfinished, the one it never sent again and the one mEdit never reached, beside the mod that landed', async () => {
+    const cancel = new AbortController();
+    const { commands, client } = commandsOver();
+    client.setCommandHandler('restoreFromManifest', () => {
+      cancel.abort();
       return Promise.resolve({
-        landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', gameFiles: [], installationFiles: ['ModA-1.0.7z'] }],
+        landed: RESTORED.landed, refused: [{ item: 'ModB', reason: "'ModB' was skipped: installation file 'ModB.7z' is missing." }],
+        notFound: [{ mod: 'ModB', gameFiles: [], installationFiles: ['ModB.7z'] }],
       });
     });
 
-    const outcome = await commands.restoreFromManifest(['ModA'], instanceOf(), { signal: cancel.signal });
+    const outcome = await commands.restoreFromManifest(['ModA', 'ModB', 'ModC'], instanceOf(), { signal: cancel.signal });
 
-    expect(client.calls.map((call) => call.args[2])).toMatchObject([{ signal: cancel.signal }]);
-    expect(outcome).toEqual({ applied: true, landed: [], refused: [] });
+    expect(outcome).toEqual({
+      applied: true, landed: RESTORED.landed,
+      refused: ['ModB', 'ModC'].map((mod) => ({ item: mod, reason: `'${mod}' was not finished: the restore was cancelled. Restoring it again finishes it.` })),
+    });
+  });
+
+  it('names each mod a cancel stopped before it was read as unfinished', async () => {
+    const cancel = new AbortController();
+    const { commands } = commandsOver();
+
+    const outcome = await commands.restoreFromManifest(['ModA'], instanceOf(), { signal: cancel.signal, onProgress: () => { cancel.abort(); } });
+
+    expect(outcome).toEqual({
+      applied: true, landed: [], refused: [{ item: 'ModA', reason: "'ModA' was not finished: the restore was cancelled. Restoring it again finishes it." }],
+    });
   });
 
   it('answers the refusal of the user\'s cancel beside what mEdit restored', async () => {

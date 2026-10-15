@@ -59,12 +59,12 @@ public sealed class RestoreFromManifestHandler(
         catch (InvalidDataException e)
         {
             return ItemAnswer<RestoreSkip, RestoredMod>.Refused(
-                new RestoreSkip(RestoreRefusal.NotFinished, [], []), $"'{mod.Name}' was not finished: {e.Message.TrimEnd('.')}.");
+                new RestoreSkip(RestoreRefusal.NotFinished), $"'{mod.Name}' was not finished: {e.Message.TrimEnd('.')}.");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return ItemAnswer<RestoreSkip, RestoredMod>.Refused(
-                new RestoreSkip(RestoreRefusal.NotFinished, [], []), $"'{mod.Name}' was not finished: {e.Message.TrimEnd('.')}. Restoring it again finishes it.");
+                new RestoreSkip(RestoreRefusal.NotFinished), $"'{mod.Name}' was not finished: {e.Message.TrimEnd('.')}. Restoring it again finishes it.");
         }
         var statCacheNotWritten = repository.KeepInStatCache(
             read, manifest, resolved.Files.ToDictionary(file => file.Path, file => file.Source.Hash, StringComparer.Ordinal));
@@ -98,14 +98,14 @@ public sealed class RestoreFromManifestHandler(
             new ModToBuild(mod.Name, sourceFolder, mod.Folder, installationFiles, mod.CommittedFiles, version),
             new InstanceToBuild(instance.ExcludedSuffix, instance.Archives, instance.StatCache));
         if (answer is ItemAnswer<BuildRefusal, BuiltMod>.Refusing refusing)
-            return ItemAnswer<RestoreSkip, RestoredMod>.Refused(new RestoreSkip(RestoreRefusal.NotBuilt, [], [], refusing.Refusal), refusing.Message);
+            return ItemAnswer<RestoreSkip, RestoredMod>.Refused(new RestoreSkip(RestoreRefusal.NotBuilt, refusing.Refusal), refusing.Message);
         var outcome = ((ItemAnswer<BuildRefusal, BuiltMod>.Wrote)answer).Outcome;
         List<string> leftAsItWas = [.. outcome.Refused.Select(plugin => plugin.Message), .. outcome.ArchivesRefused.Select(archive => archive.Message)];
         if (outcome.Failure is { } stopped) leftAsItWas.Insert(0, stopped);
         if (leftAsItWas.Count > 0)
         {
             return ItemAnswer<RestoreSkip, RestoredMod>.Refused(
-                new RestoreSkip(RestoreRefusal.NotFinished, [], []),
+                new RestoreSkip(RestoreRefusal.NotFinished),
                 $"'{mod.Name}' was not finished: {string.Join("; ", leftAsItWas.Select(why => why.TrimEnd('.')))}.");
         }
 
@@ -120,7 +120,7 @@ public sealed class RestoreFromManifestHandler(
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
         {
             return ItemAnswer<RestoreSkip, RestoredMod>.Refused(
-                new RestoreSkip(RestoreRefusal.NotFinished, [], []), $"'{mod.Name}' was not finished: {e.Message.TrimEnd('.')}. Restoring it again finishes it.");
+                new RestoreSkip(RestoreRefusal.NotFinished), $"'{mod.Name}' was not finished: {e.Message.TrimEnd('.')}. Restoring it again finishes it.");
         }
     }
 
@@ -131,14 +131,15 @@ public sealed class RestoreFromManifestHandler(
     {
         var why = string.Join("; ", lacks.Select(lack => lack.Text));
         if (!lacks.Any(lack => lack is ManifestSources.Lack.NotHanded)) return Skipped(mod, RestoreRefusal.Lacking, why);
-        return Skipped(mod, new RestoreSkip(
-            RestoreRefusal.NotFound,
-            [.. lacks.OfType<ManifestSources.Lack.GameFileMissing>().Select(lack => lack.Path)],
-            [.. lacks.OfType<ManifestSources.Lack.InstallationFileMissing>().Select(lack => lack.Name)]), why);
+        return Skipped(mod, new RestoreSkip(RestoreRefusal.NotFound)
+        {
+            GameFilesNotFound = [.. lacks.OfType<ManifestSources.Lack.GameFileMissing>().Select(lack => lack.Path)],
+            InstallationFilesNotFound = [.. lacks.OfType<ManifestSources.Lack.InstallationFileMissing>().Select(lack => lack.Name)],
+        }, why);
     }
 
     private static ItemAnswer<RestoreSkip, RestoredMod> Skipped(ModToRestore mod, RestoreRefusal refusal, string why) =>
-        Skipped(mod, new RestoreSkip(refusal, [], []), why);
+        Skipped(mod, new RestoreSkip(refusal), why);
 
     private static ItemAnswer<RestoreSkip, RestoredMod> Skipped(ModToRestore mod, RestoreSkip skip, string why) =>
         ItemAnswer<RestoreSkip, RestoredMod>.Refused(skip, $"'{mod.Name}' was skipped: {why}.");
