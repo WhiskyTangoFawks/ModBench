@@ -23,7 +23,7 @@ sourceadapter -> commands: written {class: edit}
 commands -> http: applied {class: edit}
 http -> scripts: "204: nothing" {class: edit}
 
-edit_refused: "refused before any write: no git, not tracked, or the edit itself" {
+edit_refused: "refused before any write: no git, not a source plugin, or the edit itself" {
   commands -> http: the refusal {class: edit}
   http -> scripts: the refusal {class: edit}
 }

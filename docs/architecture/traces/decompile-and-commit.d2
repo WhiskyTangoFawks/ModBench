@@ -4,8 +4,6 @@ shape: sequence_diagram
 driving: "Toolbox · Mods · Source Control" {class: driving}
 sourcecommands: @../target-architecture.modbench_core.sourcecommands
 sourcecommands.label: source commands
-instance: @../target-architecture.modbench_data.instance
-instance.label: "Instance\nmods · downloaded files · the repository"
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
 client: @../target-architecture.modbench_repositories.client
@@ -26,14 +24,16 @@ sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
 source: @../target-architecture.medit_data.source
 source.label: Mod source
+instance: @../target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · downloaded files · the repository"
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
-driving -> sourcecommands: "track: the mods, with the instance value" {class: track}
+driving -> sourcecommands: "decompile and commit: the mods" {class: track}
 sourcecommands."the message line shows the phase reading its installation files"
-sourcecommands -> instanceadapter: "get: the mod's installation files" {class: track}
-instanceadapter -> sourcecommands: "each installation file's path, size, hash and entries, or the reason it could not be read: a reason refuses the mod" {class: track}
+sourcecommands -> instanceadapter: "get: the mod's folder and installation files" {class: track}
+instanceadapter -> sourcecommands: "each mod's folder · each installation file's path, size, hash and entries, or the reason it could not be read: a reason refuses the mod" {class: track}
 sourcecommands -> client: "init: each mod's folder and installation files" {class: track}
 client -> http: envelope {class: track}
 http -> engine: envelope {class: track}
@@ -45,7 +45,7 @@ engine -> port: "progress, per mod" {class: push}
 engine -> sourceadapter: "the repository · plugin source, assets, the build configuration · commit: Init <mod>" {class: track}
 sourceadapter -> source: "the source folder" {class: track}
 engine -> http: "landed, or the refusal naming each refused plugin" {class: track}
-http -> client: "landed or refused" {class: track}
+http -> client: "landed, or the refusal naming each refused plugin" {class: track}
 client -> sourcecommands: the outcome {class: track}
 sourcecommands -> driving: "the outcome" {class: track}
 

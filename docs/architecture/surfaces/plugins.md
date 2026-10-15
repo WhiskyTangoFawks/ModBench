@@ -14,7 +14,7 @@ The view's description shows the name filter's term and the record filter's sour
 
 As a user, I want:
 
-1. One row for each line of the active profile's `plugins.txt`, in its order. Source: MO2
+1. One row for each name in the active profile's `plugins.txt`, in its order. Source: MO2
 2. The plugins the game loads with no line at the losing end, before every line. Source: MO2; ADR-0013
 3. An overridden plugin, and a plugin in a disabled mod, not to be a row. Each stays indexed. Source: MO2; ADR-0012
 4. A disabled plugin to show no expander, because it is not active. Source: ADR-0012
