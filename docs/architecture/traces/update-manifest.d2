@@ -27,13 +27,15 @@ views: "every view" {class: driving}
 driving -> sourcecommands: "update manifest: the mods, or every mod, with the instance value" {class: track}
 instance -> instanceadapter: "each downloaded file: bytes, when its index is stale" {class: track}
 instanceadapter -> sourcecommands: "each installation file: hash and entries · each game file a mod file overrides: hash" {class: track}
-sourcecommands -> client: "update manifest: each mod's folder and installation files with their hashes and entries, the game folder" {class: track}
+sourcecommands -> client: "update manifest: each mod's folder and installation files with their hashes and entries, each game file a mod file overrides with its hash, the stat cache's folder" {class: track}
 client -> http: envelope {class: track}
 http -> engine: envelope {class: track}
 modfolder -> modfolderadapter: "each mod's files: bytes, or the stat cache's hash when its stamp matches" {class: track}
 modfolderadapter -> engine: "hashed files" {class: track}
 engine."per mod: each file matched to its provider, or none; refused when an installation file is missing; a source mod's manifest is its build's"
 engine -> port: "progress, per mod" {class: push}
+client -> http: "cancel: the gesture, after its first progress" {class: track}
+http -> engine: "stop after the mod in hand" {class: track}
 engine -> modfolderadapter: "each manifest that changed · the stat cache" {class: track}
 modfolderadapter -> modfolder: "manifests · the stat cache" {class: track}
 engine -> http: "landed or refused, per mod, and each file with no provider" {class: track}
