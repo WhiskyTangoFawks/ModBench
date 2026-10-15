@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModFolder } from '../instanceAdapter';
+import { renameFolderWithManifest } from '../mo2Context';
 
 const failing = vi.hoisted(() => ({ endings: [] as string[] }));
 
@@ -14,8 +15,6 @@ vi.mock('../files', async (importOriginal) => {
       (failing.endings.some((ending) => to.endsWith(ending)) ? Promise.reject(new Error(`EBUSY: ${to}`)) : files.rename(from, to)),
   };
 });
-
-const { renameFolderWithManifest } = await import('../mo2Context');
 
 describe('renameFolderWithManifest', () => {
   let root: string;

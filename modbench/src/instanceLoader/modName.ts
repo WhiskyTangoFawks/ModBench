@@ -13,8 +13,8 @@ export const modNamesOf = (entries: readonly ModlistEntry[], folders: ModFolders
  *  when it has no folder. */
 export const modNameOf = (modNames: ReadonlyMap<string, string>, entry: EntryRef): string | undefined => modNames.get(keyOf(entry));
 
-/** What a person or an agent reads for the mod the mod manager knows by a name: a mod's name, and a separator as a
- *  separator by its name, never by its folder's name. A name no folder holds reads as it is. */
+/** What a person or an agent reads for a mod manager's mod name: a separator as a separator by its name, never by its
+ *  folder's name. A name no folder holds reads as it is. */
 export const modLabelsOf = (folders: readonly ModFolder[] | undefined): ((modName: string) => string) => {
   const separators = new Map((folders ?? []).filter(({ kind }) => kind === 'separator').map(({ modName, name }) => [modName, name]));
   return (modName) => {
