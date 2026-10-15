@@ -72,7 +72,7 @@ internal sealed class ModStatusCheck(IModFolderRepository repository, INotificat
     {
         Dictionary<string, ModStatus> now = new(StringComparer.Ordinal);
         foreach (var mod in snapshot.Mods)
-            now[mod.Name] = repository.Status(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal), snapshot.StatCache);
+            now[mod.Name] = mod.StatusIn(repository, snapshot.StatCache);
         List<string> changed = [.. now.Where(status => !_pushed.TryGetValue(status.Key, out var was) || !was.Equals(status.Value)).Select(status => status.Key)];
         _pushed = now;
         if (changed.Count > 0) notifications.Publish(new ModStatusChangedNotification(changed));

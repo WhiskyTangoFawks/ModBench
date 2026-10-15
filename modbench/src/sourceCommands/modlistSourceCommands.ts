@@ -8,6 +8,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
+import { modWithMetadata, withMetadataRead } from '../wire/modByFolder';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
@@ -323,7 +324,7 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
       for (const folder of folders) {
         const held = await adapter.modMetadata(folder.name);
         if (held.kind === 'unreadable') skipped.push({ item: folder.name, reason: `'${folder.name}' was skipped: ${metadataUnreadable(held.reason)}.` });
-        else asked.push({ ...folder, metadata: { version: held.answer.version, installationFiles: [...held.answer.installationFiles] } });
+        else asked.push(modWithMetadata(folder, held));
       }
       if (asked.length === 0) return { destroys: [], refused: skipped };
       const listing = await client.getWhatRestoreDestroys(asked, adapter.statCacheFolder);
@@ -342,7 +343,8 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
 
     /** Each mod's folder against its manifest (modlist-source.md, Status). */
     modStatus: async (mods: readonly string[]): Promise<readonly ModStatus[] | ReadFailed> => {
-      const asked = await byFolder(adapter, mods);
+      const folders = await byFolder(adapter, mods);
+      const asked = await withMetadataRead(folders, (mod) => adapter.modMetadata(mod));
       return asked.length === 0 ? [] : client.getModStatus(asked, adapter.statCacheFolder);
     },
   };

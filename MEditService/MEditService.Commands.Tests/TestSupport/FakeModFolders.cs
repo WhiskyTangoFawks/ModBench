@@ -69,7 +69,7 @@ internal sealed class FakeModFolders : IModFolderRepository
     }
 
     /// <summary>The hash a line's provider fixes is the one the last keep held for its path.</summary>
-    public ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache)
+    public ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache, ModMetadata? held = null)
     {
         if (StatusThrows.Contains(modFolder)) throw new ArgumentException($"'{modFolder}' is not a path", nameof(modFolder));
         if (UnreadableManifests.Contains(modFolder)) return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: true, "line 1 is not a manifest line"));
@@ -82,7 +82,8 @@ internal sealed class FakeModFolders : IModFolderRepository
                 && kept.GetValueOrDefault(line.Path) != Encoding.ASCII.GetString(_files[(modFolder, line.Path)])).Select(line => line.Path)],
             NamedByNoLine(modFolder, modName, manifest, leftOut),
             [.. there[false].Select(line => line.Path)],
-            [.. manifest.Files.Where(line => line.Provider is FileProvider.NoProvider).Select(line => line.Path)]);
+            [.. manifest.Files.Where(line => line.Provider is FileProvider.NoProvider).Select(line => line.Path)],
+            MetadataDiffers: MetadataDiffering.Contains(modFolder), ManifestMetadata: ModMetadata.Of(manifest));
     }
 
     public Stream OpenFile(string modFolder, string path) => Open(modFolder, path);
@@ -107,6 +108,9 @@ internal sealed class FakeModFolders : IModFolderRepository
     public HashSet<(string Folder, string Path)> UnwritableFiles { get; } = [];
 
     public HashSet<string> UnreadableManifests { get; } = [];
+
+    /// <summary>The mod folders whose status says their metadata differs from their manifest.</summary>
+    public HashSet<string> MetadataDiffering { get; } = [];
 
     public Manifest? ReadManifest(string modFolder, string modName)
     {

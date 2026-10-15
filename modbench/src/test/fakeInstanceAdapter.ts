@@ -159,6 +159,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       const reason = answers.unreadableMetadata?.get(mod);
       return Promise.resolve(reason === undefined ? { kind: 'read', answer: answers.metadata?.get(mod) ?? { installationFiles: [] } } : { kind: 'unreadable', reason });
     },
+    metadataOf: ({ version, archiveFilename }) =>
+      Promise.resolve({ version, installationFiles: archiveFilename === undefined ? [] : [{ name: archiveFilename }] }),
     unwritableMetadata: (mod) => Promise.resolve(answers.unwritableMetadata?.get(mod)),
     writeModMetadata: (mod, metadata) => record({ verb: 'writeModMetadata', mod, metadata }, undefined),
     managerFilesInModFolder: ['meta.ini'],

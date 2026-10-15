@@ -55,7 +55,7 @@ const COMMANDS = { ...modlistCommands(fakeInstanceAdapter().adapter, unscriptedM
 type ModInstallDeps = Parameters<typeof registerModInstallCommands>[0];
 
 const statusOf = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], noProvider: [], ...over });
+  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], noProvider: [], metadataDiffers: false, ...over });
 
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {

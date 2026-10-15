@@ -1401,6 +1401,7 @@ export interface components {
             folder: string;
             committedFiles: string[];
             metadata?: components["schemas"]["ModMetadata"] | null;
+            metadataUnreadable?: string | null;
         };
         ModFoldersRequest: {
             mods: components["schemas"]["ModByFolder"][];
@@ -1438,6 +1439,7 @@ export interface components {
             noProvider: string[];
             unreadable?: components["schemas"]["ModUnreadable"] | null;
             statCacheNotWritten?: string | null;
+            metadataDiffers: boolean;
         };
         ModStatusResponse: {
             mods: components["schemas"]["ModStatus"][];
