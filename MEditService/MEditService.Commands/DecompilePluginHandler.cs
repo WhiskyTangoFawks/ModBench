@@ -45,10 +45,17 @@ public sealed class DecompilePluginHandler
                 $"{key.Name} from '{key.Origin}' is not in the load order, so there is nothing to decompile.");
         }
 
-        if (plugin.Provider is not PluginProvider.FromMod mod || !_source.IsTracked(plugin))
+        if (plugin.Provider is not PluginProvider.FromMod mod)
         {
             return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.NotInTrackedMod,
-                $"{plugin.Name} is not in a tracked mod, so there is no working tree to decompile it into.");
+                $"{plugin.Name} is not in a mod, so there is no source mod to decompile it into.");
+        }
+
+        if (!_source.IsTracked(plugin))
+        {
+            return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.NotInTrackedMod,
+                $"{plugin.Name} is not in a source mod, so there is no working tree to decompile it into. "
+                + "Run git init on the modlist if the instance is not a repository, then decompile and commit on the mod.");
         }
 
         var repository = _source.OverFolder(mod, loadOrder.GameRelease);

@@ -160,6 +160,9 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.NotInTrackedMod, refused.Refusal);
         Assert.Contains("Other.esp", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("git init on the modlist", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("decompile and commit on the mod", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("tracked", refused.Message, StringComparison.Ordinal);
         Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("Other.esp", UntrackedModName, "", new PluginProvider.FromMod(UntrackedModName, _untrackedMod, _untrackedMod), Line: null, PluginStrings.None)));
     }
 
