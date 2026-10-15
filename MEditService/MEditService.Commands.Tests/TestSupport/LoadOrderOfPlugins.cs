@@ -36,7 +36,7 @@ internal sealed class LoadOrderOfPlugins : TestInstance
 
     internal static PluginAddress Address(IModGetter mod) => new(mod.ModKey.FileName, Origin(mod));
 
-    internal string Text(IModGetter mod, FormKey formKey) => TrackedTree.Body(FolderOf(mod), Address(mod), formKey.ToString());
+    internal string Text(IModGetter mod, FormKey formKey) => SourceModTree.Body(FolderOf(mod), Address(mod), formKey.ToString());
 
     /// <summary>Replaces <paramref name="replaced"/> in a tracked plugin's document for <paramref name="formKey"/>.</summary>
     internal void Respell(IModGetter mod, FormKey formKey, string recordType, string replaced, string with)
@@ -58,5 +58,5 @@ internal sealed class LoadOrderOfPlugins : TestInstance
 
     /// <summary>The absolute path of the file of a tracked plugin's document for <paramref name="formKey"/>.</summary>
     internal string DocumentFileOf(IModGetter mod, FormKey formKey) =>
-        Path.Combine(FolderOf(mod), TrackedTree.DocumentFile(FolderOf(mod), Address(mod), formKey.ToString()).Require());
+        Path.Combine(FolderOf(mod), SourceModTree.DocumentFile(FolderOf(mod), Address(mod), formKey.ToString()).Require());
 }

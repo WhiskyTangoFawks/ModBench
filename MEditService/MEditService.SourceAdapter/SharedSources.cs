@@ -59,7 +59,7 @@ internal static partial class SharedSources
             GitCli.Clone(source.Remote, sourceFolder, GitInit.Settings, cancel);
             var git = new SourceRepositoryGit(sourceFolder);
             GitInit.EnsureCommitIdentity(git);
-            if (!SourceRepositoryGit.IsTracked(sourceFolder) && !git.TryRun(out _, "branch", "--track", "main", "origin/main"))
+            if (!SourceRepositoryGit.HoldsRepository(sourceFolder) && !git.TryRun(out _, "branch", "--track", "main", "origin/main"))
                 throw SourceStopException.Unreadable("its remote has no main, so it is not a source mod's repository");
             if (git.HeadCommit() != source.Commit) git.Run("checkout", "-q", "--detach", source.Commit);
         }

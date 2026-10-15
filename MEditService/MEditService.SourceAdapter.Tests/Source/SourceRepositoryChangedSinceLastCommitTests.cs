@@ -138,7 +138,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     }
 
     [Fact]
-    public void ATrackedTreeWhoseStatusGitCannotReport_AnswersGitsRefusal_NeverReadsAsEveryRecordAdded()
+    public void ASourceModTreeWhoseStatusGitCannotReport_AnswersGitsRefusal_NeverReadsAsEveryRecordAdded()
     {
         var repository = Tracked();
         File.WriteAllText(Path.Combine(_modFolder, ".git", "index"), "not an index");

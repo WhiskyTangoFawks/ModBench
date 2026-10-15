@@ -35,7 +35,7 @@ public sealed class SkyrimGestureTests : IDisposable
 
         var tracked = new SkyrimMod(ModKey.FromFileName(TrackedName), SkyrimRelease.SkyrimSE);
         _npc = tracked.Npcs.AddNew("TrackedNpc").FormKey;
-        _tracked = _instance.AddPlugin(tracked, "TrackedMod", tracked: true);
+        _tracked = _instance.AddPlugin(tracked, "SourceMod", tracked: true);
     }
 
     public void Dispose() => _instance.Dispose();
@@ -76,7 +76,7 @@ public sealed class SkyrimGestureTests : IDisposable
             [new RecordAt(new PluginAddress(MasterName, "MasterMod"), _masterPlaced.ToString())], CopyMode.Override, [_tracked], replace: false)
             .OnlyLanded();
 
-        var copied = JsonNode.Parse(TrackedTree.Body(_instance.ModFolderOf(_tracked), _tracked, _masterInteriorCell.ToString())).Require();
+        var copied = JsonNode.Parse(SourceModTree.Body(_instance.ModFolderOf(_tracked), _tracked, _masterInteriorCell.ToString())).Require();
         Assert.NotEqual(0, copied["MajorRecordFlagsRaw"].Require().GetValue<int>() & PartialFormFlag.Bit);
         Assert.Null(copied["WaterHeight"]);
     }

@@ -48,5 +48,5 @@ internal sealed class SourceModFixture : TestInstance
 
     /// <summary>What the tree holds for a FormKey, read back through the same repository the write
     /// side wrote through — the whole read model this fixture has.</summary>
-    internal string Body(FormKey formKey) => TrackedTree.Body(ModFolder, Plugin, formKey.ToString());
+    internal string Body(FormKey formKey) => SourceModTree.Body(ModFolder, Plugin, formKey.ToString());
 }

@@ -21,7 +21,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     private const string PlacedRef = "SharedRef";
     private const string World = "SharedWorld";
 
-    private async Task<ScatteredFixtureData> ATrackedMod()
+    private async Task<ScatteredFixtureData> ASourceMod()
     {
         var fx = new PluginFixtureBuilder("trace-another-tool")
             .WithPlugin(Plugin, mod =>
@@ -53,7 +53,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     [Fact]
     public async Task AHandEditToADocumentUnderTheSourceTree_PushesRowsChanged_AndTheNextReadAgrees()
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         using var stream = await Client.NotificationStream();
 
@@ -71,7 +71,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     [InlineData("SortedByHand/{0}")]
     public async Task ACommittedDocumentRenamedByHand_KeepsItsRecord(string renamedTo)
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var npc = await Client.FirstFormKey(Plugin, Origin);
         var quest = await Client.FirstFormKey(Plugin, Origin, "qust");
@@ -135,7 +135,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     [Fact]
     public async Task ARecordABackupCopyAlsoHolds_RefusesAnEdit_NamingBothDocuments()
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var npc = await Client.FirstFormKey(Plugin, Origin);
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
@@ -162,7 +162,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     public async Task ACommittedDocumentCopiedThenDeletedByHand_IsDiagnosedUntilTheDelete_AndKeepsItsRecord(
         string copiedTo)
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var npc = await Client.FirstFormKey(Plugin, Origin);
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
@@ -197,7 +197,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     [Fact]
     public async Task APlacedReferenceTwoCellsCarry_IsDiagnosed_NamingBothDocuments()
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var cell = await Client.FirstFormKey(Plugin, Origin, "cell");
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"");
@@ -213,7 +213,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     [Fact]
     public async Task APlacedReferenceTwoCellsCarry_RefusesAnEdit_NamingBothDocuments()
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var cell = await Client.FirstFormKey(Plugin, Origin, "cell");
         var placedRef = await Client.FormKeyNamed(Plugin, Origin, "refr", PlacedRef);
@@ -237,7 +237,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     [InlineData("copy.json")]
     public async Task ABackupCopyIntoAFolderThatAlreadyStood_IsDiagnosed_NamingBothDocuments(string copiedTo)
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var quest = await Client.FirstFormKey(Plugin, Origin, "qust");
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
@@ -261,7 +261,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     [InlineData("Backup/copy.json")]
     public async Task ABackupCopyDeletedByHand_LiftsTheDiagnosis(string copiedTo)
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var npc = await Client.FirstFormKey(Plugin, Origin);
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
@@ -316,7 +316,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     [InlineData("SortedByHand/{0}")]
     public async Task ACommittedDocumentDeletedThenWrittenElsewhereByHand_BringsItsRecordBack(string writtenTo)
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var npc = await Client.FirstFormKey(Plugin, Origin);
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
@@ -338,7 +338,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     [Fact]
     public async Task ACommittedContainerCopiedThenDeletedByHandUnderANameWithoutItsFormKey_KeepsItsRecords()
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var cell = await Client.FirstFormKey(Plugin, Origin, "cell");
         var placedRef = await Client.FormKeyNamed(Plugin, Origin, "refr", PlacedRef);
@@ -361,7 +361,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     public async Task ACommittedContainerDeletedThenWrittenByHandUnderANameWithoutItsFormKey_BringsItsRecordBack(
         string editorId, string recordType)
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var container = await Client.FirstFormKey(Plugin, Origin, recordType);
         var document = OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{editorId}\"");
@@ -385,7 +385,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     [InlineData(World, "wrld")]
     public async Task AContainerWhoseDirectoryWasRenamedByHand_TakesAnEdit(string editorId, string recordType)
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var container = await Client.FirstFormKey(Plugin, Origin, recordType);
         var directory = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{editorId}\"")).Require();
@@ -402,7 +402,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     [Fact]
     public async Task ARecordInAFolderMovedInWholeByHand_IsRead()
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var npc = await Client.FirstFormKey(Plugin, Origin);
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
@@ -458,7 +458,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     [Fact]
     public async Task AGitRevertOfAQuestsDocument_ReachesTheNextRead()
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var quest = await Client.FirstFormKey(Plugin, Origin, "qust");
         (await Client.Edit(quest, Plugin, Origin, "Filter", "EditedFilter")).EnsureSuccessStatusCode();
@@ -474,7 +474,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     [Fact]
     public async Task AGitRevertOfAPlacedRefsOwningCellDocument_ReachesTheNextRead()
     {
-        using var fx = await ATrackedMod();
+        using var fx = await ASourceMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var placedRef = await Client.FormKeyNamed(Plugin, Origin, "refr", PlacedRef);
         (await Client.Edit(placedRef, Plugin, Origin, "Scale", 2.5)).EnsureSuccessStatusCode();

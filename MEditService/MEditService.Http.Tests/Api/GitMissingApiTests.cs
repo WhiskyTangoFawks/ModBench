@@ -186,7 +186,7 @@ public sealed class GitMissingApiTests : HostedTests
     [Fact]
     public async Task EditingARecord_WithGitMissing_Is500_AndChangesNoFile()
     {
-        using var fx = await TrackedMod("trace-edit-without-git");
+        using var fx = await SourceMod("trace-edit-without-git");
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
         var before = FilesOutsideGit(modFolder);
@@ -200,7 +200,7 @@ public sealed class GitMissingApiTests : HostedTests
     [Fact]
     public async Task AskingForAnEditsChanges_WithGitMissing_Is500_AsTheEditIs()
     {
-        using var fx = await TrackedMod("trace-edit-changes-without-git");
+        using var fx = await SourceMod("trace-edit-changes-without-git");
         var formKey = await Client.FirstFormKey(Plugin, Origin);
 
         var response = await WithGitMissing(() => Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 0.75, "{}"));
@@ -211,7 +211,7 @@ public sealed class GitMissingApiTests : HostedTests
     [Fact]
     public async Task CreatingARecord_WithGitMissing_Is500_AndChangesNoFile()
     {
-        using var fx = await TrackedMod("trace-create-record-without-git");
+        using var fx = await SourceMod("trace-create-record-without-git");
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
         var before = FilesOutsideGit(modFolder);
 
@@ -221,7 +221,7 @@ public sealed class GitMissingApiTests : HostedTests
         Assert.Equal(before, FilesOutsideGit(modFolder));
     }
 
-    private async Task<ScatteredFixtureData> TrackedMod(string prefix)
+    private async Task<ScatteredFixtureData> SourceMod(string prefix)
     {
         var fx = new PluginFixtureBuilder(prefix)
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)

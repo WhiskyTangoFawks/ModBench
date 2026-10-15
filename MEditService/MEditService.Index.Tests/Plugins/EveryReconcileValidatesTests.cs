@@ -30,13 +30,13 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     {
         FormKey npc = default;
         _fixture = new PluginFixtureBuilder("every-reconcile-validates")
-            .WithPlugin(Untracked, mod => mod.Npcs.AddNew("UntrackedNpc"), origin: "UntrackedMod")
-            .WithPlugin(Tracked, mod => npc = mod.Npcs.AddNew("TrackedNpc").FormKey, origin: "TrackedMod")
+            .WithPlugin(Untracked, mod => mod.Npcs.AddNew("UntrackedNpc"), origin: "NonSourceMod")
+            .WithPlugin(Tracked, mod => npc = mod.Npcs.AddNew("TrackedNpc").FormKey, origin: "SourceMod")
             .BuildScattered();
         _untracked = _fixture.Plugins.Single(p => p.Name == Untracked);
         _tracked = _fixture.Plugins.Single(p => p.Name == Tracked);
         _trackedNpc = npc.ToString();
-        TrackedMods.Track(_tracked);
+        SourceMods.Track(_tracked);
         var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
         _disk = new DiskSaysAdapter(clock);
         _index = Indexes.Open(_holder, _disk, notifications: _notifications, timeProvider: clock);
@@ -184,7 +184,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     }
 
     [Fact]
-    public void AnEqualSnapshot_OfAPluginWithNoTreeInATrackedMod_PublishesNothing()
+    public void AnEqualSnapshot_OfAPluginWithNoTreeInASourceMod_PublishesNothing()
     {
         var loosePath = Path.Combine(_tracked.ModFolderOf(), "Loose.esp");
         var loose = new Fallout4Mod(ModKey.FromFileName("Loose.esp"), Fallout4Release.Fallout4);
@@ -249,7 +249,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     [Fact]
     public void AnEqualSnapshot_ReadsAPluginWhoseModGainedARepository_FromItsTree()
     {
-        TrackedMods.Track(_untracked);
+        SourceMods.Track(_untracked);
 
         _index.NextSnapshotUntil(
             () => _index.ReadFromItsPluginSource(_untracked.KeyOf()), "the arrival's re-derivation of the plugin from its tree");

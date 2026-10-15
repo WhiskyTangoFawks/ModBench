@@ -54,14 +54,14 @@ public sealed class ScriptRecordWriteTests
     public void ACopyReachingAFileHeldUnsaved_IsRefusedAsUnsavedChanges_AndWritesNothing()
     {
         using var mod = CopyFixture.Create();
-        var header = Path.Combine(mod.DestinationModFolder, TrackedTree.HeaderDocumentFile(mod.DestinationModFolder, mod.DestinationPlugin));
+        var header = Path.Combine(mod.DestinationModFolder, SourceModTree.HeaderDocumentFile(mod.DestinationModFolder, mod.DestinationPlugin));
         mod.Unsaved.Apply([new DocumentChange(header, File.ReadAllText(header) + " ")]);
-        var before = TrackedTree.Records(mod.DestinationModFolder, mod.DestinationPlugin);
+        var before = SourceModTree.Records(mod.DestinationModFolder, mod.DestinationPlugin);
 
         var outcome = Copy(mod, CopyMode.New, mod.DestinationPlugin);
 
         Assert.Equal(RecordEditRefusal.UnsavedChanges, outcome.Refusal);
-        Assert.Equal(before, TrackedTree.Records(mod.DestinationModFolder, mod.DestinationPlugin));
+        Assert.Equal(before, SourceModTree.Records(mod.DestinationModFolder, mod.DestinationPlugin));
     }
 
     [Fact]
@@ -79,14 +79,14 @@ public sealed class ScriptRecordWriteTests
     public void ACreateReachingAFileHeldUnsaved_IsRefusedAsUnsavedChanges_AndWritesNothing()
     {
         using var mod = SourceEditFixture.Tracked();
-        var header = Path.Combine(mod.ModFolder, TrackedTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin));
+        var header = Path.Combine(mod.ModFolder, SourceModTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin));
         mod.Unsaved.Apply([new DocumentChange(header, File.ReadAllText(header) + " ")]);
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var outcome = mod.ScriptCreateHandler.Create(mod.Plugin, "npc_");
 
         Assert.Equal(RecordEditRefusal.UnsavedChanges, outcome.Refusal);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]
@@ -117,11 +117,11 @@ public sealed class ScriptRecordWriteTests
     public void ADeleteOfTheHeader_IsRefused_AndWritesNothing()
     {
         using var mod = SourceEditFixture.Tracked();
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var outcome = Delete(mod, PluginHeader.IdentityOf(mod.ActualPluginName).FormKey);
 
         Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, outcome.Refusal);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 }

@@ -61,7 +61,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
 
     private PluginAddress Edited => Address(_edited);
 
-    private IReadOnlyList<string> Tree => TrackedTree.Records(_plugins.FolderOf(_edited), Edited);
+    private IReadOnlyList<string> Tree => SourceModTree.Records(_plugins.FolderOf(_edited), Edited);
 
     private RecordEditResult CreateCellAt(int? x, int? y) =>
         _plugins.CreateHandler.CreateRecordSync(Edited, "cell", World.ToString(), new GridPosition(x, y));
@@ -77,10 +77,10 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var created = result.NewFormKey.Require();
         Assert.Equal(_edited.ModKey, FormKey.Factory(created).ModKey);
-        var cell = Document.Parse(TrackedTree.Body(_plugins.FolderOf(_edited), Edited, created));
+        var cell = Document.Parse(SourceModTree.Body(_plugins.FolderOf(_edited), Edited, created));
         Assert.Equal((x, y), cell.Grid);
         Assert.False(PlacedCell.IsInterior(cell));
-        var file = TrackedTree.DocumentFile(_plugins.FolderOf(_edited), Edited, created).Require();
+        var file = SourceModTree.DocumentFile(_plugins.FolderOf(_edited), Edited, created).Require();
         Assert.Contains(
             Path.DirectorySeparatorChar + Path.Combine(block, subBlock) + Path.DirectorySeparatorChar, file, StringComparison.Ordinal);
     }
@@ -249,6 +249,6 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         var result = CreateCellAt(7, 7);
 
         Assert.Equal("000802:Override.esp", result.NewFormKey);
-        Assert.Equal(0x803u, TrackedTree.NextObjectId(_plugins.FolderOf(_edited), Edited));
+        Assert.Equal(0x803u, SourceModTree.NextObjectId(_plugins.FolderOf(_edited), Edited));
     }
 }

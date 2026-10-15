@@ -195,7 +195,7 @@ public class RegistrationScopingTests
     public void AReferenceInATrackedPluginThatIsNotActive_IsListedForActiveOrTrackedPlugins()
     {
         using var fx = Build("registration-inactive-tracked-references");
-        TrackedMods.Track(fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name));
+        SourceMods.Track(fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name));
 
         fx.Reconcile(fx.WithBetaDisabled);
 

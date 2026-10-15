@@ -215,7 +215,7 @@ public sealed class CompilePluginContainerTests : IDisposable
         var diagnostic = Assert.Single(
             diagnostics.Where(d => d.FormKey == _cellATemporaryRef.ToString()).Take(1));
 
-        var cell = TrackedTree.DocumentCarrying(_modFolder, _plugin, "CellA");
+        var cell = SourceModTree.DocumentCarrying(_modFolder, _plugin, "CellA");
         Assert.Equal(
             TreeTampering.FileOf(_modFolder, _plugin, new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId)),
             Path.Combine(_modFolder, diagnostic.SourceRelativePath));
@@ -224,7 +224,7 @@ public sealed class CompilePluginContainerTests : IDisposable
     [Fact]
     public async Task Compile_WithACellDirectoryRenamedByHand_Succeeds_WithADiagnosticOnItsDocumentNamingWhereItBelongs()
     {
-        var cell = TrackedTree.DocumentCarrying(_modFolder, _plugin, "CellA");
+        var cell = SourceModTree.DocumentCarrying(_modFolder, _plugin, "CellA");
         var identity = new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId);
         var directory = TreeTampering.DirectoryOf(_modFolder, _plugin, identity);
         var belongsAt = Path.GetRelativePath(_modFolder, directory);
@@ -246,7 +246,7 @@ public sealed class CompilePluginContainerTests : IDisposable
     [Fact]
     public async Task Compile_WithACellDirectoryRenamedByHandToAnotherEditorId_Succeeds_WithTheMisplacedWarning()
     {
-        var cell = TrackedTree.DocumentCarrying(_modFolder, _plugin, "CellA");
+        var cell = SourceModTree.DocumentCarrying(_modFolder, _plugin, "CellA");
         var directory = TreeTampering.DirectoryOf(_modFolder, _plugin, new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId));
         Directory.Move(directory, Path.Combine(Path.GetDirectoryName(directory) ?? string.Empty, Path.GetFileName(directory).Replace("CellA", "CellB", StringComparison.Ordinal)));
 

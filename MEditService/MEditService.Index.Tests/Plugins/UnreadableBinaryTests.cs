@@ -18,7 +18,7 @@ public sealed class UnreadableBinaryTests : IDisposable
     private string _gameDirectory => _game.Path;
     private string _instanceRoot => _instance.Path;
     private const string PluginName = "Untracked.esp";
-    private const string Origin = "UntrackedMod";
+    private const string Origin = "NonSourceMod";
     private readonly string _modFolder;
     private readonly string _pluginPath;
     private readonly PluginAddress _key = new(PluginName, Origin);
@@ -56,7 +56,7 @@ public sealed class UnreadableBinaryTests : IDisposable
     private void UntrackedOverAnUnreadableBinary()
     {
         WriteValidPlugin(_pluginPath);
-        TrackedMods.Track(_pluginPath);
+        SourceMods.Track(_pluginPath);
         Reconcile(Entry);
         AnotherTool.Delete(Path.Combine(_modFolder, ".git"));
         File.WriteAllText(_pluginPath, "not a plugin");

@@ -83,7 +83,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ATrackedModsPluginWithUnreadableSource_IsNamedAtLoad()
+    public async Task ASourceModsPluginWithUnreadableSource_IsNamedAtLoad()
     {
         var fx = Owned(OneMod());
         var second = Path.Combine(OtherTool.ModFolderOf(fx, Origin), SecondPlugin);

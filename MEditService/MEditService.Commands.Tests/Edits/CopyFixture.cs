@@ -58,7 +58,7 @@ public sealed class CopyFixture : TestInstance, ITrackedPlugins
     /// <summary>Commits the destination's working tree, so what it holds now is what HEAD holds.</summary>
     public void CommitDestination()
     {
-        TrackedTree.Commit(DestinationModFolder);
+        SourceModTree.Commit(DestinationModFolder);
     }
 
     /// <summary>The source plugin's own bytes, so "a copy, not a move" is asserted against the file

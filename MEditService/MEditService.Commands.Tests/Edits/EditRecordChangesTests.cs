@@ -33,7 +33,7 @@ public sealed class EditRecordChangesTests : IDisposable
         SetAt(Json(raw.ToString(CultureInfo.InvariantCulture)), Member("MajorRecordFlagsRaw"));
 
     private static string TextOf(TestInstance instance, PluginAddress plugin, string formKey) =>
-        File.ReadAllText(Path.Combine(instance.ModFolderOf(plugin), TrackedTree.DocumentFile(instance.ModFolderOf(plugin), plugin, formKey).Require()));
+        File.ReadAllText(Path.Combine(instance.ModFolderOf(plugin), SourceModTree.DocumentFile(instance.ModFolderOf(plugin), plugin, formKey).Require()));
 
     private static RecordEditChanges Changes(TestInstance instance, PluginAddress plugin, string formKey, RecordEditEnvelope envelope) =>
         instance.EditChangesHandler.Changes(plugin, formKey, envelope);
@@ -41,7 +41,7 @@ public sealed class EditRecordChangesTests : IDisposable
     private static RecordEditChanges ChangesOver(
         TestInstance instance, PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string unsaved)
     {
-        var file = Path.Combine(instance.ModFolderOf(plugin), TrackedTree.DocumentFile(instance.ModFolderOf(plugin), plugin, formKey).Require());
+        var file = Path.Combine(instance.ModFolderOf(plugin), SourceModTree.DocumentFile(instance.ModFolderOf(plugin), plugin, formKey).Require());
         instance.Unsaved.Apply([new DocumentChange(file, unsaved)]);
         return instance.EditChangesHandler.Changes(plugin, formKey, envelope);
     }
@@ -154,7 +154,7 @@ public sealed class EditRecordChangesTests : IDisposable
     public void APlacedRecordCrossingIntoAnotherCell_BuildsOnTheUnsavedTextOfTheCellItLeaves()
     {
         using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
-        var leaving = Path.Combine(world.ModFolder, TrackedTree.DocumentFile(world.ModFolder, world.Plugin, keys["Mover"].ToString()).Require());
+        var leaving = Path.Combine(world.ModFolder, SourceModTree.DocumentFile(world.ModFolder, world.Plugin, keys["Mover"].ToString()).Require());
         var unsaved = TextOf(world, world.Plugin, keys["Mover"].ToString())
             .Replace("\"Wanderer\"", "\"TypedButUnsaved\"", StringComparison.Ordinal);
         Assert.Contains("TypedButUnsaved", unsaved, StringComparison.Ordinal);
@@ -243,7 +243,7 @@ public sealed class EditRecordChangesTests : IDisposable
     public void AChildRecordsFormIdEdit_ChangesOnlyItsOwnTextInTheUnsavedText_BesideAHandFormattedSiblingTheCodecCannotRead()
     {
         using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
-        var leaving = Path.Combine(world.ModFolder, TrackedTree.DocumentFile(world.ModFolder, world.Plugin, keys["Mover"].ToString()).Require());
+        var leaving = Path.Combine(world.ModFolder, SourceModTree.DocumentFile(world.ModFolder, world.Plugin, keys["Mover"].ToString()).Require());
         var given = TextOf(world, world.Plugin, keys["Mover"].ToString())
             .Replace("\"EditorID\": \"Wanderer\"", "\"EditorID\":\"Wanderer\", \"Scale\": { \"x\": 1 }", StringComparison.Ordinal);
 
@@ -259,7 +259,7 @@ public sealed class EditRecordChangesTests : IDisposable
     public void APlacedRecordCrossingIntoAnotherCell_LeavesTheRestOfTheUnsavedTextAsItWas()
     {
         using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
-        var leaving = Path.Combine(world.ModFolder, TrackedTree.DocumentFile(world.ModFolder, world.Plugin, keys["Mover"].ToString()).Require());
+        var leaving = Path.Combine(world.ModFolder, SourceModTree.DocumentFile(world.ModFolder, world.Plugin, keys["Mover"].ToString()).Require());
         var held = TextOf(world, world.Plugin, keys["Mover"].ToString());
         var given = HandFormatted(held, "Here");
         var withoutWanderer = JsonNode.Parse(held).Require().AsObject();
@@ -277,7 +277,7 @@ public sealed class EditRecordChangesTests : IDisposable
     public void APlacedRecordLandingInThePersistentCell_LeavesTheRestOfItsWorldspacesDocumentAsItWas()
     {
         using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys, withAPersistentCell: true);
-        var worldspace = Path.Combine(world.ModFolder, TrackedTree.DocumentFile(world.ModFolder, world.Plugin, keys["World"].ToString()).Require());
+        var worldspace = Path.Combine(world.ModFolder, SourceModTree.DocumentFile(world.ModFolder, world.Plugin, keys["World"].ToString()).Require());
         var held = File.ReadAllText(worldspace);
         File.WriteAllText(worldspace, HandFormatted(held, "World"));
         var mover = JsonNode.Parse(TextOf(world, world.Plugin, keys["Mover"].ToString())).Require()["Temporary"].Require()[0].Require().DeepClone();

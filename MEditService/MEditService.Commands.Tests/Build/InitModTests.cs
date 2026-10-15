@@ -57,7 +57,7 @@ public sealed class InitModTests
         Assert.Equal(("FixtureMod", InitRefusal.RoundTripFailed), (refusal.Item, refusal.Refusal));
         Assert.Contains("Locked.esp", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("cannot be read", refusal.Message, StringComparison.Ordinal);
-        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
         Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")));
         Assert.False(Directory.Exists(Path.Combine(modFolder, "plugin-source")));
     }
@@ -87,11 +87,11 @@ public sealed class InitModTests
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
         await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
-        Assert.True(TestAdapters.Source().IsTracked(modFolder));
+        Assert.True(TestAdapters.Source().IsSourceMod(modFolder));
 
         var plugin = new PluginAddress("Fixture.esp", "FixtureMod");
-        var first = TrackedTree.Document(modFolder, plugin, npc1.FormKey.ToString()).Require();
-        var second = TrackedTree.Document(modFolder, plugin, npc2.FormKey.ToString()).Require();
+        var first = SourceModTree.Document(modFolder, plugin, npc1.FormKey.ToString()).Require();
+        var second = SourceModTree.Document(modFolder, plugin, npc2.FormKey.ToString()).Require();
         Assert.Equal("FirstNpc", first.EditorId);
         Assert.Equal("SecondNpc", second.EditorId);
 
@@ -149,8 +149,8 @@ public sealed class InitModTests
         var result = await InitEveryPluginOf.ModAsync(loadOrder, "ModA");
 
         Assert.Equal([new PluginAddress("Same.esp", "ModA")], Assert.Single(result.Landed).Outcome.Plugins);
-        Assert.True(TestAdapters.Source().IsTracked(modA));
-        Assert.False(TestAdapters.Source().IsTracked(modB));
+        Assert.True(TestAdapters.Source().IsSourceMod(modA));
+        Assert.False(TestAdapters.Source().IsSourceMod(modB));
     }
 
     [Fact]
@@ -214,7 +214,7 @@ public sealed class InitModTests
 
         Assert.Contains(npc.FormKey.ToString(), result.Message);
         Assert.Contains("OriginalName", result.Message);
-        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public sealed class InitModTests
         Assert.Contains(npc.FormKey.ToString(), result.Message);
         Assert.Contains("Npc", result.Message);
         Assert.Contains("HeightMin", result.Message);
-        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
     }
 
     [Fact]
@@ -277,7 +277,7 @@ public sealed class InitModTests
 
         await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
-        Assert.True(TestAdapters.Source().IsTracked(modFolder));
+        Assert.True(TestAdapters.Source().IsSourceMod(modFolder));
     }
 
     public static IEnumerable<object[]> HeaderFieldCorruptionsMirroringCodecsOpaqueHeaderFields()
@@ -325,7 +325,7 @@ public sealed class InitModTests
         Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains($"TES4 header field '{fieldName}'", result.Message);
-        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
     }
 
     [Fact]
@@ -352,7 +352,7 @@ public sealed class InitModTests
         Assert.DoesNotContain("MNAM", result.Message);
         Assert.Contains("Furniture", result.Message);
         Assert.Contains("Flags", result.Message);
-        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
     }
 
     [Fact]
@@ -373,9 +373,9 @@ public sealed class InitModTests
                 NamedProvider: new PluginProvider.FromMod("FixtureMod", modFolder, sourceFolder))]);
         await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
-        Assert.True(TestAdapters.Source().IsTracked(sourceFolder));
+        Assert.True(TestAdapters.Source().IsSourceMod(sourceFolder));
 
-        var sourceText = TrackedTree.Document(sourceFolder, new PluginAddress("Fixture.esp", "FixtureMod"), door.FormKey.ToString()).Require().Body;
+        var sourceText = SourceModTree.Document(sourceFolder, new PluginAddress("Fixture.esp", "FixtureMod"), door.FormKey.ToString()).Require().Body;
         Assert.Contains("The Big Door", sourceText);
     }
 
@@ -402,7 +402,7 @@ public sealed class InitModTests
             $"Fixture.esp is a localized plugin but its strings file '{stringsFileNamedByIsoLanguageCodeNotByLanguageName}' was not found " +
             $"loose or in an archive, among the files the game loads or in {modFolder.Path}. Restore the file, then try again.",
             result.Message);
-        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
     }
 
     [Fact]
@@ -423,7 +423,7 @@ public sealed class InitModTests
             $"Fixture.esp does not round-trip through its own source: NPC_ {npc} is flagged Deleted " +
             "and still holds fields, which Mutagen does not write for a deleted record.",
             result.Message);
-        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
     }
 
     [Fact]
@@ -448,7 +448,7 @@ public sealed class InitModTests
         Assert.Equal(
             "Fixture.esp cannot become source: NPC_ 00000000 holds the null FormID, so the plugin is malformed.",
             result.Message);
-        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
     }
 
     [Fact]
@@ -479,7 +479,7 @@ public sealed class InitModTests
             "Fixture.esp cannot become source: NPC_ 000000:Fixture.esp holds object ID 000000, " +
             "the FormKey its plugin header's source holds.",
             result.Message);
-        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
     }
 
     private static (string PluginPath, Door Door) WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(string modFolder)

@@ -10,7 +10,7 @@ namespace MEditService.Index.Tests.TestSupport;
 /// <summary>A tracked mod folder made the Source repository's own way: the binary read as the tree
 /// it would commit, committed as the baseline. The Index then reads the tree, never the
 /// binary.</summary>
-internal static class TrackedMods
+internal static class SourceMods
 {
     internal static void Track(string pluginPath, GameRelease release = GameRelease.Fallout4)
     {

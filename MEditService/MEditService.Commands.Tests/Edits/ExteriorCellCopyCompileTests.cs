@@ -112,13 +112,13 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         var service = CopyHandler();
         service.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorCell.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false).OnlyLanded();
 
-        var before = TrackedTree.Records(_fixture.DestinationModFolder, _fixture.DestinationPlugin);
+        var before = SourceModTree.Records(_fixture.DestinationModFolder, _fixture.DestinationPlugin);
 
         var result = service.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.SameSubBlockCell.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false);
 
         result.OnlyLanded();
 
-        var after = TrackedTree.Records(_fixture.DestinationModFolder, _fixture.DestinationPlugin);
+        var after = SourceModTree.Records(_fixture.DestinationModFolder, _fixture.DestinationPlugin);
         Assert.All(before, document => Assert.Contains(document, after));
         var newCell = Assert.Single(after.Except(before));
         Assert.Contains(ContainerCopyFixture.SameSubBlockCellEditorId, newCell, StringComparison.Ordinal);

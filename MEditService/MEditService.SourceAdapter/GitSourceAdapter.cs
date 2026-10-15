@@ -10,9 +10,9 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved) : ISourceAdapter
 {
     public bool SourceReads(RegisteredPlugin plugin) => SourceRepository.SourceReads(plugin);
 
-    public bool IsTracked(RegisteredPlugin plugin) => SourceRepository.IsTracked(plugin);
+    public bool IsSourceMod(RegisteredPlugin plugin) => SourceRepository.IsSourceMod(plugin);
 
-    public bool IsTracked(string sourceFolder) => SourceRepository.IsTracked(sourceFolder);
+    public bool IsSourceMod(string sourceFolder) => SourceRepository.IsSourceMod(sourceFolder);
 
     public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => SourceRepository.WhySourceDoesNotRead(plugin);
 

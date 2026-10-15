@@ -280,7 +280,7 @@ public sealed class ContainerCopyFixture : TestInstance, ITrackedPlugins
     internal void AssertDestinationCellSitsAt(
         string cellFormKey, string? editorId, int blockX, int blockY, int subX, int subY)
     {
-        var repository = TrackedTree.Repository(DestinationModFolder, DestinationPlugin);
+        var repository = SourceModTree.Repository(DestinationModFolder, DestinationPlugin);
         var cell = new RecordIdentity(cellFormKey, "cell", editorId);
 
         Assert.Equal(Worldspace.ToString(), repository.WorldspaceOf(DestinationPlugin, cell).Value());

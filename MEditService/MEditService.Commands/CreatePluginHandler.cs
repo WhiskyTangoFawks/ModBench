@@ -29,7 +29,7 @@ public sealed class CreatePluginHandler
         var mod = new PluginProvider.FromMod(address.Origin, folder, sourceFolder);
         var modKey = ModKey.FromFileName(address.Name);
         var plugin = new RegisteredPlugin(address.Name, address.Origin, _adapter.PathOfEmpty(modKey, folder), mod, Line: null, PluginStrings.None);
-        if (!_source.IsTracked(plugin)) return new PluginCreateResult();
+        if (!_source.IsSourceMod(plugin)) return new PluginCreateResult();
 
         var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, folder, onParsed: () => { }, default);
         var failure = decompiled.Source is { } source

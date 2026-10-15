@@ -18,7 +18,7 @@ internal sealed class Projector(
     internal DerivedFrom TruthOf(RegisteredPlugin plugin)
     {
         if (source.SourceReads(plugin)) return DerivedFrom.SourceTree;
-        return source.IsTracked(plugin) ? DerivedFrom.BinaryForUnreadableSource : DerivedFrom.Binary;
+        return source.IsSourceMod(plugin) ? DerivedFrom.BinaryForUnreadableSource : DerivedFrom.Binary;
     }
 
     private ISourceRepositoryReads Over(RegisteredPlugin plugin) =>
