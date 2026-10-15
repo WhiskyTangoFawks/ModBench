@@ -32,6 +32,7 @@ http -> edits: put load order {class: loadorder}
 edits -> engine: "the snapshot's mods" {class: loadorder}
 modfolder -> modfolderadapter: "each manifest · each mod's files: stamps · the stat cache" {class: track}
 modfolderadapter -> engine: "each mod's status" {class: track}
+modfolderadapter -> modfolder: "the stat cache" {class: track}
 engine."against the last push: which mods changed"
 engine -> port: "mod status changed: the mods" {class: push}
 port -> http: publish {class: push}

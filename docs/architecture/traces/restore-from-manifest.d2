@@ -57,6 +57,8 @@ tracked: "a source mod with a remote" {
 
 engine."per mod: every file whose bytes differ is written; a mod that lacks anything is skipped"
 engine -> port: "progress, per mod" {class: push}
+client -> http: "cancel: the gesture, after its first progress" {class: compile}
+http -> engine: "stop after the mod in hand" {class: compile}
 engine -> modfolderadapter: "each file whose bytes differ" {class: compile}
 modfolderadapter -> modfolder: "the files · the stat cache" {class: compile}
 engine -> http: "landed or skipped, per mod, with what it lacks · each file no line names" {class: compile}
