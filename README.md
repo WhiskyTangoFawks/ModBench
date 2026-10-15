@@ -8,10 +8,10 @@ Status: alpha. Supports Fallout 4, Skyrim SE and Starfield, on Windows and Linux
 
 Every other plugin editor writes the binary in place and leaves you with `.bak` files. Modbench treats a plugin the way an IDE treats a program:
 
-- Decompile and commit a mod, and it becomes a source mod: every record in its plugins is serialized to a JSON source tree, one file for each record and its child records, committed to a git repo of its own in the `source/` folder beside `mods/`. The serialization is lossless — building it back gives a plugin that means the same, record for record, though its bytes may differ, and that round trip is verified when you decompile, so a plugin that can't be reproduced is refused rather than silently mangled.
+- Decompile and commit a mod, and it becomes a source mod: every record in its plugins is serialized to plugin source, one JSON file for each record and its child records, committed to a git repo of its own in the `source/` folder beside `mods/`. The serialization is lossless. A build gives back a plugin that means the same, record for record, though its bytes can differ. Decompile verifies this round trip and refuses a plugin it cannot reproduce, rather than mangle it in silence.
 - Edit in the compare grid and the change lands as an ordinary working-tree edit. VS Code's own Source Control panel is the review surface: diff it, discard it, commit it, branch it, rebase it.
-- Build writes the binary from the source when you say so. The build refuses what it can't emit and reports the rest as Problems.
-- The plugin stays what every tool sees. The game, MO2 and xEdit load the plugin binary. Build writes it from the source, which is the truth. Modbench never assumes exclusive ownership of any file. When a tracked plugin changes outside Modbench, Modbench tells you, and you decide what to do next.
+- Build writes the binary from its plugin source when you say so. The build refuses what it can't emit and reports the rest as Problems.
+- The plugin stays what every tool sees. The game, MO2 and xEdit load the plugin binary. Build writes it from its plugin source, which is the truth. Modbench never assumes exclusive ownership of any file. When a source plugin changes outside Modbench, Modbench tells you, and you decide what to do next.
 
 The UX is borrowed, not invented: mod management follows MO2, record editing follows xEdit, and every interaction uses the VS Code surface that already does the job. [docs/principles.md](docs/principles.md) and [docs/adr/](docs/adr/) hold the reasons.
 
@@ -20,7 +20,7 @@ The UX is borrowed, not invented: mod management follows MO2, record editing fol
 - Mods: install from an archive or a folder, separators, drag to order, enable.
 - Plugins: `plugins.txt` order and checkboxes. Each active plugin expands into its record types, records and worldspace and cell tree.
 - Record editor: an xEdit-style compare grid across the active plugins, with conflict colours, in-place editing, copy as override and new record.
-- Version control: Git Init Modlist, Decompile and Commit, Build, VS Code's Source Control panel, and external-change handling.
+- Version control: Git Init Modlist, Decompile and Commit Mod, Decompile Plugin, Build Mod, VS Code's Source Control panel, and external-change handling.
 - Referenced By: what points at a record, in VS Code's References view.
 - Record filter: plain `.sql` files against the record index.
 - Toolbox: the instance's game and active profile, switch profile, refresh.
