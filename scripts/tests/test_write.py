@@ -91,7 +91,8 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
         self.assertEqual(changed(self.source), [])
 
     def test_creates_a_plugin_in_a_mod_with_its_source_and_returns_its_name_and_origin(self):
-        self.assertEqual(medit.create_plugin('MBDevNew.esp', TRACKED), ('MBDevNew.esp', TRACKED))
+        plugin = medit.create_plugin('MBDevNew.esp', TRACKED)
+        self.assertEqual((plugin.name, plugin.origin), ('MBDevNew.esp', TRACKED))
         self.assertTrue((self.fixture.instance / 'mods' / TRACKED / 'MBDevNew.esp').exists())
         self.assertTrue(any('MBDevNew' in line for line in changed(self.source)))
 

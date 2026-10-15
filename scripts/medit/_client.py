@@ -82,9 +82,9 @@ def copy(plugin, form_key, destination, mode='override', replace=False):
 
 def create_plugin(name, origin):
     """Writes an empty plugin, with its plugin source in a source mod, into the mod origin, which must hold a plugin
-    already, and returns (name, origin). The plugin joins the load order disabled, once Modbench's watcher sees it."""
+    already, and returns it. The plugin joins the load order disabled, once Modbench's watcher sees it."""
     _call('POST', '/plugins/create-in-mod', {'origin': origin, 'name': name})
-    return name, origin
+    return Plugin(name, origin)
 
 
 def create(plugin, record_type, container=None, position=None):
