@@ -1122,7 +1122,7 @@ export interface components {
             message: string;
         };
         /** @enum {string} */
-        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotTracked" | "PluginSourceUnreadable" | "NoSource" | "SourceFileHeld" | "SourceDoesNotParse" | "SourceValueDropped" | "FormKeyCollision" | "FormIdOutsideFlagLimit" | "FormIdUnmappable" | "MasterNotInLoadOrder" | "MasterUnreadable" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
+        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotTracked" | "PluginSourceUnreadable" | "TwinPluginSources" | "NoSource" | "SourceFileHeld" | "SourceDoesNotParse" | "SourceValueDropped" | "FormKeyCollision" | "FormIdOutsideFlagLimit" | "FormIdUnmappable" | "MasterNotInLoadOrder" | "MasterUnreadable" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
         CompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
         };

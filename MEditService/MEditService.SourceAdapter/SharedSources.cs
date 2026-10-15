@@ -48,8 +48,8 @@ internal static partial class SharedSources
         return git.Exists ? git.HeadCommit() : throw SourceStopException.Unreadable($"'{sourceFolder}' holds no repository.");
     }
 
-    // A source mod's repository has a main (ADR-0007), so a clone of a remote whose default branch is another has one
-    // made at that branch's tip.
+    // A source mod's repository has a main (ADR-0007): a clone whose default branch is another takes the remote's, and
+    // Modbench never invents one.
     private static void Clone(string sourceFolder, SharedSource source, CancellationToken cancel)
     {
         if (source.Remote.StartsWith('-'))
@@ -59,7 +59,8 @@ internal static partial class SharedSources
             GitCli.Clone(source.Remote, sourceFolder, GitInit.Settings, cancel);
             var git = new SourceRepositoryGit(sourceFolder);
             GitInit.EnsureCommitIdentity(git);
-            if (!SourceRepositoryGit.IsTracked(sourceFolder)) git.Run("branch", "main");
+            if (!SourceRepositoryGit.IsTracked(sourceFolder) && !git.TryRun(out _, "branch", "--track", "main", "origin/main"))
+                throw SourceStopException.Unreadable("its remote has no main, so it is not a source mod's repository");
             if (git.HeadCommit() != source.Commit) git.Run("checkout", "-q", "--detach", source.Commit);
         }
         catch (SourceStopException) when (Directory.Exists(sourceFolder))

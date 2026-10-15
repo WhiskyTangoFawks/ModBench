@@ -17,6 +17,10 @@ public enum CompileRefusal
     /// <summary>The way out is Decompile.</summary>
     PluginSourceUnreadable,
 
+    /// <summary>Another plugin source of the mod has the same name but for case, which one mod folder cannot hold on
+    /// Windows; the way out is renaming or removing one.</summary>
+    TwinPluginSources,
+
     /// <summary>The plugin's source folder holds no files; the way out is Decompile.</summary>
     NoSource,
 

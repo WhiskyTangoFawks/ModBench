@@ -225,11 +225,13 @@ public sealed class BuildHandler
     private async Task<(IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Landed, IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused)> CompileAsync(
         LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<RegisteredPlugin> plugins, FolderWrite written)
     {
-        var changedOutside = plugins
+        var twins = plugins.GroupBy(plugin => plugin.Name, StringComparer.OrdinalIgnoreCase).Where(named => named.Count() > 1).ToList();
+        List<RegisteredPlugin> compilable = [.. plugins.Except(twins.SelectMany(named => named))];
+        var changedOutside = compilable
             .Where(plugin => ChangedOutside(plugin, loadOrder.GameRelease))
             .ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         var before = changedOutside.Count == 0 ? [] : HashesIn(mod);
-        var compiled = await _compile.CompileAsync(plugins);
+        var compiled = await _compile.CompileAsync(compilable);
         var landedChangedOutside = compiled.Landed.Select(landed => changedOutside.GetValueOrDefault(landed.Item)).OfType<RegisteredPlugin>().ToList();
         if (landedChangedOutside.Count > 0)
         {
@@ -242,7 +244,15 @@ public sealed class BuildHandler
             }
         }
 
-        return (compiled.Landed, compiled.Refused);
+        return (compiled.Landed, [.. twins.SelectMany(TwinsRefused), .. compiled.Refused]);
+    }
+
+    // mods.md, Build, story 8: each such plugin is refused by name, and the rest of the mod builds.
+    private static IEnumerable<ItemRefused<PluginAddress, CompileRefusal>> TwinsRefused(IEnumerable<RegisteredPlugin> twins)
+    {
+        var named = string.Join(" and ", twins.Select(plugin => $"'{plugin.Name}'"));
+        return twins.Select(plugin => new ItemRefused<PluginAddress, CompileRefusal>(plugin.Key, CompileRefusal.TwinPluginSources,
+            $"{plugin.Name} cannot be compiled: the plugin sources {named} differ only in case, and one mod folder cannot hold them on Windows."));
     }
 
     private Dictionary<string, string> HashesIn(ModToBuild mod) =>

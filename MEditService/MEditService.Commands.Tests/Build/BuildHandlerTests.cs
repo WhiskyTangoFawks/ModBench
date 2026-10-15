@@ -159,15 +159,23 @@ public sealed class BuildHandlerTests : IDisposable
     }
 
     [PosixFact]
-    public async Task ASourceHoldingTwoPluginsWhoseNamesDifferInCaseAlone_AnswersOneOfThem()
+    public async Task TwoPluginSourcesWhoseNamesDifferInCaseAlone_AreEachRefusedByName_AndTheRestOfTheModBuilds()
     {
-        WriteSource("{\"output\": \"Mod\"}");
+        WriteSource("{\"output\": \"Mod\"}", ("meshes/c.nif", "c"));
         Directory.CreateDirectory(Path.Combine(SourceFolder, "plugin-source", "Fixture.esp"));
         Directory.CreateDirectory(Path.Combine(SourceFolder, "plugin-source", "fixture.esp"));
 
         var built = await Landed();
 
-        Assert.Single(built.Refused);
+        Assert.Equal(
+            [
+                ("Fixture.esp", CompileRefusal.TwinPluginSources,
+                    "Fixture.esp cannot be compiled: the plugin sources 'Fixture.esp' and 'fixture.esp' differ only in case, and one mod folder cannot hold them on Windows."),
+                ("fixture.esp", CompileRefusal.TwinPluginSources,
+                    "fixture.esp cannot be compiled: the plugin sources 'Fixture.esp' and 'fixture.esp' differ only in case, and one mod folder cannot hold them on Windows."),
+            ],
+            built.Refused.Select(refused => (refused.Item.Name, refused.Refusal, refused.Message)));
+        Assert.Equal([("meshes/c.nif", "c")], FilesIn(ModFolder));
     }
 
     [Fact]

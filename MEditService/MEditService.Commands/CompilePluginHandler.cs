@@ -21,11 +21,12 @@ public sealed class CompilePluginHandler
         IReadOnlyList<PluginAddress> plugins) =>
         Over(plugins, _compileService.CompileAsync);
 
-    /// <summary>Each plugin a build places, compiled to its path whether or not the load order holds its file.</summary>
+    /// <summary>Each plugin a build places, compiled to its path whether or not the load order holds its file. No two
+    /// differ in case alone.</summary>
     internal Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileAsync(
         IReadOnlyList<RegisteredPlugin> placed)
     {
-        var byKey = placed.DistinctBy(plugin => plugin.Key, PluginAddress.Comparer).ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
+        var byKey = placed.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         return Over([.. byKey.Keys], plugin => _compileService.CompileAsync(byKey[plugin]));
     }
 

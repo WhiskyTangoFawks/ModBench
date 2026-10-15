@@ -45,13 +45,26 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     }
 
     [Fact]
-    public void AClone_OfARemoteWhoseDefaultBranchIsNotMain_IsASourceRepository()
+    public void AClone_OfARemoteWhoseDefaultBranchIsNotMain_HasTheRemotesMain()
     {
-        Git(_remote, "branch", "-m", "main", "trunk");
+        Git(_remote, "checkout", "-q", "-b", "edit", _commits["second"]);
+        Git(_remote, "branch", "-f", "main", _commits["first"]);
 
         CommitAtHead(_remote, _commits["second"]).Value();
 
+        Assert.Equal(_commits["first"], Git(SourceFolder, "rev-parse", "main").Trim());
         Assert.True(TestAdapters.Source().IsTracked(SourceFolder));
+    }
+
+    [Fact]
+    public void AClone_OfARemoteWithNoMain_IsRefused_LeavingNoFolder()
+    {
+        Git(_remote, "branch", "-m", "main", "trunk");
+
+        var failure = CommitAtHead(_remote, _commits["second"]).Stopped();
+
+        Assert.Equal("its remote has no main, so it is not a source mod's repository", failure.Reason);
+        Assert.False(Directory.Exists(SourceFolder));
     }
 
     [Fact]
