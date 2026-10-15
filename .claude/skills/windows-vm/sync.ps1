@@ -14,6 +14,7 @@ $code = $LASTEXITCODE
 $now = [DateTime]::UtcNow
 foreach ($line in $copied) {
   $path = $line.Trim()
+  if ($path.StartsWith("$stageRoot\", [StringComparison]::OrdinalIgnoreCase)) { $path = Join-Path $Work $path.Substring($stageRoot.Length + 1) }
   if ($path -and (Test-Path -LiteralPath $path -PathType Leaf)) { (Get-Item -LiteralPath $path).LastWriteTimeUtc = $now }
 }
 exit [int]($code -ge 8)
