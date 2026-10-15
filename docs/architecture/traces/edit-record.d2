@@ -4,6 +4,8 @@ shape: sequence_diagram
 editor: "Plugins · Editor" {class: driving}
 sourcelanguage: @../target-architecture.modbench_driving.sourcelanguage
 sourcelanguage.label: Source language
+textdocuments: @../target-architecture.modbench_repositories.textdocuments
+textdocuments.label: Text documents
 client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
@@ -32,8 +34,10 @@ create: "create: the type pick first" {
   client -> editor: the record types {class: query}
 }
 
-unsaved: "on each change to plugin source, and on connect" {
+unsaved: "on each change to plugin source" {
+  textdocuments -> sourcelanguage: "the unsaved plugin-source documents, whole" {class: edit}
   sourcelanguage -> client: "the unsaved plugin-source documents, whole" {class: edit}
+  client."hands them again on connect"
   client -> http: "the unsaved documents" {class: edit}
   http -> sourceadapter: "the unsaved documents, held" {class: edit}
   sourceadapter -> index: "the trees whose held text changed" {class: signal}
@@ -47,9 +51,10 @@ sourceadapter -> commands: "the documents it reads, an unsaved one in place of i
 commands -> http: "each document's new text, each create, delete and move, per item" {class: edit}
 http -> client: "the changes, per item" {class: edit}
 client -> editor: "the changes, per item" {class: edit}
-editor -> vscode: "the changes, as one workspace edit" {class: outside}
+editor -> textdocuments: "the changes, per item" {class: edit}
+textdocuments -> vscode: "the changes, as one workspace edit" {class: outside}
 vscode."apply, as a refactoring"
-vscode -> sourcelanguage: "the changed documents, handed as above" {class: outside}
+vscode -> textdocuments: "the changed documents, handed as above" {class: outside}
 vscode -> source: "the files it saves, as after any refactoring" {class: outside}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}

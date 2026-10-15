@@ -32,7 +32,7 @@ modbench_driving: "MODBENCH · Driving adapters — the views and the agent: rea
   editor: "Editor\nowns: a record, opened to read and edit" {class: driving}
   webview: "Webview pages\nowns: the pages a view draws in a webview\nhides: the grid" {class: driving}
   sourcelanguage: "Source language\nowns: VS Code's language features over plugin source\nhides: the map from a text position to a FormKey" {class: driving}
-  agent: "Agent\nowns: what the user's agent and scripts reach\nhides: MCP and the terminal's environment" {class: driving}
+  agent: "Agent\nowns: what the user's agent reads and runs,\nand how a script finds mEdit\nhides: MCP and the terminal's environment" {class: driving}
 }
 
 medit_core: "MEDIT · Core — the write side; it references the kernel and the repositories" {
@@ -67,8 +67,8 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by the core, the read model 
 medit_readmodel: "MEDIT · Read model — the record index, a view over the repositories below it" {
   class: band; grid-rows: 1
   index: "Record index — one deep module, rebuildable\nowns: the read model over every plugin\nhides: how records are stored and kept current" {
-    indexer: "Indexer\nasks the load order and the schema, decides nothing\nhides: how records are kept current" {class: readmodel}
-    store: "Store\nDuckDB: every plugin's rows" {class: derived}
+    indexer: "Indexer\nowns: every plugin's rows, kept current; it decides nothing\nhides: how records are kept current" {class: readmodel}
+    store: "Store\nowns: every plugin's rows\nhides: DuckDB" {class: derived}
   }
 }
 modbench_readmodel: "MODBENCH · Read model — the instance value, derived from the Instance adapter by watching, and nothing else" {
@@ -79,9 +79,9 @@ modbench_readmodel: "MODBENCH · Read model — the instance value, derived from
 medit_repositories: "MEDIT · Repositories — the only boxes that read or write a system of record" {
   class: band; grid-rows: 1
   sourceadapter: "Source adapter\nowns: a source mod's folder: plugin source, assets,\nbuild configuration and repository\nhides: the layout inside plugin source, and git" {
-    layout: "Layout\nowns: where each record's document sits, and a plugin's tree\nhides: the folders and leaf names inside plugin source" {class: repositories}
-    repository: "Repository\nowns: a source mod's history: committed, last written, cloned\nhides: git" {class: repositories}
-    buildconfiguration: "Build configuration\nowns: what a source mod's build writes\nhides: the configuration's text" {class: repositories}
+    layout: "Layout\nowns: where each record's document sits in plugin source\nhides: the folders and leaf names inside plugin source" {class: repositories}
+    repository: "Repository\nowns: a source mod's history\nhides: git" {class: repositories}
+    buildconfiguration: "Build configuration\nowns: what a source mod's build writes\nhides: the configuration's text beyond what Wire holds" {class: repositories}
     writes: "Writes\nowns: a write to plugin source, whole or rolled back\nhides: the journal" {class: repositories}
   }
   pluginadapter: "Plugin adapter\nowns: the plugin files\nhides: the binary format" {class: repositories}
@@ -92,9 +92,9 @@ modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the
   instanceadapter: "Instance adapter\nowns: the instance\nhides: the mod manager" {
     mo2: "MO2 — one implementation\nowns: the mod manager's files\nhides: MO2's layout and formats" {class: repositories}
     gamefolder: "Game folder\nowns: where the game is and what it holds\nhides: Steam, Wine and the platform's Documents folder" {class: repositories}
-    installationfiles: "Installation files\nowns: what each downloaded file holds, entry by entry,\nand its hash\nhides: the archive tool and the hash index" {class: repositories}
+    downloadedfilecontents: "Downloaded file contents\nowns: what each downloaded file holds, entry by entry,\nand its hash\nhides: the archive tool and the hash index" {class: repositories}
   }
-  sourcedocuments: "Source documents\nowns: plugin source as VS Code holds it, saved and unsaved\nhides: open and unopened documents, and applying\none workspace edit at a time" {class: repositories}
+  textdocuments: "Text documents\nowns: plugin source as VS Code holds it, saved and unsaved\nhides: open and unopened documents, and applying\none workspace edit at a time" {class: repositories}
   client: "mEdit client\nowns: Modbench's one reach to mEdit\nhides: mEdit's process and transport,\nand that it forgets on restart" {
     process: "Process\nowns: mEdit running beside the extension\nhides: the launch, the bundled binary and its log" {class: repositories}
     transport: "Transport\nowns: a call and its answer, and the notification stream\nhides: HTTP and SSE" {class: repositories}
