@@ -101,6 +101,8 @@ public sealed class CompareGoldenApiFixture : IDisposable
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(Fixture.Plugins),
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
+            mods = Array.Empty<object>(),
+            statCache = "stat-cache",
             gameRelease = "Fallout4",
         }).GetAwaiter().GetResult();
         response.EnsureSuccessStatusCode();

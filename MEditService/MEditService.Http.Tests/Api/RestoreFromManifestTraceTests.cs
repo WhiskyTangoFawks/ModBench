@@ -175,6 +175,21 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         Assert.Equal(["untracked.txt"], Paths(destroys, "namedByNoLine"));
     }
 
+    [Fact]
+    public async Task AModWithAManifestLineItCannotRead_IsSkippedAsManifestUnreadable()
+    {
+        var torn = Path.Combine(_instance, "mods", "Torn");
+        Directory.CreateDirectory(torn);
+        File.WriteAllText(Path.Combine(torn, "Torn.manifest"), "<<<<<<< HEAD\n");
+        var request = WhatRestoreDestroysRequest();
+        request["mods"] = new JsonArray(new JsonObject { ["name"] = "Torn", ["folder"] = torn, ["committedFiles"] = new JsonArray() });
+
+        var response = await Client.PostAsJsonAsync("/what-restore-destroys", request);
+
+        var skipped = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
+        Assert.Equal(("Torn", "ManifestUnreadable"), (skipped.GetProperty("item").GetString(), skipped.GetProperty("refusal").GetString()));
+    }
+
     [PosixFact]
     public async Task AModWhoseManifestCannotBeRead_IsSkippedAsUnreadable_AndEveryOtherModIsListed()
     {

@@ -23,6 +23,9 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public Dictionary<string, Manifest> Manifests { get; } = [];
 
+    /// <summary>The mod folders whose status throws, as a path the file system refuses does.</summary>
+    public HashSet<string> StatusThrows { get; } = [];
+
     public FakeModFolders WithFile(string folder, string path, string text) => WithBytes(folder, path, Encoding.ASCII.GetBytes(text));
 
     public FakeModFolders WithBytes(string folder, string path, byte[] bytes)
@@ -66,15 +69,20 @@ internal sealed class FakeModFolders : IModFolderRepository
     }
 
     /// <summary>The hash a line's provider fixes is the one the last keep held for its path.</summary>
-    public RestoreDestroys WhatRestoreDestroys(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache)
+    public ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache)
     {
-        if (UnreadableManifests.Contains(modFolder) || !Manifests.TryGetValue(modFolder, out var manifest)) return new([], []);
+        if (StatusThrows.Contains(modFolder)) throw new ArgumentException($"'{modFolder}' is not a path", nameof(modFolder));
+        if (UnreadableManifests.Contains(modFolder)) return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: true, "line 1 is not a manifest line"));
+        if (!Manifests.TryGetValue(modFolder, out var manifest)) return new(modName, NoManifest: true, [], [], [], []);
         var kept = KeptProviderHashes.GetValueOrDefault(modFolder) ?? new Dictionary<string, string>();
-        List<string> differing = [.. manifest.Files
-            .Where(line => line.Provider is not FileProvider.NoProvider && _files.TryGetValue((modFolder, line.Path), out var bytes)
-                && kept.GetValueOrDefault(line.Path) != Encoding.ASCII.GetString(bytes))
-            .Select(line => line.Path)];
-        return new(differing, NamedByNoLine(modFolder, modName, manifest, leftOut));
+        var there = manifest.Files.ToLookup(line => _files.ContainsKey((modFolder, line.Path)));
+        return new(
+            modName, NoManifest: false,
+            [.. there[true].Where(line => line.Provider is not FileProvider.NoProvider
+                && kept.GetValueOrDefault(line.Path) != Encoding.ASCII.GetString(_files[(modFolder, line.Path)])).Select(line => line.Path)],
+            NamedByNoLine(modFolder, modName, manifest, leftOut),
+            [.. there[false].Select(line => line.Path)],
+            [.. manifest.Files.Where(line => line.Provider is FileProvider.NoProvider).Select(line => line.Path)]);
     }
 
     public Stream OpenFile(string modFolder, string path) => Open(modFolder, path);

@@ -27,8 +27,8 @@ function row(instance: FakeInstance, label: string) {
 }
 
 describe('the Toolbox view, given an instance value', () => {
-  it('shows a Game row, then a Profile row, and nothing else', () => {
-    expect(rowsOf(new FakeInstance(VALUE)).map((r) => r.label)).toEqual(['Game', 'Profile']);
+  it('shows a Game row, then a Profile row, then a Modlist row, and nothing else', () => {
+    expect(rowsOf(new FakeInstance(VALUE)).map((r) => r.label)).toEqual(['Game', 'Profile', 'Modlist']);
   });
 
   it('reads the game as MO2 names it, with the game folder in its tooltip and no click', () => {
@@ -47,6 +47,19 @@ describe('the Toolbox view, given an instance value', () => {
     expect(profile.iconPath).toEqual(new ThemeIcon('account'));
     expect(profile.tooltip).toBe('Switch profile');
     expect(present(profile.command, 'the Profile row\'s command').command).toBe('modbench.profile.switch');
+  });
+
+  it('reads "no repository" on the Modlist row while the instance folder holds none, and a click runs git init', () => {
+    const modlist = row(new FakeInstance(VALUE), 'Modlist');
+
+    expect([modlist.description, modlist.iconPath, modlist.tooltip, modlist.contextValue, modlist.command?.command])
+      .toEqual(['no repository', new ThemeIcon('source-control'), 'Git init', 'modlist', 'modbench.modlist.gitInit']);
+  });
+
+  it('reads "repository" on the Modlist row while the instance folder holds one, and a click does nothing', () => {
+    const modlist = row(new FakeInstance({ ...VALUE, holdsRepository: true }), 'Modlist');
+
+    expect([modlist.description, modlist.tooltip, modlist.contextValue, modlist.command]).toEqual(['repository', undefined, 'modlist', undefined]);
   });
 
   it('marks the Profile row as the profile, which the Profile menu\'s `viewItem` clause keys on, so its menu offers switch', () => {
@@ -75,7 +88,7 @@ describe('the Toolbox view, given a later read that fails', () => {
 
     instance.fail('EACCES modlist.txt');
 
-    expect(provider.getChildren().map((r) => r.label)).toEqual(['Game', 'Profile']);
+    expect(provider.getChildren().map((r) => r.label)).toEqual(['Game', 'Profile', 'Modlist']);
     expect(provider.viewMessage()).toBe('Showing the last good read: EACCES modlist.txt');
     expect(fired).toHaveLength(1);
     instance.publish(VALUE);
@@ -173,7 +186,7 @@ describe('the Toolbox view\'s states', () => {
 
     instance.publish(VALUE);
 
-    expect(provider.getChildren().map((r) => r.label)).toEqual(['Game', 'Profile']);
+    expect(provider.getChildren().map((r) => r.label)).toEqual(['Game', 'Profile', 'Modlist']);
   });
 
   it('keeps its rows when a read after the first fails, the last good value standing', () => {
@@ -181,7 +194,7 @@ describe('the Toolbox view\'s states', () => {
 
     instance.fail('ModOrganizer.ini is torn');
 
-    expect(rowsOf(instance).map((r) => r.label)).toEqual(['Game', 'Profile']);
+    expect(rowsOf(instance).map((r) => r.label)).toEqual(['Game', 'Profile', 'Modlist']);
   });
 
   it('stops following the instance once disposed', () => {

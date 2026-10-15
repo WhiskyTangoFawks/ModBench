@@ -98,6 +98,8 @@ def snapshot(instance, game):
         'loadedWithNoLine': [],
         'archives': [],
         'stringsFiles': [],
+        'mods': [],
+        'statCache': str(instance / 'stat-cache'),
         'gameDirectory': str(game),
         'instanceRoot': str(instance),
         'gameRelease': 'Fallout4',

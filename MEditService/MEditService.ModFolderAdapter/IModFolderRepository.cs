@@ -15,9 +15,9 @@ public interface IModFolderRepository
     /// line names a file in another case where the file system finds it by the line's name.</summary>
     IReadOnlyList<string> NamedByNoLine(string modFolder, string modName, Manifest manifest, IReadOnlySet<string> leftOut);
 
-    /// <summary>What restore from manifest would destroy, from the manifest, each file's stamp and the stat cache in
-    /// <paramref name="statCache"/>, which it leaves as it is. Nothing for a mod restore skips for its manifest.</summary>
-    RestoreDestroys WhatRestoreDestroys(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache);
+    /// <summary>The mod's folder against its manifest, from the manifest, each file's stamp and the stat cache in
+    /// <paramref name="statCache"/>, which keeps what it read.</summary>
+    ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache);
 
     Stream OpenFile(string modFolder, string path);
 

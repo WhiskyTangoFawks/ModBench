@@ -56,6 +56,12 @@ function fileRow(row: vscode.TreeItem, parent: ModlistNode, origin: FileOrigin, 
   row.tooltip = relativePath;
 }
 
+// modlist-source.md, Status, story 4.
+function sayingWhetherItDiffers<T extends vscode.TreeItem>(row: T, differs: boolean | undefined): T {
+  if (differs === true) row.description = 'differs';
+  return row;
+}
+
 /** A folder in a mod or Overwrite, and the files and folders under it. */
 export class FolderNode extends vscode.TreeItem {
   readonly kind = 'folder' as const;
@@ -111,16 +117,20 @@ export class FileNode extends vscode.TreeItem {
  *  those under it, and `path` is its own path in its mod, none for the mod or Overwrite itself. */
 export function filesIn(
   parent: ModlistNode, origin: FileOrigin, files: readonly OriginFile[], folders: readonly OriginFolder[], path?: string,
-  filter?: { shown: ChildrenShown; matches: NameMatch; conflict: (origin: FileOrigin, file: OriginFile) => FileOrderConflict },
+  filter?: {
+    shown: ChildrenShown; matches: NameMatch; conflict: (origin: FileOrigin, file: OriginFile) => FileOrderConflict;
+    differs: (origin: FileOrigin, relativePath: string) => boolean;
+  },
 ): (FolderNode | FileNode)[] {
   const prefix = path === undefined ? '' : `${path}/`;
   const ownFiles = byLevel(files, prefix);
   const ownFolders = byLevel(folders, prefix);
   return [
-    ...[...ownFolders.here].sort(byName).map(([name, folder]) => new FolderNode(
+    ...[...ownFolders.here].sort(byName).map(([name, folder]) => sayingWhetherItDiffers(new FolderNode(
       parent, origin, folder, ownFiles.below.get(name) ?? [], ownFolders.below.get(name) ?? [], name,
       filter ? shownUnder(filter.shown, filter.matches, name) : 'all',
-    )),
-    ...[...ownFiles.here].sort(byName).map(([name, file]) => new FileNode(parent, origin, file, name, filter?.conflict(origin, file))),
+    ), filter?.differs(origin, folder.relativePath))),
+    ...[...ownFiles.here].sort(byName).map(([name, file]) =>
+      sayingWhetherItDiffers(new FileNode(parent, origin, file, name, filter?.conflict(origin, file)), filter?.differs(origin, file.relativePath))),
   ];
 }

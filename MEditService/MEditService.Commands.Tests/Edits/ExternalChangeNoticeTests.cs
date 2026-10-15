@@ -25,7 +25,8 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
     private void Put(LoadOrderSnapshot snapshot, PutLoadOrderHandler? handler = null) =>
         Assert.True((handler ?? _handler.Value).Put(snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease,
-            snapshot.Plugins, [.. snapshot.Active.Select(p => p.Key)], [.. snapshot.LoadedWithNoLine.Select(p => p.Key)], snapshot.Archives, snapshot.StringsFiles).Applied);
+            snapshot.Plugins, [.. snapshot.Active.Select(p => p.Key)], [.. snapshot.LoadedWithNoLine.Select(p => p.Key)], snapshot.Archives, snapshot.StringsFiles,
+            TestEditService.NoMods).Applied);
 
     private string ModFolder => Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
 

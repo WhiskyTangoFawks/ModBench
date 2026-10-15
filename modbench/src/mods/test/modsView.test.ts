@@ -100,6 +100,7 @@ import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
 
@@ -111,6 +112,7 @@ const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row)
 const otherDeps = () => ({
   commands: modlistCommands(fakeInstanceAdapter().adapter, unscriptedMEdit), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
   extensionUri: Uri.file('/extension'), warnIfFomod: vi.fn(), downloadInstall: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
+  modStatus: { push: new InMemoryMEditClient(), read: () => Promise.resolve([]) },
 });
 
 const silentChannel = { error: () => undefined, info: () => undefined };
@@ -425,5 +427,31 @@ describe('the Mods view tells the indicator decorations when a separator opens o
     h.collapseListeners.forEach((listener) => { listener({ element: row }); });
 
     expect([afterExpand, fired.mock.calls.length]).toEqual([4, 8]);
+  });
+});
+
+describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Reporting)', () => {
+  it('counts each mod mEdit pushes that has no manifest, once its status is read', async () => {
+    const push = new InMemoryMEditClient();
+    const instance = new FakeInstance(instanceValueFixture({ holdsRepository: true, mods: [mod('ModA'), mod('ModB')] }));
+    const read = (mods: readonly string[]) =>
+      Promise.resolve(mods.map((name) => ({ mod: name, noManifest: true, differing: [], namedByNoLine: [], gone: [], noProvider: [] })));
+    const { view } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync(), modStatus: { push, read } });
+
+    push.emit({ kind: 'mod-status-changed', plugin: '', origin: '', keys: [], sequence: 0, mods: ['ModA'] });
+
+    await vi.waitFor(() => { expect(view.badge).toEqual({ value: 1, tooltip: 'Mods that differ from their manifests or have none: 1' }); });
+  });
+
+  it('says on the message line that a status read failed, while the instance holds a repository', async () => {
+    const push = new InMemoryMEditClient();
+    const instance = new FakeInstance(instanceValueFixture({ holdsRepository: true, mods: [mod('ModA')] }));
+    const read = () => Promise.resolve({ failed: 'unreachable' as const });
+    const { view } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync(), modStatus: { push, read } });
+
+    push.emit({ kind: 'mod-status-changed', plugin: '', origin: '', keys: [], sequence: 0, mods: ['ModA'] });
+
+    await waitForMessage(view, (message) => message?.startsWith('Showing the last good read: the mods\' status could not be read') === true,
+      'the failed status read');
   });
 });

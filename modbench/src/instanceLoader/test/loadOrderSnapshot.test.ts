@@ -350,23 +350,24 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     gameRelease: 'Fallout4', listed: [], inData: { kind: 'listed', archives: [], stringsFiles: [] }, files: new FileConflictLookup(),
     filesByOrigin: new Map(),
   };
+  const NO_MODLIST = { mods: [], committedFiles: ['meta.ini'], statCache: '/mo2/stat-cache' };
   const outcomeOf = (plugins: LoadOrderPluginRow[], folders: ModFolders = modFolders) =>
-    loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: folders, sourceDirs, archives: NO_ARCHIVES });
+    loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: folders, sourceDirs, modlist: NO_MODLIST, archives: NO_ARCHIVES });
   const snapshotOf = (plugins: LoadOrderPluginRow[], pluginsLoadedWithNoLine: readonly PluginAddress[] = [], archives = NO_ARCHIVES) => {
-    const outcome = loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine, modFolders, sourceDirs, archives });
+    const outcome = loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine, modFolders, sourceDirs, modlist: NO_MODLIST, archives });
     return outcome !== undefined && 'refusal' in outcome ? undefined : outcome;
   };
   const inGameFolder = (name: string): PluginAddress => ({ name, origin: 'Data/' });
 
   it('is undefined — no put at all — while the game folder\'s plugins cannot be listed, as a snapshot lacking the game\'s masters is not sent', () => {
     expect(loadOrderSnapshotOf({
-      plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: undefined, modFolders, sourceDirs, archives: NO_ARCHIVES,
+      plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: undefined, modFolders, sourceDirs, modlist: NO_MODLIST, archives: NO_ARCHIVES,
     })).toBeUndefined();
   });
 
   it('is undefined — no put at all — when the game folder is not found', () => {
     expect(loadOrderSnapshotOf({
-      plugins: [row('a.esp', 'ModA', 0)], gameFolder: NOT_FOUND, pluginsLoadedWithNoLine: [], modFolders, sourceDirs, archives: NO_ARCHIVES,
+      plugins: [row('a.esp', 'ModA', 0)], gameFolder: NOT_FOUND, pluginsLoadedWithNoLine: [], modFolders, sourceDirs, modlist: NO_MODLIST, archives: NO_ARCHIVES,
     })).toBeUndefined();
   });
 
@@ -471,6 +472,8 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     };
     const value: Parameters<typeof stampedSnapshot>[0] = {
       dataFolder: '/game/Data',
+      mods: [],
+      statCache: '/mo2/stat-cache',
       plugins: [{
         name: 'A.esp', path: '/a/A.esp', origin: 'ModA', provider: { kind: 'Game' }, line: 0, lineNamesIt: true,
         archives: ['/a/A - Main.ba2'], stringsFiles: ['/a/A_en.STRINGS'],
@@ -585,9 +588,23 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(providers).toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA', sourceFolder: '/mo2/source/ModA' }, { kind: 'Game' }, { kind: 'None' }]);
   });
 
+  it('names each mod of the mod order that has a mod folder, with the files the repository commits, and the stat cache\'s folder', () => {
+    const outcome = loadOrderSnapshotOf({
+      plugins: [], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs, archives: NO_ARCHIVES,
+      modlist: {
+        ...NO_MODLIST,
+        mods: [{ kind: 'mod', name: 'ModA', enabled: false }, { kind: 'separator', name: 'Weapons', enabled: true }, { kind: 'mod', name: 'ModGone', enabled: true }],
+      },
+    });
+
+    expect(outcome !== undefined && 'mods' in outcome ? [outcome.mods, outcome.statCache] : []).toEqual([
+      [{ name: 'ModA', folder: '/mo2/mod-folders/ModA', committedFiles: ['meta.ini'] }], '/mo2/stat-cache',
+    ]);
+  });
+
   it('names no source folder for a mod that is no source mod', () => {
     const outcome = loadOrderSnapshotOf({
-      plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs: new Map(), archives: NO_ARCHIVES,
+      plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs: new Map(), modlist: NO_MODLIST, archives: NO_ARCHIVES,
     });
 
     expect(outcome !== undefined && 'plugins' in outcome ? outcome.plugins.map((p) => p.provider) : [])

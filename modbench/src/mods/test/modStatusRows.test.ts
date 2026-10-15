@@ -1,0 +1,106 @@
+import { describe, it, expect, vi } from 'vitest';
+import type { Mod, OriginFile } from '../../instanceLoader/instance';
+import {
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, uriFile, uriFrom,
+} from '../../test/vscodeMock';
+
+vi.mock('vscode', () => ({
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri: { file: uriFile, from: uriFrom },
+}));
+
+import type { ModStatus } from '../../client';
+import { status } from './modStatusFixture';
+import { ModListProvider, type ModlistNode } from '../ModListProvider';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { present } from '../../ports/present';
+
+const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true, version: '1.0' });
+const file = (relativePath: string): OriginFile =>
+  ({ relativePath, path: `/instance/mods/ModA/${relativePath}`, sourcePath: `/instance/mods/ModA/${relativePath}`, excluded: false, excludedByName: false });
+
+function providerOver(statuses: readonly ModStatus[], holdsRepository = true) {
+  const byMod = new Map(statuses.map((held) => [held.mod, held]));
+  const changed = new EventEmitter<void>();
+  const value = instanceValueFixture({
+    holdsRepository,
+    mods: [mod('ModA'), mod('ModB'), mod('ModC')],
+    filesByMod: new Map([['ModA', [file('meshes/a.nif'), file('readme.txt')]]]),
+    foldersByMod: new Map([['ModA', [{ relativePath: 'meshes', path: '/instance/mods/ModA/meshes', excluded: false }]]]),
+  });
+  const provider = new ModListProvider({ instance: new FakeInstance(value), statuses: { of: (name) => byMod.get(name), onDidChange: changed.event } });
+  return { provider, byMod, changed };
+}
+
+const labelOf = (row: ModlistNode): string => (typeof row.label === 'string' ? row.label : row.label?.label ?? '');
+
+async function row(provider: ModListProvider, label: string, parent?: ModlistNode): Promise<ModlistNode> {
+  return present((await provider.getChildren(parent)).find((shown) => labelOf(shown) === label), label);
+}
+
+describe('a mod row says its status against its manifest after its version (mods.md, A row, Mod)', () => {
+  it.each([
+    ['no status yet', undefined, true, '1.0'],
+    ['a folder that matches its manifest', status('ModA'), true, '1.0'],
+    ['no manifest', status('ModA', { noManifest: true }), true, '1.0 · no manifest'],
+    ['a file whose bytes differ', status('ModA', { differing: ['a.nif'] }), true, '1.0 · differs'],
+    ['a file no line names', status('ModA', { namedByNoLine: ['mine.txt'] }), true, '1.0 · differs'],
+    ['a file a line names that is gone', status('ModA', { gone: ['b.nif'] }), true, '1.0 · differs'],
+    ['files with no provider', status('ModA', { noProvider: ['a.esp', 'b.esp'] }), true, '1.0 · 2 files with no provider'],
+    ['a difference and a file with no provider', status('ModA', { differing: ['a.nif'], noProvider: ['a.esp'] }), true, '1.0 · differs · 1 file with no provider'],
+    ['no manifest while the instance holds no repository', status('ModA', { noManifest: true }), false, '1.0'],
+  ])('%s', async (_case, held, holdsRepository, description) => {
+    const { provider } = providerOver(held ? [held] : [], holdsRepository);
+
+    expect((await row(provider, 'ModA')).description).toBe(description);
+  });
+
+  it('says in its tooltip how many files its manifest names and its folder lacks', async () => {
+    const { provider } = providerOver([status('ModA', { gone: ['a.nif', 'b.nif'] })]);
+
+    expect((await row(provider, 'ModA')).tooltip).toBe('ModA · 1.0 · its folder lacks 2 files its manifest names');
+  });
+
+  it('shows the status mEdit answers next', async () => {
+    const { provider, byMod, changed } = providerOver([]);
+    const fired = vi.fn();
+    provider.onDidChangeTreeData(fired);
+
+    byMod.set('ModA', status('ModA', { noManifest: true }));
+    changed.fire();
+
+    expect([fired.mock.calls.length, (await row(provider, 'ModA')).description]).toEqual([1, '1.0 · no manifest']);
+  });
+});
+
+describe('a file row says differs when its bytes differ or no line names it, and a folder when a file in it does (mods.md, A row, File and folder)', () => {
+  it('says differs on the file and the folder that holds it, and nothing on a file that matches', async () => {
+    const { provider } = providerOver([status('ModA', { differing: ['meshes/a.nif'] })]);
+    const modRow = await row(provider, 'ModA');
+    const folder = await row(provider, 'meshes', modRow);
+
+    expect([folder.description, (await row(provider, 'a.nif', folder)).description, (await row(provider, 'readme.txt', modRow)).description])
+      .toEqual(['differs', 'differs', undefined]);
+  });
+
+  it('says differs on a file no line names', async () => {
+    const { provider } = providerOver([status('ModA', { namedByNoLine: ['readme.txt'] })]);
+
+    expect((await row(provider, 'readme.txt', await row(provider, 'ModA'))).description).toBe('differs');
+  });
+});
+
+describe('the view\'s badge counts the mods that differ or have no manifest (mods.md, The view)', () => {
+  it('counts them while the instance holds a repository', () => {
+    const { provider } = providerOver([status('ModA', { noManifest: true }), status('ModB', { gone: ['a.nif'] }), status('ModC')]);
+
+    expect(provider.badge()).toEqual({ value: 2, tooltip: 'Mods that differ from their manifests or have none: 2' });
+  });
+
+  it.each([
+    ['no mod differs', [status('ModA')], true],
+    ['the instance holds no repository', [status('ModA', { noManifest: true })], false],
+  ])('shows none when %s', (_case, statuses, holdsRepository) => {
+    expect(providerOver(statuses, holdsRepository).provider.badge()).toBeUndefined();
+  });
+});

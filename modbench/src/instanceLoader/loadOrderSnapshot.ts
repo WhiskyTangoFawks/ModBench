@@ -5,12 +5,13 @@ import {
 } from './fileConflictIndex';
 import {
   fileInFolder, isPluginFile, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
-  type ModFolders, type OriginFile, type PluginEntry,
+  type ModFolders, type ModlistEntry, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile, pluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
 import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress, type StampedFile } from '../wire/pluginAddress';
+import type { ModByFolder } from '../wire/modByFolder';
 
 export { OVERWRITE_ORIGIN };
 export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
@@ -50,6 +51,15 @@ export interface LoadOrderSnapshotRefusal {
   readonly refusal: string;
 }
 
+
+/** What the snapshot names of the mod order: its mods, the files the repository commits in each, and the stat cache's
+ *  folder. */
+export interface SnapshotModlist {
+  readonly mods: readonly ModlistEntry[];
+  readonly committedFiles: readonly string[];
+  readonly statCache: string;
+}
+
 /** ADR-0013's snapshot. */
 export interface LoadOrderSnapshotValue<F = StampedFile> {
   readonly dataFolder: string;
@@ -60,6 +70,9 @@ export interface LoadOrderSnapshotValue<F = StampedFile> {
   readonly archives: F[];
   /** The loose strings files the game reads, each at the path that wins. */
   readonly stringsFiles: F[];
+  /** Each mod of the mod order that has a mod folder. */
+  readonly mods: ModByFolder[];
+  readonly statCache: string;
 }
 
 /** What the snapshot's archives and strings files are resolved from. */
@@ -257,6 +270,7 @@ export function loadOrderSnapshotOf(value: {
   /** Each source mod's source folder, by mod name. */
   readonly sourceDirs: ReadonlyMap<string, string>;
   readonly archives: ArchiveSources;
+  readonly modlist: SnapshotModlist;
 }): LoadOrderSnapshotValue<string> | LoadOrderSnapshotRefusal | undefined {
   // Without the game's masters or its archives the snapshot would be silently wrong (principles.md), so
   // the index keeps what it holds until the folder can be read (common.md, States, story 5).
@@ -310,7 +324,16 @@ export function loadOrderSnapshotOf(value: {
     active,
     loadedWithNoLine: loadedWithNoLine.map(({ name, origin }) => ({ name, origin })),
     ...archivesAndStringsOf(value.archives, dataFolder, active),
+    mods: snapshotModsOf(value.modlist, value.modFolders),
+    statCache: value.modlist.statCache,
   };
+}
+
+function snapshotModsOf({ mods, committedFiles }: SnapshotModlist, folders: ModFolders | undefined): ModByFolder[] {
+  return mods.flatMap((entry) => {
+    const folder = entry.kind === 'mod' ? folders?.holding(entry) : undefined;
+    return folder === undefined ? [] : [{ name: entry.name, folder: folder.path, committedFiles: [...committedFiles] }];
+  });
 }
 
 // Equal while the file's content is (ADR-0003); a file whose stamp could not be read, by why.

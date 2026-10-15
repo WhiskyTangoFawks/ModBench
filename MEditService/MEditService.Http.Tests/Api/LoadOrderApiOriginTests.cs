@@ -26,6 +26,8 @@ public sealed class LoadOrderApiOriginTests(LoadedApiFixture<TestPluginFixture> 
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins.Select(p => p with { Origin = "SomeMod" })),
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
+            mods = Array.Empty<object>(),
+            statCache = "stat-cache",
             gameRelease = "Fallout4",
         });
         response.EnsureSuccessStatusCode();

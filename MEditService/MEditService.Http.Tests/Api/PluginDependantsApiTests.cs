@@ -40,6 +40,8 @@ public sealed class PluginDependantsApiTests : IDisposable
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins),
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
+            mods = Array.Empty<object>(),
+            statCache = "stat-cache",
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
             gameRelease = "Fallout4",

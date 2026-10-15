@@ -384,6 +384,16 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     expect(result).toEqual({ destroys, refused: [{ item: 'ModB', reason: skipped }] });
   });
 
+  it('getModStatus posts the mods and the stat cache and reads each mod\'s status', async () => {
+    const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', committedFiles: ['meta.ini'] }];
+    const status = [{ mod: 'ModA', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], noProvider: [] }];
+    const { result, request } = await exchange((c) => c.getModStatus(mods, '/instance/stat-cache'), answers(200, { mods: status }));
+
+    expect(new URL(request.url).pathname).toBe('/mod-status');
+    expect(await request.json()).toEqual({ mods, statCache: '/instance/stat-cache' });
+    expect(result).toEqual(status);
+  });
+
   it('selectRows posts the statement and reads the rows it selects', async () => {
     const { result, request } = await exchange((c) => c.selectRows('SELECT 1'), answers(200, { rows: [{ n: 1 }] }));
 
@@ -636,7 +646,10 @@ describe('HttpMEditClient — sendLoadOrder', () => {
   const appliedBody = { applied: true, version: 1 };
   const archives = [{ path: '/game/Data/Foo - Main.ba2', stamp: '1/2/3' }];
   const stringsFiles = [{ path: '/mods/A/Strings/Foo_en.STRINGS', stamp: '4/5/6' }];
-  const snapshot = { plugins, active, loadedWithNoLine, archives, stringsFiles, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' };
+  const snapshot = {
+    plugins, active, loadedWithNoLine, archives, stringsFiles, mods: [], statCache: '/instance/stat-cache',
+    gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4',
+  };
 
   it('PUTs every plugin with its line, the active plugins, the archives and strings files, the game directory and the instance root', async () => {
     let putBody: unknown;
@@ -653,7 +666,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     push(readyTickThatSettlesPutLoadOrder());
     await load;
 
-    expect(putBody).toEqual({ plugins, active, loadedWithNoLine, archives, stringsFiles, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' });
+    expect(putBody).toEqual(snapshot);
   });
 
   it('holds the PUT until the notification stream has connected, as the backend publishes its first tick as the PUT lands and a PUT that outran the stream would lose every tick published before it connects', async () => {

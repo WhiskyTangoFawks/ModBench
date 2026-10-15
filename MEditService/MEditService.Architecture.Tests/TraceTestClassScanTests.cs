@@ -6,8 +6,7 @@ public sealed class TraceTestClassScanTests
 {
     private const string Endpoints = "MEditService.Http.Tests";
 
-    private static readonly string[] SpecifiedAheadOfCode =
-        ["mod-status"];
+    private static readonly string[] SpecifiedAheadOfCode = [];
 
     [Fact]
     public void EveryTraceThatDrawsAnMEditActor_HasATestClassNamedForIt()

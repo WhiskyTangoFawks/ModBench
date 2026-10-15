@@ -427,3 +427,17 @@ describe('modlistSourceCommands what restore destroys', () => {
     expect(await commands.whatRestoreDestroys(['ModA'])).toEqual({ refusal: 'Could not ask what restore from manifest destroys: mEdit could not be reached.' });
   });
 });
+
+describe('modlistSourceCommands mod status', () => {
+  it('asks mEdit for each mod\'s status by its folder, with the files the repository commits and the stat cache', async () => {
+    const { commands, client } = commandsOver();
+    const status = [{ mod: 'ModA', noManifest: true, differing: [], namedByNoLine: [], gone: [], noProvider: [] }];
+    client.setQueryAnswer('getModStatus', status);
+
+    const answer = await commands.modStatus(['ModA']);
+
+    expect([client.calls, answer]).toEqual([
+      [{ method: 'getModStatus', args: [[{ name: 'ModA', folder: '/mods/ModA', committedFiles: ['meta.ini'] }], '/instance/stat-cache'] }], status,
+    ]);
+  });
+});

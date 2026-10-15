@@ -22,6 +22,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
+import { NO_MOD_STATUSES } from './noModStatuses';
 import { FakeInstance } from './mo2/fakeInstance';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { CELL_VALUE_SETTING } from '../mods/conflictTableEditor';
@@ -1214,7 +1215,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     const overflowTitles = inModsView('view/title').filter((e) => groupOf(e) === '3_create')
       .map((e) => present(pkg.contributes.commands.find((c) => c.command === e.command), e.command).title);
     expect(overflowTitles.length).toBeGreaterThan(0);
-    const shown = present(new ModListProvider({ instance: new FakeInstance(instanceValueFixture({ mods: [] })) }).viewMessage(), 'the empty list\'s message');
+    const shown = present(new ModListProvider({ statuses: NO_MOD_STATUSES, instance: new FakeInstance(instanceValueFixture({ mods: [] })) }).viewMessage(), 'the empty list\'s message');
     for (const title of overflowTitles) expect(shown).toContain(title);
     expect(shown).toContain('overflow');
   });

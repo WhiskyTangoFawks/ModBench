@@ -19,7 +19,7 @@ function valueWith(name: string): LoadOrderSource {
   const plugin = { name, path: `/game/Data/${name}`, origin: 'Base Mod', provider: { kind: 'Game' as const }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] };
   return {
     ...NO_SNAPSHOT,
-    loadOrderSnapshot: { plugins: [plugin], active: [{ name, origin: 'Base Mod' }], loadedWithNoLine: [], archives: [], stringsFiles: [], dataFolder: '/game/Data' },
+    loadOrderSnapshot: { plugins: [plugin], active: [{ name, origin: 'Base Mod' }], loadedWithNoLine: [], archives: [], stringsFiles: [], mods: [], statCache: '/instance/stat-cache', dataFolder: '/game/Data' },
   };
 }
 

@@ -14,6 +14,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
+import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { FolderNode } from '../modFiles';
 import { FileConflictLookup, RUNTIME_OUTPUT, modOrigin } from '../../instanceLoader/fileConflictIndex';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -45,7 +46,7 @@ function providerOver(
     foldersByMod: new Map(Object.entries(filesByMod).map(([name, files]) => [name, folders.byMod?.[name] ?? foldersHoldingFiles(files)])),
     overwriteFolders: folders.overwrite ?? foldersHoldingFiles(overwriteFiles),
   });
-  return new ModListProvider({ instance: new FakeInstance(value) });
+  return new ModListProvider({ statuses: NO_MOD_STATUSES, instance: new FakeInstance(value) });
 }
 
 const labelOf = (row: ModlistNode): string => (typeof row.label === 'string' ? row.label : row.label?.label ?? '');
@@ -277,7 +278,7 @@ describe('a file or folder row\'s identity is its mod or Overwrite, and the path
     const valueHolding = (enabled: boolean, files: OriginFile[]) =>
       instanceValueFixture({ mods: [mod('A', enabled)], filesByMod: new Map([['A', files]]), foldersByMod: new Map([['A', foldersHoldingFiles(files)]]) });
     const instance = new FakeInstance(valueHolding(true, [file('x/a.dds')]));
-    const provider = new ModListProvider({ instance });
+    const provider = new ModListProvider({ statuses: NO_MOD_STATUSES, instance });
     const idsNow = async () => {
       const modRow = await rootOf(provider, ModNode, 'A');
       const folder = await childNamed(provider, modRow, 'x');
@@ -492,7 +493,7 @@ describe('a file row\'s context, which the File menu\'s go to mod and compare fi
       filesByMod: new Map([['High', [file('a.dds')]], ['Low', [file('a.dds')]]]),
       overwriteFiles: [file('a.dds')],
     });
-    const provider = new ModListProvider({ instance: new FakeInstance(value) });
+    const provider = new ModListProvider({ statuses: NO_MOD_STATUSES, instance: new FakeInstance(value) });
     const row = rowOfMod === 'Overwrite' ? await rootOf(provider, OverwriteNode, 'Overwrite') : await rootOf(provider, ModNode, rowOfMod);
     return (await provider.getChildren(row)).map((child) => child.contextValue);
   };

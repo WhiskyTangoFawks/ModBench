@@ -12,7 +12,10 @@ import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { UnreadableSource } from '../wire/unreadableSource';
 import type { ReadFailed } from '../wire/readFailed';
+import type { ModByFolder } from '../wire/modByFolder';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+
+export type { ModByFolder };
 
 /** What `getEditChanges` is handed, re-exported because its caller reaches the backend only through
  *  this port. */
@@ -45,7 +48,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 
 const NOTIFICATION_KINDS = [
   'rows-changed', 'plugin-changed', 'load-order-status', 'init-progress', 'update-manifest-progress', 'restore-from-manifest-progress', 'external-change',
-  'plugin-source-unreadable', 'record-filter-cleared',
+  'plugin-source-unreadable', 'record-filter-cleared', 'mod-status-changed',
 ] as const;
 
 /** The wire's kinds, narrowed from the schema's honest `string` for a typed `onNotification` call
@@ -64,6 +67,7 @@ export interface NotificationPayloads {
   'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
   'rows-changed': { plugin: PluginAddress; keys: string[] };
   'plugin-changed': { plugin: PluginAddress };
+  'mod-status-changed': { mods: string[] };
 }
 
 /** Whether the wire defines `kind` — the one place `NotificationEvent.kind` (the schema's honest
@@ -232,8 +236,9 @@ export type RestoreMod = components['schemas']['RestoreFromManifestModRequest'];
  *  stat cache's folder. */
 export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestRequest'], 'mods' | 'gesture'>;
 
-/** A mod to ask what restore from manifest would destroy in: its folder and the files the repository commits. */
-export type RestoreDestroysMod = components['schemas']['WhatRestoreDestroysModRequest'];
+
+/** A mod's folder against its manifest (modlist-source.md, Status), or why it could not be read. */
+export type ModStatus = components['schemas']['ModStatus'];
 
 /** A mod restore would destroy files in: each file whose bytes differ from what its provider fixes, and each file no line
  *  names, by its path in the mod folder. */
@@ -366,7 +371,9 @@ export interface MEditClient {
    *  match of an ambiguous one. A name with an origin names a plugin. */
   resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed>;
   /** Each mod restore from manifest would destroy files in, from the stat cache in `statCache`, before anything is written. */
-  getWhatRestoreDestroys(mods: readonly RestoreDestroysMod[], statCache: string): Promise<WhatRestoreDestroys | ReadFailed>;
+  getWhatRestoreDestroys(mods: readonly ModByFolder[], statCache: string): Promise<WhatRestoreDestroys | ReadFailed>;
+  /** Each mod's folder against its manifest, from the stat cache in `statCache`, which keeps what the read found. */
+  getModStatus(mods: readonly ModByFolder[], statCache: string): Promise<ModStatus[] | ReadFailed>;
   /** The rows one SQL SELECT over the index selects. A statement that is not a SELECT, or cannot run, fails with the database's reason. */
   selectRows(sql: string): Promise<unknown[] | ReadFailed>;
   getReferences(formKey: string): Promise<ReferenceResult[] | ReadFailed>;

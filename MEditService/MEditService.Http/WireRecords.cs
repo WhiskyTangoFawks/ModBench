@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MEditService.Commands.Build;
 using MEditService.Commands.Edits;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
@@ -22,7 +23,7 @@ internal sealed record LoadOrderResponse(bool Applied, long Version = 0);
 internal sealed record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
     IReadOnlyList<PluginAddress> LoadedWithNoLine, IReadOnlyList<StampedFile> Archives, IReadOnlyList<StampedFile> StringsFiles,
-    string GameDirectory, string InstanceRoot, string GameRelease);
+    string GameDirectory, string InstanceRoot, string GameRelease, IReadOnlyList<ModByFolder> Mods, string StatCache);
 internal sealed record LoadOrderPlugin(
     string Name, string Path, string Origin, PluginProviderRequest Provider, int? Line, bool LineNamesIt, IReadOnlyList<StampedFile> Archives,
     IReadOnlyList<StampedFile> StringsFiles);

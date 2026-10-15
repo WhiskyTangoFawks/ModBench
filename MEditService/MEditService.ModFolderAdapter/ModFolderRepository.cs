@@ -45,27 +45,41 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
     private bool FoundAt(string modFolder, string line, HashSet<string> onDisk) =>
         !onDisk.Contains(line) && fileExists(Path.Combine(modFolder, line));
 
-    public RestoreDestroys WhatRestoreDestroys(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache)
+    public ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache)
     {
-        Manifest? manifest;
         try
         {
-            manifest = ReadManifest(modFolder, modName);
-        }
-        catch (InvalidDataException)
-        {
-            manifest = null;
-        }
-        if (manifest is null) return new([], []);
+            if (ReadManifest(modFolder, modName) is not { } manifest) return new(modName, NoManifest: true, [], [], [], []);
 
-        var cache = new StatCache(statCache, modFolder, time);
-        List<string> differing = [];
-        foreach (var line in manifest.Files.Where(line => fileExists(Path.Combine(modFolder, line.Path))))
-        {
-            if (manifest.ProviderOf(line) is { } provider && !HoldsWhatItsProviderFixes(modFolder, line.Path, cache, provider)) differing.Add(line.Path);
+            var cache = new StatCache(statCache, modFolder, time);
+            var onDisk = FilesOf(modFolder, modName).ToHashSet(StringComparer.Ordinal);
+            List<string> differing = [], gone = [], noProvider = [];
+            foreach (var line in manifest.Files)
+            {
+                var provider = manifest.ProviderOf(line);
+                if (provider is null) noProvider.Add(line.Path);
+                if (!fileExists(Path.Combine(modFolder, line.Path))) gone.Add(line.Path);
+                else if (provider is { } fixes && !HoldsWhatItsProviderFixes(modFolder, line.Path, cache, fixes)) differing.Add(OnDisk(line.Path, onDisk));
+            }
+            var namedByNoLine = NamedByNoLine(modFolder, modName, manifest, leftOut);
+            var statCacheNotWritten = cache.Keep([.. onDisk.Where(path => !leftOut.Contains(path))]);
+            return new(modName, NoManifest: false, Ordered(differing), Ordered(namedByNoLine), Ordered(gone), Ordered(noProvider), null, statCacheNotWritten);
         }
-        return new(differing, NamedByNoLine(modFolder, modName, manifest, leftOut));
+        catch (InvalidDataException e)
+        {
+            return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: true, e.Message));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: false, $"a file could not be read: {e.Message}"));
+        }
     }
+
+    // A line found by the file system names the file on disk in its own case where none has the line's (NamedByNoLine).
+    private static string OnDisk(string line, HashSet<string> onDisk) =>
+        onDisk.Contains(line) ? line : onDisk.FirstOrDefault(path => string.Equals(path, line, StringComparison.OrdinalIgnoreCase)) ?? line;
+
+    private static string[] Ordered(IEnumerable<string> paths) => [.. paths.Order(StringComparer.Ordinal)];
 
     private static bool HoldsWhatItsProviderFixes(string modFolder, string path, StatCache cache, (string Source, string Path) provider)
     {

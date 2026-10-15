@@ -15,13 +15,14 @@ const SENT_ACTIVE = [{ name: 'Master.esm', origin: 'Base Mod' }, { name: PLUGIN.
 const SENT_LOADED_WITH_NO_LINE = [{ name: 'Master.esm', origin: 'Base Mod' }];
 const SENT_ARCHIVES = [{ path: '/game/Data/Master - Main.ba2', stamp: '1/2/3' }];
 const SENT_STRINGS_FILES = [{ path: '/instance/mods/TestMod/Strings/TestMod_en.STRINGS', stamp: '4/5/6' }];
+const SENT_MODS = [{ name: 'TestMod', folder: '/instance/mods/TestMod', committedFiles: ['meta.ini'] }];
 
 const VALUE: LoadOrderSource = {
   gameName: 'Fallout 4',
   gameRelease: 'Fallout4',
   loadOrderSnapshot: {
     plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
-    dataFolder: '/game/Data',
+    mods: SENT_MODS, statCache: '/instance/stat-cache', dataFolder: '/game/Data',
   },
 };
 
@@ -40,13 +41,13 @@ describe('put load order', () => {
 
     expect(client.puts()).toEqual([{
       plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
-      gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4',
+      mods: SENT_MODS, statCache: '/instance/stat-cache', gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4',
     }]);
     expect(result).toEqual({
       sent: true,
       snapshot: {
         plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
-        gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4',
+        mods: SENT_MODS, statCache: '/instance/stat-cache', gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4',
       },
       outcome: APPLIED,
     });
