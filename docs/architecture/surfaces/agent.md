@@ -30,12 +30,13 @@ As a user, I want:
 
 1. My agent to read any record in my load order, in a source plugin or not: each plugin's copy, and the copy that wins. Source: editor.md; editor-conflicts.md
 2. My agent to find a record by its EditorID or FormKey, and the records that reference it. Source: plugin-source.md, In the text editor, stories 2 and 4
-3. My agent to query the index with one SQL SELECT, as the record filter does, and to get back the rows it selects. Source: catalog, Record, `filter`
+3. My agent to query the index with one SQL SELECT, and to get back the rows it selects, as scripts.md, Reading, story 6 says. Source: catalog, Record, `filter`
 4. My agent to edit a source plugin by editing its source, so each edit is a working-tree change I review, commit or discard in Source Control. Source: ADR-0007
 5. My agent to see the problems I see in the Problems panel for the source it changed. Source: plugin-source.md, In the text editor, story 6
 6. My agent never to edit a plugin with no source. Editing needs a source, for my agent as for me. Source: ADR-0007
 7. My agent to open a record in an editor tab, to show me what it found. Source: catalog, Record, `open`
 8. My agent to change many records by a rule with a script, as I do. Source: scripts.md
+9. My agent to learn from Modbench which views a SELECT reads, and the columns of each. A SELECT that reads anything else is refused, naming the views. Source: Any agent, story 6
 
 ## Mod management
 
@@ -53,6 +54,7 @@ As a user, I want:
 1. My agent to run each gesture whose effect is `writes`, with the same result as mine, except a gesture a story here keeps from it. A gesture whose effect is `edits` or `reads` is kept from my agent unless a story here gives it: my agent edits the files, and my screen is mine. Source: commands.md, Effect; Existing tools
 2. My agent's request for a gesture to end when the read model shows the gesture, so my agent's next read sees its change. Source: commands.md, Principles, A gesture that writes ends when the read model shows it; ADR-0015
 3. My agent never to refresh the instance. Refresh is my safety net, not how changes arrive. Source: catalog, Instance, `refresh`
+4. Each gesture my agent runs to be a tool of its own, named for the gesture, whose input says the JSON type of its Argument and Options. Source: VS Code's interaction
 
 ## Reporting
 
@@ -61,9 +63,11 @@ As a user, I want:
 1. A request from my agent that fails or is refused, in whole or in part, to give my agent the reason for each item, and to write a line in the Output. No notification: my agent asked, not me. This is an exception to common, Reporting, rows 3 to 5. Source: ADR-0019
 2. A request from my agent never to open a picker, a prompt or a confirmation. A request that leaves out an Option the gesture needs is refused, and the refusal names the Option. This is an exception to commands.md, Options: no picker asks for it. Source: commands.md, Principles
 3. My agent to get each gesture's outcome, which an entry point does not use. This is an exception to commands.md, Principles, An entry point fires a gesture: Reporting, story 1 and Gestures, story 2 need the outcome.
+4. A refusal that a gesture clears to name that gesture, such as decompile and commit for a plugin with no source. Source: Any agent, story 6
 
 ## Test seam
 
 - Each read, given an instance value or mEdit's answer: what it returns and what it refuses, with no agent.
 - Each gesture: given its Argument and the Options it needs, it acts on what it was given, never on the selection, and opens nothing.
 - The gestures my agent runs: the catalog's gestures whose effect is `writes`, less the ones kept from it here, plus the ones given to it here.
+- Every tool: each input it advertises says its JSON type.
