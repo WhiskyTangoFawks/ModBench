@@ -311,8 +311,8 @@ describe('ModListProvider', () => {
 
   it('renders no row for a folder in mods/ with no modlist line, since mod sync is what adds a line', async () => {
     const value = { ...valueOf([mod('Listed')]), modFolders: [
-      { kind: 'mod', name: 'Listed', path: '/instance/mods/Listed' },
-      { kind: 'mod', name: 'Dropped In', path: '/instance/mods/Dropped In' },
+      { kind: 'mod', name: 'Listed', path: '/instance/mods/Listed', modName: 'Listed' },
+      { kind: 'mod', name: 'Dropped In', path: '/instance/mods/Dropped In', modName: 'Dropped In' },
     ] } as InstanceValue;
     const provider = makeProvider([], { instance: new FakeInstance(value) });
 

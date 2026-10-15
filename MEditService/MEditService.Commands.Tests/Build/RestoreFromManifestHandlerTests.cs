@@ -93,6 +93,18 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
+    public async Task AManifestThatNamesNothing_LandsWritingNothing_AndNamingItsMetadataNowhere()
+    {
+        _folders.WithFile(Mod, "meta.ini", "[General]");
+        Manifested(Mod, []);
+
+        var restored = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Landed).Outcome;
+
+        Assert.Empty(restored.Written.Concat(restored.NamedByNoLine));
+        Assert.Empty(_folders.Written);
+    }
+
+    [Fact]
     public async Task ARestoredMod_KeepsInItsStatCache_TheHashEachLinesProviderFixes()
     {
         var download = Downloaded("dl/Mod.zip", ("a.nif", "a"));

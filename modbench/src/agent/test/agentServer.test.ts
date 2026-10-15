@@ -160,21 +160,22 @@ describe('the agent server, given an instance value', () => {
     const inRepository = new FakeInstance({
       ...VALUE, holdsRepository: true,
       modFolders: [
-        { kind: 'mod', name: 'Big Rocks', path: '/i/mods/Big Rocks' },
-        { kind: 'separator', name: 'Textures', path: '/i/mods/Textures_separator' },
-        { kind: 'mod', name: 'InAnotherProfile', path: '/i/mods/InAnotherProfile' },
+        { kind: 'mod', name: 'Big Rocks', path: '/i/mods/Big Rocks', modName: 'Big Rocks' },
+        { kind: 'separator', name: 'Textures', path: '/i/mods/Textures_separator', modName: 'Textures_separator' },
+        { kind: 'mod', name: 'InAnotherProfile', path: '/i/mods/InAnotherProfile', modName: 'InAnotherProfile' },
       ],
     });
     beforeEach(() => { statusRead.asked = []; });
 
-    it('asks for every mod folder in every profile, not the separators, and answers each status', async () => {
-      statusRead.answer = [status('Big Rocks', { differing: ['a.nif'], noProvider: ['b.nif'] })];
+    it('asks for every mod folder and separator folder in every profile, and answers each status', async () => {
+      statusRead.answer = [status('Big Rocks', { differing: ['a.nif'], noProvider: ['b.nif'] }), status('Textures_separator', { noManifest: true })];
       const client = await clientOf(inRepository);
 
       expect(await read(client, 'list_mod_statuses')).toEqual([
-        { mod: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], noProvider: ['b.nif'], metadataDiffers: false },
+        { kind: 'mod', name: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], noProvider: ['b.nif'], metadataDiffers: false },
+        { kind: 'separator', name: 'Textures', noManifest: true, differing: [], namedByNoLine: [], gone: [], noProvider: [], metadataDiffers: false },
       ]);
-      expect(statusRead.asked).toEqual([['Big Rocks', 'InAnotherProfile']]);
+      expect(statusRead.asked).toEqual([['Big Rocks', 'Textures_separator', 'InAnotherProfile']]);
     });
 
     it('refuses an instance that is no repository, which has no manifest to compare', async () => {

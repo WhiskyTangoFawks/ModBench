@@ -335,7 +335,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     ({ name, path: `/mods/${origin}/${name}`, origin, line, enabled: true, winning: true, ...facts });
   const folderOf = (mod: string) => `/mo2/mod-folders/${mod}`;
   const modFoldersOf = (...names: string[]): ModFolders => {
-    const all = names.map((name) => ({ kind: 'mod' as const, name, path: folderOf(name) }));
+    const all = names.map((name) => ({ kind: 'mod' as const, name, path: folderOf(name), modName: name }));
     return { all, holding: (entry) => all.find((f) => f.kind === entry.kind && f.name === entry.name) };
   };
   const modFolders = modFoldersOf('ModA', 'ModS', 'ModF', 'ModD', 'ModO', 'ModU', 'ModM', 'ModOff');
@@ -588,17 +588,27 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(providers).toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA', sourceFolder: '/mo2/source/ModA' }, { kind: 'Game' }, { kind: 'None' }]);
   });
 
-  it('names each mod of the mod order that has a mod folder, with its metadata files, and the stat cache\'s folder', () => {
+  it('names each mod and separator of the mod order that has a folder, a separator by the mod manager\'s name for it, with their metadata files, and the stat cache\'s folder', () => {
+    const withSeparator = modFoldersOf('ModA');
+    const all = [...withSeparator.all, { kind: 'separator' as const, name: 'Weapons', path: '/mo2/mod-folders/Weapons_separator', modName: 'Weapons_separator' }];
     const outcome = loadOrderSnapshotOf({
-      plugins: [], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs, archives: NO_ARCHIVES,
+      plugins: [], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: { all, holding: (entry) => all.find((f) => f.kind === entry.kind && f.name === entry.name) },
+      sourceDirs, archives: NO_ARCHIVES,
       modlist: {
         ...NO_MODLIST,
-        mods: [{ kind: 'mod', name: 'ModA', enabled: false }, { kind: 'separator', name: 'Weapons', enabled: true }, { kind: 'mod', name: 'ModGone', enabled: true }],
+        mods: [
+          { kind: 'mod', name: 'ModA', enabled: false }, { kind: 'separator', name: 'Weapons', enabled: true },
+          { kind: 'separator', name: 'Gone', enabled: true }, { kind: 'mod', name: 'ModGone', enabled: true },
+        ],
       },
     });
 
     expect(outcome !== undefined && 'mods' in outcome ? [outcome.mods, outcome.statCache] : []).toEqual([
-      [{ name: 'ModA', folder: '/mo2/mod-folders/ModA', metadataFiles: ['meta.ini'] }], '/mo2/stat-cache',
+      [
+        { name: 'ModA', folder: '/mo2/mod-folders/ModA', metadataFiles: ['meta.ini'] },
+        { name: 'Weapons_separator', folder: '/mo2/mod-folders/Weapons_separator', metadataFiles: ['meta.ini'] },
+      ],
+      '/mo2/stat-cache',
     ]);
   });
 

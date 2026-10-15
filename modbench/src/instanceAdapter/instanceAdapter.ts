@@ -91,6 +91,8 @@ export interface ModFolder {
   readonly kind: ModlistEntry['kind'];
   readonly name: string;
   readonly path: string;
+  /** The name the mod manager knows the folder's mod by; a separator's is not its name. */
+  readonly modName: string;
 }
 
 /** An end of mod order. */

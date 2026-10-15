@@ -9,6 +9,7 @@ vi.mock('vscode', () => ({
 }));
 
 import type { ModStatus } from '../../client';
+import type { InstanceValue } from '../../instanceLoader/instance';
 import { status } from './modStatusFixture';
 import { ModListProvider, type ModlistNode } from '../ModListProvider';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -19,7 +20,7 @@ const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true, version:
 const file = (relativePath: string): OriginFile =>
   ({ relativePath, path: `/instance/mods/ModA/${relativePath}`, sourcePath: `/instance/mods/ModA/${relativePath}`, excluded: false, excludedByName: false });
 
-function providerOver(statuses: readonly ModStatus[], holdsRepository = true) {
+function providerOver(statuses: readonly ModStatus[], holdsRepository = true, over: Partial<InstanceValue> = {}) {
   const byMod = new Map(statuses.map((held) => [held.mod, held]));
   const changed = new EventEmitter<void>();
   const value = instanceValueFixture({
@@ -27,6 +28,7 @@ function providerOver(statuses: readonly ModStatus[], holdsRepository = true) {
     mods: [mod('ModA'), mod('ModB'), mod('ModC')],
     filesByMod: new Map([['ModA', [file('meshes/a.nif'), file('readme.txt')]]]),
     foldersByMod: new Map([['ModA', [{ relativePath: 'meshes', path: '/instance/mods/ModA/meshes', excluded: false }]]]),
+    ...over,
   });
   const provider = new ModListProvider({ instance: new FakeInstance(value), statuses: { of: (name) => byMod.get(name), onDidChange: changed.event } });
   return { provider, byMod, changed };
@@ -71,6 +73,31 @@ describe('a mod row says its status against its manifest after its version (mods
     changed.fire();
 
     expect([fired.mock.calls.length, (await row(provider, 'ModA')).description]).toEqual([1, '1.0 · no manifest']);
+  });
+});
+
+describe('a separator row says no manifest when it has none, looked up by the name the mod manager gives its folder (mods.md, A row, Separator)', () => {
+  const separatorProvider = (held: ModStatus | undefined, holdsRepository = true) => providerOver(held ? [held] : [], holdsRepository, {
+    mods: [{ kind: 'separator', name: 'weapons', enabled: true }, mod('ModA')],
+    modFolders: [{ kind: 'separator', name: 'Weapons', path: '/instance/mods/Weapons_separator', modName: 'Weapons_separator' }],
+    modNames: new Map([['separator:weapons', 'Weapons_separator']]),
+  });
+
+  it.each([
+    ['no manifest', status('Weapons_separator', { noManifest: true }), true, 'no manifest'],
+    ['a manifest', status('Weapons_separator'), true, undefined],
+    ['no status yet', undefined, true, undefined],
+    ['no manifest while the instance holds no repository', status('Weapons_separator', { noManifest: true }), false, undefined],
+  ])('%s', async (_case, held, holdsRepository, description) => {
+    const { provider } = separatorProvider(held, holdsRepository);
+
+    expect((await row(provider, 'weapons')).description).toBe(description);
+  });
+
+  it('counts in the view\'s badge with the mods that have none', () => {
+    const { provider } = separatorProvider(status('Weapons_separator', { noManifest: true }));
+
+    expect(provider.badge()).toEqual({ value: 1, tooltip: 'Mods that differ from their manifests or have none: 1' });
   });
 });
 

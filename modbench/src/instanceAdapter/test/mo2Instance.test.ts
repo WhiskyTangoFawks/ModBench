@@ -439,16 +439,17 @@ describe('the MO2 Instance adapter', () => {
       await expect(source.modMeta('DragIn Manual Extract')).rejects.toThrow(/EISDIR/);
     });
 
-    it('answers every mod folder as the entry it holds, with its path', async () => {
+    it('answers every mod folder as the entry it holds, with its path and the name MO2 knows its mod by', async () => {
       const folders = (await source.modFolders())?.all;
 
       expect(folders).toContainEqual({
-        kind: 'mod', name: 'Unofficial Fallout 4 Patch', path: join(root, 'mods', 'Unofficial Fallout 4 Patch'),
+        kind: 'mod', name: 'Unofficial Fallout 4 Patch', path: join(root, 'mods', 'Unofficial Fallout 4 Patch'), modName: 'Unofficial Fallout 4 Patch',
       });
       expect(folders).toContainEqual({
         kind: 'separator',
         name: 'Unassigned (Modlist Development)',
         path: join(root, 'mods', 'Unassigned (Modlist Development)_separator'),
+        modName: 'Unassigned (Modlist Development)_separator',
       });
     });
 
@@ -1000,7 +1001,7 @@ describe('the MO2 Instance adapter', () => {
 
   describe('get in mods/', () => {
     it('answers the folder that holds an entry, matched as MO2 matches names, or none', async () => {
-      const harderVats = { kind: 'mod', name: 'Harder VATS', path: join(root, 'mods', 'Harder VATS') };
+      const harderVats = { kind: 'mod', name: 'Harder VATS', path: join(root, 'mods', 'Harder VATS'), modName: 'Harder VATS' };
       const folders = present((await adapter.reading()).modFolders, 'the mod folders');
 
       expect(folders.holding({ kind: 'mod', name: 'Harder VATS' })).toEqual(harderVats);
@@ -1018,6 +1019,42 @@ describe('the MO2 Instance adapter', () => {
     it('answers a mod named as a separator\'s folder with that separator\'s folder, MO2 knowing a mod by its folder\'s name and a folder named for a separator holding that separator', async () => {
       expect((await adapter.reading()).modFolders?.holding({ kind: 'mod', name: 'unassigned (modlist development)_SEPARATOR' })).toMatchObject({
         kind: 'separator', name: 'Unassigned (Modlist Development)',
+      });
+    });
+
+    it('knows a separator\'s mod by the name of its folder, and a mod by its own', async () => {
+      const folders = present((await adapter.reading()).modFolders, 'the mod folders');
+
+      expect(folders.holding({ kind: 'separator', name: 'unassigned (modlist development)' })?.modName).toBe('Unassigned (Modlist Development)_separator');
+      expect(folders.holding({ kind: 'mod', name: 'harder vats' })?.modName).toBe('Harder VATS');
+    });
+
+    describe('a separator, which has no metadata', () => {
+      const SEPARATOR = 'Held_separator';
+
+      beforeEach(async () => {
+        await mkdir(join(root, 'mods', SEPARATOR));
+        await writeFile(join(root, 'mods', SEPARATOR, 'meta.ini'), '[General]\nversion=9\ninstallationFile=Held.7z\n');
+      });
+
+      it('answers no version and no installation file, whatever its meta.ini holds, so its manifest names nothing', async () => {
+        expect(await adapter.modMetadata(SEPARATOR)).toEqual({ kind: 'read', answer: { version: undefined, installationFiles: [] } });
+        expect(await adapter.installationFiles(SEPARATOR)).toEqual({ kind: 'read', answer: [] });
+        expect(await adapter.gameFilesOverriddenBy(join(root, 'game', 'Data'), SEPARATOR)).toEqual({ kind: 'read', answer: { gameFiles: [], notes: [] } });
+      });
+
+      it('writes none, so a restore leaves its meta.ini as it was', async () => {
+        await adapter.writeModMetadata(SEPARATOR, { version: '1', installationFiles: [{ name: 'Other.7z' }] });
+
+        expect(await readFile(join(root, 'mods', SEPARATOR, 'meta.ini'), 'utf8')).toBe('[General]\nversion=9\ninstallationFile=Held.7z\n');
+      });
+
+      it('writes no meta.ini it has none of', async () => {
+        await mkdir(join(root, 'mods', 'Bare_separator'));
+
+        await adapter.writeModMetadata('Bare_separator', { version: undefined, installationFiles: [] });
+
+        expect(await readdir(join(root, 'mods', 'Bare_separator'))).toEqual([]);
       });
     });
 
@@ -1603,6 +1640,25 @@ describe('the MO2 Instance adapter', () => {
       expect(await isThere(join(root, 'mods', 'HARDER VATS 2', 'meta.ini'))).toBe(true);
     });
 
+    it('renames the manifest in a mod\'s folder to the new name in the same rename, leaving no manifest of the old name', async () => {
+      await writeFile(join(root, 'mods', 'Harder VATS', 'Harder VATS.manifest'), '');
+
+      await adapter.renameModFolder('harder vats', 'Harder VATS 2');
+
+      expect(await isThere(join(root, 'mods', 'Harder VATS 2', 'Harder VATS 2.manifest'))).toBe(true);
+      expect(await isThere(join(root, 'mods', 'Harder VATS 2', 'Harder VATS.manifest'))).toBe(false);
+    });
+
+    it('puts the folder back when its manifest cannot be renamed, so no rename lands in part', async () => {
+      await writeFile(join(root, 'mods', 'Harder VATS', 'Harder VATS.manifest'), '');
+      await mkdir(join(root, 'mods', 'Harder VATS', 'Harder VATS 2.manifest'));
+
+      await expect(adapter.renameModFolder('Harder VATS', 'Harder VATS 2')).rejects.toThrow();
+
+      expect(await isThere(join(root, 'mods', 'Harder VATS', 'Harder VATS.manifest'))).toBe(true);
+      expect(await isThere(join(root, 'mods', 'Harder VATS 2'))).toBe(false);
+    });
+
     it('refuses to rename a folder that is not there', async () => {
       await expect(adapter.renameModFolder('No Such Mod', 'Anything')).rejects.toThrow(/No Such Mod/);
     });
@@ -1926,6 +1982,29 @@ describe('the MO2 Instance adapter', () => {
       expect(modNames(await source.modOrder('Default'))).toContain('separator:Core Mods:false');
       expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
       expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(false);
+    });
+
+    it('renames the manifest in a separator\'s folder to the new name with the folder', async () => {
+      const folder = separatorFolder('Unassigned (Modlist Development)');
+      await writeFile(join(folder, 'Unassigned (Modlist Development)_separator.manifest'), '');
+
+      await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]);
+
+      expect(await isThere(join(separatorFolder('Core Mods'), 'Core Mods_separator.manifest'))).toBe(true);
+      expect(await isThere(join(separatorFolder('Core Mods'), 'Unassigned (Modlist Development)_separator.manifest'))).toBe(false);
+    });
+
+    it('leaves a separator\'s line and folder as they were when its manifest cannot be renamed', async () => {
+      const folder = separatorFolder('Unassigned (Modlist Development)');
+      await writeFile(join(folder, 'Unassigned (Modlist Development)_separator.manifest'), '');
+      await mkdir(join(folder, 'Core Mods_separator.manifest'));
+      const before = await text(root, DEFAULT_MODLIST);
+
+      await expect(change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }])).rejects.toThrow();
+
+      expect(await text(root, DEFAULT_MODLIST)).toBe(before);
+      expect(await isThere(join(folder, 'Unassigned (Modlist Development)_separator.manifest'))).toBe(true);
+      expect(await isThere(separatorFolder('Core Mods'))).toBe(false);
     });
 
     it('renames a mod\'s line in place, keeping its state, and nothing else', async () => {

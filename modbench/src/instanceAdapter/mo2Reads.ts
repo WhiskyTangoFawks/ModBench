@@ -5,7 +5,7 @@ import { basename, dirname } from 'node:path';
 import { parsePlugins } from '../loadOrderFileCodec/pluginsText';
 import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
-import { parseModlist } from './codecs/modlistText';
+import { entryNamed, parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
 import { creationClubListFile, dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
 import { factsOf, get, isTracked, listDir, readOrReason, stampOf } from './files';
@@ -133,6 +133,7 @@ export function readingSource(context: Mo2Context): ReadingSource {
     },
 
     modMeta(mod) {
+      if (entryNamed(mod).kind === 'separator') return Promise.resolve({});
       return readOrAbsent(async () => parseMetaIni(await get(modMetaFile(instanceRoot, mod))), {});
     },
 

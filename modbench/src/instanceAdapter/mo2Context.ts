@@ -4,10 +4,10 @@
 import { errnoCode } from '../ports/errno';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
-import { exists, get, listDir, listFolders } from './files';
+import { exists, get, listDir, listFolders, rename, type Undo } from './files';
 import type { GameDirectoryResolver } from './gameDirectory';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from './instanceAdapter';
-import { entryDir, isNewModExtraction, mo2FolderName, modDir, modsDir, settingsFile } from './layout';
+import { entryDir, isNewModExtraction, manifestFileIn, mo2FolderName, modDir, modsDir, settingsFile } from './layout';
 import type { MyGamesResolver } from './myGames';
 import type { Mo2Watch } from './mo2Watch';
 
@@ -55,7 +55,7 @@ export async function listModFolders(
   const installing = await Promise.all(candidates?.map((name) => isBeingInstalled(modDir(instanceRoot, name))) ?? []);
   return candidates
     ?.filter((_, i) => !installing[i])
-    .map((name) => ({ ...entryNamed(name), path: modDir(instanceRoot, name) }));
+    .map((name) => ({ ...entryNamed(name), path: modDir(instanceRoot, name), modName: name }));
 }
 
 export function modFoldersOf(all: readonly ModFolder[]): ModFolders {
@@ -88,4 +88,21 @@ export async function folderHolding(context: Mo2Context, entry: EntryRef): Promi
 export async function refuseFolderTaken(context: Mo2Context, entry: EntryRef, folder: string): Promise<void> {
   const inTheWay = (await folderHolding(context, entry))?.path ?? ((await exists(folder)) ? folder : undefined);
   if (inTheWay !== undefined) throw new Error(`The folder "${inTheWay}" is in the way`);
+}
+
+/** Renames a mod folder with its manifest, which is named for the mod, so no rename lands in part: a manifest that cannot
+ *  be renamed puts the folder back and rejects. Answers how to put both back. */
+export async function renameFolderWithManifest(from: ModFolder, toPath: string, toModName: string): Promise<Undo> {
+  await rename(from.path, toPath);
+  const undoFolder: Undo = () => rename(toPath, from.path);
+  const old = manifestFileIn(toPath, from.modName);
+  const renamed = manifestFileIn(toPath, toModName);
+  if (old === renamed || !(await exists(old))) return undoFolder;
+  try {
+    await rename(old, renamed);
+  } catch (err) {
+    await undoFolder();
+    throw err;
+  }
+  return async () => { await rename(renamed, old); await undoFolder(); };
 }

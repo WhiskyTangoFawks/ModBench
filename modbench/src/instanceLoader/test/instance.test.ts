@@ -546,6 +546,17 @@ describe('Instance — game folder and the archives the game loads', () => {
     expect(reread).toEqual([]);
   });
 
+  it('hands the snapshot a separator by the mod manager\'s name for its folder, held as the folders match names, with no version and no installation file', async () => {
+    const { instance } = loader({
+      ...GAME_FOUND, mods: [{ kind: 'separator', name: 'weapons', enabled: true }], modFolders: modFoldersOf({ kind: 'separator', name: 'Weapons', modName: 'Weapons_separator' }),
+    });
+
+    await instance.refresh();
+
+    expect(instance.readFailure).toBeUndefined();
+    expect(instance.value.loadOrderSnapshot).toMatchObject({ mods: [{ name: 'Weapons_separator', metadata: { version: undefined, installationFiles: [] } }] });
+  });
+
   it('hands the snapshot the archives the INIs list, and tells once, until it changes, the INIs it did not find', async () => {
     const note = 'The profile Default keeps no game INIs of its own';
     const { instance, warnings, logs } = loader({

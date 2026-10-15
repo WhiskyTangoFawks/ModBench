@@ -331,8 +331,8 @@ export function loadOrderSnapshotOf(value: {
 
 function snapshotModsOf({ mods, metadataFiles }: SnapshotModlist, folders: ModFolders | undefined): ModByFolder[] {
   return mods.flatMap((entry) => {
-    const folder = entry.kind === 'mod' ? folders?.holding(entry) : undefined;
-    return folder === undefined ? [] : [{ name: entry.name, folder: folder.path, metadataFiles: [...metadataFiles] }];
+    const folder = folders?.holding(entry);
+    return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path, metadataFiles: [...metadataFiles] }];
   });
 }
 
