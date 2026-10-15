@@ -47,8 +47,8 @@ public enum RestoreRefusal
 }
 
 /// <summary>Why a mod was skipped. A NotFound mod names the game files it lacks, by the paths a request can bring them
-/// back with.</summary>
-public sealed record RestoreSkip(RestoreRefusal Kind, IReadOnlyList<string> GameFilesNotFound);
+/// back with; a NotBuilt mod, its build's refusal (ADR-0019).</summary>
+public sealed record RestoreSkip(RestoreRefusal Kind, IReadOnlyList<string> GameFilesNotFound, BuildRefusal Build = BuildRefusal.None);
 
 /// <summary>A mod whose files are as its manifest says: the files written, each file no line names, for the trash, why
 /// the stat cache did not keep the read, and Uncommitted as <see cref="BuiltMod"/>'s.</summary>

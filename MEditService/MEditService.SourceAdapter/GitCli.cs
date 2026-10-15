@@ -27,15 +27,17 @@ internal static class GitCli
         }
     }
 
-    /// <summary>Clones <paramref name="remote"/> into <paramref name="folder"/>, which is not there, set as init sets a
-    /// repository. A clone that fails leaves no folder. Asks for no credentials, as no one can answer.</summary>
-    internal static void Clone(string remote, string folder)
+    /// <summary>Clones <paramref name="remote"/> into <paramref name="folder"/>, which is not there, with each of
+    /// <paramref name="settings"/>. A clone that fails leaves no folder. Asks for no credentials, as no one can answer, and
+    /// stops when <paramref name="cancel"/> does.</summary>
+    internal static void Clone(string remote, string folder, IEnumerable<(string Key, string Value)> settings, CancellationToken cancel)
     {
         var parent = Directory.CreateDirectory(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(folder)) ?? folder).FullName;
-        string[] args = ["clone", "-q", "-c", "core.autocrlf=false", "-c", "core.longpaths=true", "-c", "core.quotePath=false", remote, folder];
+        string[] args = ["clone", "-q", .. settings.SelectMany(setting => new[] { "-c", $"{setting.Key}={setting.Value}" }), "--", remote, folder];
         var psi = StartInfo(args, parent);
         psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
-        var (exitCode, _, stderr) = Execute(psi, parent);
+        var (exitCode, _, stderr) = Execute(psi, parent, cancel);
+        if (cancel.IsCancellationRequested) throw SourceStopException.GitFailed("the clone was cancelled");
         if (exitCode != 0) throw Failed(args, exitCode, stderr);
     }
 
@@ -93,11 +95,12 @@ internal static class GitCli
     }
 
     private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string[] args) =>
-        Execute(StartInfo(gitDir, workTree, args), workTree);
+        Execute(StartInfo(gitDir, workTree, args), workTree, CancellationToken.None);
 
-    private static (int ExitCode, string Stdout, string Stderr) Execute(ProcessStartInfo psi, string workTree)
+    private static (int ExitCode, string Stdout, string Stderr) Execute(ProcessStartInfo psi, string workTree, CancellationToken cancel)
     {
         using var process = Start(psi, workTree);
+        using var stopping = cancel.Register(() => process.Kill(entireProcessTree: true));
         // Closed at once: git otherwise inherits this process's stdin, and a socket never reaches EOF.
         process.StandardInput.Close();
 

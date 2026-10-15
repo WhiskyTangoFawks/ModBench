@@ -12,11 +12,11 @@ public sealed record BuildConfigurationChange(string? Output, IReadOnlyList<stri
 /// <paramref name="Files"/>.</summary>
 public sealed record ArchiveToPack(string Path, IReadOnlyList<string> Files);
 
-/// <summary>What a source mod's build writes over the base, as its working tree says. Shared is none with no remote;
-/// Uncommitted, that its working tree holds changes no commit holds.</summary>
+/// <summary>What a source mod's build writes over the base, as its working tree says. Shared is none with no remote.
+/// Uncommitted: its working tree holds changes no commit holds. Unpushed: its remote, as last fetched, lacks the commit.</summary>
 public sealed record SourceToBuild(
     string Output, IReadOnlyList<string> Exclude, IReadOnlyList<ArchiveToPack> Archives, IReadOnlyList<string> Plugins,
-    IReadOnlyList<Asset> Assets, SharedSource? Shared = null, bool Uncommitted = false);
+    IReadOnlyList<Asset> Assets, SharedSource? Shared = null, bool Uncommitted = false, bool Unpushed = false);
 
 /// <summary>A source's remote, by the URL git fetches it from, and a commit of it.</summary>
 public sealed record SharedSource(string Remote, string Commit);
@@ -46,15 +46,16 @@ internal static class BuildConfiguration
         if (!IsPathInTheMod(output) || output.Contains('/', StringComparison.Ordinal))
             throw Unreadable(sourceFolder, $"its output '{output}' is not a folder name");
 
-        var shared = SharedSources.SharedOf(sourceFolder);
+        var sharing = SharedSources.SharingOf(sourceFolder);
         return new SourceToBuild(
             output,
             InTheMod(sourceFolder, ExcludeKey, ExclusionsIn(sourceFolder, configuration)),
             ArchivesIn(sourceFolder, configuration),
             SourceRepositoryLayout.PluginsIn(sourceFolder),
             AssetsIn(sourceFolder),
-            shared,
-            shared is not null && SharedSources.HoldsUncommittedChanges(sourceFolder));
+            sharing?.Shared,
+            sharing?.Uncommitted ?? false,
+            sharing?.Unpushed ?? false);
     }
 
     private static IReadOnlyList<Asset> AssetsIn(string sourceFolder)

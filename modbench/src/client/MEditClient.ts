@@ -188,6 +188,8 @@ interface BuiltMod {
   failure?: string;
   /** Its shared source holds changes no commit holds, so its manifest's commit does not rebuild these bytes. */
   uncommitted?: true;
+  /** Its remote, as last fetched, lacks the commit its manifest names. */
+  unpushed?: true;
 }
 
 /** Build's answer: each mod built, with the plugins it compiled and the plugins it refused, or

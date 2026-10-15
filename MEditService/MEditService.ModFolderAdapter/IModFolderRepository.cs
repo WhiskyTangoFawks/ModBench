@@ -35,9 +35,6 @@ public interface IModFolderRepository
     /// <summary>The forward-slash path relative to <paramref name="modFolder"/> of the file at <paramref name="file"/>.</summary>
     string PathIn(string modFolder, string file);
 
-    /// <summary>The file at the forward-slash <paramref name="path"/> in <paramref name="modFolder"/>, as <see cref="PathIn"/> reverses.</summary>
-    string FileAt(string modFolder, string path);
-
     /// <summary>Writes the file at <paramref name="path"/> under <paramref name="folder"/> from <paramref name="write"/>'s
     /// seekable stream. A throwing write, or the bytes already there, leave the folder as it was. True when it replaced
     /// other bytes.</summary>

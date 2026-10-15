@@ -98,8 +98,6 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public string PathIn(string modFolder, string file) => file[(modFolder.Length + 1)..];
 
-    public string FileAt(string modFolder, string path) => $"{modFolder}/{path}";
-
     public Stream OpenInstallationFile(string path) => Open(string.Empty, path);
 
     public Stream OpenGameFile(string dataFolder, string path) => Open(dataFolder, path);

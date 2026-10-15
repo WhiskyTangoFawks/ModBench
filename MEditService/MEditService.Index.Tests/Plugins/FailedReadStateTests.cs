@@ -584,7 +584,8 @@ public sealed class FailedReadStateTests : IDisposable
 
         public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) => _inner.SourceToBuild(sourceFolder);
 
-        public Answer<string, SourceFailure> CommitAtHead(string sourceFolder, SharedSource cloneFrom) => _inner.CommitAtHead(sourceFolder, cloneFrom);
+        public Answer<string, SourceFailure> CommitAtHead(string sourceFolder, SharedSource cloneFrom, CancellationToken cancel) =>
+            _inner.CommitAtHead(sourceFolder, cloneFrom, cancel);
 
         public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) =>
             _inner.ChangeBuildConfiguration(sourceFolder, change);

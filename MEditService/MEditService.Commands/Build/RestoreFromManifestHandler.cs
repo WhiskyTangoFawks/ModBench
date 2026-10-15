@@ -14,9 +14,9 @@ public sealed class RestoreFromManifestHandler(
         IReadOnlyList<ModToRestore> mods, InstanceToRestore instance, string? gesture = null, CancellationToken cancel = default) =>
         ModByMod.OverAsync(
             mods, mod => mod.Name, progress => notifications.Publish(new RestoreFromManifestProgressNotification(progress)),
-            mod => RestoreModAsync(mod, instance), gesture, cancel);
+            mod => RestoreModAsync(mod, instance, cancel), gesture, cancel);
 
-    private async Task<ItemAnswer<RestoreSkip, RestoredMod>> RestoreModAsync(ModToRestore mod, InstanceToRestore instance)
+    private async Task<ItemAnswer<RestoreSkip, RestoredMod>> RestoreModAsync(ModToRestore mod, InstanceToRestore instance, CancellationToken cancel)
     {
         Manifest manifest;
         try
@@ -35,7 +35,7 @@ public sealed class RestoreFromManifestHandler(
 
         var resolved = new ManifestSources(repository, manifest, mod.InstallationFiles, instance.GameFiles).Resolve();
         if (resolved.Lacks.Count > 0) return Lacked(mod, resolved.Lacks);
-        if (resolved.Built is { } built) return await RebuildAsync(mod, instance, built);
+        if (resolved.Built is { } built) return await RebuildAsync(mod, instance, built, cancel);
 
         IReadOnlyList<string> namedByNoLine;
         ModFolderFiles read;
@@ -73,10 +73,11 @@ public sealed class RestoreFromManifestHandler(
 
     // modlist-source.md, Restore from manifest, stories 3 and 5: what the build makes comes back as the build makes it,
     // and only at the commit the manifest names.
-    private async Task<ItemAnswer<RestoreSkip, RestoredMod>> RebuildAsync(ModToRestore mod, InstanceToRestore instance, SharedSource built)
+    private async Task<ItemAnswer<RestoreSkip, RestoredMod>> RebuildAsync(
+        ModToRestore mod, InstanceToRestore instance, SharedSource built, CancellationToken cancel)
     {
         if (mod.SourceFolder is not { } sourceFolder) return Skipped(mod, RestoreRefusal.SourceUnavailable, "its name gives it no source folder");
-        if (!source.CommitAtHead(sourceFolder, built).Holds(out var head, out var failure))
+        if (!source.CommitAtHead(sourceFolder, built, cancel).Holds(out var head, out var failure))
             return Skipped(mod, RestoreRefusal.SourceUnavailable, $"its source could not be cloned or read: {failure.Reason.TrimEnd('.')}");
         if (head != built.Commit)
             return Skipped(mod, RestoreRefusal.SourceAtAnotherCommit, $"its source is at {head}, not at {built.Commit}, the commit its manifest names");
@@ -96,7 +97,7 @@ public sealed class RestoreFromManifestHandler(
             new ModToBuild(mod.Name, sourceFolder, mod.Folder, mod.InstallationFiles, mod.CommittedFiles),
             new InstanceToBuild(instance.ExcludedSuffix, instance.Archives, instance.StatCache));
         if (answer is ItemAnswer<BuildRefusal, BuiltMod>.Refusing refusing)
-            return ItemAnswer<RestoreSkip, RestoredMod>.Refused(new RestoreSkip(RestoreRefusal.NotBuilt, []), refusing.Message);
+            return ItemAnswer<RestoreSkip, RestoredMod>.Refused(new RestoreSkip(RestoreRefusal.NotBuilt, [], refusing.Refusal), refusing.Message);
         var outcome = ((ItemAnswer<BuildRefusal, BuiltMod>.Wrote)answer).Outcome;
         List<string> leftAsItWas = [.. outcome.Refused.Select(plugin => plugin.Message), .. outcome.ArchivesRefused.Select(archive => archive.Message)];
         if (outcome.Failure is { } stopped) leftAsItWas.Insert(0, stopped);
@@ -110,7 +111,7 @@ public sealed class RestoreFromManifestHandler(
         try
         {
             var after = HashesIn(mod, committed, instance);
-            var manifest = repository.ReadManifest(mod.Folder, mod.Name) ?? throw new InvalidOperationException("A build that lands writes its manifest.");
+            var manifest = outcome.Manifest ?? throw new InvalidOperationException("A build that stopped nowhere wrote its manifest.");
             return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod(
                 [.. after.Where(file => before.GetValueOrDefault(file.Key) != file.Value).Select(file => file.Key).Order(StringComparer.Ordinal)],
                 repository.NamedByNoLine(mod.Folder, mod.Name, manifest, committed), StatCacheNotWritten: null, outcome.Uncommitted));

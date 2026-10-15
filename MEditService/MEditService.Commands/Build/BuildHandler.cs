@@ -5,6 +5,7 @@ using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using SharpCompress.Common;
 
 namespace MEditService.Commands.Build;
@@ -80,7 +81,8 @@ public sealed class BuildHandler
             return Refused(mod, BuildRefusal.ArchiveFileNotAnAsset, $"'{notAnAsset.Archive}' takes '{notAnAsset.File}', which is not an asset of its source.");
 
         var written = new FolderWrite(_modFolders, mod.Folder, source.Exclude, instance.ExcludedSuffix);
-        if (WhyTheBaseIsNotKnown(mod, installed, written) is { } unknown) return unknown;
+        var overridden = installed.Where(entry => compiled.Contains(entry.Entry) || assets.ContainsKey(entry.Entry)).ToHashSet();
+        if (WhyTheBaseIsNotKnown(mod, [.. installed.Except(overridden)], written) is { } unknown) return unknown;
 
         var packed = source.Archives.SelectMany(archive => archive.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var looseBase = installed.Where(entry => !compiled.Contains(entry.Entry) && !assets.ContainsKey(entry.Entry))
@@ -115,16 +117,16 @@ public sealed class BuildHandler
         foreach (var archive in source.Archives.Select(archive => archive.Path))
             made[written.PathOf(archive)] = new Made(FromSource: true, Vouched: archivesRefused.All(refusal => refusal.Item != archive));
 
+        var (manifest, failure) = WriteManifest(mod, instance, source.Shared, made);
         return ItemAnswer<BuildRefusal, BuiltMod>.Landed(new BuiltMod(
-            landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)], WriteManifest(mod, instance, source.Shared, made),
-            source.Uncommitted));
+            landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)], failure, source.Uncommitted, source.Unpushed, manifest));
     }
 
     // A refused plugin's or archive's bytes are not as this build made them.
     private readonly record struct Made(bool FromSource, bool Vouched);
 
     // The manifest is written last (mods.md, Build, story 1), and names only the files the build made (story 3).
-    private string? WriteManifest(ModToBuild mod, InstanceToBuild instance, SharedSource? shared, Dictionary<string, Made> made)
+    private (Manifest? Written, string? Failure) WriteManifest(ModToBuild mod, InstanceToBuild instance, SharedSource? shared, Dictionary<string, Made> made)
     {
         try
         {
@@ -137,11 +139,11 @@ public sealed class BuildHandler
             // A stat cache that cannot be written leaves each file to be read again, and the mod's status says why.
             _ = _modFolders.KeepInStatCache(
                 read, manifest, files.Where(file => made[file.Path].Vouched).ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal));
-            return null;
+            return (manifest, null);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return $"The build could not write its manifest: {e.Message}";
+            return (null, $"The build could not write its manifest: {e.Message}");
         }
     }
 
@@ -165,7 +167,7 @@ public sealed class BuildHandler
         [
             .. names.Select(name => loadOrder.Plugin(new PluginAddress(name, mod.Name)) is { } registered
                 ? registered with { Provider = provider }
-                : new RegisteredPlugin(name, mod.Name, _modFolders.FileAt(mod.Folder, name), provider, Line: null, new PluginStrings([], []))),
+                : new RegisteredPlugin(name, mod.Name, _plugins.PathOfEmpty(ModKey.FromFileName(name), mod.Folder), provider, Line: null, PluginStrings.None)),
         ];
     }
 
@@ -176,7 +178,7 @@ public sealed class BuildHandler
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     // The base is each installation file's entries at their own paths (mods.md, Build, story 1); no other is guessed.
-    // A path the manifest names counts as held, so a fresh clone builds back (story 7).
+    // A path the manifest says an installation file provides is held, so a fresh clone builds back (story 7).
     private ItemAnswer<BuildRefusal, BuiltMod>? WhyTheBaseIsNotKnown(
         ModToBuild mod, IReadOnlyList<(InstallationFile File, string Entry)> installed, FolderWrite written)
     {
@@ -201,7 +203,9 @@ public sealed class BuildHandler
     {
         try
         {
-            return _modFolders.ReadManifest(mod.Folder, mod.Name)?.Files.Select(line => line.Path) ?? [];
+            return _modFolders.ReadManifest(mod.Folder, mod.Name)?.Files
+                .Where(line => line.Provider is FileProvider.FirstInstallationFile or FileProvider.InstallationFileEntry)
+                .Select(line => line.Path) ?? [];
         }
         catch (InvalidDataException)
         {

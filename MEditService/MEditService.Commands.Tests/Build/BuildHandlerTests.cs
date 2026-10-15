@@ -146,6 +146,42 @@ public sealed class BuildHandlerTests : IDisposable
         Assert.Equal(uncommitted, (await Landed()).Uncommitted);
     }
 
+    [Theory]
+    [InlineData("refs/remotes/origin/main", false)]
+    [InlineData("refs/heads/kept", true)]
+    public async Task ABuildAtACommitItsRemoteDoesNotHold_SaysSo(string holding, bool unpushed)
+    {
+        WriteSource("{\"output\": \"Mod\"}", ("meshes/c.nif", "c"));
+        Shared();
+        GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "update-ref", holding, "HEAD");
+
+        Assert.Equal(unpushed, (await Landed()).Unpushed);
+    }
+
+    [PosixFact]
+    public async Task ASourceHoldingTwoPluginsWhoseNamesDifferInCaseAlone_AnswersOneOfThem()
+    {
+        WriteSource("{\"output\": \"Mod\"}");
+        Directory.CreateDirectory(Path.Combine(SourceFolder, "plugin-source", "Fixture.esp"));
+        Directory.CreateDirectory(Path.Combine(SourceFolder, "plugin-source", "fixture.esp"));
+
+        var built = await Landed();
+
+        Assert.Single(built.Refused);
+    }
+
+    [Fact]
+    public async Task AManifestLineThatNamesNoInstallationFile_DoesNotStandForTheBase()
+    {
+        var installed = Download(("textures/a.dds", "installed a"));
+        WriteSource("{\"output\": \"Mod\"}");
+        WriteInFolder(MetaIni, "[General]");
+        new ModFolderRepository(TimeProvider.System).WriteManifest(ModFolder, ModName, new Manifest(
+            [new ManifestSource(Installed, installed.Size, installed.Hash)], [], [new ManifestFile("textures/a.dds", new FileProvider.NoProvider())]));
+
+        Assert.Equal(BuildRefusal.BaseNotKnown, Assert.Single((await Build(_noArchives, installed)).Refused).Refusal);
+    }
+
     [Fact]
     public async Task AJustBuiltMod_DiffersFromItsManifestOnlyByTheFilesTheBuildDidNotMake()
     {

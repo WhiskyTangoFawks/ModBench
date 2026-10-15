@@ -8,58 +8,61 @@ internal static partial class SharedSources
 {
     private const string Origin = "origin";
 
-    /// <summary>The remote <c>origin</c>, else the first by name, at the commit at HEAD; none for a folder with no
-    /// repository, or a remote only this machine reaches.</summary>
-    internal static SharedSource? SharedOf(string sourceFolder)
+    /// <summary>The remote <c>origin</c>, else the first by name, at HEAD, as <see cref="SourceToBuild"/> reads it. None
+    /// for a folder with no repository, or a remote that cannot be written safely.</summary>
+    internal static (SharedSource Shared, bool Uncommitted, bool Unpushed)? SharingOf(string sourceFolder)
     {
         var git = new SourceRepositoryGit(sourceFolder);
         if (!git.Exists) return null;
         var remotes = git.Run("remote").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var remote = remotes.Contains(Origin) ? Origin : remotes.Order(StringComparer.Ordinal).FirstOrDefault();
-        return remote is not null && Shareable(git.Run("remote", "get-url", remote).Trim()) is { } url ? new SharedSource(url, git.HeadCommit()) : null;
+        if (remote is null || Shareable(git.Run("remote", "get-url", remote).Trim()) is not { } url) return null;
+        return (new SharedSource(url, git.HeadCommit()), git.HoldsUncommittedChanges(), !git.RemoteHoldsHead(remote));
     }
 
-    // modlist-source.md, The manifest, story 8: no path from this machine, and so no credential, is committed.
+    // modlist-source.md, The manifest, story 8: no path from this machine, and so no credential, is committed. A URL
+    // that cannot be read safely is not written at all.
     private static string? Shareable(string url)
     {
-        if (url.Contains("://", StringComparison.Ordinal) && Uri.TryCreate(url, UriKind.Absolute, out var uri))
-            return uri.IsFile ? null : WithoutCredential(url, uri);
+        if (url.Contains("://", StringComparison.Ordinal))
+            return Uri.TryCreate(url, UriKind.Absolute, out var uri) && !uri.IsFile ? WithoutCredential(uri) : null;
         return ScpLike().IsMatch(url) ? url : null;
     }
 
     // An HTTP user is a credential; another scheme's user names the account, so only its password goes.
-    private static string WithoutCredential(string url, Uri uri)
+    private static string WithoutCredential(Uri uri)
     {
-        if (uri.UserInfo.Length == 0) return url;
-        var at = url.IndexOf("://", StringComparison.Ordinal) + 3;
-        var end = url.IndexOf('@', at);
-        var user = uri.Scheme is "http" or "https" ? "" : url[at..end].Split(':')[0] + "@";
-        return url[..at] + user + url[(end + 1)..];
+        var user = uri.UserInfo.Split(':')[0];
+        var account = user.Length == 0 || uri.Scheme is "http" or "https" ? "" : user + "@";
+        return $"{uri.Scheme}://{account}{uri.Authority}{uri.PathAndQuery}{uri.Fragment}";
     }
 
-    // git's scp-like form, [user@]host:path, whose host is longer than a Windows drive letter.
-    [GeneratedRegex(@"^([^@/\\:]+@)?[^@/\\:]{2,}:")]
+    // git's scp-like form, [user@]host:path, whose host is longer than a Windows drive letter, and no password before an @.
+    [GeneratedRegex(@"^(?![^/@]*:[^/]*@)([^@/\\:]+@)?[^@/\\:]{2,}:")]
     private static partial Regex ScpLike();
 
-    internal static bool HoldsUncommittedChanges(string sourceFolder) =>
-        new SourceRepositoryGit(sourceFolder).Run("status", "--porcelain", "--untracked-files=all").Length > 0;
-
-    internal static string CommitAtHead(string sourceFolder, SharedSource cloneFrom)
+    internal static string CommitAtHead(string sourceFolder, SharedSource cloneFrom, CancellationToken cancel)
     {
-        if (!Directory.Exists(sourceFolder)) Clone(sourceFolder, cloneFrom);
+        if (!Directory.Exists(sourceFolder)) Clone(sourceFolder, cloneFrom, cancel);
         var git = new SourceRepositoryGit(sourceFolder);
         return git.Exists ? git.HeadCommit() : throw SourceStopException.Unreadable($"'{sourceFolder}' holds no repository.");
     }
 
-    private static void Clone(string sourceFolder, SharedSource source)
+    // A source mod's repository has a main (ADR-0007), so a clone of a remote whose default branch is another has one
+    // made at that branch's tip.
+    private static void Clone(string sourceFolder, SharedSource source, CancellationToken cancel)
     {
-        GitCli.Clone(source.Remote, sourceFolder);
+        if (source.Remote.StartsWith('-'))
+            throw SourceStopException.GitFailed($"its remote '{source.Remote}' is not a remote git can clone");
         try
         {
+            GitCli.Clone(source.Remote, sourceFolder, GitInit.Settings, cancel);
             var git = new SourceRepositoryGit(sourceFolder);
+            GitInit.EnsureCommitIdentity(git);
+            if (!SourceRepositoryGit.IsTracked(sourceFolder)) git.Run("branch", "main");
             if (git.HeadCommit() != source.Commit) git.Run("checkout", "-q", "--detach", source.Commit);
         }
-        catch (SourceStopException)
+        catch (SourceStopException) when (Directory.Exists(sourceFolder))
         {
             Delete(sourceFolder);
             throw;

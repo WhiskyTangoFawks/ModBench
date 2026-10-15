@@ -33,12 +33,13 @@ public sealed class SourceToBuildTests : IDisposable
     }
 
     [Theory]
-    [InlineData(new[] { "fork", "origin" }, "origin")]
-    [InlineData(new[] { "upstream", "fork" }, "fork")]
-    public void ASourceWithARemote_IsSharedThroughOrigin_ElseTheFirstRemote_AtTheCommitAtHead(string[] remotes, string sharedThrough)
+    [InlineData("fork", "origin", "origin")]
+    [InlineData("upstream", "fork", "fork")]
+    public void ASourceWithARemote_IsSharedThroughOrigin_ElseTheFirstRemote_AtTheCommitAtHead(string added, string addedNext, string sharedThrough)
     {
         Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], []));
-        foreach (var remote in remotes) Git("remote", "add", remote, $"https://example.com/{remote}.git");
+        Git("remote", "add", added, $"https://example.com/{added}.git");
+        Git("remote", "add", addedNext, $"https://example.com/{addedNext}.git");
 
         Assert.Equal(new SharedSource($"https://example.com/{sharedThrough}.git", Git("rev-parse", "HEAD").Trim()), Built().Shared);
     }
@@ -66,6 +67,31 @@ public sealed class SourceToBuildTests : IDisposable
         File.WriteAllText(Path.Combine(_sourceFolder, written), "new");
 
         Assert.Equal(uncommitted, Built().Uncommitted);
+    }
+
+    [Theory]
+    [InlineData("https://user:p@ss@example.com/mod.git")]
+    [InlineData("ssh://git:p@ss@example.com/mod.git")]
+    [InlineData("user:secret@example.com:mod.git")]
+    [InlineData("https://exa mple.com/mod.git")]
+    public void ARemoteWhoseCredentialCannotSafelyBeLeftOut_IsSharedThroughNone(string url)
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], []));
+        Git("remote", "add", "origin", url);
+
+        Assert.Null(Built().Shared);
+    }
+
+    [Theory]
+    [InlineData("refs/remotes/origin/main", false)]
+    [InlineData("refs/heads/kept", true)]
+    public void ASharedSource_SaysWhetherItsRemoteHoldsTheCommitAtHead_AsTheLastFetchSaw(string holding, bool unpushed)
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], []));
+        Git("remote", "add", "origin", "https://example.com/mod.git");
+        Git("update-ref", holding, "HEAD");
+
+        Assert.Equal(unpushed, Built().Unpushed);
     }
 
     [Fact]

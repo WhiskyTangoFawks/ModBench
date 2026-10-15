@@ -1053,6 +1053,7 @@ export interface components {
             overwritten: string[];
             failure?: string | null;
             uncommitted: boolean;
+            unpushed: boolean;
         };
         CellChildRecords: {
             persistent: components["schemas"]["ChildRecordSummary"][];
@@ -1409,6 +1410,7 @@ export interface components {
             refusal: components["schemas"]["RestoreRefusal"];
             message: string;
             gameFilesNotFound: string[];
+            buildRefusal: components["schemas"]["BuildRefusal"];
         };
         ModStatus: {
             mod: string;

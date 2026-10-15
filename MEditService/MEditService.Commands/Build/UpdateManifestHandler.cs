@@ -16,7 +16,7 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
 
     private ItemAnswer<UpdateManifestRefusal, UpdatedMod> UpdateMod(ModToUpdate mod, InstanceToUpdate instance)
     {
-        if (mod.IsSourceMod) return LeftToItsBuild(mod, instance);
+        if (mod.IsSourceMod || NamesASource(mod)) return LeftToItsBuild(mod, instance);
 
         var missing = mod.InstallationFiles.Where(file => !repository.InstallationFileExists(file.Path))
             .Select(file => $"'{repository.InstallationFileName(file.Path)}'").ToList();
@@ -61,6 +61,18 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
         return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Landed(new UpdatedMod(
             written, [.. manifest.Files.Where(file => file.Provider is FileProvider.NoProvider).Select(file => file.Path).Order(StringComparer.Ordinal)],
             statCacheNotWritten));
+    }
+
+    private bool NamesASource(ModToUpdate mod)
+    {
+        try
+        {
+            return repository.ReadManifest(mod.Folder, mod.Name)?.Files.Any(line => line.Provider is FileProvider.Source) ?? false;
+        }
+        catch (Exception e) when (e is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private ItemAnswer<UpdateManifestRefusal, UpdatedMod> LeftToItsBuild(ModToUpdate mod, InstanceToUpdate instance)

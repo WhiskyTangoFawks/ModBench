@@ -308,6 +308,16 @@ public sealed class UpdateManifestHandlerTests
         Assert.Equal(["z.txt"], updated.NoProvider);
     }
 
+    [Fact]
+    public async Task AModWhoseManifestNamesItsSource_IsLeftToItsBuild_ThoughItsSourceIsNotThere()
+    {
+        var built = BuiltSourceMod();
+
+        await Landed(ModFrom("Mod"));
+
+        Assert.Same(built, _folders.Manifests[Mod]);
+    }
+
     [Theory]
     [InlineData("a.esp", "changed since the build")]
     [InlineData("notes.txt", "a file the build did not make")]

@@ -651,17 +651,20 @@ describe('modbench.mod.build', () => {
     }]);
   });
 
-  it('names each mod built from a source holding changes no commit holds, beside the landing', async () => {
+  it.each([
+    ['uncommitted', ['ModA'], 'Built 1 mod from changes no commit holds, so its manifest\'s commit does not rebuild it.', '"ModA"'],
+    ['uncommitted', ['ModA', 'ModB'], 'Built 2 mods from changes no commit holds, so their manifests\' commits do not rebuild them.', '"ModA", "ModB"'],
+    ['unpushed', ['ModA'], 'Built 1 mod at a commit its remote does not hold, so a clone elsewhere cannot fetch it.', '"ModA"'],
+    ['unpushed', ['ModA', 'ModB'], 'Built 2 mods at commits their remotes do not hold, so a clone elsewhere cannot fetch them.', '"ModA", "ModB"'],
+  ] as const)('names each mod whose manifest\'s commit does not rebuild it, %s, beside the landing', async (flag, mods, message, detail) => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [{ ...built('ModA'), uncommitted: true }, built('ModB')], refused: [] });
+    client.setCommandResult('build', { landed: mods.map((mod) => ({ ...built(mod), [flag]: true })), refused: [] });
     const { handler, reporter } = registered(client);
-    const rows = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
+    const rows = mods.map((mod) => new ModsRowStandIn(mod));
 
     await handler(rows[0], rows);
 
-    expect(reporter.reports).toEqual([{
-      severity: 'warning', message: 'Built 1 mod from changes no commit holds, so its manifest\'s commit does not rebuild it.', detail: '"ModA"',
-    }]);
+    expect(reporter.reports).toEqual([{ severity: 'warning', message, detail }]);
   });
 
   it('reports a refusal of the whole selection once, and lands nothing', async () => {

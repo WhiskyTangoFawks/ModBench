@@ -6,15 +6,14 @@ public sealed class SourceCommitAtHeadTests : IDisposable
 {
     private readonly ScratchDirectory _root = new("medit-source-commit-at-head-");
     private readonly string _remote;
-    private readonly string _first;
-    private readonly string _second;
+    private readonly Dictionary<string, string> _commits = [];
 
     public SourceCommitAtHeadTests()
     {
         _remote = Directory.CreateDirectory(Path.Combine(_root, "remote")).FullName;
         Git(_remote, "init", "-q", "-b", "main");
-        _first = Commit("first");
-        _second = Commit("second");
+        Commit("first");
+        Commit("second");
     }
 
     public void Dispose() => _root.Dispose();
@@ -22,37 +21,81 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     private string SourceFolder => Path.Combine(_root, "source", "Mod");
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void AnAbsentSource_IsClonedFromItsRemote_AtTheCommit(bool atTheTip)
+    [InlineData("first")]
+    [InlineData("second")]
+    public void AnAbsentSource_IsClonedFromItsRemote_AtTheCommit(string at)
     {
-        var commit = atTheTip ? _second : _first;
+        Assert.Equal(_commits[at], CommitAtHead(_remote, _commits[at]).Value());
 
-        Assert.Equal(commit, TestAdapters.Source().CommitAtHead(SourceFolder, new SharedSource(_remote, commit)).Value());
+        Assert.Equal(_commits[at], Git(SourceFolder, "rev-parse", "HEAD").Trim());
+        Assert.Equal(at, File.ReadAllText(Path.Combine(SourceFolder, "build.json")));
+    }
 
-        Assert.Equal(commit, Git(SourceFolder, "rev-parse", "HEAD").Trim());
-        Assert.Equal(atTheTip ? "second" : "first", File.ReadAllText(Path.Combine(SourceFolder, "build.json")));
+    [Theory]
+    [InlineData("core.autocrlf", "false")]
+    [InlineData("core.longpaths", "true")]
+    [InlineData("core.quotePath", "false")]
+    [InlineData("commit.gpgsign", "false")]
+    [InlineData("gc.autoDetach", "false")]
+    public void AClone_IsSetAsInitSetsARepository(string key, string value)
+    {
+        CommitAtHead(_remote, _commits["second"]).Value();
+
+        Assert.Equal(value, Git(SourceFolder, "config", "--local", "--get", key).Trim());
+    }
+
+    [Fact]
+    public void AClone_OfARemoteWhoseDefaultBranchIsNotMain_IsASourceRepository()
+    {
+        Git(_remote, "branch", "-m", "main", "trunk");
+
+        CommitAtHead(_remote, _commits["second"]).Value();
+
+        Assert.True(TestAdapters.Source().IsTracked(SourceFolder));
     }
 
     [Fact]
     public void ASourceAtAnotherCommit_AnswersThatCommit_AndIsNotMoved()
     {
-        TestAdapters.Source().CommitAtHead(SourceFolder, new SharedSource(_remote, _first)).Value();
+        CommitAtHead(_remote, _commits["first"]).Value();
 
-        Assert.Equal(_first, TestAdapters.Source().CommitAtHead(SourceFolder, new SharedSource(_remote, _second)).Value());
+        Assert.Equal(_commits["first"], CommitAtHead(_remote, _commits["second"]).Value());
 
         Assert.Equal("first", File.ReadAllText(Path.Combine(SourceFolder, "build.json")));
     }
 
     [Theory]
     [InlineData("a commit its remote does not hold", "remote", "0123456789012345678901234567890123456789")]
-    [InlineData("a remote that is not there", "gone", null)]
-    public void ACloneThatCannotReachTheCommit_Fails_LeavingNoFolder(string cause, string remote, string? commit)
+    [InlineData("a remote that is not there", "gone", "second")]
+    public void ACloneThatCannotReachTheCommit_Fails_LeavingNoFolder(string cause, string remote, string commit)
     {
-        var failure = TestAdapters.Source().CommitAtHead(SourceFolder, new SharedSource(Path.Combine(_root, remote), commit ?? _first)).Stopped();
+        var failure = CommitAtHead(Path.Combine(_root, remote), _commits.GetValueOrDefault(commit, commit)).Stopped();
 
         Assert.True(failure is SourceFailure.GitFailed, cause);
         Assert.False(Directory.Exists(SourceFolder), cause);
+    }
+
+    [Fact]
+    public void ARemoteThatReadsAsAnOption_IsRefused_RunningNothing()
+    {
+        var failure = CommitAtHead("--upload-pack=touch medit-owned", _commits["second"]).Stopped();
+
+        Assert.Equal("its remote '--upload-pack=touch medit-owned' is not a remote git can clone", failure.Reason);
+        Assert.False(Directory.Exists(SourceFolder));
+    }
+
+    [PosixFact]
+    public async Task ACloneCancelledWhileGitWaits_StopsGit_LeavingNoFolder()
+    {
+        var stalled = Directory.CreateDirectory(Path.Combine(_root, "stalled", ".git")).FullName;
+        using (var fifo = System.Diagnostics.Process.Start("mkfifo", Path.Combine(stalled, "HEAD"))) await fifo.WaitForExitAsync();
+        using var cancelling = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+
+        var failure = await Task.Run(() => CommitAtHead(Path.Combine(_root, "stalled"), _commits["second"], cancelling.Token).Stopped())
+            .WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.Equal("the clone was cancelled", failure.Reason);
+        Assert.False(Directory.Exists(SourceFolder));
     }
 
     [Fact]
@@ -60,17 +103,20 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     {
         Directory.CreateDirectory(SourceFolder);
 
-        var failure = TestAdapters.Source().CommitAtHead(SourceFolder, new SharedSource(_remote, _first)).Stopped();
+        var failure = CommitAtHead(_remote, _commits["first"]).Stopped();
 
         Assert.Equal($"'{SourceFolder}' holds no repository.", Assert.IsType<SourceFailure.Unreadable>(failure).Reason);
     }
 
-    private string Commit(string text)
+    private RepositoriesLib.Answer<string, SourceFailure> CommitAtHead(string remote, string commit, CancellationToken cancel = default) =>
+        TestAdapters.Source().CommitAtHead(SourceFolder, new SharedSource(remote, commit), cancel);
+
+    private void Commit(string text)
     {
         File.WriteAllText(Path.Combine(_remote, "build.json"), text);
         Git(_remote, "add", "-A");
         Git(_remote, "commit", "-q", "-m", text);
-        return Git(_remote, "rev-parse", "HEAD").Trim();
+        _commits[text] = Git(_remote, "rev-parse", "HEAD").Trim();
     }
 
     private static string Git(string folder, params string[] args) => GitProbe.Run(Path.Combine(folder, ".git"), folder, args);

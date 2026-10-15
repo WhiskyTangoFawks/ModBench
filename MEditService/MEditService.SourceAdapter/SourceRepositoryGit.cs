@@ -71,6 +71,12 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
 
     internal string HeadCommit() => Run("rev-parse", "HEAD").Trim();
 
+    internal bool HoldsUncommittedChanges() => Run("status", "--porcelain", "--untracked-files=all").Length > 0;
+
+    /// <summary>Whether <paramref name="remote"/>, as last fetched, holds the commit at HEAD.</summary>
+    internal bool RemoteHoldsHead(string remote) =>
+        Run("for-each-ref", "--contains", "HEAD", "--format=%(refname)", $"refs/remotes/{remote}/").Length > 0;
+
     // git speaks forward slashes on every platform, Windows included, while the layout builds
     // its paths with Path.Combine.
     internal static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');

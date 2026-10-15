@@ -25,7 +25,7 @@ public sealed class CompilePluginHandler
     internal Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileAsync(
         IReadOnlyList<RegisteredPlugin> placed)
     {
-        var byKey = placed.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
+        var byKey = placed.DistinctBy(plugin => plugin.Key, PluginAddress.Comparer).ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         return Over([.. byKey.Keys], plugin => _compileService.CompileAsync(byKey[plugin]));
     }
 

@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using MEditService.Commands.Build;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -56,36 +55,6 @@ public sealed class RestoreASourceModTests : IDisposable
     }
 
     [Fact]
-    public async Task AFreshClonesModFolder_ThatHoldsNoneOfItsInstallationFiles_IsBuiltWithTheBaseItsManifestNames()
-    {
-        var downloaded = Path.Combine(_root, "downloads", "Mod-1.zip");
-        Directory.CreateDirectory(Path.GetDirectoryName(downloaded).Require());
-        using (var zip = ZipFile.Open(downloaded, ZipArchiveMode.Create))
-        using (var entry = new StreamWriter(zip.CreateEntry("textures/a.dds").Open()))
-            entry.Write("installed a");
-        var installed = new InstallationFile(downloaded, Source: null, Size: 7, Hash: "AAAAAAAAAAA=", [new HashedEntry("textures/a.dds", "#a")]);
-        _folders.WriteManifest(ModFolder, ModName, new Manifest(
-            [new ManifestSource("Mod-1.zip", 7, "AAAAAAAAAAA=")], [],
-            [new ManifestFile("meshes/c.nif", new FileProvider.Source(RemoteFolder, _first)), new ManifestFile("textures/a.dds", new FileProvider.FirstInstallationFile())]));
-
-        Assert.Single((await Restore(installed)).Landed);
-
-        Assert.Equal("installed a", File.ReadAllText(Path.Combine(ModFolder, "textures", "a.dds")));
-    }
-
-    [Fact]
-    public async Task AFreshClone_WithNoPluginFile_RestoresEachPluginItsSourceCompiles()
-    {
-        var plugin = await ManifestedPluginSource();
-        File.Delete(plugin);
-        _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
-
-        Assert.Single((await Restore()).Landed);
-
-        Assert.True(File.Exists(plugin));
-    }
-
-    [Fact]
     public async Task APluginWhoseSourceTheLoadOrderDoesNotKnow_IsCompiledFromTheSourceRestoreCloned()
     {
         var plugin = await ManifestedPluginSource();
@@ -119,7 +88,7 @@ public sealed class RestoreASourceModTests : IDisposable
     public async Task ASourceAtTheCommitThatHoldsChangesNoCommitHolds_IsBuilt_AndSaysSo()
     {
         const string Shared = "https://example.com/mod.git";
-        Assert.Equal(_first, TestAdapters.Source().CommitAtHead(SourceFolder, new SharedSource(RemoteFolder, _first)).Value());
+        Assert.Equal(_first, TestAdapters.Source().CommitAtHead(SourceFolder, new SharedSource(RemoteFolder, _first), CancellationToken.None).Value());
         Git(SourceFolder, "remote", "set-url", "origin", Shared);
         File.WriteAllText(Path.Combine(SourceFolder, "assets", "meshes", "c.nif"), "changed");
         ManifestedAt(_first, Shared);
@@ -133,7 +102,7 @@ public sealed class RestoreASourceModTests : IDisposable
     [Fact]
     public async Task ASourceAtAnotherCommit_IsSkippedNamingTheCommit_AndNothingIsWritten()
     {
-        Assert.Equal(_second, TestAdapters.Source().CommitAtHead(SourceFolder, new SharedSource(RemoteFolder, _second)).Value());
+        Assert.Equal(_second, TestAdapters.Source().CommitAtHead(SourceFolder, new SharedSource(RemoteFolder, _second), CancellationToken.None).Value());
         ManifestedAt(_first);
 
         var skipped = Assert.Single((await Restore()).Refused);
@@ -164,8 +133,22 @@ public sealed class RestoreASourceModTests : IDisposable
         var skipped = Assert.Single((await Restore()).Refused);
 
         Assert.Equal(
-            (RestoreRefusal.NotBuilt, $"'{ModName}' was not built: its build configuration names the output folder 'Other', not its folder 'Mod'."),
-            (skipped.Refusal.Kind, skipped.Message));
+            (RestoreRefusal.NotBuilt, BuildRefusal.OutputNotThisMod,
+                $"'{ModName}' was not built: its build configuration names the output folder 'Other', not its folder 'Mod'."),
+            (skipped.Refusal.Kind, skipped.Refusal.Build, skipped.Message));
+    }
+
+    [Fact]
+    public async Task ARestoreCancelledWhileItClonesASource_StopsTheClone_AndSkipsTheMod()
+    {
+        ManifestedAt(_first);
+        using var cancelling = new CancellationTokenSource();
+        var notifications = new InMemoryNotificationPublisher { OnPublish = _ => cancelling.Cancel() };
+
+        var skipped = Assert.Single((await Restore(notifications, cancelling.Token)).Refused);
+
+        Assert.Equal($"'{ModName}' was skipped: its source could not be cloned or read: the clone was cancelled.", skipped.Message);
+        Assert.False(Directory.Exists(SourceFolder));
     }
 
     [Fact]
@@ -183,10 +166,12 @@ public sealed class RestoreASourceModTests : IDisposable
     private void ManifestedAt(string commit, string? remote = null) =>
         _folders.WriteManifest(ModFolder, ModName, new Manifest([], [], [new ManifestFile("meshes/c.nif", new FileProvider.Source(remote ?? RemoteFolder, commit))]));
 
-    private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(params InstallationFile[] installed) =>
-        TestEditService.RestoreHandler(_holder, new InMemoryNotificationPublisher(), TestAdapters.Source(), _folders).RestoreAsync(
-            [new ModToRestore(ModName, ModFolder, installed, ["meta.ini"], SourceFolder)],
-            new InstanceToRestore([], Path.Combine(_root, "game"), Path.Combine(_root, "stat-cache"), ".mohidden", Archives: null));
+    private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore() => Restore(new InMemoryNotificationPublisher(), CancellationToken.None);
+
+    private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(InMemoryNotificationPublisher notifications, CancellationToken cancel) =>
+        TestEditService.RestoreHandler(_holder, notifications, TestAdapters.Source(), _folders).RestoreAsync(
+            [new ModToRestore(ModName, ModFolder, [], ["meta.ini"], SourceFolder)],
+            new InstanceToRestore([], Path.Combine(_root, "game"), Path.Combine(_root, "stat-cache"), ".mohidden", Archives: null), cancel: cancel);
 
     private string Commit(string configuration, string mesh)
     {

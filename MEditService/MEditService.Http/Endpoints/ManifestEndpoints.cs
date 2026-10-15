@@ -109,7 +109,8 @@ internal static class ManifestEndpoints
         return Results.Ok(new RestoreFromManifestResponse(
             [.. result.Landed.Select(landed => new RestoredModResponse(
                 landed.Item, landed.Outcome.Written, landed.Outcome.NamedByNoLine, landed.Outcome.StatCacheNotWritten, landed.Outcome.Uncommitted))],
-            [.. result.Refused.Select(refused => new ModRestoreRefusal(refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.GameFilesNotFound))]));
+            [.. result.Refused.Select(refused => new ModRestoreRefusal(
+                refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.GameFilesNotFound, refused.Refusal.Build))]));
     }
 
     internal static IResult WhatRestoreDestroys(ModFoldersRequest req, IModFolderRepository repository)
@@ -239,8 +240,9 @@ internal sealed record ModRestoreDestroys(string Mod, IReadOnlyList<string> Diff
 internal sealed record WhatRestoreDestroysResponse(IReadOnlyList<ModRestoreDestroys> Mods, IReadOnlyList<ModRestoreRefusal> Refused);
 
 /// <summary>A skipped mod. A NotFound mod names each game file it lacks, by its path under the data folder; a request that
-/// names them brings it back.</summary>
-internal sealed record ModRestoreRefusal(string Item, RestoreRefusal Refusal, string Message, IReadOnlyList<string> GameFilesNotFound);
+/// names them brings it back. A NotBuilt mod names its build's refusal.</summary>
+internal sealed record ModRestoreRefusal(
+    string Item, RestoreRefusal Refusal, string Message, IReadOnlyList<string> GameFilesNotFound, BuildRefusal BuildRefusal = BuildRefusal.None);
 
 /// <summary>Landed, skipped or not finished, per mod (ADR-0019), never the status of the call.</summary>
 internal sealed record RestoreFromManifestResponse(IReadOnlyList<RestoredModResponse> Applied, IReadOnlyList<ModRestoreRefusal> Refused);
