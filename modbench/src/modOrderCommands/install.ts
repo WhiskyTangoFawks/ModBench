@@ -52,7 +52,7 @@ const upgradeLoss = (status: ModStatus): string | undefined => {
 
 type StatusClient = Pick<MEditClient, 'getModStatus'>;
 
-/** What an upgrade over the mod would lose, or why mEdit could not say (agent.md, Any agent, story 7). */
+// What an upgrade over the mod would lose, or why mEdit could not say (agent.md, Any agent, story 7).
 async function upgradeRefusal(
   adapter: InstanceAdapter, client: StatusClient, target: InstallTarget, force: boolean,
 ): Promise<string | undefined> {
