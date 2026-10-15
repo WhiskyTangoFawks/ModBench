@@ -46,8 +46,8 @@ public enum RestoreRefusal
     NotBuilt,
 }
 
-/// <summary>Why a mod was skipped. A NotFound mod names the game files it lacks, by the paths a request can bring them
-/// back with, and the installation files, by their names; a NotBuilt mod, its build's refusal (ADR-0019).</summary>
+/// <summary>Why a mod was skipped. A NotFound mod names the game files and installation files it lacks, as a request
+/// hands them; a NotBuilt mod, its build's refusal (ADR-0019).</summary>
 public sealed record RestoreSkip(
     RestoreRefusal Kind, IReadOnlyList<string> GameFilesNotFound, IReadOnlyList<string> InstallationFilesNotFound, BuildRefusal Build = BuildRefusal.None);
 

@@ -266,8 +266,8 @@ interface RestoredMod {
   uncommitted?: boolean;
 }
 
-/** A skipped mod that lacks files the call did not hand: game files by their paths under the data folder, and installation
- *  files by their names in the downloads folder. A call that hands them brings it back, or names every other lack. */
+/** A skipped mod lacking files the call did not hand: game files by path under the data folder, installation files by
+ *  name. A call that hands them brings it back, or names every other lack. */
 export interface NotFound {
   mod: string;
   gameFiles: readonly string[];

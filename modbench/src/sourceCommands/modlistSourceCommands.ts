@@ -51,7 +51,7 @@ export type RestoreStatus = { readonly phase: 'ReadingFiles'; readonly mod: stri
 
 type FolderMod = Pick<UpdateManifestMod, 'name' | 'folder' | 'committedFiles'>;
 
-/** What a gesture reads of a mod beyond its folder and the game files it overrides, or why it cannot. */
+// What a gesture reads of a mod beyond its folder and the game files it overrides, or why it cannot.
 type ReadMore<T> = (mod: string) => Promise<{ read: T; notes: readonly string[] } | { refusal: string }>;
 
 interface ReadMods<T> {

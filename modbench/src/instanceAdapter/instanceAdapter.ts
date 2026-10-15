@@ -309,7 +309,7 @@ export interface GameFile extends HashedFile {
 }
 
 /** The game files a mod's files override, and each entry of its folder the listing skipped, one line apiece. */
-export interface OverriddenGameFiles {
+interface OverriddenGameFiles {
   readonly gameFiles: readonly GameFile[];
   readonly notes: readonly string[];
 }
