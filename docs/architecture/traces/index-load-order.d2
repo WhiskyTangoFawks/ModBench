@@ -11,8 +11,8 @@ client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
-commands: @../target-architecture.medit_core.commands.edits
-commands.label: Record edits
+commands: @../target-architecture.medit_core.commands
+commands.label: Commands
 loadorder: @../target-architecture.medit_kernel.loadorder
 loadorder.label: Load order state
 indexer: @../target-architecture.medit_readmodel.index.indexer
@@ -31,8 +31,8 @@ views: "Plugins · Editor" {class: driving}
 
 instanceloader -> activation: value {class: loadorder}
 activation -> instancecommands: "put load order: the snapshot" {class: loadorder}
-instancecommands -> client: "snapshot: the game release · every plugin and what provides it · the active plugins" {class: loadorder}
-client -> http: "snapshot: the game release · every plugin and what provides it · the active plugins" {class: loadorder}
+instancecommands -> client: "snapshot: the game release · every plugin and what provides it · the active plugins · the strings language" {class: loadorder}
+client -> http: "snapshot: the game release · every plugin and what provides it · the active plugins · the strings language" {class: loadorder}
 http -> commands: put load order {class: loadorder}
 commands -> loadorder: snapshot {class: loadorder}
 commands -> http: "applied: the version" {class: loadorder}
