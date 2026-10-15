@@ -9,8 +9,8 @@ Each story cites its source. A story with no provider is owned here.
 As a user, I want:
 
 1. The instance folder to be the repository, so a change I make in the mod manager or in Modbench is a working-tree change in Source Control. Source: ADR-0022
-2. The ignore list to be a whitelist: every manifest, each mod's `meta.ini`, each profile's mod order, plugin order and INIs, and the mod manager's configuration. Everything else is ignored, the downloaded files' index and the source folder included.
-3. Every mod and every profile in the commit, enabled or not. A disabled mod is still mine.
+2. The ignore list to be a whitelist: every manifest, each profile's mod order, plugin order and game INIs, and the mod manager's configuration. Everything else is ignored: the mod manager's own file in each mod folder, the downloaded files' index and the source folder included.
+3. Every mod, every separator and every profile in the commit, enabled or not. A disabled mod is still mine.
 4. The mod manager's configuration committed with the paths it holds. A clone on another machine edits them.
 5. Commit, diff, history, branches and merge to be VS Code's. Modbench adds no gesture for them. Source: Existing tools
 
@@ -26,6 +26,9 @@ A mod's installation files are the downloaded files the mod manager records the 
 6. An excluded file to come back excluded: its line carries its full name, `.mohidden` included. Source: MO2
 7. A source mod's manifest to be what its last build wrote. With a remote, each file the source provides names the remote and the commit. With none, the manifest reads as any other mod's, and a file the installation files do not yield has no provider. Source: ADR-0022
 8. The manifest to hold no path from this machine, so a clone rebuilds anywhere.
+9. Each separator to have a manifest that names nothing, so a clone has the separator. Source: Never break the instance for its owner
+10. The manifest to hold the mod's version beside its sources, so it holds all that restore writes into the mod manager's record of the mod. Source: Orthogonality
+11. The mod manager's own file in a mod folder to be its record of the mod, never a file of the mod: no line names it, status never says it differs, and restore never sends it to the trash.
 
 ## Status
 
@@ -36,12 +39,14 @@ As a user, I want:
 3. Status to cost a stat of each file, and a hash only of a file whose size, modified time or change time differs from Modbench's last read. A tool can keep a file's modified time, and a write always moves its change time. Modbench keeps what it last read on this machine and never commits it, as git keeps its index, so a clone on another machine reads a file as differing only when its bytes do. Source: Existing tools; ADR-0003
 4. Each file row in a mod to say differs when its bytes differ from the manifest's or no line names it, and the mod's tooltip to say how many files its manifest names and its folder lacks.
 5. The Mods view's badge to count the mods that differ or have no manifest. Source: VS Code's view badge
+6. A mod to say differs when the mod manager's record differs from its manifest in the version or a source, so a change I make in the mod manager reaches the commit. Source: Never silently wrong
+7. A separator with no manifest to say no manifest and to count in the badge, because a clone lacks it. Source: Never silently wrong
 
 ## Git init
 
 As a user, I want:
 
-1. No prompt. Git init makes the repository with its ignore list and writes no manifest, so Source Control shows each mod's `meta.ini`, the profiles and the mod manager's configuration as untracked, until I update the manifests, stage and commit. Source: catalog `git init`
+1. No prompt. Git init makes the repository with its ignore list and writes no manifest, so Source Control shows the profiles and the mod manager's configuration as untracked, and no mod, until I update the manifests, stage and commit. Source: catalog `git init`
 2. Git init refused when the instance folder already holds a repository, naming it. Source: Refuse, do not repair
 3. Source Control, while the instance folder holds no repository, to offer git init beside git's own Initialize Repository, and to say that git init writes the ignore list, so git never reads the mod folders' files. Source: VS Code's Source Control welcome content
 
@@ -49,9 +54,9 @@ As a user, I want:
 
 As a user, I want:
 
-1. Update manifest and restore from manifest with no mods to act on every mod folder in the instance, in every profile, enabled or not. The Mods view shows the active profile alone and what a filter leaves, so select all there is not every mod. Source: The repository, story 3
+1. Update manifest and restore from manifest with no mods to act on every mod and every separator in the instance, in every profile, enabled or not. The Mods view shows the active profile alone and what a filter leaves, so select all there is not every mod. Source: The repository, story 3
 2. From the palette, the Mods view's selection when that view has focus, else every mod. Source: catalog, The surface supplies the Argument
-3. A separator in a selection to stand for its mods, so a collapsed group acts whole. Source: mods.md, The tree, story 2
+3. A separator in a selection to stand for itself and its mods, so a collapsed group acts whole. Source: mods.md, The tree, story 2
 4. Each mod to land on its own: a refused or skipped mod never stops the rest. Source: A selection is one gesture, and each item lands on its own
 5. Progress by mod, with Cancel. Cancel stops after the mod in hand, and the mods that landed stay. Source: VS Code's progress notification
 
@@ -75,10 +80,12 @@ As a user, I want:
 1. Each mod's folder to become what its manifest says: every file whose bytes differ written, and every file no line names sent to the trash. A file whose bytes already match is left alone, so a restore after a checkout costs only what the checkout changed. Source: ADR-0022
 2. One confirmation, only when the restore destroys something: a file whose bytes differ from the manifest's, or a file no line names. It names the mods, or says every mod, and says that a change no manifest holds is lost. A restore after a fresh clone asks nothing. Source: Confirm what destroys
 3. A source mod with a remote rebuilt from its source at the commit the manifest names, and the source cloned when it is absent. One at another commit is skipped and named with the commit, because Modbench never moves my repository. Source: ADR-0022; ADR-0003
-4. A mod skipped, and named with what it lacks, when an installation file or a game file its manifest names is missing or has other bytes, or when a file has no provider. Every other mod lands. Nothing is downloaded. Source: A selection is one gesture, and each item lands on its own
+4. A mod skipped, and named with what it lacks, when a downloaded file or a game file its manifest names is missing or has other bytes, or when a file has no provider. Every other mod lands. Nothing is downloaded. Source: A selection is one gesture, and each item lands on its own
 5. A file the build makes, a compiled plugin or a packed archive, to come back as the build makes it, which can differ in bytes. Only what comes from a downloaded file is byte-checked. Source: ADR-0006
 6. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. This is an exception to A failed gesture writes nothing. Source: mods.md, What install does, story 5
 7. A mod folder with no manifest left as it is and named in the report, because it can be a mod I have not recorded yet. Uninstall removes it. Source: Never silently wrong
+8. Restore to find each mod's files from its manifest alone, never from the mod manager's record, so a clone restores under a mod manager whose record git does not hold. Each downloaded file the manifest names is found by its name in the downloads folder. Source: Orthogonality; ADR-0022
+9. Restore to write the mod manager's record of each mod from its manifest, and to keep what the record holds that the manifest does not. Notes, colour and category do not travel: they are Metadata chrome. Source: Never break the instance for its owner; commands.md, Metadata chrome
 
 ## Menus and keys
 
@@ -113,7 +120,7 @@ What I expect to need and choose not to build yet, each with why.
 ## Test seam
 
 - The manifest, given a mod folder's files, its installation files and the game folder: the lines, with no git and no VS Code.
-- Restore from manifest, given manifests and the downloaded files: the files written, the files sent to the trash, and the mods skipped with their reasons.
+- Restore from manifest, given manifests and the downloaded files: the files written, the files sent to the trash, each mod manager record written, and the mods skipped with their reasons.
 - Status, given manifests, a folder and what Modbench last read: each mod's state, with no hash computed for a file whose size and time match.
 - The round trip: update manifest then restore from manifest on a fixture instance changes no file.
 - Menus and keys: the placement above, checked against the extension manifest.
