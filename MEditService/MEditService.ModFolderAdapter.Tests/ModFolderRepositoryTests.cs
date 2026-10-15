@@ -164,6 +164,38 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal(namedByNoLine, status.Gone.Contains("meshes/a.nif"));
     }
 
+    [Theory]
+    [InlineData(StringComparison.OrdinalIgnoreCase, "Meshes/A.nif")]
+    [InlineData(StringComparison.Ordinal, null)]
+    public void AFileThatDiffers_IsNamedByItsPathOnDisk_WhereTheFileSystemFindsItByItsLinesName(
+        StringComparison fileSystemMatchesNames, string? differing)
+    {
+        Write("Meshes/A.nif", "hello");
+        Manifested(Line("meshes/a.nif", "Mod.zip"));
+        var repository = new ModFolderRepository(
+            TimeProvider.System,
+            path => Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories).Any(file => string.Equals(file, path, fileSystemMatchesNames)));
+
+        Assert.Equal(differing is null ? [] : [differing], repository.Status(_root, "mod", new HashSet<string>(), _statCache).Differing);
+    }
+
+    [PosixFact]
+    public void AStatusWhoseStatCacheCannotBeWritten_SaysWhy()
+    {
+        Write("a.nif", "hello");
+        KeepAsRestored(Manifested(Line("a.nif", "Mod.zip")));
+        Write("a.nif", "hello");
+        FileModes.Set(_statCache, "555");
+        try
+        {
+            Assert.Contains(_statCache.Path, Status().StatCacheNotWritten, StringComparison.Ordinal);
+        }
+        finally
+        {
+            FileModes.Set(_statCache, "755");
+        }
+    }
+
     [PosixFact]
     public void OnAFileSystemThatTellsCaseApart_TwoFilesWhoseNamesDifferInCaseAlone_AreOneNamedByALineAndOneNot()
     {
@@ -271,7 +303,8 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
         var status = Status();
 
-        Assert.Contains("line 1", status.Unreadable, StringComparison.Ordinal);
+        Assert.True(status.Unreadable?.Manifest);
+        Assert.Contains("line 1", status.Unreadable?.Why, StringComparison.Ordinal);
         Assert.Equal(new ModStatus("mod", NoManifest: false, [], [], [], []), status with { Unreadable = null });
     }
 

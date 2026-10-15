@@ -7,7 +7,7 @@ import type { MoveToTrash } from '../ports/trash';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
 import { errorMessage } from '../ports/errorMessage';
-import { messageLine, registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
+import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import type { Sync } from '../drivingLib/syncFailureReport';
 import { modsKeyContext } from './gestureEntry';
@@ -40,7 +40,7 @@ interface ModsViewDeps {
   /** Mod sync, whose failure the view's message line says. */
   modSync: Sync<ModSyncArguments>;
   /** Each mod's status: mEdit pushes the mods whose status changed, and the view reads them. */
-  modStatus: { push: Pick<MEditClient, 'onNotification'>; read: ReadStatus };
+  modStatus: { push: Pick<MEditClient, 'onNotification' | 'onReconnected'>; read: ReadStatus };
 }
 
 interface ModsView extends vscode.Disposable {
@@ -54,7 +54,7 @@ interface ModsView extends vscode.Disposable {
  *  the loser silently vanishes. */
 export function createModsView(deps: ModsViewDeps): ModsView {
   const { instance, commands, log, modSync, reporterFor, ask, trash } = deps;
-  const statuses = new ModStatuses(deps.modStatus.push, deps.modStatus.read, log);
+  const { statuses, statusMessage } = modStatusesOf(deps);
   const provider = new ModListProvider({ instance, statuses });
   const view = vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: provider,
@@ -70,10 +70,10 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     hasRows: async () => (await provider.getChildren()).some((n) => !(n instanceof OverwriteNode) || n.lists()),
     toggle: { icon: 'list-tree', label: 'Group by separator' },
     termPlacement: 'afterBase',
-    viewMessage: () => messageLine(provider.viewMessage(), modSync.message()),
+    viewMessage: () => messageLine(provider.viewMessage(), modSync.message(), statusMessage()),
     standingMessage: () => provider.lastGoodReadMessage(),
     onRowsChanged: provider.onDidChangeTreeData,
-    onViewMessageChanged: (listener) => modSync.onMessageChanged(listener),
+    onViewMessageChanged: (listener) => joinSyncMessages(modSync, statuses).onMessageChanged(listener),
   });
   const showCount = () => nameFilter.setBaseDescription(provider.description());
   showCount();
@@ -130,6 +130,13 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },
     dispose: () => { disposable.dispose(); },
   };
+}
+
+// modlist-source.md, Status, story 1: status shows while the instance holds a repository.
+function modStatusesOf({ instance, modStatus, log }: Pick<ModsViewDeps, 'instance' | 'modStatus' | 'log'>) {
+  const statuses = new ModStatuses(
+    modStatus.push, modStatus.read, log, () => instance.value.mods.flatMap((entry) => (entry.kind === 'mod' ? [entry.name] : [])));
+  return { statuses, statusMessage: () => (instance.value.holdsRepository ? statuses.message() : undefined) };
 }
 
 // VS Code keeps the expansion it remembers for a known row identity over the provider's state, so

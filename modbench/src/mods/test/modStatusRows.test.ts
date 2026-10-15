@@ -9,6 +9,7 @@ vi.mock('vscode', () => ({
 }));
 
 import type { ModStatus } from '../../client';
+import { status } from './modStatusFixture';
 import { ModListProvider, type ModlistNode } from '../ModListProvider';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -17,8 +18,6 @@ import { present } from '../../ports/present';
 const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true, version: '1.0' });
 const file = (relativePath: string): OriginFile =>
   ({ relativePath, path: `/instance/mods/ModA/${relativePath}`, sourcePath: `/instance/mods/ModA/${relativePath}`, excluded: false, excludedByName: false });
-const status = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], noProvider: [], ...over });
 
 function providerOver(statuses: readonly ModStatus[], holdsRepository = true) {
   const byMod = new Map(statuses.map((held) => [held.mod, held]));

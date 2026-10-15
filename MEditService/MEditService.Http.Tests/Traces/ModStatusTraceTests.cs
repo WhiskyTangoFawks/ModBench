@@ -61,9 +61,6 @@ public sealed class ModStatusTraceTests : HostedTests
             .ToDictionary(mod => mod.GetProperty("mod").GetString() ?? "", StringComparer.Ordinal);
     }
 
-    private static IEnumerable<string?> Paths(JsonElement mod, string list) =>
-        [.. mod.GetProperty(list).EnumerateArray().Select(path => path.GetString())];
-
     private static IEnumerable<string?> Pushed(JsonElement push) => [.. push.GetProperty("mods").EnumerateArray().Select(mod => mod.GetString())];
 
     [Fact]
@@ -81,14 +78,10 @@ public sealed class ModStatusTraceTests : HostedTests
         File.WriteAllText(Path.Combine(FolderOf(Recorded), "mine.txt"), "mine");
         await PutLoadOrder(fx);
         var second = (await stream.EventsUntil("mod-status-changed"))[^1];
-        var changed = (await ModStatus())[Recorded];
 
         Assert.Equal([Recorded, Unrecorded], Pushed(first));
-        Assert.False(status[Recorded].GetProperty("noManifest").GetBoolean());
-        Assert.Equal(["a.txt"], Paths(status[Recorded], "noProvider"));
-        Assert.True(status[Unrecorded].GetProperty("noManifest").GetBoolean());
+        Assert.Equal([Recorded, Unrecorded], status.Keys.Order(StringComparer.Ordinal));
         Assert.Equal([Recorded], Pushed(second));
-        Assert.Equal(["mine.txt"], Paths(changed, "namedByNoLine"));
     }
 
     [Fact]

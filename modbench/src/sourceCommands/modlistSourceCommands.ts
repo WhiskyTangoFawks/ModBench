@@ -52,7 +52,6 @@ interface ReadMods {
   readonly notes: readonly string[];
 }
 
-// A mod the Instance adapter gives no folder has none to read.
 async function byFolder(adapter: Adapter, mods: readonly string[]): Promise<ModByFolder[]> {
   const asked: ModByFolder[] = [];
   for (const mod of mods) {

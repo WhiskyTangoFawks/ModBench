@@ -162,7 +162,9 @@ public static class CommandHandlers
                 sp.GetRequiredService<INotificationPublisher>(),
                 sp.GetRequiredService<IPluginAdapter>(),
                 sp.GetRequiredService<ISourceAdapter>()),
-            new ModStatusCheck(sp.GetRequiredService<IModFolderRepository>(), sp.GetRequiredService<INotificationPublisher>())));
+            new ModStatusCheck(
+                sp.GetRequiredService<IModFolderRepository>(), sp.GetRequiredService<INotificationPublisher>(),
+                sp.GetRequiredService<ILogger<ModStatusCheck>>())));
 
         return services;
     }

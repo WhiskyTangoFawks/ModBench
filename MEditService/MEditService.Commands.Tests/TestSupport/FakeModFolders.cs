@@ -23,6 +23,9 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public Dictionary<string, Manifest> Manifests { get; } = [];
 
+    /// <summary>The mod folders whose status throws, as a path the file system refuses does.</summary>
+    public HashSet<string> StatusThrows { get; } = [];
+
     public FakeModFolders WithFile(string folder, string path, string text) => WithBytes(folder, path, Encoding.ASCII.GetBytes(text));
 
     public FakeModFolders WithBytes(string folder, string path, byte[] bytes)
@@ -68,7 +71,8 @@ internal sealed class FakeModFolders : IModFolderRepository
     /// <summary>The hash a line's provider fixes is the one the last keep held for its path.</summary>
     public ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache)
     {
-        if (UnreadableManifests.Contains(modFolder)) return new(modName, NoManifest: false, [], [], [], [], "line 1 is not a manifest line");
+        if (StatusThrows.Contains(modFolder)) throw new ArgumentException($"'{modFolder}' is not a path", nameof(modFolder));
+        if (UnreadableManifests.Contains(modFolder)) return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: true, "line 1 is not a manifest line"));
         if (!Manifests.TryGetValue(modFolder, out var manifest)) return new(modName, NoManifest: true, [], [], [], []);
         var kept = KeptProviderHashes.GetValueOrDefault(modFolder) ?? new Dictionary<string, string>();
         var there = manifest.Files.ToLookup(line => _files.ContainsKey((modFolder, line.Path)));

@@ -6,6 +6,7 @@ using MEditService.ModFolderAdapter;
 using MEditService.Ports;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Build;
@@ -19,6 +20,7 @@ public sealed class ModStatusPushTests : IDisposable
     private readonly FakeModFolders _folders = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly BlockingCollection<IReadOnlyList<string>> _pushes = [];
+    private readonly BlockingCollection<LogEntry> _errors = [];
 
     private readonly PutLoadOrderHandler _handler;
 
@@ -28,7 +30,9 @@ public sealed class ModStatusPushTests : IDisposable
         {
             if (notification is ModStatusChangedNotification pushed) _pushes.Add(pushed.Mods);
         };
-        _handler = TestEditService.Over(new LoadOrderHolder(), notifications: _notifications, modFolders: _folders)
+        _handler = TestEditService.Over(
+                new LoadOrderHolder(), logging: logging => logging.AddProvider(new CollectingLoggerProvider([], Logged)), notifications: _notifications,
+                modFolders: _folders)
             .GetRequiredService<PutLoadOrderHandler>();
     }
 
@@ -37,12 +41,18 @@ public sealed class ModStatusPushTests : IDisposable
         _dataFolder.Dispose();
         _instanceRoot.Dispose();
         _pushes.Dispose();
+        _errors.Dispose();
+    }
+
+    private void Logged(LogEntry entry)
+    {
+        if (entry.Level == LogLevel.Error) _errors.Add(entry);
     }
 
     private void Put(params string[] mods) =>
         Assert.True(_handler.Put(
             _dataFolder, _instanceRoot, GameRelease.Fallout4, [], [], [], [], [],
-            new SnapshotMods([.. mods.Select(mod => new SnapshotMod(mod, mod, ["meta.ini"]))], "stat-cache")).Applied);
+            new SnapshotMods([.. mods.Select(mod => new ModByFolder(mod, mod, ["meta.ini"]))], "stat-cache")).Applied);
 
     private IReadOnlyList<string> NextPush() =>
         _pushes.TryTake(out var mods, Patience) ? mods : throw new TimeoutException("no mod status was pushed");
@@ -60,16 +70,29 @@ public sealed class ModStatusPushTests : IDisposable
     }
 
     [Fact]
-    public void ASnapshot_PushesOnlyTheModsNewToIt_AndNothingWhenNoneIs()
+    public void ASnapshot_PushesOnlyTheModsNewToIt()
     {
         Manifested("Kept");
         Put("Kept", "Unrecorded");
         NextPush();
-        Put("Kept", "Unrecorded");
 
         Put("Kept", "Unrecorded", "Installed");
 
         Assert.Equal(["Installed"], NextPush());
+    }
+
+    [Fact]
+    public void ACheckThatThrows_IsLogged_AndTheNextSnapshotIsCheckedAllTheSame()
+    {
+        _folders.StatusThrows.Add("Broken");
+        Put("Broken");
+        var logged = _errors.TryTake(out var error, Patience) ? error : throw new TimeoutException("no failed check was logged");
+        _folders.StatusThrows.Clear();
+
+        Put("Recorded");
+
+        Assert.Contains("'Broken' is not a path", logged.Exception?.Message, StringComparison.Ordinal);
+        Assert.Equal(["Recorded"], NextPush());
     }
 
     [Fact]

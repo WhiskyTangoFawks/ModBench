@@ -74,6 +74,13 @@ export class SeparatorNode extends vscode.TreeItem {
   }
 }
 
+const joined = (parts: readonly (string | undefined)[]): string => parts.filter((s): s is string => !!s).join(' · ');
+
+const modTooltip = (mod: Mod, facts: ModFacts | undefined): string => joined([
+  mod.name, mod.version, mod.nexusId, mod.archiveFilename, facts?.sourceFolder && `built from ${facts.sourceFolder}`,
+  facts?.status && lackedLine(facts.status),
+]);
+
 export class ModNode extends vscode.TreeItem {
   readonly kind = 'mod' as const;
   readonly argument: ModArgument;
@@ -89,13 +96,8 @@ export class ModNode extends vscode.TreeItem {
     this.id = rowIdentity(this.kind, mod.name);
     this.resourceUri = modRowUri(mod.name);
     this.nexusModId = mod.nexusId;
-    const { status } = facts ?? {};
-    this.description = [mod.version, status && statusDescription(status)].filter((s): s is string => !!s).join(' · ');
-    this.tooltip = [
-      mod.name, mod.version, mod.nexusId, mod.archiveFilename, facts?.sourceFolder && `built from ${facts.sourceFolder}`, status && lackedLine(status),
-    ]
-      .filter((s): s is string => !!s)
-      .join(' · ');
+    this.description = joined([mod.version, facts?.status && statusDescription(facts.status)]);
+    this.tooltip = modTooltip(mod, facts);
     this.iconPath = new vscode.ThemeIcon(facts?.tracked ? 'repo' : 'package');
     this.contextValue = modContextValue(mod, facts);
     this.checkboxState = mod.enabled

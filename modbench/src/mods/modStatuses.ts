@@ -1,28 +1,50 @@
 // modlist-source.md, Status: each mod's folder against its manifest, read again for each mod mEdit pushes as changed
-// (mod-status trace).
+// (mod-status trace), and for every mod when the stream opens again.
 
 import * as vscode from 'vscode';
 import type { MEditClient, ModStatus } from '../client';
+import type { SyncMessage } from '../drivingLib/nameFilter';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 
 export type ReadStatus = (mods: readonly string[]) => Promise<readonly ModStatus[] | ReadFailed>;
 
-/** Each mod's status as mEdit last answered it. */
-export class ModStatuses implements vscode.Disposable {
+/** Each mod's status as mEdit last answered it. A read that fails keeps the last good one, and says so on the view's
+ *  message line and once in the Output (common.md, Reporting). */
+export class ModStatuses implements SyncMessage, vscode.Disposable {
   private readonly byMod = new Map<string, ModStatus>();
-  // The latest ask that named each mod: an earlier ask that answers last answers nothing.
   private readonly askedIn = new Map<string, number>();
   private asks = 0;
+  private readFailure: string | undefined;
+  private readonly unreadable = new Map<string, string>();
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChange = this.changed.event;
-  private readonly unsubscribe: () => void;
+  private readonly messageChanged = new vscode.EventEmitter<void>();
+  private readonly unsubscribes: (() => void)[];
 
-  constructor(push: Pick<MEditClient, 'onNotification'>, private readonly read: ReadStatus, private readonly log: (line: string) => void) {
-    this.unsubscribe = push.onNotification('mod-status-changed', ({ mods }) => { void this.ask(mods); });
+  constructor(
+    client: Pick<MEditClient, 'onNotification' | 'onReconnected'>, private readonly read: ReadStatus, private readonly log: (line: string) => void,
+    mods: () => readonly string[],
+  ) {
+    this.unsubscribes = [
+      client.onNotification('mod-status-changed', ({ mods: changed }) => { void this.ask(changed); }),
+      client.onReconnected(() => { void this.ask(mods()); }),
+    ];
   }
 
   of(mod: string): ModStatus | undefined {
     return this.byMod.get(mod);
+  }
+
+  message(): string | undefined {
+    const failures = [
+      ...(this.readFailure === undefined ? [] : [`the mods' status could not be read: ${this.readFailure}`]),
+      ...[...this.unreadable].map(([mod, why]) => `the status of "${mod}" could not be read: ${why}.`),
+    ];
+    return failures.length === 0 ? undefined : `Showing the last good read: ${failures.join(' ')}`;
+  }
+
+  onMessageChanged(listener: () => void): vscode.Disposable {
+    return this.messageChanged.event(listener);
   }
 
   private async ask(mods: readonly string[]): Promise<void> {
@@ -30,22 +52,40 @@ export class ModStatuses implements vscode.Disposable {
     for (const mod of mods) this.askedIn.set(mod, ask);
     const answer = await this.read(mods);
     if (isReadFailed(answer)) {
-      this.log(`Could not read the mods' status: ${failureReason(answer)}`);
+      this.readFailed(failureReason(answer));
       return;
     }
+    this.readFailed(undefined);
     const answered = new Map(answer.map((status) => [status.mod, status]));
-    for (const mod of mods.filter((name) => this.askedIn.get(name) === ask)) {
-      const status = answered.get(mod);
-      if (status === undefined) this.byMod.delete(mod);
-      else this.byMod.set(mod, status);
-      if (status?.unreadable) this.log(`The status of "${mod}" could not be read: ${status.unreadable}`);
-    }
+    for (const mod of mods.filter((name) => this.askedIn.get(name) === ask)) this.hold(mod, answered.get(mod));
     this.changed.fire();
+    this.messageChanged.fire();
+  }
+
+  private readFailed(reason: string | undefined): void {
+    if (reason === this.readFailure) return;
+    this.readFailure = reason;
+    if (reason !== undefined) this.log(`The mods' status could not be read: ${reason}`);
+    this.messageChanged.fire();
+  }
+
+  private hold(mod: string, status: ModStatus | undefined): void {
+    if (status?.unreadable) {
+      const { why } = status.unreadable;
+      if (this.unreadable.get(mod) !== why) this.log(`The status of "${mod}" could not be read: ${why}`);
+      this.unreadable.set(mod, why);
+      return;
+    }
+    this.unreadable.delete(mod);
+    if (status === undefined) this.byMod.delete(mod);
+    else this.byMod.set(mod, status);
+    if (status?.statCacheNotWritten) this.log(`"${mod}": the stat cache could not be written: ${status.statCacheNotWritten}`);
   }
 
   dispose(): void {
-    this.unsubscribe();
+    for (const unsubscribe of this.unsubscribes) unsubscribe();
     this.changed.dispose();
+    this.messageChanged.dispose();
   }
 }
 
@@ -54,9 +94,14 @@ const counted = (count: number, one: string, many: string): string => `${count} 
 // modlist-source.md, Status, story 1.
 const differs = ({ differing, namedByNoLine, gone }: ModStatus): boolean => differing.length + namedByNoLine.length + gone.length > 0;
 
+function stateOf(status: ModStatus): string | undefined {
+  if (status.noManifest) return 'no manifest';
+  return differs(status) ? 'differs' : undefined;
+}
+
 /** What a mod row's description says of its status (mods.md, A row, Mod). */
 export function statusDescription(status: ModStatus): string | undefined {
-  const state = status.noManifest ? 'no manifest' : differs(status) ? 'differs' : undefined;
+  const state = stateOf(status);
   const unprovided = status.noProvider.length > 0 ? `${counted(status.noProvider.length, 'file', 'files')} with no provider` : undefined;
   return [state, unprovided].filter((part) => part !== undefined).join(' · ') || undefined;
 }
@@ -65,7 +110,7 @@ export function statusDescription(status: ModStatus): string | undefined {
 export const lackedLine = ({ gone }: ModStatus): string | undefined =>
   (gone.length > 0 ? `its folder lacks ${counted(gone.length, 'file', 'files')} its manifest names` : undefined);
 
-/** Each file of the mod whose row says differs, by its path in the mod. */
+/** Each file of the mod whose row says differs, by its path on disk. */
 export const differingFiles = ({ differing, namedByNoLine }: ModStatus): ReadonlySet<string> => new Set([...differing, ...namedByNoLine]);
 
 /** Whether the mod counts in the view's badge (modlist-source.md, Status, story 5). */

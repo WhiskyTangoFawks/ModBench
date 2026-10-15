@@ -50,12 +50,16 @@ export function fileRowUri(origin: FileOrigin, relativePath: string): vscode.Uri
   return vscode.Uri.from({ scheme: FILE_ROW_SCHEME, path: `/${originPart}/${relativePath}` });
 }
 
-// mods.md, A row, File and folder: the description says differs (modlist-source.md, Status, story 4).
-function fileRow(row: vscode.TreeItem, parent: ModlistNode, origin: FileOrigin, name: string, relativePath: string, differs: boolean): void {
+function fileRow(row: vscode.TreeItem, parent: ModlistNode, origin: FileOrigin, name: string, relativePath: string): void {
   row.id = `${parent.id}/${name}`;
   row.resourceUri = fileRowUri(origin, relativePath);
   row.tooltip = relativePath;
-  if (differs) row.description = 'differs';
+}
+
+// modlist-source.md, Status, story 4.
+function sayingWhetherItDiffers<T extends vscode.TreeItem>(row: T, differs: boolean | undefined): T {
+  if (differs === true) row.description = 'differs';
+  return row;
 }
 
 /** A folder in a mod or Overwrite, and the files and folders under it. */
@@ -69,10 +73,9 @@ export class FolderNode extends vscode.TreeItem {
     public readonly folders: readonly OriginFolder[],
     name: string,
     public readonly shown: ChildrenShown = 'all',
-    differs = false,
   ) {
     super(name, expanderOver([...files, ...folders], shown));
-    fileRow(this, parent, origin, name, folder.relativePath, differs);
+    fileRow(this, parent, origin, name, folder.relativePath);
     this.contextValue = 'folder';
   }
 }
@@ -97,10 +100,9 @@ export class FileNode extends vscode.TreeItem {
     public readonly file: OriginFile,
     name: string,
     public readonly conflict: FileOrderConflict = 'none',
-    differs = false,
   ) {
     super(name, vscode.TreeItemCollapsibleState.None);
-    fileRow(this, parent, origin, name, file.relativePath, differs);
+    fileRow(this, parent, origin, name, file.relativePath);
     this.exclusion = FILE_MARKS[file.excludedByName ? 'Excluded' : 'Included'].state;
     this.contextValue = ['file', conflict !== 'none' && 'conflict', conflict === 'loses' && 'losing', this.exclusion].filter(Boolean).join(' ');
     this.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(file.path), { preview: true }] };
@@ -124,11 +126,11 @@ export function filesIn(
   const ownFiles = byLevel(files, prefix);
   const ownFolders = byLevel(folders, prefix);
   return [
-    ...[...ownFolders.here].sort(byName).map(([name, folder]) => new FolderNode(
+    ...[...ownFolders.here].sort(byName).map(([name, folder]) => sayingWhetherItDiffers(new FolderNode(
       parent, origin, folder, ownFiles.below.get(name) ?? [], ownFolders.below.get(name) ?? [], name,
-      filter ? shownUnder(filter.shown, filter.matches, name) : 'all', filter?.differs(origin, folder.relativePath),
-    )),
+      filter ? shownUnder(filter.shown, filter.matches, name) : 'all',
+    ), filter?.differs(origin, folder.relativePath))),
     ...[...ownFiles.here].sort(byName).map(([name, file]) =>
-      new FileNode(parent, origin, file, name, filter?.conflict(origin, file), filter?.differs(origin, file.relativePath))),
+      sayingWhetherItDiffers(new FileNode(parent, origin, file, name, filter?.conflict(origin, file)), filter?.differs(origin, file.relativePath))),
   ];
 }

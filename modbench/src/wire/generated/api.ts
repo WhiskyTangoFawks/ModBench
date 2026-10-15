@@ -1354,7 +1354,7 @@ export interface components {
             gameDirectory: string;
             instanceRoot: string;
             gameRelease: string;
-            mods: components["schemas"]["ModFolderRequest"][];
+            mods: components["schemas"]["ModByFolder"][];
             statCache: string;
         };
         LoadOrderResponse: {
@@ -1382,13 +1382,13 @@ export interface components {
             refusal: components["schemas"]["BuildRefusal"];
             message: string;
         };
-        ModFolderRequest: {
+        ModByFolder: {
             name: string;
             folder: string;
             committedFiles: string[];
         };
         ModFoldersRequest: {
-            mods: components["schemas"]["ModFolderRequest"][];
+            mods: components["schemas"]["ModByFolder"][];
             statCache: string;
         };
         ModInitRefusal: {
@@ -1414,10 +1414,15 @@ export interface components {
             namedByNoLine: string[];
             gone: string[];
             noProvider: string[];
-            unreadable?: string | null;
+            unreadable?: components["schemas"]["ModUnreadable"] | null;
+            statCacheNotWritten?: string | null;
         };
         ModStatusResponse: {
             mods: components["schemas"]["ModStatus"][];
+        };
+        ModUnreadable: {
+            manifest: boolean;
+            why: string;
         };
         ModUpdateManifestRefusal: {
             item: string;

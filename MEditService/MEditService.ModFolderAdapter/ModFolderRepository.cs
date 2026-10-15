@@ -52,27 +52,32 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
             if (ReadManifest(modFolder, modName) is not { } manifest) return new(modName, NoManifest: true, [], [], [], []);
 
             var cache = new StatCache(statCache, modFolder, time);
+            var onDisk = FilesOf(modFolder, modName).ToHashSet(StringComparer.Ordinal);
             List<string> differing = [], gone = [], noProvider = [];
             foreach (var line in manifest.Files)
             {
                 var provider = manifest.ProviderOf(line);
                 if (provider is null) noProvider.Add(line.Path);
                 if (!fileExists(Path.Combine(modFolder, line.Path))) gone.Add(line.Path);
-                else if (provider is { } fixes && !HoldsWhatItsProviderFixes(modFolder, line.Path, cache, fixes)) differing.Add(line.Path);
+                else if (provider is { } fixes && !HoldsWhatItsProviderFixes(modFolder, line.Path, cache, fixes)) differing.Add(OnDisk(line.Path, onDisk));
             }
             var namedByNoLine = NamedByNoLine(modFolder, modName, manifest, leftOut);
-            cache.Keep([.. FilesOf(modFolder, modName).Where(path => !leftOut.Contains(path))]);
-            return new(modName, NoManifest: false, Ordered(differing), Ordered(namedByNoLine), Ordered(gone), Ordered(noProvider));
+            var statCacheNotWritten = cache.Keep([.. onDisk.Where(path => !leftOut.Contains(path))]);
+            return new(modName, NoManifest: false, Ordered(differing), Ordered(namedByNoLine), Ordered(gone), Ordered(noProvider), null, statCacheNotWritten);
         }
         catch (InvalidDataException e)
         {
-            return new(modName, NoManifest: false, [], [], [], [], e.Message);
+            return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: true, e.Message));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return new(modName, NoManifest: false, [], [], [], [], $"a file could not be read: {e.Message}");
+            return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: false, $"a file could not be read: {e.Message}"));
         }
     }
+
+    // A line found by the file system names the file on disk in its own case where none has the line's (NamedByNoLine).
+    private static string OnDisk(string line, HashSet<string> onDisk) =>
+        onDisk.Contains(line) ? line : onDisk.FirstOrDefault(path => string.Equals(path, line, StringComparison.OrdinalIgnoreCase)) ?? line;
 
     private static string[] Ordered(IEnumerable<string> paths) => [.. paths.Order(StringComparer.Ordinal)];
 

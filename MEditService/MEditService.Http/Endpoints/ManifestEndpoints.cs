@@ -111,8 +111,12 @@ internal static class ManifestEndpoints
         List<ModRestoreRefusal> refused = [];
         foreach (var status in StatusOf(req, repository))
         {
-            if (status.Unreadable is { } why)
-                refused.Add(new ModRestoreRefusal(status.Mod, RestoreRefusal.Unreadable, $"'{status.Mod}' was skipped: {why}", []));
+            if (status.Unreadable is { } unreadable)
+            {
+                refused.Add(new ModRestoreRefusal(
+                    status.Mod, unreadable.Manifest ? RestoreRefusal.ManifestUnreadable : RestoreRefusal.Unreadable,
+                    $"'{status.Mod}' was skipped: {unreadable.Why}.", []));
+            }
             else if (status.Differing.Count + status.NamedByNoLine.Count > 0)
                 destroying.Add(new ModRestoreDestroys(status.Mod, status.Differing, status.NamedByNoLine));
         }
@@ -124,14 +128,13 @@ internal static class ManifestEndpoints
 
     private static IResult? MalformedFolders(ModFoldersRequest req)
     {
-        var mods = req.Mods ?? [];
-        if (mods.Count == 0 || mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.Folder)))
-            return Results.Problem("At least one mod is required, and every mod needs a name and a folder.", statusCode: 400);
+        if (req.Mods is not { Count: > 0 } || !ModsByFolder.AreWhole(req.Mods))
+            return Results.Problem("At least one mod is required, and every mod needs a name, a folder and its committed files.", statusCode: 400);
         return string.IsNullOrWhiteSpace(req.StatCache) ? Results.Problem("The folder of the stat cache is required.", statusCode: 400) : null;
     }
 
     private static List<ModStatus> StatusOf(ModFoldersRequest req, IModFolderRepository repository) =>
-        [.. req.Mods.Select(mod => repository.Status(mod.Folder, mod.Name, (mod.CommittedFiles ?? []).ToHashSet(StringComparer.Ordinal), req.StatCache))];
+        [.. req.Mods.Select(mod => repository.Status(mod.Folder, mod.Name, mod.CommittedFiles.ToHashSet(StringComparer.Ordinal), req.StatCache))];
 
     private static IResult? Malformed(IReadOnlyList<IModRequest> mods, IReadOnlyList<OverriddenGameFileRequest>? gameFiles, string? statCache)
     {
@@ -201,10 +204,15 @@ internal sealed record RestoreFromManifestModRequest(
 internal sealed record RestoredModResponse(string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten);
 
 /// <summary>The mods to read the folders of against their manifests, and the stat cache's folder.</summary>
-internal sealed record ModFoldersRequest(IReadOnlyList<ModFolderRequest> Mods, string StatCache);
+internal sealed record ModFoldersRequest(IReadOnlyList<ModByFolder> Mods, string StatCache);
 
-/// <summary>A mod by its folder, with the files of it the repository commits, which no line names.</summary>
-internal sealed record ModFolderRequest(string Name, string Folder, IReadOnlyList<string> CommittedFiles);
+internal static class ModsByFolder
+{
+    /// <summary>Whether a request's mods each name a mod, its folder and its committed files.</summary>
+    internal static bool AreWhole(IReadOnlyList<ModByFolder>? mods) =>
+        mods is not null
+        && mods.All(mod => mod is not null && !string.IsNullOrWhiteSpace(mod.Name) && !string.IsNullOrWhiteSpace(mod.Folder) && mod.CommittedFiles is not null);
+}
 
 internal sealed record ModStatusResponse(IReadOnlyList<ModStatus> Mods);
 

@@ -1,11 +1,12 @@
 using MEditService.ModFolderAdapter;
 using MEditService.Ports;
+using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands.Build;
 
 /// <summary>After each snapshot, pushes each mod whose status changed since the last push (mod-status trace). A check
 /// runs off the snapshot's request, and the snapshots that arrive while one runs are checked once, as the latest.</summary>
-internal sealed class ModStatusCheck(IModFolderRepository repository, INotificationPublisher notifications)
+internal sealed class ModStatusCheck(IModFolderRepository repository, INotificationPublisher notifications, ILogger<ModStatusCheck> logger)
 {
     private readonly Lock _gate = new();
     private SnapshotMods? _waiting;
@@ -23,9 +24,37 @@ internal sealed class ModStatusCheck(IModFolderRepository repository, INotificat
         _ = Task.Run(CheckUntilNoneWaits);
     }
 
+    // Nothing awaits this thread: a throw is logged, to the Output, and gives the check up, so the next snapshot is checked.
     private void CheckUntilNoneWaits()
     {
-        while (Next() is { } snapshot) Push(snapshot);
+        var snapshot = Next();
+        try
+        {
+            while (snapshot is not null)
+            {
+                Push(snapshot);
+                snapshot = Next();
+            }
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "The mods' status could not be checked: {Reason}", e.Message);
+            throw;
+        }
+        finally
+        {
+            if (snapshot is not null) GiveUp();
+        }
+    }
+
+    private void GiveUp()
+    {
+        lock (_gate)
+        {
+            _checking = _waiting is not null;
+            if (!_checking) return;
+        }
+        _ = Task.Run(CheckUntilNoneWaits);
     }
 
     private SnapshotMods? Next()
