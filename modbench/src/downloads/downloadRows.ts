@@ -2,7 +2,6 @@
 // none of it belongs to the codec that parsed one.
 
 import type { DownloadRow } from '../instanceLoader/instance';
-import { isArchiveName } from '../instanceAdapter/instanceAdapter';
 
 /** The columns the reference tool's own Downloads pane sorts by. `name` means the label
  *  (downloads.md, Order and view state, story 2), so it reads `displayName`, not the row's `name`
@@ -34,12 +33,6 @@ export function sortDownloadRows<T extends DownloadRow>(
  *  apart. */
 export function filterExcludedRows<T extends DownloadRow>(rows: readonly T[], showExcluded: boolean): T[] {
   return showExcluded ? [...rows] : rows.filter((r) => !r.excluded);
-}
-
-/** Only the files install can take are rows, by install's own extension list. Unconditional,
- *  unlike `filterExcludedRows`: no toggle brings a non-archive back. */
-export function filterArchiveRows<T extends DownloadRow>(rows: readonly T[]): T[] {
-  return rows.filter((r) => isArchiveName(r.name));
 }
 
 // A space-separated flag string, because `when` clauses match it with

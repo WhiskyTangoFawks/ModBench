@@ -377,6 +377,9 @@ describe('the MO2 Instance adapter', () => {
     it('lists the downloaded files with their metadata parsed, and no metadata file as a file of its own', async () => {
       await writeFile(join(root, 'downloads', 'manual.zip'), 'zip');
       await mkdir(join(root, 'downloads', 'a folder'));
+      await mkdir(join(root, 'downloads', 'a folder.zip'));
+      await writeFile(join(root, 'downloads', 'readme.txt'), 'text');
+      await writeFile(join(root, 'downloads', 'big.rar.unfinished'), 'half');
       await writeFile(tempWritePath(join(root, 'downloads', 'manual.zip.meta')), 'half');
 
       const downloads = await (await source.settings()).downloadedFiles();
