@@ -8,6 +8,7 @@ from tests.fixture_medit import (
     LIGHT,
     LIGHT_RECORD,
     RECIPE,
+    RECIPE_FILE,
     Fixture,
     changed,
     files_and_bytes,
@@ -29,7 +30,7 @@ class EditAgainstTheFixtureInstance(unittest.TestCase):
         cls.fixture = cls.enterClassContext(fixture_medit())
         track(cls.fixture, CONDITIONS.origin)
         cls.source = source_folder(cls.fixture.instance, CONDITIONS.origin)
-        [cls.recipe_file] = cls.source.rglob('MBDevConditionedRecipe - *.json')
+        [cls.recipe_file] = cls.source.rglob(RECIPE_FILE)
 
     def test_writes_an_edited_field_to_the_records_file_as_a_working_tree_change(self) -> None:
         with window_of(self.fixture.url):

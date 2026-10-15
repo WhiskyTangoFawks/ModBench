@@ -59,8 +59,8 @@ def referenced_by(form_key: str) -> list[Referrer]:
     """The records that reference a record, each with its plugin and the field that holds the reference."""
     return [
         Referrer(
-            Plugin(referrer['plugin'], referrer['origin']), referrer['formKey'], referrer['fieldPath'],
-            referrer['recordType'], referrer['editorId'])
+            plugin=Plugin(referrer['plugin'], referrer['origin']), form_key=referrer['formKey'],
+            field_path=referrer['fieldPath'], record_type=referrer['recordType'], editor_id=referrer['editorId'])
         for referrer in _call('GET', f'/records/{_quoted(form_key)}/references')]
 
 
@@ -70,8 +70,9 @@ _NO_VALUE = object()
 def edit(plugin: Name, form_key: str, op: EditOp, path: str, value: object = _NO_VALUE) -> None:
     """Writes op to the plugin's copy of a record in its plugin source, at a field path spelled as referenced_by
     spells one, such as Conditions[0].ComparisonValue. A value of None clears a member."""
+    hops = _hops(path)
     name, origin = _plugin(plugin)
-    body: JsonRecord = {'plugin': name, 'origin': origin, 'op': op, 'path': _hops(path)}
+    body: JsonRecord = {'plugin': name, 'origin': origin, 'op': op, 'path': hops}
     if value is not _NO_VALUE:
         body['value'] = value
     _call('POST', f'/records/{_quoted(form_key)}/edit', body)
@@ -114,7 +115,7 @@ def delete(plugin: Name, form_key: str) -> None:
 def _named(named: JsonRecord) -> Plugin | RecordName:
     plugin = named['plugin']
     if plugin is None:
-        return RecordName(named['formKey'], named['editorId'])
+        return RecordName(form_key=named['formKey'], editor_id=named['editorId'])
     return Plugin(plugin['name'], plugin['origin'])
 
 

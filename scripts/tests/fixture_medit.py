@@ -27,6 +27,7 @@ CONFLICT_B = Plugin('MBDevConflictB.esp', 'MB-DEV Conflict B')
 # DevList's plugins.txt in its order, each enabled.
 PLUGINS = [CONFLICT_B, CONFLICT_A, LIGHT, CONDITIONS, Plugin('MBDevMissingMaster.esp', 'MB-DEV Missing Master')]
 RECIPE = '000800:MBDevConditions.esp'
+RECIPE_FILE = 'MBDevConditionedRecipe - *.json'
 LIGHT_RECORD = '000800:MBDevLight.esl'
 CONFLICTED_RECORD = '004822:Fallout4.esm'
 BOOT_TIMEOUT_S = 180

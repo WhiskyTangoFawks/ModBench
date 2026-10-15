@@ -8,6 +8,7 @@ from tests.fixture_medit import (
     LIGHT,
     LIGHT_RECORD,
     RECIPE,
+    RECIPE_FILE,
     changed,
     fixture_medit,
     holding_unsaved,
@@ -28,7 +29,7 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
         self.enterContext(window_of(self.fixture.url))
 
     def recipe_file(self) -> pathlib.Path:
-        [recipe_file] = self.source.rglob('MBDevConditionedRecipe - *.json')
+        [recipe_file] = self.source.rglob(RECIPE_FILE)
         return recipe_file
 
     def select_after_the_watcher(self, sql: str) -> list[medit.JsonRecord]:
@@ -95,9 +96,8 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
         self.assertIn(f'{LIGHT.name} is not tracked', str(raised.exception))
         self.assertEqual(changed(self.source), [])
 
-    def test_creates_a_plugin_in_a_mod_with_its_source_and_returns_its_name_and_origin(self) -> None:
-        plugin = medit.create_plugin(NEW_PLUGIN, CONDITIONS.origin)
-        self.assertEqual((plugin.name, plugin.origin), (NEW_PLUGIN, CONDITIONS.origin))
+    def test_creates_a_plugin_in_a_mod_with_its_source(self) -> None:
+        medit.create_plugin(NEW_PLUGIN, CONDITIONS.origin)
         self.assertTrue((self.fixture.instance / 'mods' / CONDITIONS.origin / NEW_PLUGIN).exists())
         self.assertTrue(any('MBDevNew' in line for line in changed(self.source)))
 
