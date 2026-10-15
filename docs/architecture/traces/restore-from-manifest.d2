@@ -4,26 +4,26 @@ shape: sequence_diagram
 driving: "Mods · Source Control · Toolbox" {class: driving}
 sourcecommands: @../target-architecture.modbench_core.sourcecommands
 sourcecommands.label: source commands
-instance: @../target-architecture.modbench_data.instance
-instance.label: "Instance\nmods · downloaded files · the repository"
 client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
-engine: @../target-architecture.medit_core.commands.engine
-engine.label: Build engine
-modfolder: @../target-architecture.medit_data.modfolder
-modfolder.label: "Mod folders\nfiles · manifests · the stat cache"
 modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
 modfolderadapter.label: Mod folder adapter
+modfolder: @../target-architecture.medit_data.modfolder
+modfolder.label: "Mod folders\nfiles · manifests · the stat cache"
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instance: @../target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · downloaded files · the repository"
+engine: @../target-architecture.medit_core.commands.engine
+engine.label: Build engine
 source: @../target-architecture.medit_data.source
 source.label: Mod source
 sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
 port: @../target-architecture.medit_kernel.ports
 port.label: Ports
-instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
-instanceadapter.label: Instance adapter
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
@@ -39,6 +39,7 @@ client -> sourcecommands: the listing {class: query}
 sourcecommands -> driving: "the listing" {class: compile}
 driving."the confirmation, when the listing holds a file"
 driving -> sourcecommands: "confirmed" {class: compile}
+sourcecommands -> instanceadapter: "get: each mod's folder and installation files, the game folder" {class: compile}
 instance -> instanceadapter: "each downloaded file: bytes, when its index is stale" {class: compile}
 instanceadapter -> sourcecommands: "each mod's folder · each installation file: hash and entries · the game folder · each game file a mod file overrides: hash" {class: compile}
 sourcecommands -> client: "restore: each mod's folder and installation files with their hashes and entries, the game folder" {class: compile}

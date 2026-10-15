@@ -4,6 +4,8 @@ shape: sequence_diagram
 driving: "Mods · Source Control · Toolbox" {class: driving}
 sourcecommands: @../target-architecture.modbench_core.sourcecommands
 sourcecommands.label: source commands
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
 instance: @../target-architecture.modbench_data.instance
 instance.label: "Instance\nmods · downloaded files · the repository"
 client: @../target-architecture.modbench_repositories.client
@@ -18,13 +20,12 @@ modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
 modfolderadapter.label: Mod folder adapter
 port: @../target-architecture.medit_kernel.ports
 port.label: Ports
-instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
-instanceadapter.label: Instance adapter
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
 driving -> sourcecommands: "update manifest: the mods, or every mod" {class: track}
+sourcecommands -> instanceadapter: "get: each mod's folder and installation files" {class: track}
 instance -> instanceadapter: "each downloaded file: bytes, when its index is stale" {class: track}
 instanceadapter -> sourcecommands: "each mod's folder · each installation file: hash and entries · each game file a mod file overrides: hash" {class: track}
 sourcecommands -> client: "update manifest: each mod's folder and installation files with their hashes and entries, each game file a mod file overrides with its hash, the stat cache's folder" {class: track}
