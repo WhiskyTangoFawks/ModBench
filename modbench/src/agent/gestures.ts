@@ -11,15 +11,17 @@ import { parseOrRefuse } from './refusal';
 interface GestureInput {
   /** The Argument the agent gives, as the tool's description teaches it. */
   readonly takes: string;
+  readonly input: z.ZodRawShape;
   readonly callOf: (value: InstanceValue, given: unknown, mEdit: NameResolver) => AgentCall | Promise<AgentCall>;
 }
 
 type NameResolver = Pick<MEditClient, 'resolveNames'>;
 
-function gestureInput<Given>(
-  takes: string, input: z.ZodType<Given>, callOf: (value: InstanceValue, given: Given, mEdit: NameResolver) => AgentCall | Promise<AgentCall>,
+function gestureInput<Shape extends z.ZodRawShape>(
+  takes: string, input: z.ZodObject<Shape>,
+  callOf: (value: InstanceValue, given: z.output<z.ZodObject<Shape>>, mEdit: NameResolver) => AgentCall | Promise<AgentCall>,
 ): GestureInput {
-  return { takes, callOf: (value, given, mEdit) => callOf(value, parseOrRefuse(input, given), mEdit) };
+  return { takes, input: input.shape, callOf: (value, given, mEdit) => callOf(value, parseOrRefuse(input, given), mEdit) };
 }
 
 const ENTRY_NAME = z.object({ name: z.string(), kind: z.enum(['mod', 'separator']).optional() });
@@ -128,7 +130,7 @@ const INSTALL = gestureInput(
   ),
 );
 
-const GIT_INIT = gestureInput('nothing', z.object({}), () => new AgentCall([], {}));
+const GIT_INIT = gestureInput('', z.object({}), () => new AgentCall([], {}));
 
 const MANIFEST_MODS_TAKES = 'argument?: the mods or separators, each { name, kind? } as list_mods names it, or none for every mod';
 const MANIFEST_MODS = z.object({ argument: z.array(ENTRY_NAME).optional() });
@@ -251,18 +253,18 @@ function refusalIn(outcome: GestureOutcome): string | undefined {
   return [...refusals, ...partials].join(' ') || undefined;
 }
 
-export const RUN_GESTURE = {
-  name: 'run_gesture',
-  description: 'Run a gesture as the user does, by its Command ID, on the Argument and Options given: never on the selection, and with no picker, prompt or confirmation. '
-    + 'It answers once the read model shows the change, with the gesture\'s outcome. A refusal answers the outcome too: what landed, and each item refused and why. Gestures: '
-    + [...AGENT_GESTURES].map(([command, { takes }]) => `${command} (${takes})`).join('; '),
-  input: { command: z.string(), argument: z.unknown().optional(), options: z.unknown().optional() },
-  of: async (value: InstanceValue, mEdit: NameResolver, { command, ...given }: { command: string; argument?: unknown; options?: unknown }) => {
-    const gesture = AGENT_GESTURES.get(command);
-    if (gesture === undefined) throw new Refusal(`${command} is not a gesture your agent runs.`);
+const toolName = (command: string): string =>
+  command.replace(/^modbench\./, '').replaceAll('.', '_').replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+
+/** Claude Code shows the first 2,048 characters of a tool's description, and sends an input with no JSON type as a string. */
+export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, gesture]) => ({
+  name: toolName(command),
+  description: `Runs ${command}. ${gesture.takes}`.trim(),
+  input: gesture.input,
+  of: async (value: InstanceValue, mEdit: NameResolver, given: unknown) => {
     const outcome = await vscode.commands.executeCommand<GestureOutcome>(command, await gesture.callOf(value, given, mEdit));
     const refusal = refusalIn(outcome);
     if (refusal !== undefined) throw new Refusal(refusal, outcome);
     return outcome;
   },
-};
+}));
