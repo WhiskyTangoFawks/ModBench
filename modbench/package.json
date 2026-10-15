@@ -39,7 +39,7 @@
           {
             "id": "openInstance",
             "title": "Open your MO2 instance",
-            "description": "Open the folder that holds ModOrganizer.ini, mods/ and profiles/, and trust it when VS Code asks. Modbench does not run in Restricted Mode.\n[Open Folder](command:workbench.action.files.openFolder)",
+            "description": "Open the folder that holds ModOrganizer.ini, mods/ and profiles/, and trust it when VS Code asks.\n[Open Folder](command:workbench.action.files.openFolder)",
             "media": {
               "markdown": "walkthrough/getting-started.md"
             },
@@ -82,8 +82,8 @@
           },
           {
             "id": "edit",
-            "title": "Edit a record",
-            "description": "Expand a plugin in the Plugins view and open a record. Edit a field in the compare grid, or edit its plugin source file as text.",
+            "title": "Open a record",
+            "description": "Expand a plugin in the Plugins view and open a record. Edit a field in the record panel, or edit its plugin source file as text.",
             "media": {
               "markdown": "walkthrough/getting-started.md"
             },
@@ -105,7 +105,7 @@
           {
             "id": "build",
             "title": "Build the plugin",
-            "description": "Build Mod writes each plugin binary from its plugin source. The game, MO2 and xEdit load the binary.\n[Build Mod](command:modbench.mod.build)",
+            "description": "Build Mod writes each plugin from its plugin source. The game, MO2 and xEdit load the plugin.\n[Build Mod](command:modbench.mod.build)",
             "media": {
               "markdown": "walkthrough/getting-started.md"
             },

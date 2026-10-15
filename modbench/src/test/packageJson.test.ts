@@ -6,6 +6,7 @@ import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, uriFile, uriFrom,
 } from './vscodeMock';
 import { FOLDER_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
+import { WALKTHROUGH_ID } from '../walkthrough';
 import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN } from './commandsCatalog';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
@@ -39,13 +40,13 @@ interface KeybindingEntry { command: string; key: string; when: string; mac?: st
 interface SettingEntry { description?: string; type?: unknown; default?: unknown; enum?: unknown; }
 interface ColorEntry { id: string; }
 interface CustomEditorEntry { viewType: string; }
-interface WalkthroughStep { id: string; title: string; media: { markdown: string }; completionEvents: string[]; }
+interface WalkthroughStep { id: string; title: string; description: string; media: { markdown: string }; completionEvents: string[]; }
 interface WalkthroughEntry { id: string; steps: WalkthroughStep[]; }
 interface UntrustedWorkspaces { supported: unknown; description?: string; }
 
 interface PackageManifest {
   activationEvents: string[];
-  capabilities: { untrustedWorkspaces?: UntrustedWorkspaces };
+  capabilities: { untrustedWorkspaces: UntrustedWorkspaces };
   contributes: {
     viewsWelcome: ViewsWelcomeEntry[];
     views: Record<string, ViewEntry[]>;
@@ -100,21 +101,17 @@ function isCustomEditorEntry(v: unknown): v is CustomEditorEntry {
   return isRecord(v) && isString(v.viewType);
 }
 function isWalkthroughStep(v: unknown): v is WalkthroughStep {
-  return isRecord(v) && isString(v.id) && isString(v.title) && isRecord(v.media) && isString(v.media.markdown)
+  return isRecord(v) && isString(v.id) && isString(v.title) && isString(v.description) && isRecord(v.media) && isString(v.media.markdown)
     && isArrayOf(v.completionEvents, isString);
 }
 function isWalkthroughEntry(v: unknown): v is WalkthroughEntry {
   return isRecord(v) && isString(v.id) && isArrayOf(v.steps, isWalkthroughStep);
 }
 function capabilitiesOf(raw: unknown): PackageManifest['capabilities'] {
-  if (raw === undefined) return {};
-  if (!isRecord(raw)) throw new Error('Expected package.json capabilities to be an object.');
-  const { untrustedWorkspaces } = raw;
-  if (untrustedWorkspaces === undefined) return {};
-  if (!isRecord(untrustedWorkspaces) || !isOptionalString(untrustedWorkspaces.description)) {
-    throw new Error('Expected capabilities.untrustedWorkspaces to be { supported, description? }.');
+  if (!isRecord(raw) || !isRecord(raw.untrustedWorkspaces) || !isOptionalString(raw.untrustedWorkspaces.description)) {
+    throw new Error('Expected package.json capabilities.untrustedWorkspaces to be { supported, description? }.');
   }
-  return { untrustedWorkspaces: { supported: untrustedWorkspaces.supported, description: untrustedWorkspaces.description } };
+  return { untrustedWorkspaces: { supported: raw.untrustedWorkspaces.supported, description: raw.untrustedWorkspaces.description } };
 }
 
 function parsePackageManifest(raw: unknown): PackageManifest {
@@ -123,7 +120,7 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   }
   const { contributes } = raw;
   if (!isRecord(contributes)) throw new Error('Expected package.json to have a contributes object.');
-  const { viewsWelcome, views, menus, commands, keybindings, configuration, colors, customEditors, walkthroughs = [] } = contributes;
+  const { viewsWelcome, views, menus, commands, keybindings, configuration, colors, customEditors, walkthroughs } = contributes;
   if (!isArrayOf(viewsWelcome, isViewsWelcomeEntry)) {
     throw new Error('Expected contributes.viewsWelcome to be an array of { view, contents, when? }.');
   }
@@ -158,6 +155,7 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   };
 }
 
+const REPOSITORY = 'https://github.com/WhiskyTangoFawks/ModBench';
 const pkg = parsePackageManifest(
   JSON.parse(readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')),
 );
@@ -199,23 +197,30 @@ describe('package.json getting started (common.md, Getting started)', () => {
   const steps = pkg.contributes.walkthroughs.flatMap((walkthrough) => walkthrough.steps);
   const commands = new Set(pkg.contributes.commands.map(({ command }) => command));
   const views = new Set(Object.values(pkg.contributes.views).flat().map(({ id }) => id));
+  const isVsCodes = (subject: string): boolean => subject.startsWith('workbench.');
+  const isCommand = (subject: string): boolean => commands.has(subject) || isVsCodes(subject) || views.has(subject.replace(/\.focus$/, ''));
   const OWNERS: Record<string, (subject: string) => boolean> = {
-    onCommand: (subject) => commands.has(subject),
-    onView: (subject) => views.has(subject),
-    onContext: (subject) => subject.startsWith('modbench.'),
-    onLink: (subject) => subject.startsWith('https://'),
+    onCommand: isCommand,
+    onView: (subject) => views.has(subject) || isVsCodes(subject),
+    onContext: (subject) => [FOLDER_KEY, INSTANCE_READ_KEY].some((key) => subject.startsWith(`${key} `)),
+    onLink: (subject) => subject.startsWith(`${REPOSITORY}#`),
   };
   const owned = (event: string): boolean => {
     const [kind = '', subject = ''] = event.split(/:(.*)/s);
-    return subject.startsWith('workbench.') || (OWNERS[kind]?.(subject) ?? false);
+    return OWNERS[kind]?.(subject) ?? false;
   };
+  const linkedCommands = (description: string): string[] => [...description.matchAll(/\(command:([^)?]+)/g)].map(([, command = '']) => command);
 
-  it('is one walkthrough', () => {
-    expect(pkg.contributes.walkthroughs).toHaveLength(1);
+  it('is one walkthrough, the one Modbench opens', () => {
+    expect(pkg.contributes.walkthroughs.map(({ id }) => id)).toEqual([WALKTHROUGH_ID]);
   });
 
-  it('ticks each step on a command, view or context Modbench or VS Code owns, or a link (story 3)', () => {
+  it('ticks each step on a command, view or context of Modbench or VS Code, or a link into the repository (story 3)', () => {
     expect(steps.filter((step) => step.completionEvents.length === 0 || !step.completionEvents.every(owned)).map(({ id }) => id)).toEqual([]);
+  });
+
+  it('links each step only to commands that exist', () => {
+    expect(steps.flatMap(({ description }) => linkedCommands(description)).filter((command) => !isCommand(command))).toEqual([]);
   });
 
   it('shows each step a markdown file the extension ships', () => {
@@ -223,8 +228,9 @@ describe('package.json getting started (common.md, Getting started)', () => {
   });
 
   it('says, in a folder not trusted, that Modbench needs it trusted (story 4)', () => {
-    expect(pkg.capabilities.untrustedWorkspaces?.supported).toBe(false);
-    expect(pkg.capabilities.untrustedWorkspaces?.description).toBeTruthy();
+    expect(pkg.capabilities.untrustedWorkspaces).toEqual({
+      supported: false, description: 'Modbench writes to your MO2 instance and runs its own service, so it needs the folder trusted.',
+    });
   });
 });
 

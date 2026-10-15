@@ -279,7 +279,7 @@ export function activate(context: vscode.ExtensionContext): void {
       client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     }),
   );
-  void openWalkthroughOnce(context.globalState, (walkthrough) => vscode.commands.executeCommand('workbench.action.openWalkthrough', walkthrough, false));
+  void openWalkthroughOnce(context.globalState, context.extension.id, (walkthrough) => vscode.commands.executeCommand('workbench.action.openWalkthrough', walkthrough, false));
 }
 
 // Async so VS Code awaits confirmed-dead-child teardown before the extension host finishes

@@ -76,7 +76,6 @@ ADR-0019 decides the tier; this table is how each tier looks on a surface.
 | Something Modbench does on its own fails, and a view now shows something untrue, such as a record filter it cleared | a notification naming what changed and why, and a line in the Output |
 | A failure inside a dialog I am answering | a line in the Output. The dialog says it; a second notification on top of it does not. |
 
-
 ## Getting started
 
 As a user, I want:

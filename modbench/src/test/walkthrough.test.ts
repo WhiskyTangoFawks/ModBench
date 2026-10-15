@@ -15,8 +15,8 @@ describe('openWalkthroughOnce (common.md, Getting started, story 2)', () => {
     const opened: string[] = [];
     const open = (walkthrough: string) => { opened.push(walkthrough); return Promise.resolve(); };
 
-    await openWalkthroughOnce(state, open);
-    await openWalkthroughOnce(state, open);
+    await openWalkthroughOnce(state, 'whiskytangofawks.modbench', open);
+    await openWalkthroughOnce(state, 'whiskytangofawks.modbench', open);
 
     expect(opened).toEqual(['whiskytangofawks.modbench#gettingStarted']);
   });
