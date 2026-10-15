@@ -6,8 +6,7 @@ using MEditService.SourceAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>A mod to build, by name, with the source folder whose build configuration names its folder, the folder, its
-/// installation files in the mod manager's order, its files the repository commits, which no manifest line names, and its
-/// version as the mod manager's metadata says.</summary>
+/// installation files in the mod manager's order, and its files the repository commits, which no manifest line names.</summary>
 public sealed record ModToBuild(
     string Name, string SourceFolder, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> CommittedFiles,
     string? Version = null);
