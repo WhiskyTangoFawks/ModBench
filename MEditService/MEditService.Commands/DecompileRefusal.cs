@@ -12,9 +12,9 @@ public enum DecompileRefusal
     /// <summary>No loaded plugin is the file name and origin the gesture named.</summary>
     PluginNotLoaded,
 
-    /// <summary>The plugin is in no mod with a repository, so it has no working tree to go into; the
-    /// way out is init.</summary>
-    NotInTrackedMod,
+    /// <summary>The plugin is in no source mod, so it has no working tree to go into; the
+    /// way out is decompile and commit on its mod.</summary>
+    NotInSourceMod,
 
     /// <summary>ADR-0006's gate refused it, or the plugin cannot be read or deep-parsed
     /// at all.</summary>
