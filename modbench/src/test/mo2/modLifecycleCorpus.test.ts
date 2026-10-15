@@ -99,7 +99,7 @@ describe('mod lifecycle corpus (install)', () => {
     const before = await snapshotTree(dir);
 
     const outcome = await modlistCommands(adapterOver(dir, { archives: fakeArchiveReader(['Manual.esp']) }), unscriptedMEdit)
-      .installMod({ kind: 'downloadedFile', name: MANUAL, path: join(dir, 'downloads', MANUAL) }, { kind: 'new', name: 'Manual' }, 'Fallout 4');
+      .installMod({ kind: 'downloadedFile', name: MANUAL, path: join(dir, 'downloads', MANUAL) }, { kind: 'new', name: 'Manual' }, 'Fallout 4', true);
     const after = await snapshotTree(dir);
 
     expect(outcome).toEqual({ applied: true, isFomod: false });

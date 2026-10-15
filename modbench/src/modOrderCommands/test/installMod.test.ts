@@ -30,13 +30,13 @@ const clientAnswering = (answer: ModStatus[] | ReadFailed): InMemoryMEditClient 
 
 describe('installMod', () => {
   describe('an upgrade without force', () => {
-    it.each([
+    it.each<[string, Partial<ModStatus>, string]>([
       ['differs from its manifest', { differing: ['a.esp'] }, 'files whose bytes differ from its manifest: a.esp'],
       ['holds a file no line names', { namedByNoLine: ['stray.txt'] }, 'files no line of its manifest names: stray.txt'],
       ['lacks a file its manifest names', { gone: ['b.nif'] }, 'files its manifest names that its folder lacks: b.nif'],
       ['has no manifest', { noManifest: true }, 'it has no manifest'],
       ['has a file with no provider', { noProvider: ['c.dds'] }, 'files with no provider: c.dds'],
-    ] as const)('refuses a mod that %s, listing the loss and naming force, and installs nothing', async (_, over, loss) => {
+    ])('refuses a mod that %s, listing the loss and naming force, and installs nothing', async (_, over, loss) => {
       const { result, calls } = await install(ARCHIVE, UPGRADED, {}, false, clientAnswering([statusOf(over)]));
 
       expect(result).toEqual({
@@ -46,7 +46,7 @@ describe('installMod', () => {
       expect(calls).toEqual([]);
     });
 
-    it.each([
+    it.each<[string, ModStatus[] | ReadFailed, string]>([
       ['a status read that failed', { failed: 'unreachable' }, 'mEdit could not be reached.'],
       ['a status mEdit could not read', [statusOf({ unreadable: { manifest: true, why: 'bad manifest' } })], 'bad manifest'],
       ['no status for the mod', [], 'has no status to read'],

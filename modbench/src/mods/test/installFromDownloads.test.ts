@@ -30,7 +30,7 @@ import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { modlistCommands } from '../../modOrderCommands/modOrderCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
-const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
+const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')), getModStatus: () => Promise.reject(new Error('unscripted')) };
 const installOver = () => ({ ...modlistCommands(fakeInstanceAdapter().adapter, unscriptedMEdit), installMod });
 
 const ARCHIVE_PATH = downloadRowFixture('foo.7z').path;

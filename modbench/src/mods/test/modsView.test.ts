@@ -102,7 +102,7 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
-const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
+const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')), getModStatus: () => Promise.reject(new Error('unscripted')) };
 
 const currentBox = currentBoxOf(h.state);
 
