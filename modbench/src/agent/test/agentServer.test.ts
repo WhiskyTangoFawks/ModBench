@@ -165,7 +165,7 @@ describe('the agent server, given an instance value', () => {
 
     const { isError, text } = await call(client, 'list_plugins');
 
-    expect({ isError, answer: JSON.parse(text), warned }).toMatchObject({
+    expect({ isError, answer: JSON.parse(text) as unknown, warned }).toMatchObject({
       isError: true, answer: { noLineMissing: 'The game folder was not found.', plugins: [{ name: 'A.esp' }, { name: 'B.esp' }] },
       warned: ['[agent] list_plugins: The game folder was not found.'],
     });
