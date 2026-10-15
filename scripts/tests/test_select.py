@@ -31,7 +31,7 @@ def medit_answering(status, body):
             self.answer()
 
         def answer(self):
-            payload = json.dumps(body).encode()
+            payload = body if isinstance(body, bytes) else json.dumps(body).encode()
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Content-Length', str(len(payload)))
@@ -103,6 +103,11 @@ class SelectWithoutAWindow(unittest.TestCase):
         with medit_answering(503, problem) as url, window_of(url), self.assertRaises(medit.MEditError) as raised:
             medit.select('SELECT 1')
         self.assertEqual(str(raised.exception), "mEdit's index is not ready: still reading.")
+
+    def test_raises_the_status_of_an_answer_that_is_not_a_problem(self):
+        with medit_answering(502, b'<html>Bad Gateway</html>') as url, window_of(url), self.assertRaises(medit.MEditError) as raised:
+            medit.select('SELECT 1')
+        self.assertEqual(str(raised.exception), 'mEdit answered 502.')
 
     def test_raises_when_nothing_answers_on_the_port(self):
         with medit_answering(200, {}) as url:

@@ -123,6 +123,14 @@ def _call(method, path, body=None):
             answer = response.read()
         return json.loads(answer) if answer else None
     except urllib.error.HTTPError as refused:
-        raise MEditError(json.load(refused).get('detail') or f'mEdit answered {refused.code}.') from None
+        raise MEditError(_detail(refused) or f'mEdit answered {refused.code}.') from None
     except urllib.error.URLError as unreachable:
         raise MEditError(f'mEdit does not answer on port {port}: {unreachable.reason}') from None
+
+
+def _detail(refused):
+    try:
+        problem = json.load(refused)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    return problem.get('detail') if isinstance(problem, dict) else None
