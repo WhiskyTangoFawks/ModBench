@@ -87,7 +87,7 @@ def create_plugin(name, origin):
     return Plugin(name, origin)
 
 
-def create(plugin, record_type, container=None, position=None):
+def create_record(plugin, record_type, container=None, position=None):
     """Writes a new record of a record type, such as npc_, into the plugin's source, in a container such as a cell, at
     a grid position (x, y) for a cell in a worldspace, and returns its FormKey."""
     name, origin = _plugin(plugin)

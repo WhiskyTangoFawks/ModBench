@@ -31,7 +31,7 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
         call('PUT', self.fixture.url + '/unsaved-documents', {'documents': [{'path': str(path), 'text': path.read_text() + ' '}]})
 
     def test_creates_a_record_in_the_plugins_source_and_returns_its_form_key(self):
-        form_key = medit.create(PLUGIN, 'npc_')
+        form_key = medit.create_record(PLUGIN, 'npc_')
         self.assertTrue(form_key.endswith(f':{PLUGIN}'))
         self.assertTrue(any(line.startswith('??') for line in changed(self.source)))
 
@@ -62,7 +62,7 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
             [{'editor_id': 'MBDevEditedRecipe'}])
 
     def test_a_select_after_a_create_returns_the_created_row(self):
-        form_key = medit.create(PLUGIN, 'npc_')
+        form_key = medit.create_record(PLUGIN, 'npc_')
         self.assertEqual(
             self.select_after_the_watcher(f"SELECT plugin FROM records WHERE form_key = '{form_key}'"), [{'plugin': PLUGIN}])
 
@@ -99,14 +99,14 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
     def test_a_write_into_the_created_plugin_lands_once_the_watchers_snapshot_holds_it(self):
         created = medit.create_plugin('MBDevNew.esp', TRACKED)
         watcher_resends_load_order(self.fixture, created)
-        self.assertTrue(medit.create(created, 'npc_').endswith(':MBDevNew.esp'))
+        self.assertTrue(medit.create_record(created, 'npc_').endswith(':MBDevNew.esp'))
 
     def test_a_write_into_the_created_plugin_waits_for_the_watchers_snapshot_that_holds_it(self):
         created = medit.create_plugin('MBDevNew.esp', TRACKED)
         watcher = threading.Timer(1, watcher_resends_load_order, [self.fixture, created])
         watcher.start()
         self.addCleanup(watcher.join)
-        self.assertTrue(medit.create(created, 'npc_').endswith(':MBDevNew.esp'))
+        self.assertTrue(medit.create_record(created, 'npc_').endswith(':MBDevNew.esp'))
 
     def test_raises_for_a_create_of_a_plugin_in_overwrite_and_writes_nothing(self):
         with self.assertRaises(medit.MEditError) as raised:
@@ -120,7 +120,7 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
 
     def test_raises_for_a_create_of_a_record_type_that_does_not_exist_and_writes_nothing(self):
         with self.assertRaises(medit.MEditError):
-            medit.create(PLUGIN, 'nothing')
+            medit.create_record(PLUGIN, 'nothing')
         self.assertEqual(changed(self.source), [])
 
 
