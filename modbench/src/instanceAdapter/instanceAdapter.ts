@@ -330,7 +330,7 @@ export interface InstallationFile extends HashedDownload {
   readonly unsourcedGame?: string;
 }
 
-export interface MetadataInstallationFile {
+interface MetadataInstallationFile {
   readonly name: string;
   readonly source?: string;
 }
