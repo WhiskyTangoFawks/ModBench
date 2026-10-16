@@ -18,12 +18,12 @@ source: @../target-architecture.medit_data.source
 source.label: Mod source
 sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
-modfolder: @../target-architecture.medit_data.modfolder
-modfolder.label: "Mod folders\nfiles · manifests"
-modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
-modfolderadapter.label: Mod folder adapter
 commands: @../target-architecture.medit_core.commands
 commands.label: Commands
+modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
+modfolderadapter.label: Mod folder adapter
+modfolder: @../target-architecture.medit_data.modfolder
+modfolder.label: "Mod folders\nfiles · manifests"
 instance: @../target-architecture.modbench_data.instance
 instance.label: "Instance\nmods · downloaded files · the repository"
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
@@ -38,8 +38,8 @@ instanceadapter -> sourcecommands: "each mod's folder" {class: compile}
 sourcecommands -> client: "build: each mod's folder" {class: compile}
 client -> http: envelope {class: compile}
 http -> engine: envelope {class: compile}
-source -> sourceadapter: "each mod's build configuration, assets and commit" {class: compile}
-sourceadapter -> engine: "the build configuration, the assets, the commit" {class: compile}
+source -> sourceadapter: "each mod's source at its commit" {class: compile}
+sourceadapter -> engine: "the source" {class: compile}
 engine."refused when the output folder is not the mod's"
 engine -> commands: "compile-plugin, per plugin" {class: compile}
 engine -> modfolderadapter: "the mod's files · the manifest" {class: compile}

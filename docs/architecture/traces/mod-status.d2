@@ -39,7 +39,7 @@ http -> client: stream {class: push}
 client -> mods: "mod status changed" {class: push}
 mods -> client: "mod status: the mods" {class: query}
 client -> http: envelope {class: query}
-http -> modfolderadapter: "mod status: the mods" {class: query}
-modfolderadapter -> http: "per mod: its status" {class: query}
+http -> engine: "mod status: the mods" {class: query}
+engine -> http: "per mod: its status" {class: query}
 http -> client: "per mod: its status" {class: query}
 client -> mods: "per mod: its status" {class: query}
