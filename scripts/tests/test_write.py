@@ -119,6 +119,13 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
         medit.create_plugin(NEW_PLUGIN, EMPTY_MOD)
         self.assertTrue((self.fixture.instance / 'mods' / EMPTY_MOD / NEW_PLUGIN).exists())
 
+    def test_a_copy_into_a_plugin_created_in_a_mod_with_no_source_is_refused_until_the_mod_is_decompiled(self) -> None:
+        created = medit.create_plugin(NEW_PLUGIN, EMPTY_MOD)
+        watcher_resends_load_order(self.fixture, created)
+        with self.assertRaises(medit.MEditError) as raised:
+            medit.copy(CONDITIONS.name, RECIPE, created, mode='new')
+        self.assertIn(f'{NEW_PLUGIN} is not a compiled plugin', str(raised.exception))
+
     def test_creates_a_plugin_in_overwrite_with_no_source(self) -> None:
         medit.create_plugin(NEW_PLUGIN, OVERWRITE)
         self.assertTrue((self.fixture.instance / 'overwrite' / NEW_PLUGIN).exists())

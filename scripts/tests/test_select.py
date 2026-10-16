@@ -41,6 +41,7 @@ class SelectAgainstTheFixtureInstance(unittest.TestCase):
     def test_a_terminal_of_the_window_imports_medit_and_reaches_that_windows_medit(self) -> None:
         with window_of(self.url):
             records = len(medit.select('SELECT form_key FROM records'))
+        self.assertGreater(records, 0)
         with tempfile.TemporaryDirectory() as elsewhere:
             run = subprocess.run(
                 [sys.executable, '-c', "import medit; print(len(medit.select('SELECT form_key FROM records')))"],
