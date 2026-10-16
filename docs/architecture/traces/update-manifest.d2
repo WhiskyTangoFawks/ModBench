@@ -18,30 +18,26 @@ modfolder: @../target-architecture.medit_data.modfolder
 modfolder.label: "Mod folders\nfiles · manifests · the stat cache"
 modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
 modfolderadapter.label: Mod folder adapter
-port: @../target-architecture.medit_kernel.ports
-port.label: Ports
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
-driving -> sourcecommands: "update manifest: the mods, or every mod" {class: track}
-sourcecommands -> instanceadapter: "get: each mod's folder and installation files" {class: track}
-instance -> instanceadapter: "each downloaded file: bytes, when its index is stale" {class: track}
-instanceadapter -> sourcecommands: "each mod's folder · each installation file: hash and entries · each game file a mod file overrides: hash" {class: track}
-sourcecommands -> client: "update manifest: each mod's folder and installation files with their hashes and entries, each game file a mod file overrides with its hash, the stat cache's folder" {class: track}
+driving -> sourcecommands: "update manifest: the mods" {class: track}
+sourcecommands -> instanceadapter: "get: each mod's package and metadata" {class: track}
+instance -> instanceadapter: "downloaded files · metadata" {class: track}
+instanceadapter -> sourcecommands: "each mod's package, hashed, and its metadata" {class: track}
+sourcecommands -> client: "update manifest: each mod's folder, package and metadata" {class: track}
 client -> http: envelope {class: track}
 http -> engine: envelope {class: track}
-modfolder -> modfolderadapter: "each mod's files: bytes, or the stat cache's hash when its stamp matches" {class: track}
+modfolder -> modfolderadapter: "each mod's files" {class: track}
 modfolderadapter -> engine: "hashed files" {class: track}
-engine."per mod: each file matched to its place in the package, or to none; refused when an installation file is missing; a source mod's manifest is its build's"
-engine -> port: "progress, per mod" {class: push}
-client -> http: "cancel: the gesture, after its first progress" {class: track}
-http -> engine: "stop after the mod in hand" {class: track}
-engine -> modfolderadapter: "each manifest that changed · the stat cache" {class: track}
-modfolderadapter -> modfolder: "manifests · the stat cache" {class: track}
-engine -> http: "landed or refused, per mod, and each file its package does not hold" {class: track}
-http -> client: "landed or refused, per mod, and each file its package does not hold" {class: track}
+engine -> modfolderadapter: "manifests" {class: track}
+modfolderadapter -> modfolder: "manifests" {class: track}
+engine -> http: "the outcome, per mod" {class: track}
+http -> client: "the outcome, per mod" {class: track}
 client -> sourcecommands: the outcome {class: track}
+sourcecommands -> instanceadapter: "each source mod with a remote: its submodule" {class: track}
+instanceadapter -> instance: ".gitmodules · the ignore list" {class: track}
 sourcecommands -> driving: "the outcome" {class: track}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
