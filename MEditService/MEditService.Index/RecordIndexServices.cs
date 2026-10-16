@@ -25,8 +25,7 @@ public static class RecordIndexServices
                 sp.GetRequiredService<SchemaReflector>(),
                 sp.GetRequiredService<ILoggerFactory>(),
                 sp.GetService<INotificationPublisher>(),
-                sp.GetRequiredService<TimeProvider>(),
-                sp.GetRequiredService<StringsLanguageHolder>());
+                sp.GetRequiredService<TimeProvider>());
             index.Subscribe();
             return new RecordQueries(
                 index, sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<SchemaReflector>(),

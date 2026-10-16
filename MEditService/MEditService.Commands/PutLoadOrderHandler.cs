@@ -4,6 +4,7 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands;
 
@@ -29,7 +30,7 @@ public sealed class PutLoadOrderHandler
         string dataFolder, string? instanceRoot, GameRelease gameRelease,
         IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine,
         IReadOnlyList<StampedFile> archives, IReadOnlyList<StampedFile> stringsFiles, IReadOnlyList<PluginPlace> places,
-        SnapshotMods mods)
+        Language stringsLanguage, SnapshotMods mods)
     {
         if (!_plugins.GameFolderExists(dataFolder))
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.GameDirectoryNotFound, $"Game directory not found: {dataFolder}");
@@ -50,7 +51,7 @@ public sealed class PutLoadOrderHandler
         if (LoadOrderSnapshot.RefusalOf(plugins, active, loadedWithNoLine) is { } invalid)
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InvalidSnapshot, invalid);
 
-        var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active, loadedWithNoLine, archives, stringsFiles, places);
+        var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active, loadedWithNoLine, archives, stringsFiles, places, stringsLanguage);
         var version = _holder.Apply(snapshot);
         _externalChanges.Check(snapshot);
         _modStatus.Check(mods);

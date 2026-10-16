@@ -23,11 +23,9 @@ internal interface ILoadedMod : IDisposable
 
 /// <summary>The one implementation: Mutagen's own mod factory and write builder, reached by the
 /// release the caller passed and never by a game this code names.</summary>
-public sealed class MutagenPluginAdapter(TimeProvider timeProvider, StringsLanguageHolder? stringsLanguage = null) : IPluginAdapter
+public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAdapter
 {
     private readonly PluginFileHashes _hashes = new(timeProvider);
-
-    private readonly StringsLanguageHolder _stringsLanguage = stringsLanguage ?? new StringsLanguageHolder();
 
     // The getter looks its strings up as they are read, so the folder it reads them from lives as long as it does.
     internal static ILoadedMod OpenForRead(
@@ -72,7 +70,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider, StringsLangu
     }
 
     // The open passes to what its result holds; until it has, a failure disposes it here.
-    private Answer<T, PluginFailure> Opened<T>(
+    private static Answer<T, PluginFailure> Opened<T>(
         ModPath modPath, PluginStrings? strings, LoadOrderSnapshot loadOrder, Func<ILoadedMod, T> holding)
     {
         ILoadedMod? loaded = null;
@@ -80,7 +78,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider, StringsLangu
         {
             return PluginFailure.Answer(() =>
             {
-                loaded = OpenForRead(modPath, loadOrder.GameRelease, strings, loadOrder, _stringsLanguage.Current);
+                loaded = OpenForRead(modPath, loadOrder.GameRelease, strings, loadOrder, loadOrder.StringsLanguage);
                 var held = holding(loaded);
                 loaded = null;
                 return held;
@@ -95,7 +93,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider, StringsLangu
     public bool GameFolderExists(string gameFolder) => Directory.Exists(gameFolder);
 
     public Answer<IReadOnlyList<string>, PluginFailure> StringsPlacesOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
-        PluginFailure.Answer(() => LocalizedStrings.PlacesOf(strings, loadOrder, modPath, loadOrder.GameRelease, _stringsLanguage.Current));
+        PluginFailure.Answer(() => LocalizedStrings.PlacesOf(strings, loadOrder, modPath, loadOrder.GameRelease, loadOrder.StringsLanguage));
 
     public bool Exists(string pluginPath) => File.Exists(pluginPath);
 
@@ -125,7 +123,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider, StringsLangu
                     && PluginFlagPredicates.IsBlueprint(loaded.Getter, name, ModHeaderFrame.FromPath(modPath, loadOrder.GameRelease).Flags);
                 var (content, unreachable) = OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint);
                 var missing = strings is { } named
-                    ? LocalizedStrings.FindMissingStringsFiles(loaded.Getter, modPath, named, loadOrder, loadOrder.GameRelease, _stringsLanguage.Current)
+                    ? LocalizedStrings.FindMissingStringsFiles(loaded.Getter, modPath, named, loadOrder, loadOrder.GameRelease, loadOrder.StringsLanguage)
                     : [];
                 return (content with { MissingStringsFiles = missing }, unreachable);
             }
@@ -156,7 +154,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider, StringsLangu
         IReadOnlyList<TreeFile> files,
         LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default) =>
-        PluginTrees.ReadTreeAsync(files, loadOrder, _stringsLanguage.Current, cancel);
+        PluginTrees.ReadTreeAsync(files, loadOrder, loadOrder.StringsLanguage, cancel);
 
     public Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, LoadOrderSnapshot loadOrder,
@@ -165,12 +163,12 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider, StringsLangu
 
     public Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
         RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>
-        PluginTrees.ReadAsync(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder, plugin.Strings, _stringsLanguage.Current, cancel);
+        PluginTrees.ReadAsync(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder, plugin.Strings, loadOrder.StringsLanguage, cancel);
 
     public Answer<string?, PluginFailure> DivergenceFrom(
         string pluginFileName, string pluginFilePath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         PluginFailure.Answer(() => PluginTrees.DivergenceBetween(
-            new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), recompiledPath, loadOrder, strings, _stringsLanguage.Current)?.Describe());
+            new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), recompiledPath, loadOrder, strings, loadOrder.StringsLanguage)?.Describe());
 
     public Task<Answer<PluginByteComparison, PluginFailure>> CompareBytesAsync(
         string originalPath, string recompiledPath, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>

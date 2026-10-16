@@ -3,6 +3,7 @@ using MEditService.PluginAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -40,7 +41,7 @@ public sealed class MachineIniTests : IDisposable
     [PosixFact]
     public void OpenDocuments_AnArchiveThisMachinesGameIniListsBesideThePlugin_IsNotReadWhenTheSnapshotListsNone()
     {
-        var loadOrder = new LoadOrderSnapshot(_modFolder, null, GameRelease.SkyrimSE, [], [], [], [], [], []);
+        var loadOrder = new LoadOrderSnapshot(_modFolder, null, GameRelease.SkyrimSE, [], [], [], [], [], [], Language.English);
 
         using var documents = TestAdapters.Mutagen().OpenDocuments(
             new ModPath(ModKey.FromFileName(PluginName), _pluginPath), loadOrder,

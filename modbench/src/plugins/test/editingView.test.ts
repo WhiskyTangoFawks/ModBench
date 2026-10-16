@@ -13,7 +13,7 @@ const STATUS = {
 };
 const SNAPSHOT: Sent['snapshot'] = {
   plugins: [], active: [], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], mods: [], statCache: '/instance/stat-cache',
-  gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4',
+  gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
 };
 
 const sent = (outcome: Outcome): PutLoadOrderResult => ({ sent: true, snapshot: SNAPSHOT, outcome });

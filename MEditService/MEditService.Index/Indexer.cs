@@ -33,7 +33,6 @@ internal sealed class Indexer : IDisposable
     private readonly ILogger _logger;
     private readonly INotificationPublisher? _notifications;
     private readonly TimeProvider _timeProvider;
-    private readonly StringsLanguageHolder _stringsLanguage;
     private Language _readLanguage = Language.English;
 
     /// <summary>The registration's door: the Index opens its own store (ADR-0014).</summary>
@@ -45,11 +44,9 @@ internal sealed class Indexer : IDisposable
         SchemaReflector schemaReflector,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
-        TimeProvider? timeProvider = null,
-        StringsLanguageHolder? stringsLanguage = null)
+        TimeProvider? timeProvider = null)
     {
         _holder = holder;
-        _stringsLanguage = stringsLanguage ?? new StringsLanguageHolder();
         _unsaved = unsaved;
         _adapter = adapter;
         _source = source;
@@ -545,7 +542,7 @@ internal sealed class Indexer : IDisposable
     {
         var (held, store) = (scope.Held, scope.Store);
         FailCollisions(snapshot.CaseOnlyCollisions);
-        _readLanguage = _stringsLanguage.Current;
+        _readLanguage = snapshot.StringsLanguage;
         var resolved = snapshot.Plugins;
         // A hash is kept only for a file the load order names, or the kept hashes grow by every path
         // a session ever read.
@@ -1146,7 +1143,6 @@ internal sealed class Indexer : IDisposable
     public void Subscribe()
     {
         _holder.Arrived += OnArrived;
-        _stringsLanguage.Changed += StartReconcile;
         _unsaved.Arrived += ValidateTreesHolding;
     }
 

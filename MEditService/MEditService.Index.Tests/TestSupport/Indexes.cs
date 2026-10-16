@@ -28,7 +28,6 @@ internal static class Indexes
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
         var services = new ServiceCollection();
         services.AddSingleton(holder);
-        services.AddSingleton<StringsLanguageHolder>();
         if (adapter is null) services.AddSingleton<IPluginAdapter, MutagenPluginAdapter>();
         else services.AddSingleton(adapter);
         services.AddSingleton<UnsavedDocuments>();

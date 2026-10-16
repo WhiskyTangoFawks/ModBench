@@ -69,6 +69,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             gameDirectory = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
             gameRelease = "Oblivion",
+            stringsLanguage = "English",
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);

@@ -438,9 +438,6 @@ export interface MEditClient {
   /** Every plugin-source document VS Code holds unsaved, which mEdit reads in place of its file (ADR-0015).
    *  Put at once and in order while mEdit runs, and the newest again whenever the process may hold none. */
   handUnsavedDocuments(documents: readonly UnsavedDocument[]): void;
-  /** The language a translated text shows in (editor-fields.md, By type). Put at once while mEdit runs, and again
-   *  whenever the process may hold none; mEdit shows English until one is put. */
-  handStringsLanguage(language: string): void;
   /** Each put of the unsaved documents as it answers: undefined when mEdit took them, else why not. */
   onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void;
 

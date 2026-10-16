@@ -34,6 +34,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -61,6 +62,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -91,6 +93,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -105,6 +108,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     [InlineData("places")]
     [InlineData("mods")]
     [InlineData("statCache")]
+    [InlineData("stringsLanguage")]
     public async Task PutLoadOrder_WithAListItNeverDefaultsLeftOut_Returns400(string omitted)
     {
         var body = new Dictionary<string, object>
@@ -120,10 +124,35 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             ["mods"] = Array.Empty<object>(),
             ["statCache"] = "stat-cache",
             ["gameRelease"] = "Fallout4",
+            ["stringsLanguage"] = "English",
         };
         body.Remove(omitted);
 
         var response = await _client.PutAsJsonAsync("/load-order", body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("99")]
+    [InlineData("Klingon")]
+    public async Task PutLoadOrder_WithAStringsLanguageNoGameHas_Returns400(string stringsLanguage)
+    {
+        var response = await _client.PutAsJsonAsync("/load-order", new
+        {
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
+            plugins = _fixture.Plugins.Select(p => p.Wire),
+            active = SnapshotPlugins.Active(_fixture.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
+            places = Array.Empty<object>(),
+            mods = Array.Empty<object>(),
+            statCache = "stat-cache",
+            gameRelease = "Fallout4",
+            stringsLanguage,
+        });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -158,6 +187,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -187,6 +217,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -208,6 +239,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -241,6 +273,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -270,6 +303,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -312,6 +346,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -327,6 +362,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             instanceRoot = _fixture.InstanceRoot,
             plugins = Array.Empty<object>(),
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -341,6 +377,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             instanceRoot = "/no-such-instance",
             plugins = Array.Empty<object>(),
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

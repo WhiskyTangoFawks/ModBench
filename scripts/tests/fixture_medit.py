@@ -121,6 +121,7 @@ def snapshot(instance: pathlib.Path, game: pathlib.Path) -> JsonRecord:
         'gameDirectory': str(game),
         'instanceRoot': str(instance),
         'gameRelease': 'Fallout4',
+        'stringsLanguage': 'English',
     }
 
 

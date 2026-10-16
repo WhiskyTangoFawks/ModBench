@@ -2,6 +2,7 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -16,7 +17,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     private static RegisteredPlugin Plugin(string name) => new(name, "ModA", $"C:\\Instance\\mods\\ModA\\{name}", new PluginProvider.FromMod("ModA", "C:\\Instance\\mods\\ModA", "C:\\Instance\\mods\\ModA"), Line: null, PluginStrings.None);
 
     private PutLoadOrderResult Put(GameRelease release, RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
-        Handler.Put(_dataFolder, _instanceRoot, release, plugins, [.. active.Select(p => p.Key)], [], [], [], [], TestEditService.NoMods);
+        Handler.Put(_dataFolder, _instanceRoot, release, plugins, [.. active.Select(p => p.Key)], [], [], [], [], Language.English, TestEditService.NoMods);
 
     public void Dispose()
     {
@@ -69,7 +70,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     {
         var gone = Path.Combine(_dataFolder, "no-such-data");
 
-        var result = Handler.Put(gone, _instanceRoot, GameRelease.Fallout4, [Plugin("A.esp")], [], [], [], [], [], TestEditService.NoMods);
+        var result = Handler.Put(gone, _instanceRoot, GameRelease.Fallout4, [Plugin("A.esp")], [], [], [], [], [], Language.English, TestEditService.NoMods);
 
         Assert.Equal(PutLoadOrderRefusal.GameDirectoryNotFound, result.Refusal);
         Assert.Contains(gone, result.Message, StringComparison.Ordinal);
@@ -81,7 +82,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     {
         var gone = Path.Combine(_instanceRoot, "no-such-instance");
 
-        var result = Handler.Put(_dataFolder, gone, GameRelease.Fallout4, [Plugin("A.esp")], [], [], [], [], [], TestEditService.NoMods);
+        var result = Handler.Put(_dataFolder, gone, GameRelease.Fallout4, [Plugin("A.esp")], [], [], [], [], [], Language.English, TestEditService.NoMods);
 
         Assert.Equal(PutLoadOrderRefusal.InstanceRootNotFound, result.Refusal);
         Assert.Contains(gone, result.Message, StringComparison.Ordinal);
@@ -91,7 +92,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     [Fact]
     public void Put_NoInstanceRoot_RefusesWithoutApplying()
     {
-        var result = Handler.Put(_dataFolder, null, GameRelease.Fallout4, [Plugin("A.esp")], [], [], [], [], [], TestEditService.NoMods);
+        var result = Handler.Put(_dataFolder, null, GameRelease.Fallout4, [Plugin("A.esp")], [], [], [], [], [], Language.English, TestEditService.NoMods);
 
         Assert.Equal(PutLoadOrderRefusal.InstanceRootNotFound, result.Refusal);
         Assert.Null(_holder.Held);
@@ -102,7 +103,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     {
         var gone = Path.Combine(_dataFolder, "no-such-data");
 
-        var result = Handler.Put(gone, _instanceRoot, GameRelease.Oblivion, [Plugin("A.esp")], [], [], [], [], [], TestEditService.NoMods);
+        var result = Handler.Put(gone, _instanceRoot, GameRelease.Oblivion, [Plugin("A.esp")], [], [], [], [], [], Language.English, TestEditService.NoMods);
 
         Assert.Equal(PutLoadOrderRefusal.GameDirectoryNotFound, result.Refusal);
     }
