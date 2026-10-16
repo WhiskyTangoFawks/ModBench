@@ -45,14 +45,24 @@ describe('the indicators each mod carries (mods.md, Indicators)', () => {
     expect(carriedBy(value, 'Loser')).toEqual(['redundant']);
   });
 
-  it('a mod between two copies of a file wins over one and loses to the other, so carries both', async () => {
+  it('a mod that wins one file and loses another carries both', async () => {
     const value = await indexedValueOf([mod('High'), mod('Middle'), mod('Low')], {
       High: { files: [file('High', 'a.dds')] },
       Middle: { files: [file('Middle', 'a.dds'), file('Middle', 'own.dds')] },
-      Low: { files: [file('Low', 'a.dds')] },
+      Low: { files: [file('Low', 'a.dds'), file('Low', 'own.dds')] },
     });
 
     expect(carriedBy(value, 'Middle')).toEqual(['overwritesLooseFiles', 'overwrittenLooseFiles']);
+  });
+
+  it('a mod between two copies of its only file loses it, so is redundant and does not overwrite', async () => {
+    const value = await indexedValueOf([mod('High'), mod('Middle'), mod('Low')], {
+      High: { files: [file('High', 'a.dds')] },
+      Middle: { files: [file('Middle', 'a.dds')] },
+      Low: { files: [file('Low', 'a.dds')] },
+    });
+
+    expect(carriedBy(value, 'Middle')).toEqual(['redundant']);
   });
 
   it('a mod whose file loses to Overwrite\'s is overwritten', async () => {
@@ -95,13 +105,13 @@ describe('the indicators each mod carries (mods.md, Indicators)', () => {
     expect(carriedBy(value, 'Shared')).toEqual([]);
   });
 
-  it('a file whose path\'s copies do not name its mod is neither a win nor a loss, and not one the game could get', async () => {
+  it('a file whose path\'s copies do not name its mod is neither a win nor a loss', async () => {
     const listed = await indexedValueOf([mod('A')], { A: { files: [file('A', 'a.dds'), file('A', 'b.dds')] } });
     const othersOnly = await indexedValueOf([mod('B'), mod('A')], {
       A: { files: [file('A', 'b.dds')] }, B: { files: [file('B', 'a.dds'), file('B', 'b.dds')] },
     });
 
-    expect(carriedBy({ ...listed, files: othersOnly.files }, 'A')).toEqual(['redundant']);
+    expect(carriedBy({ ...listed, files: othersOnly.files }, 'A')).toEqual(['overwrittenLooseFiles']);
   });
 
   it('a mod shipping two case variants of one path wins over no copy of its own', async () => {
@@ -134,7 +144,7 @@ const decorationsOn = (decorations: ModIndicatorDecorations, uri: vscode.Uri) =>
 const middleOfThree = () => indexedValueOf([mod('High'), mod('Middle'), mod('Low')], {
   High: { files: [file('High', 'a.dds')] },
   Middle: { files: [file('Middle', 'a.dds'), file('Middle', 'own.dds'), file('Middle', 'b.dds', true)] },
-  Low: { files: [file('Low', 'a.dds')] },
+  Low: { files: [file('Low', 'a.dds'), file('Low', 'own.dds')] },
 });
 
 describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mod; Indicators)', () => {
@@ -182,7 +192,7 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
     });
     expect(decorationsOn(decorations, uri)[2]).toBeDefined();
 
-    instance.publish(await indexedValueOf([mod('Low')], { Low: { files: [file('Low', 'a.dds')] } }));
+    instance.publish(await indexedValueOf([mod('Low')], { Low: { files: [file('Low', 'a.dds'), file('Low', 'own.dds')] } }));
 
     expect(fired.map((listener) => listener.mock.calls)).toEqual([[[undefined]], [[undefined]], [[undefined]], [[undefined]]]);
     expect(decorationsOn(decorations, uri)).toEqual([undefined, undefined, undefined, undefined]);
@@ -210,7 +220,7 @@ const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, en
 const groupedMiddleOfThree = () => indexedValueOf([mod('High'), mod('Middle'), mod('Low'), separator('Section'), mod('Alone'), separator('Quiet')], {
   High: { files: [file('High', 'a.dds')] },
   Middle: { files: [file('Middle', 'a.dds'), file('Middle', 'own.dds'), file('Middle', 'b.dds', true)] },
-  Low: { files: [file('Low', 'a.dds')] },
+  Low: { files: [file('Low', 'a.dds'), file('Low', 'own.dds')] },
   Alone: { files: [file('Alone', 'only.dds')] },
 });
 
@@ -274,7 +284,7 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
     const decorations = new ModIndicatorDecorations(instance, settingsOf(allOn).settings);
     decorations.expandedRow(section);
 
-    instance.publish(await indexedValueOf([mod('Low')], { Low: { files: [file('Low', 'a.dds')] } }));
+    instance.publish(await indexedValueOf([mod('Low')], { Low: { files: [file('Low', 'a.dds'), file('Low', 'own.dds')] } }));
     instance.publish(await groupedMiddleOfThree());
 
     expect(decorationsOn(decorations, section)[0]).toBeDefined();
