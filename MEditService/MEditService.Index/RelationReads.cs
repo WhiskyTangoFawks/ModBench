@@ -174,7 +174,7 @@ internal sealed class RelationReads(
         return conditions.Count == 0 ? "" : "WHERE " + string.Join(" AND ", conditions);
     }
 
-    /// <summary>The rows of one SELECT over the views of every registered plugin, each a JSON object of its
+    /// <summary>The rows of one SELECT over the views of every plugin the index holds, each a JSON object of its
     /// columns; or why the SQL cannot be one. The filter in force does not narrow it.</summary>
     public Answer<JsonElement[], string> Select(string statement)
     {

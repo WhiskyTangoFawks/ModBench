@@ -9,6 +9,8 @@ public sealed class SqlDoorSealTests(SqlDoorFixture fixture) : IClassFixture<Sql
     [InlineData("SELECT form_key FROM mirror.records")]
     [InlineData("SELECT form_key FROM main.npc_")]
     [InlineData("SELECT form_key FROM winners")]
+    [InlineData("(WITH plugin_records AS (SELECT 1 AS form_key) SELECT form_key FROM plugin_records) UNION ALL SELECT form_key FROM plugin_records")]
+    [InlineData("WITH winners AS (SELECT form_key FROM winners) SELECT form_key FROM winners")]
     [InlineData("SELECT name AS form_key FROM sqlite_master")]
     [InlineData("SELECT form_key FROM records WHERE form_key IN (SELECT form_key FROM mirror.records)")]
     [InlineData("SELECT table_name AS form_key FROM information_schema.tables")]
@@ -39,6 +41,8 @@ public sealed class SqlDoorSealTests(SqlDoorFixture fixture) : IClassFixture<Sql
     [Theory]
     [InlineData("SELECT form_key FROM records")]
     [InlineData("WITH held AS (SELECT form_key FROM records) SELECT form_key FROM held")]
+    [InlineData("WITH a AS (SELECT form_key FROM records), b AS (SELECT form_key FROM a) SELECT form_key FROM b")]
+    [InlineData("WITH RECURSIVE r(form_key) AS (SELECT form_key FROM records UNION SELECT form_key FROM r) SELECT form_key FROM r")]
     [InlineData("SELECT form_key FROM records, unnest([1, 2]) AS t(n)")]
     public void AFilterOfThePublicRelations_IsAccepted(string sql) => Assert.True(fixture.Index.Accepts(sql));
 }

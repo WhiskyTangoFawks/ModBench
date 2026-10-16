@@ -17,20 +17,20 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
     internal const string ActiveSchema = "main";
 
-    /// <summary>The views a SELECT reads: the records of every registered plugin, each row saying whether
-    /// its plugin is active. A connection that reads them puts this schema first on its search path.</summary>
+    /// <summary>The views a SELECT reads: the records of every plugin the index holds, each row saying whether
+    /// its plugin is active. A connection that reads them takes this schema as its search path.</summary>
     internal const string IndexedSchema = "indexed";
 
     internal const string ViewColumnsView = "view_columns";
 
     /// <summary>The views both schemas hold whatever the game; each record type has a view of its own besides.</summary>
-    internal static IEnumerable<string> ReadableViews => PublicViews.Select(view => view.Table).Append("form_lookup");
+    internal static IEnumerable<string> FixedViews => PublicViews.Select(view => view.Table).Append("form_lookup");
 
     // ADR-0012, and Mutagen's ModKey: a FormKey names its plugin by filename, so it
     // compares ignoring case too.
     internal const string FilenameIdentity = "COLLATE NOCASE";
 
-    // A view in `main` over a mirror table carrying a plugin identity: of records, which only the
+    // A view over a mirror table carrying a plugin identity: of records, which only the
     // active plugins answer, or of a plugin's own facts, which every registered plugin answers.
     // `registrations` and `mirror.files` have no view.
     private readonly record struct PublicView(

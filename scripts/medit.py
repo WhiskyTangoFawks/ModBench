@@ -38,7 +38,7 @@ class Referrer:
 
 
 def select(sql: str) -> list[JsonRecord]:
-    """The rows of one SQL SELECT over the views of every registered plugin, each a dict of its columns; view_columns lists them."""
+    """The rows of one SQL SELECT over the views of every plugin the index holds, each a dict of its columns; view_columns lists them."""
     return _call('POST', '/records/select', {'sql': sql})['rows']
 
 
