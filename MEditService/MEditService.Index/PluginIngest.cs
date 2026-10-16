@@ -45,13 +45,13 @@ internal sealed class PluginIngest
     // caller's transaction.
     public Ingested IndexPlugin(
         IPluginDocuments documents, string plugin, string origin,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, CancellationToken token)
     {
         DeleteAllRowsFor(plugin, origin);
         var timer = Stopwatch.StartNew();
         var counters = new PhaseCounters();
         var records = 0;
-        foreach (var prepared in Pipelined(Batches(documents.Records), batch => Prepared(batch, plugin, schemas, counters)))
+        foreach (var prepared in Pipelined(Batches(documents.Records, token), batch => Prepared(batch, plugin, schemas, counters), token))
         {
             var appendTimer = Stopwatch.StartNew();
             Append(prepared, plugin, origin);
@@ -99,12 +99,13 @@ internal sealed class PluginIngest
     private const int PrepareBatchSize = 2048;
     private const long PrepareBatchChars = 16 * 1024 * 1024;
 
-    private static IEnumerable<List<PluginDocument>> Batches(IEnumerable<PluginDocument> documents)
+    private static IEnumerable<List<PluginDocument>> Batches(IEnumerable<PluginDocument> documents, CancellationToken token)
     {
         List<PluginDocument> batch = [];
         long chars = 0;
         foreach (var document in documents)
         {
+            token.ThrowIfCancellationRequested();
             batch.Add(document);
             chars += document.Text.Length;
             if (batch.Count < PrepareBatchSize && chars < PrepareBatchChars) continue;
@@ -118,9 +119,9 @@ internal sealed class PluginIngest
     // Reading a batch of documents and preparing one each keep the cores busy. Each stage runs a batch
     // ahead of the next, so the ingest holds at most five.
     private static IEnumerable<List<PreparedRecord>> Pipelined(
-        IEnumerable<List<PluginDocument>> batches, Func<List<PluginDocument>, List<PreparedRecord>> prepare)
+        IEnumerable<List<PluginDocument>> batches, Func<List<PluginDocument>, List<PreparedRecord>> prepare, CancellationToken token)
     {
-        using var stop = new CancellationTokenSource();
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(token);
         using var read = new BlockingCollection<List<PluginDocument>>(boundedCapacity: 1);
         using var prepared = new BlockingCollection<List<PreparedRecord>>(boundedCapacity: 1);
         ExceptionDispatchInfo? failure = null;

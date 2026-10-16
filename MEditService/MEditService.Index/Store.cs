@@ -643,18 +643,18 @@ internal sealed class Store : IDisposable
     /// <summary>Indexes a compiled plugin's tree as <see cref="IndexBinary"/> indexes a binary. The tree
     /// is the plugin's truth however many records its binary holds, and it refuses a FormKey two
     /// documents claim before any is indexed.</summary>
-    public void IndexTree(IPluginDocuments documents, PluginMetadata registered, string? filePath) =>
-        Index(documents, registered, filePath, DerivedFrom.SourceTree, stringsRead: null);
+    public void IndexTree(IPluginDocuments documents, PluginMetadata registered, string? filePath, CancellationToken token) =>
+        Index(documents, registered, filePath, DerivedFrom.SourceTree, stringsRead: null, token);
 
     /// <summary>A binary whose documents miss a record it holds, or that holds one FormKey in two
     /// groups, is not indexed, and the failure says which. xEdit refuses a duplicate FormID to load.</summary>
     public LoadFailure? IndexBinary(
-        IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom, string? stringsRead) =>
-        Index(documents, registered, filePath, derivedFrom, stringsRead);
+        IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom, string? stringsRead, CancellationToken token) =>
+        Index(documents, registered, filePath, derivedFrom, stringsRead, token);
 
     // Replaces whatever the key held, and stamps the file's hash and diagnosis (ADR-0003); a null
     // path claims no file backs the rows (ADR-0012).
-    private LoadFailure? Index(IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom, string? stringsRead)
+    private LoadFailure? Index(IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom, string? stringsRead, CancellationToken token)
     {
         var (plugin, origin) = (registered.Name, registered.Origin);
         var schemas = Schemas;
@@ -670,7 +670,7 @@ internal sealed class Store : IDisposable
         // with them rather than beside them.
         StampPluginFacts(plugin, origin, filePath, derivedFrom, stringsRead);
 
-        var ingested = Ingest.IndexPlugin(documents, plugin, origin, schemas);
+        var ingested = Ingest.IndexPlugin(documents, plugin, origin, schemas, token);
         if (derivedFrom != DerivedFrom.SourceTree && BinaryRefused(registered, ingested.Records) is { } refused) return refused;
         BumpSequence();
 

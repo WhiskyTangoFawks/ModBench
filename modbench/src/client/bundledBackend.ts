@@ -9,4 +9,7 @@ export function bundledBackendPath(platform: NodeJS.Platform, bundleDir: string)
   return path.join(bundleDir, '..', 'backend', exe);
 }
 
-export const spawnPiped: SpawnFn = (exe, args) => spawn(exe, args, { detached: false, stdio: ['ignore', 'pipe', 'pipe'] });
+// The stdin pipe is never written. The OS closes it when this extension host dies, however it dies,
+// and the backend exits on its end, so no backend outlives the window that spawned it.
+export const spawnPiped: SpawnFn = (exe, args) =>
+  spawn(exe, [...args, '--ExitWhenStdinCloses', 'true'], { detached: false, stdio: ['pipe', 'pipe', 'pipe'] });
