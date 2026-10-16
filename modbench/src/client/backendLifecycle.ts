@@ -14,6 +14,7 @@ interface BackendProcess {
   on(event: 'exit', cb: (code: number | null, signal: NodeJS.Signals | null) => void): void;
   on(event: 'error', cb: (err: Error) => void): void;
   /** Present when spawned with piped stdio; absent on 'ignore'. */
+  stdin?: NodeJS.WritableStream | null;
   stdout?: NodeJS.ReadableStream | null;
   stderr?: NodeJS.ReadableStream | null;
 }

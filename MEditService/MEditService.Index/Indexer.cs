@@ -94,6 +94,9 @@ internal sealed class Indexer : IDisposable
     // holding it could never be signalled.
     private readonly Lock _exclusive = new();
     private CancellationTokenSource? _reconcileCancellation;
+    // Only disposal stops a plugin read partway, inside the one transaction its rows land in. A newer
+    // snapshot waits for the plugin in hand: snapshots come with every source write (ADR-0015), and each
+    // reconcile must make progress.
     private readonly CancellationTokenSource _disposal = new();
     private bool _disposed;
 
@@ -879,9 +882,7 @@ internal sealed class Indexer : IDisposable
         && state.Binary is { } binary && store.IndexedContentHash(key) == binary;
 
     // ADR-0005: the binary reaches the index as documents, through the adapter's own door,
-    // never as a mod this side holds. Disposal alone stops a read partway, inside the one transaction its
-    // rows land in; a newer snapshot waits for the plugin in hand, since snapshots arrive with every
-    // source write (ADR-0015) and each reconcile must still make progress.
+    // never as a mod this side holds.
     private ReadOutcome IndexFromBinary(OpenScope scope, PluginMetadata plugin, DerivedFrom derivedFrom)
     {
         var modPath = ModPathOf(plugin.Path);
