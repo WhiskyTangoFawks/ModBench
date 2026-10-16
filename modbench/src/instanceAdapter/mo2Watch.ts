@@ -2,6 +2,7 @@
 // reads, armed through VS Code's file watcher while anyone listens, and a change to the game-folder setting.
 
 import * as vscode from 'vscode';
+import { heldFolderWatch } from './heldFolders';
 import type { Subscription } from './instanceAdapter';
 import {
   MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, REPOSITORY_WATCH_GLOB, SETTINGS_WATCH_GLOB, SOURCE_GLOB,
@@ -22,11 +23,20 @@ function isRepositoryChange(path: string): boolean {
 // Each change beneath `base` that matches `glob`, created, changed or deleted alike.
 function watchFiles(base: string, glob: string, onChange: (path: string) => void): Subscription {
   const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(base), glob));
+  const held = process.platform === 'linux' && glob.endsWith('**') ? heldFolderWatch(onChange) : undefined;
   const heard = (uri: vscode.Uri): void => onChange(uri.fsPath);
-  watcher.onDidCreate(heard);
+  watcher.onDidCreate((uri) => {
+    heard(uri);
+    void held?.created(uri.fsPath);
+  });
   watcher.onDidChange(heard);
   watcher.onDidDelete(heard);
-  return watcher;
+  return {
+    dispose: () => {
+      watcher.dispose();
+      held?.dispose();
+    },
+  };
 }
 
 interface Followed {

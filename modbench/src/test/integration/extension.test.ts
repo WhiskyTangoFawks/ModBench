@@ -1806,6 +1806,43 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 
     assert.deepStrictEqual(putLoadOrders.slice(sent), [order]);
   });
+
+  describe('a file of a source mod\'s plugin source, its folder moved into the instance whole', () => {
+    const origin = 'Written Mod';
+    const modDir = path.join(root, 'mods', origin);
+    const sourceDir = path.join(root, 'source', origin);
+    const file = path.join(sourceDir, 'plugin-source', 'Written.esp', 'Gun.json');
+    const SETUP_PUTS_SETTLED_MS = 1000;
+    let modlist = '';
+
+    before(async () => {
+      modlist = readFileSync(modlistPath, 'utf8');
+      mkdirSync(modDir, { recursive: true });
+      const staged = mkdtempSync(path.join(os.tmpdir(), 'modbench-staged-source-'));
+      const stagedFile = path.join(staged, path.relative(sourceDir, file));
+      mkdirSync(path.dirname(stagedFile), { recursive: true });
+      writeFileSync(path.join(staged, 'build.json'), JSON.stringify({ output: origin }));
+      writeFileSync(stagedFile, '{}');
+      mkdirSync(path.dirname(sourceDir), { recursive: true });
+      renameSync(staged, sourceDir);
+      await waitFor('mod sync to give the new folder its line', () => readFileSync(modlistPath, 'utf8').includes(origin));
+    });
+
+    after(() => {
+      writeFileSync(modlistPath, modlist);
+      rmSync(modDir, { recursive: true, force: true });
+      rmSync(path.join(root, 'source'), { recursive: true, force: true });
+    });
+
+    it('puts the load order again on a write to it', async () => {
+      await sleep(SETUP_PUTS_SETTLED_MS);
+      const before = putCount();
+
+      writeFileSync(file, '{ }');
+
+      await waitFor('a PUT /load-order after the write', () => putCount() > before);
+    });
+  });
 });
 
 describe('Refresh rebuilds the index, then re-reads the instance', () => {

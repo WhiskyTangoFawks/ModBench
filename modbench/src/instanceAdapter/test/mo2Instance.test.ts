@@ -26,7 +26,7 @@ const actualStat = present(real.stat, 'the real stat');
 const actualReaddir = present(real.readdir, 'the real readdir');
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join, matchesGlob } from 'node:path';
+import { dirname, join, matchesGlob } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import type { Mo2Context } from '../mo2Context';
 import { readingSource, readInstance, type ReadingSource } from '../mo2Reads';
@@ -983,6 +983,25 @@ describe('the MO2 Instance adapter', () => {
 
       expect(fire(root, 'mods/Harder VATS/.git/index', 'mods/Harder VATS/git/index')).toBe(true);
       expect(signals).toBe(1);
+    });
+
+    it.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher misses it only on Linux) signals a change in a folder that a folder heard created already held', async () => {
+      let signals = 0;
+      const subscription = adapterAt(root).subscribe(() => { signals++; });
+      const file = join(root, 'source', 'Harder VATS', 'plugin-source', 'Harder VATS.esp', 'Weapons', 'Gun.json');
+      await mkdir(dirname(file), { recursive: true });
+      const sourceWatch = live().find((w) => w.base === root && matchesGlob('source/A/x.json', w.pattern));
+      sourceWatch?.fireCreate(join(root, 'source'));
+      signals = 0;
+
+      const deadline = Date.now() + 2_000;
+      while (signals === 0 && Date.now() < deadline) {
+        await writeFile(file, `${Date.now()}`);
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      subscription.dispose();
+
+      expect(signals).toBeGreaterThan(0);
     });
 
     it('follows the downloads folder the last read of the settings resolved, signalling once when it moves, not the one where the instance began, so a download landing in the folder the settings name now is heard', async () => {
