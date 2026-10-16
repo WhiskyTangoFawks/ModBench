@@ -247,12 +247,15 @@ describe('registerCreatePluginCommand', () => {
     const mo2 = makeMo2();
     mo2.instance.value = { ...mo2.instance.value, paths: { ...mo2.instance.value.paths, overwriteDir: undefined } };
     showInputBox.mockResolvedValue('New.esp');
-    showQuickPick.mockResolvedValue(undefined);
+    const offered: string[] = [];
+    showQuickPick.mockImplementation((places: Place[]) => {
+      offered.push(...places.map((place) => place.label));
+      return Promise.resolve(undefined);
+    });
 
     const { run } = invoke(client, mo2);
     await run();
 
-    const offered = showQuickPick.mock.calls.flatMap((call) => (call[0] as Place[]).map((place) => place.label));
     expect(offered).not.toContain('Overwrite');
   });
 
