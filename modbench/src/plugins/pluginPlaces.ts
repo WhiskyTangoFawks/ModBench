@@ -13,9 +13,7 @@ export interface PluginPlace {
 const enabledModNames = (value: Pick<InstanceValue, 'mods'>): string[] =>
   value.mods.filter((entry) => entry.kind === 'mod' && entry.enabled).map((entry) => entry.name);
 
-/** Whether the origin holds a plugin of that name, compared without case. The same name
- *  elsewhere in the load order is not checked. */
-export function holdsPlugin(value: Pick<InstanceValue, 'plugins'>, plugin: PluginAddress): boolean {
+function holdsPlugin(value: Pick<InstanceValue, 'plugins'>, plugin: PluginAddress): boolean {
   return value.plugins.some((p) => p.path !== undefined && samePluginAddress(p, plugin));
 }
 

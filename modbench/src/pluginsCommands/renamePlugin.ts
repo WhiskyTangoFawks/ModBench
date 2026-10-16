@@ -55,7 +55,6 @@ async function confirmRename(access: PluginRenameAccess, ask: AskQuestion, plugi
   return answer === CONFIRM ? { confirmed: true } : { confirmed: false };
 }
 
-/** Why `newName` is refused for `plugin`, or undefined: a name the game does not take, or one the plugin's origin holds now on disk. */
 async function renameRefusal(
   access: PluginRenameAccess, plugin: PluginAddress, newName: string, creatableExtensions: readonly string[],
 ): Promise<string | undefined> {

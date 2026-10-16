@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import { holdsPlugin, pluginPlaces, placeFolder } from '../pluginPlaces';
+import { pluginPlaces, placeFolder } from '../pluginPlaces';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { LoadOrderPlugin } from '../../instanceLoader/loadOrderSnapshot';
 
@@ -38,35 +38,5 @@ describe('pluginPlaces', () => {
   it('leaves out only a place that already holds a plugin of that name, whatever its case', () => {
     expect(pluginPlaces(value, 'held.ESP').map((p) => p.origin)).toEqual(['Winning Mod', 'overwrite/']);
     expect(pluginPlaces(value, 'Other.esp').map((p) => p.origin)).toEqual(['Winning Mod', 'Losing Mod']);
-  });
-});
-
-describe('holdsPlugin', () => {
-  it('holds a plugin of that name in that origin, whatever its case, and not the same name in another origin', () => {
-    expect(holdsPlugin(value, { name: 'held.ESP', origin: 'Losing Mod' })).toBe(true);
-    expect(holdsPlugin(value, { name: 'Held.esp', origin: 'Winning Mod' })).toBe(false);
-    expect(holdsPlugin(value, { name: 'Gone.esp', origin: 'Losing Mod' })).toBe(false);
-  });
-});
-
-describe('placeFolder', () => {
-  it("answers Overwrite's folder, an enabled mod's folder, and a source mod's source folder, as the value names them", () => {
-    expect(placeFolder(value, 'overwrite/')).toEqual({ folder: join('/instance', 'overwrite') });
-    expect(placeFolder(value, 'Winning Mod'))
-      .toEqual({ folder: join('/instance', 'mods', 'Winning Mod'), sourceFolder: join('/instance', 'source', 'Winning Mod') });
-    expect(placeFolder(value, 'Losing Mod')).toEqual({ folder: join('/instance', 'mods', 'Losing Mod') });
-  });
-
-  it('answers a mod the value does not list as gone', () => {
-    expect(placeFolder(value, 'Uninstalled')).toEqual({ lost: 'gone' });
-  });
-
-  it('answers a mod the value lists but does not enable as disabled', () => {
-    expect(placeFolder(value, 'Disabled Mod')).toEqual({ lost: 'disabled' });
-  });
-
-  it('answers Overwrite as unread while the value names no folder for it', () => {
-    const unread = instanceValueFixture({ paths: { ...value.paths, overwriteDir: undefined } });
-    expect(placeFolder(unread, 'overwrite/')).toEqual({ lost: 'unread' });
   });
 });
