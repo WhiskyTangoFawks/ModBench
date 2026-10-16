@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 
 const { getExtension, openRepository } = vi.hoisted(() => ({
   getExtension: vi.fn(),
@@ -33,6 +34,7 @@ describe('trackedRepositoriesOver', () => {
     const outputChannel = { warn: vi.fn(), error: vi.fn() };
     const tracked = trackedRepositoriesOver({
       client, outputChannel,
+      modOfOrigin: modOfOriginIn(...Object.keys(sourceDirs), ...trackedMods),
       trackedMods: () => new Set(trackedMods), sourceDirs: () => new Map(Object.entries(sourceDirs)),
     });
     return { tracked, outputChannel };
@@ -90,6 +92,14 @@ describe('trackedRepositoriesOver', () => {
       plugins: [{ name: 'Tracked.esp', origin: 'TrackedMod' }, { name: 'Untracked.esp', origin: 'UntrackedMod' }],
       trackedMods: ['TrackedMod'], sourceDirs: { TrackedMod: '/source/TrackedMod', UntrackedMod: '/source/UntrackedMod' },
     });
+
+    await tracked.registerRepositories();
+
+    expect(openRepository.mock.calls).toEqual([[{ fsPath: '/source/TrackedMod' }]]);
+  });
+
+  it('opens the folder of a tracked mod whatever the case of the origin that names it', async () => {
+    const { tracked } = setup(undefined, { plugins: [{ name: 'Tracked.esp', origin: 'trackedmod' }], trackedMods: ['TrackedMod'], sourceDirs: { TrackedMod: '/source/TrackedMod' } });
 
     await tracked.registerRepositories();
 

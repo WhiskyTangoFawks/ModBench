@@ -27,7 +27,7 @@ function gestureInput<Shape extends z.ZodRawShape>(
 const ENTRY_NAME = z.object({ name: z.string(), kind: z.enum(['mod', 'separator']).optional() });
 
 const entryArguments = (value: InstanceValue, argument: readonly z.infer<typeof ENTRY_NAME>[]) =>
-  modsNamed(value.mods, argument).map(({ kind, name }) => ({ kind, name }));
+  modsNamed(value, argument).map(({ kind, name }) => ({ kind, name }));
 
 const modArguments = (value: InstanceValue, argument: readonly z.infer<typeof ENTRY_NAME>[]) =>
   entryArguments(value, argument).map((entry) => {
@@ -54,7 +54,7 @@ const MOVE_PLACE = z.union([
 ]);
 
 const placeNamed = (value: InstanceValue, place: z.infer<typeof MOVE_PLACE>) =>
-  ('name' in place ? { kind: place.kind, name: modsNamed(value.mods, [{ name: place.name, kind: place.kind }])[0]?.name ?? place.name } : place);
+  ('name' in place ? { kind: place.kind, name: modsNamed(value, [{ name: place.name, kind: place.kind }])[0]?.name ?? place.name } : place);
 
 const MOVE_MODS = gestureInput(
   `argument: the mods, or the separators, each { name, kind? } as list_mods names it; options: { place: { kind: 'ungrouped' | 'modOrder' } or { kind: 'separator' | 'mod', name: the one it lands in or beside }, end: 'winning' | 'losing' }`,
@@ -126,7 +126,7 @@ const INSTALL = gestureInput(
     argument.map((source) => (source.kind === 'downloadedFile'
       ? { kind: source.kind, name: downloadsNamed(value.downloads, [source.name])[0] ?? source.name }
       : source)),
-    { name, target: target === undefined ? undefined : modsNamed(value.mods, [{ name: target, kind: 'mod' }])[0]?.name, force },
+    { name, target: target === undefined ? undefined : modsNamed(value, [{ name: target, kind: 'mod' }])[0]?.name, force },
   ),
 );
 
@@ -152,7 +152,7 @@ const PLUGIN_TAKES = 'each { name, origin? } as list_plugins shows it';
 
 const pluginArguments = (named: typeof pluginsNamed) =>
   (value: InstanceValue, argument: readonly z.infer<typeof PLUGIN_NAME>[]) =>
-    named(value.plugins, argument).map((plugin) => ({ kind: 'plugin' as const, plugin }));
+    named(value, argument).map((plugin) => ({ kind: 'plugin' as const, plugin }));
 
 const pluginsCall = pluginArguments(pluginsNamed);
 const linesCall = pluginArguments(linesNamed);
@@ -202,7 +202,7 @@ const OPEN_RECORD = gestureInput(
     const formKeys = await formKeysNamed(mEdit, argument.map(({ name }) => name));
     return new AgentCall(
       formKeys.map((formKey, at) => ({
-        kind: 'record' as const, formKey, ...(argument[at]?.plugin && { plugin: pluginsNamed(value.plugins, [argument[at].plugin])[0] }),
+        kind: 'record' as const, formKey, ...(argument[at]?.plugin && { plugin: pluginsNamed(value, [argument[at].plugin])[0] }),
       })),
       { pinned: options?.pinned },
     );

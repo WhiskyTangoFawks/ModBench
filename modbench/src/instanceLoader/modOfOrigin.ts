@@ -1,6 +1,9 @@
-/** The mod an origin names, as the instance value spells it, or none when no mod folder carries
- *  that name: Overwrite and the game's Data folder are origins of plugins that no mod provides. */
-export function modOfOrigin(modDirs: ReadonlyMap<string, string>, origin: string): string | undefined {
-  const folded = origin.toLowerCase();
-  return [...modDirs.keys()].find((name) => name.toLowerCase() === folded);
+import type { InstanceValue, Mod } from './instance';
+import { sameEntry } from '../instanceAdapter/instanceAdapter';
+
+/** The listed mod an origin names, matched as the mod manager matches names.
+ *  Overwrite and the game's Data folder name none. */
+export function modOfOrigin(value: Pick<InstanceValue, 'mods' | 'entryKey'>, origin: string): Mod | undefined {
+  const named = { kind: 'mod' as const, name: origin };
+  return value.mods.find((entry): entry is Mod => sameEntry(value, entry, named));
 }

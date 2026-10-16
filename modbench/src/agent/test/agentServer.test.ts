@@ -687,6 +687,15 @@ describe('the agent server, running a gesture', () => {
       expect(fired.calls).toEqual([['modbench.plugin.enable', new AgentCall([SOLO, { kind: 'plugin' as const, plugin: { name: 'Same.esp', origin: 'ModA' } }], {})]]);
     });
 
+    it('names an origin as the mod manager matches names, firing the plugin as the load order holds it', async () => {
+      fired.outcome = { applied: true, outcome: { landed: ['Same.esp'], refused: [] } };
+      const { client } = await served(PLUGGED);
+
+      await call(client, 'plugin_enable', { argument: [{ name: 'Same.esp', origin: 'moda' }] });
+
+      expect(fired.calls).toEqual([['modbench.plugin.enable', new AgentCall([{ kind: 'plugin' as const, plugin: { name: 'Same.esp', origin: 'ModA' } }], {})]]);
+    });
+
     it('refuses a file name two plugins share, listing both, and a plugin nothing holds', async () => {
       const { client } = await served(PLUGGED);
 
@@ -829,6 +838,14 @@ describe('the agent server, running a gesture', () => {
       await fire('mod_move', { argument: [{ name: 'B' }], options });
 
       expect(fired.calls).toEqual([['modbench.mod.move', new AgentCall([B], options)]]);
+    });
+
+    it('names a mod as the mod manager matches names, firing the mod as the value spells it', async () => {
+      const options = { place: { kind: 'separator', name: 'textures' }, end: 'winning' };
+
+      await fire('mod_move', { argument: [{ name: 'b' }], options });
+
+      expect(fired.calls).toEqual([['modbench.mod.move', new AgentCall([B], { ...options, place: { kind: 'separator', name: 'Textures' } })]]);
     });
 
     it('refuses a place nothing is named, firing nothing', async () => {

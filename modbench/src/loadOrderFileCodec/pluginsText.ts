@@ -98,16 +98,13 @@ export function renamePluginInText(text: string, pluginName: string, newName: st
   });
 }
 
-/** `toIndex` counts entries with the moved lines already removed, and clamps to
- *  the last slot. The block keeps its source order, whatever order the names came
- *  in; comment and blank lines keep their positions. */
+/** `toIndex` counts entries with the moved lines already removed, and clamps to the last slot.
+ *  The block keeps its source order. A plugin's repeated lines move with it, so its first line stays the one read. */
 export function movePluginsInText(text: string, pluginNames: string[], toIndex: number): string {
   return editLines(text, (lines) => {
-    const moved = new Set(pluginNames.map((name) => {
-      const at = entryLineAt(lines, name);
-      if (at < 0) throw notFound(name);
-      return at;
-    }));
+    for (const name of pluginNames) if (entryLineAt(lines, name) < 0) throw notFound(name);
+    const movedKeys = new Set(pluginNames.map(pluginKey));
+    const moved = new Set(entryLineIndices(lines, isEntryLine).filter((at) => movedKeys.has(pluginKey(pluginNameOf(lines[at] ?? '')))));
     const block = lines.filter((_, at) => moved.has(at));
     const rest = lines.filter((_, at) => !moved.has(at));
     const shown = firstLines(entryLineIndices(lines, isEntryLine), (at) => pluginKey(pluginNameOf(lines[at] ?? '')))

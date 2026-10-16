@@ -7,7 +7,6 @@ import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { modArgumentOf, pluginArgumentOf, rowNameOf } from '../drivingLib/argument';
 import { recordArgumentOf } from '../drivingLib/recordArgument';
-import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { decompileAndCommitProgressMessage } from './decompileAndCommitProgress';
 import type { PluginsTreeNode } from './pluginRows';
@@ -41,8 +40,7 @@ export interface DecompileAndCommitDeps {
   commands: Pick<SourceCommands, 'decompileAndCommit'>;
   reporter: Reporter;
   onCommitted: () => Promise<void>;
-  /** The instance's mod folders by mod name, which say whether an origin is a mod. */
-  modDirs: () => ReadonlyMap<string, string>;
+  modOfOrigin: (origin: string) => string | undefined;
   /** The Mods view's id, whose bar a gesture from a Mods row runs under. */
   modsView: string;
 }
@@ -69,7 +67,7 @@ type DecompiledAndCommitted = GestureResult<InitOutcome['landed'][number], strin
  *  selection, in one call. A plugin no mod provides is refused here, since mEdit is sent mods. */
 export function registerDecompileAndCommitCommand(deps: DecompileAndCommitDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
   const gesture: AgentGesture<unknown, ModsGiven, DecompiledAndCommitted> = {
-    fromView: (entry) => ({ ...targetsOf(entry.selection, deps.modDirs()), invokedFrom: viewOf(entry.selection, deps.modsView) }),
+    fromView: (entry) => ({ ...targetsOf(entry.selection, deps.modOfOrigin), invokedFrom: viewOf(entry.selection, deps.modsView) }),
     fromAgent: ({ argument }) => givenByAgent(argument, deps.modsView),
     run: ({ mods, invokedFrom }) => decompileAndCommitMods(deps, mods, invokedFrom),
     report: (result, { mods, refusedRows }) => reportDecompiledAndCommitted(deps.reporter, result, mods, refusedRows),
@@ -83,7 +81,7 @@ const givenByAgent = (argument: readonly Argument[], invokedFrom: string): ModsG
 const viewOf = (rows: readonly unknown[], modsView: string): string =>
   (rows.some((row) => modArgumentOf(row) !== undefined) ? modsView : PLUGINS_KEY_ARGS.view);
 
-function targetsOf(rows: readonly unknown[], modDirs: ReadonlyMap<string, string>): ModTargets {
+function targetsOf(rows: readonly unknown[], modOfOrigin: (origin: string) => string | undefined): ModTargets {
   const mods = new Set<string>();
   const refusedRows: ItemRefusal<string>[] = [];
   for (const row of rows) {
@@ -91,7 +89,7 @@ function targetsOf(rows: readonly unknown[], modDirs: ReadonlyMap<string, string
     if (mod !== undefined) { mods.add(mod.name); continue; }
     const plugin = pluginAddressOf(row);
     if (plugin === undefined) { refusedRows.push({ item: rowNameOf(row), reason: NO_MOD_OR_PLUGIN }); continue; }
-    const owner = modOfOrigin(modDirs, plugin.origin);
+    const owner = modOfOrigin(plugin.origin);
     if (owner === undefined) refusedRows.push({ item: rowName(plugin), reason: NOT_IN_A_MOD }); else mods.add(owner);
   }
   return { mods: [...mods], refusedRows };
@@ -234,8 +232,7 @@ export interface BuildDeps {
   sourceFiles: SourceFilesOf;
   /** Saves the mod's unsaved plugin source; answers the paths VS Code left unsaved, or undefined when the mod has no source folder. */
   saveUnsaved: (mod: string) => Promise<string[] | undefined>;
-  /** The instance's mod folders by mod name, which say whether an origin is a mod. */
-  modDirs: () => ReadonlyMap<string, string>;
+  modOfOrigin: (origin: string) => string | undefined;
   /** The source folder of each mod that holds a repository, by mod name. */
   sourceDirs: () => ReadonlyMap<string, string>;
   /** The Mods view's id, whose bar a gesture from a Mods row or the palette runs under. */
@@ -251,7 +248,7 @@ type Built = GestureResult<BuildOutcome['landed'][number], string>;
 export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
   const gesture: AgentGesture<unknown, ModsGiven, Built> = {
     fromView: async (entry) => {
-      const targets = targetsOf(entry.selection, deps.modDirs());
+      const targets = targetsOf(entry.selection, deps.modOfOrigin);
       const fromARow = entry.clicked !== undefined || targets.mods.some((mod) => deps.sourceDirs().has(mod));
       if (fromARow) return { ...targets, invokedFrom: viewOf(entry.selection, deps.modsView) };
       const mods = await pickSourceMods(deps.sourceDirs());

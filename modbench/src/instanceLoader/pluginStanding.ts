@@ -6,7 +6,7 @@ import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 
 export type PluginStanding = { kind: 'enabled' } | { kind: 'disabled' } | { kind: 'overridden'; by: string };
 
-type StandingFacts = Pick<InstanceValue, 'mods' | 'plugins' | 'pluginsLoadedWithNoLine'>;
+type StandingFacts = Pick<InstanceValue, 'mods' | 'entryKey' | 'plugins' | 'pluginsLoadedWithNoLine'>;
 
 const GAME_FOLDER_LABEL = 'the game folder';
 

@@ -62,9 +62,9 @@ async function setPluginsParticipation(
   adapter: InstanceAdapter, profile: string, entries: readonly PluginParticipation[],
 ): Promise<SelectionResult<string>> {
   const outcome = await changeDeciding(overOrder(adapter, profile), (order) => {
-    const known = new Set(order.map((entry) => entry.name));
-    const found = entries.filter((entry) => known.has(entry.name));
-    const refused: ItemRefusal<string>[] = entries.filter((entry) => !known.has(entry.name))
+    const known = new Set(order.map((entry) => pluginKey(entry.name)));
+    const found = entries.filter((entry) => known.has(pluginKey(entry.name)));
+    const refused: ItemRefusal<string>[] = entries.filter((entry) => !known.has(pluginKey(entry.name)))
       .map((entry) => ({ item: entry.name, reason: `Plugin not found in plugins.txt: ${entry.name}` }));
     return {
       changes: found.map(({ name, enabled }): PluginOrderChange => ({ kind: 'enable', plugin: name, enabled })),

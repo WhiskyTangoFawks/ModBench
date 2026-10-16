@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
 import type { Instance } from '../instanceLoader/instance';
+import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { PluginsTreeProvider } from './PluginsTreeProvider';
 import { type PluginListNode, type PluginsTreeNode } from './pluginRows';
 import {
@@ -98,7 +99,7 @@ interface NewPlugin {
   readonly sourceFolder?: string;
 }
 
-function placed(value: Pick<InstanceValue, 'mods' | 'paths'>, name: string, { origin, label }: { origin: string; label: string }): NewPlugin | string {
+function placed(value: Pick<InstanceValue, 'mods' | 'paths' | 'entryKey'>, name: string, { origin, label }: { origin: string; label: string }): NewPlugin | string {
   const where = placeFolder(value, origin);
   if ('lost' in where) return `${lostPlace(origin, where.lost)}, so "${name}" was not created.`;
   const { folder, sourceFolder } = where;
@@ -139,7 +140,7 @@ export function registerCreatePluginCommand(
       return made;
     },
     fromAgent: ({ options: { name, place } }) => {
-      const chosen = pluginPlaces(instance.value, name).find(({ name: origin }) => origin.toLowerCase() === place.toLowerCase());
+      const chosen = pluginPlaces(instance.value, name).find(({ name: origin }) => origin === (modOfOrigin(instance.value, place)?.name ?? place));
       if (chosen === undefined) {
         if (place.toLowerCase() === OVERWRITE_ORIGIN) {
           const unread = placed(instance.value, name, { origin: OVERWRITE_ORIGIN, label: OVERWRITE_LABEL });

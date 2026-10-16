@@ -9,6 +9,7 @@ import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { SourceEditing } from '../drivingLib/sourceEditing';
 import { sourceFiles } from '../instanceLoader/loadOrderSnapshot';
+import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import type { Instance } from '../instanceLoader/instance';
 import { reportSyncFailures, type Sync, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
 import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider';
@@ -188,12 +189,12 @@ function registerPluginGestures(
   return [
     registerDecompileAndCommitCommand({
       progress, instance, commands: sourceCommands, reporter: reporterFor('mod.decompileAndCommit'), onCommitted: registerRepositories,
-      modDirs: () => instance.value.paths.modDirs, modsView,
+      modOfOrigin: (origin) => modOfOrigin(instance.value, origin)?.name, modsView,
     }, sourceGestureRows),
     registerBuildCommand({
       commands: sourceCommands, instance, gameRelease: () => instance.value.gameRelease, reporter: reporterFor('mod.build'), problems: buildProblems,
       sourceFiles: (origin) => sourceFiles(instance.value, origin), saveUnsaved: saveUnsavedPluginSource,
-      modDirs: () => instance.value.paths.modDirs, sourceDirs: () => instance.value.paths.sourceDirs, modsView,
+      modOfOrigin: (origin) => modOfOrigin(instance.value, origin)?.name, sourceDirs: () => instance.value.paths.sourceDirs, modsView,
     }, sourceGestureRows),
     registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
     registerRecordCreateCommand({

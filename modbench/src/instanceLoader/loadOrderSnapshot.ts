@@ -7,11 +7,12 @@ import {
   fileInFolder, isRootLevel, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
   type ModFolders, type ModlistEntry, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
+import { modOfOrigin } from './modOfOrigin';
 import { pluginOrderOf } from './pluginOrder';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile, pluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
-import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress, type PluginPlace, type StampedFile } from '../wire/pluginAddress';
+import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, pluginNameKey, type PluginAddress, type PluginPlace, type StampedFile } from '../wire/pluginAddress';
 import type { ModByFolder } from '../wire/modByFolder';
 
 export { OVERWRITE_ORIGIN };
@@ -108,8 +109,8 @@ export const NO_SOURCE_FILES: SourceFilesOf = () => undefined;
 
 /** The files of the source folder the Instance adapter answered for the origin's mod (ADR-0007).
  *  `undefined` for Overwrite and the game folder, which are no mod (ADR-0012). */
-export function sourceFiles(value: Pick<InstanceValue, 'paths'>, origin: string): SourceFiles | undefined {
-  const folder = byOrigin(origin, { overwrite: undefined, data: undefined, mod: (name) => value.paths.sourceDirs.get(name) });
+export function sourceFiles(value: Pick<InstanceValue, 'mods' | 'entryKey' | 'paths'>, origin: string): SourceFiles | undefined {
+  const folder = byOrigin(origin, { overwrite: undefined, data: undefined, mod: (name) => value.paths.sourceDirs.get(modOfOrigin(value, name)?.name ?? name) });
   return folder === undefined ? undefined : { file: (relativePath) => fileInFolder(folder, relativePath) };
 }
 
@@ -170,11 +171,10 @@ export function buildLoadOrderRows(
   inData: DataFolderPlugins,
 ): (LoadOrderPlugin | LoadOrderPluginLine)[] {
   const winners = winningPlugins(index.files);
-  // The game matches a line to a file without case, so a case difference must not read as
-  // "disabled".
-  const enabledNames = new Set(pluginOrder.filter((line) => line.enabled).map((line) => foldPath(line.name)));
-  const lineByName = new Map<string, number>();
-  pluginOrder.forEach(({ name }, line) => lineByName.set(foldPath(name), line));
+  // The adapter hands each name once, and the game matches a line to a file without case, so a case
+  // difference must not read as "disabled".
+  const lineByName = new Map(pluginOrder.map(({ name }, line) => [pluginNameKey(name), line] as const));
+  const isEnabled = (name: string): boolean => pluginOrder[lineByName.get(pluginNameKey(name)) ?? -1]?.enabled ?? false;
 
   const listed = pluginOrder.flatMap(({ name }, line) => {
     const folded = foldPath(name);
@@ -185,7 +185,7 @@ export function buildLoadOrderRows(
     const plugins = provided !== undefined ? [provided] : spellings.length > 0
       ? spellings.map((spelled) => ({ name: spelled, path: dataFolderFile(gameFolder, spelled), origin: DATA_DIRECTORY_ORIGIN }))
       : [{ name, path: dataFolderFile(gameFolder, name), origin: DATA_DIRECTORY_ORIGIN }];
-    return plugins.map((plugin, i) => ({ ...plugin, line, enabled: enabledNames.has(folded), winning: i === 0 }));
+    return plugins.map((plugin, i) => ({ ...plugin, line, enabled: isEnabled(name), winning: i === 0 }));
   });
 
   const isWinning = ({ name, origin }: PluginFile) => {
@@ -196,8 +196,8 @@ export function buildLoadOrderRows(
   const outside = findPluginsOutsideLoadOrder([...index.filesByMod, [OVERWRITE_ORIGIN, overwriteFiles]], listed)
     .map((plugin) => ({
       ...plugin,
-      line: lineByName.get(foldPath(plugin.name)) ?? null,
-      enabled: enabledNames.has(foldPath(plugin.name)),
+      line: lineByName.get(pluginNameKey(plugin.name)) ?? null,
+      enabled: isEnabled(plugin.name),
       winning: isWinning(plugin),
     }));
 
@@ -283,7 +283,7 @@ export function loadOrderSnapshotOf(value: {
     mod: (name) => {
       const folder = value.modFolders?.holding({ kind: 'mod', name });
       if (folder === undefined) return undefined;
-      const sourceFolder = value.sourceDirs.get(name);
+      const sourceFolder = value.sourceDirs.get(folder.name);
       return sourceFolder === undefined ? { kind: 'Mod', mod: name, folder: folder.path } : { kind: 'Mod', mod: name, folder: folder.path, sourceFolder };
     },
   });

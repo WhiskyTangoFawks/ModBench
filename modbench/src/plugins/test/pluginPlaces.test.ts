@@ -49,6 +49,11 @@ describe('placeFolder', () => {
     expect(placeFolder(value, 'Losing Mod')).toEqual({ name: 'Losing Mod', folder: join('/instance', 'mods', 'Losing Mod') });
   });
 
+  it('names a mod as the mod manager matches names', () => {
+    expect(placeFolder(value, 'losing mod')).toEqual({ name: 'Losing Mod', folder: join('/instance', 'mods', 'Losing Mod') });
+    expect(placeFolder(value, 'disabled mod')).toEqual({ lost: 'disabled' });
+  });
+
   it('answers a mod the value does not list as gone', () => {
     expect(placeFolder(value, 'Uninstalled')).toEqual({ lost: 'gone' });
   });

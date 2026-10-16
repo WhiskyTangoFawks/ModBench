@@ -84,7 +84,7 @@ export async function register({
     ask: vi.fn(),
     focusedView,
     recordViewIds: ['test.view'],
-    modFacts: { trackedMods: () => new Set(), modDirs: () => new Map(), standingOf: () => ({ kind: 'enabled' }), onChange: () => ({ dispose: () => undefined }) },
+    modFacts: { trackedMods: () => new Set(), modOfOrigin: () => undefined, standingOf: () => ({ kind: 'enabled' }), onChange: () => ({ dispose: () => undefined }) },
     recordWrite: (command) => command(),
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     locateRecord: () => Promise.resolve(undefined),

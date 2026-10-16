@@ -66,6 +66,7 @@ function valueOf(
 ): InstanceValue {
   const mods = [...new Set(plugins.map((p) => p.origin))].filter((origin) => origin !== 'Data/' && origin !== 'overwrite/');
   return instanceValueFixture({
+    mods: mods.map((name) => ({ kind: 'mod' as const, name, enabled: true })),
     gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
     pluginsLoadedWithNoLine: pluginsLoadedWithNoLine?.map((p) => (typeof p === 'string' ? { name: p, origin: 'Data/' } : p)),
     plugins, paths: { overwriteDir: '/instance/overwrite', downloadsDir: '', modDirs: new Map(mods.map((m) => [m, `/instance/mods/${m}`])), sourceDirs: new Map() },

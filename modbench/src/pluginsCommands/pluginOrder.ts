@@ -2,6 +2,7 @@
 // (plugins.md, Drag and drop, story 3; the reference tool's PluginList::setPluginPriority,
 // pluginlist.cpp).
 
+import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { dropIndexIn, type Drop } from './dropIndex';
 
 interface PluginOrderFacts {
@@ -36,11 +37,11 @@ function movesBehindIn(before: readonly string[], after: readonly string[]): Mov
 // The reference tool holds master order only within one blueprint class; across the two, blueprint
 // last decides.
 function sameClassMasters(order: readonly string[], factsOf: PluginOrderFactsOf): [master: string, plugin: string][] {
-  const listedByFolded = new Map(order.map((name) => [name.toLowerCase(), name] as const));
+  const listedByFolded = new Map(order.map((name) => [pluginKey(name), name] as const));
   return order.flatMap((plugin) => {
     const facts = factsOf(plugin);
     return (facts?.masters ?? [])
-      .map((masterName) => listedByFolded.get(masterName.toLowerCase()))
+      .map((masterName) => listedByFolded.get(pluginKey(masterName)))
       .filter((master): master is string => master !== undefined && factsOf(master)?.blueprint === facts?.blueprint)
       .map((master): [string, string] => [master, plugin]);
   });

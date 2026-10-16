@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { isDisabledOrInDisabledMod } from '../disabledPlugin';
 import type { LoadOrderPlugin } from '../loadOrderSnapshot';
 import type { Mod } from '../instance';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const mod = (name: string, enabled: boolean): Mod => ({ kind: 'mod', name, enabled });
 const row = (over: Partial<LoadOrderPlugin>): LoadOrderPlugin =>
@@ -9,7 +10,7 @@ const row = (over: Partial<LoadOrderPlugin>): LoadOrderPlugin =>
 const A = { name: 'A.esp', origin: 'ModA' };
 
 const disabled = (mods: Mod[], plugins: LoadOrderPlugin[], pluginsLoadedWithNoLine: { name: string; origin: string }[] = []) =>
-  isDisabledOrInDisabledMod({ mods, plugins, pluginsLoadedWithNoLine }, A);
+  isDisabledOrInDisabledMod({ mods, plugins, pluginsLoadedWithNoLine, entryKey: instanceValueFixture().entryKey }, A);
 
 describe('a plugin disabled, or in a disabled mod', () => {
   it('is one whose line is disabled', () => {
