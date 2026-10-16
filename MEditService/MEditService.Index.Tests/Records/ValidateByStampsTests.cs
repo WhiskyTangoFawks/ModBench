@@ -59,7 +59,8 @@ public sealed class ValidateByStampsTests : IDisposable
         _index.NextSnapshotUntil(() => NpcNamed(editorId), $"the record named {editorId}");
 
     private bool NpcNamed(string editorId) =>
-        _index.Queries.GetCompareRecords([new RecordCopy(_npc, _mod.KeyOf())]).Holds(out var compared, out _)
+        _index.Queries.GetCompareRecords([new RecordCopy(_npc, _mod.KeyOf())]).Holds(out var answer, out _)
+        && answer.Compare is { } compared
         && compared.Overrides.Single().EditorId == editorId;
 
     private void ValidateUntilSourceUnreadable() =>

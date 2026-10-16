@@ -287,7 +287,6 @@ public enum IndexRefusal
     FilterRejected,
     SelectRejected,
     NameRefused,
-    CopiesMissing,
     SourceStopped,
 }
 
@@ -300,9 +299,9 @@ public sealed record NameQuery(string Name, string? Origin = null);
 /// <summary>What one name means: a plugin, or a record by its FormKey.</summary>
 public sealed record NamedObject(PluginAddress? Plugin, string? FormKey, string? EditorId);
 
-/// <summary>The copies no plugin gave, in the order given.</summary>
-public sealed record CopiesMissing(IReadOnlyList<MissingCopy> Missing)
-    : IndexRefused(IndexRefusal.CopiesMissing, $"Copies not found: {string.Join("; ", Missing.Select(m => $"{m.Copy.FormKey} in {m.Copy.Plugin.Name} ({m.Copy.Plugin.Origin})"))}.");
+/// <summary>The comparison of the copies given, and the copies no plugin gave, in the order given. With any
+/// copy missing nothing is compared.</summary>
+public sealed record CopiesCompared(CompareResult? Compare, IReadOnlyList<MissingCopy> Missing);
 
 // A tri-state rather than two booleans: the states are mutually exclusive. Deleted is absent
 // because a working-tree-deleted record has no row to describe.
