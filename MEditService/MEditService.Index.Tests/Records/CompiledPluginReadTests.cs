@@ -7,7 +7,7 @@ namespace MEditService.Index.Tests.Records;
 
 public sealed class CompiledPluginReadTests : IDisposable
 {
-    private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("compiledPlugin-read")
+    private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("compiled-plugin-read")
         .WithPlugin("CompiledPlugin.esp", mod => mod.Npcs.AddNew("FromCompiledPlugin"), origin: "SourceMod")
         .WithPlugin("Plain.esp", mod => mod.Npcs.AddNew("FromPlain"), origin: "PlainMod")
         .BuildScattered();
@@ -17,7 +17,7 @@ public sealed class CompiledPluginReadTests : IDisposable
 
     public CompiledPluginReadTests()
     {
-        SourceMods.Track(_fixture.Plugins.Single(p => p.Name == CompiledPlugin.Name));
+        SourceMods.Init(_fixture.Plugins.Single(p => p.Name == CompiledPlugin.Name));
         _index = Indexes.Open(_holder);
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
     }

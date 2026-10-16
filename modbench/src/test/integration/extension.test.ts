@@ -123,7 +123,7 @@ const editsAsked: EditAsked[] = [];
 const carriedIn = new Map<string, string>();
 const heldIn = new Map<string, string>();
 type EditAnswer = { status: number; body: unknown };
-const refusedAsNonCompiledPlugin: EditAnswer = { status: 409, body: { refusal: 'PluginNotCompiledPlugin', detail: 'Compiled plugin.esp is not a compiled plugin, so it is read-only.' } };
+const refusedAsNonCompiledPlugin: EditAnswer = { status: 409, body: { refusal: 'PluginNotCompiledPlugin', detail: 'CompiledPlugin.esp is not a compiled plugin, so it is read-only.' } };
 let answerEdit: (asked: EditAsked) => EditAnswer = () => refusedAsNonCompiledPlugin;
 const deletesAsked: unknown[] = [];
 let answerDelete: EditAnswer = { status: 200, body: { applied: [], refused: [] } };
@@ -431,7 +431,7 @@ const HELD_FORM_KEY = '000801:Held.esp';
 const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
 const RENDERED_REFERRER_FORM_KEY = '000803:Fallout4.esm';
 const COMPILED_PLUGIN_FILE = path.join(
-  mkdtempSync(path.join(os.tmpdir(), 'modbench-compiledPlugin-')), 'source', COMPILED_PLUGIN_ORIGIN, 'plugin-source', COMPILED_PLUGIN, 'Weapons', 'CompiledPluginGun.json');
+  mkdtempSync(path.join(os.tmpdir(), 'modbench-compiled-plugin-')), 'source', COMPILED_PLUGIN_ORIGIN, 'plugin-source', COMPILED_PLUGIN, 'Weapons', 'CompiledPluginGun.json');
 mkdirSync(path.dirname(COMPILED_PLUGIN_FILE), { recursive: true });
 writeFileSync(COMPILED_PLUGIN_FILE, JSON.stringify({
   FormKey: COMPILED_PLUGIN_FORM_KEY, EditorID: 'CompiledPluginGun', Model: HELD_FORM_KEY, Placed: [
@@ -1225,7 +1225,7 @@ describe('an edit in a compiled plugin copy\'s grid', () => {
 
     const document = await vscode.workspace.openTextDocument(vscode.Uri.file(COMPILED_PLUGIN_FILE));
     assert.deepStrictEqual(shown(document), { text: savedText, unsaved: false });
-    await waitFor('the refusal in the Modbench log', () => modbenchLog().includes('Edits: Compiled plugin.esp is not a compiled plugin, so it is read-only.'));
+    await waitFor('the refusal in the Modbench log', () => modbenchLog().includes('Edits: CompiledPlugin.esp is not a compiled plugin, so it is read-only.'));
   });
 
   it('moves the file where mEdit answers, and the tab goes with it, reading the record it moved to from the document', async () => {

@@ -71,7 +71,7 @@ describe('PluginHeader', () => {
     ['the game’s own plugin', { isImmutable: true }, '(read-only)', 'The game’s plugins are not edited.'],
     ['a plugin in Overwrite', { override: { isInOverwrite: true }, isCompiledPlugin: false }, '(in Overwrite)',
       'Overwrite is not a mod; move the plugin into a mod and decompile and commit that mod.'],
-    ['a plugin that is not a compiled plugin', { isCompiledPlugin: false }, '(not a compiled plugin)',
+    ['a plugin that is not a compiled plugin', { isCompiledPlugin: false }, '(no source)',
       '“Decompile and Commit Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, makes it editable.'],
     ['a compiled plugin whose plugin source is unreadable', { sourceUnreadable: WHY }, '(plugin source unreadable)',
       `${WHY.reason} Its records are its plugin file’s. “Decompile Plugin”, in this header’s menu, makes it editable.`],
@@ -79,7 +79,7 @@ describe('PluginHeader', () => {
       `${TWINS.reason} Its records are its plugin file’s.`],
     ['a Partial Form copy', { override: { isPartialForm: true } }, '(Partial Form)',
       'The game ignores this copy’s own fields.'],
-    ['a compiled plugin', {}, '(compiled plugin)',
+    ['a compiled plugin', {}, '(source)',
       'An edit lands in the mod’s working tree, for review in Source Control.'],
   ])('for %s, shows its status, and a tooltip of the file name, the origin and the reason', (_case, facts, status, reason) => {
     const { header } = renderHeader(facts);
@@ -94,11 +94,11 @@ describe('PluginHeader', () => {
     ['overridden over read-only', { overriddenBy: 'ModB', isImmutable: true }, '(overridden)', '(read-only)'],
     ['not active over read-only', { notActive: true, isImmutable: true }, '(not active)', '(read-only)'],
     ['read-only over in Overwrite', { override: { isInOverwrite: true }, isImmutable: true }, '(read-only)', '(in Overwrite)'],
-    ['in Overwrite over non-compiled plugin', { override: { isInOverwrite: true }, isCompiledPlugin: false }, '(in Overwrite)', '(not a compiled plugin)'],
-    ['non-compiled plugin over Partial Form', { override: { isPartialForm: true }, isCompiledPlugin: false }, '(not a compiled plugin)', '(Partial Form)'],
-    ['non-compiled plugin over unreadable', { isCompiledPlugin: false, sourceUnreadable: WHY }, '(not a compiled plugin)', '(plugin source unreadable)'],
+    ['in Overwrite over non-compiled plugin', { override: { isInOverwrite: true }, isCompiledPlugin: false }, '(in Overwrite)', '(no source)'],
+    ['non-compiled plugin over Partial Form', { override: { isPartialForm: true }, isCompiledPlugin: false }, '(no source)', '(Partial Form)'],
+    ['non-compiled plugin over unreadable', { isCompiledPlugin: false, sourceUnreadable: WHY }, '(no source)', '(plugin source unreadable)'],
     ['unreadable over Partial Form', { override: { isPartialForm: true }, sourceUnreadable: WHY }, '(plugin source unreadable)', '(Partial Form)'],
-    ['Partial Form over compiled plugin', { override: { isPartialForm: true } }, '(Partial Form)', '(compiled plugin)'],
+    ['Partial Form over compiled plugin', { override: { isPartialForm: true } }, '(Partial Form)', '(source)'],
   ])('a column shows one status, the first that applies: %s', (_case, facts, shown, displaced) => {
     const { header } = renderHeader(facts);
     expect(header).toHaveTextContent(shown);
@@ -121,7 +121,7 @@ describe('PluginHeader', () => {
     const { header, onToggleCollapse } = renderHeader();
     fireEvent.click(header);
     fireEvent.click(screen.getByText('MyMod.esp'));
-    fireEvent.click(screen.getByText('(compiled plugin)'));
+    fireEvent.click(screen.getByText('(source)'));
     expect(onToggleCollapse).not.toHaveBeenCalled();
   });
 
@@ -132,7 +132,7 @@ describe('PluginHeader', () => {
 
   it('shows only its label while collapsed', () => {
     renderHeader({}, { collapsed: true });
-    expect(screen.queryByText('(compiled plugin)')).not.toBeInTheDocument();
+    expect(screen.queryByText('(source)')).not.toBeInTheDocument();
     expect(screen.getByText('MyMod.esp').parentElement).toHaveTextContent(/^\[01\] MyMod\.esp$/);
   });
 

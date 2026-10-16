@@ -18,7 +18,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         { StaleHeaderPlugins.FullFileName, 11 },
     };
 
-    public static TheoryData<string> TrackAndCompileGeneratedPlugins => new()
+    public static TheoryData<string> InitAndCompileGeneratedPlugins => new()
     {
         StaleHeaderPlugins.SettingsFileName,
         StaleHeaderPlugins.LightFileName,
@@ -44,7 +44,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     [Theory]
-    [MemberData(nameof(TrackAndCompileGeneratedPlugins))]
+    [MemberData(nameof(InitAndCompileGeneratedPlugins))]
     public async Task Init_OfAGeneratedPluginWithAStaleHeader_Succeeds(string fileName)
     {
         using var scratch = new CompiledPluginScratch(fileName);
@@ -55,7 +55,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     [Theory]
-    [MemberData(nameof(TrackAndCompileGeneratedPlugins))]
+    [MemberData(nameof(InitAndCompileGeneratedPlugins))]
     public async Task Compile_OfAGeneratedPluginWithAStaleHeader_ReproducesTheSourceContent(string fileName)
     {
         using var scratch = new CompiledPluginScratch(fileName);

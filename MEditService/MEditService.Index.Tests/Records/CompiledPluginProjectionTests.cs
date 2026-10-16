@@ -22,7 +22,7 @@ public sealed class CompiledPluginProjectionTests : IDisposable
     public CompiledPluginProjectionTests()
     {
         FormKey npc = default, otherNpc = default;
-        _fixture = new PluginFixtureBuilder("compiledPlugin-projection")
+        _fixture = new PluginFixtureBuilder("compiled-plugin-projection")
             .WithPlugin("Fixture.esp", mod =>
             {
                 npc = mod.Npcs.AddNew(NpcEditorId).FormKey;

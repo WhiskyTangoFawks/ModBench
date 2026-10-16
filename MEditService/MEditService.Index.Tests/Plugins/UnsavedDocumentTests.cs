@@ -38,7 +38,7 @@ public sealed class UnsavedDocumentTests : IDisposable
             .BuildScattered();
         _compiledPlugin = _fixture.Plugins.Single(p => p.Name == CompiledPlugin);
         (_npc, _race) = (npc.ToString(), race.ToString());
-        SourceMods.Track(_compiledPlugin);
+        SourceMods.Init(_compiledPlugin);
         _index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, notifications: _notifications);
         _file = _compiledPlugin.SourceFileOf(_index.DocumentOf(_npc, _compiledPlugin.KeyOf()));
     }

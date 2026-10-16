@@ -257,7 +257,7 @@ export class PluginFacts {
     return [...lines, ...this.statuses(address).map((s) => s.tooltipLine)];
   }
 
-  /** Nothing until mEdit answers: an unknown is neither compiled plugin nor non-compiled plugin, nor editable. */
+  /** Nothing until mEdit answers: an unknown is neither a compiled plugin nor one with no plugin source, nor editable. */
   contextFlags(address: PluginAddress): string[] {
     const read = this.reads.get(address);
     const flags: string[] = [];

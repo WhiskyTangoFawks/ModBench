@@ -144,7 +144,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       setGone(loaded.result === null ? { records: loaded.gone, copiesLacking: loaded.copiesLacking } : null);
       if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
       // Unguarded, unlike the two above: a null must replace a previous record's answer, so an
-      // unknown state reads as neither compiled plugin nor non-compiled plugin.
+      // unknown state reads as neither a compiled plugin nor one with no plugin source.
       setCompiledPluginSet(loaded.compiledPluginSet);
       setEditableSet(loaded.editableSet);
       setSourceUnreadableReasons(loaded.sourceUnreadableReasons);

@@ -93,7 +93,7 @@ internal sealed class Projector(
         var key = plugin.Key;
 
         // The tree is what these rows are re-derived from, so it is what the plugin is derived from
-        // (ADR-0007), bytes moved or not: a compiled plugin after indexing arrives here
+        // (ADR-0007), bytes moved or not: a plugin made compiled after indexing arrives here
         // still stamped from its binary.
         if (source.SourceReads(plugin))
             index.RestampDerivation(key, DerivedFrom.SourceTree);

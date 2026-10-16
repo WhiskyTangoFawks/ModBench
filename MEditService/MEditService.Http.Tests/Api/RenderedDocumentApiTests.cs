@@ -52,7 +52,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
     [InlineData("npc_", "RenderedNpc")]
     [InlineData("qust", "RenderedQuest")]
     [InlineData(null, null)]
-    public async Task ANonCompiledPluginCopy_IsTheFileTrackWrites_ByNameAndText_TheHeadersWithNoRecordType(string? recordType, string? editorId)
+    public async Task ANonCompiledPluginCopy_IsTheFileInitWrites_ByNameAndText_TheHeadersWithNoRecordType(string? recordType, string? editorId)
     {
         var fx = await NonCompiledPlugin();
         var formKey = recordType is null ? $"000000:{Plugin}" : await Client.FormKeyNamed(Plugin, Origin, recordType, editorId.Require());
@@ -67,7 +67,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ANonCompiledPluginContainer_IsTheFileTrackWrites_WithoutItsChildren()
+    public async Task ANonCompiledPluginContainer_IsTheFileInitWrites_WithoutItsChildren()
     {
         var fx = await NonCompiledPlugin();
         var (_, text) = await RenderedOk(await Client.FormKeyNamed(Plugin, Origin, "cell", "RenderedRoom"));

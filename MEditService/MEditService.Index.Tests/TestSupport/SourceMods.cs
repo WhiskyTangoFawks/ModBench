@@ -12,7 +12,7 @@ namespace MEditService.Index.Tests.TestSupport;
 /// binary.</summary>
 internal static class SourceMods
 {
-    internal static void Track(string pluginPath, GameRelease release = GameRelease.Fallout4)
+    internal static void Init(string pluginPath, GameRelease release = GameRelease.Fallout4)
     {
         var modFolder = Path.GetDirectoryName(pluginPath)
             ?? throw new ArgumentException("A plugin path names a file inside a mod folder.", nameof(pluginPath));
@@ -27,13 +27,13 @@ internal static class SourceMods
         TestAdapters.Source().Init(modFolder, [(source.Files, new DecompiledPlugin(pluginName, source.BinarySha256))]);
     }
 
-    internal static void Track(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>
-        Track(entry.Path, release);
+    internal static void Init(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>
+        Init(entry.Path, release);
 
-    /// <summary>Every plugin of the fixture compiled plugin, so the Index reads each from its tree.</summary>
+    /// <summary>Every plugin of the fixture source mod, so the Index reads each from its tree.</summary>
     internal static ScatteredFixtureData CompiledPlugin(this ScatteredFixtureData fixture)
     {
-        foreach (var entry in fixture.Plugins) Track(entry);
+        foreach (var entry in fixture.Plugins) Init(entry);
         return fixture;
     }
 

@@ -27,7 +27,7 @@ public static class CutDownPluginFixture
         CompiledPluginTemplates.CopyInto(modFolder, PluginFileName, template =>
         {
             File.Copy(PluginPath, Path.Combine(template, PluginFileName));
-            CompiledPluginTemplates.TrackAlone(template, PluginFileName);
+            CompiledPluginTemplates.InitAlone(template, PluginFileName);
         });
 
     /// <summary>Every document of the plugin's tree, keyed by FormKey.</summary>

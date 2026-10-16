@@ -254,7 +254,7 @@ describe('the Plugins view registers its own gestures', () => {
   });
 });
 
-describe('the Plugins view says what it knows of a plugin\'s tracking and editability', () => {
+describe('the Plugins view says what it knows of whether a plugin is a compiled plugin, and its editability', () => {
   const COMPILED_PLUGIN_EDITABLE = { name: 'Test.esp', origin: 'ModA' };
   const withThePlugin = () => instanceValueFixture({
     plugins: [{ name: 'Test.esp', path: '/instance/mods/ModA/Test.esp', origin: 'ModA', line: 0, enabled: true, winning: true }],

@@ -43,7 +43,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     [Fact]
     public void ACompiledPluginCopy_IsItsFile()
     {
-        SourceMods.Track(Entry);
+        SourceMods.Init(Entry);
         using var index = Reconciled();
 
         Assert.Equal(new CopyDocument(CopyDocumentKind.OwnFile, NpcFile), index.Queries.GetCopyDocument(Plugin, Npc).Value());
@@ -52,7 +52,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     [Fact]
     public void ACompiledPluginChildCopy_IsInItsContainersFile()
     {
-        SourceMods.Track(Entry);
+        SourceMods.Init(Entry);
         using var index = Reconciled();
 
         Assert.Equal(new CopyDocument(CopyDocumentKind.ContainersFile, CellFile), index.Queries.GetCopyDocument(Plugin, PlacedRef).Value());
@@ -61,7 +61,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     [Fact]
     public void ACompiledPluginCopyInAPluginThatIsNotActive_IsItsFile()
     {
-        SourceMods.Track(Entry);
+        SourceMods.Init(Entry);
         using var index = Indexes.Reconciled(_fixture.GameDirectory, [Entry with { Enabled = false }]);
 
         Assert.Equal(new CopyDocument(CopyDocumentKind.OwnFile, NpcFile), index.Queries.GetCopyDocument(Plugin, Npc).Value());
@@ -70,7 +70,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     [Fact]
     public void ACompiledPluginCopyWhoseFileIsGone_HasNoAnswer()
     {
-        SourceMods.Track(Entry);
+        SourceMods.Init(Entry);
         using var index = Reconciled();
 
         File.Delete(NpcFile);
@@ -89,7 +89,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     [Fact]
     public void ACopyInASourceModWithNoSourceForItsPlugin_IsRenderedUnderTheLayoutsName()
     {
-        SourceMods.Track(Entry);
+        SourceMods.Init(Entry);
         Directory.Delete(PluginSourceRoot.In(Entry.ModFolderOf(), Plugin.Name), recursive: true);
         using var index = Reconciled();
 

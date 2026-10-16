@@ -33,13 +33,13 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         return this;
     }
 
-    internal FakeSourceAdapter Tracking(string modFolder, params SourceDocument[] documents)
+    internal FakeSourceAdapter WithSourceMod(string modFolder, params SourceDocument[] documents)
     {
         _mods[modFolder] = new FakeMod(modFolder, documents.ToDictionary(document => document.FormKey, StringComparer.Ordinal));
         return this;
     }
 
-    internal FakeSourceAdapter TrackingUnreadable(string modFolder)
+    internal FakeSourceAdapter WithUnreadableSourceMod(string modFolder)
     {
         _mods[modFolder] = new FakeMod(modFolder, [], SourceReads: false);
         return this;

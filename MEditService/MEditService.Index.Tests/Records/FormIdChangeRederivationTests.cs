@@ -158,7 +158,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
     private sealed class OneExteriorCellWorldspaceFixture : IDisposable
     {
         private const string PluginName = "WorldspaceFormId.esp";
-        private const string OriginNamingItsOwnModFolderBecauseTrackAppliesToNothingElse = "WorldspaceFormIdMod";
+        private const string OriginNamingItsOwnModFolderBecauseInitAppliesToNothingElse = "WorldspaceFormIdMod";
         private readonly ScatteredFixtureData _fixture;
 
         public LoadOrderEntry Entry { get; }
@@ -182,7 +182,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
                     world.SubCells.Add(block);
                     mod.Worldspaces.Add(world);
                     (worldspace, exteriorCell) = (world.FormKey, ext.FormKey);
-                }, origin: OriginNamingItsOwnModFolderBecauseTrackAppliesToNothingElse)
+                }, origin: OriginNamingItsOwnModFolderBecauseInitAppliesToNothingElse)
                 .BuildScattered()
                 .CompiledPlugin();
             Entry = _fixture.Plugins.Single();

@@ -254,7 +254,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         }
     }
 
-    private sealed class UntrackingAModWhenAMasterIsRead(string modFolder) : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    private sealed class HidingTheRepositoryWhenAMasterIsRead(string modFolder) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
             RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas)
@@ -270,7 +270,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     {
         Load(masterCompiledPlugin: false);
         var modFolder = _plugins.FolderOf(Override);
-        var services = TestEditService.Over(_plugins.Holder, adapter: new UntrackingAModWhenAMasterIsRead(modFolder));
+        var services = TestEditService.Over(_plugins.Holder, adapter: new HidingTheRepositoryWhenAMasterIsRead(modFolder));
         var handler = new TestEditor(services.GetRequiredService<EditRecordChangesHandler>());
 
         var result = handler.Edit(

@@ -1366,25 +1366,22 @@ describe('package.json Referenced By menus', () => {
   });
 
   it.each([
-    ['an editable compiled plugin container', 'referencedByHolder compiledPlugin editable container', [
+    ['an editable container', 'referencedByHolder editable container', [
       [OPEN_PINNED, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.create', '3_create@1'],
       ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'], ['modbench.record.delete', '6_destroy@1'],
     ]],
-    ['an editable compiled plugin record', 'referencedByHolder compiledPlugin editable', [
+    ['an editable record', 'referencedByHolder editable', [
       [OPEN_PINNED, '1_open@1'], [REFERENCED_BY, '1_open@2'],
       ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'], ['modbench.record.delete', '6_destroy@1'],
     ]],
-    ['a record in a compiled plugin that is not editable', 'referencedByHolder compiledPlugin', [
-      [OPEN_PINNED, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'],
-    ]],
-    ['a record in a non-compiled plugin', 'referencedByHolder nonCompiledPlugin', [
+    ['a record that is not editable', 'referencedByHolder', [
       [OPEN_PINNED, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'],
     ]],
   ])('offers a plugin copy that is %s what a Plugins record row offers', (_, viewItem, expected) => {
     expect(menuOf(viewItem)).toEqual(expected);
   });
 
-  it.each(['referencedByReferrer', 'referencedByHolder compiledPlugin editable container'])('offers a %s row nothing in a list another extension filled', (viewItem) => {
+  it.each(['referencedByReferrer', 'referencedByHolder editable container'])('offers a %s row nothing in a list another extension filled', (viewItem) => {
     expect(menuOf(viewItem, { 'reference-list.source': 'typescript' })).toEqual([]);
   });
 

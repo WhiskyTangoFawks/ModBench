@@ -252,8 +252,8 @@ describe('PluginFacts — what a row states about its plugin', () => {
   it.each([
     ['nothing before mEdit answers', undefined, [], { editable: false }],
     ['a plugin with no source', { isCompiledPlugin: false }, ['nonCompiledPlugin'], { editable: false }],
-    ['a compiled plugin, editable plugin', { isCompiledPlugin: true }, ['compiledPlugin', 'editable'], { editable: true }],
-    ['a compiled plugin, read-only plugin', { isCompiledPlugin: true, isImmutable: true }, ['compiledPlugin'], { editable: false }],
+    ['an editable compiled plugin', { isCompiledPlugin: true }, ['compiledPlugin', 'editable'], { editable: true }],
+    ['a read-only compiled plugin', { isCompiledPlugin: true, isImmutable: true }, ['compiledPlugin'], { editable: false }],
     ['a compiled plugin whose plugin source is unreadable', { isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }, ['compiledPlugin'], { editable: false }],
   ] as const)('%s', (_label, overrides, flags, conditions) => {
     const facts = new PluginFacts();

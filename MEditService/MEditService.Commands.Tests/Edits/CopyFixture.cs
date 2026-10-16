@@ -36,7 +36,7 @@ public sealed class CopyFixture : TestInstance, ICompiledPlugins
     public const string DestinationNpcEditorId = "DestinationNpc";
     public FormKey DestinationNpc { get; }
 
-    private CopyFixture(bool trackSource)
+    private CopyFixture(bool initSource)
     {
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
         var npc = sourceMod.Npcs.AddNew(SourceNpcEditorId);
@@ -45,7 +45,7 @@ public sealed class CopyFixture : TestInstance, ICompiledPlugins
         var relation = new Relation();
         relation.Target.SetTo(faction);
         faction.Relations.Add(relation);
-        SourcePlugin = Add(sourceMod, SourceOrigin, trackSource);
+        SourcePlugin = Add(sourceMod, SourceOrigin, initSource);
         (SourceNpc, SelfLinkingFaction) = (npc.FormKey, faction.FormKey);
         SourceNpcWithNoEditorId = namelessNpc.FormKey;
 
@@ -62,8 +62,8 @@ public sealed class CopyFixture : TestInstance, ICompiledPlugins
     }
 
     /// <summary>The source plugin's own bytes, so "a copy, not a move" is asserted against the file
-    /// a non-compiled plugin source is read from.</summary>
+    /// a plugin with no plugin source is read from.</summary>
     public byte[] SourcePluginBytes() => File.ReadAllBytes(Path.Combine(SourceModFolder, SourcePluginName));
 
-    public static CopyFixture Create(bool trackSource = false) => new(trackSource);
+    public static CopyFixture Create(bool initSource = false) => new(initSource);
 }

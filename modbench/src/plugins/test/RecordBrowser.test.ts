@@ -531,7 +531,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
     return repo;
   }
 
-  it('states a compiled plugin, editable plugin on its groups, records, a container\'s children, worldspace, cells and placed references', async () => {
+  it('states every row beneath an editable plugin editable: its groups, records, a container\'s children, worldspace, cells and placed references', async () => {
     const states = (await rowsBeneath(new RecordBrowser(spatialClient()), { name: 'Plugin0.esp', origin: 'Data/' }, EDITABLE_PLUGIN))
       .map((n) => String(n.contextValue));
 
@@ -544,15 +544,6 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
       'recordType editable creatable',
       'cell editable container', 'placed editable', 'placed editable',
     ]);
-  });
-
-  it('states an editable plugin\'s editability on every row beneath it', async () => {
-    const states = (await rowsBeneath(new RecordBrowser(spatialClient()), { name: 'Plugin0.esp', origin: 'Data/' }, { editable: true }))
-      .map((n) => String(n.contextValue));
-
-    const CONDITION_WORDS = new Set(['editable']);
-    const conditionsOf = (state: string) => state.split(' ').filter((w) => CONDITION_WORDS.has(w)).join(' ');
-    expect(new Set(states.map(conditionsOf))).toEqual(new Set(['editable']));
   });
 });
 

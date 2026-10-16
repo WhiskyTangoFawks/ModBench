@@ -20,7 +20,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("ApiNpc"), origin: Origin)
             .BuildScattered();
 
-    private async Task LoadAndTrack(ScatteredFixtureData fx)
+    private async Task LoadAndInit(ScatteredFixtureData fx)
     {
         var load = await _client.PutLoadOrderAndAwaitReady(new
         {
@@ -47,7 +47,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
     public async Task EditingTheFormId_OfANeverCommittedRecord_DropsTheOldFormKeyAtTheWire()
     {
         using var fx = BuildOneModOnePlugin();
-        await LoadAndTrack(fx);
+        await LoadAndInit(fx);
 
         var created = await _client.CreateRecord(Plugin, Origin, "npc_");
         created.EnsureSuccessStatusCode();

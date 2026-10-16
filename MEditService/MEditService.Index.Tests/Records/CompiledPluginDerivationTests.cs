@@ -20,7 +20,7 @@ public sealed class CompiledPluginDerivationTests : IDisposable
     public CompiledPluginDerivationTests()
     {
         FormKey npc = default;
-        _fixture = new PluginFixtureBuilder("compiledPlugin-plugin-derivation")
+        _fixture = new PluginFixtureBuilder("compiled-plugin-derivation")
             .WithPlugin(PluginName, mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: Origin)
             .BuildScattered();
         _mod = _fixture.Plugins.Single();
@@ -44,7 +44,7 @@ public sealed class CompiledPluginDerivationTests : IDisposable
     public void APluginCompiledPluginAfterItWasIndexed_ReadsAsCompiledPlugin_AfterTheNextSnapshot()
     {
         Assert.False(ReadsAsCompiledPlugin());
-        SourceMods.Track(_mod);
+        SourceMods.Init(_mod);
 
         _index.NextSnapshotUntil(ReadsAsCompiledPlugin, "the plugin reading as compiled plugin");
     }
@@ -52,7 +52,7 @@ public sealed class CompiledPluginDerivationTests : IDisposable
     [Fact]
     public void ACompiledPluginWhoseRepositoryWentAway_ReadsAsNonCompiledPlugin_AfterTheNextSnapshot()
     {
-        SourceMods.Track(_mod);
+        SourceMods.Init(_mod);
         _index.NextSnapshotUntil(ReadsAsCompiledPlugin, "the plugin reading as compiled plugin");
 
         AnotherTool.Delete(Path.Combine(_mod.ModFolderOf(), ".git"));

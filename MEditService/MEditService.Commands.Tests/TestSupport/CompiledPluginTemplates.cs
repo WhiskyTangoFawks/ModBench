@@ -27,7 +27,7 @@ internal static class CompiledPluginTemplates
     {
         var template = Folders.GetOrAdd(key, _ => new Lazy<ScratchDirectory>(() =>
         {
-            var folder = new ScratchDirectory("medit-compiledPlugin-template-");
+            var folder = new ScratchDirectory("medit-compiled-plugin-template-");
             make(folder.Path);
             return folder;
         })).Value;
@@ -35,7 +35,7 @@ internal static class CompiledPluginTemplates
     }
 
     /// <summary><paramref name="mod"/>, which has no masters, written into
-    /// <paramref name="modFolder"/> and compiled plugin there. Keyed on its bytes, so fixtures share a
+    /// <paramref name="modFolder"/> and made a source mod there. Keyed on its bytes, so fixtures share a
     /// template only when their plugins are one.</summary>
     internal static void WriteCompiledPlugin(string modFolder, IModGetter mod)
     {
@@ -46,16 +46,16 @@ internal static class CompiledPluginTemplates
         CopyInto(modFolder, $"{pluginName} {Convert.ToHexString(SHA256.HashData(bytes))}", template =>
         {
             File.WriteAllBytes(Path.Combine(template, pluginName), bytes);
-            TrackAlone(template, pluginName, mod.GameRelease);
+            InitAlone(template, pluginName, mod.GameRelease);
         });
     }
 
     /// <summary>Inits the mod of the one plugin <paramref name="modFolder"/> holds, in a load order of that
     /// plugin alone.</summary>
-    internal static void TrackAlone(string modFolder, string pluginName, GameRelease release = GameRelease.Fallout4)
+    internal static void InitAlone(string modFolder, string pluginName, GameRelease release = GameRelease.Fallout4)
     {
         const string origin = "TemplateMod";
-        using var gameDirectory = new ScratchDirectory("medit-compiledPlugin-template-game-");
+        using var gameDirectory = new ScratchDirectory("medit-compiled-plugin-template-game-");
         var loadOrder = SnapshotPlugins.Snapshot(gameDirectory, instanceRoot: null, release,
             [new LoadOrderEntry(pluginName, Path.Combine(modFolder, pluginName), origin, Line: 0, Enabled: true, Winning: true)]);
         var result = InitEveryPluginOf.ModAsync(loadOrder, origin)

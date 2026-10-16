@@ -21,7 +21,7 @@ export class ModStatuses implements SyncMessage, vscode.Disposable {
   private readonly unsubscribes: (() => void)[];
 
   constructor(
-    client: Pick<MEditClient, 'onNotification' | 'onReconnected'>, private readonly read: ReadModStatus, private readonly log: (line: string) => void,
+    client: Pick<MEditClient, 'onNotification' | 'onReconnected'>, private readonly readStatus: ReadModStatus, private readonly log: (line: string) => void,
     mods: () => readonly string[],
   ) {
     this.unsubscribes = [
@@ -50,7 +50,7 @@ export class ModStatuses implements SyncMessage, vscode.Disposable {
   private async ask(mods: readonly string[]): Promise<void> {
     const ask = ++this.asks;
     for (const mod of mods) this.askedIn.set(mod, ask);
-    const answer = await this.read(mods);
+    const answer = await this.readStatus(mods);
     if (isReadFailed(answer)) {
       this.readFailed(failureReason(answer));
       return;

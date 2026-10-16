@@ -44,7 +44,7 @@ interface PluginsOnInstance extends vscode.Disposable {
 export interface Plugins extends vscode.Disposable {
   /** What a record gesture runs under: the index must show the write before it lands. */
   recordWrite: RecordWrite;
-  /** What the Plugins view knows of a plugin's tracking and editability; nothing is editable while no Instance is open. */
+  /** What the Plugins view knows of whether a plugin is a compiled plugin, and its editability; nothing is editable while no Instance is open. */
   conditionsOf(plugin: PluginAddress): PluginConditions;
   /** The Plugins view, over an Instance that was found. */
   onInstance(deps: PluginsInstanceDeps): PluginsOnInstance;

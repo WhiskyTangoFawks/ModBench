@@ -27,7 +27,7 @@ describe('the destination pick', () => {
     plugin('Other.esp', 'OtherMod', 9),
   ];
 
-  it('offers the compiled plugin, editable plugins, each with its load position, and not a non-compiled plugin one or one whose plugin source is unreadable', () => {
+  it('offers the editable plugins, each with its load position, and not one with no plugin source or one whose plugin source is unreadable', () => {
     expect(copyDestinationItems(plugins, 'New', [npc]).map(({ label, description }) => ({ label, description }))).toEqual([
       { label: 'Source.esp', description: '[3]' },
       { label: 'Patch.esp', description: '[5]' },
@@ -66,7 +66,7 @@ describe('the destination pick', () => {
     expect(copyDestinationItems(plugins, 'Override', [shouted]).map((item) => item.label)).toEqual(['Patch.esp', 'Other.esp']);
   });
 
-  it('offers every compiled plugin, editable plugin to an override of records from several plugins', () => {
+  it('offers every editable plugin to an override of records from several plugins', () => {
     expect(copyDestinationItems(plugins, 'Override', [npc, elsewhere]).map((item) => item.label))
       .toEqual(['Source.esp', 'Patch.esp', 'Other.esp']);
   });

@@ -128,8 +128,8 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         var onlySource = source.Except(binary, StringComparer.Ordinal).ToList();
         Assert.True(
             binary.SequenceEqual(source, StringComparer.Ordinal),
-            $"{relation}: {binary.Count} rows non-compiled plugin, {source.Count} compiled plugin." +
-            $"\nOnly non-compiled plugin:\n{string.Join('\n', onlyBinary.Take(20))}\nOnly compiled plugin:\n{string.Join('\n', onlySource.Take(20))}");
+            $"{relation}: {binary.Count} rows from the plugin file, {source.Count} from plugin source." +
+            $"\nOnly plugin file:\n{string.Join('\n', onlyBinary.Take(20))}\nOnly plugin source:\n{string.Join('\n', onlySource.Take(20))}");
     }
 
     private static IEnumerable<string> AllFormKeysInOneUnpagedQuery(string instanceRoot) =>

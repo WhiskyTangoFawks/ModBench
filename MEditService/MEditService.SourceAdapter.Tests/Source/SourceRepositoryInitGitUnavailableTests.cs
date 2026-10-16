@@ -20,7 +20,7 @@ public sealed class SourceRepositoryInitGitUnavailableTests
             var failure = TestAdapters.Source().Init(modFolder, PluginBaselines.Of(files));
 
             Assert.Equal(
-                "git was not found on PATH. Modbench's tracking features require git to be installed and on PATH.", failure.Require().Reason);
+                "git was not found on PATH. Modbench's source mod features require git to be installed and on PATH.", failure.Require().Reason);
             Assert.Empty(Directory.EnumerateFileSystemEntries(modFolder));
         }
         finally

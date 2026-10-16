@@ -51,7 +51,7 @@ public sealed class CopyRecordChangesHandlerTests
     [InlineData(true)]
     public void CopyingAsOverride_IntoTheRecordsOwnPlugin_WritesNothing_AndIsNoRefusal(bool replace)
     {
-        using var mod = CopyFixture.Create(trackSource: true);
+        using var mod = CopyFixture.Create(initSource: true);
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
         LeaveTextTheCodecWouldRespell(mod);
         var before = SourceModTree.Records(mod.SourceModFolder, mod.SourcePlugin);
@@ -117,7 +117,7 @@ public sealed class CopyRecordChangesHandlerTests
     [Fact]
     public void CopyChanges_OfACompiledPluginSourcesRecord_CarryTheSourcesUnsavedText()
     {
-        using var mod = CopyFixture.Create(trackSource: true);
+        using var mod = CopyFixture.Create(initSource: true);
         var npc = mod.Document(mod.SourcePlugin, mod.SourceNpc.ToString()).Require();
         var unsaved = new DocumentChange(
             TreeTampering.FileOf(mod.SourceModFolder, mod.SourcePlugin, npc.Identity),

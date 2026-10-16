@@ -7,8 +7,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
-/// <summary>Real plugins in load order, each in a mod folder of its own: a compiled plugin one answers from its
-/// tree, a non-compiled plugin one from its file. Every plugin but Fallout4.esm masters it.</summary>
+/// <summary>Real plugins in load order, each in a mod folder of its own: one in a source mod answers from its
+/// tree, one outside any from its file. Every plugin but Fallout4.esm masters it.</summary>
 internal sealed class LoadOrderOfPlugins : TestInstance
 {
     internal static readonly ModKey Fallout4Esm = ModKey.FromFileName("Fallout4.esm");

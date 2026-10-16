@@ -116,7 +116,7 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([own]).singleCreatable).toBe(false);
   });
 
-  it('create does not see a compiled plugin, editable group of a type the game cannot create', () => {
+  it('create does not see an editable group of a type the game cannot create', () => {
     expect(context([quests]).singleCreatable).toBe(false);
   });
 

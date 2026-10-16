@@ -194,8 +194,8 @@ public class RegistrationScopingTests
     [Fact]
     public void AReferenceInACompiledPluginThatIsNotActive_IsListedForActiveOrCompiledPlugins()
     {
-        using var fx = Build("registration-inactive-compiledPlugin-references");
-        SourceMods.Track(fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name));
+        using var fx = Build("registration-inactive-compiled-plugin-references");
+        SourceMods.Init(fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name));
 
         fx.Reconcile(fx.WithBetaDisabled);
 

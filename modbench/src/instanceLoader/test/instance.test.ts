@@ -609,31 +609,31 @@ describe('Instance — game folder and the archives the game loads', () => {
   it('hands a mod\'s plugin a strings file added beside it, at the next read', async () => {
     const reading: Partial<InstanceReading> = {
       ...GAME_FOUND,
-      mods: [mod('Source Patch Mod')],
-      pluginOrder: [{ name: 'Source Patch Mod.esp', enabled: true }],
-      modFolders: modFoldersOf('Source Patch Mod'),
+      mods: [mod('Patch Mod')],
+      pluginOrder: [{ name: 'Patch Mod.esp', enabled: true }],
+      modFolders: modFoldersOf('Patch Mod'),
     };
-    const { instance, fake } = loader({ ...reading, modFiles: new Map([['Source Patch Mod', filesOfMod('Source Patch Mod', 'Source Patch Mod.esp')]]) });
+    const { instance, fake } = loader({ ...reading, modFiles: new Map([['Patch Mod', filesOfMod('Patch Mod', 'Patch Mod.esp')]]) });
     await instance.refresh();
 
-    const stringsFile = '/mods/Source Patch Mod/Strings/Source Patch Mod_en.STRINGS';
-    fake.read({ modFiles: new Map([['Source Patch Mod', filesOfMod('Source Patch Mod', 'Source Patch Mod.esp', 'Strings/Source Patch Mod_en.STRINGS')]]) });
+    const stringsFile = '/mods/Patch Mod/Strings/Patch Mod_en.STRINGS';
+    fake.read({ modFiles: new Map([['Patch Mod', filesOfMod('Patch Mod', 'Patch Mod.esp', 'Strings/Patch Mod_en.STRINGS')]]) });
     await instance.refresh();
 
     expect(instance.value.loadOrderSnapshot).toMatchObject({
-      plugins: expect.arrayContaining([expect.objectContaining({ origin: 'Source Patch Mod', stringsFiles: [expect.objectContaining({ path: stringsFile })] })]) as unknown,
+      plugins: expect.arrayContaining([expect.objectContaining({ origin: 'Patch Mod', stringsFiles: [expect.objectContaining({ path: stringsFile })] })]) as unknown,
     });
   });
 
   it('hands a mod\'s plugin the new stamp of a strings file rewritten beside it, at the next read', async () => {
-    const stringsFile = '/mods/Source Patch Mod/Strings/Source Patch Mod_en.STRINGS';
+    const stringsFile = '/mods/Patch Mod/Strings/Patch Mod_en.STRINGS';
     let changedNs = 1n;
     const { instance } = loader({
       ...GAME_FOUND,
-      mods: [mod('Source Patch Mod')],
-      pluginOrder: [{ name: 'Source Patch Mod.esp', enabled: true }],
-      modFolders: modFoldersOf('Source Patch Mod'),
-      modFiles: new Map([['Source Patch Mod', filesOfMod('Source Patch Mod', 'Source Patch Mod.esp', 'Strings/Source Patch Mod_en.STRINGS')]]),
+      mods: [mod('Patch Mod')],
+      pluginOrder: [{ name: 'Patch Mod.esp', enabled: true }],
+      modFolders: modFoldersOf('Patch Mod'),
+      modFiles: new Map([['Patch Mod', filesOfMod('Patch Mod', 'Patch Mod.esp', 'Strings/Patch Mod_en.STRINGS')]]),
     }, (adapter) => ({ ...adapter, fileStamp: (path) => Promise.resolve({ kind: 'read', answer: { size: 5n, modifiedNs: 1n, changedNs: path === stringsFile ? changedNs : 0n } }) }));
     await instance.refresh();
     const before = handedStringsFiles(instance.value.loadOrderSnapshot);

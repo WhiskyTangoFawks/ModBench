@@ -83,7 +83,7 @@ public abstract record SourceFailure
     public sealed record GitUnavailable : SourceFailure
     {
         internal GitUnavailable()
-            : base("git was not found on PATH. Modbench's tracking features require git to be installed and on PATH.")
+            : base("git was not found on PATH. Modbench's source mod features require git to be installed and on PATH.")
         {
         }
 

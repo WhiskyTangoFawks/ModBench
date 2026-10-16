@@ -4,12 +4,12 @@ using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-public sealed class SourceRepositoryUntrackTests
+public sealed class SourceRepositoryDeletedGitTests
 {
     [Fact]
     public void DeletingGit_MakesIsSourceModFalseAgain_WithSourceFilesUntouched()
     {
-        using var modFolder = new ScratchDirectory("medit-untrack-");
+        using var modFolder = new ScratchDirectory("medit-deleted-git-");
         var relativePath = Path.Combine("plugin-source", "Test.esp", "npc_", "Test.esp", "000001.json");
         var content = "{\"formKey\":\"000001:Test.esp\"}"u8.ToArray();
         PluginBaselines.Init(

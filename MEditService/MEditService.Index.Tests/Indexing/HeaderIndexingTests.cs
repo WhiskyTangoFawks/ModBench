@@ -131,7 +131,7 @@ public class HeaderIndexingTests
     [Fact]
     public void TheHeadersMastersField_FollowsTheWorkingTree_OfACompiledPlugin()
     {
-        using var fixture = new PluginFixtureBuilder("header-masters-compiledPlugin")
+        using var fixture = new PluginFixtureBuilder("header-masters-compiled-plugin")
             .WithPlugin("Kept.esm", mod => mod.Npcs.AddNew("KeptNpc"), origin: "KeptMod")
             .WithPlugin("Dropped.esm", mod => mod.Npcs.AddNew("DroppedNpc"), origin: "DroppedMod")
             .WithPlugin(

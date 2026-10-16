@@ -164,7 +164,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void EditingTheFormId_OfAnOverride_Refuses_NamingItsMaster()
     {
-        using var two = TwoModReferenceFixture.Create(trackReferencer: true);
+        using var two = TwoModReferenceFixture.Create(initReferencer: true);
         var before = SourceModTree.Records(two.ReferencerModFolder, two.ReferencerPlugin);
 
         var result = two.EditHandler.SetFormId(two.ReferencerPlugin, two.Npc.ToString(), "000F00:Winner.esp");
@@ -179,9 +179,9 @@ public sealed class FormIdEditTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void EditingTheFormId_LeavesAReferencerInAnotherMod_AsItWas_CompiledPluginOrNot(bool trackReferencer)
+    public void EditingTheFormId_LeavesAReferencerInAnotherMod_AsItWas_CompiledPluginOrNot(bool initReferencer)
     {
-        using var two = TwoModReferenceFixture.Create(trackReferencer);
+        using var two = TwoModReferenceFixture.Create(initReferencer);
         var before = ReferencerState(two);
 
         var result = two.EditHandler.SetFormId(two.TargetPlugin, two.TargetRace.ToString(), "000F00:Base.esm");

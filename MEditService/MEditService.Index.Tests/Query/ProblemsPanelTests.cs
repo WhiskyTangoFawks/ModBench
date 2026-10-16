@@ -42,7 +42,7 @@ public sealed class ProblemsPanelTests : IDisposable
         }
         _fixture = builder.BuildScattered();
         foreach (var plugin in plugins.Where(p => p.CompiledPlugin))
-            SourceMods.Track(Entry(plugin));
+            SourceMods.Init(Entry(plugin));
         return _fixture.Plugins;
     }
 

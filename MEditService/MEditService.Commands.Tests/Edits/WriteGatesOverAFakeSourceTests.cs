@@ -29,7 +29,7 @@ public sealed class WriteGatesOverAFakeSourceTests
         return TestEditService.Over(holder, source: source);
     }
 
-    private static IServiceProvider OverADiskThatTracksWhatTheFakeDoesNot(FakeSourceAdapter source, out SourceEditFixture disk)
+    private static IServiceProvider OverADiskThatInitsWhatTheFakeDoesNot(FakeSourceAdapter source, out SourceEditFixture disk)
     {
         disk = SourceEditFixture.CompiledPlugin();
         return TestEditService.Over(disk.Holder, source: source);
@@ -42,7 +42,7 @@ public sealed class WriteGatesOverAFakeSourceTests
     [Fact]
     public void EditingAPluginOfAnNonSourceMod_IsRefused_NamingTheInitCommand()
     {
-        var services = OverADiskThatTracksWhatTheFakeDoesNot(new FakeSourceAdapter(), out var disk);
+        var services = OverADiskThatInitsWhatTheFakeDoesNot(new FakeSourceAdapter(), out var disk);
         using var _ = disk;
 
         var result = services.GetRequiredService<EditRecordChangesHandler>()
@@ -55,7 +55,7 @@ public sealed class WriteGatesOverAFakeSourceTests
     [Fact]
     public void EditingAFormKeyNoDocumentHolds_OnANonCompiledPlugin_StillRefusesAsNonCompiledPlugin()
     {
-        var services = OverADiskThatTracksWhatTheFakeDoesNot(new FakeSourceAdapter(), out var disk);
+        var services = OverADiskThatInitsWhatTheFakeDoesNot(new FakeSourceAdapter(), out var disk);
         using var _ = disk;
 
         var result = services.GetRequiredService<EditRecordChangesHandler>()
@@ -67,7 +67,7 @@ public sealed class WriteGatesOverAFakeSourceTests
     [Fact]
     public void EditingAPlugin_WhoseSourceIsUnreadable_IsRefusedBeforeAnySessionOpens_NamingDecompile()
     {
-        var source = new FakeSourceAdapter().TrackingUnreadable(ModFolder);
+        var source = new FakeSourceAdapter().WithUnreadableSourceMod(ModFolder);
 
         var result = SetHeight(Over(source), Npc).Outcome;
 
@@ -79,7 +79,7 @@ public sealed class WriteGatesOverAFakeSourceTests
     [Fact]
     public void CreatingARecordInAPlugin_WhoseSourceIsUnreadable_IsRefusedTheSameWay()
     {
-        var source = new FakeSourceAdapter().TrackingUnreadable(ModFolder);
+        var source = new FakeSourceAdapter().WithUnreadableSourceMod(ModFolder);
 
         var result = Over(source).GetRequiredService<CreateRecordChangesHandler>().CreateRecord(Plugin, "npc_").Outcome;
 
@@ -90,7 +90,7 @@ public sealed class WriteGatesOverAFakeSourceTests
     [Fact]
     public void EditingAFormKeyNoDocumentOfACompiledPlugin_IsRefusedAsRecordNotFound()
     {
-        var source = new FakeSourceAdapter().Tracking(ModFolder, NpcDocument());
+        var source = new FakeSourceAdapter().WithSourceMod(ModFolder, NpcDocument());
 
         var result = SetHeight(Over(source), $"000900:{Plugin.Name}").Outcome;
 
@@ -100,7 +100,7 @@ public sealed class WriteGatesOverAFakeSourceTests
     [Fact]
     public void EditingAField_AnswersTheDocumentRewritten_UnderTheModFolder()
     {
-        var source = new FakeSourceAdapter().Tracking(ModFolder, NpcDocument());
+        var source = new FakeSourceAdapter().WithSourceMod(ModFolder, NpcDocument());
 
         var answered = SetHeight(Over(source), Npc);
 

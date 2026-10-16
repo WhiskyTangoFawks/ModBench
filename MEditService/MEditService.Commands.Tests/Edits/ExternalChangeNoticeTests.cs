@@ -115,7 +115,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     public void ASnapshot_NamesThePluginsWhoseSourceIsUnreadable_ApartFromItsChangedOnes()
     {
         var compiledPlugin = "the compiled plugin binary"u8.ToArray();
-        var loadOrder = WithPlugins((PluginName, compiledPlugin), ("SourceUnreadable.esp", "never compiled plugin"u8.ToArray()));
+        var loadOrder = WithPlugins((PluginName, compiledPlugin), ("SourceUnreadable.esp", "never compiled"u8.ToArray()));
         Init((PluginName, compiledPlugin));
 
         Put(loadOrder);

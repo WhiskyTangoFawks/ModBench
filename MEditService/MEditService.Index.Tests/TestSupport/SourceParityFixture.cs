@@ -33,7 +33,7 @@ public sealed class SourceParityFixture : IDisposable
         File.Copy(RealDataPlugin.PluginPath, pluginPath);
 
         FromBinary = NewIndex(pluginPath, BinaryInstanceRoot);
-        SourceMods.Track(pluginPath);
+        SourceMods.Init(pluginPath);
         FromSource = NewIndex(pluginPath, SourceInstanceRoot);
     }
 

@@ -27,7 +27,7 @@ public sealed class CopyAsOverrideTests
     [Fact]
     public void CopyRecordAsOverride_FromACompiledPluginSource_ReadsItsCurrentDocument()
     {
-        using var mod = CopyFixture.Create(trackSource: true);
+        using var mod = CopyFixture.Create(initSource: true);
         var original = mod.Document(mod.SourcePlugin, mod.SourceNpc.ToString()).Require();
         mod.Overwrite(mod.SourcePlugin, original with { Body = original.Body.Replace(CopyFixture.SourceNpcEditorId, "MutatedOnDisk") });
 
@@ -42,7 +42,7 @@ public sealed class CopyAsOverrideTests
     public void CopyRecordAsOverride_FromANonCompiledPluginSource_WritesTheSameTextACompiledPluginSourceWould()
     {
         using var nonCompiledPlugin = CopyFixture.Create();
-        using var compiledPlugin = CopyFixture.Create(trackSource: true);
+        using var compiledPlugin = CopyFixture.Create(initSource: true);
 
         nonCompiledPlugin.CopyHandler.CopySync([new RecordAt(nonCompiledPlugin.SourcePlugin, nonCompiledPlugin.SourceNpc.ToString())], CopyMode.Override, [nonCompiledPlugin.DestinationPlugin], replace: false).OnlyLanded();
         compiledPlugin.CopyHandler.CopySync([new RecordAt(compiledPlugin.SourcePlugin, compiledPlugin.SourceNpc.ToString())], CopyMode.Override, [compiledPlugin.DestinationPlugin], replace: false).OnlyLanded();

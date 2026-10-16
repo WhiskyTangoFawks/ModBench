@@ -50,7 +50,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
         _index.Reconcile(holder,
             _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Line: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
-        SourceMods.Track(pluginPath);
+        SourceMods.Init(pluginPath);
         _index.NextSnapshot();
     }
 

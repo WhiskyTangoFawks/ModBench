@@ -1189,7 +1189,7 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
   it.each([
     ['after', [held('Shared.esp', { origin: 'ModA', isImmutable: true }), held('Shared.esp', { origin: 'ModB', isCompiledPlugin: true })]],
     ['before', [held('Shared.esp', { origin: 'ModB', isCompiledPlugin: true }), held('Shared.esp', { origin: 'ModA', isImmutable: true })]],
-  ])("never marks a plugin's records read-only or non-compiled plugin for another plugin of the same name, listed %s it", async (_order, answer) => {
+  ])("never marks a plugin's records read-only or not compiled for another plugin of the same name, listed %s it", async (_order, answer) => {
     const client = makeClient({
       recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
       records: { items: [recordSummary({ plugin: 'Shared.esp', formKey: '000001:Shared.esp', origin: 'ModB' })], total: 1 },
@@ -1896,7 +1896,7 @@ function tooltipAsString(value: unknown): string {
 describe('PluginsTreeProvider — the row states its conditions', () => {
   const flags = async (h: Harness, index = 0): Promise<string[]> => String((await rowItem(h, index)).contextValue).split(' ');
 
-  it('states a compiled plugin, editable plugin in a source mod', async () => {
+  it('states an editable plugin in a source mod', async () => {
     const h = makeTree([A_ROW()], { instance: new FakeInstance({ ...valueOf([A_ROW()]), listedSourceMods: new Set(['SomeMod']) }) });
     await reconcile(h, [held('A.esp', { isCompiledPlugin: true })]);
 

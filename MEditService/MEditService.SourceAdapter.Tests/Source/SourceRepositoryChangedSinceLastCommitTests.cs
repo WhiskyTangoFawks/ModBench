@@ -42,7 +42,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         repository.ChangedSinceLastCommit(Plugin).Value();
 
     [Fact]
-    public void AnUnstagedEditNeverGitAdded_ToAFileTrackAlreadyCommitted_IsModified()
+    public void AnUnstagedEditNeverGitAdded_ToAFileInitAlreadyCommitted_IsModified()
     {
         var repository = SourceMod();
 

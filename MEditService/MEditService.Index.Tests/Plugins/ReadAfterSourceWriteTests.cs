@@ -29,7 +29,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
             .BuildScattered();
         _compiledPlugin = _fixture.Plugins.Single(p => p.Name == CompiledPlugin);
         _npc = npc;
-        SourceMods.Track(_compiledPlugin);
+        SourceMods.Init(_compiledPlugin);
         _index = Indexes.Open(_holder, timeProvider: _clock);
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         _compiledPlugin.HandEdit(_index.DocumentOf(_npc, _compiledPlugin.KeyOf()), "\"CompiledPluginNpc\"", "\"Written\"");

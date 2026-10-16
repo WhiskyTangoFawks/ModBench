@@ -119,7 +119,7 @@ public sealed class WorkingTreeStatesBeneathTests : IDisposable
             .WithPlugin(sharedName, HoldingAPlacedRef, origin: "SharedMod")
             .BuildScattered();
         var compiledPlugin = fixture.Plugins.Single(p => p.Origin == "SharedMod");
-        SourceMods.Track(compiledPlugin);
+        SourceMods.Init(compiledPlugin);
         using var index = Indexes.Reconciled(fixture);
         index.Edit(compiledPlugin, index.DocumentOf(placed, compiledPlugin.KeyOf()),
             index.BodyOf(placed, compiledPlugin.KeyOf()).Replace("SharedRef", "RenamedRef", StringComparison.Ordinal));

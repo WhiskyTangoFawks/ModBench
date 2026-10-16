@@ -38,7 +38,7 @@ function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: bo
   }
   if (!isCompiledPlugin) {
     return {
-      label: '(not a compiled plugin)',
+      label: '(no source)',
       reason: '“Decompile and Commit Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, '
         + 'makes it editable.',
     };
@@ -51,7 +51,7 @@ function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: bo
     };
   }
   if (o.isPartialForm) return { label: '(Partial Form)', reason: 'The game ignores this copy’s own fields.' };
-  return { label: '(compiled plugin)', reason: 'An edit lands in the mod’s working tree, for review in Source Control.' };
+  return { label: '(source)', reason: 'An edit lands in the mod’s working tree, for review in Source Control.' };
 }
 
 export function PluginHeader({

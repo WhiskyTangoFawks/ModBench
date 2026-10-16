@@ -507,7 +507,7 @@ describe('RecordPanel — column header native right-click menu', () => {
   });
 
   it.each([
-    ['a compiled plugin, editable', { isCompiledPlugin: true, isImmutable: false }, true],
+    ['an editable compiled plugin', { isCompiledPlugin: true, isImmutable: false }, true],
     ['a non-compiled plugin', { isCompiledPlugin: false, isImmutable: false }, false],
     ['a compiled plugin, plugin-source-unreadable', { isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }, false],
     ['a read-only', { isCompiledPlugin: true, isImmutable: true }, false],
@@ -589,7 +589,7 @@ describe('RecordPanel — column header native right-click menu', () => {
     expect(client.load).toHaveBeenCalledTimes(1);
   });
 
-  it('offers no delete on a column whose compiled plugin state is unknown, when the page is given no plugin facts a column is neither compiled plugin nor non-compiled plugin', async () => {
+  it('offers no delete on a column whose state is unknown, when the page is given no plugin facts a column is neither a compiled plugin nor one with no plugin source', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const compare = compareResultFixture({
       conflictAll: 'OnlyOne',
@@ -645,7 +645,7 @@ describe('RecordPanel — a Partial Form column', () => {
   it('is dimmed under an earlier status too', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(partialFormCompareResult, { plugins: pluginsResponse });
-    await waitFor(() => expect(screen.getByText('(not a compiled plugin)')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('(no source)')).toBeInTheDocument());
 
     expect(screen.getByText('MyMod.esp').closest('th')).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
@@ -683,7 +683,7 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('control: a scalar cell in the identical compiled plugin, editable column the flags cases use opens an editable input on double click', async () => {
+  it('control: a scalar cell in the identical editable column the flags cases use opens an editable input on double click', async () => {
     renderPanel(flagsCompareResult, { plugins: compiledPluginMyModPluginsForTheRealEditableColumnsGate });
     await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
 
@@ -2632,7 +2632,7 @@ describe('RecordPanel — several records side by side', () => {
     await waitFor(() => expect(screen.getByText('Ammo Name')).toBeInTheDocument());
     const nameCells = Array.from(required(screen.getByText('Gun Name').closest('tr'), 'the Name row').querySelectorAll('td')).slice(1);
     expect(nameCells.map(cell => cell.textContent)).toEqual(['Gun Name', 'Ammo Name']);
-    expect(screen.getAllByText('(compiled plugin)')).toHaveLength(2);
+    expect(screen.getAllByText('(source)')).toHaveLength(2);
   });
 
   it('opens another record\'s copy in this tab on a click on its header, with the same records as its columns, that one first as the file', async () => {

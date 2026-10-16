@@ -56,7 +56,7 @@ public sealed class UnreadableBinaryTests : IDisposable
     private void NonCompiledPluginOverAnUnreadableBinary()
     {
         WriteValidPlugin(_pluginPath);
-        SourceMods.Track(_pluginPath);
+        SourceMods.Init(_pluginPath);
         Reconcile(Entry);
         AnotherTool.Delete(Path.Combine(_modFolder, ".git"));
         File.WriteAllText(_pluginPath, "not a plugin");

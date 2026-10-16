@@ -102,7 +102,7 @@ internal static class PluginEndpoints
             .WithName("GetRenderedDocument")
             .WithTags(Tag)
             .WithDescription(
-                "The plugin's copy of a record as its own document and the name of its file in plugin source. A non-source " +
+                "The plugin's copy of a record as its own document and the name of its file in plugin source. A non-compiled " +
                 "plugin's is the text init writes for it, under the name init gives its file. A copy mEdit could not parse " +
                 "is what could be stored. Two documents claiming the copy refuse, naming them.")
             .Produces<RenderedDocument>()

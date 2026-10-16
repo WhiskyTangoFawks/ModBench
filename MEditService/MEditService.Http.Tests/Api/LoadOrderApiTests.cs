@@ -74,7 +74,8 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     [InlineData("mods")]
     [InlineData("statCache")]
     [InlineData("stringsLanguage")]
-    public async Task PutLoadOrder_WithAListItNeverDefaultsLeftOut_Returns400(string omitted)
+    [InlineData("gameRelease")]
+    public async Task PutLoadOrder_WithAFieldItNeverDefaultsLeftOut_Returns400(string omitted)
     {
         var body = Body();
         body.Remove(omitted);
@@ -197,17 +198,6 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     }
 
     [Fact]
-    public async Task PutLoadOrder_WithNoGameRelease_Returns400()
-    {
-        var body = Body();
-        body.Remove("gameRelease");
-
-        var response = await _client.PutAsJsonAsync("/load-order", body);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
     public async Task PutLoadOrder_TwoActivePluginsOfOneFilename_Returns400()
     {
         var plugin = _fixture.Plugins[0];
@@ -230,7 +220,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
 
         var response = await _client.PutAsJsonAsync("/load-order", body);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("GameDirectoryNotFound", (await response.AssertIsProblem(HttpStatusCode.BadRequest)).GetProperty("refusal").GetString());
     }
 
     [Fact]
@@ -241,6 +231,6 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
 
         var response = await _client.PutAsJsonAsync("/load-order", body);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("InstanceRootNotFound", (await response.AssertIsProblem(HttpStatusCode.BadRequest)).GetProperty("refusal").GetString());
     }
 }

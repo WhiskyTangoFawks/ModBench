@@ -56,19 +56,19 @@ public sealed class NonCompiledPluginReadOnlyTests
         using var nonCompiledPlugin = SourceEditFixture.NonCompiledPlugin();
         using var vanilla = SourceModFixture.VanillaMaster(out var vanillaNpc);
 
-        var trackable = nonCompiledPlugin.EditHandler
+        var initable = nonCompiledPlugin.EditHandler
             .Set(nonCompiledPlugin.Plugin, nonCompiledPlugin.Npc.ToString(), "HeightMax", Json("0.75"));
-        var notTrackable = vanilla.EditHandler
+        var notInitable = vanilla.EditHandler
             .Set(vanilla.Plugin, vanillaNpc.ToString(), "HeightMax", Json("0.75"));
 
-        Assert.NotEqual(trackable.Refusal, notTrackable.Refusal);
-        Assert.DoesNotContain("patch", trackable.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Decompile and commit", notTrackable.Message, StringComparison.Ordinal);
-        Assert.Contains("Decompile and commit its mod", trackable.Message, StringComparison.Ordinal);
+        Assert.NotEqual(initable.Refusal, notInitable.Refusal);
+        Assert.DoesNotContain("patch", initable.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Decompile and commit", notInitable.Message, StringComparison.Ordinal);
+        Assert.Contains("Decompile and commit its mod", initable.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task TrackingTheSameModFolder_TurnsTheRefusalIntoAnAcceptedEdit()
+    public async Task InitingTheSameModFolder_TurnsTheRefusalIntoAnAcceptedEdit()
     {
         using var mod = SourceEditFixture.NonCompiledPlugin();
         var compiledPlugin = await InitEveryPluginOf.ModAsync(mod.LoadOrder, SourceEditFixture.ModFolderOrigin);

@@ -35,7 +35,7 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
             .WithPlugin(Arriving, mod => mod.Npcs.AddNew("ArrivingNpc"))
             .BuildScattered();
         _compiledPluginNpc = compiledPluginNpc;
-        SourceMods.Track(Entry(CompiledPlugin));
+        SourceMods.Init(Entry(CompiledPlugin));
         _loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider([], entry =>
         {
             if (_failingAt is { } logged && entry.Message.StartsWith(logged, StringComparison.Ordinal))

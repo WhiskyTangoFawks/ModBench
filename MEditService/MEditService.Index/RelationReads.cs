@@ -347,7 +347,7 @@ internal sealed class RelationReads(
           ON d.plugin = fr.source_plugin AND d.origin = fr.source_origin
         """;
 
-    /// <summary>The same read over the active plugins and the inactive compiled plugin ones (ADR-0012).</summary>
+    /// <summary>The same read over the active plugins and the inactive compiled ones (ADR-0012).</summary>
     public IReadOnlyList<ReferenceRow> GetReferencedByInActiveOrCompiledPlugins(string targetFormKey)
     {
         using var connection = store.OpenReadConnection();

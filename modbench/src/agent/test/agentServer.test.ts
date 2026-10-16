@@ -71,7 +71,7 @@ async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new I
   const warned: string[] = [];
   const errored: string[] = [];
   const server = serveAgent({
-    port, instance, mEdit, terminalEnvironment, reporter, modStatus: readStatus,
+    port, instance, mEdit, terminalEnvironment, reporter, readStatus,
     log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => { lines.push(line); warned.push(line); }, error: (line) => { lines.push(line); errored.push(line); } },
   });
   running.push(server);

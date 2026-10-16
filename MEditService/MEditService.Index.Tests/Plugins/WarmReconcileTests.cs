@@ -140,7 +140,7 @@ public sealed class WarmReconcileTests
     {
         var holder = new LoadOrderHolder();
         const string plugin = "CompiledPlugin.esp";
-        using var fixture = new PluginFixtureBuilder("warm-compiledPlugin")
+        using var fixture = new PluginFixtureBuilder("warm-compiled-plugin")
             .WithPlugin(plugin, m => m.Npcs.AddNew("CompiledPluginNpc"), origin: "SourceMod")
             .BuildScattered()
             .CompiledPlugin();

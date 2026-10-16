@@ -235,7 +235,7 @@ public sealed class ValidateByStampsTests : IDisposable
     public void ValidatingEveryPlugin_WhenOnePluginsTreeCannotBeRead_StillValidatesTheOthers()
     {
         FormKey other = default;
-        using var fixture = new PluginFixtureBuilder("validate-two-compiledPlugin")
+        using var fixture = new PluginFixtureBuilder("validate-two-compiled-plugin")
             .WithPlugin("Broken.esp", mod => mod.Npcs.AddNew("BrokenNpc"), origin: "BrokenMod")
             .WithPlugin("Sound.esp", mod => other = mod.Npcs.AddNew("SoundNpc").FormKey, origin: "SoundMod")
             .BuildScattered()

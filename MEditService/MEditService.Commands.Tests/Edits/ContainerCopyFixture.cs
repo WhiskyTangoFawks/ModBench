@@ -10,7 +10,7 @@ using Noggog;
 namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Two mod folders, because one cannot ask whether a copy crosses plugins. The source
-/// defaults non-compiled plugin, so its records come through the Plugin adapter; no index anywhere in
+/// defaults to a plugin with no plugin source, so its records come through the Plugin adapter; no index anywhere in
 /// it.</summary>
 public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
 {
@@ -126,7 +126,7 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
     public const string ExteriorTemporaryRefEditorId = "SourceExteriorTemporaryRef";
     public FormKey ExteriorTemporaryRef { get; }
 
-    private ContainerCopyFixture(bool destinationLoadsFirst, bool trackSource)
+    private ContainerCopyFixture(bool destinationLoadsFirst, bool initSource)
     {
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
 
@@ -261,21 +261,21 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
         if (destinationLoadsFirst)
         {
             DestinationPlugin = Add(destinationMod, DestinationOrigin);
-            SourcePlugin = Add(sourceMod, SourceOrigin, trackSource);
+            SourcePlugin = Add(sourceMod, SourceOrigin, initSource);
         }
         else
         {
-            SourcePlugin = Add(sourceMod, SourceOrigin, trackSource);
+            SourcePlugin = Add(sourceMod, SourceOrigin, initSource);
             DestinationPlugin = Add(destinationMod, DestinationOrigin);
         }
     }
 
-    public static ContainerCopyFixture Create() => new(destinationLoadsFirst: false, trackSource: false);
+    public static ContainerCopyFixture Create() => new(destinationLoadsFirst: false, initSource: false);
 
-    public static ContainerCopyFixture CreateWithCompiledPluginSource() => new(destinationLoadsFirst: false, trackSource: true);
+    public static ContainerCopyFixture CreateWithCompiledPluginSource() => new(destinationLoadsFirst: false, initSource: true);
 
     public static ContainerCopyFixture CreateWithDestinationLoadingFirst() =>
-        new(destinationLoadsFirst: true, trackSource: false);
+        new(destinationLoadsFirst: true, initSource: false);
 
     internal void AssertDestinationCellSitsAt(
         string cellFormKey, string? editorId, int blockX, int blockY, int subX, int subY)

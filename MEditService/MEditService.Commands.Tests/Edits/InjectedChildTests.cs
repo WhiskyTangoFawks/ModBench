@@ -96,7 +96,7 @@ public sealed class InjectedChildTests : IDisposable
 
     [Theory]
     [MemberData(nameof(Injections))]
-    public async Task AfterTrackAndCompileOfBothPlugins_TheInjectingPluginsBinaryHoldsTheChildUnderItsContainer(string injection)
+    public async Task AfterInitAndCompileOfBothPlugins_TheInjectingPluginsBinaryHoldsTheChildUnderItsContainer(string injection)
     {
         var (container, child) = Case(injection);
 
@@ -107,7 +107,7 @@ public sealed class InjectedChildTests : IDisposable
 
     [Theory]
     [MemberData(nameof(Injections))]
-    public async Task AfterTrackAndCompileOfBothPlugins_TheOwningPluginsBinaryKeepsItsOwnChildrenAndNotTheInjected(string injection)
+    public async Task AfterInitAndCompileOfBothPlugins_TheOwningPluginsBinaryKeepsItsOwnChildrenAndNotTheInjected(string injection)
     {
         var (container, child) = Case(injection);
 

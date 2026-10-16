@@ -63,7 +63,7 @@ export interface InstanceValue {
   readonly modFolders: readonly ModFolder[] | undefined;
   /** The mod manager's name for the folder of each mod order entry that has one (`modNameOf`). */
   readonly modNames: ReadonlyMap<string, string>;
-  /** The source mods (ADR-0007). */
+  /** The source mods the mod order lists (ADR-0007). */
   readonly listedSourceMods: ReadonlySet<string>;
   /** Every mod a repository in the source folder builds, listed in the mod order or not. */
   readonly sourceMods: ReadonlySet<string>;

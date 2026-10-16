@@ -36,7 +36,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         _nonCompiledPlugin = _fixture.Plugins.Single(p => p.Name == NonCompiledPlugin);
         _compiledPlugin = _fixture.Plugins.Single(p => p.Name == CompiledPlugin);
         _compiledPluginNpc = npc.ToString();
-        SourceMods.Track(_compiledPlugin);
+        SourceMods.Init(_compiledPlugin);
         var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
         _disk = new DiskSaysAdapter(clock);
         _index = Indexes.Open(_holder, _disk, notifications: _notifications, timeProvider: clock);
@@ -249,7 +249,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     [Fact]
     public void AnEqualSnapshot_ReadsAPluginWhoseModGainedARepository_FromItsTree()
     {
-        SourceMods.Track(_nonCompiledPlugin);
+        SourceMods.Init(_nonCompiledPlugin);
 
         _index.NextSnapshotUntil(
             () => _index.ReadFromItsPluginSource(_nonCompiledPlugin.KeyOf()), "the arrival's re-derivation of the plugin from its tree");

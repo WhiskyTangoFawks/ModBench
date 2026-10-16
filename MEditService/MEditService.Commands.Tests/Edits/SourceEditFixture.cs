@@ -33,7 +33,7 @@ public sealed class SourceEditFixture : TestInstance, ICompiledPlugin
     public FormKey Cell { get; }
     public FormKey Quest { get; }
 
-    private SourceEditFixture(bool track, string pluginName, bool isLight)
+    private SourceEditFixture(bool isSourceMod, string pluginName, bool isLight)
     {
         ActualPluginName = pluginName;
         var mod = new Fallout4Mod(ModKey.FromFileName(pluginName), Fallout4Release.Fallout4)
@@ -59,17 +59,17 @@ public sealed class SourceEditFixture : TestInstance, ICompiledPlugin
         mod.Quests.Add(quest);
         (Worldspace, Cell, Quest) = (worldspace.FormKey, cell.FormKey, quest.FormKey);
 
-        // Compiled plugin through the real service: what an edit does to a git working tree is the thing
+        // A compiled plugin through the real service: what an edit does to a git working tree is the thing
         // under test, and no mock can answer that.
-        Plugin = Add(mod, ModFolderOrigin, track);
+        Plugin = Add(mod, ModFolderOrigin, isSourceMod);
     }
 
-    public static SourceEditFixture CompiledPlugin() => new(track: true, PluginName, isLight: false);
+    public static SourceEditFixture CompiledPlugin() => new(isSourceMod: true, PluginName, isLight: false);
 
     public static SourceEditFixture CompiledPluginLight(string pluginName = PluginName) =>
-        new(track: true, pluginName, isLight: true);
+        new(isSourceMod: true, pluginName, isLight: true);
 
-    public static SourceEditFixture NonCompiledPlugin() => new(track: false, PluginName, isLight: false);
+    public static SourceEditFixture NonCompiledPlugin() => new(isSourceMod: false, PluginName, isLight: false);
 
     public ISourceRepository? Repository => RepositoryOf(Plugin);
 
