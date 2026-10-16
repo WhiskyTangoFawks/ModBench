@@ -43,8 +43,10 @@ export function instanceSyncs({ instance, syncMods, syncPlugins, channel }: Inst
 
 type LoadOrderPut = (value: InstanceValue) => void;
 
-export function loadOrderPutHandler(editing: { onRecompute: LoadOrderPut }): LoadOrderPut {
-  return (value) => { editing.onRecompute(value); };
+export function loadOrderPutHandler(
+  editing: { onRecompute(value: InstanceValue, stringsLanguage: string): void }, stringsLanguage: () => string,
+): LoadOrderPut {
+  return (value) => { editing.onRecompute(value, stringsLanguage()); };
 }
 
 export function loadOrderPutOnEachValue(instance: Pick<Instance, 'subscribe'>, put: LoadOrderPut) {

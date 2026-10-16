@@ -105,6 +105,7 @@ public sealed class CompareGoldenApiFixture : IDisposable
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         }).GetAwaiter().GetResult();
         response.EnsureSuccessStatusCode();
     }

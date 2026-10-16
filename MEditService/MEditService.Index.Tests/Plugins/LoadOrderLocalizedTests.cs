@@ -244,7 +244,7 @@ public sealed class LoadOrderLocalizedTests
         string? NameCheckErrorIn(Language language)
         {
             var before = index.Sequence;
-            index.StringsLanguage.Set(language);
+            index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: [], language: language));
             Waits.Reached(() => index.Sequence > before, "the sequence moving");
             Waits.Reached(() => index.Status.State != LoadOrderState.Reconciling, "the reconcile");
             return NameCheckError();
@@ -269,7 +269,7 @@ public sealed class LoadOrderLocalizedTests
         var settled = watching.Settled = index.Sequence;
         watching.Seen.Clear();
 
-        index.StringsLanguage.Set(Language.German);
+        index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: [], language: Language.German));
         Waits.Reached(() => index.Sequence > settled && index.Status.State == LoadOrderState.Ready, "the reconcile");
 
         Assert.DoesNotContain((true, LoadOrderState.Ready), watching.Seen.Select(seen => (seen.SequenceMoved, seen.State)));
@@ -314,7 +314,7 @@ public sealed class LoadOrderLocalizedTests
         index.Settled();
         var before = index.Sequence;
 
-        index.StringsLanguage.Set(Language.German);
+        index.Receive(index.Holder, SnapshotPlugins.Snapshot(fx.GameDirectory, null, GameRelease.Fallout4, fx.Plugins, stringsLanguage: Language.German));
 
         Waits.Reached(() => index.Sequence > before, "the sequence moving");
     }
@@ -359,9 +359,10 @@ public sealed class LoadOrderLocalizedTests
     }
 
     private static LoadOrderSnapshot SnapshotOf(
-        PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads, string[]? gameArchives = null, string? instanceRoot = null) =>
+        PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads, string[]? gameArchives = null, string? instanceRoot = null,
+        Language language = Language.English) =>
         new(data.DataFolder, instanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(plugins), SnapshotPlugins.Active(plugins),
-            SnapshotPlugins.LoadedWithNoLine(plugins), [.. (gameArchives ?? []).Select(HandedStrings.Stamped)], [.. gameReads.Select(HandedStrings.Stamped)], []);
+            SnapshotPlugins.LoadedWithNoLine(plugins), [.. (gameArchives ?? []).Select(HandedStrings.Stamped)], [.. gameReads.Select(HandedStrings.Stamped)], [], language);
 
     private static (bool NamesMissing, bool ReadsTheDoor) NameAfter(
         OpenedIndex index, LoadOrderHolder holder, PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads,

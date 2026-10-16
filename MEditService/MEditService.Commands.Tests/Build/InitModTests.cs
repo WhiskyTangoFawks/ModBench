@@ -21,7 +21,7 @@ public sealed class InitModTests
     public async Task InitMod_OfAModThatProvidesNoPlugin_RefusesThatModWithoutThrowing()
     {
         using var gameDir = new ScratchDirectory("medit-init-noorigin-game-");
-        var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], [], [], []);
+        var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], [], [], [], Language.English);
 
         var result = await InitEveryPluginOf.ModAsync(loadOrder, "NoSuchMod");
 

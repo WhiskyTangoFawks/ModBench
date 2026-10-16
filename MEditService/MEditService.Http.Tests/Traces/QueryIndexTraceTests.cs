@@ -44,8 +44,7 @@ public sealed class QueryIndexTraceTests : HostedTests
 
     private ScatteredFixtureData? _localized;
 
-    private async Task LoadedLocalized()
-    {
+    private ScatteredFixtureData Localized =>
         _localized ??= Owned(new PluginFixtureBuilder("trace-query-localized")
             .WithPlugin("Localized.esp", mod =>
             {
@@ -56,8 +55,9 @@ public sealed class QueryIndexTraceTests : HostedTests
                     new KeyValuePair<Language, string>(Language.English, "Lever"));
             }, origin: "LocalizedMod")
             .BuildScattered());
-        (await Client.PutLoadOrder(_localized)).EnsureSuccessStatusCode();
-    }
+
+    private async Task LoadedLocalized(string stringsLanguage = "English") =>
+        (await Client.PutLoadOrderIn(Localized, stringsLanguage)).EnsureSuccessStatusCode();
 
     private async Task<string?> LocalizedLeverName()
     {
@@ -68,43 +68,27 @@ public sealed class QueryIndexTraceTests : HostedTests
     [Fact]
     public async Task ALocalizedPluginsRecords_ShowTheirNameInTheStringsLanguageTheLoadOrderNames()
     {
-        await Client.PutStringsLanguage("French");
-        await LoadedLocalized();
+        await LoadedLocalized("French");
 
         Assert.Equal("Levier", await LocalizedLeverName());
     }
 
     [Fact]
-    public async Task ChangingTheStringsLanguage_ChangesTheNameTheRecordsShow()
+    public async Task APutLoadOrderNamingAnotherStringsLanguage_ChangesTheNameTheRecordsShow()
     {
-        await Client.PutStringsLanguage("French");
-        await LoadedLocalized();
+        await LoadedLocalized("French");
 
-        await Client.PutStringsLanguage("English");
+        await LoadedLocalized("English");
 
         await Wire.Eventually(async () => await LocalizedLeverName() == "Lever", "the name shown in English");
     }
 
-    [Fact]
-    public async Task ANumberThatNamesNoStringsLanguage_IsRefused()
+    [Theory]
+    [InlineData("99")]
+    [InlineData("Klingon")]
+    public async Task AStringsLanguageNoGameHas_RefusesTheLoadOrder(string stringsLanguage)
     {
-        var response = await Client.PutStringsLanguage("99");
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task ABodyWithNoStringsLanguage_IsRefused()
-    {
-        var response = await Client.PutAsJsonAsync("/strings-language", new { });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task AStringsLanguageNoGameHas_IsRefused()
-    {
-        var response = await Client.PutStringsLanguage("Klingon");
+        var response = await Client.PutLoadOrderIn(Localized, stringsLanguage);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

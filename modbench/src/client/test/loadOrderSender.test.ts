@@ -22,6 +22,7 @@ function snapshot(name: string): LoadOrderSnapshot {
     gameDirectory: '/game/Data',
     instanceRoot: '/instance',
     gameRelease: 'Fallout4',
+    stringsLanguage: 'English',
   };
 }
 

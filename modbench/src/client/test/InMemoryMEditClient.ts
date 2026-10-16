@@ -240,7 +240,6 @@ export class InMemoryMEditClient implements MEditClient {
 
   handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.record('handUnsavedDocuments', [documents]); }
 
-  handStringsLanguage(language: string): void { this.record('handStringsLanguage', [language]); }
 
   onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void {
     this.handOverListeners.add(listener);

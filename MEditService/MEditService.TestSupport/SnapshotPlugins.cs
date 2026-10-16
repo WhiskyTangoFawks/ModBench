@@ -1,5 +1,6 @@
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.TestSupport;
 
@@ -21,16 +22,16 @@ public static class SnapshotPlugins
 
     public static LoadOrderSnapshot Snapshot(
         string dataFolder, string? instanceRoot, GameRelease gameRelease, IEnumerable<LoadOrderEntry> entries,
-        IReadOnlyList<PluginPlace>? places = null)
+        IReadOnlyList<PluginPlace>? places = null, Language stringsLanguage = Language.English)
     {
         var list = entries.ToList();
-        return new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, Of(list), Active(list), LoadedWithNoLine(list), [], [], places ?? []);
+        return new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, Of(list), Active(list), LoadedWithNoLine(list), [], [], places ?? [], stringsLanguage);
     }
 
     /// <summary>The PUT /load-order body.</summary>
     public static object Body(
         string gameDirectory, string instanceRoot, IEnumerable<LoadOrderEntry> entries, string gameRelease = "Fallout4",
-        object? mods = null, object? places = null, string statCache = "stat-cache")
+        object? mods = null, object? places = null, string statCache = "stat-cache", string? stringsLanguage = "English")
     {
         var list = entries.ToList();
         return new
@@ -46,6 +47,7 @@ public static class SnapshotPlugins
             mods = mods ?? Array.Empty<object>(),
             statCache,
             gameRelease,
+            stringsLanguage,
         };
     }
 }

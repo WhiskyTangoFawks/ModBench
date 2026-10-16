@@ -24,28 +24,20 @@ public sealed class StringsLanguageTests : IDisposable
 
     private ModPath Mod => new(ModKey.FromFileName(PluginName), _pluginPath);
 
-    private static MutagenPluginAdapter AdapterIn(Language language)
-    {
-        var holder = new StringsLanguageHolder();
-        holder.Set(language);
-        return new MutagenPluginAdapter(TimeProvider.System, holder);
-    }
+    private static MutagenPluginAdapter Adapter => new(TimeProvider.System);
 
-    private LoadOrderSnapshot LoadOrder
+    private LoadOrderSnapshot LoadOrderIn(Language language)
     {
-        get
-        {
-            var plugin = new RegisteredPlugin(
-                PluginName, PluginOrigin.DataDirectory, _pluginPath, PluginProvider.Game, Line: null, HandedStrings.Of(_pluginPath));
-            return new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], [], []);
-        }
+        var plugin = new RegisteredPlugin(
+            PluginName, PluginOrigin.DataDirectory, _pluginPath, PluginProvider.Game, Line: null, HandedStrings.Of(_pluginPath));
+        return new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], [], [], language);
     }
 
     [Fact]
     public void OpenDocuments_TheStringsLanguage_IsTheLanguageTheTextShowsIn()
     {
-        using var documents = AdapterIn(Language.German).OpenDocuments(
-            Mod, LoadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE), HandedStrings.Of(_pluginPath)).Answered();
+        using var documents = Adapter.OpenDocuments(
+            Mod, LoadOrderIn(Language.German), SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE), HandedStrings.Of(_pluginPath)).Answered();
 
         Assert.Matches("\"TargetLanguage\":\\s*\"German\"", documents.Records.Single().Text);
     }
@@ -53,7 +45,7 @@ public sealed class StringsLanguageTests : IDisposable
     [Fact]
     public void ReadContent_TheStringsLanguage_IsTheLanguageWhoseFilesItChecksFor()
     {
-        var (content, _) = AdapterIn(Language.French).ReadContent(Mod, LoadOrder, HandedStrings.Of(_pluginPath)).Answered();
+        var (content, _) = Adapter.ReadContent(Mod, LoadOrderIn(Language.French), HandedStrings.Of(_pluginPath)).Answered();
 
         Assert.Equal(["Update_French.STRINGS", "Update_French.ILSTRINGS", "Update_French.DLSTRINGS"], content.MissingStringsFiles);
     }
@@ -61,9 +53,9 @@ public sealed class StringsLanguageTests : IDisposable
     [Fact]
     public async Task ReadSourceOf_TheStringsLanguage_IsTheLanguageWhoseFilesItChecksFor()
     {
-        var plugin = LoadOrder.Plugins.Single();
+        var loadOrder = LoadOrderIn(Language.French);
 
-        var source = await AdapterIn(Language.French).ReadSourceOfAsync(plugin, LoadOrder);
+        var source = await Adapter.ReadSourceOfAsync(loadOrder.Plugins.Single(), loadOrder);
 
         Assert.Equal("Update_French.STRINGS", Assert.IsType<PluginFailure.MissingStrings>(source.Failure()).File);
     }
@@ -75,8 +67,8 @@ public sealed class StringsLanguageTests : IDisposable
         LocalizedDoorPlugin.WriteNamedIn(germanOnly, (Language.German, "Das Grosse Tor"));
         var plugin = new RegisteredPlugin(
             PluginName, PluginOrigin.DataDirectory, germanOnly, PluginProvider.Game, Line: null, HandedStrings.Of(germanOnly));
-        var loadOrder = new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], [], []);
-        var adapter = AdapterIn(Language.German);
+        var loadOrder = new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], [], [], Language.German);
+        var adapter = Adapter;
         var source = (await adapter.ReadSourceOfAsync(plugin, loadOrder)).Answered();
         var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();
 
