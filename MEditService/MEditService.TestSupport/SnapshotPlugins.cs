@@ -31,7 +31,7 @@ public static class SnapshotPlugins
     /// <summary>The PUT /load-order body.</summary>
     public static object Body(
         string gameDirectory, string instanceRoot, IEnumerable<LoadOrderEntry> entries, string gameRelease = "Fallout4",
-        object? mods = null, object? places = null, string statCache = "stat-cache", string? stringsLanguage = "English")
+        object? mods = null, object? places = null, string statCache = "stat-cache", string stringsLanguage = "English")
     {
         var list = entries.ToList();
         return new

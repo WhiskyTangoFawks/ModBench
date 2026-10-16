@@ -42,7 +42,7 @@ internal static class Wire
             ? fx.Plugins
             : fx.Plugins.Where(p => p.LoadedWithNoLine || origins.Contains(p.Origin, StringComparer.Ordinal));
 
-    internal static Task<HttpResponseMessage> PutLoadOrderIn(this HttpClient client, ScatteredFixtureData fx, string? stringsLanguage) =>
+    internal static Task<HttpResponseMessage> PutLoadOrderIn(this HttpClient client, ScatteredFixtureData fx, string stringsLanguage) =>
         client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, fx.Plugins, stringsLanguage: stringsLanguage));
 
     internal static Task<HttpResponseMessage> SetFilter(this HttpClient client) =>

@@ -240,7 +240,6 @@ export class InMemoryMEditClient implements MEditClient {
 
   handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.record('handUnsavedDocuments', [documents]); }
 
-
   onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void {
     this.handOverListeners.add(listener);
     return () => { this.handOverListeners.delete(listener); };

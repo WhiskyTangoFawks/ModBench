@@ -83,16 +83,6 @@ public sealed class QueryIndexTraceTests : HostedTests
         await Wire.Eventually(async () => await LocalizedLeverName() == "Lever", "the name shown in English");
     }
 
-    [Theory]
-    [InlineData("99")]
-    [InlineData("Klingon")]
-    public async Task AStringsLanguageNoGameHas_RefusesTheLoadOrder(string stringsLanguage)
-    {
-        var response = await Client.PutLoadOrderIn(Localized, stringsLanguage);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
     [Fact]
     public async Task ALocalizedPluginsRecords_CarryTheirNameInTheTargetLanguage()
     {

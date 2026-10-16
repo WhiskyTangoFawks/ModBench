@@ -134,6 +134,30 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     }
 
     [Theory]
+    [InlineData("99")]
+    [InlineData("Klingon")]
+    public async Task PutLoadOrder_WithAStringsLanguageNoGameHas_Returns400(string stringsLanguage)
+    {
+        var response = await _client.PutAsJsonAsync("/load-order", new
+        {
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
+            plugins = _fixture.Plugins.Select(p => p.Wire),
+            active = SnapshotPlugins.Active(_fixture.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
+            archives = Array.Empty<string>(),
+            stringsFiles = Array.Empty<string>(),
+            places = Array.Empty<object>(),
+            mods = Array.Empty<object>(),
+            statCache = "stat-cache",
+            gameRelease = "Fallout4",
+            stringsLanguage,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
     [InlineData("Game", "ModA", null, null)]
     [InlineData("None", null, "/mods/ModA", null)]
     [InlineData("Game", null, null, "/source/ModA")]
