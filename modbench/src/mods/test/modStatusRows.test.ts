@@ -76,7 +76,7 @@ describe('a mod row says its status against its manifest after its version (mods
   });
 });
 
-describe('a separator row says no manifest when it has none, looked up by the name the mod manager gives its folder (mods.md, A row, Separator)', () => {
+describe('a separator row says no manifest or differs as a mod does, looked up by the name the mod manager gives its folder (mods.md, A row, Separator)', () => {
   const separatorProvider = (held: ModStatus | undefined, holdsRepository = true) => providerOver(held ? [held] : [], holdsRepository, {
     mods: [{ kind: 'separator', name: 'weapons', enabled: true }, mod('ModA')],
     modFolders: [{ kind: 'separator', name: 'Weapons', path: '/instance/mods/Weapons_separator', modName: 'Weapons_separator' }],
@@ -85,6 +85,7 @@ describe('a separator row says no manifest when it has none, looked up by the na
 
   it.each([
     ['no manifest', status('Weapons_separator', { noManifest: true }), true, 'no manifest'],
+    ['a file that differs', status('Weapons_separator', { namedByNoLine: ['mine.txt'] }), true, 'differs'],
     ['a manifest', status('Weapons_separator'), true, undefined],
     ['no status yet', undefined, true, undefined],
     ['no manifest while the instance holds no repository', status('Weapons_separator', { noManifest: true }), false, undefined],
@@ -92,6 +93,12 @@ describe('a separator row says no manifest when it has none, looked up by the na
     const { provider } = separatorProvider(held, holdsRepository);
 
     expect((await row(provider, 'weapons')).description).toBe(description);
+  });
+
+  it('counts in the view\'s badge when it differs', () => {
+    const { provider } = separatorProvider(status('Weapons_separator', { namedByNoLine: ['mine.txt'] }));
+
+    expect(provider.badge()?.value).toBe(1);
   });
 
   it('counts in the view\'s badge with the mods that have none', () => {
