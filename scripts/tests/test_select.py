@@ -39,12 +39,14 @@ class SelectAgainstTheFixtureInstance(unittest.TestCase):
         self.assertIn('information_schema', str(raised.exception))
 
     def test_a_terminal_of_the_window_imports_medit_and_reaches_that_windows_medit(self) -> None:
+        with window_of(self.url):
+            records = len(medit.select('SELECT form_key FROM records'))
         with tempfile.TemporaryDirectory() as elsewhere:
             run = subprocess.run(
                 [sys.executable, '-c', "import medit; print(len(medit.select('SELECT form_key FROM records')))"],
                 check=False, cwd=elsewhere, capture_output=True, text=True,
                 env={**os.environ, 'PYTHONPATH': str(SCRIPTS), 'MEDIT_PORT': str(urlparse(self.url).port)})
-        self.assertEqual((run.returncode, run.stdout.strip()), (0, '9'), run.stderr)
+        self.assertEqual((run.returncode, run.stdout.strip()), (0, str(records)), run.stderr)
 
 
 class SelectWithoutAWindow(unittest.TestCase):

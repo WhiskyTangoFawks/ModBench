@@ -24,11 +24,14 @@ class FixtureMEdit(unittest.TestCase):
         with fixture_medit() as fixture:
             plugins = call('GET', fixture.url + '/plugins')
         self.assertEqual([(plugin['name'], plugin['origin']) for plugin in plugins], [
-            ('MBDevConflictB.esp', 'MB-DEV Conflict B'),
+            ('MBDevFixes.esm', 'MB-DEV Fixes'),
+            ('MBDevFixesAddon.esp', 'MB-DEV Fixes Addon'),
             ('MBDevConflictA.esp', 'MB-DEV Conflict A'),
+            ('MBDevConflictB.esp', 'MB-DEV Conflict B'),
             ('MBDevLight.esl', 'MB-DEV Light'),
             ('MBDevConditions.esp', 'MB-DEV Conditions'),
             ('MBDevMissingMaster.esp', 'MB-DEV Missing Master'),
+            ('MBDevPatchAB.esp', 'MB-DEV Patch A+B'),
         ])
         self.assertEqual(files_and_bytes(INSTANCE), checked_in)
         with self.assertRaises(urllib.error.URLError):
