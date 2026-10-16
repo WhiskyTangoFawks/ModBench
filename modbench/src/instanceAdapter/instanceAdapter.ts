@@ -281,8 +281,6 @@ export interface SourceMods {
 /** Why one source mod is not as a submodule would be. */
 export interface SubmoduleNote { readonly mod: string; readonly note: string }
 
-/** What writing the submodules says: a note for each source mod it could not read or write, and the lines about
- *  a folder that is no source mod and about the files it could not write. */
 interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly other: readonly string[] }
 
 /** Whether the game gets a file of a mod or of Overwrite. */
