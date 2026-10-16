@@ -13,7 +13,7 @@ export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
 export { OVERWRITE_ORIGIN } from './codecs/modlistText';
 
 export type { ArchiveReader } from './archiveReader';
-export { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, isArchiveName } from './archiveNames';
+export { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder } from './archiveNames';
 export { samePath } from './samePath';
 export { sevenZip } from './sevenZip';
 

@@ -3,7 +3,8 @@
 
 import { basename, dirname } from 'node:path';
 import { parsePlugins } from '../loadOrderFileCodec/pluginsText';
-import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
+import { isArchiveName } from './archiveNames';
+import { parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { entryNamed, parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
@@ -59,7 +60,7 @@ async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile
   const dirents = await readOrAbsent(() => listDir(downloadsDir), undefined);
   if (dirents === undefined) return undefined;
   const names = dirents
-    .filter((d) => d.isFile() && !isTempWrite(d.name) && !d.name.endsWith(DOWNLOAD_SIDECAR_SUFFIX))
+    .filter((d) => d.isFile() && isArchiveName(d.name) && !isTempWrite(d.name))
     .map((d) => d.name);
   return Promise.all(names.map(async (name) => {
     const path = downloadFile(downloadsDir, name);

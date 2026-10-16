@@ -374,10 +374,13 @@ describe('the MO2 Instance adapter', () => {
       expect(folder.kind).toBe('notFound');
     });
 
-    it('lists the downloaded files with their metadata parsed, and no metadata file as a file of its own', async () => {
+    it('lists only the files install can take, with their metadata parsed: no folder, no partial download, no lone metadata', async () => {
       await writeFile(join(root, 'downloads', 'manual.zip'), 'zip');
       await mkdir(join(root, 'downloads', 'a folder'));
-      await writeFile(tempWritePath(join(root, 'downloads', 'manual.zip.meta')), 'half');
+      await mkdir(join(root, 'downloads', 'a folder.zip'));
+      await writeFile(join(root, 'downloads', 'readme.txt'), 'text');
+      await writeFile(join(root, 'downloads', 'big.rar.unfinished'), 'half');
+      await writeFile(join(root, 'downloads', 'gone.zip.meta'), '[General]\r\n');
 
       const downloads = await (await source.settings()).downloadedFiles();
 
