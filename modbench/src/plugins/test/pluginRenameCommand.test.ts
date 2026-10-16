@@ -38,10 +38,9 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
 import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { present } from '../../ports/present';
-import type { LoadOrderPlugin } from '../../instanceLoader/loadOrderSnapshot';
 
-const held = (name: string, origin: string): LoadOrderPlugin =>
-  ({ name, origin, path: `/instance/mods/${origin}/${name}`, line: null, enabled: true, winning: true });
+const held = (name: string, origin: string): NonNullable<InstanceAnswers['heldPlugins']>[number] =>
+  ({ name, origin: { kind: 'mod', name: origin } });
 
 const PLUGIN = { name: 'Patch.esp', origin: 'ModA' };
 const CHANGES = { treeName: 'Patch.esp', moves: [], deletions: [], documents: [] };
@@ -56,12 +55,11 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
   const stepsWhenAsked: string[][] = [];
   const ask = Object.assign<AskQuestion, { asked: typeof dialog.asked }>(
     (...args) => { stepsWhenAsked.push([...progressSteps]); return dialog(...args); }, { asked: dialog.asked });
-  const instanceAnswers: InstanceAnswers = {};
+  const instanceAnswers: InstanceAnswers = { heldPlugins: [held('Patch.esp', 'ModA'), held('Taken.esp', 'ModA'), held('Elsewhere.esp', 'ModB')] };
   const fake = fakeInstanceAdapter(undefined, instanceAnswers);
   const instance = {
     value: instanceValueFixture({
       gameRelease: 'Fallout4',
-      plugins: [held('Patch.esp', 'ModA'), held('Taken.esp', 'ModA'), held('Elsewhere.esp', 'ModB')],
     }),
     quiet: async <T>(work: () => Promise<T>): Promise<T> => {
       try {
@@ -84,9 +82,9 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
   const run = present(handlers.get('modbench.plugin.rename'), 'the rename plugin command');
   const validate = async (value: string): Promise<string | undefined> => {
     let validated: string | undefined;
-    showInputBox.mockImplementationOnce((options: { validateInput: (v: string) => string | undefined }) => {
-      validated = options.validateInput(value);
-      return Promise.resolve(undefined);
+    showInputBox.mockImplementationOnce(async (options: { validateInput: (v: string) => Promise<string | undefined> | undefined }) => {
+      validated = await options.validateInput(value);
+      return undefined;
     });
     await run(new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin));
     return validated;
@@ -188,17 +186,22 @@ describe('modbench.plugin.rename', () => {
       expect(await validate('Patch.esp')).toBeUndefined();
     });
 
-    it('refuses a name with no plugin extension, and one mEdit leaves out', async () => {
-      const { validate, client } = setup();
-      expect(await validate('Patch.txt')).toBe('Extension must be .esm, .esl, or .esp');
-      client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esp']);
-      expect(await validate('Patch.esl')).toBe('Extension must be .esm or .esp');
-    });
-
     it('refuses a name the plugin\'s own place holds, a case-only rename of itself too', async () => {
       const { validate } = setup();
       expect(await validate('taken.ESP')).toBe('"ModA" already holds "taken.ESP".');
       expect(await validate('PATCH.esp')).toBe('"ModA" already holds "PATCH.esp".');
+    });
+
+    it('refuses by the extensions mEdit allows now', async () => {
+      const { validate, client } = setup();
+      client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esp']);
+      expect(await validate('Patch.esl')).toBe('Extension must be .esm or .esp');
+    });
+
+    it('shows why when the name cannot be checked, rather than rejecting', async () => {
+      const { validate, fake } = setup();
+      vi.spyOn(fake.adapter, 'originHoldsPlugin').mockRejectedValue(new Error('EACCES'));
+      expect(await validate('Other.esp')).toBe('Could not check "Other.esp": EACCES');
     });
 
     it('lets through a name only another place holds', async () => {
@@ -295,9 +298,23 @@ describe('modbench.plugin.rename, called by the agent', () => {
     expect(reporter.reports).toEqual([]);
   });
 
+  it('refuses a name its place holds as a refusal result, renaming nothing', async () => {
+    const { client, fake, run } = setup();
+
+    expect(await run(calling('Taken.esp'))).toMatchObject({ applied: false, refusal: '"ModA" already holds "Taken.esp".' });
+
+    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([]);
+    expect(fake.calls).toEqual([]);
+  });
+
+  it('refuses by the extensions mEdit allows now', async () => {
+    const { client, run } = setup();
+    client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esp']);
+
+    expect(await run(calling('Renamed.esl'))).toMatchObject({ applied: false, refusal: 'Extension must be .esm or .esp' });
+  });
+
   it.each([
-    ['a name with an extension no plugin takes', calling('Patch.txt'), 'Extension must be .esm, .esl, or .esp'],
-    ['a name its place holds', calling('Taken.esp'), '"ModA" already holds "Taken.esp".'],
     ['more than one plugin', calling('Renamed.esp', [PLUGIN, PLUGIN]), 'carries one plugin'],
   ])('refuses %s, renaming nothing', async (_what, call, reason) => {
     const { client, fake, run } = setup();

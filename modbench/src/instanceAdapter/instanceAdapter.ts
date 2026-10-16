@@ -473,6 +473,8 @@ export interface InstanceAdapter {
   includedPath(relativePath: string): string;
   /** The suffix the manager gives an excluded file's or folder's name. */
   readonly excludedSuffix: string;
+  /** Whether the origin's folder holds a file of the name now on disk, compared as the game compares plugin names. */
+  originHoldsPlugin(origin: FileOrigin, name: string): Promise<boolean>;
   /** Renames plugin `from` of `origin`, its named files and its line in every profile, in one
    *  write; a failed write puts every file back. Refuses, changing nothing, a taken name or a
    *  plugin not there. */

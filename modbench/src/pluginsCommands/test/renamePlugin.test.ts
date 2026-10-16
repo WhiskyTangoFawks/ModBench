@@ -35,6 +35,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     client = new InMemoryMEditClient();
     client.setCommandResult('getRenameSourceChanges', CHANGES);
     client.setCommandResult('moveLastWritten', { moved: true });
+    client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esl', '.esp']);
     applied = [];
     failure = undefined;
     apply.mockClear();
@@ -46,6 +47,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     expect(await result).toEqual({ applied: true });
 
     expect(client.calls).toEqual([
+      { method: 'getCreatablePluginExtensions', args: [] },
       { method: 'getRenameSourceChanges', args: [PLUGIN, 'Renamed Patch.esp'] },
       { method: 'moveLastWritten', args: [PLUGIN, 'Tracked Patch Mod.esp', 'Renamed Patch.esp'] },
     ]);
@@ -61,6 +63,27 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     await result;
 
     expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'runtimeOutput' }, from: 'Run.esp', to: 'Ran.esp', gameRelease: 'Fallout4' }]);
+  });
+
+  it('refuses a name the origin already holds before any write', async () => {
+    const heldPlugins = [{ origin: { kind: 'mod' as const, name: PLUGIN.origin }, name: 'Renamed Patch.esp' }];
+    const { fake, result } = rename('Renamed Patch.esp', PLUGIN, { heldPlugins });
+
+    expect(await result).toEqual({ applied: false, sourceRenamed: false, refusal: '"Tracked Patch Mod" already holds "Renamed Patch.esp".' });
+    expect(client.calls.map((call) => call.method)).toEqual(['getCreatablePluginExtensions']);
+    expect(apply).not.toHaveBeenCalled();
+    expect(fake.calls).toEqual([]);
+  });
+
+  it('refuses with the reason, writing nothing, when mEdit cannot say which extensions a plugin may take', async () => {
+    client.setQueryFailure('getCreatablePluginExtensions', { failed: 'refused', refusal: 'mEdit is not ready.' });
+    const { fake, result } = rename('Renamed Patch.esp');
+
+    expect(await result).toEqual({
+      applied: false, sourceRenamed: false, refusal: 'Could not check "Renamed Patch.esp" for "Tracked Patch Mod.esp" (Tracked Patch Mod).', detail: 'mEdit is not ready.',
+    });
+    expect(apply).not.toHaveBeenCalled();
+    expect(fake.calls).toEqual([]);
   });
 
   it('applies nothing and renames nothing when mEdit refuses the changes, and carries the refusal', async () => {
@@ -79,7 +102,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     const { fake, result } = rename('Renamed Patch.esp');
 
     expect(await result).toEqual({ applied: false, reported: 'EEXIST' });
-    expect(client.calls.map((call) => call.method)).toEqual(['getRenameSourceChanges']);
+    expect(client.calls.map((call) => call.method)).toEqual(['getCreatablePluginExtensions', 'getRenameSourceChanges']);
     expect(fake.calls).toEqual([]);
   });
 
@@ -95,6 +118,17 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     const { result } = rename('Renamed Patch.esp', PLUGIN, { refusals: refusing('renamePlugin', 'disk full') });
 
     expect(await result).toEqual({ applied: false, sourceRenamed: true, refusal: 'disk full' });
+  });
+});
+
+describe('renameRefusal — what the prompt is told before the rename is asked for', () => {
+  const refusal = (newName: string, heldIn: string) => pluginsCommandsWith(fakeInstanceAdapter(undefined, {
+    heldPlugins: [{ origin: { kind: 'mod', name: heldIn }, name: 'Renamed Patch.esp' }],
+  }).adapter).renameRefusal(PLUGIN, newName, ['.esm', '.esl', '.esp']);
+
+  it('refuses a name the plugin\'s origin holds, and not one another origin holds', async () => {
+    expect(await refusal('Renamed Patch.esp', 'Tracked Patch Mod')).toBe('"Tracked Patch Mod" already holds "Renamed Patch.esp".');
+    expect(await refusal('Renamed Patch.esp', 'OtherMod')).toBeUndefined();
   });
 });
 
