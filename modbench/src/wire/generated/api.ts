@@ -497,7 +497,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes an empty plugin into the folder, and the source folder, of an enabled mod or Overwrite the held load order names as a place, by its origin. Refuses any other origin. */
+        /** @description Writes an empty plugin into the folder of an enabled mod or Overwrite the held load order names as a place, by its origin, with plugin source only in a mod that is already a source mod. Refuses any other origin. */
         post: operations["CreatePluginInMod"];
         delete?: never;
         options?: never;
