@@ -164,7 +164,7 @@ export function readingSource(context: Mo2Context): ReadingSource {
     sourceMods: () => sourceModsIn(instanceRoot),
 
     holdsRepository: () => isTracked(instanceRoot),
-    watchNotes: () => watch.notes(),
+    watchNotes: () => watch.watchNotes(),
   };
 }
 

@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   access, chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, writeFile,
 } from 'node:fs/promises';
-import { watch, type PathLike } from 'node:fs';
+import type { PathLike } from 'node:fs';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../test/noDetectors';
+import { eventually, writtenAndHeard } from '../../test/eventually';
 import { present } from '../../ports/present';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -21,17 +22,12 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, rename: vi.fn(actual.rename), stat: vi.fn(actual.stat), readdir: vi.fn(actual.readdir) };
 });
 
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs')>();
-  return { ...actual, watch: vi.fn(actual.watch) };
-});
-
 const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(real.rename, 'the real rename')(from, to);
 const actualStat = present(real.stat, 'the real stat');
 const actualReaddir = present(real.readdir, 'the real readdir');
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { dirname, join, matchesGlob } from 'node:path';
+import { dirname, join, matchesGlob, sep } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import type { Mo2Context } from '../mo2Context';
 import { readingSource, readInstance, type ReadingSource } from '../mo2Reads';
@@ -992,22 +988,10 @@ describe('the MO2 Instance adapter', () => {
 
     describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher misses them only on Linux) the folders a folder heard created already held', () => {
       const mod = (): string => join(root, 'source', 'Harder VATS');
-      const fireSourceCreated = (): void => {
-        live().find((w) => w.base === root && matchesGlob('source/A/x.json', w.pattern))?.fireCreate(join(root, 'source'));
-      };
-      const signalledWriting = async (file: string, signalled: () => boolean): Promise<boolean> => {
-        const deadline = Date.now() + 2_000;
-        while (!signalled()) {
-          if (Date.now() > deadline) return false;
-          await writeFile(file, `${Date.now()}`);
-          await new Promise((r) => setTimeout(r, 20));
-        }
-        return true;
-      };
-      const watchedFolders = (): string[] => vi.mocked(watch).mock.calls.map(([folder]) => String(folder));
-      const until = async (done: () => boolean): Promise<void> => {
-        const deadline = Date.now() + 2_000;
-        while (!done() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 10));
+      const watchOf = (top: string): FakeWatcher | undefined => live().find((w) => w.base === root && matchesGlob(`${top}/A/x.json`, w.pattern));
+      const fireCreated = (path: string): void => {
+        const [top = ''] = path.slice(root.length + 1).split(sep);
+        watchOf(top)?.fireCreate(path);
       };
 
       it('signals a change inside one', async () => {
@@ -1015,10 +999,10 @@ describe('the MO2 Instance adapter', () => {
         const subscription = adapterAt(root).subscribe(() => { signals++; });
         const file = join(mod(), 'plugin-source', 'Harder VATS.esp', 'Weapons', 'Gun.json');
         await mkdir(dirname(file), { recursive: true });
-        fireSourceCreated();
+        fireCreated(join(root, 'source'));
         signals = 0;
 
-        const signalled = await signalledWriting(file, () => signals > 0);
+        const signalled = await eventually(() => signals > 0, () => writeFile(file, `${Date.now()}`));
         subscription.dispose();
 
         expect(signalled).toBe(true);
@@ -1028,34 +1012,112 @@ describe('the MO2 Instance adapter', () => {
         const watched = adapterAt(root);
         const file = join(mod(), 'plugin-source', 'Harder VATS.esp', 'Gun.json');
         await mkdir(dirname(file), { recursive: true });
-        vi.mocked(watch).mockClear();
-        const first = watched.subscribe(() => undefined);
-        fireSourceCreated();
-        await until(() => watchedFolders().includes(dirname(file)));
+        let signals = 0;
+        const first = watched.subscribe(() => { signals++; });
+        fireCreated(join(root, 'source'));
+        signals = 0;
+        const heardBeforeTheDisarm = await eventually(() => signals > 0, () => writeFile(file, `${Date.now()}`));
         first.dispose();
 
-        let signals = 0;
+        signals = 0;
         const again = watched.subscribe(() => { signals++; });
-        const signalled = await signalledWriting(file, () => signals > 0);
+        const heardAfter = await eventually(() => signals > 0, () => writeFile(file, `${Date.now()}`));
         again.dispose();
 
-        expect(signalled).toBe(true);
+        expect(heardBeforeTheDisarm).toBe(true);
+        expect(heardAfter).toBe(true);
       });
 
-      it('holds a repository\'s .git and its refs, and none of git\'s bookkeeping', async () => {
-        await mkdir(join(mod(), '.git', 'objects', 'ab'), { recursive: true });
-        await mkdir(join(mod(), '.git', 'refs', 'heads'), { recursive: true });
-        vi.mocked(watch).mockClear();
-        const subscription = adapterAt(root).subscribe(() => undefined);
+      it('forgets a folder heard deleted, so armed again it watches nothing that folder held', async () => {
+        const watched = adapterAt(root);
+        const kept = join(root, 'source', 'Kept Mod');
+        const gone = join(root, 'source', 'Gone Mod');
+        const inKept = join(kept, 'plugin-source');
+        const inGone = join(gone, 'plugin-source');
+        await mkdir(inKept, { recursive: true });
+        await mkdir(inGone, { recursive: true });
+        let signals = 0;
+        const first = watched.subscribe(() => { signals++; });
+        fireCreated(kept);
+        fireCreated(gone);
+        signals = 0;
+        const goneHeard = await eventually(() => signals > 0, () => writeFile(join(inGone, 'Gun.json'), `${Date.now()}`));
+        await rm(gone, { recursive: true });
+        watchOf('source')?.fireDelete(gone);
+        first.dispose();
+        await mkdir(inGone, { recursive: true });
 
-        fireSourceCreated();
-        await until(() => watchedFolders().includes(join(mod(), '.git', 'refs', 'heads')));
+        const again = watched.subscribe(() => { signals++; });
+        signals = 0;
+        const keptHeard = await eventually(() => signals > 0, () => writeFile(join(inKept, 'Gun.json'), `${Date.now()}`));
+        signals = 0;
+        await writtenAndHeard(inGone);
+        again.dispose();
+
+        expect(goneHeard).toBe(true);
+        expect(keptHeard).toBe(true);
+        expect(signals).toBe(0);
+      });
+
+      it.each(['source', 'mods'])('signals a change to the refs of a repository in %s/, and none to git\'s object store', async (top) => {
+        const repository = join(root, top, 'Repository Mod');
+        const refs = join(repository, '.git', 'refs', 'heads');
+        const objects = join(repository, '.git', 'objects', 'ab');
+        await mkdir(refs, { recursive: true });
+        await mkdir(objects, { recursive: true });
+        let signals = 0;
+        const subscription = adapterAt(root).subscribe(() => { signals++; });
+        fireCreated(repository);
+        signals = 0;
+
+        const refsSignalled = await eventually(() => signals > 0, () => writeFile(join(refs, 'main'), `${Date.now()}`));
+        signals = 0;
+        await writtenAndHeard(objects);
         subscription.dispose();
 
-        expect(watchedFolders().sort()).toEqual([mod(), join(mod(), '.git'), join(mod(), '.git', 'refs'), join(mod(), '.git', 'refs', 'heads')].sort());
+        expect(refsSignalled).toBe(true);
+        expect(signals).toBe(0);
       });
 
-      it.skipIf(process.getuid?.() === 0)('(root reads every folder) reads a folder whose watch failed into the next reading\'s notes, signalling it', async () => {
+      it('holds nothing for a submodule\'s gitlink .git, a file, and signals a change inside the repository\'s folders', async () => {
+        const repository = join(root, 'source', 'Submodule Mod');
+        const folder = join(repository, 'plugin-source');
+        await mkdir(folder, { recursive: true });
+        await writeFile(join(repository, '.git'), 'gitdir: ../../.git/modules/Submodule Mod\n');
+        let signals = 0;
+        const watched = adapterAt(root);
+        const subscription = watched.subscribe(() => { signals++; });
+        fireCreated(repository);
+        fireCreated(join(repository, '.git'));
+        signals = 0;
+
+        const signalled = await eventually(() => signals > 0, () => writeFile(join(folder, 'Gun.json'), `${Date.now()}`));
+        const { watchNotes } = await watched.reading();
+        subscription.dispose();
+
+        expect(signalled).toBe(true);
+        expect(watchNotes).toEqual([]);
+      });
+
+      it('signals no write to git\'s own bookkeeping in a source repository\'s .git', async () => {
+        const repository = join(root, 'source', 'Repository Mod');
+        const refs = join(repository, '.git', 'refs', 'heads');
+        await mkdir(refs, { recursive: true });
+        let signals = 0;
+        const subscription = adapterAt(root).subscribe(() => { signals++; });
+        fireCreated(repository);
+        signals = 0;
+
+        const refsSignalled = await eventually(() => signals > 0, () => writeFile(join(refs, 'main'), `${Date.now()}`));
+        signals = 0;
+        await writtenAndHeard(join(repository, '.git'));
+        subscription.dispose();
+
+        expect(refsSignalled).toBe(true);
+        expect(signals).toBe(0);
+      });
+
+      it.skipIf(process.getuid?.() === 0)('(root reads every folder) signals a folder whose watch failed, and the next reading notes why', async () => {
         const unreadable = join(mod(), 'Unreadable');
         await mkdir(unreadable, { recursive: true });
         await chmod(unreadable, 0o000);
@@ -1063,14 +1125,15 @@ describe('the MO2 Instance adapter', () => {
         let signals = 0;
         const subscription = watched.subscribe(() => { signals++; });
 
-        fireSourceCreated();
+        fireCreated(join(root, 'source'));
         signals = 0;
-        await until(() => signals > 0);
+        const signalled = await eventually(() => signals > 0);
         const { watchNotes } = await watched.reading();
         await chmod(unreadable, 0o755);
         subscription.dispose();
 
-        expect(watchNotes).toEqual([expect.stringContaining(unreadable)]);
+        expect(signalled).toBe(true);
+        expect(watchNotes).toEqual(['Modbench hears no change inside a folder whose watch failed: EACCES: permission denied']);
       });
     });
 

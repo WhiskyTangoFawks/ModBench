@@ -2,7 +2,7 @@
 // reads, armed through VS Code's file watcher while anyone listens, and a change to the game-folder setting.
 
 import * as vscode from 'vscode';
-import { heldFolderWatch, type HeldFolderWatch } from './heldFolders';
+import { heldFolderWatchFor, type HeldFolderWatch } from './heldFolders';
 import type { Subscription } from './instanceAdapter';
 import {
   MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, REPOSITORY_WATCH_GLOB, SETTINGS_WATCH_GLOB, SOURCE_GLOB,
@@ -10,26 +10,15 @@ import {
 
 type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives';
 
-// The segments of `path` inside its last `.git`; undefined outside one.
-function insideGitDir(path: string): string[] | undefined {
-  const segments = path.split(/[\\/]/);
-  const gitIndex = segments.lastIndexOf('.git');
-  return gitIndex === -1 ? undefined : segments.slice(gitIndex + 1);
-}
-
 // A repository's change is its working tree and its refs, never git's own bookkeeping.
 function isRepositoryChange(path: string): boolean {
-  const inside = insideGitDir(path);
-  if (inside === undefined) return true;
-  const [first, ...rest] = inside;
+  const segments = path.split(/[\\/]/);
+  const gitIndex = segments.lastIndexOf('.git');
+  if (gitIndex === -1) return true;
+  const [first, ...rest] = segments.slice(gitIndex + 1);
   if (first === undefined || first === 'refs') return true;
   return rest.length === 0 && (first === 'HEAD' || first === 'packed-refs');
 }
-
-const holdsRepositoryChanges = (folder: string): boolean => {
-  const inside = insideGitDir(folder);
-  return inside === undefined || inside.length === 0 || inside[0] === 'refs';
-};
 
 // Each change beneath `base` that matches `glob`, created, changed or deleted alike.
 function watchFiles(base: string, glob: string, onChange: (path: string) => void, held?: HeldFolderWatch): Subscription {
@@ -41,7 +30,10 @@ function watchFiles(base: string, glob: string, onChange: (path: string) => void
     void held?.created(uri.fsPath);
   });
   watcher.onDidChange(heard);
-  watcher.onDidDelete(heard);
+  watcher.onDidDelete((uri) => {
+    heard(uri);
+    held?.removed(uri.fsPath);
+  });
   return {
     dispose: () => {
       watcher.dispose();
@@ -61,8 +53,7 @@ export interface Mo2Watch {
   /** Watches `base` under `glob` for `what` in place of the folder it followed before; undefined
    *  follows none. A watch newly armed signals once, for a change it missed while arming. */
   follow(what: FollowedFolder, base: string | undefined, glob: string): void;
-  /** Each change the watch cannot hear, with why. */
-  notes(): string[];
+  watchNotes(): string[];
 }
 
 export function mo2Watch(instanceRoot: string, gameDirectoryChanged: (listener: () => void) => Subscription): Mo2Watch {
@@ -70,30 +61,27 @@ export function mo2Watch(instanceRoot: string, gameDirectoryChanged: (listener: 
   const followed = new Map<FollowedFolder, Followed>();
   let fixed: Subscription[] = [];
   // Kept across a disarm: a folder VS Code's watcher missed, it still misses once armed again.
-  const held = new Map<string, HeldFolderWatch>();
+  const held = new Map<string, HeldFolderWatch | undefined>();
 
   const changed = (): void => {
     for (const listener of [...listeners]) listener();
   };
-  const heldKey = (base: string, glob: string): string => `${base}\0${glob}`;
-  const heldFor = (base: string, glob: string, onChange: (path: string) => void, holds: (folder: string) => boolean = () => true): HeldFolderWatch | undefined => {
-    if (process.platform !== 'linux' || !glob.endsWith('**')) return undefined;
-    const key = heldKey(base, glob);
-    const existing = held.get(key);
-    if (existing) return existing;
-    const made = heldFolderWatch({ onChange, holds, onFailure: changed });
-    held.set(key, made);
-    return made;
-  };
-  const watch = (base: string, glob: string): Subscription => watchFiles(base, glob, changed, heldFor(base, glob, changed));
   const onSourceChange = (path: string): void => {
     if (isRepositoryChange(path)) changed();
   };
+  const onChangeFor = (glob: string): ((path: string) => void) => (glob === SOURCE_GLOB ? onSourceChange : changed);
+  const heldKey = (base: string, glob: string): string => `${base}\0${glob}`;
+  const heldFor = (base: string, glob: string): HeldFolderWatch | undefined => {
+    const key = heldKey(base, glob);
+    if (!held.has(key)) held.set(key, heldFolderWatchFor(glob, { onChange: onChangeFor(glob), holds: isRepositoryChange, onFailure: changed }));
+    return held.get(key);
+  };
+  const watch = (base: string, glob: string): Subscription => watchFiles(base, glob, onChangeFor(glob), heldFor(base, glob));
   const armed = (): boolean => listeners.size > 0;
 
   const arm = (): void => {
-    fixed = [MODS_GLOB, OVERWRITE_GLOB, MODLIST_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, SETTINGS_WATCH_GLOB, REPOSITORY_WATCH_GLOB].map((glob) => watch(instanceRoot, glob));
-    fixed.push(watchFiles(instanceRoot, SOURCE_GLOB, onSourceChange, heldFor(instanceRoot, SOURCE_GLOB, onSourceChange, holdsRepositoryChanges)));
+    fixed = [MODS_GLOB, OVERWRITE_GLOB, SOURCE_GLOB, MODLIST_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, SETTINGS_WATCH_GLOB, REPOSITORY_WATCH_GLOB]
+      .map((glob) => watch(instanceRoot, glob));
     fixed.push(gameDirectoryChanged(changed));
     for (const folder of followed.values()) folder.watch = watch(folder.base, folder.glob);
   };
@@ -133,6 +121,7 @@ export function mo2Watch(instanceRoot: string, gameDirectoryChanged: (listener: 
       changed();
     },
 
-    notes: () => [...held.values()].flatMap((folders) => folders.notes()),
+    watchNotes: () => [...new Set([...held.values()].flatMap((folders) => folders?.failures() ?? []))]
+      .map((reason) => `Modbench hears no change inside a folder whose watch failed: ${reason}`),
   };
 }

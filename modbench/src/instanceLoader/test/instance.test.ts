@@ -584,7 +584,7 @@ describe('Instance — game folder and the archives the game loads', () => {
   });
 
   it('warns once, until it changes, of each change the watch cannot hear', async () => {
-    const note = 'Modbench hears no change inside 1 folder(s), the first /source/A/Held, whose watch failed: EACCES';
+    const note = 'Modbench hears no change inside a folder whose watch failed: EACCES: permission denied';
     const { instance, warnings } = loader({ ...GAME_FOUND, watchNotes: [note] });
 
     await instance.refresh();
