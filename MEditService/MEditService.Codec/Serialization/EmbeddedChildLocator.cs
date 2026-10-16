@@ -80,7 +80,7 @@ public static class EmbeddedChildLocator
 
             if (reader.TokenType == JsonTokenType.String && member.Equals(FormKeyMember, StringComparison.Ordinal))
             {
-                ownFormKey = reader.GetString();
+                ownFormKey = reader.GetString() is { } written ? CanonicalFormKey.OfOrAsWritten(written) : null;
                 continue;
             }
             if (reader.TokenType == JsonTokenType.String && member.Equals(LoquiUnions.UnionTypeDiscriminator, StringComparison.Ordinal))

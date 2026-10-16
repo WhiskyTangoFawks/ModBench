@@ -107,6 +107,7 @@ public sealed class DocumentTokensTests
     [Theory]
     [InlineData("""{ "FormKey": "000800:Some.esp" }""", true)]
     [InlineData("""{ "FormKey": "000800:\u0053ome.esp" }""", true)]
+    [InlineData("""{ "FormKey": "000800_Some.esp" }""", true)]
     [InlineData("""{ "FormKey": "000800:Other.esp" }""", false)]
     public void MayCarry_IsFalseOnlyWhenTheBytesCertainlyDoNotSpellTheFormKey(string text, bool expected)
     {

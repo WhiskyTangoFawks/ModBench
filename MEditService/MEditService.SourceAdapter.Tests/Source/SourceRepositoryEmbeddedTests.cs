@@ -340,7 +340,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void RecordFromText_OfAChildWhoseOwnersTextDeclaresNoFormKeyMutagenParses_RefusesNamingItsOwnersFileAndWhat_ItDeclares()
+    public void RecordFromText_OfAChildWhoseOwnersTextDeclaresNoFormKey_RefusesNamingItsOwnersFileAndWhat_ItDeclares()
     {
         var text = File.ReadAllText(FullPath(InteriorCellPath))
             .Replace($"\"FormKey\": \"{_interiorCell.FormKey}\"", "\"FormKey\": \"NotAFormKey\"", StringComparison.Ordinal);
@@ -349,6 +349,32 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.RecordFromText(Plugin, _temporaryRef.FormKey.ToString(), text).Stopped());
 
         Assert.Equal($"The text given for {InteriorCellPath} declares NotAFormKey, which is no FormKey.", refused.Reason);
+    }
+
+    private void SpellTheTemporaryRefAs(string spelled) =>
+        File.WriteAllText(
+            FullPath(InteriorCellPath),
+            File.ReadAllText(FullPath(InteriorCellPath)).Replace(_temporaryRef.FormKey.ToString(), spelled, StringComparison.Ordinal));
+
+    [Fact]
+    public void AChildDelimitingItsFormKeyWithAnUnderscore_IsTheRecordTheCanonicalKeyNames()
+    {
+        SpellTheTemporaryRefAs(_temporaryRef.FormKey.ToString().Replace(':', '_'));
+
+        var found = Repository.RecordByFormKey(Plugin, _temporaryRef.FormKey.ToString()).Value();
+
+        Assert.Equal(_temporaryRef.FormKey.ToString(), found?.FormKey);
+    }
+
+    [Fact]
+    public void ReadingTheTree_RefusesAChildDeclaringNoFormKey_NamingItsOwnersFileAndWhat_ItDeclares()
+    {
+        SpellTheTemporaryRefAs("NotAFormKey");
+
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Stopped(Read.ReadingTheTree, _temporaryRef, "refr", InteriorCellPath));
+
+        Assert.Equal(InteriorCellPath, refused.File?.SourceRelativePath);
+        Assert.Contains("declares NotAFormKey, which is no FormKey", refused.Reason, StringComparison.Ordinal);
     }
 
     private string TopCellFormKey => _worldspace.TopCell.Require().FormKey.ToString();

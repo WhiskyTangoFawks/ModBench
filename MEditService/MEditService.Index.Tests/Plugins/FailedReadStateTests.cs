@@ -78,23 +78,6 @@ public sealed class FailedReadStateTests : IDisposable
     private string Relative(string path) => Path.GetRelativePath(Plugin.ModFolderOf(), path);
 
     [Fact]
-    public void ATreeDocumentDelimitingItsFormKeyWithAnUnderscore_IsTheRecordTheCanonicalKeyNames()
-    {
-        SourceMods.Track(Plugin);
-        using var index = Reconciled();
-        var formKey = TheNpc(index).FormKey;
-        var edited = File.ReadAllText(NpcDocument)
-            .Replace(formKey, formKey.Replace(':', '_'), StringComparison.Ordinal)
-            .Replace(NpcEditorId, "EditedInTree", StringComparison.Ordinal);
-        File.WriteAllText(NpcDocument, edited);
-
-        index.NextSnapshotUntil(() => index.RowOf(formKey, Plugin.KeyOf())?.EditorId == "EditedInTree", "the edit read from the tree");
-
-        Assert.Equal(WorkingTreeState.Modified, index.RowOf(formKey, Plugin.KeyOf())?.WorkingTreeState);
-        Assert.Single(index.ListedIn(Plugin.KeyOf()), row => row.EditorId == "EditedInTree");
-    }
-
-    [Fact]
     public void ATreeWithADocumentDeclaringNoFormKey_NamesThatFile_WhileItsBinaryStandsIn()
     {
         SourceMods.Track(Plugin);

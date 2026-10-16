@@ -52,7 +52,7 @@ public static class DocumentTokens
                     case JsonTokenType.String when atFormKey:
                         var formKey = reader.GetString()
                             ?? throw new InvalidOperationException("Expected a JSON string value to read a non-null string.");
-                        found.Add(new DocumentFormKey(formKey, PositionOf(openedBy, keyDepth, embeddedSlotNames)));
+                        found.Add(new DocumentFormKey(CanonicalFormKey.OfOrAsWritten(formKey), PositionOf(openedBy, keyDepth, embeddedSlotNames)));
                         break;
                 }
                 atFormKey = false;
@@ -141,9 +141,10 @@ public static class DocumentTokens
     /// JSON object, which a member can be read from.</summary>
     public static string? WhyNotADocument(string text) => Document.TryRead(text, out _, out var whyNot) ? null : whyNot;
 
-    /// <summary>False only when the bytes certainly do not spell <paramref name="formKeyUtf8"/>: JSON spells
-    /// it other than literally only through a \u escape, since no plugin file name holds a quote,
-    /// backslash, slash or control character.</summary>
+    /// <summary>False only when the bytes certainly do not spell <paramref name="formKeyUtf8"/> in any of Mutagen's
+    /// spellings: the plugin file name is literal in every one, and JSON spells it other than literally only
+    /// through a \u escape, since no plugin file name holds a quote, backslash, slash or control character.</summary>
     public static bool MayCarry(byte[] document, byte[] formKeyUtf8) =>
-        document.AsSpan().IndexOf(formKeyUtf8) >= 0 || document.AsSpan().IndexOf(@"\u"u8) >= 0;
+        document.AsSpan().IndexOf(formKeyUtf8.AsSpan(formKeyUtf8.AsSpan().IndexOf((byte)':') + 1)) >= 0
+        || document.AsSpan().IndexOf(@"\u"u8) >= 0;
 }

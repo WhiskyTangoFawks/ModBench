@@ -202,6 +202,10 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     /// one whose EditorID is no string.</summary>
     internal static string RequireReadable(string sourceFolder, ContainerDocuments.ChildDocument child, string ownerFile)
     {
+        if (CanonicalFormKey.Of(child.FormKey) is null)
+            throw SourceStopException.UnreadableIn(
+                sourceFolder, ownerFile, $"its '{child.SlotName}' declares {child.FormKey}, which is no FormKey", child.FormKey);
+
         var type = child.RecordType ?? throw SourceStopException.UnreadableIn(sourceFolder, ownerFile, child.WhyUntyped, child.FormKey);
         if (child.Document.EditorId.WhyUnreadable is { } why)
         {

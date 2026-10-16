@@ -151,10 +151,24 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     }
 
     [Fact]
-    public void TheTreesDocuments_RefuseADocumentWhoseFormKeyMutagenCannotParse_RatherThanKeyItByItsText()
+    public void TheTreesDocuments_RefuseADocumentWhoseFormKeyMutagenCannotParse_NamingItAndWhatItDeclares()
     {
         var repository = TrackedWithNpcDeclaring("not-a-formkey");
 
-        Assert.ThrowsAny<Exception>(() => TreeDocuments.Of(repository, Plugin).ToList());
+        var refused = Assert.IsType<SourceFailure.Unreadable>(
+            repository.ReadDocuments(Plugin, documents => documents.Records.ToList()).Stopped());
+
+        Assert.Equal(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, refused.File?.SourceRelativePath);
+        Assert.Contains("declares not-a-formkey, which is no FormKey", refused.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FormKeysUsed_RefusesADocumentWhoseFormKeyMutagenCannotParse_RatherThanLoseIt()
+    {
+        var repository = TrackedWithNpcDeclaring("not-a-formkey");
+
+        var refused = Assert.IsType<SourceFailure.Unreadable>(repository.FormKeysUsed(Plugin).Stopped());
+
+        Assert.Contains("declares not-a-formkey, which is no FormKey", refused.Reason, StringComparison.Ordinal);
     }
 }

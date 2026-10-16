@@ -18,7 +18,10 @@ interface ProblemPlace {
   fieldPath?: string | null;
 }
 
-const FORM_KEY = /^[0-9A-F]{6}:.+$/i;
+const FORM_KEY = /^[0-9A-F]{6}[:_].+$/i;
+
+// Mutagen reads either delimiter and either hex case as one FormKey; the Index names it by the colon and upper case.
+const canonicalFormKey = (text: string): string => FORM_KEY.test(text) ? `${text.slice(0, 6).toUpperCase()}:${text.slice(7)}` : text;
 
 const spanOf = (node: Node): TextSpan => ({ start: node.offset, end: node.offset + node.length });
 
@@ -42,16 +45,20 @@ const stringNodeAt = (root: Node | undefined, offset: number): Node | undefined 
   return node && isStringValue(node) ? node : undefined;
 };
 
-const isStringOf = (value: string) => (node: Node): boolean => isStringValue(node) && node.value === value;
+const isStringOf = (value: string) => (node: Node): boolean =>
+  isStringValue(node) && typeof node.value === 'string' && canonicalFormKey(node.value) === canonicalFormKey(value);
 
 const recordOf = (root: Node, formKey: string): Node | undefined =>
-  find(root, (node) => ownFormKey(node)?.value === formKey);
+  find(root, (node) => {
+    const own = ownFormKey(node);
+    return own !== undefined && isStringOf(formKey)(own);
+  });
 
 /** The FormKey string under `offset`, and its span. */
 export function formKeyAt(text: string, offset: number): (TextSpan & { formKey: string }) | undefined {
   const node = stringNodeAt(parseTree(text), offset);
   const value: unknown = node?.value;
-  return node && typeof value === 'string' && FORM_KEY.test(value) ? { formKey: value, ...spanOf(node) } : undefined;
+  return node && typeof value === 'string' && FORM_KEY.test(value) ? { formKey: canonicalFormKey(value), ...spanOf(node) } : undefined;
 }
 
 /** The string value under `offset` with the record it sits in. */
@@ -60,7 +67,7 @@ export function fieldAt(text: string, offset: number): FieldAtOffset | undefined
   for (let ancestor = node?.parent; node && ancestor; ancestor = ancestor.parent) {
     const recordFormKey: unknown = ownFormKey(ancestor)?.value;
     if (typeof recordFormKey === 'string') {
-      return { ...spanOf(node), recordFormKey, record: getNodeValue(ancestor), path: getNodePath(node).slice(getNodePath(ancestor).length) };
+      return { ...spanOf(node), recordFormKey: canonicalFormKey(recordFormKey), record: getNodeValue(ancestor), path: getNodePath(node).slice(getNodePath(ancestor).length) };
     }
   }
   return undefined;

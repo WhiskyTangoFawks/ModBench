@@ -595,14 +595,12 @@ internal sealed class RelationReads(
         }
         if (search != null)
         {
-            // A FormKey-shaped query resolves against form_key rather than an EditorID substring
-            // match; form_key values are stored via FormKey.ToString(), so round-tripping the
-            // query through TryFactory canonicalizes its hex id.
+            // A FormKey-shaped query resolves against form_key rather than an EditorID substring match.
             var matches = new List<string>();
-            if (Mutagen.Bethesda.Plugins.FormKey.TryFactory(search, out var formKey))
+            if (CanonicalFormKey.Of(search) is { } formKey)
             {
                 matches.Add($"form_key = ${values.Count + 1}");
-                values.Add(formKey.ToString());
+                values.Add(formKey);
             }
             else
             {

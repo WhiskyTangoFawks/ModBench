@@ -30,7 +30,8 @@ internal static class DocumentText
         BytesOrNull(files, path) is { } bytes ? Encoding.UTF8.GetString(bytes) : null;
 
     /// <summary>The FormKey the document at <paramref name="filePath"/> declares — an embedded child's
-    /// owner's, in Mutagen's spelling. Null when unreadable or declaring none Mutagen parses.</summary>
+    /// owner's, since the file is the owner's document. Null when it cannot be read or declares
+    /// none.</summary>
     internal static string? FormKeyDeclaredBy(ISourceFiles files, string filePath, string pluginFileName) =>
         ReadOrNull(files, filePath) is { } text ? FormKeyDeclaredIn(text, filePath, pluginFileName) : null;
 
@@ -46,12 +47,14 @@ internal static class DocumentText
         return DocumentTokens.RootStringIn(text, RecordMembers.FormKey) is { } spelled ? CanonicalFormKey.Of(spelled) : null;
     }
 
-    /// <summary>The spelling a document declares as its FormKey when Mutagen reads no FormKey there.</summary>
-    internal static string? UnparsedFormKeyIn(string text) =>
-        DocumentTokens.RootStringIn(text, RecordMembers.FormKey) is { } spelled && CanonicalFormKey.Of(spelled) is null ? spelled : null;
+    internal static string? UnparsedFormKeyIn(string text, string filePath, string pluginFileName) =>
+        FormKeyDeclaredIn(text, filePath, pluginFileName) is null ? DocumentTokens.RootStringIn(text, RecordMembers.FormKey) : null;
 
+    // For a text FormKeyDeclaredIn answered null for: a FormKey it holds is one Mutagen cannot parse.
     internal static string WhyNoFormKey(string text) =>
-        UnparsedFormKeyIn(text) is { } spelled ? $"declares {spelled}, which is no FormKey" : "declares no FormKey";
+        DocumentTokens.RootStringIn(text, RecordMembers.FormKey) is { } spelled
+            ? $"declares {spelled}, which is no FormKey"
+            : "declares no FormKey";
 
     /// <summary>The record's own text out of the bytes <paramref name="unit"/>'s file holds: itself for
     /// a flat record, or spliced back out of its owner's text for an embedded child.</summary>

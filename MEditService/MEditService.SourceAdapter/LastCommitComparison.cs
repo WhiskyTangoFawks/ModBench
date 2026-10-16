@@ -27,7 +27,9 @@ internal static class LastCommitComparison
                     ?? throw SourceStopException.GitFailed($"git cannot read what the last commit holds for '{fullPath}'.")
                 : null;
             RecordTextsIn(committed, locator, expansion, plugin, relativePath, committedText);
-            RecordTextsIn(working, locator, expansion, plugin, relativePath, ReadWorkingText(fullPath));
+            var workingText = ReadWorkingText(fullPath);
+            if (workingText is not null) locator.RequireParsedFormKey(relativePath, workingText, plugin.Name);
+            RecordTextsIn(working, locator, expansion, plugin, relativePath, workingText);
         }
 
         var changes = new Dictionary<string, RecordChange>(StringComparer.Ordinal);
