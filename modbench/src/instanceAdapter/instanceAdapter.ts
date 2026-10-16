@@ -199,7 +199,7 @@ export interface InstallTarget {
   readonly name: string;
 }
 
-/** An install that landed, and whether its source is a scripted installer, whose files land as
+/** An install that landed, and whether its package is a scripted installer, whose files land as
  *  they are; or none, because the target's folder is there for a new mod or absent for an upgrade. */
 export type InstallOutcome = { readonly landed: true; readonly isFomod: boolean } | { readonly landed: false };
 
