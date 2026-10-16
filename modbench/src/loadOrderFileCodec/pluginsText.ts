@@ -2,6 +2,7 @@
 // meaning, and the bottom of the file is winning-most. Mutations edit the lines, so
 // comment and blank lines survive untouched.
 
+import { firstLines } from './firstLines';
 import { editLines, entryLineIndices, stripBom } from './lineScan';
 
 /** The plugin order, one line per plugin file. */
@@ -109,7 +110,9 @@ export function movePluginsInText(text: string, pluginNames: string[], toIndex: 
     }));
     const block = lines.filter((_, at) => moved.has(at));
     const rest = lines.filter((_, at) => !moved.has(at));
-    const entries = entryLineIndices(rest, isEntryLine);
+    const shown = firstLines(entryLineIndices(lines, isEntryLine), (at) => pluginKey(pluginNameOf(lines[at] ?? '')))
+      .kept.filter((at) => !moved.has(at));
+    const entries = shown.map((at) => at - [...moved].filter((m) => m < at).length);
     const atEntry = entries[Math.min(Math.max(0, toIndex), entries.length)];
     const lastEntry = entries.at(-1);
     rest.splice(atEntry ?? (lastEntry === undefined ? rest.length : lastEntry + 1), 0, ...block);
