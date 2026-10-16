@@ -11,9 +11,7 @@ internal static class Copies
     internal static RecordDetail? CopyIn(this OpenedIndex index, string formKey, PluginAddress plugin)
     {
         var compared = index.Queries.GetCompareRecords([new RecordCopy(formKey, plugin)]);
-        return compared.Holds(out var result, out var refused) ? result.Overrides.Single()
-            : refused is CopiesMissing ? null
-            : throw new InvalidOperationException($"Expected the Index to answer here: {refused.Message}");
+        return compared.Value().Compare?.Overrides.Single();
     }
 
     internal static RecordDetail DocumentOf(this OpenedIndex index, string formKey, PluginAddress plugin) =>

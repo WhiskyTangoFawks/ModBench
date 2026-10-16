@@ -438,7 +438,7 @@ internal static class RecordEndpoints
                 || string.IsNullOrWhiteSpace(c.Plugin.Name) || string.IsNullOrWhiteSpace(c.Plugin.Origin)))
             return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
         return EndpointMapping.Answered(
-            svc.GetCompareRecords(copies), compared => Results.Ok(new CompareRecordsResponse(compared, [])));
+            svc.GetCompareRecords(copies), compared => Results.Ok(new CompareRecordsResponse(compared.Compare, [.. compared.Missing.Select(Wire)])));
     }
 
     internal static IResult CompareRecord(string formKey, CopyText copy, IQueries svc)

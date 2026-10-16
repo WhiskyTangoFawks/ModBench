@@ -17,9 +17,17 @@ internal static class IndexAnswers
             ? throw new InvalidOperationException("Expected the Index to refuse here.")
             : refused;
 
+    /// <summary>The comparison the Index answered; a missing copy here is a broken fixture.</summary>
+    internal static CompareResult Compared(this Answer<CopiesCompared, IndexRefused> answer) =>
+        answer.Value().Compare ?? throw new InvalidOperationException("Expected every copy to be found here.");
+
     /// <summary>The copies the Index found no plugin holding, which the test asked for.</summary>
-    internal static CopiesMissing Missing<T>(this Answer<T, IndexRefused> answer) =>
-        answer.Refused() as CopiesMissing ?? throw new InvalidOperationException("Expected the Index to refuse for missing copies here.");
+    internal static IReadOnlyList<MissingCopy> Missing(this Answer<CopiesCompared, IndexRefused> answer)
+    {
+        var compared = answer.Value();
+        Assert.Null(compared.Compare);
+        return compared.Missing;
+    }
 
     /// <summary>A filter the Index took; its refusal here is a broken fixture.</summary>
     internal static void Accepted(this IndexRefused? refused)

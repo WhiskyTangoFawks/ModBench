@@ -167,10 +167,10 @@ internal sealed class RecordQueries(
             ? new MissingCopy(copy, CopyMissingReason.NotInPlugin, $"{copy.FormKey} is not in {copy.Plugin.Name} ({copy.Plugin.Origin}).")
             : new MissingCopy(copy, CopyMissingReason.RecordGone, $"{copy.FormKey} is held by no plugin.");
 
-    public Answer<CompareResult, IndexRefused> GetCompareRecords(IReadOnlyList<RecordCopy> copies) =>
-        IndexAnswer.Flat(() => CompareCopies(copies));
+    public Answer<CopiesCompared, IndexRefused> GetCompareRecords(IReadOnlyList<RecordCopy> copies) =>
+        IndexAnswer.Of(() => CompareCopies(copies));
 
-    private Answer<CompareResult, IndexRefused> CompareCopies(IReadOnlyList<RecordCopy> copies)
+    private CopiesCompared CompareCopies(IReadOnlyList<RecordCopy> copies)
     {
         var reads = _index.RequireWholeSetReads();
         var snapshot = _loadOrder.Require();
@@ -186,7 +186,7 @@ internal sealed class RecordQueries(
             else documents.Add(document);
         }
         if (missing.Count > 0)
-            return new CopiesMissing([.. missing.Select(c => MissingCopyOf(reads, c))]);
+            return new CopiesCompared(null, [.. missing.Select(c => MissingCopyOf(reads, c))]);
 
         var records = documents.ConvertAll(ToRecordDetail);
         // Two copies may come from one plugin, so a column is named by its place as well.
@@ -197,7 +197,8 @@ internal sealed class RecordQueries(
         var overrides = records.Select((r, i) => ToCompareOverride(r, state: null, columns[i], snapshot, reads)).ToList();
 
         var conflictAll = ConflictRules.Worst(ConflictAll.NoConflict, diffs.Select(diff => diff.ConflictAll));
-        return new CompareResult(overrides, diffs, conflictAll, RequireSchemas().DisplayNameFor(documents[0].RecordType));
+        return new CopiesCompared(
+            new CompareResult(overrides, diffs, conflictAll, RequireSchemas().DisplayNameFor(documents[0].RecordType)), []);
     }
 
     // The text is the document carrying the record. A plugin's source tree says which document that is, as it

@@ -174,19 +174,16 @@ internal static class EndpointMapping
         },
         extensions: new Dictionary<string, object?> { ["refusal"] = refused.Refusal.ToString() });
 
-    /// <summary>Copies no plugin gave answer the comparison with nothing compared and each one named; no load
-    /// order, or an index not yet ready, is a "not right now", never a bad request.</summary>
-    internal static IResult Refusal(IndexRefused refused) => refused is CopiesMissing missing
-        ? Results.Ok(new CompareRecordsResponse(null, [.. missing.Missing.Select(RecordEndpoints.Wire)]))
-        : new Logged(refused.Refusal.ToString(), refused.Message, Results.Problem(
-            refused.Message,
-            statusCode: refused.Refusal switch
-            {
-                IndexRefusal.NoLoadOrder or IndexRefusal.IndexNotReady => StatusCodes.Status503ServiceUnavailable,
-                IndexRefusal.FilterRejected or IndexRefusal.SelectRejected or IndexRefusal.NameRefused => StatusCodes.Status400BadRequest,
-                IndexRefusal.SourceStopped => StatusCodes.Status422UnprocessableEntity,
-                _ => throw new InvalidEnumArgumentException(nameof(refused), (int)refused.Refusal, typeof(IndexRefusal)),
-            }));
+    /// <summary>No load order, or an index not yet ready, is a "not right now", never a bad request.</summary>
+    internal static IResult Refusal(IndexRefused refused) => new Logged(refused.Refusal.ToString(), refused.Message, Results.Problem(
+        refused.Message,
+        statusCode: refused.Refusal switch
+        {
+            IndexRefusal.NoLoadOrder or IndexRefusal.IndexNotReady => StatusCodes.Status503ServiceUnavailable,
+            IndexRefusal.FilterRejected or IndexRefusal.SelectRejected or IndexRefusal.NameRefused => StatusCodes.Status400BadRequest,
+            IndexRefusal.SourceStopped => StatusCodes.Status422UnprocessableEntity,
+            _ => throw new InvalidEnumArgumentException(nameof(refused), (int)refused.Refusal, typeof(IndexRefusal)),
+        }));
 
     private sealed class Logged(string refusal, string message, IResult problem) : IResult
     {

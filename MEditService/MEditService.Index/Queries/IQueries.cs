@@ -18,7 +18,7 @@ public interface IQueries
 
     Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text = null);
 
-    Answer<CompareResult, IndexRefused> GetCompareRecords(IReadOnlyList<RecordCopy> copies);
+    Answer<CopiesCompared, IndexRefused> GetCompareRecords(IReadOnlyList<RecordCopy> copies);
 
     Answer<IReadOnlyList<PluginRecordTypeCount>, IndexRefused> GetPluginRecordTypes(PluginAddress plugin);
     Answer<WorkingTreeStatesBeneath, IndexRefused> GetWorkingTreeStatesBeneath(PluginAddress plugin);
