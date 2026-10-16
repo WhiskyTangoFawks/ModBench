@@ -97,6 +97,8 @@ const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
 const requestLog: string[] = [];
 const putLoadOrders: string[][] = [];
+const putMods: string[][] = [];
+const putPlaces: string[][] = [];
 const handedUnsaved: unknown[][] = [];
 const comparedTexts: unknown[] = [];
 const comparedSideBySide: unknown[] = [];
@@ -131,6 +133,12 @@ function pluginNamesOf(body: string): string[] {
   const plugins = typeof parsed === 'object' && parsed !== null && 'plugins' in parsed ? parsed.plugins : undefined;
   if (!Array.isArray(plugins)) throw new Error(`expected a PUT /load-order body with a plugins array, got: ${body}`);
   return plugins.map((p: unknown) => (typeof p === 'object' && p !== null && 'name' in p ? String(p.name) : '?'));
+}
+function namesIn(body: string, list: 'mods' | 'places'): string[] {
+  const parsed: unknown = JSON.parse(body);
+  const entries = isRecord(parsed) ? parsed[list] : undefined;
+  if (!Array.isArray(entries)) throw new Error(`expected a PUT /load-order body with a ${list} array, got: ${body}`);
+  return entries.map((entry: unknown) => (isRecord(entry) ? String(entry.name) : '?'));
 }
 let rebuildIndexShouldFail = false;
 const RAW_INDEX_LOCKED_DETAIL = 'raw backend detail: index lock held by pid 4242';
@@ -196,6 +204,8 @@ function createMockBackend(): http.Server {
       req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
       req.on('end', () => {
         putLoadOrders.push(pluginNamesOf(body));
+        putMods.push(namesIn(body, 'mods'));
+        putPlaces.push(namesIn(body, 'places'));
         loadOrderVersion += 1;
         const version = loadOrderVersion;
         loadOrderStatus = { ...loadOrderStatus, version };
@@ -1805,6 +1815,73 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     await writePluginsTxt(`${readFileSync(pluginsTxtPath, 'utf8')}\n`);
 
     assert.deepStrictEqual(putLoadOrders.slice(sent), [order]);
+  });
+
+  describe('a file of a source mod\'s plugin source, written after its folders arrive', () => {
+    const writeThroughTemp = (file: string, text: string): void => {
+      writeFileSync(`${file}.tmp`, text);
+      renameSync(`${file}.tmp`, file);
+    };
+    const arrivals: { how: string; origin: string; arrive: (sourceDir: string, file: string) => void }[] = [
+      {
+        how: 'its mod\'s folder moved into the instance whole',
+        origin: 'Moved Mod',
+        arrive: (sourceDir, file) => {
+          const staged = mkdtempSync(path.join(os.tmpdir(), 'modbench-staged-source-'));
+          const stagedFile = path.join(staged, path.relative(sourceDir, file));
+          mkdirSync(path.dirname(stagedFile), { recursive: true });
+          writeFileSync(stagedFile, '{}');
+          mkdirSync(path.dirname(sourceDir), { recursive: true });
+          renameSync(staged, sourceDir);
+        },
+      },
+      {
+        how: 'its folders made at once and the file renamed in from a temp file, as mEdit writes it',
+        origin: 'Journaled Mod',
+        arrive: (_sourceDir, file) => {
+          mkdirSync(path.dirname(file), { recursive: true });
+          writeThroughTemp(file, '{}');
+        },
+      },
+    ];
+
+    for (const { how, origin, arrive } of arrivals) {
+      describe(how, () => {
+        const modDir = path.join(root, 'mods', origin);
+        const sourceDir = path.join(root, 'source', origin);
+        const file = path.join(sourceDir, 'plugin-source', 'Written.esp', 'Weapons', 'Gun.json');
+        let modlist = '';
+
+        before(async () => {
+          modlist = readFileSync(modlistPath, 'utf8');
+          arrive(sourceDir, file);
+          mkdirSync(modDir, { recursive: true });
+          const modlistWatch = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(root), 'profiles/*/modlist.txt'));
+          const modlistHeard = new Promise((r) => { modlistWatch.onDidChange(r); });
+          writeFileSync(modlistPath, `${modlist}+${origin}\r\n`);
+          await modlistHeard;
+          modlistWatch.dispose();
+          await vscode.commands.executeCommand('modbench.instance.refresh');
+          writeFileSync(modlistPath, `${modlist}-${origin}\r\n`);
+          await waitFor('the put of the mod disabled, the one recompute left after the refresh drained the arrival\'s',
+            () => putMods.at(-1)?.includes(origin) && !putPlaces.at(-1)?.includes(origin));
+        });
+
+        after(() => {
+          writeFileSync(modlistPath, modlist);
+          rmSync(modDir, { recursive: true, force: true });
+          rmSync(path.join(root, 'source'), { recursive: true, force: true });
+        });
+
+        it('puts the load order again on a write to it', async () => {
+          const before = putCount();
+
+          writeThroughTemp(file, '{ }');
+
+          await waitFor('a PUT /load-order after the write', () => putCount() > before);
+        });
+      });
+    }
   });
 });
 

@@ -583,6 +583,16 @@ describe('Instance — game folder and the archives the game loads', () => {
     expect(warnings).toEqual([`[instance] ${note}`]);
   });
 
+  it('warns once, until it changes, of each change the watch cannot hear', async () => {
+    const note = 'Modbench hears no change inside a folder whose watch failed: EACCES: permission denied';
+    const { instance, warnings } = loader({ ...GAME_FOUND, watchNotes: [note] });
+
+    await instance.refresh();
+    await instance.refresh();
+
+    expect(warnings).toEqual([`[instance] ${note}`]);
+  });
+
   it('tells once, until it changes, each archive the INIs list that nothing holds', async () => {
     const { instance, logs } = loader({
       ...GAME_FOUND,
