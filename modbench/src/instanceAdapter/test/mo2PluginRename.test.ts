@@ -85,6 +85,27 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     await rm(root, { recursive: true, force: true });
   });
 
+  describe('originHoldsPlugin', () => {
+    it('answers whether the origin\'s folder holds a plugin file of the name, compared without case', async () => {
+      expect(await adapter.originHoldsPlugin(ORIGIN, 'tracked patch mod.ESP')).toBe(true);
+      expect(await adapter.originHoldsPlugin(ORIGIN, 'Renamed Patch.esp')).toBe(false);
+    });
+
+    it('answers false for a folder of the name and for a mod with no folder', async () => {
+      await mkdir(at(`${MOD}/Folder.esp`));
+
+      expect(await adapter.originHoldsPlugin(ORIGIN, 'Folder.esp')).toBe(false);
+      expect(await adapter.originHoldsPlugin({ kind: 'mod', name: 'Gone' }, 'Tracked Patch Mod.esp')).toBe(false);
+    });
+
+    it('answers for Overwrite as the run-time output', async () => {
+      await put('overwrite/Ran.esp');
+
+      expect(await adapter.originHoldsPlugin({ kind: 'runtimeOutput' }, 'Ran.esp')).toBe(true);
+      expect(await adapter.originHoldsPlugin({ kind: 'runtimeOutput' }, 'Tracked Patch Mod.esp')).toBe(false);
+    });
+  });
+
   it('renames the plugin, its strings, its archives and its ini, and its line in every profile that lists it, in the place and the enabled state it had', async () => {
     const before = await snapshotTree(root);
 

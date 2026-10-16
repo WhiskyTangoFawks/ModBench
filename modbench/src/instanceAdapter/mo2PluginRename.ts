@@ -9,7 +9,7 @@ import type { FileOrigin, InstanceAdapter } from './instanceAdapter';
 import { fileInFolder, originDir, pluginsFile, profilesDir } from './layout';
 import { readOrAbsent, type Mo2Context } from './mo2Context';
 
-type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin'>;
+type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin' | 'originHoldsPlugin'>;
 
 interface Move {
   readonly from: string;
@@ -107,6 +107,11 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
   }
 
   return {
+    async originHoldsPlugin(origin, name) {
+      const folder = originDir(instanceRoot, origin);
+      return folder !== undefined && (await entriesIn(folder)).some((entry) => !entry.isFolder && sameName(entry.name, name));
+    },
+
     async renamePlugin(origin, from, to, gameRelease) {
       const orders = await orderFiles();
       await withLocks(orders, async () => {
