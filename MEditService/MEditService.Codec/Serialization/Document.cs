@@ -191,7 +191,7 @@ public sealed class Document
 
     private static ChildDocument? Child(string owner, string slotName, int index, JsonElement node, RecordTypes types) =>
         Over(node) is { } child && child.StringAt(RecordMembers.FormKey) is { } formKey
-            ? new ChildDocument(slotName, index, formKey, child.RecordTypeIn(owner, slotName, types), new Document(node.Clone()))
+            ? new ChildDocument(slotName, index, CanonicalFormKey.OfOrAsWritten(formKey), child.RecordTypeIn(owner, slotName, types), new Document(node.Clone()))
             : null;
 
     // The child's own spelling where the document carries one, else the slot's declared element type:
@@ -230,8 +230,8 @@ public sealed class Document
 
         foreach (var child in ChildrenOf(ownerRecordType, types))
         {
-            if (string.Equals(child.FormKey, formKey, StringComparison.Ordinal))
-                return new DocumentContainment(ownKey, ownerRecordType, child.SlotName);
+            if (FormKeyComparer.Instance.Equals(child.FormKey, formKey))
+                return new DocumentContainment(CanonicalFormKey.OfOrAsWritten(ownKey), ownerRecordType, child.SlotName);
 
             if (!types.IsEmbeddedSlot(ownerRecordType, child.SlotName) || child.RecordType is not { } childType) continue;
             if (child.Document.ContainmentOf(childType, formKey, types) is { } deeper) return deeper;

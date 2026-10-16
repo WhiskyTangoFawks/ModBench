@@ -68,4 +68,22 @@ public sealed class WorkingTreeChangeMarkingTests : IDisposable
         Assert.Equal(WorkingTreeState.None, index.RowOf(_keptNpc, _winnerKey)?.WorkingTreeState);
         Assert.Equal(WorkingTreeState.None, index.RowOf(_soleSourcedNpcWhoseOneEntryIsItsOwnWinner, _baseKey)?.WorkingTreeState);
     }
+
+    [Fact]
+    public void ATreeDocumentDelimitingItsFormKeyWithAnUnderscore_IsTheRecordTheCanonicalKeyNames()
+    {
+        using var index = Indexes.Reconciled(_fixture);
+        var document = Directory.EnumerateFiles(_base.ModFolderOf(), "*.json", SearchOption.AllDirectories)
+            .Single(file => File.ReadAllText(file).Contains("\"KeepMe\"", StringComparison.Ordinal));
+        File.WriteAllText(
+            document,
+            File.ReadAllText(document)
+                .Replace(_keptNpc, _keptNpc.Replace(':', '_'), StringComparison.Ordinal)
+                .Replace("KeepMe", "EditedInTree", StringComparison.Ordinal));
+
+        index.NextSnapshotUntil(() => index.RowOf(_keptNpc, _baseKey)?.EditorId == "EditedInTree", "the edit read from the tree");
+
+        Assert.Equal(WorkingTreeState.Modified, index.RowOf(_keptNpc, _baseKey)?.WorkingTreeState);
+        Assert.Single(index.ListedIn(_baseKey), row => row.EditorId == "EditedInTree");
+    }
 }

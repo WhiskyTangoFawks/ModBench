@@ -107,9 +107,18 @@ public sealed class DocumentTokensTests
     [Theory]
     [InlineData("""{ "FormKey": "000800:Some.esp" }""", true)]
     [InlineData("""{ "FormKey": "000800:\u0053ome.esp" }""", true)]
+    [InlineData("""{ "FormKey": "000800_Some.esp" }""", true)]
+    [InlineData("""{ "FormKey": "000800:SOME.esp" }""", true)]
     [InlineData("""{ "FormKey": "000800:Other.esp" }""", false)]
     public void MayCarry_IsFalseOnlyWhenTheBytesCertainlyDoNotSpellTheFormKey(string text, bool expected)
     {
         Assert.Equal(expected, DocumentTokens.MayCarry(Bytes(text), Bytes("000800:Some.esp")));
+    }
+
+    [Fact]
+    public void MayCarry_MatchesAPluginNameBeyondAsciiWithoutCase()
+    {
+        Assert.True(DocumentTokens.MayCarry(Bytes("""{ "FormKey": "000800:ÜNI.ESP" }"""), Bytes("000800:Üni.esp")));
+        Assert.False(DocumentTokens.MayCarry(Bytes("""{ "FormKey": "000800:Other.esp" }"""), Bytes("000800:Üni.esp")));
     }
 }

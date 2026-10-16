@@ -1,4 +1,5 @@
 using System.Text;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 
@@ -36,12 +37,24 @@ internal static class DocumentText
 
     /// <summary>The same answer for a caller holding the text already, so a whole-tree pass reads each
     /// file once.</summary>
-    internal static string? FormKeyDeclaredIn(string text, string filePath, string pluginFileName) =>
+    internal static string? FormKeyDeclaredIn(string text, string filePath, string pluginFileName)
+    {
         // The header's document carries a ModKey rather than a FormKey; PluginHeader computes the
         // FormKey the index files it under.
-        SourceRepositoryLayout.IsHeaderDocumentPath(filePath, pluginFileName)
-            ? SourceRepositoryLayout.HeaderFormKeyOf(pluginFileName)
-            : DocumentTokens.RootStringIn(text, RecordMembers.FormKey);
+        if (SourceRepositoryLayout.IsHeaderDocumentPath(filePath, pluginFileName))
+            return SourceRepositoryLayout.HeaderFormKeyOf(pluginFileName);
+
+        return DocumentTokens.RootStringIn(text, RecordMembers.FormKey) is { } spelled ? CanonicalFormKey.Of(spelled) : null;
+    }
+
+    internal static string? UnparsedFormKeyIn(string text, string filePath, string pluginFileName) =>
+        FormKeyDeclaredIn(text, filePath, pluginFileName) is null ? DocumentTokens.RootStringIn(text, RecordMembers.FormKey) : null;
+
+    // For a text FormKeyDeclaredIn answered null for: a FormKey it holds is one Mutagen cannot parse.
+    internal static string WhyNoFormKey(string text) =>
+        DocumentTokens.RootStringIn(text, RecordMembers.FormKey) is { } spelled
+            ? $"declares {spelled}, which is no FormKey"
+            : "declares no FormKey";
 
     /// <summary>The record's own text out of the bytes <paramref name="unit"/>'s file holds: itself for
     /// a flat record, or spliced back out of its owner's text for an embedded child.</summary>

@@ -31,7 +31,7 @@ public static class EmbeddedChildLocator
     {
         foreach (var child in All(ownerBytes, ownerRecordType, release))
         {
-            if (string.Equals(child.FormKey, formKey, StringComparison.Ordinal)) return child.Span;
+            if (FormKeyComparer.Instance.Equals(child.FormKey, formKey)) return child.Span;
         }
         return null;
     }
@@ -80,7 +80,7 @@ public static class EmbeddedChildLocator
 
             if (reader.TokenType == JsonTokenType.String && member.Equals(FormKeyMember, StringComparison.Ordinal))
             {
-                ownFormKey = reader.GetString();
+                ownFormKey = reader.GetString() is { } written ? CanonicalFormKey.OfOrAsWritten(written) : null;
                 continue;
             }
             if (reader.TokenType == JsonTokenType.String && member.Equals(LoquiUnions.UnionTypeDiscriminator, StringComparison.Ordinal))
