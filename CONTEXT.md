@@ -200,6 +200,6 @@ Where a package is fetched from: a site such as Nexus, a store such as Steam, or
 Avoid: repository (MO2's word for a host), source
 
 # Manifest
-The one file in a mod folder that names its package and its host. For a source mod the build writes it.
+The one file in a mod folder that names its package, its host when it has one, and each of the mod's files. For a source mod the build writes it.
 
 Avoid: record (a plugin's unit of data), recipe, directives
