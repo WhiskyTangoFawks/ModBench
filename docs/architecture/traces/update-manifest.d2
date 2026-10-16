@@ -33,14 +33,14 @@ client -> http: envelope {class: track}
 http -> engine: envelope {class: track}
 modfolder -> modfolderadapter: "each mod's files: bytes, or the stat cache's hash when its stamp matches" {class: track}
 modfolderadapter -> engine: "hashed files" {class: track}
-engine."per mod: each file matched to its provider, or none; refused when an installation file is missing; a source mod's manifest is its build's"
+engine."per mod: each file matched to its place in the package, or to none; refused when an installation file is missing; a source mod's manifest is its build's"
 engine -> port: "progress, per mod" {class: push}
 client -> http: "cancel: the gesture, after its first progress" {class: track}
 http -> engine: "stop after the mod in hand" {class: track}
 engine -> modfolderadapter: "each manifest that changed · the stat cache" {class: track}
 modfolderadapter -> modfolder: "manifests · the stat cache" {class: track}
-engine -> http: "landed or refused, per mod, and each file with no provider" {class: track}
-http -> client: "landed or refused, per mod, and each file with no provider" {class: track}
+engine -> http: "landed or refused, per mod, and each file its package does not hold" {class: track}
+http -> client: "landed or refused, per mod, and each file its package does not hold" {class: track}
 client -> sourcecommands: the outcome {class: track}
 sourcecommands -> driving: "the outcome" {class: track}
 instance -> instanceadapter: watch {class: signal}

@@ -41,7 +41,7 @@ client -> mods: "mod status changed" {class: push}
 mods -> client: "mod status: the mods" {class: query}
 client -> http: envelope {class: query}
 http -> modfolderadapter: "mod status: the mods" {class: query}
-modfolderadapter -> http: "per mod: differs · no manifest · files with no provider" {class: query}
+modfolderadapter -> http: "per mod: differs · no manifest · files the package does not hold" {class: query}
 http -> client: "per mod: its state" {class: query}
 client -> mods: "per mod: its state" {class: query}
 mods."joined to the instance value"
