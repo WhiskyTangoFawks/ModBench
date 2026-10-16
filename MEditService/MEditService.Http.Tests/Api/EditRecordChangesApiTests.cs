@@ -14,17 +14,17 @@ public sealed class EditRecordChangesApiTests : HostedTests
     private const string Origin = "EditableMod";
     private const string Npc = "EditableNpc";
 
-    private async Task<(ScatteredFixtureData Fixture, string FormKey)> Loaded(bool sourcePlugin)
+    private async Task<(ScatteredFixtureData Fixture, string FormKey)> Loaded(bool compiledPlugin)
     {
         var fx = Owned(new PluginFixtureBuilder("api-edit-changes")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        if (sourcePlugin)
+        if (compiledPlugin)
         {
             (await Client.Init(Origin)).EnsureSuccessStatusCode();
             await Client.NextSnapshot(fx);
-            await Client.PluginReportsSourcePlugin(Plugin);
+            await Client.PluginReportsCompiledPlugin(Plugin);
         }
         return (fx, await Client.FirstFormKey(Plugin, Origin));
     }
@@ -40,7 +40,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
     [Fact]
     public async Task AnEdit_IsAnsweredWithTheNewTextOfTheRecordsDocument_AtItsPath_AndWritesNothing()
     {
-        var (fx, formKey) = await Loaded(sourcePlugin: true);
+        var (fx, formKey) = await Loaded(compiledPlugin: true);
         var file = NpcFile(fx);
         var before = TreeSnapshot.Of(ModFolderOf(fx));
 
@@ -57,7 +57,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ClearingDeleted_FillsFromTheUnsavedTextOfASourcePluginMaster()
+    public async Task ClearingDeleted_FillsFromTheUnsavedTextOfACompiledPluginMaster()
     {
         var fx = Owned(new PluginFixtureBuilder("api-edit-changes-masters")
             .WithPlugin("Master.esp", mod => mod.Npcs.AddNew("Saved"), origin: "MasterMod")
@@ -68,7 +68,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(["MasterMod", "OverrideMod"])).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsSourcePlugin("Override.esp");
+        await Client.PluginReportsCompiledPlugin("Override.esp");
         var formKey = await Client.FirstFormKey("Override.esp", "OverrideMod");
         var masterFile = Directory.EnumerateFiles(ModFolderOf(fx, "Master.esp"), "Saved - *.json", SearchOption.AllDirectories).Single();
 
@@ -84,7 +84,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
     [Fact]
     public async Task AnEditNamingAFieldTheRecordHasNot_Is404_WithItsOwnRefusal()
     {
-        var (_, formKey) = await Loaded(sourcePlugin: true);
+        var (_, formKey) = await Loaded(compiledPlugin: true);
 
         var response = await Client.EditChanges(formKey, Plugin, Origin, "no_such_field", 1);
 
@@ -92,19 +92,19 @@ public sealed class EditRecordChangesApiTests : HostedTests
     }
 
     [Fact]
-    public async Task AnEditOfANonSourcePlugin_Is409_WithItsOwnRefusal()
+    public async Task AnEditOfANonCompiledPlugin_Is409_WithItsOwnRefusal()
     {
-        var (_, formKey) = await Loaded(sourcePlugin: false);
+        var (_, formKey) = await Loaded(compiledPlugin: false);
 
         var response = await Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 0.75);
 
-        Assert.Equal("PluginNotSourcePlugin", (await response.AssertIsProblem(HttpStatusCode.Conflict)).GetProperty("refusal").GetString());
+        Assert.Equal("PluginNotCompiledPlugin", (await response.AssertIsProblem(HttpStatusCode.Conflict)).GetProperty("refusal").GetString());
     }
 
     [Fact]
     public async Task AnEditOfAPluginWhoseSourceIsUnreadable_Is409_WithItsOwnRefusal()
     {
-        var (fx, formKey) = await Loaded(sourcePlugin: true);
+        var (fx, formKey) = await Loaded(compiledPlugin: true);
         Directory.Delete(PluginSourceRoot.In(ModFolderOf(fx), Plugin), recursive: true);
 
         var response = await Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 0.75);
@@ -115,7 +115,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
     [Fact]
     public async Task AFormIdThatIsNoFormKey_Is422_WithItsOwnRefusal()
     {
-        var (_, formKey) = await Loaded(sourcePlugin: true);
+        var (_, formKey) = await Loaded(compiledPlugin: true);
 
         var response = await Client.EditChanges(formKey, Plugin, Origin, "FormKey", "not a FormKey");
 

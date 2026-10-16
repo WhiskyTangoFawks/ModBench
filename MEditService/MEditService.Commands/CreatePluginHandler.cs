@@ -21,7 +21,7 @@ public sealed class CreatePluginHandler
     internal CreatePluginHandler(IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, ILogger<CreatePluginHandler> logger) =>
         (_adapter, _holder, _source, _decompiler) = (adapter, holder, source, new PluginDecompiler(logger, adapter, source));
 
-    private async Task<PluginCreateResult> LandSourceIfSourcePlugin(
+    private async Task<PluginCreateResult> LandSourceIfCompiledPlugin(
         LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written)
     {
         if (sourceFolder is null) return new PluginCreateResult();
@@ -78,7 +78,7 @@ public sealed class CreatePluginHandler
 
         return created.Outcome switch
         {
-            EmptyPluginWrite.Written => await LandSourceIfSourcePlugin(loadOrder, plugin, folder, sourceFolder, created.Written),
+            EmptyPluginWrite.Written => await LandSourceIfCompiledPlugin(loadOrder, plugin, folder, sourceFolder, created.Written),
             EmptyPluginWrite.FolderGone => new PluginCreateResult(PluginCreateRefusal.FolderGone,
                 $"The folder {folder} has gone, so {plugin.Name} was not created."),
             EmptyPluginWrite.FileExists => new PluginCreateResult(PluginCreateRefusal.FileExists,

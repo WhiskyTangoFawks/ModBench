@@ -62,7 +62,7 @@ function appliedWithRefusals<A, R>(
 }
 
 // The backend's typed discriminator, off the ProblemDetails extension rather than re-derived from the
-// status: only it tells "not a source plugin" from "no folder", whose ways out differ.
+// status: only it tells "not a compiled plugin" from "no folder", whose ways out differ.
 function editRefused(
   error: { refusal?: unknown; detail?: string | null } | undefined,
 ): { applied: false; refusal: string; message: string } {
@@ -538,7 +538,7 @@ class HttpMEditClient implements MEditClient {
     }));
   }
 
-  /** A refusal (non-source plugin, a link that would dangle) comes back typed (ADR-0014); only a
+  /** A refusal (non-compiled plugin, a link that would dangle) comes back typed (ADR-0014); only a
    *  transport failure rejects. */
   async getEditChanges(
     formKey: string, { name: plugin, origin }: PluginAddress, envelope: RecordEditEnvelope,
@@ -717,9 +717,9 @@ class HttpMEditClient implements MEditClient {
       (data) => data ?? []);
   }
 
-  getReferencesInActiveOrSourcePlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed> {
-    return this.read(`getReferencesInActiveOrSourcePlugins(${formKey})`,
-      (signal) => this.apiClient.GET('/records/{formKey}/references-in-active-or-source-plugins', { params: { path: { formKey } }, signal }),
+  getReferencesInActiveOrCompiledPlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed> {
+    return this.read(`getReferencesInActiveOrCompiledPlugins(${formKey})`,
+      (signal) => this.apiClient.GET('/records/{formKey}/references-in-active-or-compiled-plugins', { params: { path: { formKey } }, signal }),
       (data) => data ?? []);
   }
 

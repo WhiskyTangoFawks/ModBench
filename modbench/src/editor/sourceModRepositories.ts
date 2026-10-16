@@ -4,7 +4,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 import { answerOf } from '../wire/readFailed';
 
-function sourcePluginFoldersOf(
+function compiledPluginFoldersOf(
   plugins: readonly Pick<PluginMetadata, 'name' | 'origin'>[],
   { listedSourceMods, sourceDirs, modOfOrigin }: Pick<SourceModRepositoriesDeps, 'listedSourceMods' | 'sourceDirs' | 'modOfOrigin'>,
 ): Map<string, string> {
@@ -89,7 +89,7 @@ export function sourceModRepositoriesOver(deps: SourceModRepositoriesDeps): Sour
       const gitApi = exports.getAPI(1);
 
       const plugins = answerOf(await client.getPlugins());
-      const folders = sourcePluginFoldersOf(plugins, deps);
+      const folders = compiledPluginFoldersOf(plugins, deps);
       const folderRepositories = await registerSourceModRepositories(
         (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), [...folders.values()]);
       byPlugin = pluginRepositoriesOf(folders, folderRepositories);

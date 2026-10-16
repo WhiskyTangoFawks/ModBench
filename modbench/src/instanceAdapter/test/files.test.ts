@@ -153,7 +153,7 @@ describe('isRepository', () => {
   let folder: string;
 
   beforeEach(async () => {
-    folder = await mkdtemp(join(tmpdir(), 'files-sourcePlugin-'));
+    folder = await mkdtemp(join(tmpdir(), 'files-compiledPlugin-'));
   });
 
   afterEach(async () => {

@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>What the record index reads of source plugins' source trees, and the writes the commands make to them. Each
+/// <summary>What the record index reads of compiled plugins' source trees, and the writes the commands make to them. Each
 /// answers the folder as it stands now: another tool can change it.</summary>
 public interface ISourceAdapter
 {

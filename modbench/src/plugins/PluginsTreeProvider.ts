@@ -405,7 +405,7 @@ export class PluginsTreeProvider
   }
 
   // plugins.md, Menus and keys: what every plugin menu condition reads. Where the plugin lives and
-  // whether its line is enabled are the instance value's; source plugin and editable wait on mEdit.
+  // whether its line is enabled are the instance value's; compiled plugin and editable wait on mEdit.
   private contextValueOf(row: PluginNode, address: PluginAddress): string {
     const place = placeOf(row.origin, { modOfOrigin: (origin) => modOfOrigin(this.instanceValue, origin)?.name, listedSourceMods: this.instanceValue.listedSourceMods });
     return ['plugin', row.plugin.enabled ? 'enabled' : 'disabled', ...(place === undefined ? [] : [place]), ...this.facts.rows.contextFlags(address)]

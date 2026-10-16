@@ -58,7 +58,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
 
     private static Action<Cell> Placing(PlacedObject placed) => cell => cell.Temporary.Add(placed);
 
-    private void Load(params (Fallout4Mod Mod, bool SourcePlugin)[] plugins)
+    private void Load(params (Fallout4Mod Mod, bool CompiledPlugin)[] plugins)
     {
         _plugins.Load(plugins);
         _edited = plugins[^1].Mod;
@@ -193,7 +193,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
-    public void ClearingDeleted_PassesOverADeletedCopyToItsLeft_ThatASourcePluginHolds()
+    public void ClearingDeleted_PassesOverADeletedCopyToItsLeft_ThatACompiledPluginHolds()
     {
         Load(
             (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
@@ -206,7 +206,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
-    public void ClearingDeleted_FillsFromTheUnsavedTextOfASourcePluginCopyToItsLeft()
+    public void ClearingDeleted_FillsFromTheUnsavedTextOfACompiledPluginCopyToItsLeft()
     {
         var middle = Plugin("Middle.esp", NpcCopy(0, "Saved"));
         Load(

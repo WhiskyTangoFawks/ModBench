@@ -14,7 +14,7 @@ public sealed class FilterAfterValidationTests
         using var fixture = new PluginFixtureBuilder("filter-after-validation")
             .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
             .BuildScattered()
-            .SourcePlugin();
+            .CompiledPlugin();
         var entry = fixture.Plugins.Single();
         using var index = Indexes.Reconciled(fixture);
         index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'EditedName'", "filter.sql");

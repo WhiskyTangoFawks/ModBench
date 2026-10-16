@@ -26,7 +26,7 @@ public sealed class PersistentFlagPartialFormCellTests : TestInstance
         var master = new Fallout4Mod(ModKey.FromFileName("Master.esm"), Fallout4Release.Fallout4);
         var masterCell = new Cell(master) { EditorID = "Inside", Flags = Cell.Flag.IsInteriorCell };
         master.Cells.Records.Add(CellBlocks.Interior(masterCell));
-        Add(master, "MasterMod", sourcePlugin: false);
+        Add(master, "MasterMod", compiledPlugin: false);
 
         var copy = new Fallout4Mod(ModKey.FromFileName("Override.esp"), Fallout4Release.Fallout4);
         copy.ModHeader.MasterReferences.Add(new MasterReference { Master = master.ModKey });

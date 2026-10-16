@@ -684,8 +684,8 @@ describe('Instance — game folder and the archives the game loads', () => {
 
   it('carries the paths a view renders: overwrite/, downloads/ and each listed mod\'s own folder, matched as the manager matches names, where it has one', async () => {
     const { instance } = loader({
-      mods: [mod('sourcePlugin'), mod('Radfall'), separator('Section')],
-      modFolders: modFoldersOf('SourcePlugin'),
+      mods: [mod('compiledPlugin'), mod('Radfall'), separator('Section')],
+      modFolders: modFoldersOf('CompiledPlugin'),
       runtimeOutput: { origin: 'overwrite', folder: '/overwrite', files: [], folders: [], notes: [] },
     });
 
@@ -694,7 +694,7 @@ describe('Instance — game folder and the archives the game loads', () => {
     const { paths } = instance.value;
     expect(paths.overwriteDir).toBe('/overwrite');
     expect(paths.downloadsDir).toBe('/downloads');
-    expect(paths.modDirs).toEqual(new Map([['sourcePlugin', '/mods/SourcePlugin']]));
+    expect(paths.modDirs).toEqual(new Map([['compiledPlugin', '/mods/CompiledPlugin']]));
   });
 
   it('carries a source folder for each source mod alone, one with no mod folder too, and hands it to the facts', async () => {

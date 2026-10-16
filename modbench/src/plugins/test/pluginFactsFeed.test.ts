@@ -46,17 +46,17 @@ function feedOver(client = new InMemoryMEditClient(), shown: readonly PluginAddr
   return { feed, client, logged, diagnoses, changedOutside, changes };
 }
 
-const sourcePluginFlag = (feed: PluginFactsFeed) => feed.rows.contextFlags(A).includes('sourcePlugin');
+const compiledPluginFlag = (feed: PluginFactsFeed) => feed.rows.contextFlags(A).includes('compiledPlugin');
 
 describe('PluginFactsFeed', () => {
   it('lands a reconcile: the plugins shown become queryable, the change event fires, and the count returns', async () => {
     const { feed, client, changes } = feedOver();
-    client.setQueryAnswer('getPlugins', [held({ isSourcePlugin: true }), held({ name: 'Unshown.esp' })]);
+    client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: true }), held({ name: 'Unshown.esp' })]);
     client.setQueryAnswer('getDiagnoses', []);
 
     expect(await feed.reconciled([])).toBe(1);
 
-    expect(sourcePluginFlag(feed)).toBe(true);
+    expect(compiledPluginFlag(feed)).toBe(true);
     expect(feed.rows.contextFlags({ name: 'Unshown.esp', origin: 'SomeMod' })).toEqual([]);
     expect(changes).toHaveBeenCalled();
   });
@@ -73,38 +73,38 @@ describe('PluginFactsFeed', () => {
 
   it('drops a reconcile answer that lands after a newer event', async () => {
     const { feed, client } = feedOver();
-    client.setQueryAnswer('getPlugins', [held({ isSourcePlugin: true })]);
+    client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: true })]);
     const landing = feed.reconciled([]);
     feed.indexed([], []);
 
     expect(await landing).toBeUndefined();
-    expect(sourcePluginFlag(feed)).toBe(false);
+    expect(compiledPluginFlag(feed)).toBe(false);
   });
 
   it('a fact re-read during a reconcile hand-off leaves the hand-off standing', async () => {
     const { feed, client } = feedOver();
     const slow = deferred<PluginMetadata[]>();
     client.setQueryAnswerOnce('getPlugins', slow.promise);
-    client.setQueryAnswer('getPlugins', [held({ isSourcePlugin: true })]);
+    client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: true })]);
     const handOff = feed.reconciled([]);
     await feed.refresh();
-    slow.resolve([held({ isSourcePlugin: true })]);
+    slow.resolve([held({ isCompiledPlugin: true })]);
 
     expect(await handOff).toBe(1);
-    expect(sourcePluginFlag(feed)).toBe(true);
+    expect(compiledPluginFlag(feed)).toBe(true);
   });
 
   it('a later re-read wins over an earlier one still in flight', async () => {
     const { feed, client } = feedOver();
     const slow = deferred<PluginMetadata[]>();
     client.setQueryAnswerOnce('getPlugins', slow.promise);
-    client.setQueryAnswer('getPlugins', [held({ isSourcePlugin: false })]);
+    client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: false })]);
     const earlier = feed.refresh();
     await feed.refresh();
-    slow.resolve([held({ isSourcePlugin: true })]);
+    slow.resolve([held({ isCompiledPlugin: true })]);
     await earlier;
 
-    expect(sourcePluginFlag(feed)).toBe(false);
+    expect(compiledPluginFlag(feed)).toBe(false);
   });
 
   it('publishes the malformed-plugin scan to the Problems panel', async () => {

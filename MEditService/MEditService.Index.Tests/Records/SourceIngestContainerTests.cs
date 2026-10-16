@@ -20,7 +20,7 @@ public sealed class SourceIngestContainerTests : IDisposable
     }
 
     private bool ReadFromItsBinaryInPlaceOfItsSource(OpenedIndex index) =>
-        index.PluginRowOf(_fixture.Plugin) is { IsSourcePlugin: true, PluginSourceUnreadable: not null };
+        index.PluginRowOf(_fixture.Plugin) is { IsCompiledPlugin: true, PluginSourceUnreadable: not null };
 
     [Fact]
     public void AnExternallyEditedContainer_ServesItsEdit_ThroughStructuralDiff()

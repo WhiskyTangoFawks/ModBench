@@ -92,7 +92,7 @@ public sealed class SpatialWorkingTreeStateApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsSourcePlugin(Plugin);
+        await Client.PluginReportsCompiledPlugin(Plugin);
 
         (await Client.Edit(formKeys[edited], Plugin, Origin, "EditorID", "Renamed")).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
@@ -111,7 +111,7 @@ public sealed class SpatialWorkingTreeStateApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsSourcePlugin(Plugin);
+        await Client.PluginReportsCompiledPlugin(Plugin);
 
         (await Client.Edit(formKeys["interiorRef"], Plugin, Origin, "EditorID", "Renamed")).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);

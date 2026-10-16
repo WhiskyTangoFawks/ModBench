@@ -38,7 +38,7 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
         return File.Exists(config) && File.ReadLines(config).Any(line => line.Trim() == $"[{InitMarkSection}]");
     }
 
-    // Read off the ref store's files, not by running git: every read of a source plugin asks this.
+    // Read off the ref store's files, not by running git: every read of a compiled plugin asks this.
     // A branch is a loose ref file until git packs it into packed-refs.
     private static bool HasMainBranch(string gitDir) =>
         File.Exists(Path.Combine(gitDir, "refs", "heads", "main")) || PackedBranches(gitDir).Contains("main");

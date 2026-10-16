@@ -5,7 +5,7 @@ import { followReportedCopies, type CopyChanged } from './recordCopy';
 import { RENDERED_DOCUMENT_SCHEME, copyOf, holdsNoCopy } from '../drivingLib/recordDocument';
 import { answerOf } from '../wire/readFailed';
 
-/** The read-only documents a non-source plugin's copies open as: mEdit's rendering, read again
+/** The read-only documents a non-compiled plugin's copies open as: mEdit's rendering, read again
  *  when mEdit reports the copy changed, and when its reports resume, since one may have been missed. */
 export class RenderedDocuments implements vscode.TextDocumentContentProvider, vscode.Disposable {
   private readonly changes = new vscode.EventEmitter<vscode.Uri>();

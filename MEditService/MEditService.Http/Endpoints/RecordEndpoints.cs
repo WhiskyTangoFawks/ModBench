@@ -157,10 +157,10 @@ internal static class RecordEndpoints
         .ProducesProblem(503)
         .ProducesProblem(500);
 
-        app.MapGet("/records/{formKey}/references-in-active-or-source-plugins", (string formKey, IQueries svc) =>
+        app.MapGet("/records/{formKey}/references-in-active-or-compiled-plugins", (string formKey, IQueries svc) =>
             GetReferences(
-                nameof(IQueries.GetReferencesInActiveOrSourcePlugins), formKey, svc.GetReferencesInActiveOrSourcePlugins, logger))
-        .WithName("GetReferencesInActiveOrSourcePlugins")
+                nameof(IQueries.GetReferencesInActiveOrCompiledPlugins), formKey, svc.GetReferencesInActiveOrCompiledPlugins, logger))
+        .WithName("GetReferencesInActiveOrCompiledPlugins")
         .WithTags("Records")
         .Produces<IReadOnlyList<ReferenceResult>>()
         .ProducesProblem(503)

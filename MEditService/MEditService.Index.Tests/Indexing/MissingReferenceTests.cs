@@ -19,7 +19,7 @@ public class MissingReferenceTests
 
     private static List<(PluginAddress Plugin, SourceProblem Problem)> MissingReferencesOf(ScatteredFixtureData fixture)
     {
-        using var index = Indexes.Reconciled(fixture.SourcePlugin());
+        using var index = Indexes.Reconciled(fixture.CompiledPlugin());
         var problems = index.Queries.GetProblems().Value() ?? throw new InvalidOperationException("Expected the index to be ready.");
         return [.. problems.SelectMany(plugin => plugin.Problems.Select(problem => (plugin.Plugin, problem)))];
     }

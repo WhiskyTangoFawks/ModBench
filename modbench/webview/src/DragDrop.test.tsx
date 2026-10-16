@@ -65,7 +65,7 @@ const record = compareResultFixture({
 
 const plugins = [
   { name: 'Fallout4.esm', isImmutable: true },
-  { name: 'MyMod.esp', isSourcePlugin: true },
+  { name: 'MyMod.esp', isCompiledPlugin: true },
 ];
 
 const LABEL_COLUMN = 0;
@@ -184,14 +184,14 @@ describe('RecordPanel — drag and drop', () => {
   });
 });
 
-describe('RecordPanel — a drop on a source plugin column that is not the file\'s', () => {
+describe('RecordPanel — a drop on a compiled plugin column that is not the file\'s', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('changes nothing, as the file\'s column alone is edited', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     vi.mocked(vscode.postMessage).mockClear();
-    const bothSourcePlugin = [{ name: 'Fallout4.esm', isSourcePlugin: true }, { name: 'MyMod.esp', isSourcePlugin: true }];
-    render(<RecordPanel client={panelClient(() => record, { plugins: bothSourcePlugin, fileColumn: 'MyMod.esp' })} />);
+    const bothCompiledPlugin = [{ name: 'Fallout4.esm', isCompiledPlugin: true }, { name: 'MyMod.esp', isCompiledPlugin: true }];
+    render(<RecordPanel client={panelClient(() => record, { plugins: bothCompiledPlugin, fileColumn: 'MyMod.esp' })} />);
 
     const { landed } = drag(await cellOf('Level', MOD), await cellOf('Level', MASTER));
 

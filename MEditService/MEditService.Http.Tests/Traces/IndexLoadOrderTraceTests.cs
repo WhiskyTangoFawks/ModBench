@@ -55,13 +55,13 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task APluginWhosePluginSourceIsGone_IsSourcePlugin_ItsPluginSourceUnreadable_AndItsPluginFileAnswers()
+    public async Task APluginWhosePluginSourceIsGone_IsCompiledPlugin_ItsPluginSourceUnreadable_AndItsPluginFileAnswers()
     {
         using var fx = OneMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsSourcePlugin(Plugin);
+        await Client.PluginReportsCompiledPlugin(Plugin);
 
         Directory.Delete(PluginSourceRoot.In(OtherTool.ModFolderOf(fx, Origin), Plugin), recursive: true);
         await Client.NextSnapshot(fx);
@@ -70,7 +70,7 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
             async () => (await Client.Plugin(Plugin)).GetProperty("pluginSourceUnreadable") is { ValueKind: JsonValueKind.Object } unreadable
                 && unreadable.GetProperty("reason").GetString().Require().Contains(Plugin, StringComparison.Ordinal),
             $"{Plugin} reported with its plugin source unreadable");
-        Assert.True((await Client.Plugin(Plugin)).GetProperty("isSourcePlugin").GetBoolean());
+        Assert.True((await Client.Plugin(Plugin)).GetProperty("isCompiledPlugin").GetBoolean());
         var records = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_");
         Assert.Equal(1, records.GetProperty("total").GetInt32());
     }

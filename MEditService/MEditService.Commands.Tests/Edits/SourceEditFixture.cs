@@ -8,9 +8,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>The write side as ADR-0015 has it: a temporary source plugin tree, a load order
+/// <summary>The write side as ADR-0015 has it: a temporary compiled plugin tree, a load order
 /// value, the codec and the schema. No index and no factory anywhere in it.</summary>
-public sealed class SourceEditFixture : TestInstance, ISourcePlugin
+public sealed class SourceEditFixture : TestInstance, ICompiledPlugin
 {
     public const string ModFolderOrigin = "FixtureMod";
     public const string PluginName = "Fixture.esp";
@@ -59,17 +59,17 @@ public sealed class SourceEditFixture : TestInstance, ISourcePlugin
         mod.Quests.Add(quest);
         (Worldspace, Cell, Quest) = (worldspace.FormKey, cell.FormKey, quest.FormKey);
 
-        // Source plugin through the real service: what an edit does to a git working tree is the thing
+        // Compiled plugin through the real service: what an edit does to a git working tree is the thing
         // under test, and no mock can answer that.
         Plugin = Add(mod, ModFolderOrigin, track);
     }
 
-    public static SourceEditFixture SourcePlugin() => new(track: true, PluginName, isLight: false);
+    public static SourceEditFixture CompiledPlugin() => new(track: true, PluginName, isLight: false);
 
-    public static SourceEditFixture SourcePluginLight(string pluginName = PluginName) =>
+    public static SourceEditFixture CompiledPluginLight(string pluginName = PluginName) =>
         new(track: true, pluginName, isLight: true);
 
-    public static SourceEditFixture NonSourcePlugin() => new(track: false, PluginName, isLight: false);
+    public static SourceEditFixture NonCompiledPlugin() => new(track: false, PluginName, isLight: false);
 
     public ISourceRepository? Repository => RepositoryOf(Plugin);
 

@@ -141,7 +141,7 @@ public sealed class CompareRecordsApiTests : HostedTests
         Assert.Equal((WithWeapon, WithWeaponMod), (column.GetProperty("plugin").GetString(), column.GetProperty("origin").GetString()));
     }
 
-    private async Task<(string PlacedRef, string CellText)> SourcePluginACell()
+    private async Task<(string PlacedRef, string CellText)> CompiledPluginACell()
     {
         var fx = Owned(new PluginFixtureBuilder("compare-child")
             .WithPlugin(WithNpc, mod =>
@@ -158,7 +158,7 @@ public sealed class CompareRecordsApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(WithNpcMod)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsSourcePlugin(WithNpc);
+        await Client.PluginReportsCompiledPlugin(WithNpc);
         var cellFile = Directory.EnumerateFiles(Path.GetDirectoryName(fx.Plugins.Single().Path).Require(), "*.json", SearchOption.AllDirectories)
             .Single(file => File.ReadAllText(file).Contains("\"PlacedRef\"", StringComparison.Ordinal));
         return (await Client.FormKeyNamed(WithNpc, WithNpcMod, "refr", "PlacedRef"), await File.ReadAllTextAsync(cellFile));
@@ -176,7 +176,7 @@ public sealed class CompareRecordsApiTests : HostedTests
     [Fact]
     public async Task AChildWithItsContainersText_IsTheChildReadFromIt()
     {
-        var (placedRef, cellText) = await SourcePluginACell();
+        var (placedRef, cellText) = await CompiledPluginACell();
 
         var column = await ColumnReadFrom(placedRef, cellText.Replace("\"PlacedRef\"", "\"EditedRef\"", StringComparison.Ordinal));
 
@@ -188,7 +188,7 @@ public sealed class CompareRecordsApiTests : HostedTests
     [Fact]
     public async Task AChildWithAContainersTextThatDoesNotCarryIt_IsAColumnSayingSo()
     {
-        var (placedRef, cellText) = await SourcePluginACell();
+        var (placedRef, cellText) = await CompiledPluginACell();
 
         var column = await ColumnReadFrom(placedRef, cellText.Replace(placedRef, "000FFF:WithNpc.esp", StringComparison.Ordinal));
 

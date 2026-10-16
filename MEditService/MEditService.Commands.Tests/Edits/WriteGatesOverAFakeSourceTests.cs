@@ -31,7 +31,7 @@ public sealed class WriteGatesOverAFakeSourceTests
 
     private static IServiceProvider OverADiskThatTracksWhatTheFakeDoesNot(FakeSourceAdapter source, out SourceEditFixture disk)
     {
-        disk = SourceEditFixture.SourcePlugin();
+        disk = SourceEditFixture.CompiledPlugin();
         return TestEditService.Over(disk.Holder, source: source);
     }
 
@@ -48,12 +48,12 @@ public sealed class WriteGatesOverAFakeSourceTests
         var result = services.GetRequiredService<EditRecordChangesHandler>()
             .Changes(disk.Plugin, disk.Npc.ToString(), SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).Outcome;
 
-        Assert.Equal(RecordEditRefusal.PluginNotSourcePlugin, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, result.Refusal);
         Assert.Contains("Decompile and commit its mod", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void EditingAFormKeyNoDocumentHolds_OnANonSourcePlugin_StillRefusesAsNonSourcePlugin()
+    public void EditingAFormKeyNoDocumentHolds_OnANonCompiledPlugin_StillRefusesAsNonCompiledPlugin()
     {
         var services = OverADiskThatTracksWhatTheFakeDoesNot(new FakeSourceAdapter(), out var disk);
         using var _ = disk;
@@ -61,7 +61,7 @@ public sealed class WriteGatesOverAFakeSourceTests
         var result = services.GetRequiredService<EditRecordChangesHandler>()
             .Changes(disk.Plugin, $"ABCDEF:{disk.Plugin.Name}", SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).Outcome;
 
-        Assert.Equal(RecordEditRefusal.PluginNotSourcePlugin, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, result.Refusal);
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public sealed class WriteGatesOverAFakeSourceTests
     }
 
     [Fact]
-    public void EditingAFormKeyNoDocumentOfASourcePlugin_IsRefusedAsRecordNotFound()
+    public void EditingAFormKeyNoDocumentOfACompiledPlugin_IsRefusedAsRecordNotFound()
     {
         var source = new FakeSourceAdapter().Tracking(ModFolder, NpcDocument());
 

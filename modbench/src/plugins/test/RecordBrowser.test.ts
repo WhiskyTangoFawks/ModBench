@@ -531,7 +531,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
     return repo;
   }
 
-  it('states a source plugin, editable plugin on its groups, records, a container\'s children, worldspace, cells and placed references', async () => {
+  it('states a compiled plugin, editable plugin on its groups, records, a container\'s children, worldspace, cells and placed references', async () => {
     const states = (await rowsBeneath(new RecordBrowser(spatialClient()), { name: 'Plugin0.esp', origin: 'Data/' }, EDITABLE_PLUGIN))
       .map((n) => String(n.contextValue));
 

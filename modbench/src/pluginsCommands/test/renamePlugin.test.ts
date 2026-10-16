@@ -87,11 +87,11 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
   });
 
   it('applies nothing and renames nothing when mEdit refuses the changes, and carries the refusal', async () => {
-    client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename the source of "Source Patch Mod.esp" — NotSourcePlugin' });
+    client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename the source of "Source Patch Mod.esp" — NotCompiledPlugin' });
     const { fake, result } = rename('Renamed Patch.esp');
 
     expect(await result).toEqual({
-      applied: false, sourceRenamed: false, refusal: 'Could not rename the source of "Source Patch Mod.esp" — NotSourcePlugin',
+      applied: false, sourceRenamed: false, refusal: 'Could not rename the source of "Source Patch Mod.esp" — NotCompiledPlugin',
     });
     expect(apply).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);

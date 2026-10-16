@@ -1261,10 +1261,10 @@ describe('what a record tab\'s webview posts', () => {
       const mEdit = client();
       mEdit.setQueryAnswer('getPlugins', activeA);
       mEdit.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModB', isWinner: true, editorId: 'Gun' }]));
-      let sourcePlugin = new Set<string>();
+      let compiledPlugin = new Set<string>();
       const changed: (() => void)[] = [];
       const modFacts = {
-        ...NO_MODS, listedSourceMods: () => sourcePlugin, modOfOrigin: modOfOriginIn('ModB'),
+        ...NO_MODS, listedSourceMods: () => compiledPlugin, modOfOrigin: modOfOriginIn('ModB'),
         onChange: (listener: () => void) => { changed.push(listener); return { dispose: () => undefined }; },
       };
       const { openDocument } = makeEditor(mEdit, undefined, modFacts);
@@ -1273,7 +1273,7 @@ describe('what a record tab\'s webview posts', () => {
       await settle();
       const told = () => answered(tab).filter((message) => typeof message === 'object' && message !== null && Reflect.get(message, 'type') === 'modsChanged');
 
-      sourcePlugin = new Set(['ModB']);
+      compiledPlugin = new Set(['ModB']);
       changed.forEach((listener) => { listener(); });
 
       expect(told()).toEqual([{ type: 'modsChanged', modsByOrigin: { ModB: 'sourceMod' } }]);
@@ -1311,7 +1311,7 @@ describe('a click on a column\'s header', () => {
   });
 });
 
-describe('a non-source plugin copy\'s tab', () => {
+describe('a non-compiled plugin copy\'s tab', () => {
   const GUN = '000801:A.esp';
   const RENDERED = renderedUri(GUN, 'Gun.json');
 

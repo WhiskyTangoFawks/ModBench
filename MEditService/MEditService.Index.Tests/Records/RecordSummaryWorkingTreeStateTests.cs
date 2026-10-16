@@ -25,7 +25,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
                 untouched = mod.Npcs.AddNew("Untouched").FormKey;
             }, origin: "BaseMod")
             .BuildScattered()
-            .SourcePlugin();
+            .CompiledPlugin();
         _base = _fixture.Plugins.Single();
         _baseKey = _base.KeyOf();
         _editedFormKey = edited;
@@ -97,12 +97,12 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         using (new FileStream(_base.SourceFileOf(committed), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
         {
             index.NextSnapshotUntil(
-                () => index.PluginRowOf(_baseKey) is { IsSourcePlugin: true, PluginSourceUnreadable: not null }, "the binary read in the tree's place");
+                () => index.PluginRowOf(_baseKey) is { IsCompiledPlugin: true, PluginSourceUnreadable: not null }, "the binary read in the tree's place");
 
             Assert.Equal(WorkingTreeState.None, SummaryFor(Listing(index), edited).WorkingTreeState);
         }
 
-        index.NextSnapshotUntil(() => index.PluginRowOf(_baseKey) is { IsSourcePlugin: true, PluginSourceUnreadable: null }, "the tree read again");
+        index.NextSnapshotUntil(() => index.PluginRowOf(_baseKey) is { IsCompiledPlugin: true, PluginSourceUnreadable: null }, "the tree read again");
 
         Assert.Equal(WorkingTreeState.Modified, SummaryFor(Listing(index), edited).WorkingTreeState);
     }

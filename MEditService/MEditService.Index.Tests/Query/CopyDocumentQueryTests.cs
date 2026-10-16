@@ -41,7 +41,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     private OpenedIndex Reconciled() => Indexes.Reconciled(_fixture);
 
     [Fact]
-    public void ASourcePluginCopy_IsItsFile()
+    public void ACompiledPluginCopy_IsItsFile()
     {
         SourceMods.Track(Entry);
         using var index = Reconciled();
@@ -50,7 +50,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     }
 
     [Fact]
-    public void ASourcePluginChildCopy_IsInItsContainersFile()
+    public void ACompiledPluginChildCopy_IsInItsContainersFile()
     {
         SourceMods.Track(Entry);
         using var index = Reconciled();
@@ -59,7 +59,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     }
 
     [Fact]
-    public void ASourcePluginCopyInAPluginThatIsNotActive_IsItsFile()
+    public void ACompiledPluginCopyInAPluginThatIsNotActive_IsItsFile()
     {
         SourceMods.Track(Entry);
         using var index = Indexes.Reconciled(_fixture.GameDirectory, [Entry with { Enabled = false }]);
@@ -68,7 +68,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     }
 
     [Fact]
-    public void ASourcePluginCopyWhoseFileIsGone_HasNoAnswer()
+    public void ACompiledPluginCopyWhoseFileIsGone_HasNoAnswer()
     {
         SourceMods.Track(Entry);
         using var index = Reconciled();
@@ -79,7 +79,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     }
 
     [Fact]
-    public void ANonSourcePluginCopy_IsRenderedUnderTheLayoutsName()
+    public void ANonCompiledPluginCopy_IsRenderedUnderTheLayoutsName()
     {
         using var index = Reconciled();
 

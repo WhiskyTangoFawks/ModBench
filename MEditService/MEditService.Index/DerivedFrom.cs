@@ -1,6 +1,6 @@
 namespace MEditService.Index;
 
-/// <summary>Which truth a plugin's rows were derived from (ADR-0007). A source plugin whose plugin
+/// <summary>Which truth a plugin's rows were derived from (ADR-0007). A compiled plugin whose plugin
 /// source is missing or cannot be read is derived from its binary (plugins.md, A row, Plugin).</summary>
 internal enum DerivedFrom
 {

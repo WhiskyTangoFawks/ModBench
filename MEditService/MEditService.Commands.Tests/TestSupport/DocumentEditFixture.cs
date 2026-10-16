@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
-/// <summary>A real source plugin with no records of its own: a case seeds the document it needs,
+/// <summary>A real compiled plugin with no records of its own: a case seeds the document it needs,
 /// then edits it through the real <see cref="EditRecordChangesHandler"/>, saving what it answers.</summary>
 internal sealed class DocumentEditFixture : TestInstance
 {
@@ -20,7 +20,7 @@ internal sealed class DocumentEditFixture : TestInstance
     internal static readonly ModKey ModKey = ModKey.FromFileName(PluginName);
 
     private ISourceRepository Repository => RepositoryOf(Plugin)
-        ?? throw new InvalidOperationException($"Expected '{Plugin}' to already be a source plugin.");
+        ?? throw new InvalidOperationException($"Expected '{Plugin}' to already be a compiled plugin.");
 
     internal PluginAddress Plugin { get; }
 

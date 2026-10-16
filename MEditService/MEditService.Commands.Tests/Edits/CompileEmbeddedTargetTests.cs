@@ -86,7 +86,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_ForALinkToARecordEmbeddedInAnotherSourcePlugin_ReportsNothingAboutIt()
+    public async Task Compile_ForALinkToARecordEmbeddedInAnotherCompiledPlugin_ReportsNothingAboutIt()
     {
         var answer = await CompileServices.Over(_loadOrder).CompileAsync([_referrer]);
 
@@ -97,7 +97,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_ForALinkIntoASourcePluginTheLoadOrderDoesNotLoad_ReportsItUnresolved()
+    public async Task Compile_ForALinkIntoACompiledPluginTheLoadOrderDoesNotLoad_ReportsItUnresolved()
     {
         var notLoaded = SnapshotPlugins.Snapshot(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4, [Target(enabled: false), Referrer]);

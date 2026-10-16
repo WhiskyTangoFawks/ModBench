@@ -23,22 +23,22 @@ const copy = { formKey: GUN, plugin: modA };
 const NAME = 'Gun - 000801_A.esp.json';
 const CELL_FILE = '/source/ModA/plugin-source/A.esp/Cells/Cell.json';
 
-const nonSourcePlugin = (renderedFileName: string): RecordDocumentClient => ({
+const nonCompiledPlugin = (renderedFileName: string): RecordDocumentClient => ({
   getRecordOwner: () => Promise.resolve(undefined),
   getCopyDocument: () => Promise.resolve({ kind: 'Rendered', location: renderedFileName }),
 });
 
 const carriedIn = (path: string): RecordDocumentClient => ({
-  ...nonSourcePlugin(NAME),
+  ...nonCompiledPlugin(NAME),
   getCopyDocument: () => Promise.resolve({ kind: 'ContainersFile', location: path }),
 });
 
 const ownFile = (path: string): RecordDocumentClient => ({
-  ...nonSourcePlugin(NAME),
+  ...nonCompiledPlugin(NAME),
   getCopyDocument: () => Promise.resolve({ kind: 'OwnFile', location: path }),
 });
 
-const holdingNone: RecordDocumentClient = { ...nonSourcePlugin(NAME), getCopyDocument: () => Promise.resolve(null) };
+const holdingNone: RecordDocumentClient = { ...nonCompiledPlugin(NAME), getCopyDocument: () => Promise.resolve(null) };
 
 const uriOf = async (client: RecordDocumentClient, of: RecordCopy): Promise<vscode.Uri> => {
   const document = await copyDocument(client, of);
@@ -48,7 +48,7 @@ const uriOf = async (client: RecordDocumentClient, of: RecordCopy): Promise<vsco
 
 describe('a rendered document\'s address', () => {
   it('names the copy by its FormKey and plugin, and ends in the name its file would have', async () => {
-    const uri = await uriOf(nonSourcePlugin(NAME), copy);
+    const uri = await uriOf(nonCompiledPlugin(NAME), copy);
 
     expect(copyOf(uri)).toEqual(copy);
     expect(uri.path.split('/').at(-1)).toBe(NAME);
@@ -57,13 +57,13 @@ describe('a rendered document\'s address', () => {
   it('survives a plugin address containing "/"', async () => {
     const odd = { formKey: '000801:Mod/A.esp', plugin: { name: 'Mod/A.esp', origin: 'Mods/A' } };
 
-    expect(copyOf(await uriOf(nonSourcePlugin(NAME), odd))).toEqual(odd);
+    expect(copyOf(await uriOf(nonCompiledPlugin(NAME), odd))).toEqual(odd);
   });
 
   it('keeps the game folder\'s origin whole, as one segment of the path', async () => {
     const game = { formKey: GUN, plugin: { name: 'A.esp', origin: DATA_DIRECTORY_ORIGIN } };
 
-    const uri = await uriOf(nonSourcePlugin(NAME), game);
+    const uri = await uriOf(nonCompiledPlugin(NAME), game);
 
     expect(uri.path.split('/').slice(1)).not.toContain('');
     expect(copyOf(uri)).toEqual(game);
@@ -76,8 +76,8 @@ describe('a rendered document\'s address', () => {
   });
 
   it('tells apart the copies of two plugins of one file name from different origins', async () => {
-    expect(await uriOf(nonSourcePlugin(NAME), copy))
-      .not.toEqual(await uriOf(nonSourcePlugin(NAME), { formKey: GUN, plugin: { name: 'A.esp', origin: 'ModB' } }));
+    expect(await uriOf(nonCompiledPlugin(NAME), copy))
+      .not.toEqual(await uriOf(nonCompiledPlugin(NAME), { formKey: GUN, plugin: { name: 'A.esp', origin: 'ModB' } }));
   });
 });
 

@@ -20,7 +20,7 @@ public sealed class DeletedRecordCopyTests : IDisposable
     public void Dispose() => _plugins.Dispose();
 
     [Fact]
-    public void CopyAsOverride_OfADeletedRecordANonSourcePluginHolds_LandsItDeleted()
+    public void CopyAsOverride_OfADeletedRecordANonCompiledPluginHolds_LandsItDeleted()
     {
         var deleting = Plugin("Deleting.esp", mod => mod.Npcs.Add(new Npc(TheNpc, Fallout4Release.Fallout4) { MajorRecordFlagsRaw = Deleted }));
         var patch = Plugin("Patch.esp", _ => { });

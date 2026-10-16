@@ -50,7 +50,7 @@ export const WEBVIEW_TO_EXTENSION = {
   VIEW_STATE: 'viewState',
 } as const;
 
-/** Why a source plugin's source does not read, and whether decompile gets past it. */
+/** Why a compiled plugin's source does not read, and whether decompile gets past it. */
 export type UnreadableSource = components['schemas']['UnreadableSource'];
 export type ConflictThis = components['schemas']['ConflictThis'];
 export type ConflictAll = components['schemas']['ConflictAll'];
@@ -146,7 +146,7 @@ export interface ColumnHeaderContext {
   webviewSection: 'recordHeader';
   // commands.md, Argument: the column's record, as its plugin's address and its FormKey.
   argument: ArgumentOf<'record'>;
-  // commands.md, delete: the column's plugin is a source plugin and not read-only, and the plugin source reads.
+  // commands.md, delete: the column's plugin is a compiled plugin and not read-only, and the plugin source reads.
   editable: boolean;
   // editor.md, Menus and keys: which of decompile and commit, or decompile and build, a plugin's mod is offered.
   // None is a plugin in no mod: the game's and Overwrite's.

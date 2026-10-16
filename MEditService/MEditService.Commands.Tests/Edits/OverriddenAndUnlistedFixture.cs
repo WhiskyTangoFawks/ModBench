@@ -9,7 +9,7 @@ namespace MEditService.Commands.Tests.Edits;
 /// <summary>Two source mods sharing one plugin filename (ADR-0012), one winning and one overridden;
 /// a winning plugin plugins.txt does not list; and a plain winning destination. No index anywhere
 /// in it.</summary>
-public sealed class OverriddenAndUnlistedFixture : TestInstance, ISourcePlugins
+public sealed class OverriddenAndUnlistedFixture : TestInstance, ICompiledPlugins
 {
     public const string PluginName = "Shared.esp";
     public const string WinningOrigin = "WinningMod";
@@ -69,7 +69,7 @@ public sealed class OverriddenAndUnlistedFixture : TestInstance, ISourcePlugins
 
     public static OverriddenAndUnlistedFixture Create() => new();
 
-    /// <summary>The bytes on disk for a source plugin's own binary — what a refused compile's
+    /// <summary>The bytes on disk for a compiled plugin's own binary — what a refused compile's
     /// "writes nothing" claim is checked against.</summary>
     public byte[] PluginBytes(PluginAddress plugin) => File.ReadAllBytes(Path.Combine(ModFolderOf(plugin), plugin.Name));
 }

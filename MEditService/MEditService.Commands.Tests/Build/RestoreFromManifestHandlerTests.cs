@@ -81,13 +81,13 @@ public sealed class RestoreFromManifestHandlerTests
     public async Task AFileWhoseBytesDiffer_ComesBackFromItsInstallationFile_EachFileNoLineNamesIsNamed_AndEveryOtherFileIsLeftAlone()
     {
         var download = Downloaded("dl/Mod.zip", ("a.nif", "a"), ("b.nif", "b"));
-        _folders.WithFile(Mod, "a.nif", "edited").WithFile(Mod, "b.nif", "b").WithFile(Mod, "nonSourcePlugin.txt", "mine").WithFile(Mod, "meta.ini", "[General]");
+        _folders.WithFile(Mod, "a.nif", "edited").WithFile(Mod, "b.nif", "b").WithFile(Mod, "nonCompiledPlugin.txt", "mine").WithFile(Mod, "meta.ini", "[General]");
         Manifested(Mod, [download], Line("a.nif", new FileProvider.FirstInstallationFile()), Line("b.nif", new FileProvider.FirstInstallationFile()));
 
         var restored = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod, download)], Instance())).Landed).Outcome;
 
         Assert.Equal(["a.nif"], restored.Written);
-        Assert.Equal(["nonSourcePlugin.txt"], restored.NamedByNoLine);
+        Assert.Equal(["nonCompiledPlugin.txt"], restored.NamedByNoLine);
         Assert.Equal([(Mod, "a.nif")], WrittenIn(Mod));
         Assert.Equal("a", WrittenText(Mod, "a.nif"));
     }

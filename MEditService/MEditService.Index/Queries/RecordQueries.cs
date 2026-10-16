@@ -48,7 +48,7 @@ internal sealed class RecordQueries(
             return new(plugin, snapshot.LoadOrderIndex(plugin.Key), IsImmutable: snapshot.ProviderOf(plugin.Key) == PluginProvider.Game, opened[plugin.Key],
                 masterIssues?.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
                 parseFailures.Contains(plugin.Key),
-                IsSourcePlugin: derivedFrom?.IsSourceMod() ?? false,
+                IsCompiledPlugin: derivedFrom?.IsSourceMod() ?? false,
                 PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource ? WhyUnreadable(plugin) : null,
                 _index.LaterReadFailure(plugin.Key)?.Select(SourceProblem.StoppedAt).ToList());
         }
@@ -300,8 +300,8 @@ internal sealed class RecordQueries(
     public Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferences(string targetFormKey) =>
         IndexAnswer.Of(() => Referrers(RequireReads().GetReferencedBy(targetFormKey)));
 
-    public Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferencesInActiveOrSourcePlugins(string targetFormKey) =>
-        IndexAnswer.Of(() => Referrers(RequireReads().GetReferencedByInActiveOrSourcePlugins(targetFormKey)));
+    public Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferencesInActiveOrCompiledPlugins(string targetFormKey) =>
+        IndexAnswer.Of(() => Referrers(RequireReads().GetReferencedByInActiveOrCompiledPlugins(targetFormKey)));
 
     private IReadOnlyList<ReferenceResult> Referrers(IReadOnlyList<ReferenceRow> rows)
     {
@@ -325,7 +325,7 @@ internal sealed class RecordQueries(
         return RenderedFileName(plugin, identity).Then(name => SourceAnswer.Of<RenderedDocument?>(new RenderedDocument(name, body)));
     }
 
-    // A source plugin's truth is its tree (ADR-0006), so a copy whose file is gone has no answer.
+    // A compiled plugin's truth is its tree (ADR-0006), so a copy whose file is gone has no answer.
     public Answer<CopyDocument?, IndexRefused> GetCopyDocument(PluginAddress plugin, string formKey) =>
         IndexAnswer.Sourced(() => CopyDocumentOf(plugin, formKey));
 
@@ -343,16 +343,16 @@ internal sealed class RecordQueries(
     private static CopyDocument CopyDocumentAt(DocumentFile file) =>
         new(file.IsContainersDocument ? CopyDocumentKind.ContainersFile : CopyDocumentKind.OwnFile, file.Path);
 
-    // A source plugin copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
+    // A compiled plugin copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
     private Answer<string, SourceFailure> RenderedFileName(PluginAddress plugin, RecordIdentity identity)
     {
         var snapshot = _loadOrder.Require();
         if (snapshot.Plugin(plugin) is not { } registered || !source.IsSourceMod(registered)
-            || source.Over(registered, snapshot.GameRelease) is not { } sourcePlugin)
+            || source.Over(registered, snapshot.GameRelease) is not { } compiledPlugin)
         {
             return source.FileNameOf(identity);
         }
-        return sourcePlugin.FileNameOf(plugin, identity).Then(name => SourceAnswer.Of(name ?? source.FileNameOf(identity)));
+        return compiledPlugin.FileNameOf(plugin, identity).Then(name => SourceAnswer.Of(name ?? source.FileNameOf(identity)));
     }
 
     private ISourceRepositoryReads? TreeOf(PluginAddress plugin)

@@ -41,7 +41,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsSourcePlugin(Plugin);
+        await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;
     }
 
@@ -116,7 +116,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(patchOrigin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsSourcePlugin(patch);
+        await Client.PluginReportsCompiledPlugin(patch);
         var patchFolder = OtherTool.ModFolderOf(fx, patchOrigin);
         OtherTool.RenamesASourceDocument(patchFolder, patch, "\"SharedDialogueQuest\"", "RenamedByHand.json");
 
@@ -436,9 +436,9 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         rowsChanged.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey);
 
     [Fact]
-    public async Task ARewriteOfANonSourcePluginsBytes_PushesPluginChanged_AndTheNextReadAgrees()
+    public async Task ARewriteOfANonCompiledPluginsBytes_PushesPluginChanged_AndTheNextReadAgrees()
     {
-        using var fx = new PluginFixtureBuilder("trace-another-tool-nonSourcePlugin")
+        using var fx = new PluginFixtureBuilder("trace-another-tool-nonCompiledPlugin")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.5f, origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();

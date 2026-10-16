@@ -54,7 +54,7 @@ export interface PluginsKeyContext {
   readonly allInNonSourceMod: boolean;
   readonly allInSourceMod: boolean;
   readonly singleCreatable: boolean;
-  readonly singleSourcePlugin: boolean;
+  readonly singleCompiledPlugin: boolean;
   readonly allDeletableRecords: boolean;
   readonly allRecords: boolean;
   readonly selectionToggle?: 'enable' | 'disable';
@@ -79,7 +79,7 @@ export function pluginsKeyContext(
     singleCreatable: creatableCandidate !== undefined
       && hasFlags(creatableCandidate, 'editable')
       && (creatableCandidate.kind === 'plugin' || hasFlags(creatableCandidate, 'creatable') || isContainerRow(creatableCandidate)),
-    singleSourcePlugin: hasFlags(onlySelected(selection, 'plugin'), 'sourcePlugin'),
+    singleCompiledPlugin: hasFlags(onlySelected(selection, 'plugin'), 'compiledPlugin'),
     allDeletableRecords: every(selection, (row) => isOf(RECORD_ROW_KINDS)(row) && hasFlags(row, 'editable')),
     allRecords: every(selection, isOf(RECORD_ROW_KINDS)),
     selectionToggle: firstPlugin && (isEnabled(firstPlugin) ? 'disable' : 'enable'),

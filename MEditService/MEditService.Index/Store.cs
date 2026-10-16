@@ -337,7 +337,7 @@ internal sealed class Store : IDisposable
     }
 
     /// <summary>The disk claim <paramref name="key"/>'s rows carry, or null when nothing backs them.
-    /// Validate's non-source plugin half asks for both halves at once: the path to re-hash and the hash the
+    /// Validate's non-compiled plugin half asks for both halves at once: the path to re-hash and the hash the
     /// rows were built under.</summary>
     public (string FilePath, string ContentHash)? IndexedFile(PluginAddress key)
     {
@@ -640,7 +640,7 @@ internal sealed class Store : IDisposable
         public void ReadFailedOrRecovered(PluginAddress key) => Announce(sequence => new PluginChangedNotification(key, sequence));
     }
 
-    /// <summary>Indexes a source plugin's tree as <see cref="IndexBinary"/> indexes a binary. The tree
+    /// <summary>Indexes a compiled plugin's tree as <see cref="IndexBinary"/> indexes a binary. The tree
     /// is the plugin's truth however many records its binary holds, and it refuses a FormKey two
     /// documents claim before any is indexed.</summary>
     public void IndexTree(IPluginDocuments documents, PluginMetadata registered, string? filePath) =>

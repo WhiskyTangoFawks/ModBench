@@ -134,7 +134,7 @@ public sealed class CreateChildRecordTests : IDisposable
     public void AChildCreatedOnADeletedContainer_IsRefused_AndTheTreeIsAsItWas()
     {
         var questKey = FormKey.Null;
-        using var mod = SourceModFixture.SourcePlugin("Deleted.esp", "DeletedMod", plugin =>
+        using var mod = SourceModFixture.CompiledPlugin("Deleted.esp", "DeletedMod", plugin =>
         {
             var quest = plugin.Quests.AddNew("DeletedQuest");
             quest.MajorRecordFlagsRaw = DeletedFlag.Bit;
@@ -292,7 +292,7 @@ public sealed class CreateChildRecordTests : IDisposable
     private static SourceModFixture InteriorCell(out FormKey cell, Action<Cell> shape)
     {
         var cellKey = FormKey.Null;
-        var mod = SourceModFixture.SourcePlugin("Interior.esp", "InteriorMod", plugin =>
+        var mod = SourceModFixture.CompiledPlugin("Interior.esp", "InteriorMod", plugin =>
         {
             var interior = new Cell(plugin) { EditorID = "InteriorCell", Flags = Cell.Flag.IsInteriorCell };
             shape(interior);
@@ -306,7 +306,7 @@ public sealed class CreateChildRecordTests : IDisposable
     private static SourceModFixture WorldspacePersistentCell(out FormKey cell, Action<Cell> shape)
     {
         var cellKey = FormKey.Null;
-        var mod = SourceModFixture.SourcePlugin("Persistent.esp", "PersistentMod", plugin =>
+        var mod = SourceModFixture.CompiledPlugin("Persistent.esp", "PersistentMod", plugin =>
         {
             var persistentCell = new Cell(plugin) { EditorID = "PersistentCell" };
             shape(persistentCell);
@@ -320,7 +320,7 @@ public sealed class CreateChildRecordTests : IDisposable
     private static SourceModFixture ExteriorCell(out FormKey cell, Action<Fallout4Mod, Cell>? shape = null)
     {
         var cellKey = FormKey.Null;
-        var mod = SourceModFixture.SourcePlugin("Exterior.esp", "ExteriorMod", plugin =>
+        var mod = SourceModFixture.CompiledPlugin("Exterior.esp", "ExteriorMod", plugin =>
         {
             var exterior = new Cell(plugin) { EditorID = "ExteriorCell", Grid = new CellGrid() };
             shape?.Invoke(plugin, exterior);

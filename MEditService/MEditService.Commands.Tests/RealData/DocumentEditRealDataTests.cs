@@ -28,7 +28,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
     public DocumentEditRealDataTests(ITestOutputHelper output)
     {
         _output = output;
-        CutDownPluginFixture.SourcePluginInto(_modFolder);
+        CutDownPluginFixture.CompiledPluginInto(_modFolder);
         _plugin = new PluginAddress(CutDownPluginFixture.PluginFileName, "DocEditRealMod");
 
         var loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
@@ -99,11 +99,11 @@ public sealed class DocumentEditRealDataTests : IDisposable
     private void RunSweep(IReadOnlyList<Gesture> gestures)
     {
 
-        var sourcePluginTree = SourceModTree();
+        var compiledPluginTree = SourceModTree();
         var befores = gestures.Select(g => g.Record.FormKey).Distinct().ToDictionary(formKey => formKey, formKey =>
         {
-            var document = sourcePluginTree.RecordByFormKey(_plugin, formKey).Value()
-                ?? throw new InvalidOperationException($"Expected the source plugin tree to hold a document for {formKey}.");
+            var document = compiledPluginTree.RecordByFormKey(_plugin, formKey).Value()
+                ?? throw new InvalidOperationException($"Expected the compiled plugin tree to hold a document for {formKey}.");
             return (document.Identity, document.Body);
         });
 
@@ -126,7 +126,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
     }
 
     private ISourceRepository SourceModTree() => TestAdapters.Source().Open(TestMod.Of(_plugin, _modFolder), GameRelease.Fallout4)
-        ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source plugin.");
+        ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a compiled plugin.");
 
     private static IEnumerable<(RecordEditEnvelope Gesture, string Path)> EveryGestureWithThePathItMayChange(RecordTableSchema schema, JsonElement root)
     {

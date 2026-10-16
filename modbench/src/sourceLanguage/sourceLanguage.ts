@@ -15,7 +15,7 @@ import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type Sourc
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   reporter: Pick<Reporter, 'shownOnSurface'>;
-  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrSourcePlugins' | 'getPlugins' | 'handUnsavedDocuments'> & RecordDocumentClient & SourceProblemsDeps['client'];
+  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments'> & RecordDocumentClient & SourceProblemsDeps['client'];
 }
 
 const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };

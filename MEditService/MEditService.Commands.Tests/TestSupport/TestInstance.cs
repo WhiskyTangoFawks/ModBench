@@ -80,9 +80,9 @@ public abstract class TestInstance : IDisposable
 
     public string ModFolderOf(PluginAddress plugin) => FolderOf(plugin.Origin);
 
-    /// <summary>The next plugin in load order. A source plugin one is a mod's plugin, made so as it is added;
-    /// one that masters another is a source plugin over the load order so far, which holds its masters.</summary>
-    protected PluginAddress Add(IMod mod, string origin, bool sourcePlugin = true, Listing listing = Listing.Winning)
+    /// <summary>The next plugin in load order. A compiled plugin one is a mod's plugin, made so as it is added;
+    /// one that masters another is a compiled plugin over the load order so far, which holds its masters.</summary>
+    protected PluginAddress Add(IMod mod, string origin, bool compiledPlugin = true, Listing listing = Listing.Winning)
     {
         if (_loadOrder is not null) throw new InvalidOperationException("The load order is sealed.");
         if (mod.GameRelease != _release) throw new InvalidOperationException($"{mod.ModKey} is a {mod.GameRelease} plugin in a {_release} instance.");
@@ -98,10 +98,10 @@ public abstract class TestInstance : IDisposable
         var entry = new LoadOrderEntry(name, path, origin, line, Enabled: true, Winning: listing != Listing.Overridden);
         _entries.Add(entry);
 
-        if (!sourcePlugin) Write(mod, path);
+        if (!compiledPlugin) Write(mod, path);
         else if (entry.Provider is not PluginProvider.FromMod)
             throw new InvalidOperationException($"'{origin}' is not a mod, so its plugin has no folder to init.");
-        else if (mod.MasterReferences.Count == 0) SourcePluginTemplates.WriteSourcePlugin(folder, mod);
+        else if (mod.MasterReferences.Count == 0) CompiledPluginTemplates.WriteCompiledPlugin(folder, mod);
         else
         {
             Write(mod, path);
@@ -141,7 +141,7 @@ public abstract class TestInstance : IDisposable
         Holder.Apply(_loadOrder);
     }
 
-    /// <summary>Fixes the load order: a fixture whose tests read a source plugin tree before any handler runs
+    /// <summary>Fixes the load order: a fixture whose tests read a compiled plugin tree before any handler runs
     /// seals at the end of its construction.</summary>
     protected LoadOrderSnapshot Seal() => _loadOrder ??= Snapshot();
 

@@ -41,7 +41,7 @@ public sealed class SourceIngestTests : IDisposable
                 (npc, race) = (theNpc.FormKey, theRace.FormKey);
             }, origin: "FixtureMod")
             .BuildScattered()
-            .SourcePlugin();
+            .CompiledPlugin();
         _entry = _fixture.Plugins.Single();
         (_npc, _otherNpc, _race, _keyword) =
             (npc.ToString(), otherNpc.ToString(), race.ToString(), keyword.ToString());
@@ -59,7 +59,7 @@ public sealed class SourceIngestTests : IDisposable
         _entry.SourceFileOf(index.DocumentOf(_npc, Plugin));
 
     private bool ReadFromItsBinaryInPlaceOfItsSource(OpenedIndex index) =>
-        index.PluginRowOf(Plugin) is { IsSourcePlugin: true, PluginSourceUnreadable: not null };
+        index.PluginRowOf(Plugin) is { IsCompiledPlugin: true, PluginSourceUnreadable: not null };
 
     private IEnumerable<string> SourceFilesTheReadStoppedAt(OpenedIndex index) =>
         (index.Queries.GetProblems().Value() ?? throw new InvalidOperationException("Expected the index to be ready."))
@@ -164,7 +164,7 @@ public sealed class SourceIngestTests : IDisposable
     }
 
     [Fact]
-    public async Task ABinaryChangeOnASourcePlugin_ReDerivesFromItsSourceTree_UnderALiveLoadOrder()
+    public async Task ABinaryChangeOnACompiledPlugin_ReDerivesFromItsSourceTree_UnderALiveLoadOrder()
     {
         using var index = LaunchedFreshOverTheSameSourceModTreeAndToldNothing();
 

@@ -21,7 +21,7 @@ public sealed class EditRecordChangesTests : IDisposable
     private const int PartialForm = 0x4000;
     private const float CellWidth = 4096f;
 
-    private readonly SourceEditFixture _mod = SourceEditFixture.SourcePlugin();
+    private readonly SourceEditFixture _mod = SourceEditFixture.CompiledPlugin();
 
     public void Dispose() => _mod.Dispose();
 
@@ -332,7 +332,7 @@ public sealed class EditRecordChangesTests : IDisposable
         out Dictionary<string, FormKey> keys, bool withAPersistentCell = false)
     {
         var held = new Dictionary<string, FormKey>();
-        var fixture = SourceModFixture.SourcePlugin("World.esp", "WorldMod", mod =>
+        var fixture = SourceModFixture.CompiledPlugin("World.esp", "WorldMod", mod =>
         {
             var world = new Worldspace(mod) { EditorID = "World" };
             held["World"] = world.FormKey;

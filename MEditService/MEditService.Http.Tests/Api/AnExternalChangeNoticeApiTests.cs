@@ -25,7 +25,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsSourcePlugin(Plugin);
+        await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;
     }
 
@@ -59,7 +59,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
     }
 
     [PosixFact]
-    public async Task ASourcePluginWhoseBinaryCannotBeRead_FailsToLoad_AndIsNamedWithNoState()
+    public async Task ACompiledPluginWhoseBinaryCannotBeRead_FailsToLoad_AndIsNamedWithNoState()
     {
         var fx = Owned(await Watched());
         var binary = PluginPath(fx);
@@ -93,15 +93,15 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         OtherTool.WritesThePlugin(second, mod => mod.Npcs.AddNew("SecondNpc").HeightMax = 0.5f);
         (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
-        await Client.PluginReportsSourcePlugin(Plugin);
+        await Client.PluginReportsCompiledPlugin(Plugin);
         Restart();
         using var stream = await Client.NotificationStream();
 
         (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
 
-        var nonSourcePlugin = Assert.Single(await stream.EventsUntil("plugin-source-unreadable"));
-        Assert.Equal(Origin, nonSourcePlugin.GetProperty("origin").GetString());
-        var unreadable = Assert.Single(nonSourcePlugin.GetProperty("pluginWithUnreadableSources").EnumerateArray());
+        var nonCompiledPlugin = Assert.Single(await stream.EventsUntil("plugin-source-unreadable"));
+        Assert.Equal(Origin, nonCompiledPlugin.GetProperty("origin").GetString());
+        var unreadable = Assert.Single(nonCompiledPlugin.GetProperty("pluginWithUnreadableSources").EnumerateArray());
         Assert.Equal(SecondPlugin, unreadable.GetProperty("name").GetString());
         Assert.Contains(SecondPlugin, unreadable.GetProperty("source").GetProperty("reason").GetString(), StringComparison.Ordinal);
         Assert.True(unreadable.GetProperty("source").GetProperty("decompileRepairs").GetBoolean());

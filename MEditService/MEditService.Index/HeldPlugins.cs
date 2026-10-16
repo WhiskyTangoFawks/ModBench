@@ -69,7 +69,7 @@ internal sealed class HeldPlugins
         }
 
         // The binary path (ADR-0007) needs the same explicit strings parameters
-        // init does, or a Localized non-source plugin fails instead of opening.
+        // init does, or a Localized non-compiled plugin fails instead of opening.
         var readTimer = Stopwatch.StartNew();
         if (!_adapter.ReadContent(
                 new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder,

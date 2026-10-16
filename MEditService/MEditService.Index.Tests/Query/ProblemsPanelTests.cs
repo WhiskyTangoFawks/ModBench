@@ -12,7 +12,7 @@ public sealed class ProblemsPanelTests : IDisposable
 {
     private const string Absent = "000ABC:Absent.esp";
 
-    private sealed record Plugin(string Name, string? RefersTo = Absent, bool Enabled = true, bool SourcePlugin = true)
+    private sealed record Plugin(string Name, string? RefersTo = Absent, bool Enabled = true, bool CompiledPlugin = true)
     {
         public string Referrer => $"000800:{Name}";
     }
@@ -41,7 +41,7 @@ public sealed class ProblemsPanelTests : IDisposable
             }, enabled: plugin.Enabled, origin: $"{Path.GetFileNameWithoutExtension(plugin.Name)}Mod");
         }
         _fixture = builder.BuildScattered();
-        foreach (var plugin in plugins.Where(p => p.SourcePlugin))
+        foreach (var plugin in plugins.Where(p => p.CompiledPlugin))
             SourceMods.Track(Entry(plugin));
         return _fixture.Plugins;
     }
@@ -179,7 +179,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_AMissingReferenceOfASourcePlugin_IsAProblemOnTheReferrersFile_NamingItsTarget_WordedAsTheGridWordsIt()
+    public void GetProblems_AMissingReferenceOfACompiledPlugin_IsAProblemOnTheReferrersFile_NamingItsTarget_WordedAsTheGridWordsIt()
     {
         var plugin = new Plugin("Refers.esp");
         using var index = Reconciled(plugin);
@@ -213,7 +213,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_AskedBeforeASnapshotNoModProvidesASourcePluginIn_IsReconciled_AnswersThatPluginWithAFailure()
+    public void GetProblems_AskedBeforeASnapshotNoModProvidesACompiledPluginIn_IsReconciled_AnswersThatPluginWithAFailure()
     {
         var plugin = new Plugin("Unprovided.esp");
         Build(plugin);
@@ -240,7 +240,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_AnActiveSourcePluginWithNoMissingReference_IsAnsweredWithNoProblems()
+    public void GetProblems_AnActiveCompiledPluginWithNoMissingReference_IsAnsweredWithNoProblems()
     {
         var plugin = new Plugin("Clean.esp", RefersTo: null);
         using var index = Reconciled(plugin);
@@ -255,13 +255,13 @@ public sealed class ProblemsPanelTests : IDisposable
     [Fact]
     public void GetProblems_AnActivePluginNoTreeBacks_IsNotAnswered_ForItHasNoSourceFile()
     {
-        using var index = Reconciled(new Plugin("Binary.esp", SourcePlugin: false));
+        using var index = Reconciled(new Plugin("Binary.esp", CompiledPlugin: false));
 
         Assert.Empty(Ready(index));
     }
 
     [Fact]
-    public void GetProblems_AMissingReferenceOfASourcePluginThatIsNotActive_IsAProblemOnItsFile()
+    public void GetProblems_AMissingReferenceOfACompiledPluginThatIsNotActive_IsAProblemOnItsFile()
     {
         var dormant = new Plugin("Dormant.esp", Enabled: false);
         using var index = Reconciled(dormant);
@@ -316,7 +316,7 @@ public sealed class ProblemsPanelTests : IDisposable
     [Fact]
     public async Task GetProblems_WhileTheIndexIsReconciling_AnswersNothing_ForAPartialSetReadsAsNoProblem()
     {
-        var plugins = Build(new Plugin("Clean.esp", RefersTo: null), new Plugin("Later.esp", SourcePlugin: false));
+        var plugins = Build(new Plugin("Clean.esp", RefersTo: null), new Plugin("Later.esp", CompiledPlugin: false));
         var holder = new LoadOrderHolder();
         using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
         using var index = Indexes.Open(holder, gate);

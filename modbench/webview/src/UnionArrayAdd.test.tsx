@@ -57,7 +57,7 @@ const aliasesCompareResult: CompareResult = compareResultFixture({
 describe('RecordPanel — Add on an abstract-union array, whose default element only the backend\'s DocumentEdit can name', () => {
   function renderPanel() {
     const client = panelClient(() => aliasesCompareResult, {
-      plugins: [{ name: 'MyMod.esp', isSourcePlugin: true }],
+      plugins: [{ name: 'MyMod.esp', isCompiledPlugin: true }],
     });
     return render(<RecordPanel client={client} />);
   }

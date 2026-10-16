@@ -34,10 +34,10 @@ public sealed class DecompilePluginHandlerTests : IDisposable
             new LoadOrderEntry("First.esp", Path.Combine(_sourceMod, "First.esp"), SourceModName, 0, Enabled: true, Winning: true),
             new LoadOrderEntry("Other.esp", Path.Combine(_nonSourceMod, "Other.esp"), NonSourceModName, 2, Enabled: true, Winning: true),
         ]));
-        var sourcePlugin = TestEditService.InitHandler(_holder)
+        var compiledPlugin = TestEditService.InitHandler(_holder)
             .InitAsync(ToInit.In(_holder.Held?.Snapshot, SourceModName))
             .GetAwaiter().GetResult();
-        Assert.Equal([SourcePlugin("First.esp")], Assert.Single(sourcePlugin.Landed).Outcome.Plugins);
+        Assert.Equal([CompiledPlugin("First.esp")], Assert.Single(compiledPlugin.Landed).Outcome.Plugins);
         WritePlugin(_sourceMod, "Second.esp", "SecondNpc");
         _holder.Apply(SnapshotPlugins.Snapshot(game, _root, GameRelease.Fallout4,
         [
@@ -54,14 +54,14 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         GitProbe.Run(Path.Combine(_sourceMod, ".git"), _sourceMod, "rev-parse", "HEAD").Trim();
 
     [Fact]
-    public async Task Decompile_OfANonSourcePluginInASourceMod_WritesItsSourceToTheWorkingTree_AndCommitsNothing()
+    public async Task Decompile_OfANonCompiledPluginInASourceMod_WritesItsSourceToTheWorkingTree_AndCommitsNothing()
     {
         var headBefore = Head();
         Assert.NotEmpty(headBefore);
 
-        var result = await Decompile(SourcePlugin("Second.esp"));
+        var result = await Decompile(CompiledPlugin("Second.esp"));
 
-        Assert.Equal([SourcePlugin("Second.esp")], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([CompiledPlugin("Second.esp")], result.Landed.Select(landed => landed.Item));
         Assert.Empty(result.Refused);
         Assert.Contains("SecondNpc", SourceTextOf("Second.esp"), StringComparison.Ordinal);
         Assert.Equal(headBefore, Head());
@@ -70,7 +70,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     [Fact]
     public async Task Decompile_ParksThePluginsBytes_SoItReadsAsOneModbenchWrote()
     {
-        await Decompile(SourcePlugin("Second.esp"));
+        await Decompile(CompiledPlugin("Second.esp"));
 
         Assert.Empty(ExternalChanges.NamedBy(_holder.Current));
     }
@@ -78,26 +78,26 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     [Fact]
     public async Task Decompile_ParksTheHashOfTheBytesItsSourceWasReadFrom()
     {
-        await Decompile(new ReadingAs("READ-FROM"), SourcePlugin("Second.esp"));
+        await Decompile(new ReadingAs("READ-FROM"), CompiledPlugin("Second.esp"));
 
         Assert.Equal(
             ["READ-FROM"],
-            TestAdapters.Source().OverFolder(new PluginProvider.FromMod(SourceModName, _sourceMod, _sourceMod), GameRelease.Fallout4).LastWrittenBinarySha256s(SourcePlugin("Second.esp")).Value());
+            TestAdapters.Source().OverFolder(new PluginProvider.FromMod(SourceModName, _sourceMod, _sourceMod), GameRelease.Fallout4).LastWrittenBinarySha256s(CompiledPlugin("Second.esp")).Value());
     }
 
     [Fact]
-    public async Task Decompile_OfASourcePlugin_ReplacesItsSourceInTheWorkingTree_WithWhatItsBytesHold_DiscardingHandEditsAndStrayDocuments()
+    public async Task Decompile_OfACompiledPlugin_ReplacesItsSourceInTheWorkingTree_WithWhatItsBytesHold_DiscardingHandEditsAndStrayDocuments()
     {
-        var first = TreeDocuments.Of(Repository, SourcePlugin("First.esp")).Single(document => document.EditorId == "FirstNpc");
+        var first = TreeDocuments.Of(Repository, CompiledPlugin("First.esp")).Single(document => document.EditorId == "FirstNpc");
         var identity = new RecordIdentity(first.FormKey, first.RecordType, first.EditorId);
-        var stray = TreeTampering.Stray(_sourceMod, SourcePlugin("First.esp"), identity, "Stray.json", "{}");
+        var stray = TreeTampering.Stray(_sourceMod, CompiledPlugin("First.esp"), identity, "Stray.json", "{}");
         SourceModTree.Overwrite(
-            _sourceMod, SourcePlugin("First.esp"), identity, first.Body.Replace("FirstNpc", "EditedByHand", StringComparison.Ordinal));
+            _sourceMod, CompiledPlugin("First.esp"), identity, first.Body.Replace("FirstNpc", "EditedByHand", StringComparison.Ordinal));
         WritePlugin(_sourceMod, "First.esp", "UpgradedNpc");
 
-        var result = await Decompile(force: true, SourcePlugin("First.esp"));
+        var result = await Decompile(force: true, CompiledPlugin("First.esp"));
 
-        Assert.Equal([SourcePlugin("First.esp")], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([CompiledPlugin("First.esp")], result.Landed.Select(landed => landed.Item));
         Assert.False(File.Exists(stray));
         var text = SourceTextOf("First.esp");
         Assert.Contains("UpgradedNpc", text, StringComparison.Ordinal);
@@ -107,14 +107,14 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     [Fact]
     public async Task Decompile_OfAPluginWhoseSourceHasWorkingTreeChanges_RefusesItNamingEachChangedFile_AndWritesNothing()
     {
-        var first = TreeDocuments.Of(Repository, SourcePlugin("First.esp")).Single(document => document.EditorId == "FirstNpc");
+        var first = TreeDocuments.Of(Repository, CompiledPlugin("First.esp")).Single(document => document.EditorId == "FirstNpc");
         var identity = new RecordIdentity(first.FormKey, first.RecordType, first.EditorId);
-        var stray = TreeTampering.Stray(_sourceMod, SourcePlugin("First.esp"), identity, "Stray.json", "{}");
+        var stray = TreeTampering.Stray(_sourceMod, CompiledPlugin("First.esp"), identity, "Stray.json", "{}");
         SourceModTree.Overwrite(
-            _sourceMod, SourcePlugin("First.esp"), identity, first.Body.Replace("FirstNpc", "EditedByHand", StringComparison.Ordinal));
+            _sourceMod, CompiledPlugin("First.esp"), identity, first.Body.Replace("FirstNpc", "EditedByHand", StringComparison.Ordinal));
         WritePlugin(_sourceMod, "First.esp", "UpgradedNpc");
 
-        var result = await Decompile(SourcePlugin("First.esp"));
+        var result = await Decompile(CompiledPlugin("First.esp"));
 
         Assert.Empty(result.Landed);
         var refused = Assert.Single(result.Refused);
@@ -132,7 +132,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         File.WriteAllText(Path.Combine(_sourceMod, ".git", "HEAD"), "not a ref");
         WritePlugin(_sourceMod, "First.esp", "UpgradedNpc");
 
-        var result = await Decompile(SourcePlugin("First.esp"));
+        var result = await Decompile(CompiledPlugin("First.esp"));
 
         Assert.Empty(result.Landed);
         Assert.Equal(DecompileRefusal.WorkingTreeStatusUnreadable, Assert.Single(result.Refused).Refusal);
@@ -142,15 +142,15 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     [Fact]
     public async Task Decompile_OfASelection_RefusesOnlyThePluginWhoseSourceHasWorkingTreeChanges()
     {
-        var first = TreeDocuments.Of(Repository, SourcePlugin("First.esp")).Single(document => document.EditorId == "FirstNpc");
+        var first = TreeDocuments.Of(Repository, CompiledPlugin("First.esp")).Single(document => document.EditorId == "FirstNpc");
         SourceModTree.Overwrite(
-            _sourceMod, SourcePlugin("First.esp"), new RecordIdentity(first.FormKey, first.RecordType, first.EditorId),
+            _sourceMod, CompiledPlugin("First.esp"), new RecordIdentity(first.FormKey, first.RecordType, first.EditorId),
             first.Body.Replace("FirstNpc", "EditedByHand", StringComparison.Ordinal));
 
-        var result = await Decompile(SourcePlugin("First.esp"), SourcePlugin("Second.esp"));
+        var result = await Decompile(CompiledPlugin("First.esp"), CompiledPlugin("Second.esp"));
 
-        Assert.Equal([SourcePlugin("Second.esp")], result.Landed.Select(landed => landed.Item));
-        Assert.Equal(SourcePlugin("First.esp"), Assert.Single(result.Refused).Item);
+        Assert.Equal([CompiledPlugin("Second.esp")], result.Landed.Select(landed => landed.Item));
+        Assert.Equal(CompiledPlugin("First.esp"), Assert.Single(result.Refused).Item);
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Assert.Contains("Other.esp", refused.Message, StringComparison.Ordinal);
         Assert.Contains($"decompile and commit on {NonSourceModName}", refused.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("git init", refused.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("sourcePlugin", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("compiledPlugin", refused.Message, StringComparison.Ordinal);
         Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("Other.esp", NonSourceModName, "", new PluginProvider.FromMod(NonSourceModName, _nonSourceMod, _nonSourceMod), Line: null, PluginStrings.None)));
     }
 
@@ -186,7 +186,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Directory.Move(Path.Combine(sources, "First.esp"), Path.Combine(sources, "FIRST.ESP"));
         Directory.CreateDirectory(Path.Combine(sources, "first.esp"));
 
-        var result = await Decompile(force: true, SourcePlugin("First.esp"));
+        var result = await Decompile(force: true, CompiledPlugin("First.esp"));
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.AmbiguousSource, refused.Refusal);
@@ -198,9 +198,9 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     [Fact]
     public async Task Decompile_OfASelection_LandsEachPluginOnItsOwn_ANotLoadedOneRefusedByName()
     {
-        var result = await Decompile(new PluginAddress("NoSuch.esp", SourceModName), SourcePlugin("Second.esp"));
+        var result = await Decompile(new PluginAddress("NoSuch.esp", SourceModName), CompiledPlugin("Second.esp"));
 
-        Assert.Equal([SourcePlugin("Second.esp")], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([CompiledPlugin("Second.esp")], result.Landed.Select(landed => landed.Item));
         var refused = Assert.Single(result.Refused);
         Assert.Equal((new PluginAddress("NoSuch.esp", SourceModName), DecompileRefusal.PluginNotLoaded), (refused.Item, refused.Refusal));
     }
@@ -210,10 +210,10 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     {
         var spelledAgain = new PluginAddress("SECOND.ESP", SourceModName);
 
-        var result = await Decompile(SourcePlugin("Second.esp"), spelledAgain);
+        var result = await Decompile(CompiledPlugin("Second.esp"), spelledAgain);
 
         Assert.Empty(result.Refused);
-        Assert.Equal([SourcePlugin("Second.esp")], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([CompiledPlugin("Second.esp")], result.Landed.Select(landed => landed.Item));
     }
 
     [Fact]
@@ -222,7 +222,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var before = SourceTextOf("First.esp");
         WritePlugin(_sourceMod, "First.esp", "UpgradedNpc");
 
-        var result = await Decompile(new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc), SourcePlugin("First.esp"));
+        var result = await Decompile(new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc), CompiledPlugin("First.esp"));
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.RoundTripFailed, refused.Refusal);
@@ -236,7 +236,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         return deserialized;
     }
 
-    private static PluginAddress SourcePlugin(string plugin) => new(plugin, SourceModName);
+    private static PluginAddress CompiledPlugin(string plugin) => new(plugin, SourceModName);
 
     private Task<SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>> Decompile(params PluginAddress[] plugins) =>
         Decompile(force: false, plugins);
@@ -257,5 +257,5 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     private ISourceRepository Repository => TestAdapters.Source().Open(new PluginProvider.FromMod(SourceModName, _sourceMod, _sourceMod), GameRelease.Fallout4).Require();
 
     private string SourceTextOf(string plugin) => string.Concat(
-        TreeDocuments.Of(Repository, SourcePlugin(plugin)).Select(document => document.Body).Order(StringComparer.Ordinal));
+        TreeDocuments.Of(Repository, CompiledPlugin(plugin)).Select(document => document.Body).Order(StringComparer.Ordinal));
 }

@@ -10,7 +10,7 @@ interface PluginHeaderProps {
   overriddenBy: string | null;
   notActive: boolean;
   isImmutable: boolean;
-  isSourcePlugin: boolean;
+  isCompiledPlugin: boolean;
   sourceUnreadable: UnreadableSource | undefined;
   isFile: boolean;
   onOpen: () => void;
@@ -25,7 +25,7 @@ interface PluginHeaderProps {
 interface Status { label: string; reason: string }
 
 // editor.md, A column's header, the Status table: the first row that applies.
-function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: boolean, isImmutable: boolean, isSourcePlugin: boolean, sourceUnreadable: UnreadableSource | undefined): Status {
+function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: boolean, isImmutable: boolean, isCompiledPlugin: boolean, sourceUnreadable: UnreadableSource | undefined): Status {
   if (o.parseDiagnosis != null) return { label: '(parse failure)', reason: o.parseDiagnosis };
   if (overriddenBy !== null) return { label: '(overridden)', reason: `The game loads ${overriddenBy}’s file instead.` };
   if (notActive) return { label: '(not active)', reason: 'The game does not load it, so no other copy is compared.' };
@@ -36,9 +36,9 @@ function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: bo
       reason: 'Overwrite is not a mod; move the plugin into a mod and decompile and commit that mod.',
     };
   }
-  if (!isSourcePlugin) {
+  if (!isCompiledPlugin) {
     return {
-      label: '(not a source plugin)',
+      label: '(not a compiled plugin)',
       reason: '“Decompile and Commit Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, '
         + 'makes it editable.',
     };
@@ -51,13 +51,13 @@ function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: bo
     };
   }
   if (o.isPartialForm) return { label: '(Partial Form)', reason: 'The game ignores this copy’s own fields.' };
-  return { label: '(source plugin)', reason: 'An edit lands in the mod’s working tree, for review in Source Control.' };
+  return { label: '(compiled plugin)', reason: 'An edit lands in the mod’s working tree, for review in Source Control.' };
 }
 
 export function PluginHeader({
-  override: o, overriddenBy, notActive, isImmutable, isSourcePlugin, sourceUnreadable, isFile, onOpen, collapsed, onToggleCollapse, onResize, style, vscodeContext,
+  override: o, overriddenBy, notActive, isImmutable, isCompiledPlugin, sourceUnreadable, isFile, onOpen, collapsed, onToggleCollapse, onResize, style, vscodeContext,
 }: Readonly<PluginHeaderProps>) {
-  const status = statusOf(o, overriddenBy, notActive, isImmutable, isSourcePlugin, sourceUnreadable);
+  const status = statusOf(o, overriddenBy, notActive, isImmutable, isCompiledPlugin, sourceUnreadable);
 
   return (
     <th

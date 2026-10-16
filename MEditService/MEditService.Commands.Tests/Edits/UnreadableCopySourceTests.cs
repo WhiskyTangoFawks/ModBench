@@ -9,7 +9,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class UnreadableCopySourceTests : IDisposable
 {
-    private readonly ContainerCopyFixture _mod = ContainerCopyFixture.CreateWithSourcePluginSource();
+    private readonly ContainerCopyFixture _mod = ContainerCopyFixture.CreateWithCompiledPluginSource();
 
     public void Dispose() => _mod.Dispose();
 
@@ -30,7 +30,7 @@ public sealed class UnreadableCopySourceTests : IDisposable
     }
 
     [Fact]
-    public void CopyAsOverride_OfARecordWhoseSourcePluginDocumentIsNoJsonDocument_IsRefused_AndWritesNothing()
+    public void CopyAsOverride_OfARecordWhoseCompiledPluginDocumentIsNoJsonDocument_IsRefused_AndWritesNothing()
     {
         MakeNoJsonDocument(_mod.FlatNpc);
 

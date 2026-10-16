@@ -20,7 +20,7 @@ public sealed class DecompileChurnTests : IDisposable
 
     public DecompileChurnTests()
     {
-        SourcePluginTemplates.WriteSourcePlugin(_modFolder, SmallMod());
+        CompiledPluginTemplates.WriteCompiledPlugin(_modFolder, SmallMod());
         _holder.Apply(SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             [new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, Line: 0, Enabled: true, Winning: true)]));
     }

@@ -184,7 +184,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     {
         var document = Path.Combine(_modFolder, "Loose.json");
 
-        Assert.Equal($"{document} is under no source plugin's source.", WhyRefused(document));
+        Assert.Equal($"{document} is under no compiled plugin's source.", WhyRefused(document));
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         TrackFiledIn(other);
         var npcFile = Path.Combine(other, NpcDocument);
 
-        Assert.Equal($"{npcFile} is under no source plugin's source.", WhyRefused(npcFile));
+        Assert.Equal($"{npcFile} is under no compiled plugin's source.", WhyRefused(npcFile));
     }
 
     [Fact]
@@ -206,7 +206,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         File.WriteAllText(npcFile, "{\"FormKey\": \"000800:Filed.esp\", \"EditorID\": \"FiledNpc\"}");
 
         Assert.Equal(
-            $"{npcFile} is under no source plugin's source.",
+            $"{npcFile} is under no compiled plugin's source.",
             WhyRefused(npcFile, LoadOrder(Entry(_modFolder, Origin) with { Winning = false }, Entry(nonSourceMod, "NonSourceMod"))));
     }
 

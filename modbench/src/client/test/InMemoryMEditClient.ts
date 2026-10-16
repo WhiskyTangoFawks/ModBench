@@ -12,7 +12,7 @@ export type { NotificationEvent };
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
   | 'getRecords' | 'searchRecords' | 'getWhatRestoreDestroys' | 'getModStatus'
-  | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrSourcePlugins'
+  | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrCompiledPlugins'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
@@ -405,10 +405,10 @@ export class InMemoryMEditClient implements MEditClient {
   getReferences(...args: Parameters<MEditClient['getReferences']>): ReturnType<MEditClient['getReferences']> {
     return this.query('getReferences', args);
   }
-  getReferencesInActiveOrSourcePlugins(
-    ...args: Parameters<MEditClient['getReferencesInActiveOrSourcePlugins']>
-  ): ReturnType<MEditClient['getReferencesInActiveOrSourcePlugins']> {
-    return this.query('getReferencesInActiveOrSourcePlugins', args);
+  getReferencesInActiveOrCompiledPlugins(
+    ...args: Parameters<MEditClient['getReferencesInActiveOrCompiledPlugins']>
+  ): ReturnType<MEditClient['getReferencesInActiveOrCompiledPlugins']> {
+    return this.query('getReferencesInActiveOrCompiledPlugins', args);
   }
   getEditChanges(...args: Parameters<MEditClient['getEditChanges']>): ReturnType<MEditClient['getEditChanges']> {
     return this.query('getEditChanges', args);

@@ -20,7 +20,7 @@ public sealed class RefreshByKeysTests : IDisposable
         _fixture = new PluginFixtureBuilder("refresh-by-keys")
             .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
             .BuildScattered()
-            .SourcePlugin();
+            .CompiledPlugin();
         _mod = _fixture.Plugins.Single();
         _npc = npc.ToString();
         _index = Indexes.Reconciled(_fixture);
@@ -78,7 +78,7 @@ public sealed class RefreshByKeysTests : IDisposable
         File.WriteAllText(file, notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold);
 
         _index.NextSnapshotUntil(
-            () => _index.PluginRowOf(_mod.KeyOf()) is { IsSourcePlugin: true, PluginSourceUnreadable: not null }, "the binary read in the tree's place");
+            () => _index.PluginRowOf(_mod.KeyOf()) is { IsCompiledPlugin: true, PluginSourceUnreadable: not null }, "the binary read in the tree's place");
 
         Assert.Equal("FixtureNpc", _index.DocumentOf(_npc, _mod.KeyOf()).EditorId);
         Assert.Empty(_index.Status.Failures);

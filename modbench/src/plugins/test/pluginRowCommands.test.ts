@@ -810,7 +810,7 @@ describe('modbench.plugin.decompile', () => {
 
   function row(plugin: { name: string; origin: string }): PluginNode {
     const node = new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);
-    node.contextValue = 'plugin enabled inSourceMod nonSourcePlugin editable';
+    node.contextValue = 'plugin enabled inSourceMod nonCompiledPlugin editable';
     return node;
   }
 

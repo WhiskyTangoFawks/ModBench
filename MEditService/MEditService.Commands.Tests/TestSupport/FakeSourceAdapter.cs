@@ -50,7 +50,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     public bool IsSourceMod(string modFolder) => _mods.ContainsKey(modFolder);
 
     public bool SourceReads(RegisteredPlugin plugin) =>
-        plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && _mods.TryGetValue(sourceFolder, out var sourcePlugin) && sourcePlugin.SourceReads;
+        plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && _mods.TryGetValue(sourceFolder, out var compiledPlugin) && compiledPlugin.SourceReads;
 
     public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => throw Unreached();
 

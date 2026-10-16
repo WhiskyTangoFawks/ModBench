@@ -192,44 +192,44 @@ public class RegistrationScopingTests
     }
 
     [Fact]
-    public void AReferenceInASourcePluginThatIsNotActive_IsListedForActiveOrSourcePlugins()
+    public void AReferenceInACompiledPluginThatIsNotActive_IsListedForActiveOrCompiledPlugins()
     {
-        using var fx = Build("registration-inactive-sourcePlugin-references");
+        using var fx = Build("registration-inactive-compiledPlugin-references");
         SourceMods.Track(fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name));
 
         fx.Reconcile(fx.WithBetaDisabled);
 
-        var reference = Assert.Single(fx.Index.Queries.GetReferencesInActiveOrSourcePlugins(fx.BetaRaceFk).Value(), r => r.FormKey == fx.BetaNpcFk);
+        var reference = Assert.Single(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value(), r => r.FormKey == fx.BetaNpcFk);
         Assert.Equal(BetaKey, new PluginAddress(reference.Plugin, reference.Origin));
         Assert.Empty(fx.Index.Queries.GetReferences(fx.BetaRaceFk).Value());
     }
 
     [Fact]
-    public void AReferenceInANonSourcePluginThatIsNotActive_IsListedForNoOne()
+    public void AReferenceInANonCompiledPluginThatIsNotActive_IsListedForNoOne()
     {
-        using var fx = Build("registration-inactive-nonSourcePlugin-references");
+        using var fx = Build("registration-inactive-nonCompiledPlugin-references");
 
         fx.Reconcile(fx.WithBetaDisabled);
 
-        Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrSourcePlugins(fx.BetaRaceFk).Value());
+        Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value());
     }
 
     [Fact]
-    public void AReferenceInANonSourcePluginActivePlugin_IsListedForActiveOrSourcePlugins()
+    public void AReferenceInANonCompiledPluginActivePlugin_IsListedForActiveOrCompiledPlugins()
     {
-        using var fx = Build("registration-active-nonSourcePlugin-references");
+        using var fx = Build("registration-active-nonCompiledPlugin-references");
 
-        Assert.Contains(fx.Index.Queries.GetReferencesInActiveOrSourcePlugins(fx.BetaRaceFk).Value(), r => r.FormKey == fx.BetaNpcFk);
+        Assert.Contains(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value(), r => r.FormKey == fx.BetaNpcFk);
     }
 
     [Fact]
-    public void AReferenceInAPluginAbsentFromTheSnapshot_IsListedForNoSourcePlugin()
+    public void AReferenceInAPluginAbsentFromTheSnapshot_IsListedForNoCompiledPlugin()
     {
         using var fx = Build("registration-absent-references");
 
         fx.Reconcile(fx.WithoutBeta);
 
-        Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrSourcePlugins(fx.BetaRaceFk).Value());
+        Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value());
     }
 
     [Fact]

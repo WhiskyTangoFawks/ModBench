@@ -69,8 +69,8 @@ public sealed class CreatePluginHandlerTests : IDisposable
             .. _data.Plugins,
             new LoadOrderEntry(existing, Path.Combine(folder, existing), name, Line: 1, Enabled: true, Winning: true),
         ]));
-        var sourcePlugin = await TestEditService.InitHandler(_holder).InitAsync(ToInit.In(_holder.Held?.Snapshot, name));
-        Assert.Single(sourcePlugin.Landed);
+        var compiledPlugin = await TestEditService.InitHandler(_holder).InitAsync(ToInit.In(_holder.Held?.Snapshot, name));
+        Assert.Single(compiledPlugin.Landed);
         return folder;
     }
 

@@ -40,33 +40,33 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   };
   const alpha = pluginRow('Alpha.esp', 'ModA');
   const beta = pluginRow('Beta.esp', 'ModB');
-  const nonSourcePlugin = withFlags(pluginRow('Gamma.esp', 'ModC'), 'plugin enabled inNonSourceMod nonSourcePlugin');
-  const alsoNonSourcePlugin = withFlags(pluginRow('Zeta.esp', 'ModZ'), 'plugin enabled inNonSourceMod nonSourcePlugin');
-  const inOverwrite = withFlags(pluginRow('Eta.esp', 'overwrite/'), 'plugin enabled inOverwrite nonSourcePlugin');
-  const compilable = withFlags(pluginRow('Eps.esp', 'ModE'), 'plugin enabled inSourceMod sourcePlugin editable');
-  const sourcePluginReadOnly = withFlags(pluginRow('Iota.esp', 'ModI'), 'plugin enabled inSourceMod sourcePlugin');
-  const nonSourcePluginInSourceMod = withFlags(pluginRow('Kappa.esp', 'ModE'), 'plugin enabled inSourceMod nonSourcePlugin');
+  const nonCompiledPlugin = withFlags(pluginRow('Gamma.esp', 'ModC'), 'plugin enabled inNonSourceMod nonCompiledPlugin');
+  const alsoNonCompiledPlugin = withFlags(pluginRow('Zeta.esp', 'ModZ'), 'plugin enabled inNonSourceMod nonCompiledPlugin');
+  const inOverwrite = withFlags(pluginRow('Eta.esp', 'overwrite/'), 'plugin enabled inOverwrite nonCompiledPlugin');
+  const compilable = withFlags(pluginRow('Eps.esp', 'ModE'), 'plugin enabled inSourceMod compiledPlugin editable');
+  const compiledPluginReadOnly = withFlags(pluginRow('Iota.esp', 'ModI'), 'plugin enabled inSourceMod compiledPlugin');
+  const nonCompiledPluginInSourceMod = withFlags(pluginRow('Kappa.esp', 'ModE'), 'plugin enabled inSourceMod nonCompiledPlugin');
   const ALPHA = { name: 'Alpha.esp', origin: 'ModA' };
   const EDITABLE = { editable: true };
   const WEAPON = { type: 'weap', count: 3, displayName: 'Weapon' };
   const ownRecord = (formKey: string, plugin: string, origin: string, conditions: { editable: boolean }, recordType?: string) =>
     recordRow(recordSummaryFixture({ formKey, plugin }), origin, conditions, recordType);
   let weapons: RecordBrowserNode;
-  let nonSourcePluginWeapons: RecordBrowserNode;
+  let nonCompiledPluginWeapons: RecordBrowserNode;
   let quests: RecordBrowserNode;
   let own: RecordBrowserNode;
   let immutable: RecordBrowserNode;
-  let nonSourcePluginRecord: RecordBrowserNode;
+  let nonCompiledPluginRecord: RecordBrowserNode;
   let cell: RecordBrowserNode;
   let quest: RecordBrowserNode;
   let readOnlyQuest: RecordBrowserNode;
   beforeAll(async () => {
     weapons = await recordGroupRow(WEAPON, ALPHA, EDITABLE);
-    nonSourcePluginWeapons = await recordGroupRow(WEAPON, { name: 'Beta.esp', origin: 'ModB' });
+    nonCompiledPluginWeapons = await recordGroupRow(WEAPON, { name: 'Beta.esp', origin: 'ModB' });
     quests = await recordGroupRow({ type: 'qust', count: 1, displayName: 'Quest', isCreatable: false }, ALPHA, EDITABLE);
     own = await ownRecord('000800:Alpha.esp', 'Alpha.esp', 'ModA', EDITABLE);
     immutable = await ownRecord('000801:Alpha.esp', 'Alpha.esp', 'ModA', { editable: false });
-    nonSourcePluginRecord = await ownRecord('000802:Beta.esp', 'Beta.esp', 'ModB', { editable: false });
+    nonCompiledPluginRecord = await ownRecord('000802:Beta.esp', 'Beta.esp', 'ModB', { editable: false });
     cell = await cellRow({
       formKey: '000803:Alpha.esp', editorId: 'Cell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false, workingTreeState: 'None',
     }, ALPHA, EDITABLE);
@@ -84,43 +84,43 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   });
 
   it('decompile and commit sees a selection of plugins in mods with no repository, every one', () => {
-    expect(context([nonSourcePlugin, alsoNonSourcePlugin])).toMatchObject({ allInNonSourceMod: true });
-    expect(context([nonSourcePlugin, compilable])).toMatchObject({ allInNonSourceMod: false });
-    expect(context([nonSourcePlugin, inOverwrite])).toMatchObject({ allInNonSourceMod: false });
+    expect(context([nonCompiledPlugin, alsoNonCompiledPlugin])).toMatchObject({ allInNonSourceMod: true });
+    expect(context([nonCompiledPlugin, compilable])).toMatchObject({ allInNonSourceMod: false });
+    expect(context([nonCompiledPlugin, inOverwrite])).toMatchObject({ allInNonSourceMod: false });
     expect(context([])).toMatchObject({ allInNonSourceMod: false });
   });
 
   it('decompile sees a selection of plugins in source mods, every one', () => {
-    expect(context([compilable, sourcePluginReadOnly, nonSourcePluginInSourceMod])).toMatchObject({ allInSourceMod: true });
-    expect(context([compilable, nonSourcePlugin])).toMatchObject({ allInSourceMod: false });
+    expect(context([compilable, compiledPluginReadOnly, nonCompiledPluginInSourceMod])).toMatchObject({ allInSourceMod: true });
+    expect(context([compilable, nonCompiledPlugin])).toMatchObject({ allInSourceMod: false });
     expect(context([compilable, inOverwrite])).toMatchObject({ allInSourceMod: false });
     expect(context([])).toMatchObject({ allInSourceMod: false });
   });
 
-  it('rename sees exactly one selected source plugin, editable or not', () => {
-    expect(context([compilable]).singleSourcePlugin).toBe(true);
-    expect(context([sourcePluginReadOnly]).singleSourcePlugin).toBe(true);
-    expect(context([nonSourcePlugin]).singleSourcePlugin).toBe(false);
-    expect(context([compilable, sourcePluginReadOnly]).singleSourcePlugin).toBe(false);
-    expect(context([weapons]).singleSourcePlugin).toBe(false);
-    expect(context([]).singleSourcePlugin).toBe(false);
+  it('rename sees exactly one selected compiled plugin, editable or not', () => {
+    expect(context([compilable]).singleCompiledPlugin).toBe(true);
+    expect(context([compiledPluginReadOnly]).singleCompiledPlugin).toBe(true);
+    expect(context([nonCompiledPlugin]).singleCompiledPlugin).toBe(false);
+    expect(context([compilable, compiledPluginReadOnly]).singleCompiledPlugin).toBe(false);
+    expect(context([weapons]).singleCompiledPlugin).toBe(false);
+    expect(context([]).singleCompiledPlugin).toBe(false);
   });
 
-  it('create sees exactly one selected record type or plugin that is a source plugin and editable', () => {
+  it('create sees exactly one selected record type or plugin that is a compiled plugin and editable', () => {
     expect(context([weapons]).singleCreatable).toBe(true);
     expect(context([compilable]).singleCreatable).toBe(true);
-    expect(context([nonSourcePluginWeapons]).singleCreatable).toBe(false);
-    expect(context([sourcePluginReadOnly]).singleCreatable).toBe(false);
-    expect(context([nonSourcePlugin]).singleCreatable).toBe(false);
+    expect(context([nonCompiledPluginWeapons]).singleCreatable).toBe(false);
+    expect(context([compiledPluginReadOnly]).singleCreatable).toBe(false);
+    expect(context([nonCompiledPlugin]).singleCreatable).toBe(false);
     expect(context([weapons, compilable]).singleCreatable).toBe(false);
     expect(context([own]).singleCreatable).toBe(false);
   });
 
-  it('create does not see a source plugin, editable group of a type the game cannot create', () => {
+  it('create does not see a compiled plugin, editable group of a type the game cannot create', () => {
     expect(context([quests]).singleCreatable).toBe(false);
   });
 
-  it('create sees exactly one selected container whose plugin is a source plugin and editable, a cell included', () => {
+  it('create sees exactly one selected container whose plugin is a compiled plugin and editable, a cell included', () => {
     expect(context([quest]).singleCreatable).toBe(true);
     expect(context([cell]).singleCreatable).toBe(true);
     expect(context([readOnlyQuest]).singleCreatable).toBe(false);
@@ -131,13 +131,13 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   it('delete sees a selection of records, cells included, their plugins all let it remove', () => {
     expect(context([own, cell]).allDeletableRecords).toBe(true);
     expect(context([own, immutable]).allDeletableRecords).toBe(false);
-    expect(context([own, nonSourcePluginRecord]).allDeletableRecords).toBe(false);
+    expect(context([own, nonCompiledPluginRecord]).allDeletableRecords).toBe(false);
     expect(context([own, alpha]).allDeletableRecords).toBe(false);
     expect(context([]).allDeletableRecords).toBe(false);
   });
 
   it('copy sees a selection of records, cells included, whatever their plugins allow', () => {
-    expect(context([own, cell, immutable, nonSourcePluginRecord]).allRecords).toBe(true);
+    expect(context([own, cell, immutable, nonCompiledPluginRecord]).allRecords).toBe(true);
     expect(context([own, alpha]).allRecords).toBe(false);
     expect(context([]).allRecords).toBe(false);
   });

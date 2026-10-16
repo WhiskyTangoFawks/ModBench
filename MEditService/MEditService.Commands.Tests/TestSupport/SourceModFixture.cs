@@ -13,24 +13,24 @@ internal sealed class SourceModFixture : TestInstance
     public string ModFolder { get; }
     internal PluginAddress Plugin { get; }
 
-    private SourceModFixture(string pluginName, string origin, bool sourcePlugin, Action<Fallout4Mod> build)
+    private SourceModFixture(string pluginName, string origin, bool compiledPlugin, Action<Fallout4Mod> build)
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(pluginName), Fallout4Release.Fallout4);
         build(mod);
-        Plugin = Add(mod, origin, sourcePlugin);
+        Plugin = Add(mod, origin, compiledPlugin);
         ModFolder = FolderOf(origin);
     }
 
-    internal static SourceModFixture SourcePlugin(string pluginName, string origin, Action<Fallout4Mod> build) =>
-        new(pluginName, origin, sourcePlugin: true, build);
+    internal static SourceModFixture CompiledPlugin(string pluginName, string origin, Action<Fallout4Mod> build) =>
+        new(pluginName, origin, compiledPlugin: true, build);
 
     /// <summary>A master in the game's Data folder holding one NPC: registered and loaded, with no
-    /// mod folder at all, which is a different refusal from a non-source plugin.</summary>
+    /// mod folder at all, which is a different refusal from a non-compiled plugin.</summary>
     internal static SourceModFixture VanillaMaster(out FormKey npc)
     {
         var formKey = FormKey.Null;
         var fixture = new SourceModFixture(
-            "Vanilla.esm", PluginOrigin.DataDirectory, sourcePlugin: false, mod => formKey = mod.Npcs.AddNew("VanillaNpc").FormKey);
+            "Vanilla.esm", PluginOrigin.DataDirectory, compiledPlugin: false, mod => formKey = mod.Npcs.AddNew("VanillaNpc").FormKey);
         npc = formKey;
         return fixture;
     }
@@ -41,7 +41,7 @@ internal sealed class SourceModFixture : TestInstance
     {
         var formKey = FormKey.Null;
         var fixture = new SourceModFixture(
-            "Stray.esp", PluginOrigin.Overwrite, sourcePlugin: false, mod => formKey = mod.Npcs.AddNew("StrayNpc").FormKey);
+            "Stray.esp", PluginOrigin.Overwrite, compiledPlugin: false, mod => formKey = mod.Npcs.AddNew("StrayNpc").FormKey);
         npc = formKey;
         return fixture;
     }

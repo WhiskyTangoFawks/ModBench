@@ -40,7 +40,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
         load.EnsureSuccessStatusCode();
         (await _client.Init(Origin)).EnsureSuccessStatusCode();
         await _client.NextSnapshot(fx, Origin);
-        await _client.PluginReportsSourcePlugin(Plugin);
+        await _client.PluginReportsCompiledPlugin(Plugin);
     }
 
     [Fact]

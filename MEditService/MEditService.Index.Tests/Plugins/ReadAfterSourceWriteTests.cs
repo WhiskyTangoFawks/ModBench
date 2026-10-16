@@ -10,14 +10,14 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class ReadAfterSourceWriteTests : IDisposable
 {
-    private const string SourcePlugin = "SourcePlugin.esp";
+    private const string CompiledPlugin = "CompiledPlugin.esp";
     private static readonly DateTimeOffset Start = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
     private static readonly TimeSpan Generous = TimeSpan.FromSeconds(30);
 
     private readonly FakeTimeProvider _clock = new(Start);
     private readonly LoadOrderHolder _holder = new();
     private readonly ScatteredFixtureData _fixture;
-    private readonly LoadOrderEntry _sourcePlugin;
+    private readonly LoadOrderEntry _compiledPlugin;
     private readonly string _npc;
     private readonly OpenedIndex _index;
 
@@ -25,14 +25,14 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     {
         string npc = "";
         _fixture = new PluginFixtureBuilder("read-after-source-write")
-            .WithPlugin(SourcePlugin, mod => npc = mod.Npcs.AddNew("SourcePluginNpc").FormKey.ToString(), origin: "SourceMod")
+            .WithPlugin(CompiledPlugin, mod => npc = mod.Npcs.AddNew("CompiledPluginNpc").FormKey.ToString(), origin: "SourceMod")
             .BuildScattered();
-        _sourcePlugin = _fixture.Plugins.Single(p => p.Name == SourcePlugin);
+        _compiledPlugin = _fixture.Plugins.Single(p => p.Name == CompiledPlugin);
         _npc = npc;
-        SourceMods.Track(_sourcePlugin);
+        SourceMods.Track(_compiledPlugin);
         _index = Indexes.Open(_holder, timeProvider: _clock);
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        _sourcePlugin.HandEdit(_index.DocumentOf(_npc, _sourcePlugin.KeyOf()), "\"SourcePluginNpc\"", "\"Written\"");
+        _compiledPlugin.HandEdit(_index.DocumentOf(_npc, _compiledPlugin.KeyOf()), "\"CompiledPluginNpc\"", "\"Written\"");
         _holder.SourceWritten();
     }
 
@@ -43,7 +43,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     private Task<Answer<RenderedDocument?, IndexRefused>> Read() =>
-        Task.Run(() => _index.Queries.GetRenderedDocument(_sourcePlugin.KeyOf(), _npc));
+        Task.Run(() => _index.Queries.GetRenderedDocument(_compiledPlugin.KeyOf(), _npc));
 
     [Fact]
     public async Task AReadAfterASourceWrite_AnswersOnceTheNextSnapshotIsReconciled()
@@ -72,7 +72,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     [Fact]
     public async Task ANameResolvedAfterASourceWrite_IsResolvedAgainstTheNextSnapshot()
     {
-        var resolved = Task.Run(() => _index.Queries.ResolveNames([new NameQuery(SourcePlugin, null)]));
+        var resolved = Task.Run(() => _index.Queries.ResolveNames([new NameQuery(CompiledPlugin, null)]));
         await Task.Delay(TimeSpan.FromMilliseconds(500));
 
         _holder.Apply(SnapshotPlugins.Snapshot(_fixture.GameDirectory, _fixture.InstanceRoot, GameRelease.Fallout4, []));

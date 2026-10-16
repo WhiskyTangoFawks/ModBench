@@ -111,7 +111,7 @@ public sealed class InitModTests
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("SomeNpc");
-        SourcePluginTemplates.WriteSourcePlugin(modFolder, mod);
+        CompiledPluginTemplates.WriteCompiledPlugin(modFolder, mod);
 
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,

@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-public sealed class SourcePluginDerivationTests : IDisposable
+public sealed class CompiledPluginDerivationTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
     private const string Origin = "FixtureMod";
@@ -17,10 +17,10 @@ public sealed class SourcePluginDerivationTests : IDisposable
     private readonly LoadOrderEntry _mod;
     private readonly string _npc;
 
-    public SourcePluginDerivationTests()
+    public CompiledPluginDerivationTests()
     {
         FormKey npc = default;
-        _fixture = new PluginFixtureBuilder("sourcePlugin-plugin-derivation")
+        _fixture = new PluginFixtureBuilder("compiledPlugin-plugin-derivation")
             .WithPlugin(PluginName, mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: Origin)
             .BuildScattered();
         _mod = _fixture.Plugins.Single();
@@ -38,24 +38,24 @@ public sealed class SourcePluginDerivationTests : IDisposable
     private void ReconcileTheSnapshotAlreadyHeldSinceOnlyThePluginsFolderMoved() =>
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
 
-    private bool ReadsAsSourcePlugin() => _index.PluginRowOf(_mod.KeyOf()) is { IsSourcePlugin: true, PluginSourceUnreadable: null };
+    private bool ReadsAsCompiledPlugin() => _index.PluginRowOf(_mod.KeyOf()) is { IsCompiledPlugin: true, PluginSourceUnreadable: null };
 
     [Fact]
-    public void APluginSourcePluginAfterItWasIndexed_ReadsAsSourcePlugin_AfterTheNextSnapshot()
+    public void APluginCompiledPluginAfterItWasIndexed_ReadsAsCompiledPlugin_AfterTheNextSnapshot()
     {
-        Assert.False(ReadsAsSourcePlugin());
+        Assert.False(ReadsAsCompiledPlugin());
         SourceMods.Track(_mod);
 
-        _index.NextSnapshotUntil(ReadsAsSourcePlugin, "the plugin reading as source plugin");
+        _index.NextSnapshotUntil(ReadsAsCompiledPlugin, "the plugin reading as compiled plugin");
     }
 
     [Fact]
-    public void ASourcePluginWhoseRepositoryWentAway_ReadsAsNonSourcePlugin_AfterTheNextSnapshot()
+    public void ACompiledPluginWhoseRepositoryWentAway_ReadsAsNonCompiledPlugin_AfterTheNextSnapshot()
     {
         SourceMods.Track(_mod);
-        _index.NextSnapshotUntil(ReadsAsSourcePlugin, "the plugin reading as source plugin");
+        _index.NextSnapshotUntil(ReadsAsCompiledPlugin, "the plugin reading as compiled plugin");
 
         AnotherTool.Delete(Path.Combine(_mod.ModFolderOf(), ".git"));
-        _index.NextSnapshotUntil(() => !ReadsAsSourcePlugin(), "the plugin reading as non-source plugin");
+        _index.NextSnapshotUntil(() => !ReadsAsCompiledPlugin(), "the plugin reading as non-compiled plugin");
     }
 }

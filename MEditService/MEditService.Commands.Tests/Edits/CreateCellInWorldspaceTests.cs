@@ -117,14 +117,14 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     [Fact]
     public void ACellCreatedWhereTheUnsavedTextOfAMastersCellNoLongerSits_LandsThere()
     {
-        using var sourcePluginMaster = new LoadOrderOfPlugins();
-        sourcePluginMaster.Load((_master, true), (_edited, true));
-        var file = sourcePluginMaster.DocumentFileOf(_master, MasterCell);
+        using var compiledPluginMaster = new LoadOrderOfPlugins();
+        compiledPluginMaster.Load((_master, true), (_edited, true));
+        var file = compiledPluginMaster.DocumentFileOf(_master, MasterCell);
         var moved = PlacedCell.WithGrid(Document.Parse(File.ReadAllText(file)), 20, 21);
 
-        sourcePluginMaster.Unsaved.Apply([new DocumentChange(file, moved.Text)]);
+        compiledPluginMaster.Unsaved.Apply([new DocumentChange(file, moved.Text)]);
 
-        var (outcome, _) = sourcePluginMaster.CreateHandler.CreateRecord(Edited, "cell", World.ToString(), new GridPosition(3, 3));
+        var (outcome, _) = compiledPluginMaster.CreateHandler.CreateRecord(Edited, "cell", World.ToString(), new GridPosition(3, 3));
 
         Assert.True(outcome.Applied, outcome.Message);
     }

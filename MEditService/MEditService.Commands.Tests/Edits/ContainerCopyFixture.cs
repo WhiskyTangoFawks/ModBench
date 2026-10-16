@@ -10,9 +10,9 @@ using Noggog;
 namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Two mod folders, because one cannot ask whether a copy crosses plugins. The source
-/// defaults non-source plugin, so its records come through the Plugin adapter; no index anywhere in
+/// defaults non-compiled plugin, so its records come through the Plugin adapter; no index anywhere in
 /// it.</summary>
-public sealed class ContainerCopyFixture : TestInstance, ISourcePlugins
+public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
 {
     public const string SourcePluginName = "ContainerSource.esm";
     public const string SourceOrigin = "ContainerSourceMod";
@@ -272,7 +272,7 @@ public sealed class ContainerCopyFixture : TestInstance, ISourcePlugins
 
     public static ContainerCopyFixture Create() => new(destinationLoadsFirst: false, trackSource: false);
 
-    public static ContainerCopyFixture CreateWithSourcePluginSource() => new(destinationLoadsFirst: false, trackSource: true);
+    public static ContainerCopyFixture CreateWithCompiledPluginSource() => new(destinationLoadsFirst: false, trackSource: true);
 
     public static ContainerCopyFixture CreateWithDestinationLoadingFirst() =>
         new(destinationLoadsFirst: true, trackSource: false);

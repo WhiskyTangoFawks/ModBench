@@ -193,9 +193,9 @@ public sealed class CopyAsOverrideContainerTests
     }
 
     [Fact]
-    public void CopyRecordAsOverride_OnATopCellPlacedReferenceFromASourcePluginSource_CopiesTheWorldspaceAndItsPersistentCellIn()
+    public void CopyRecordAsOverride_OnATopCellPlacedReferenceFromACompiledPluginSource_CopiesTheWorldspaceAndItsPersistentCellIn()
     {
-        using var fixture = ContainerCopyFixture.CreateWithSourcePluginSource();
+        using var fixture = ContainerCopyFixture.CreateWithCompiledPluginSource();
 
         var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.TopCellRef.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
@@ -262,9 +262,9 @@ public sealed class CopyAsOverrideContainerTests
     }
 
     [Fact]
-    public void CopyRecordAsOverride_OnAnExteriorPlacedReferenceFromASourcePluginSource_MintsAtTheSourcesOwnBlock()
+    public void CopyRecordAsOverride_OnAnExteriorPlacedReferenceFromACompiledPluginSource_MintsAtTheSourcesOwnBlock()
     {
-        using var fixture = ContainerCopyFixture.CreateWithSourcePluginSource();
+        using var fixture = ContainerCopyFixture.CreateWithCompiledPluginSource();
 
         var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.ExteriorPersistentRef.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 

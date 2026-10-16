@@ -21,7 +21,7 @@ const MASTER = 'Fallout4.esm';
 const MOD = 'MyMod.esp';
 const MASTER_AND_EDITABLE_MOD: FixturePlugin[] = [
   { name: MASTER, isImmutable: true },
-  { name: MOD, isSourcePlugin: true },
+  { name: MOD, isCompiledPlugin: true },
 ];
 
 const leaf = (values: Record<string, unknown>, over: Partial<FieldDiff> = {}) =>

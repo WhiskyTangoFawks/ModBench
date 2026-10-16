@@ -147,7 +147,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     {
         const string pluginName = "ContainerReferencer.esp";
         var referenced = FormKey.Null;
-        using var referencer = SourceModFixture.SourcePlugin(pluginName, "ContainerReferencerMod", mod =>
+        using var referencer = SourceModFixture.CompiledPlugin(pluginName, "ContainerReferencerMod", mod =>
         {
             var npc = mod.Npcs.AddNew("ReferencedNpc");
             var cell = new Cell(mod) { EditorID = "ReferencerCell", WaterHeight = 0f };
@@ -176,7 +176,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     {
         const string pluginName = "SiblingReferencer.esp";
         var enabler = FormKey.Null;
-        using var mod = SourceModFixture.SourcePlugin(pluginName, "SiblingReferencerMod", m =>
+        using var mod = SourceModFixture.CompiledPlugin(pluginName, "SiblingReferencerMod", m =>
         {
             var cell = new Cell(m) { EditorID = "SiblingCell", WaterHeight = 0f };
             var first = new PlacedObject(m) { EditorID = "EnablerRef", Position = new Noggog.P3Float(0, 0, 0) };

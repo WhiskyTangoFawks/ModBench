@@ -20,7 +20,7 @@ export function pluginMetadataFixture(overrides: Partial<PluginMetadata> & { nam
     masterIssues: [],
     inLoadOrder: true,
     hasMatchingRecords: true,
-    isSourcePlugin: false,
+    isCompiledPlugin: false,
     hasParseFailure: false,
     pluginSourceUnreadable: null,
     ...overrides,

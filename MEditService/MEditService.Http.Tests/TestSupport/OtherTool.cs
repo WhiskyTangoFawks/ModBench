@@ -36,7 +36,7 @@ internal static class OtherTool
         File.WriteAllText(path, contents);
     }
 
-    /// <summary>A hand edit to a document under the source plugin source tree, found by the text it
+    /// <summary>A hand edit to a document under the compiled plugin source tree, found by the text it
     /// carries so no test has to know the layout the repository chose for it.</summary>
     internal static void EditsASourceDocument(string modFolder, string plugin, string find, string replacement)
     {

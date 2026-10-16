@@ -16,7 +16,7 @@ public sealed class CreateRecordApiTests : HostedTests
 
     private string _worldspace = string.Empty;
 
-    private async Task<ScatteredFixtureData> Loaded(bool sourcePlugin)
+    private async Task<ScatteredFixtureData> Loaded(bool compiledPlugin)
     {
         var fx = Owned(new PluginFixtureBuilder("api-create-record")
             .WithPlugin(Plugin, mod =>
@@ -26,11 +26,11 @@ public sealed class CreateRecordApiTests : HostedTests
             }, origin: Origin)
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        if (!sourcePlugin) return fx;
+        if (!compiledPlugin) return fx;
 
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsSourcePlugin(Plugin);
+        await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;
     }
 
@@ -38,9 +38,9 @@ public sealed class CreateRecordApiTests : HostedTests
         Client.CreateRecord(Plugin, origin, recordType, container, position);
 
     [Fact]
-    public async Task CreatingARecord_InASourcePlugin_AnswersTheNewFormKey()
+    public async Task CreatingARecord_InACompiledPlugin_AnswersTheNewFormKey()
     {
-        var fx = await Loaded(sourcePlugin: true);
+        var fx = await Loaded(compiledPlugin: true);
 
         var response = await Create(Origin, "npc_");
 
@@ -57,7 +57,7 @@ public sealed class CreateRecordApiTests : HostedTests
     [Fact]
     public async Task CreatingARecord_GivenTheUnsavedTextOfTheHeader_TakesTheNextObjectIdItHolds()
     {
-        var fx = await Loaded(sourcePlugin: true);
+        var fx = await Loaded(compiledPlugin: true);
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
         var headerFile = Path.Combine(modFolder, "plugin-source", Plugin, $"000000_{Plugin}.json");
         var unsavedHeader = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(await File.ReadAllBytesAsync(headerFile), GameRelease.Fallout4, 0xA00));
@@ -73,7 +73,7 @@ public sealed class CreateRecordApiTests : HostedTests
     [Fact]
     public async Task CreatingARecord_WithNoOrigin_Is400()
     {
-        await Loaded(sourcePlugin: true);
+        await Loaded(compiledPlugin: true);
 
         Assert.Equal(HttpStatusCode.BadRequest, (await Create(string.Empty, "npc_")).StatusCode);
     }
@@ -81,26 +81,26 @@ public sealed class CreateRecordApiTests : HostedTests
     [Fact]
     public async Task CreatingARecord_WithNoRecordType_Is400()
     {
-        await Loaded(sourcePlugin: true);
+        await Loaded(compiledPlugin: true);
 
         Assert.Equal(HttpStatusCode.BadRequest, (await Create(Origin, string.Empty)).StatusCode);
     }
 
     [Fact]
-    public async Task CreatingARecord_InANonSourcePlugin_Is409()
+    public async Task CreatingARecord_InANonCompiledPlugin_Is409()
     {
-        await Loaded(sourcePlugin: false);
+        await Loaded(compiledPlugin: false);
 
         var response = await Create(Origin, "npc_");
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Equal("PluginNotSourcePlugin", (await response.Body()).GetProperty("refusal").GetString());
+        Assert.Equal("PluginNotCompiledPlugin", (await response.Body()).GetProperty("refusal").GetString());
     }
 
     [Fact]
     public async Task CreatingARecord_OfATypeThePluginCannotHold_Is422()
     {
-        await Loaded(sourcePlugin: true);
+        await Loaded(compiledPlugin: true);
 
         var response = await Create(Origin, "nosuch");
 
@@ -111,7 +111,7 @@ public sealed class CreateRecordApiTests : HostedTests
     [Fact]
     public async Task CreatingACell_InAWorldspace_AnswersTheNewFormKey()
     {
-        await Loaded(sourcePlugin: true);
+        await Loaded(compiledPlugin: true);
 
         var response = await Create(Origin, "cell", _worldspace, new { x = 1, y = -2 });
 
@@ -122,7 +122,7 @@ public sealed class CreateRecordApiTests : HostedTests
     [Fact]
     public async Task CreatingACell_InAWorldspace_WithOnlyOneCoordinate_Is400()
     {
-        await Loaded(sourcePlugin: true);
+        await Loaded(compiledPlugin: true);
 
         var response = await Create(Origin, "cell", _worldspace, new { x = 1 });
 
@@ -133,7 +133,7 @@ public sealed class CreateRecordApiTests : HostedTests
     [Fact]
     public async Task CreatingARecord_WithAGridPositionAndNoContainer_Is400()
     {
-        await Loaded(sourcePlugin: true);
+        await Loaded(compiledPlugin: true);
 
         Assert.Equal(HttpStatusCode.BadRequest, (await Create(Origin, "cell", position: new { x = 0, y = 0 })).StatusCode);
     }
@@ -141,7 +141,7 @@ public sealed class CreateRecordApiTests : HostedTests
     [Fact]
     public async Task CreatingARecord_InAContainerThePluginLacks_Is404()
     {
-        await Loaded(sourcePlugin: true);
+        await Loaded(compiledPlugin: true);
 
         var response = await Create(Origin, "refr", "000FFF:" + Plugin);
 

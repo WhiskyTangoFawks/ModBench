@@ -183,7 +183,7 @@ public sealed class SourceRepository : ISourceRepository
             if (plugin.Provider is PluginProvider.FromMod mod && TreeFolderHolding(plugin, fullPath) is { } tree)
                 return Over(mod, loadOrder.GameRelease).Over(files).Locator.RecordOfFile(plugin.Key, tree, fullPath);
         }
-        return new RecordOfFileAnswer.Refused($"{fullPath} is under no source plugin's source.");
+        return new RecordOfFileAnswer.Refused($"{fullPath} is under no compiled plugin's source.");
     }
 
     internal static bool TreeHolds(RegisteredPlugin plugin, string fullPath) => TreeFolderHolding(plugin, fullPath) is not null;

@@ -12,7 +12,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A real source mod folder and the load order value over it, and nothing else: compile
 /// reads only those (ADR-0015).</summary>
-public sealed class CompileFixture : TestInstance, ISourcePlugin
+public sealed class CompileFixture : TestInstance, ICompiledPlugin
 {
     public const string Origin = "CompileMod";
     public const string PluginName = "Compile.esp";

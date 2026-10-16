@@ -196,7 +196,7 @@ let currentCompare: CompareResult = compareResultFixture();
 
 function renderPanel() {
   return render(<RecordPanel client={panelClient(() => currentCompare, {
-    plugins: [{ name: PLUGIN, isSourcePlugin: true }],
+    plugins: [{ name: PLUGIN, isCompiledPlugin: true }],
   })} />);
 }
 

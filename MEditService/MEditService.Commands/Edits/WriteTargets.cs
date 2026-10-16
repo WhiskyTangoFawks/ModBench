@@ -104,18 +104,18 @@ internal sealed class WriteTargets(
                 $"{plugin.Name} from '{plugin.Origin}' is not in the load order, so nothing can be written to it.");
         }
 
-        if (!source.IsSourceMod(registered)) return RefuseNonSourcePlugin(plugin, registered.Provider);
+        if (!source.IsSourceMod(registered)) return RefuseNonCompiledPlugin(plugin, registered.Provider);
         return source.SourceReads(registered) ? null : RefuseSourceUnreadable(plugin);
     }
 
     // Two refusals, because there are two different ways out and a message that named neither
     // would be silent dead UI.
-    private static RecordEditResult RefuseNonSourcePlugin(PluginAddress plugin, PluginProvider provider) =>
+    private static RecordEditResult RefuseNonCompiledPlugin(PluginAddress plugin, PluginProvider provider) =>
         provider is not PluginProvider.FromMod
             ? RecordEditResult.Refused(RecordEditRefusal.PluginHasNoModFolder, NoModFolderMessage(plugin, provider))
             : RecordEditResult.Refused(
-                RecordEditRefusal.PluginNotSourcePlugin,
-                $"{plugin.Name} is not a source plugin, so it is read-only. " +
+                RecordEditRefusal.PluginNotCompiledPlugin,
+                $"{plugin.Name} is not a compiled plugin, so it is read-only. " +
                 "Decompile and commit its mod once to start editing.");
 
     private static RecordEditResult RefuseSourceUnreadable(PluginAddress plugin) =>
@@ -129,7 +129,7 @@ internal sealed class WriteTargets(
         provider == PluginProvider.NoMod
             ? $"{plugin.Name} is loaded from Overwrite, an origin and not a mod, so it has no mod " +
               "folder to hold its source. Move it into a mod, then edit it there."
-            : $"{plugin.Name} is a base-game plugin with no mod folder, so it cannot be a source plugin. " +
+            : $"{plugin.Name} is a base-game plugin with no mod folder, so it cannot be a compiled plugin. " +
               "Author a patch plugin and edit the override there.";
 
     // The codec's own words are the reason (ADR-0015).

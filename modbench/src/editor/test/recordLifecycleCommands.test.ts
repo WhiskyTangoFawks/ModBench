@@ -142,9 +142,9 @@ describe('registerRecordLifecycleCommands', () => {
 
     const FIRST = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
     const SECOND = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
-    const NON_SOURCE_PLUGIN = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' };
+    const NON_COMPILED_PLUGIN = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' };
     const SECOND_NODE = carrying(SECOND, 'SecondNpc');
-    const NON_SOURCE_PLUGIN_NODE = carrying(NON_SOURCE_PLUGIN);
+    const NON_COMPILED_PLUGIN_NODE = carrying(NON_COMPILED_PLUGIN);
     const deleteCalls = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'getDeleteChanges').map(c => c.args[0]);
 
     const COLUMN_HEADER = { webviewSection: 'recordHeader', ...carrying(FIRST), editable: true, preventDefaultContextMenuItems: true };
@@ -216,20 +216,20 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('sends the whole selection as one call', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('getDeleteChanges', { applied: [FIRST, NON_SOURCE_PLUGIN, SECOND].map(changes), refused: [] });
+      client.setCommandResult('getDeleteChanges', { applied: [FIRST, NON_COMPILED_PLUGIN, SECOND].map(changes), refused: [] });
       invoke(client, 'Delete');
 
-      await deleteRecords(SECOND_NODE, [RECORD_NODE, NON_SOURCE_PLUGIN_NODE, SECOND_NODE]);
+      await deleteRecords(SECOND_NODE, [RECORD_NODE, NON_COMPILED_PLUGIN_NODE, SECOND_NODE]);
 
-      expect(deleteCalls(client)).toEqual([[FIRST, NON_SOURCE_PLUGIN, SECOND]]);
+      expect(deleteCalls(client)).toEqual([[FIRST, NON_COMPILED_PLUGIN, SECOND]]);
     });
 
     it('asks once, listing every selected record with its plugin and origin, in working-tree words', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('getDeleteChanges', { applied: [FIRST, NON_SOURCE_PLUGIN, SECOND].map(changes), refused: [] });
+      client.setCommandResult('getDeleteChanges', { applied: [FIRST, NON_COMPILED_PLUGIN, SECOND].map(changes), refused: [] });
       const { ask } = invoke(client, 'Delete');
 
-      await deleteRecords(SECOND_NODE, [RECORD_NODE, NON_SOURCE_PLUGIN_NODE, SECOND_NODE]);
+      await deleteRecords(SECOND_NODE, [RECORD_NODE, NON_COMPILED_PLUGIN_NODE, SECOND_NODE]);
 
       expect(ask.asked).toEqual([{
         message: 'Delete 3 records? They leave their plugin source as working-tree changes you can review.',
@@ -270,18 +270,18 @@ describe('registerRecordLifecycleCommands', () => {
       const client = new InMemoryMEditClient();
       const outcome = {
         landed: [FIRST, SECOND],
-        refused: [{ item: NON_SOURCE_PLUGIN, reason: 'Other.esp is not a source plugin, so it is read-only.' }],
+        refused: [{ item: NON_COMPILED_PLUGIN, reason: 'Other.esp is not a compiled plugin, so it is read-only.' }],
       };
       client.setCommandResult('getDeleteChanges', { applied: outcome.landed.map(changes), refused: outcome.refused });
       const { reporter } = invoke(client, 'Delete');
 
-      await deleteRecords(SECOND_NODE, [RECORD_NODE, NON_SOURCE_PLUGIN_NODE, SECOND_NODE]);
+      await deleteRecords(SECOND_NODE, [RECORD_NODE, NON_COMPILED_PLUGIN_NODE, SECOND_NODE]);
 
       expect(reporter.selectionOutcomeCalls).toEqual([{ message: 'Could not delete 1 of 3 records.', outcome }]);
       expect(reporter.reports).toEqual([{
         severity: 'error',
         message: 'Could not delete 1 of 3 records.',
-        detail: '"000900:Other.esp in Other.esp (ModB)" (Other.esp is not a source plugin, so it is read-only.)',
+        detail: '"000900:Other.esp in Other.esp (ModB)" (Other.esp is not a compiled plugin, so it is read-only.)',
       }]);
     });
 
@@ -325,11 +325,11 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('makes what mEdit answered as one workspace edit, then refreshes Source Control once for each plugin it changed', async () => {
       const client = new InMemoryMEditClient();
-      const answered = [changes(FIRST), changes(SECOND), changes(NON_SOURCE_PLUGIN)];
+      const answered = [changes(FIRST), changes(SECOND), changes(NON_COMPILED_PLUGIN)];
       client.setCommandResult('getDeleteChanges', { applied: answered, refused: [] });
       const { source } = invoke(client, 'Delete');
 
-      await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE, NON_SOURCE_PLUGIN_NODE]);
+      await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE, NON_COMPILED_PLUGIN_NODE]);
 
       expect(source.applyWorkspaceChanges.mock.calls).toEqual([[answered]]);
       expect(source.refreshSourceControlFor.mock.calls).toEqual([
@@ -339,12 +339,12 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('reports a workspace edit VS Code did not make as one that may have partly landed, lands none, refreshes Source Control, and still names the records mEdit refused', async () => {
       const client = new InMemoryMEditClient();
-      const refusal = { item: NON_SOURCE_PLUGIN, reason: 'Other.esp is not a source plugin, so it is read-only.' };
+      const refusal = { item: NON_COMPILED_PLUGIN, reason: 'Other.esp is not a compiled plugin, so it is read-only.' };
       client.setCommandResult('getDeleteChanges', { applied: [changes(FIRST)], refused: [refusal] });
       const { reporter, source } = invoke(client, 'Delete');
       source.applyWorkspaceChanges.mockRejectedValue(new Error('VS Code did not apply the changes.'));
 
-      await deleteRecords(SECOND_NODE, [RECORD_NODE, NON_SOURCE_PLUGIN_NODE]);
+      await deleteRecords(SECOND_NODE, [RECORD_NODE, NON_COMPILED_PLUGIN_NODE]);
 
       expect(reporter.reports[0]).toEqual(
         { severity: 'error', message: 'Could not delete the records.', detail: "VS Code did not apply the changes. VS Code stops at the first change it cannot make, so some changes may have landed." });
@@ -430,9 +430,9 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
 
   function destinations(client: InMemoryMEditClient) {
     client.setQueryAnswer('getPlugins', [
-      pluginMetadataFixture({ name: 'MyPatch.esp', origin: 'ModA', loadOrderIndex: 2, isSourcePlugin: true }),
-      pluginMetadataFixture({ name: 'Patch.esp', origin: 'PatchMod', loadOrderIndex: 4, isSourcePlugin: true }),
-      pluginMetadataFixture({ name: 'Other.esp', origin: 'OtherMod', loadOrderIndex: 6, isSourcePlugin: true }),
+      pluginMetadataFixture({ name: 'MyPatch.esp', origin: 'ModA', loadOrderIndex: 2, isCompiledPlugin: true }),
+      pluginMetadataFixture({ name: 'Patch.esp', origin: 'PatchMod', loadOrderIndex: 4, isCompiledPlugin: true }),
+      pluginMetadataFixture({ name: 'Other.esp', origin: 'OtherMod', loadOrderIndex: 6, isCompiledPlugin: true }),
     ]);
   }
 
@@ -624,7 +624,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     destinations(client);
     client.setCommandResult('getCopyChanges', {
       applied: [copyChanges(SOURCE, PATCH)],
-      refused: [{ item: { record: SOURCE, destination: OTHER }, reason: 'Other.esp is not a source plugin' }],
+      refused: [{ item: { record: SOURCE, destination: OTHER }, reason: 'Other.esp is not a compiled plugin' }],
     });
     pick('New', [PATCH, OTHER]);
     const { reporter } = invoke(client);
@@ -635,7 +635,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     expect(reporter.reports).toEqual([{
       severity: 'error',
       message: 'Could not make 1 of 2 copies.',
-      detail: '"000801:MyPatch.esp in MyPatch.esp (ModA) into Other.esp (OtherMod)" (Other.esp is not a source plugin)',
+      detail: '"000801:MyPatch.esp in MyPatch.esp (ModA) into Other.esp (OtherMod)" (Other.esp is not a compiled plugin)',
     }]);
   });
 
@@ -687,7 +687,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
 
   it('says so when no plugin can take the copy, and offers no pick of none', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'NonSourcePlugin.esp', origin: 'ModB', isSourcePlugin: false })]);
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'NonCompiledPlugin.esp', origin: 'ModB', isCompiledPlugin: false })]);
     showQuickPick.mockImplementationOnce((items) =>
       Promise.resolve(items.find((item) => item.mode === 'New')));
     const { reporter } = invoke(client);
@@ -767,7 +767,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     it('reports a workspace edit VS Code did not make as one that may have partly landed, lands none, refreshes Source Control, and counts the copies asked', async () => {
       const client = new InMemoryMEditClient();
       destinations(client);
-      const refusal = { item: { record: SOURCE, destination: OTHER }, reason: 'Other.esp is not a source plugin' };
+      const refusal = { item: { record: SOURCE, destination: OTHER }, reason: 'Other.esp is not a compiled plugin' };
       client.setCommandResult('getCopyChanges', { applied: [copyChanges(SOURCE, PATCH)], refused: [refusal] });
       pick('New', [PATCH, OTHER]);
       const { reporter, source } = invoke(client);

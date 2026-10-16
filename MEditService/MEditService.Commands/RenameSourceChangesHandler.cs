@@ -25,7 +25,7 @@ public sealed class RenameSourceChangesHandler
             return RenameSourceResult.Refused(refused.Value.Refusal, refused.Value.Message);
         var (loaded, mod) = target;
         if (!_source.SourceReads(loaded))
-            return RenameSourceResult.Refused(RenameSourceRefusal.NotSourcePlugin, RenameSourceTarget.NotSourcePluginMessage(plugin));
+            return RenameSourceResult.Refused(RenameSourceRefusal.NotCompiledPlugin, RenameSourceTarget.NotCompiledPluginMessage(plugin));
 
         var session = _source.WriteSessionOver(mod, loadOrder.GameRelease, _unsaved.Current);
         if (!session.Repository.ChangesToRenameSource(plugin, newName).Holds(out var changes, out var failure))

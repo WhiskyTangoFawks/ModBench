@@ -32,7 +32,7 @@ public sealed record InitProgressNotification(InitProgress Progress) : INotifica
 /// <summary>A build's own progress (<see cref="BuildProgress"/>), per mod.</summary>
 public sealed record BuildProgressNotification(BuildProgress Progress) : INotification;
 
-/// <summary>At a snapshot: each source plugin whose bytes differ from what Modbench last wrote
+/// <summary>At a snapshot: each compiled plugin whose bytes differ from what Modbench last wrote
 /// (ADR-0003). The mod's whole answer, so a plugin it leaves out matches; a mod whose
 /// repository went names none.</summary>
 public sealed record ExternalChangeNotification(string Origin, IReadOnlyList<ChangedPlugin> Plugins)
@@ -49,7 +49,7 @@ public sealed record PluginSourceUnreadableNotification(string Origin, IReadOnly
 
 public sealed record PluginWithUnreadableSource(string Name, UnreadableSource Source);
 
-/// <summary>Why a source plugin's source does not read, and whether decompile gets past it.</summary>
+/// <summary>Why a compiled plugin's source does not read, and whether decompile gets past it.</summary>
 public sealed record UnreadableSource(string Reason, bool DecompileRepairs);
 
 /// <summary>The record filter could not apply again after a change to the index, so the Index

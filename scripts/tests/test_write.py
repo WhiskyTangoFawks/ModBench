@@ -95,7 +95,7 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
     def test_raises_for_a_copy_into_a_plugin_with_no_source_and_writes_nothing(self) -> None:
         with self.assertRaises(medit.MEditError) as raised:
             medit.copy(CONDITIONS.name, RECIPE, LIGHT.name, mode='new')
-        self.assertIn(f'{LIGHT.name} is not a source plugin', str(raised.exception))
+        self.assertIn(f'{LIGHT.name} is not a compiled plugin', str(raised.exception))
         self.assertEqual(changed(self.source), [])
 
     def test_creates_a_plugin_in_a_mod_with_its_source(self) -> None:

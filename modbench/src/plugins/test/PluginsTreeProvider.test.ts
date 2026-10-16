@@ -97,7 +97,7 @@ function held(name: string, overrides: Partial<PluginMetadata> = {}): PluginMeta
     masterIssues: [],
     inLoadOrder: true,
     hasMatchingRecords: true,
-    isSourcePlugin: false,
+    isCompiledPlugin: false,
     hasParseFailure: false,
     pluginSourceUnreadable: null,
     ...overrides,
@@ -1187,9 +1187,9 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
   });
 
   it.each([
-    ['after', [held('Shared.esp', { origin: 'ModA', isImmutable: true }), held('Shared.esp', { origin: 'ModB', isSourcePlugin: true })]],
-    ['before', [held('Shared.esp', { origin: 'ModB', isSourcePlugin: true }), held('Shared.esp', { origin: 'ModA', isImmutable: true })]],
-  ])("never marks a plugin's records read-only or non-source plugin for another plugin of the same name, listed %s it", async (_order, answer) => {
+    ['after', [held('Shared.esp', { origin: 'ModA', isImmutable: true }), held('Shared.esp', { origin: 'ModB', isCompiledPlugin: true })]],
+    ['before', [held('Shared.esp', { origin: 'ModB', isCompiledPlugin: true }), held('Shared.esp', { origin: 'ModA', isImmutable: true })]],
+  ])("never marks a plugin's records read-only or non-compiled plugin for another plugin of the same name, listed %s it", async (_order, answer) => {
     const client = makeClient({
       recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
       records: { items: [recordSummary({ plugin: 'Shared.esp', formKey: '000001:Shared.esp', origin: 'ModB' })], total: 1 },
@@ -1225,7 +1225,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
     expect((await firstRecordUnder(h, present(row, 'the A.esp row'))).record.contextValue).toBe('record');
     const reads = client.calls.filter((c) => c.method === 'getRecords').length;
 
-    await reconcile(h, [held('A.esp', { isSourcePlugin: true })]);
+    await reconcile(h, [held('A.esp', { isCompiledPlugin: true })]);
     const [again] = await h.tree.getChildren();
 
     expect((await firstRecordUnder(h, present(again, 'the A.esp row'))).record.contextValue).toBe('record editable');
@@ -1233,7 +1233,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
   });
 
   const DATA_COPY = held('Fallout4.esm', { origin: 'Data/', isImmutable: true });
-  const MOD_COPY = held('Fallout4.esm', { origin: 'ModA', isSourcePlugin: true });
+  const MOD_COPY = held('Fallout4.esm', { origin: 'ModA', isCompiledPlugin: true });
   const lockedTree = (modCopyWins: boolean) => makeTree(
     [plugin({ name: 'Fallout4.esm', line: null, origin: 'ModA', winning: modCopyWins }), plugin({ name: 'A.esp', line: 0 })],
     { client: weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data/' })),
@@ -1896,18 +1896,18 @@ function tooltipAsString(value: unknown): string {
 describe('PluginsTreeProvider — the row states its conditions', () => {
   const flags = async (h: Harness, index = 0): Promise<string[]> => String((await rowItem(h, index)).contextValue).split(' ');
 
-  it('states a source plugin, editable plugin in a source mod', async () => {
+  it('states a compiled plugin, editable plugin in a source mod', async () => {
     const h = makeTree([A_ROW()], { instance: new FakeInstance({ ...valueOf([A_ROW()]), listedSourceMods: new Set(['SomeMod']) }) });
-    await reconcile(h, [held('A.esp', { isSourcePlugin: true })]);
+    await reconcile(h, [held('A.esp', { isCompiledPlugin: true })]);
 
-    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inSourceMod', 'sourcePlugin', 'editable']);
+    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inSourceMod', 'compiledPlugin', 'editable']);
   });
 
   it('states a disabled line', async () => {
     const h = makeTree([plugin({ name: 'A.esp', line: 0, origin: 'SomeMod', enabled: false })]);
     await reconcile(h, [held('A.esp')]);
 
-    expect(await flags(h)).toEqual(['plugin', 'disabled', 'inNonSourceMod', 'nonSourcePlugin']);
+    expect(await flags(h)).toEqual(['plugin', 'disabled', 'inNonSourceMod', 'nonCompiledPlugin']);
   });
 });
 
@@ -1946,7 +1946,7 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
     h.tree.facts.indexed([], []);
     expect((await rowItem(h)).tooltip).toContain('read-only');
 
-    await reconcile(h, [held('A.esp', { isSourcePlugin: true })]);
+    await reconcile(h, [held('A.esp', { isCompiledPlugin: true })]);
     expect((await rowItem(h)).tooltip).not.toContain('read-only');
   });
 
@@ -1987,7 +1987,7 @@ describe('PluginsTreeProvider — master-issue decoration', () => {
     await withIssues(h, ['Ghost.esm']);
     expect((await rowItem(h)).tooltip).toContain('Missing master');
 
-    await reconcile(h, [held('A.esp', { isSourcePlugin: true })]);
+    await reconcile(h, [held('A.esp', { isCompiledPlugin: true })]);
 
     const item = await rowItem(h);
     expect(item.tooltip).toBe('A.esp\nSomeMod');
@@ -2103,13 +2103,13 @@ describe('PluginsTreeProvider — changed outside Modbench', () => {
 describe('PluginsTreeProvider — a healthy plugin row after a reconcile', () => {
   it('states only its kind and where decompile and commit applies, with no description and the base tooltip', async () => {
     const h = makeTree([A_ROW(), B_ROW()], { instance: new FakeInstance({ ...valueOf([A_ROW(), B_ROW()]), listedSourceMods: new Set(['SomeMod']) }) });
-    await reconcile(h, [held('A.esp', { isSourcePlugin: true }), held('B.esp', { isSourcePlugin: true })]);
+    await reconcile(h, [held('A.esp', { isCompiledPlugin: true }), held('B.esp', { isCompiledPlugin: true })]);
 
     const items = [await rowItem(h, 0), await rowItem(h, 1)];
 
     expect(items.map((i) => [i.contextValue, i.description, i.tooltip])).toEqual([
-      ['plugin enabled inSourceMod sourcePlugin editable', undefined, 'A.esp\nSomeMod'],
-      ['plugin enabled inSourceMod sourcePlugin editable', undefined, 'B.esp\nSomeMod'],
+      ['plugin enabled inSourceMod compiledPlugin editable', undefined, 'A.esp\nSomeMod'],
+      ['plugin enabled inSourceMod compiledPlugin editable', undefined, 'B.esp\nSomeMod'],
     ]);
   });
 });

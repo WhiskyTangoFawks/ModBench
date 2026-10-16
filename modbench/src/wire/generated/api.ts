@@ -279,7 +279,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * The changes renaming a source plugin's source makes, writing nothing.
+         * The changes renaming a compiled plugin's source makes, writing nothing.
          * @description Over the unsaved documents mEdit holds, the files and folders renaming the plugin's source moves and the text each document it changes holds afterwards: every FormKey of the plugin follows. Moves come first, then deletions, then documents, and every path is absolute. The plugin file, its plugins.txt lines and what Modbench last wrote stay as they are.
          */
         post: operations["RenameSourceChanges"];
@@ -328,7 +328,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description What is wrong in each source plugin's source, on the file that holds the record: a reference to a record neither it nor an active plugin holds. Answers only once the index is ready. */
+        /** @description What is wrong in each compiled plugin's source, on the file that holds the record: a reference to a record neither it nor an active plugin holds. Answers only once the index is ready. */
         get: operations["GetPluginProblems"];
         put?: never;
         post?: never;
@@ -444,7 +444,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Where the plugin's copy of a record is a document: its own file in plugin source, the file of the record carrying it (a child record), or, for a non-source plugin's copy, the name of its rendered document. Two documents claiming the copy refuse, naming them. */
+        /** @description Where the plugin's copy of a record is a document: its own file in plugin source, the file of the record carrying it (a child record), or, for a non-compiled plugin's copy, the name of its rendered document. Two documents claiming the copy refuse, naming them. */
         get: operations["GetCopyDocument"];
         put?: never;
         post?: never;
@@ -731,14 +731,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/records/{formKey}/references-in-active-or-source-plugins": {
+    "/records/{formKey}/references-in-active-or-compiled-plugins": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["GetReferencesInActiveOrSourcePlugins"];
+        get: operations["GetReferencesInActiveOrCompiledPlugins"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1106,7 +1106,7 @@ export interface components {
             message: string;
         };
         /** @enum {string} */
-        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotSourcePlugin" | "PluginSourceUnreadable" | "TwinPluginSources" | "NoSource" | "SourceFileHeld" | "SourceDoesNotParse" | "SourceValueDropped" | "FormKeyCollision" | "FormIdOutsideFlagLimit" | "FormIdUnmappable" | "MasterNotInLoadOrder" | "MasterUnreadable" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
+        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotCompiledPlugin" | "PluginSourceUnreadable" | "TwinPluginSources" | "NoSource" | "SourceFileHeld" | "SourceDoesNotParse" | "SourceValueDropped" | "FormKeyCollision" | "FormIdOutsideFlagLimit" | "FormIdUnmappable" | "MasterNotInLoadOrder" | "MasterUnreadable" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
         CompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
         };
@@ -1570,7 +1570,7 @@ export interface components {
             masterIssues?: string[] | null;
             inLoadOrder: boolean;
             hasMatchingRecords: boolean;
-            isSourcePlugin: boolean;
+            isCompiledPlugin: boolean;
             hasParseFailure: boolean;
             pluginSourceUnreadable?: components["schemas"]["UnreadableSource"] | null;
             laterReadFailure?: components["schemas"]["SourceProblem"][] | null;
@@ -1684,7 +1684,7 @@ export interface components {
             newFormKey?: string | null;
         };
         /** @enum {string} */
-        RecordEditRefusal: "None" | "PluginNotSourcePlugin" | "PluginSourceUnreadable" | "PluginHasNoModFolder" | "PluginNotInLoadOrder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "ContainerCannotHoldType" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "HeldInAnotherRecordNotYetSupported" | "SourceUnitNotFound" | "SourceAccessFailed" | "UnsavedChanges" | "AmbiguousSourceUnit" | "FormIdOutsideFlagLimit" | "PartialFormFieldReadOnly" | "CannotBePartialForm" | "SyntheticMemberIndirectWrite" | "PersistentOnDeletedRecord" | "PersistentMoveDestinationUnknown" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "ChildSlotHeldByAnotherRecord" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "AlphaNotHeld" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable" | "NoLoadOrder";
+        RecordEditRefusal: "None" | "PluginNotCompiledPlugin" | "PluginSourceUnreadable" | "PluginHasNoModFolder" | "PluginNotInLoadOrder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "ContainerCannotHoldType" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "HeldInAnotherRecordNotYetSupported" | "SourceUnitNotFound" | "SourceAccessFailed" | "UnsavedChanges" | "AmbiguousSourceUnit" | "FormIdOutsideFlagLimit" | "PartialFormFieldReadOnly" | "CannotBePartialForm" | "SyntheticMemberIndirectWrite" | "PersistentOnDeletedRecord" | "PersistentMoveDestinationUnknown" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "ChildSlotHeldByAnotherRecord" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "AlphaNotHeld" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable" | "NoLoadOrder";
         RecordEditRequest: {
             plugin: string;
             origin: string;
@@ -3893,7 +3893,7 @@ export interface operations {
             };
         };
     };
-    GetReferencesInActiveOrSourcePlugins: {
+    GetReferencesInActiveOrCompiledPlugins: {
         parameters: {
             query?: never;
             header?: never;

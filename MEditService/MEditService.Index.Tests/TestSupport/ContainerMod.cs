@@ -43,7 +43,7 @@ internal sealed class ContainerMod : IDisposable
                 npc = mod.Npcs.AddNew(NpcEditorId).FormKey;
             }, origin: Origin)
             .BuildScattered()
-            .SourcePlugin();
+            .CompiledPlugin();
 
         Entry = _fixture.Plugins.Single();
         (Cell, EmbedCell, TemporaryRef, PersistentRef, Worldspace, TopCell, TopCellRef) =
@@ -62,7 +62,7 @@ internal sealed class ContainerMod : IDisposable
 }
 
 /// <summary>The container mod with an index over it, reconciled the way the composition root
-/// reconciles: the Index reads the source plugin tree.</summary>
+/// reconciles: the Index reads the compiled plugin tree.</summary>
 internal sealed class IndexedContainerMod : IDisposable
 {
     private readonly ContainerMod _mod = new();

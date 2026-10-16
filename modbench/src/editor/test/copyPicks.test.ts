@@ -4,7 +4,7 @@ import type { PluginMetadata, RecordAddress } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 
 function plugin(name: string, origin: string, loadOrderIndex: number | null, facts: Partial<PluginMetadata> = {}): PluginMetadata {
-  return pluginMetadataFixture({ name, origin, loadOrderIndex, isSourcePlugin: true, isImmutable: false, ...facts });
+  return pluginMetadataFixture({ name, origin, loadOrderIndex, isCompiledPlugin: true, isImmutable: false, ...facts });
 }
 
 const npc: RecordAddress = { formKey: '000801:Source.esp', plugin: 'Source.esp', origin: 'SourceMod' };
@@ -21,13 +21,13 @@ describe('the destination pick', () => {
   const plugins = [
     plugin('Source.esp', 'SourceMod', 3),
     plugin('Patch.esp', 'PatchMod', 5),
-    plugin('NonSourcePlugin.esp', 'NonSourceMod', 6, { isSourcePlugin: false }),
+    plugin('NonCompiledPlugin.esp', 'NonSourceMod', 6, { isCompiledPlugin: false }),
     plugin('ReadOnly.esp', 'ReadOnlyMod', 7, { isImmutable: true }),
     plugin('Unreadable.esp', 'UnreadableMod', 8, { pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }),
     plugin('Other.esp', 'OtherMod', 9),
   ];
 
-  it('offers the source plugin, editable plugins, each with its load position, and not a non-source plugin one or one whose plugin source is unreadable', () => {
+  it('offers the compiled plugin, editable plugins, each with its load position, and not a non-compiled plugin one or one whose plugin source is unreadable', () => {
     expect(copyDestinationItems(plugins, 'New', [npc]).map(({ label, description }) => ({ label, description }))).toEqual([
       { label: 'Source.esp', description: '[3]' },
       { label: 'Patch.esp', description: '[5]' },
@@ -66,7 +66,7 @@ describe('the destination pick', () => {
     expect(copyDestinationItems(plugins, 'Override', [shouted]).map((item) => item.label)).toEqual(['Patch.esp', 'Other.esp']);
   });
 
-  it('offers every source plugin, editable plugin to an override of records from several plugins', () => {
+  it('offers every compiled plugin, editable plugin to an override of records from several plugins', () => {
     expect(copyDestinationItems(plugins, 'Override', [npc, elsewhere]).map((item) => item.label))
       .toEqual(['Source.esp', 'Patch.esp', 'Other.esp']);
   });

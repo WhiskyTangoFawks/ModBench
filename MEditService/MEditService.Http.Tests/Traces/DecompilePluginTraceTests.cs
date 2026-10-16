@@ -9,14 +9,14 @@ namespace MEditService.Http.Tests.Traces;
 
 public sealed class DecompilePluginTraceTests : HostedTests
 {
-    private const string Plugin = "SourcePlugin.esp";
+    private const string Plugin = "CompiledPlugin.esp";
     private const string Origin = "SourceMod";
-    private const string Npc = "SourcePluginNpc";
-    private const string NonSourcePluginOrigin = "NonSourceMod";
+    private const string Npc = "CompiledPluginNpc";
+    private const string NonCompiledPluginOrigin = "NonSourceMod";
 
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("trace-decompile-plugin")
         .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
-        .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("OtherNpc"), origin: NonSourcePluginOrigin)
+        .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("OtherNpc"), origin: NonCompiledPluginOrigin)
         .BuildScattered();
 
     protected override void DisposeFixtures() => _instance.Dispose();
@@ -24,7 +24,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
     private async Task Loaded() => (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
 
     [Fact]
-    public async Task DecompilingASourcePluginWhoseBytesChanged_AnswersItApplied_AndItsNewSourceReachesTheAnswers()
+    public async Task DecompilingACompiledPluginWhoseBytesChanged_AnswersItApplied_AndItsNewSourceReachesTheAnswers()
     {
         await Loaded();
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
@@ -68,7 +68,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
     {
         await Loaded();
 
-        var response = await Client.Decompile([("Other.esp", NonSourcePluginOrigin)]);
+        var response = await Client.Decompile([("Other.esp", NonCompiledPluginOrigin)]);
 
         response.EnsureSuccessStatusCode();
         var refused = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());

@@ -32,10 +32,10 @@ export function workspaceSymbolsOf<Document extends { getText(): string }>({ cli
     try {
       plugins = answerOf(await client.getPlugins());
     } catch (error) {
-      reporter.shownOnSurface('error', `${GESTURE} cannot list the source plugins.`, errorMessage(error));
+      reporter.shownOnSurface('error', `${GESTURE} cannot list the compiled plugins.`, errorMessage(error));
       return [];
     }
-    const pages = await Promise.all(plugins.filter((plugin) => plugin.isSourcePlugin)
+    const pages = await Promise.all(plugins.filter((plugin) => plugin.isCompiledPlugin)
       .map((plugin) => searched(query, plugin)));
     const copies = pages.flatMap((page) => typeof page === 'string' ? [] : page)
       .map((row) => ({ formKey: row.formKey, plugin: pluginAddressOf(row), name: recordLabel(row.editorId, row.formKey) }));

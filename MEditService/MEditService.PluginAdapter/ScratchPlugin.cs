@@ -1,7 +1,7 @@
 namespace MEditService.PluginAdapter;
 
 /// <summary>A folder holding one recompiled plugin and nothing else, outside every mod folder so a
-/// half-written plugin is never mistaken for a source plugin; removed on dispose.</summary>
+/// half-written plugin is never mistaken for a compiled plugin; removed on dispose.</summary>
 public sealed class ScratchPlugin : IDisposable
 {
     private readonly string _folder;

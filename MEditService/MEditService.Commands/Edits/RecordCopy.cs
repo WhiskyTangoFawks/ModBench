@@ -14,7 +14,7 @@ namespace MEditService.Commands.Edits;
 /// container copied in when absent, as a Partial Form where the game allows (ADR-0007).</summary>
 internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger)
 {
-    /// <summary>The source plugin a copy lands in: its session and its key. No folder — every
+    /// <summary>The compiled plugin a copy lands in: its session and its key. No folder — every
     /// write here is a put, and the repository decides where a document goes.</summary>
     internal readonly record struct Destination(IWriteSession Session, PluginAddress Plugin)
     {

@@ -544,7 +544,7 @@ describe('the agent server, reading a record through mEdit', () => {
     expect(answered).toEqual({ kind: 'OwnFile', location: '/s/A.esp/000800.json' });
   });
 
-  it('answers the text of a non-source plugin\'s copy, which has no file to open', async () => {
+  it('answers the text of a non-compiled plugin\'s copy, which has no file to open', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
     mEdit.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'SharedNpc.txt' });

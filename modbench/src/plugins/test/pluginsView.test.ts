@@ -255,25 +255,25 @@ describe('the Plugins view registers its own gestures', () => {
 });
 
 describe('the Plugins view says what it knows of a plugin\'s tracking and editability', () => {
-  const SOURCE_PLUGIN_EDITABLE = { name: 'Test.esp', origin: 'ModA' };
+  const COMPILED_PLUGIN_EDITABLE = { name: 'Test.esp', origin: 'ModA' };
   const withThePlugin = () => instanceValueFixture({
     plugins: [{ name: 'Test.esp', path: '/instance/mods/ModA/Test.esp', origin: 'ModA', line: 0, enabled: true, winning: true }],
   });
-  const holdingSourcePluginEditable = () => {
+  const holdingCompiledPluginEditable = () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...SOURCE_PLUGIN_EDITABLE, isSourcePlugin: true, isImmutable: false })]);
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...COMPILED_PLUGIN_EDITABLE, isCompiledPlugin: true, isImmutable: false })]);
     return client;
   };
 
-  it('says nothing is a source plugin or editable until mEdit has answered, then what it answered', async () => {
-    const client = holdingSourcePluginEditable();
+  it('says nothing is a compiled plugin or editable until mEdit has answered, then what it answered', async () => {
+    const client = holdingCompiledPluginEditable();
     const { plugins } = pluginsView(withThePlugin(), { client });
-    expect(plugins.conditionsOf(SOURCE_PLUGIN_EDITABLE)).toEqual({ editable: false });
+    expect(plugins.conditionsOf(COMPILED_PLUGIN_EDITABLE)).toEqual({ editable: false });
 
     client.emit(rowsChanged);
     await settle();
 
-    expect(plugins.conditionsOf(SOURCE_PLUGIN_EDITABLE)).toEqual({ editable: true });
+    expect(plugins.conditionsOf(COMPILED_PLUGIN_EDITABLE)).toEqual({ editable: true });
     expect(plugins.conditionsOf({ name: 'Other.esp', origin: 'ModA' })).toEqual({ editable: false });
   });
 
@@ -297,17 +297,17 @@ describe('the Plugins view says what it knows of a plugin\'s tracking and editab
     }
 
     it('says nothing is editable before an Instance is open and after its view is gone, and what the view knows between', async () => {
-      const client = holdingSourcePluginEditable();
+      const client = holdingCompiledPluginEditable();
       const { plugins, onInstance } = box(client);
-      expect(plugins.conditionsOf(SOURCE_PLUGIN_EDITABLE)).toEqual(NOTHING);
+      expect(plugins.conditionsOf(COMPILED_PLUGIN_EDITABLE)).toEqual(NOTHING);
 
       const opened = onInstance();
       client.emit(rowsChanged);
       await settle();
-      expect(plugins.conditionsOf(SOURCE_PLUGIN_EDITABLE)).toEqual({ editable: true });
+      expect(plugins.conditionsOf(COMPILED_PLUGIN_EDITABLE)).toEqual({ editable: true });
 
       opened.dispose();
-      expect(plugins.conditionsOf(SOURCE_PLUGIN_EDITABLE)).toEqual(NOTHING);
+      expect(plugins.conditionsOf(COMPILED_PLUGIN_EDITABLE)).toEqual(NOTHING);
     });
   });
 });
@@ -859,7 +859,7 @@ describe('the Plugins view\'s message line and name filter', () => {
     "Game folder not found: set modbench.mods.gameDirectory. The Toolbox's Game row names each place Modbench looked.";
   const heldPlugin = (name: string, hasMatchingRecords: boolean): PluginMetadata => ({
     name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0,
-    isImmutable: false, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, hasMatchingRecords, isSourcePlugin: false,
+    isImmutable: false, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, hasMatchingRecords, isCompiledPlugin: false,
     hasParseFailure: false, pluginSourceUnreadable: null,
   });
   const NO_MATCH = 'No matches for "zzznomatch".';

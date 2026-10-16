@@ -10,7 +10,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class RecordEditTests : IDisposable
 {
-    private readonly SourceEditFixture _mod = SourceEditFixture.SourcePlugin();
+    private readonly SourceEditFixture _mod = SourceEditFixture.CompiledPlugin();
 
     public void Dispose() => _mod.Dispose();
 
@@ -42,7 +42,7 @@ public sealed class RecordEditTests : IDisposable
     }
 
     [Fact]
-    public void EditField_OnASourcePlugin_LeavesTheRecordChangedSinceTheLastCommit()
+    public void EditField_OnACompiledPlugin_LeavesTheRecordChangedSinceTheLastCommit()
     {
         Assert.Empty(_mod.ChangedFormKeys());
 

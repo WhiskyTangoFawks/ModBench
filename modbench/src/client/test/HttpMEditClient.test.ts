@@ -186,7 +186,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const second = { name: 'Second.esp', origin: 'ModB' };
   const kept = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const gone = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
-  const nonSourcePlugin = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' };
+  const nonCompiledPlugin = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' };
   const patch = { name: 'Patch.esp', origin: 'PatchMod' };
   const other = { name: 'Other.esp', origin: 'OtherMod' };
   const newPlugin = { name: 'New.esp', origin: 'ModA' };
@@ -226,10 +226,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     { name: 'getCreateChanges in a container', verb: (c) => c.getCreateChanges(myPatch, 'cell', { container: '000800:MyPatch.esp', position: { x: 1, y: -2 } }),
       ...same(createdRecord), path: '/plugins/MyPatch.esp/create-record-changes',
       body: { origin: 'ModA', recordType: 'cell', container: '000800:MyPatch.esp', position: { x: 1, y: -2 } } },
-    { name: 'getDeleteChanges', verb: (c) => c.getDeleteChanges([kept, nonSourcePlugin, gone]),
-      answer: { applied: [keptChanges, goneChanges], refused: [{ item: nonSourcePlugin, refusal: 'PluginNotSourcePlugin', message: 'Other.esp is not a source plugin.' }] },
-      reads: { applied: [keptChanges, goneChanges], refused: [{ item: nonSourcePlugin, reason: 'Other.esp is not a source plugin.' }] },
-      path: '/records/delete-changes', body: { records: [kept, nonSourcePlugin, gone] } },
+    { name: 'getDeleteChanges', verb: (c) => c.getDeleteChanges([kept, nonCompiledPlugin, gone]),
+      answer: { applied: [keptChanges, goneChanges], refused: [{ item: nonCompiledPlugin, refusal: 'PluginNotCompiledPlugin', message: 'Other.esp is not a compiled plugin.' }] },
+      reads: { applied: [keptChanges, goneChanges], refused: [{ item: nonCompiledPlugin, reason: 'Other.esp is not a compiled plugin.' }] },
+      path: '/records/delete-changes', body: { records: [kept, nonCompiledPlugin, gone] } },
     { name: 'createPlugin', verb: (c) => c.createPlugin(newPlugin, '/mods/ModA', '/source/ModA'), ...same({ ...newPlugin, path: '/mods/ModA/New.esp' }),
       path: '/plugins/create', body: { origin: 'ModA', name: 'New.esp', folder: '/mods/ModA', sourceFolder: '/source/ModA' } },
     { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'),
@@ -542,11 +542,11 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   });
 
   describe('getEditChanges answered with a refusal', () => {
-    const notSourcePlugin = 'MyPatch.esp is not a source plugin, so it is read-only.';
+    const notCompiledPlugin = 'MyPatch.esp is not a compiled plugin, so it is read-only.';
     const detail = 'No load order has been received.';
     const refusals = [
-      [409, { refusal: 'PluginNotSourcePlugin', detail: notSourcePlugin }, 'PluginNotSourcePlugin', notSourcePlugin],
-      [422, { refusal: 'PluginNotSourcePlugin', detail: notSourcePlugin }, 'PluginNotSourcePlugin', notSourcePlugin],
+      [409, { refusal: 'PluginNotCompiledPlugin', detail: notCompiledPlugin }, 'PluginNotCompiledPlugin', notCompiledPlugin],
+      [422, { refusal: 'PluginNotCompiledPlugin', detail: notCompiledPlugin }, 'PluginNotCompiledPlugin', notCompiledPlugin],
       [422, { refusal: 'SourceAccessFailed', detail: 'Could not write the source file for 000800:MyPatch.esp: Access denied.' }, 'SourceAccessFailed', 'Could not write the source file for 000800:MyPatch.esp: Access denied.'],
       [503, { detail }, 'Unknown', detail],
     ] as const;

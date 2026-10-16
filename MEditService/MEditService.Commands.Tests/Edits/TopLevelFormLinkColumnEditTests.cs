@@ -7,7 +7,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class TopLevelFormLinkColumnEditTests : IDisposable
 {
-    private readonly SourceEditFixture _mod = SourceEditFixture.SourcePlugin();
+    private readonly SourceEditFixture _mod = SourceEditFixture.CompiledPlugin();
 
     public void Dispose() => _mod.Dispose();
 

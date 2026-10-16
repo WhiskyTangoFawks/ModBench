@@ -215,7 +215,7 @@ describe('stringValueContext, the string-cell right-click menu\'s own identity a
     });
   });
 
-  it('carries readOnly: true for an immutable/non-source plugin/not-in-load-order column unchanged', () => {
+  it('carries readOnly: true for an immutable/non-compiled plugin/not-in-load-order column unchanged', () => {
     expect(stringValueContext(
       '000001:Fallout4.esm', 'Fallout4.esm', 'Data', 'Dogmeat', 'Name', 'Dogmeat', true, NAME_PATH,
     ).readOnly).toBe(true);

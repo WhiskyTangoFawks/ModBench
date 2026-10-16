@@ -40,7 +40,7 @@ const CHANGED_OUTSIDE_TEXT = 'Changed outside Modbench: its bytes differ from wh
 
 interface PluginRead {
   readOnly: boolean;
-  sourcePlugin: boolean;
+  compiledPlugin: boolean;
   sourceUnreadable: UnreadableSource | undefined;
   masterIssues?: string[];
   parseFailure: boolean;
@@ -146,7 +146,7 @@ export class PluginFacts {
     const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
       reads.set(p, {
-        readOnly: !pluginCanBeEdited(p), sourcePlugin: p.isSourcePlugin,
+        readOnly: !pluginCanBeEdited(p), compiledPlugin: p.isCompiledPlugin,
         sourceUnreadable: p.pluginSourceUnreadable ?? undefined, parseFailure: p.hasParseFailure,
         masterIssues: p.masterIssues ?? this.reads.get(p)?.masterIssues,
       });
@@ -257,11 +257,11 @@ export class PluginFacts {
     return [...lines, ...this.statuses(address).map((s) => s.tooltipLine)];
   }
 
-  /** Nothing until mEdit answers: an unknown is neither source plugin nor non-source plugin, nor editable. */
+  /** Nothing until mEdit answers: an unknown is neither compiled plugin nor non-compiled plugin, nor editable. */
   contextFlags(address: PluginAddress): string[] {
     const read = this.reads.get(address);
     const flags: string[] = [];
-    if (read !== undefined) flags.push(read.sourcePlugin ? 'sourcePlugin' : 'nonSourcePlugin');
+    if (read !== undefined) flags.push(read.compiledPlugin ? 'compiledPlugin' : 'nonCompiledPlugin');
     if (read?.readOnly === false) flags.push('editable');
     return flags;
   }
