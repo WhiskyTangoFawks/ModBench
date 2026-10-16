@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { heldFolderWatch, type HeldFolderWatch } from '../heldFolders';
+import { heldFolderWatchFor, type HeldFolderWatch } from '../heldFolders';
+import { present } from '../../ports/present';
 import { eventually, writtenAndHeard } from '../../test/eventually';
 
-describe('heldFolderWatch', () => {
+describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher misses them only on Linux) the watch of the folders a folder created already held', () => {
   let root: string;
   let heard: string[];
   let failures: number;
@@ -15,7 +16,7 @@ describe('heldFolderWatch', () => {
     root = await mkdtemp(join(tmpdir(), 'held-folders-'));
     heard = [];
     failures = 0;
-    held = heldFolderWatch({ onChange: (path) => { heard.push(path); }, holds: () => true, onFailure: () => { failures++; } });
+    held = present(heldFolderWatchFor('**', { onChange: (path) => { heard.push(path); }, holds: () => true, onFailure: () => { failures++; } }), 'a held-folder watch on Linux');
     await held.open();
   });
 
@@ -75,18 +76,19 @@ describe('heldFolderWatch', () => {
     expect(await writesHeard(join(heldFolder, 'Gun.json'))).toBe(true);
   });
 
-  it('hears a folder deleted inside a held folder, and no change inside a held folder deleted itself', async () => {
+  it('hears a held folder deleted at its own path, and at no path inside it but its own folders\'', async () => {
     const created = join(root, 'Created');
-    const heldFolder = join(created, 'Held');
+    const outer = join(created, 'Outer');
+    const heldFolder = join(outer, 'Held');
     await mkdir(join(heldFolder, 'Deeper'), { recursive: true });
     await held.created(created);
 
     await rm(heldFolder, { recursive: true });
-    const deletionHeard = await eventually(() => heard.includes(join(heldFolder, 'Deeper')));
-    await writtenAndHeard(created);
+    const deletionHeard = await eventually(() => heard.includes(heldFolder));
+    await writtenAndHeard(outer);
 
     expect(deletionHeard).toBe(true);
-    expect(heard.filter((path) => path.startsWith(`${heldFolder}/`))).toEqual([join(heldFolder, 'Deeper')]);
+    expect(heard.filter((path) => path.startsWith(`${heldFolder}/`) && path !== join(heldFolder, 'Deeper'))).toEqual([]);
   });
 
   it('hears nothing once closed', async () => {

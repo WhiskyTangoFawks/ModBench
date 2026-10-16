@@ -51,7 +51,7 @@ async function foldersIn(folder: string): Promise<string[]> {
   }
 }
 
-export function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): HeldFolderWatch {
+function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): HeldFolderWatch {
   const createdFolders = new Set<string>();
   const watched = new Map<string, { watcher: FSWatcher; real: string }>();
   const watchedReal = new Set<string>();
