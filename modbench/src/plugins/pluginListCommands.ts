@@ -137,7 +137,7 @@ export function registerCreatePluginCommand(
       }
       return made;
     },
-    fromAgent: async ({ options: { name, place } }) => {
+    fromAgent: ({ options: { name, place } }) => {
       const chosen = pluginPlaces(instance.value, name).find(({ name: origin }) => origin.toLowerCase() === place.toLowerCase());
       if (chosen === undefined) {
         const overwrite = placeFolder(instance.value, OVERWRITE_ORIGIN);
