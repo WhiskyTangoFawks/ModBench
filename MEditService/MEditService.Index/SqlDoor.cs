@@ -36,9 +36,8 @@ internal static class SqlDoor
     {
         private readonly HashSet<string> _views = new(views, StringComparer.OrdinalIgnoreCase);
 
-        // The parse serializes a reference to a WITH's relation like any table reference. A WITH covers
-        // its own query node and the later entries of its list, and a recursive one its right side: elsewhere
-        // the name is the real relation's.
+        // A WITH's name covers its own query node, the later entries of its list and, if recursive, its
+        // right side. Elsewhere the name is the real relation's.
         internal string? RefusalIn(JsonElement node, ImmutableHashSet<string> commonTableExpressions) => node.ValueKind switch
         {
             JsonValueKind.Object => RefusalInObject(node, commonTableExpressions),
