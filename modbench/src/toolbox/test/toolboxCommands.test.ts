@@ -231,7 +231,7 @@ describe('Refresh', () => {
       'progress opens on modbench.toolbox', 'instance commands: refresh', 'Instance loader: read every file again', 'progress closes',
     ]);
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: "This instance's record index is open in another Modbench window", detail: '/instance/FO4' },
+      { severity: 'error', message: "This instance is open in another Modbench window", detail: '/instance/FO4' },
     ]);
   });
 

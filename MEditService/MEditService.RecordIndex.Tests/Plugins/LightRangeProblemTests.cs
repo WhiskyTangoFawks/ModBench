@@ -41,7 +41,7 @@ public sealed class LightRangeProblemTests : IDisposable
 
     private string HeaderFlaggedLight => File.ReadAllText(HeaderFile).Replace(ModHeaderOpening, ModHeaderOpening + "\n    \"Flags\": [\"Small\"],", StringComparison.Ordinal);
 
-    private static IReadOnlyList<Index.Queries.SourceProblem> Problems(OpenedIndex index) => index.Queries.GetProblems().Value().Single().Problems;
+    private static IReadOnlyList<RecordIndex.Queries.SourceProblem> Problems(OpenedIndex index) => index.Queries.GetProblems().Value().Single().Problems;
 
     private string OutsideFile(OpenedIndex index) =>
         Path.GetRelativePath(_light.ModFolderOf(), _light.SourceFileOf(index.DocumentOf(_outside, _light.KeyOf())));

@@ -49,7 +49,7 @@ As a user, I want no confirmation, and the view's progress bar while it runs. Ci
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. A refresh refused because another window holds the record index to say "This instance's record index is open in another Modbench window", and to name the instance. Modbench cannot name the other window. Cites: catalog `refresh`; Never silently wrong
+1. A refresh refused because another window holds the record index to say "This instance is open in another Modbench window", and to name the instance. Modbench cannot name the other window. Cites: catalog `refresh`; Never silently wrong
 2. A failed refresh to say why.
 
 ## Test seam
