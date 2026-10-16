@@ -14,8 +14,8 @@ from tests.fixture_medit import (
     files_and_bytes,
     fixture_medit,
     holding_unsaved,
-    source_folder,
     init_mod,
+    source_folder,
     window_of,
 )
 

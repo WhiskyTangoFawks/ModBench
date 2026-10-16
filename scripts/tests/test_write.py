@@ -14,8 +14,8 @@ from tests.fixture_medit import (
     changed,
     fixture_medit,
     holding_unsaved,
-    source_folder,
     init_mod,
+    source_folder,
     watcher_resends_load_order,
     window_of,
 )
