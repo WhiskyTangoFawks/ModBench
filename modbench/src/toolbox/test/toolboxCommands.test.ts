@@ -245,7 +245,7 @@ describe('Refresh', () => {
       'progress opens on modbench.toolbox', 'instance commands: refresh', 'Instance loader: read every file again', 'progress closes',
     ]);
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not rebuild the index.', detail: refusal },
+      { severity: 'error', message: 'Could not refresh.', detail: refusal },
     ]);
   });
 
