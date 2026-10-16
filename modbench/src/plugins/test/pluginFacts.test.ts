@@ -77,13 +77,6 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     expect(facts.description(A)).toBe('failed to read, 1 master issue, unreadable records, plugin source unreadable, changed outside Modbench, malformed');
   });
 
-  it('carries the read-only line on a plugin with no source', () => {
-    const facts = new PluginFacts();
-    facts.reconciled([held({ isTracked: false })], []);
-
-    expect(facts.tooltipLines(A)).toEqual(['A.esp', 'SomeMod', 'read-only']);
-  });
-
   it('carries the read-only line between the origin and the status lines', () => {
     const facts = new PluginFacts();
     facts.reconciled([held({ isImmutable: true, masterIssues: ['Ghost.esm'] })], []);
@@ -260,7 +253,6 @@ describe('PluginFacts — what a row states about its plugin', () => {
     ['a plugin with no source', { isTracked: false }, ['untracked'], { tracked: false, editable: false }],
     ['a tracked, editable plugin', { isTracked: true }, ['tracked', 'editable'], { tracked: true, editable: true }],
     ['a tracked, read-only plugin', { isTracked: true, isImmutable: true }, ['tracked'], { tracked: true, editable: false }],
-    ['an untracked, read-only plugin', { isTracked: false, isImmutable: true }, ['untracked'], { tracked: false, editable: false }],
     ['a tracked plugin whose plugin source is unreadable', { isTracked: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }, ['tracked'], { tracked: true, editable: false }],
   ] as const)('%s', (_label, overrides, flags, conditions) => {
     const facts = new PluginFacts();

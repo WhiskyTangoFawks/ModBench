@@ -1640,7 +1640,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
       plugin({ name: 'Shared.esp', line: 0, origin: 'ModA', winning: false }),
       plugin({ name: 'Shared.esp', line: 0, origin: 'ModB' }),
     ], { client });
-    await reconcile(h, [held('Shared.esp', { origin: 'ModA' }), held('Shared.esp', { origin: 'ModB', isTracked: true })]);
+    await reconcile(h, [held('Shared.esp', { origin: 'ModA' }), held('Shared.esp', { origin: 'ModB' })]);
     const [row] = await h.tree.getChildren();
 
     const group = present((await h.tree.getChildren(row))[0], 'the Weapon group');
@@ -2101,14 +2101,14 @@ describe('PluginsTreeProvider — changed outside Modbench', () => {
 
 describe('PluginsTreeProvider — a healthy plugin row after a reconcile', () => {
   it('states only its kind and where decompile and commit applies, with no description and the base tooltip', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
+    const h = makeTree([A_ROW(), B_ROW()], { instance: new FakeInstance({ ...valueOf([A_ROW(), B_ROW()]), trackedMods: new Set(['SomeMod']) }) });
     await reconcile(h, [held('A.esp', { isTracked: true }), held('B.esp', { isTracked: true })]);
 
     const items = [await rowItem(h, 0), await rowItem(h, 1)];
 
     expect(items.map((i) => [i.contextValue, i.description, i.tooltip])).toEqual([
-      ['plugin enabled inUntrackedMod tracked editable', undefined, 'A.esp\nSomeMod'],
-      ['plugin enabled inUntrackedMod tracked editable', undefined, 'B.esp\nSomeMod'],
+      ['plugin enabled inTrackedMod tracked editable', undefined, 'A.esp\nSomeMod'],
+      ['plugin enabled inTrackedMod tracked editable', undefined, 'B.esp\nSomeMod'],
     ]);
   });
 });
