@@ -11,10 +11,6 @@ games="fallout skyrim starfield"
 
 game_of() { case " $games " in *" $1 "*) echo "$1";; esac; }
 
-steam_folder_of() {
-  case "$1" in fallout) echo "Fallout 4";; skyrim) echo "Skyrim Special Edition";; starfield) echo "Starfield";; esac
-}
-
 usage() {
   echo "usage: accept.sh up <fallout|skyrim|starfield|instance folder> | call <dir> <tool> [json] | tools <dir> | down <dir> | seed <fallout|skyrim|starfield>" >&2
   exit 2
@@ -47,13 +43,6 @@ up() {
   [ -f "$root/modbench/out/extension.js" ] && [ -x "$root/modbench/backend/MEditService.Http" ] || {
     echo "refused: build first, in modbench/ through slot-run: npm run build, npm run build:backend" >&2; exit 1; }
 
-  # Modbench finds only Fallout 4's install in Steam, so a Skyrim or Starfield run names the game folder itself.
-  local game_folder=""
-  if [ -n "$game" ] && [ "$game" != fallout ]; then
-    game_folder="$(readlink -f "$HOME/.steam/steam")/steamapps/common/$(steam_folder_of "$game")"
-    [ -d "$game_folder/Data" ] || { echo "refused: no installed $game at $game_folder" >&2; exit 1; }
-  fi
-
   dir="$(mktemp -d /tmp/modbench-accept.XXXX)"
   instance="$dir/instance"
   if [ -n "$game" ]; then
@@ -69,9 +58,7 @@ up() {
   port="$(free_port)"
   echo "$port" > "$dir/port"
   python3 -I -c 'import json, sys
-settings = {"modbench.agent.port": int(sys.argv[1])}
-if sys.argv[2]: settings["modbench.mods.gameDirectory"] = sys.argv[2]
-print(json.dumps(settings))' "$port" "$game_folder" > "$instance/.vscode/settings.json"
+print(json.dumps({"modbench.agent.port": int(sys.argv[1])}))' "$port" > "$instance/.vscode/settings.json"
   # Modbench loads nothing in Restricted Mode, and a headless window cannot answer the trust prompt.
   printf '{"security.workspace.trust.enabled": false, "telemetry.telemetryLevel": "off", "update.mode": "none"}\n' \
     > "$dir/user/User/settings.json"
@@ -98,6 +85,17 @@ print(json.dumps(settings))' "$port" "$game_folder" > "$instance/.vscode/setting
   echo "DIR=$dir PORT=$port ready after ${waited}s"
 }
 
+wait_gone() {
+  local seconds="$1" p i; shift
+  for ((i = 0; i < seconds * 10; i++)); do
+    local alive=""
+    for p in "$@"; do [ -d "/proc/$p" ] && alive=1; done
+    [ -z "$alive" ] && return 0
+    sleep 0.1
+  done
+  return 1
+}
+
 down() {
   local dir="$1" keep="${2:-}" seed="$state/seed/${3:-}"
   case "$dir" in /tmp/modbench-accept.*) ;; *) echo "refused: not a run folder: $dir" >&2; exit 1;; esac
@@ -110,8 +108,8 @@ down() {
     fi
   done
   [ -n "$pids" ] && kill $pids 2>/dev/null || true
-  sleep 3
-  for p in $pids; do [ -d "/proc/$p" ] && kill -9 "$p" 2>/dev/null || true; done
+  wait_gone 10 $pids || for p in $pids; do kill -9 "$p" 2>/dev/null || true; done
+  wait_gone 10 $pids || { echo "still running after SIGKILL:$pids" >&2; exit 1; }
   [ -f "$dir/xvfb.pid" ] && kill "$(cat "$dir/xvfb.pid")" 2>/dev/null || true
   if [ "$keep" = "--keep-seed" ]; then
     mkdir -p "$seed" && rm -f "$seed"/index.duckdb* && cp "$dir"/instance/modbench/index.duckdb* "$seed/"

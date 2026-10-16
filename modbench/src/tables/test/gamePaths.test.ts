@@ -61,18 +61,17 @@ describe('nexusDomainForMetaGame', () => {
 });
 
 describe('gamePathInfoForRelease', () => {
-  it('answers Fallout 4\'s Steam install facts', () => {
-    expect(gamePathInfoForRelease('Fallout4')).toMatchObject({
-      gameName: 'Fallout 4',
-      nexusSlug: 'fallout4',
-      steamAppId: '377160',
-      steamFolderName: 'Fallout 4',
-    });
+  it.each([
+    ['Fallout4', '377160', 'Fallout 4'],
+    ['SkyrimSE', '489830', 'Skyrim Special Edition'],
+    ['Starfield', '1716740', 'Starfield'],
+  ])('answers %s\'s Steam install facts', (release, steamAppId, steamFolderName) => {
+    expect(gamePathInfoForRelease(release)).toMatchObject({ steamAppId, steamFolderName });
   });
 
   it('answers no Steam facts for a release the table only knows the Nexus slug for, the autodetector\'s signal to give up rather than guess a folder', () => {
-    const info = gamePathInfoForRelease('SkyrimSE');
-    expect(info).toMatchObject({ gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition' });
+    const info = gamePathInfoForRelease('Oblivion');
+    expect(info).toMatchObject({ gameName: 'Oblivion', nexusSlug: 'oblivion' });
     expect(info?.steamAppId).toBeUndefined();
     expect(info?.steamFolderName).toBeUndefined();
   });
