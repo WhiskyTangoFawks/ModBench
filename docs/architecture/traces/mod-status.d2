@@ -1,4 +1,4 @@
-# Mod status, green: whether each mod's folder differs from its manifest, after each snapshot, by stat, and a hash of a file whose stat changed.
+# Mod status, green: whether each mod's folder and metadata differ from its manifest, after each snapshot.
 ...@../styles
 shape: sequence_diagram
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
@@ -25,15 +25,14 @@ mods: @../target-architecture.modbench_driving.mods
 mods.label: Mods
 
 instanceloader -> activation: value {class: loadorder}
-activation -> instancecommands: "put load order: the snapshot" {class: loadorder}
+activation -> instancecommands: "put load order: the snapshot, with each mod's metadata" {class: loadorder}
 instancecommands -> client: snapshot {class: loadorder}
 client -> http: snapshot {class: loadorder}
 http -> commands: put load order {class: loadorder}
-commands -> engine: "the snapshot's mods" {class: loadorder}
-modfolder -> modfolderadapter: "each manifest · each mod's files: stamps · the stat cache" {class: track}
+commands -> engine: "the snapshot's mods and metadata" {class: loadorder}
+modfolder -> modfolderadapter: "manifests · each mod's files" {class: track}
 modfolderadapter -> engine: "each mod's status" {class: track}
-modfolderadapter -> modfolder: "the stat cache" {class: track}
-engine."against the last push: which mods changed"
+engine."only the mods that changed since the last push"
 engine -> port: "mod status changed: the mods" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
@@ -41,7 +40,6 @@ client -> mods: "mod status changed" {class: push}
 mods -> client: "mod status: the mods" {class: query}
 client -> http: envelope {class: query}
 http -> modfolderadapter: "mod status: the mods" {class: query}
-modfolderadapter -> http: "per mod: differs · no manifest · files the package does not hold" {class: query}
-http -> client: "per mod: its state" {class: query}
-client -> mods: "per mod: its state" {class: query}
-mods."joined to the instance value"
+modfolderadapter -> http: "per mod: its status" {class: query}
+http -> client: "per mod: its status" {class: query}
+client -> mods: "per mod: its status" {class: query}

@@ -1,4 +1,4 @@
-# Build mod, orange: the mod folder from its source, as the build configuration says.
+# Build, orange: a source mod's folder written from its repository alone.
 ...@../styles
 shape: sequence_diagram
 driving: "Toolbox · Mods · Source Control" {class: driving}
@@ -24,8 +24,6 @@ modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
 modfolderadapter.label: Mod folder adapter
 commands: @../target-architecture.medit_core.commands
 commands.label: Commands
-port: @../target-architecture.medit_kernel.ports
-port.label: Ports
 instance: @../target-architecture.modbench_data.instance
 instance.label: "Instance\nmods · downloaded files · the repository"
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
@@ -35,23 +33,19 @@ views: "every view" {class: driving}
 driving -> sourcecommands: "build: the mods" {class: compile}
 sourcecommands -> textdocuments: "save: each mod's unsaved plugin source" {class: compile}
 textdocuments -> sourcecommands: "saved, or the file VS Code did not save" {class: compile}
-sourcecommands -> instanceadapter: "get: each mod's folder and installation files, the game folder" {class: compile}
-instanceadapter -> sourcecommands: "the folders, the installation files, the game folder" {class: compile}
-sourcecommands -> client: "build: each mod's folder and installation files, the game folder" {class: compile}
+sourcecommands -> instanceadapter: "get: each mod's folder" {class: compile}
+instanceadapter -> sourcecommands: "each mod's folder" {class: compile}
+sourcecommands -> client: "build: each mod's folder" {class: compile}
 client -> http: envelope {class: compile}
 http -> engine: envelope {class: compile}
 source -> sourceadapter: "each mod's build configuration, assets and commit" {class: compile}
-sourceadapter -> engine: "the output folder, the assets, the archives to pack, the commit" {class: compile}
-modfolder -> modfolderadapter: "installation files: bytes" {class: compile}
-modfolderadapter -> engine: "the base files" {class: compile}
+sourceadapter -> engine: "the build configuration, the assets, the commit" {class: compile}
 engine."refused when the output folder is not the mod's"
 engine -> commands: "compile-plugin, per plugin" {class: compile}
-engine."pack each archive from its loose files"
-engine -> port: "progress, per mod" {class: push}
-engine -> modfolderadapter: "the mod's files, whole · the manifest, last" {class: compile}
+engine -> modfolderadapter: "the mod's files · the manifest" {class: compile}
 modfolderadapter -> modfolder: "the folder · the manifest" {class: compile}
-engine -> http: "landed, per mod, with each refused plugin" {class: compile}
-http -> client: "landed, per mod, with each refused plugin" {class: compile}
+engine -> http: "the outcome, per mod" {class: compile}
+http -> client: "the outcome, per mod" {class: compile}
 client -> sourcecommands: the outcome {class: compile}
 sourcecommands -> driving: "the outcome" {class: compile}
 instance -> instanceadapter: watch {class: signal}

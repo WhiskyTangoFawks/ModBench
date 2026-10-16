@@ -1,4 +1,4 @@
-# Decompile and commit, green: the repository in the source folder, plugin source, assets, build configuration, one commit.
+# Decompile and commit, green: a mod put under git as a source mod, every file of it in its repository.
 ...@../styles
 shape: sequence_diagram
 driving: "Toolbox · Mods · Source Control" {class: driving}
@@ -18,8 +18,6 @@ modfolder: @../target-architecture.medit_data.modfolder
 modfolder.label: "Mod folders\nfiles · manifests"
 modfolderadapter: @../target-architecture.medit_repositories.modfolderadapter
 modfolderadapter.label: Mod folder adapter
-port: @../target-architecture.medit_kernel.ports
-port.label: Ports
 sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
 source: @../target-architecture.medit_data.source
@@ -31,24 +29,20 @@ instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
 driving -> sourcecommands: "decompile and commit: the mods" {class: track}
-sourcecommands."the message line shows the phase reading its installation files"
-sourcecommands -> instanceadapter: "get: the mod's folder and installation files" {class: track}
-instanceadapter -> sourcecommands: "each mod's folder · each installation file's path, size, hash and entries, or the reason it could not be read: a reason refuses the mod" {class: track}
-sourcecommands -> client: "init: each mod's folder and installation files" {class: track}
+sourcecommands -> instanceadapter: "get: each mod's folder" {class: track}
+instanceadapter -> sourcecommands: "each mod's folder" {class: track}
+sourcecommands -> client: "init: each mod's folder" {class: track}
 client -> http: envelope {class: track}
 http -> engine: envelope {class: track}
 engine -> commands: "decompile-plugin, every plugin of the mod" {class: track}
-modfolder -> modfolderadapter: "the mod's files: bytes" {class: track}
-modfolderadapter -> engine: "bytes" {class: track}
-engine."the files no installation file yields are the assets; the build configuration names this folder"
-engine -> port: "progress, per mod" {class: push}
-engine -> sourceadapter: "the repository · plugin source, assets, the build configuration · commit: Init <mod>" {class: track}
+modfolder -> modfolderadapter: "the mod's files" {class: track}
+modfolderadapter -> engine: "the mod's files" {class: track}
+engine -> sourceadapter: "the repository: plugin source, assets, the build configuration, its first commit" {class: track}
 sourceadapter -> source: "the source folder" {class: track}
-engine -> http: "landed, or the refusal naming each refused plugin" {class: track}
-http -> client: "landed, or the refusal naming each refused plugin" {class: track}
+engine -> http: "the outcome" {class: track}
+http -> client: "the outcome" {class: track}
 client -> sourcecommands: the outcome {class: track}
 sourcecommands -> driving: "the outcome" {class: track}
-
 refused: "refused, before any write: nothing of the mod, and no repository" {
   engine -> http: "the refusal" {class: track}
 }
