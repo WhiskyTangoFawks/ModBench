@@ -46,6 +46,7 @@ public sealed class LoadOrderStatusApiTests : IDisposable
             gameDirectory = fx.DataFolder,
             instanceRoot = fx.InstanceRoot,
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
         load.EnsureSuccessStatusCode();
 
@@ -81,6 +82,7 @@ public sealed class LoadOrderStatusApiTests : IDisposable
             gameDirectory = fx.DataFolder,
             instanceRoot = fx.InstanceRoot,
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
 
         Assert.Equal(HttpStatusCode.OK, load.StatusCode);

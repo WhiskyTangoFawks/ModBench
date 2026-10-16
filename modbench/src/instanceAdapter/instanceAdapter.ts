@@ -382,7 +382,7 @@ interface InstanceGame {
   readonly gameRelease: string | undefined;
 }
 
-/** The instance as parsed facts, every one from the same read of its settings. */
+/** The instance as parsed facts, every one from the same read of its settings, and what the watch cannot hear. */
 export interface InstanceReading extends InstanceGame {
   /** The profile the mod manager's configuration selects. */
   readonly profile: string;
@@ -417,6 +417,8 @@ export interface InstanceReading extends InstanceGame {
   readonly sourceMods: SourceMods;
   /** Whether the instance folder holds a repository. */
   readonly holdsRepository: boolean;
+  /** Why a folder's watch failed, once per reason: no change inside that folder is heard. */
+  readonly watchNotes: readonly string[];
 }
 
 export interface InstanceAdapter {

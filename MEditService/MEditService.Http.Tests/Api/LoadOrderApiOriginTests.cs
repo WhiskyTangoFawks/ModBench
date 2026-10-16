@@ -30,6 +30,7 @@ public sealed class LoadOrderApiOriginTests(LoadedApiFixture<TestPluginFixture> 
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
         response.EnsureSuccessStatusCode();
 

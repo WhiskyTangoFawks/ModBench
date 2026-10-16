@@ -32,7 +32,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     {
         var held = _holder.Current;
         _holder.Apply(new LoadOrderSnapshot(
-            held.DataFolderPath, held.InstanceRoot, held.GameRelease, held.Plugins, [], [], [], [], [.. held.Places, place]));
+            held.DataFolderPath, held.InstanceRoot, held.GameRelease, held.Plugins, [], [], [], [], [.. held.Places, place], held.StringsLanguage));
     }
 
     public void Dispose() => _data.Dispose();

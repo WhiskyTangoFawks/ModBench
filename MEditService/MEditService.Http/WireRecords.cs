@@ -23,7 +23,7 @@ internal sealed record LoadOrderResponse(bool Applied, long Version = 0);
 internal sealed record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
     IReadOnlyList<PluginAddress> LoadedWithNoLine, IReadOnlyList<StampedFile> Archives, IReadOnlyList<StampedFile> StringsFiles,
-    IReadOnlyList<PluginPlace> Places, string GameDirectory, string InstanceRoot, string GameRelease, IReadOnlyList<ModByFolder> Mods, string StatCache);
+    IReadOnlyList<PluginPlace> Places, string GameDirectory, string InstanceRoot, string GameRelease, string StringsLanguage, IReadOnlyList<ModByFolder> Mods, string StatCache);
 internal sealed record LoadOrderPlugin(
     string Name, string Path, string Origin, PluginProviderRequest Provider, int? Line, bool LineNamesIt, IReadOnlyList<StampedFile> Archives,
     IReadOnlyList<StampedFile> StringsFiles);
@@ -83,8 +83,6 @@ internal sealed record RecordEditChangesResponse(
 
 /// <summary>Documents are the unsaved texts of every dirty plugin-source document.</summary>
 internal sealed record UnsavedDocumentsRequest(IReadOnlyList<DocumentChange> Documents);
-
-internal sealed record StringsLanguageRequest(string Language);
 
 // The three lifecycle gestures' wire shapes, on the same door (Plugin/Origin as the compound
 // identity, refusals as ProblemDetails carrying the same `refusal` extension) Edit already

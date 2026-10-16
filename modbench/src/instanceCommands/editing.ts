@@ -25,7 +25,7 @@ export interface EditingFlow {
   /** The launch with the extension, shown until the first read settles and the value it landed,
    *  if any, is told. */
   enter(firstRead: Promise<unknown>): Promise<void>;
-  onRecompute(source: LoadOrderSource): void;
+  onRecompute(source: LoadOrderSource, stringsLanguage: string): void;
   dispose(): void;
 }
 
@@ -93,7 +93,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
         entering = false;
       }
     },
-    onRecompute: (source) => { tellPut(putLoadOrder(client, instanceRoot, source)); },
+    onRecompute: (source, stringsLanguage) => { tellPut(putLoadOrder(client, instanceRoot, source, stringsLanguage)); },
     dispose: () => { for (const unsubscribe of unsubscribes) unsubscribe(); },
   };
 }

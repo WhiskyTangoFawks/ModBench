@@ -17,7 +17,7 @@ internal static class LoadOrderEndpoints
             .WithDescription(
                 "Reconciles the load order against this snapshot (ADR-0013): every plugin file in " +
                 "the instance, each with its origin, path, provider, strings files and archives, the active plugins in load order, " +
-                "the plugins loaded with no line, the archives the game loads and the loose strings files it reads, as Mod Management decided them. " +
+                "the plugins loaded with no line, the archives the game loads, the loose strings files it reads and the language a translated text shows in, as Mod Management decided them. " +
                 "Every archive and strings file carries its stamp. It names each mod, by its folder with its metadata files " +
                 "and the stat cache's folder, and each mod whose status then changed is pushed as mod-status-changed. " +
                 "Plugins new to the snapshot are opened and " +
@@ -40,6 +40,7 @@ internal static class LoadOrderEndpoints
             logger.LogInformation("Received PutLoadOrder for {InstanceRoot} ({Count} plugins)", req.InstanceRoot, req.Plugins?.Count ?? 0);
         }
         if (EndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
+        if (EndpointMapping.ParseStringsLanguage(req.StringsLanguage, out var stringsLanguage) is { } languageErr) return languageErr;
 
         if (RegisteredPluginsOf(req.Plugins) is not { } registered)
         {
@@ -56,7 +57,7 @@ internal static class LoadOrderEndpoints
 
         var result = handler.Put(
             req.GameDirectory, req.InstanceRoot, gameRelease,
-            registered, active, loadedWithNoLine, archives, stringsFiles, places,
+            registered, active, loadedWithNoLine, archives, stringsFiles, places, stringsLanguage,
             new SnapshotMods(req.Mods, req.StatCache));
         return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : EndpointMapping.Refusal(result);
     }

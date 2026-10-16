@@ -58,7 +58,7 @@ function wired(status: 'running' | 'stopped' = 'running') {
     around: async (entry) => { around.entered++; await entry(); around.settled = true; around.told.push(told.length); },
   });
   const putPluginNames = (): string[] => client.puts().map((put) => put.plugins.map((p) => p.name).join());
-  const land = (value: LoadOrderSource): void => { flow.onRecompute(value); };
+  const land = (value: LoadOrderSource): void => { flow.onRecompute(value, 'English'); };
   const failNextTell = (error: Error): void => { tellFailure = error; };
   return { client, flow, told, toldCount, putPluginNames, land, around, logged, failNextTell };
 }

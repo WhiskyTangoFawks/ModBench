@@ -35,6 +35,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
         load.EnsureSuccessStatusCode();
         (await _client.Init(Origin)).EnsureSuccessStatusCode();
