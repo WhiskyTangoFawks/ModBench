@@ -1,13 +1,15 @@
 // A source mod with a remote is a submodule of the instance repository; git decides the config and the staging.
 
 import { execFile } from 'node:child_process';
-import { basename } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import { promisify } from 'node:util';
 import { errorMessage } from '../ports/errorMessage';
 import { exists, get, isRepository, write } from './files';
 import type { InstanceAdapter, SubmoduleNote } from './instanceAdapter';
 import { ignoreListFile, sourceModPath, submodulesFile, withSourceModLines } from './layout';
 import type { Mo2Context } from './mo2Context';
+import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from './prePushHook';
 import { sourceModsIn } from './sourceMods';
 
 type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'refuseUnpublishedPins'>;
@@ -77,6 +79,12 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
     },
 
     async refuseUnpublishedPins() {
+      const hooks = join(instanceRoot, '.git', 'hooks');
+      await mkdir(hooks, { recursive: true });
+      const hook = join(hooks, PRE_PUSH_HOOK_NAME);
+      await writeFile(hook, PRE_PUSH_HOOK, { mode: 0o755, flag: 'wx' }).catch((err: unknown) => {
+        throw new Error(typeof err === 'object' && err !== null && 'code' in err && err.code === 'EEXIST' ? `${hook} already exists; git init does not write over it.` : errorMessage(err));
+      });
       await git(instanceRoot, 'config', 'push.recurseSubmodules', 'check');
     },
   };

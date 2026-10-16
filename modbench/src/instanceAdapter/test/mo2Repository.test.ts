@@ -215,34 +215,83 @@ describe('the MO2 adapter\'s repository', () => {
       ]);
     });
 
-    it('makes the repository refuse a push of a pin its source mod\'s remote lacks', async () => {
-      const adapter = await instance();
-      runGit('init', '--quiet', '--initial-branch=main');
-      runGit('config', 'user.name', 't');
-      runGit('config', 'user.email', 't@t');
-      await adapter.writeIgnoreList();
-      const remote = await mkdtemp(join(tmpdir(), 'modbench-mo2-remote-'));
-      const bare = await mkdtemp(join(tmpdir(), 'modbench-mo2-modlist-'));
-      try {
-        git(remote, 'init', '--quiet', '--bare');
-        git(bare, 'init', '--quiet', '--bare');
-        const mod = await sourceMod('Mod A', 'Mod A', remote);
-        git(mod, 'push', '--quiet', 'origin', 'main');
-        await adapter.writeSubmodules();
-        runGit('add', '-A');
-        runGit('commit', '--quiet', '-m', 'pins a published commit');
-        runGit('remote', 'add', 'origin', bare);
-        await adapter.refuseUnpublishedPins();
-        runGit('push', '--quiet', 'origin', 'main');
-        git(mod, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '--allow-empty', '-m', 'second');
-        runGit('add', '-A');
-        runGit('commit', '--quiet', '-m', 'pins a commit the remote lacks');
+    describe('a push of the modlist', () => {
+      const remotes: string[] = [];
 
-        expect(() => { runGit('push', '--quiet', 'origin', 'main'); }).toThrow();
-      } finally {
-        await rm(remote, { recursive: true, force: true });
-        await rm(bare, { recursive: true, force: true });
+      afterEach(async () => {
+        await Promise.all(remotes.splice(0).map((folder) => rm(folder, { recursive: true, force: true })));
+      });
+
+      const bareRepository = async (): Promise<string> => {
+        const folder = await mkdtemp(join(tmpdir(), 'modbench-mo2-bare-'));
+        remotes.push(folder);
+        git(folder, 'init', '--quiet', '--bare');
+        return folder;
+      };
+
+      async function pinnedSourceMod() {
+        const adapter = await instance();
+        runGit('init', '--quiet', '--initial-branch=main');
+        runGit('config', 'user.name', 't');
+        runGit('config', 'user.email', 't@t');
+        await adapter.writeIgnoreList();
+        const mod = await sourceMod('Mod A', 'Mod A', await bareRepository());
+        await adapter.writeSubmodules();
+        runGit('remote', 'add', 'origin', await bareRepository());
+        return { adapter, mod };
       }
+
+      const pin = (): void => {
+        runGit('add', '-A');
+        runGit('commit', '--quiet', '--allow-empty', '-m', 'pin');
+      };
+      const pushed = (): 'allowed' | 'refused' => {
+        try {
+          runGit('push', '--quiet', 'origin', 'main');
+          return 'allowed';
+        } catch {
+          return 'refused';
+        }
+      };
+
+      it('is refused while the source mod was never pushed, which git\'s own check lets through', async () => {
+        const { adapter } = await pinnedSourceMod();
+        await adapter.refuseUnpublishedPins();
+        pin();
+
+        expect(pushed()).toBe('refused');
+      });
+
+      it('is allowed once the source mod\'s remote holds the pin', async () => {
+        const { adapter, mod } = await pinnedSourceMod();
+        await adapter.refuseUnpublishedPins();
+        git(mod, 'push', '--quiet', 'origin', 'main');
+        pin();
+
+        expect(pushed()).toBe('allowed');
+      });
+
+      it('is refused while a pin it changes is missing from the source mod\'s tracked remote', async () => {
+        const { adapter, mod } = await pinnedSourceMod();
+        await adapter.refuseUnpublishedPins();
+        git(mod, 'push', '--quiet', 'origin', 'main');
+        pin();
+        const first = pushed();
+        git(mod, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '--allow-empty', '-m', 'second');
+        pin();
+
+        expect([first, pushed()]).toEqual(['allowed', 'refused']);
+      });
+
+      it('leaves a pre-push hook already in the repository as it is, naming it', async () => {
+        const adapter = await instance();
+        runGit('init', '--quiet');
+        await put('.git/hooks/pre-push', 'mine\n');
+
+        await expect(adapter.refuseUnpublishedPins()).rejects.toThrow(join(root, '.git', 'hooks', 'pre-push'));
+
+        expect(await readFile(join(root, '.git', 'hooks', 'pre-push'), 'utf8')).toBe('mine\n');
+      });
     });
   });
 });
