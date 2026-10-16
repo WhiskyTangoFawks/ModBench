@@ -52,7 +52,7 @@ public static class DocumentTokens
                     case JsonTokenType.String when atFormKey:
                         var formKey = reader.GetString()
                             ?? throw new InvalidOperationException("Expected a JSON string value to read a non-null string.");
-                        found.Add(new DocumentFormKey(formKey, PositionOf(openedBy, keyDepth, embeddedSlotNames)));
+                        found.Add(new DocumentFormKey(CanonicalFormKey.OfOrAsWritten(formKey), PositionOf(openedBy, keyDepth, embeddedSlotNames)));
                         break;
                 }
                 atFormKey = false;
@@ -141,9 +141,30 @@ public static class DocumentTokens
     /// JSON object, which a member can be read from.</summary>
     public static string? WhyNotADocument(string text) => Document.TryRead(text, out _, out var whyNot) ? null : whyNot;
 
-    /// <summary>False only when the bytes certainly do not spell <paramref name="formKeyUtf8"/>: JSON spells
-    /// it other than literally only through a \u escape, since no plugin file name holds a quote,
-    /// backslash, slash or control character.</summary>
-    public static bool MayCarry(byte[] document, byte[] formKeyUtf8) =>
-        document.AsSpan().IndexOf(formKeyUtf8) >= 0 || document.AsSpan().IndexOf(@"\u"u8) >= 0;
+    /// <summary>False only when the bytes certainly do not spell <paramref name="formKeyUtf8"/> in any spelling
+    /// Mutagen reads: each holds the plugin file name, in any case, unless a \u escape spells it.</summary>
+    public static bool MayCarry(byte[] document, byte[] formKeyUtf8)
+    {
+        var name = formKeyUtf8.AsSpan(formKeyUtf8.AsSpan().IndexOf((byte)':') + 1);
+        return (Ascii.IsValid(name) ? ContainsIgnoringAsciiCase(document, name) : DecodedContains(document, name))
+            || document.AsSpan().IndexOf(@"\u"u8) >= 0;
+    }
+
+    private static bool ContainsIgnoringAsciiCase(ReadOnlySpan<byte> document, ReadOnlySpan<byte> asciiName)
+    {
+        var lower = (byte)char.ToLowerInvariant((char)asciiName[0]);
+        var upper = (byte)char.ToUpperInvariant((char)asciiName[0]);
+        var rest = document;
+        while (rest.Length >= asciiName.Length)
+        {
+            var at = rest.IndexOfAny(lower, upper);
+            if (at < 0) return false;
+            if (at + asciiName.Length <= rest.Length && Ascii.EqualsIgnoreCase(rest.Slice(at, asciiName.Length), asciiName)) return true;
+            rest = rest[(at + 1)..];
+        }
+        return false;
+    }
+
+    private static bool DecodedContains(byte[] document, ReadOnlySpan<byte> name) =>
+        Encoding.UTF8.GetString(document).Contains(Encoding.UTF8.GetString(name), StringComparison.OrdinalIgnoreCase);
 }

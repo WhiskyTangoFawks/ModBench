@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 
@@ -20,8 +21,8 @@ internal sealed class TreeScan
     private readonly GameRelease _release;
     private readonly ISourceFiles _files;
     private readonly byte[]? _onlyKey;
-    private Dictionary<string, List<OwnerDocument>> _byChild = new(StringComparer.Ordinal);
-    private Dictionary<string, List<string>> _byRoot = new(StringComparer.Ordinal);
+    private Dictionary<string, List<OwnerDocument>> _byChild = new(FormKeyComparer.Instance);
+    private Dictionary<string, List<string>> _byRoot = new(FormKeyComparer.Instance);
     private bool _rescanned;
     private readonly Dictionary<string, DocumentKeys> _keysByDocument = new(StringComparer.Ordinal);
 
@@ -70,14 +71,14 @@ internal sealed class TreeScan
         var keys = DocumentTokens.FormKeysIn(bytes, _release);
         return _keysByDocument[documentPath] = new DocumentKeys(
             bytes,
-            [.. keys.Where(k => k.Position == FormKeyPosition.Root).Select(k => k.FormKey)],
-            [.. keys.Where(k => k.Position == FormKeyPosition.Embedded).Select(k => k.FormKey)]);
+            new HashSet<string>(keys.Where(k => k.Position == FormKeyPosition.Root).Select(k => k.FormKey), FormKeyComparer.Instance),
+            new HashSet<string>(keys.Where(k => k.Position == FormKeyPosition.Embedded).Select(k => k.FormKey), FormKeyComparer.Instance));
     }
 
     private void Scan(IEnumerable<string> listed)
     {
-        var byChild = new Dictionary<string, List<OwnerDocument>>(StringComparer.Ordinal);
-        var byRoot = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var byChild = new Dictionary<string, List<OwnerDocument>>(FormKeyComparer.Instance);
+        var byRoot = new Dictionary<string, List<string>>(FormKeyComparer.Instance);
         foreach (var documentPath in listed)
         {
             if (SourceRepositoryLayout.CarriesNoRecord(documentPath)) continue;

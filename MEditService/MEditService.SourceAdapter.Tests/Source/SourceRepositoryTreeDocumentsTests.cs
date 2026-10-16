@@ -132,4 +132,75 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
 
         Assert.Equal([NpcFormKey], repository.FormKeysUsed(Plugin).Value().ToList());
     }
+
+    private ISourceRepository TrackedWithNpcDeclaring(string declared)
+    {
+        var repository = Tracked();
+        var path = Path.Combine(PluginSourceRoot.In(_modFolder, PluginName), "Npcs", Path.GetFileName(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk));
+        File.WriteAllText(path, NpcBody.Replace(NpcFormKey, declared));
+        return repository;
+    }
+
+    [Fact]
+    public void TheTreesDocuments_NameARecordByMutagensSpellingOfItsFormKey_ThoughTheTextDelimitsItWithAnUnderscore()
+    {
+        var repository = TrackedWithNpcDeclaring("000800_Fixture.esp");
+
+        Assert.Equal([NpcFormKey], TreeDocuments.Of(repository, Plugin).Select(d => d.FormKey).ToList());
+        Assert.Equal([NpcFormKey], repository.FormKeysUsed(Plugin).Value().ToList());
+    }
+
+    [Fact]
+    public void TheTreesDocuments_RefuseADocumentWhoseFormKeyMutagenCannotParse_NamingItAndWhatItDeclares()
+    {
+        var repository = TrackedWithNpcDeclaring("not-a-formkey");
+
+        var refused = Assert.IsType<SourceFailure.Unreadable>(
+            repository.ReadDocuments(Plugin, documents => documents.Records.ToList()).Stopped());
+
+        Assert.Equal(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, refused.File?.SourceRelativePath);
+        Assert.Contains("declares not-a-formkey, which is no FormKey", refused.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FormKeysUsed_RefusesADocumentWhoseFormKeyMutagenCannotParse_RatherThanLoseIt()
+    {
+        var repository = TrackedWithNpcDeclaring("not-a-formkey");
+
+        var refused = Assert.IsType<SourceFailure.Unreadable>(repository.FormKeysUsed(Plugin).Stopped());
+
+        Assert.Contains("declares not-a-formkey, which is no FormKey", refused.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ARecordsDocument_SpellingThePluginInAnotherCase_IsTheRecordTheKeyNames()
+    {
+        var repository = TrackedWithNpcDeclaring("000800:fixture.esp");
+
+        Assert.NotNull(repository.RecordByFormKey(Plugin, NpcFormKey).Value());
+    }
+
+    [Fact]
+    public void TheTextGivenForARecord_SpellingThePluginInAnotherCase_IsTheRecordTheKeyNames()
+    {
+        var repository = Tracked();
+
+        var found = repository.RecordFromText(Plugin, NpcFormKey, NpcBody.Replace(NpcFormKey, "000800:fixture.esp")).Value();
+
+        Assert.NotNull(found);
+    }
+
+    [Fact]
+    public void TwoDocumentsDeclaringOneFormKey_WithThePluginInDifferentCase_AreRefusedAsAClaimOfBoth()
+    {
+        var repository = Tracked();
+        var npcsFolder = Path.Combine(PluginSourceRoot.In(_modFolder, PluginName), "Npcs");
+        File.WriteAllText(Path.Combine(npcsFolder, "Twin.json"), NpcBody.Replace(NpcFormKey, "000800:fixture.esp"));
+
+        var refused = Assert.IsType<SourceFailure.Ambiguous>(
+            repository.ReadDocuments(Plugin, documents => documents.Records.ToList()).Stopped());
+
+        Assert.Equal(2, refused.Claim?.Documents.Count);
+        Assert.StartsWith("More than one document in this plugin's source tree holds", refused.Reason, StringComparison.Ordinal);
+    }
 }

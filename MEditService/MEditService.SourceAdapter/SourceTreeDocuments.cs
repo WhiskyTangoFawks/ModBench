@@ -153,7 +153,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
             ?? _types.RecordTypeNamed(DocumentTokens.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator))
             ?? throw Unreadable(file, "neither its path nor its text names a record type", declared);
-        var formKey = declared ?? throw Unreadable(file, "it declares no FormKey");
+        var formKey = declared ?? throw Unreadable(file, $"it {DocumentText.WhyNoFormKey(text)}");
 
         holders.Claim(formKey, file);
         yield return new PluginDocument(recordType, formKey, text, null, cell, ContentsOf(recordType, text));
@@ -202,6 +202,10 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     /// one whose EditorID is no string.</summary>
     internal static string RequireReadable(string sourceFolder, ContainerDocuments.ChildDocument child, string ownerFile)
     {
+        if (CanonicalFormKey.Of(child.FormKey) is null)
+            throw SourceStopException.UnreadableIn(
+                sourceFolder, ownerFile, $"its '{child.SlotName}' declares {child.FormKey}, which is no FormKey", child.FormKey);
+
         var type = child.RecordType ?? throw SourceStopException.UnreadableIn(sourceFolder, ownerFile, child.WhyUntyped, child.FormKey);
         if (child.Document.EditorId.WhyUnreadable is { } why)
         {
