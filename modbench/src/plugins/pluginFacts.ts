@@ -2,6 +2,7 @@ import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagn
 import type { UnreadableSource } from '../wire/unreadableSource';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
+import { pluginCanBeEdited } from '../wire/pluginEditable';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { ByPluginAddress } from './pluginAddress';
 import type { PluginConditions } from '../drivingLib/recordRowContext';
@@ -148,7 +149,7 @@ export class PluginFacts {
     const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
       reads.set(p, {
-        readOnly: p.isImmutable || p.pluginSourceUnreadable != null, tracked: p.isTracked,
+        readOnly: !pluginCanBeEdited(p), tracked: p.isTracked,
         sourceUnreadable: p.pluginSourceUnreadable ?? undefined, parseFailure: p.hasParseFailure,
         masterIssues: p.masterIssues ?? this.reads.get(p)?.masterIssues,
       });
