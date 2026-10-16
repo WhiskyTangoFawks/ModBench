@@ -47,9 +47,9 @@ up() {
   [ -f "$root/modbench/out/extension.js" ] && [ -x "$root/modbench/backend/MEditService.Http" ] || {
     echo "refused: build first, in modbench/ through slot-run: npm run build, npm run build:backend" >&2; exit 1; }
 
-  # Modbench finds only Fallout 4's install in Steam, so the run names the game folder itself.
+  # Modbench finds only Fallout 4's install in Steam, so a Skyrim or Starfield run names the game folder itself.
   local game_folder=""
-  if [ -n "$game" ]; then
+  if [ -n "$game" ] && [ "$game" != fallout ]; then
     game_folder="$(readlink -f "$HOME/.steam/steam")/steamapps/common/$(steam_folder_of "$game")"
     [ -d "$game_folder/Data" ] || { echo "refused: no installed $game at $game_folder" >&2; exit 1; }
   fi
@@ -68,7 +68,10 @@ up() {
 
   port="$(free_port)"
   echo "$port" > "$dir/port"
-  printf '{"modbench.agent.port": %s, "modbench.mods.gameDirectory": "%s"}\n' "$port" "$game_folder" > "$instance/.vscode/settings.json"
+  python3 -I -c 'import json, sys
+settings = {"modbench.agent.port": int(sys.argv[1])}
+if sys.argv[2]: settings["modbench.mods.gameDirectory"] = sys.argv[2]
+print(json.dumps(settings))' "$port" "$game_folder" > "$instance/.vscode/settings.json"
   # Modbench loads nothing in Restricted Mode, and a headless window cannot answer the trust prompt.
   printf '{"security.workspace.trust.enabled": false, "telemetry.telemetryLevel": "off", "update.mode": "none"}\n' \
     > "$dir/user/User/settings.json"
