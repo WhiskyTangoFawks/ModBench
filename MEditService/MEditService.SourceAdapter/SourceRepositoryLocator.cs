@@ -154,8 +154,6 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
             throw SourceStopException.Unreadable($"The text given for {relativePath} is not a readable document: {why}");
         var document = ReadableDocumentAt(relativePath, text, pluginFileName)
             ?? throw SourceStopException.Unreadable($"The text given for {relativePath} names no record.");
-        if (!FormKey.TryFactory(document.FormKey, out _))
-            throw SourceStopException.Unreadable($"The text given for {relativePath} declares {document.FormKey}, which is no FormKey.");
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
             ?? RecordTypes.For(_release).RecordTypeNamed(document.RecordType)
             ?? throw SourceStopException.Unreadable($"The text given for {relativePath} names no record type.");

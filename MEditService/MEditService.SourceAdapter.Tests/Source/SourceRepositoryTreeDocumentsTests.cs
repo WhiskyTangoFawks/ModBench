@@ -132,4 +132,29 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
 
         Assert.Equal([NpcFormKey], repository.FormKeysUsed(Plugin).Value().ToList());
     }
+
+    private ISourceRepository TrackedWithNpcDeclaring(string declared)
+    {
+        var repository = Tracked();
+        var path = Path.Combine(PluginSourceRoot.In(_modFolder, PluginName), "Npcs", Path.GetFileName(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk));
+        File.WriteAllText(path, NpcBody.Replace(NpcFormKey, declared));
+        return repository;
+    }
+
+    [Fact]
+    public void TheTreesDocuments_NameARecordByMutagensSpellingOfItsFormKey_ThoughTheTextDelimitsItWithAnUnderscore()
+    {
+        var repository = TrackedWithNpcDeclaring("000800_Fixture.esp");
+
+        Assert.Equal([NpcFormKey], TreeDocuments.Of(repository, Plugin).Select(d => d.FormKey).ToList());
+        Assert.Equal([NpcFormKey], repository.FormKeysUsed(Plugin).Value().ToList());
+    }
+
+    [Fact]
+    public void TheTreesDocuments_RefuseADocumentWhoseFormKeyMutagenCannotParse_RatherThanKeyItByItsText()
+    {
+        var repository = TrackedWithNpcDeclaring("not-a-formkey");
+
+        Assert.ThrowsAny<Exception>(() => TreeDocuments.Of(repository, Plugin).ToList());
+    }
 }

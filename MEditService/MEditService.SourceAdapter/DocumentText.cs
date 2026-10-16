@@ -1,4 +1,5 @@
 using System.Text;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 
@@ -29,19 +30,21 @@ internal static class DocumentText
         BytesOrNull(files, path) is { } bytes ? Encoding.UTF8.GetString(bytes) : null;
 
     /// <summary>The FormKey the document at <paramref name="filePath"/> declares — an embedded child's
-    /// owner's, since the file is the owner's document. Null when it cannot be read or declares
-    /// none.</summary>
+    /// owner's, in Mutagen's spelling. Null when unreadable or declaring none Mutagen parses.</summary>
     internal static string? FormKeyDeclaredBy(ISourceFiles files, string filePath, string pluginFileName) =>
         ReadOrNull(files, filePath) is { } text ? FormKeyDeclaredIn(text, filePath, pluginFileName) : null;
 
     /// <summary>The same answer for a caller holding the text already, so a whole-tree pass reads each
     /// file once.</summary>
-    internal static string? FormKeyDeclaredIn(string text, string filePath, string pluginFileName) =>
+    internal static string? FormKeyDeclaredIn(string text, string filePath, string pluginFileName)
+    {
         // The header's document carries a ModKey rather than a FormKey; PluginHeader computes the
         // FormKey the index files it under.
-        SourceRepositoryLayout.IsHeaderDocumentPath(filePath, pluginFileName)
-            ? SourceRepositoryLayout.HeaderFormKeyOf(pluginFileName)
-            : DocumentTokens.RootStringIn(text, RecordMembers.FormKey);
+        if (SourceRepositoryLayout.IsHeaderDocumentPath(filePath, pluginFileName))
+            return SourceRepositoryLayout.HeaderFormKeyOf(pluginFileName);
+
+        return DocumentTokens.RootStringIn(text, RecordMembers.FormKey) is { } spelled ? CanonicalFormKey.Of(spelled) : null;
+    }
 
     /// <summary>The record's own text out of the bytes <paramref name="unit"/>'s file holds: itself for
     /// a flat record, or spliced back out of its owner's text for an embedded child.</summary>

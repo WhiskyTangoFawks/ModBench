@@ -340,7 +340,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void RecordFromText_OfAChildWhoseOwnersTextDeclaresNoFormKey_RefusesNamingItsOwnersFileAndWhat_ItDeclares()
+    public void RecordFromText_OfAChildWhoseOwnersTextDeclaresNoFormKeyMutagenParses_RefusesNamingItsOwnersFile()
     {
         var text = File.ReadAllText(FullPath(InteriorCellPath))
             .Replace($"\"FormKey\": \"{_interiorCell.FormKey}\"", "\"FormKey\": \"NotAFormKey\"", StringComparison.Ordinal);
@@ -348,7 +348,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.RecordFromText(Plugin, _temporaryRef.FormKey.ToString(), text).Stopped());
 
-        Assert.Equal($"The text given for {InteriorCellPath} declares NotAFormKey, which is no FormKey.", refused.Reason);
+        Assert.Equal($"The text given for {InteriorCellPath} names no record.", refused.Reason);
     }
 
     private string TopCellFormKey => _worldspace.TopCell.Require().FormKey.ToString();
