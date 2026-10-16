@@ -278,6 +278,9 @@ export interface SourceMods {
   readonly notes: readonly string[];
 }
 
+/** Why a source mod is not a submodule. */
+export interface SubmoduleNote { readonly mod: string; readonly note: string }
+
 /** Whether the game gets a file of a mod or of Overwrite. */
 export type OriginFileMark = 'Excluded' | 'Included';
 
@@ -464,6 +467,13 @@ export interface InstanceAdapter {
   writeIgnoreList(): Promise<void>;
   /** Takes back the ignore list `writeIgnoreList` wrote. */
   removeIgnoreList(): Promise<void>;
+  /** Makes each source mod with a remote a submodule of the instance repository: its entry in `.gitmodules` with its
+   *  remote and branch, and its line in the ignore list. A source mod gone or with no remote loses both. Writes nothing
+   *  when the instance holds no repository. Names each source mod whose remote or branch it could not read, and gives it
+   *  no entry. */
+  writeSubmodules(): Promise<readonly SubmoduleNote[]>;
+  /** Makes the instance repository refuse a push while a commit it pins for a submodule is missing from that submodule's remote. */
+  refuseUnpublishedPins(): Promise<void>;
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** An origin file's size and hash at the path it is read from, remembered for this session alone: its lasting hash

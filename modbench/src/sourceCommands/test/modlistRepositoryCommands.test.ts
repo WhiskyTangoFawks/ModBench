@@ -28,12 +28,12 @@ function commandsOver(answers: InstanceAnswers = {}, client = new InMemoryMEditC
 }
 
 describe('modlistRepositoryCommands git init', () => {
-  it('writes the ignore list, then makes the instance folder a repository', async () => {
+  it('writes the ignore list, makes the instance folder a repository, then makes it refuse a push of a pin its remote lacks', async () => {
     const { commands, adapter, repositories } = commandsOver();
 
     const result = await commands.gitInit({ holdsRepository: false });
 
-    expect([result.applied, adapter.calls, repositories]).toEqual([true, [{ verb: 'writeIgnoreList' }], ['made']]);
+    expect([result.applied, adapter.calls, repositories]).toEqual([true, [{ verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }], ['made']]);
   });
 
   it('refuses an instance folder that already holds a repository, naming it, and changes nothing', async () => {
@@ -48,6 +48,15 @@ describe('modlistRepositoryCommands git init', () => {
     const { commands, repositories } = commandsOver({ refusals: refusing('writeIgnoreList', '/instance/.gitignore already exists') });
 
     expect([await commands.gitInit({ holdsRepository: false }), repositories]).toEqual([{ applied: false, refusal: '/instance/.gitignore already exists' }, []]);
+  });
+
+  it('says the repository was made without its refusal of an unpublished pin, when that could not be written', async () => {
+    const { commands, adapter, repositories } = commandsOver({ refusals: refusing('refuseUnpublishedPins', 'config is read-only') });
+
+    expect([await commands.gitInit({ holdsRepository: false }), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
+      { applied: false, refusal: 'The repository was made, but it does not refuse a push of a commit a submodule\'s remote lacks: config is read-only' },
+      ['made'], ['writeIgnoreList', 'refuseUnpublishedPins'],
+    ]);
   });
 
   it('takes back the ignore list it wrote when the repository could not be made, leaving nothing behind', async () => {
@@ -100,6 +109,33 @@ describe('modlistRepositoryCommands update manifest', () => {
         { onProgress: expect.any(Function) as unknown, signal: undefined },
       ],
     }]);
+  });
+
+  it('makes each source mod with a remote a submodule once mEdit has answered, and names a source mod that is not one', async () => {
+    const { commands, client, adapter } = commandsOver({ submoduleNotes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }] });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModA'], instanceOf());
+
+    expect([adapter.calls, outcome]).toMatchObject([[{ verb: 'writeSubmodules' }], { applied: true, notes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }] }]);
+  });
+
+  it('makes no submodule when mEdit refuses the gesture', async () => {
+    const { commands, client, adapter } = commandsOver();
+    client.setCommandResult('updateManifest', { refused: true, message: 'mEdit is not running.' });
+
+    await commands.updateManifest(['ModA'], instanceOf());
+
+    expect(adapter.calls).toEqual([]);
+  });
+
+  it('names the failure to write the submodules beside the manifests that landed', async () => {
+    const { commands, client } = commandsOver({ refusals: refusing('writeSubmodules', 'git is not available') });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModA'], instanceOf());
+
+    expect(outcome).toMatchObject({ applied: true, landed: UPDATED.landed, notes: [{ mod: '.gitmodules', note: 'the source mods are not submodules: git is not available' }] });
   });
 
   it('refuses a mod whose metadata cannot be read, naming why, and updates the rest', async () => {

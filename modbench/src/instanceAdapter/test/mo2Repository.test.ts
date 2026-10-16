@@ -125,4 +125,124 @@ describe('the MO2 adapter\'s repository', () => {
     const shown = runGit('status', '--porcelain', '-z', '--untracked-files=all').split('\0').filter(Boolean).map((line) => line.slice(3));
     expect(shown.sort()).toEqual([...listed, '.gitignore'].sort());
   });
+
+  describe('a source mod with a remote is a submodule', () => {
+    const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+    const SOURCE_BUILD = (output: string): string => JSON.stringify({ output });
+
+    async function sourceMod(folder: string, output: string, remote?: string): Promise<string> {
+      await put(`source/${folder}/build.json`, SOURCE_BUILD(output));
+      const path = join(root, 'source', folder);
+      git(path, 'init', '--quiet', '--initial-branch=main');
+      if (remote !== undefined) git(path, 'remote', 'add', 'origin', remote);
+      git(path, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '--allow-empty', '-m', 'first');
+      return path;
+    }
+
+    const submodulesNamed = (): string[] =>
+      runGit('config', '-f', '.gitmodules', '--get-regexp', String.raw`^submodule\..*\.url$`).split('\n').filter(Boolean).sort();
+
+    it('writes its entry in .gitmodules with its remote and its branch, and its line in the ignore list, so git stages it as a submodule', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
+      await sourceMod('Local', 'Local');
+
+      const notes = await adapter.writeSubmodules();
+
+      runGit('add', '-A', '--', '.');
+      expect(notes).toEqual([]);
+      expect(submodulesNamed()).toEqual(['submodule.Mod A.url https://example.test/a.git']);
+      expect(runGit('config', '-f', '.gitmodules', 'submodule.Mod A.branch').trim()).toBe('main');
+      expect(runGit('config', '-f', '.gitmodules', 'submodule.Mod A.path').trim()).toBe('source/Mod A');
+      expect(runGit('ls-files', '-s', 'source').trim().split('\n').map((line) => line.slice(0, 6) + line.slice(line.indexOf('\t')))).toEqual(['160000\tsource/Mod A']);
+      expect(runGit('ls-files', '.gitmodules')).toBe('.gitmodules\n');
+    });
+
+    it('changes nothing when the source mods are as the last call left them', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
+      await adapter.writeSubmodules();
+      const before = [await readFile(join(root, '.gitmodules'), 'utf8'), await readFile(join(root, '.gitignore'), 'utf8')];
+
+      await adapter.writeSubmodules();
+
+      expect([await readFile(join(root, '.gitmodules'), 'utf8'), await readFile(join(root, '.gitignore'), 'utf8')]).toEqual(before);
+    });
+
+    it('takes the entry and the line of a source mod that is gone or lost its remote, and keeps the lines it did not write', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await put('.gitignore', `${await readFile(join(root, '.gitignore'), 'utf8')}mine/\n`);
+      const gone = await sourceMod('Gone', 'Gone', 'https://example.test/g.git');
+      const unlinked = await sourceMod('Unlinked', 'Unlinked', 'https://example.test/u.git');
+      await sourceMod('Kept', 'Kept', 'https://example.test/k.git');
+      await adapter.writeSubmodules();
+      await rm(gone, { recursive: true });
+      git(unlinked, 'remote', 'remove', 'origin');
+
+      await adapter.writeSubmodules();
+
+      expect(submodulesNamed()).toEqual(['submodule.Kept.url https://example.test/k.git']);
+      const ignoreList = await readFile(join(root, '.gitignore'), 'utf8');
+      expect([ignoreList.includes('Gone'), ignoreList.includes('Unlinked'), ignoreList.includes('Kept'), ignoreList.includes('mine/')]).toEqual([false, false, true, true]);
+    });
+
+    it('writes the entry of a source mod by the folder it is in, whatever mod its build names', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await sourceMod('Old Name', 'New Name', 'https://example.test/n.git');
+
+      await adapter.writeSubmodules();
+
+      expect(runGit('config', '-f', '.gitmodules', 'submodule.Old Name.path').trim()).toBe('source/Old Name');
+    });
+
+    it('names a source mod whose remote or branch it cannot read, and writes no entry for it', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      const detached = await sourceMod('Detached', 'Detached', 'https://example.test/d.git');
+      git(detached, 'checkout', '--quiet', '--detach');
+
+      const notes = await adapter.writeSubmodules();
+
+      expect([notes, existsSync(join(root, '.gitmodules')) ? submodulesNamed() : []]).toEqual([
+        [{ mod: 'Detached', note: expect.stringContaining('branch') as unknown }], [],
+      ]);
+    });
+
+    it('makes the repository refuse a push of a pin its source mod\'s remote lacks', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet', '--initial-branch=main');
+      runGit('config', 'user.name', 't');
+      runGit('config', 'user.email', 't@t');
+      await adapter.writeIgnoreList();
+      const remote = await mkdtemp(join(tmpdir(), 'modbench-mo2-remote-'));
+      const bare = await mkdtemp(join(tmpdir(), 'modbench-mo2-modlist-'));
+      try {
+        git(remote, 'init', '--quiet', '--bare');
+        git(bare, 'init', '--quiet', '--bare');
+        const mod = await sourceMod('Mod A', 'Mod A', remote);
+        git(mod, 'push', '--quiet', 'origin', 'main');
+        await adapter.writeSubmodules();
+        runGit('add', '-A');
+        runGit('commit', '--quiet', '-m', 'pins a published commit');
+        runGit('remote', 'add', 'origin', bare);
+        await adapter.refuseUnpublishedPins();
+        runGit('push', '--quiet', 'origin', 'main');
+        git(mod, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '--allow-empty', '-m', 'second');
+        runGit('add', '-A');
+        runGit('commit', '--quiet', '-m', 'pins a commit the remote lacks');
+
+        expect(() => { runGit('push', '--quiet', 'origin', 'main'); }).toThrow();
+      } finally {
+        await rm(remote, { recursive: true, force: true });
+        await rm(bare, { recursive: true, force: true });
+      }
+    });
+  });
 });

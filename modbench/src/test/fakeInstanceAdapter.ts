@@ -2,8 +2,7 @@ import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type {
   DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, GameFile, HashedFile, InstallationFile,
   InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
-  ModFolder, ModFolders, ModMetadata, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription,
-} from '../instanceAdapter/instanceAdapter';
+  ModFolder, ModFolders, ModMetadata, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription, SubmoduleNote } from '../instanceAdapter/instanceAdapter';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { filesWinningFirst, pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
@@ -60,6 +59,8 @@ export type AdapterCall =
   | { readonly verb: 'writeModMetadata'; readonly mod: string; readonly metadata: ModMetadata }
   | { readonly verb: 'writeIgnoreList' }
   | { readonly verb: 'removeIgnoreList' }
+  | { readonly verb: 'writeSubmodules' }
+  | { readonly verb: 'refuseUnpublishedPins' }
   | { readonly verb: 'install'; readonly package: InstallPackage; readonly target: InstallTarget; readonly keys: OwnedMetaKeys };
 
 export type WriteVerb = AdapterCall['verb'];
@@ -88,6 +89,8 @@ export interface InstanceAnswers {
   /** The game's files, which a mod's files of the same path, whatever the case, override. */
   gameFiles?: readonly GameFile[];
   installed?: InstallOutcome;
+  /** The source mods that write submodules names as not submodules. */
+  submoduleNotes?: readonly SubmoduleNote[];
   /** Downloaded files that are gone: they get no mark. */
   goneDownloads?: ReadonlySet<string>;
   /** A write that rejects with the message this returns for it, after it is recorded. */
@@ -182,6 +185,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, undefined),
     removeIgnoreList: () => record({ verb: 'removeIgnoreList' }, undefined),
+    writeSubmodules: () => record({ verb: 'writeSubmodules' }, answers.submoduleNotes ?? []),
+    refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, undefined),
     fileStamp: (path) => answer(answers.stamps?.get(path), path),
     originFileHash: (path) => {
       hashed.push(path);

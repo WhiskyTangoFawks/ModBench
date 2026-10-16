@@ -13,7 +13,7 @@ import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
-  'installationFiles' | 'downloadedFile' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'
+  'installationFiles' | 'downloadedFile' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList' | 'writeSubmodules' | 'refuseUnpublishedPins'
   | 'statCacheFolder' | 'trashModFile' | 'sourceFolder' | 'excludedSuffix'>;
 
 interface ModlistRepositoryCommandsDeps {
@@ -91,7 +91,7 @@ async function readMod(
     notes: [
       ...overridden.answer.notes,
       ...installed.answer.flatMap(({ unpagedGame }) =>
-        unpagedGame === undefined ? [] : [`its installation file comes from '${unpagedGame}', which has no Nexus domain here, so its manifest names no page`]),
+        unpagedGame === undefined ? [] : [`its installation file comes from '${unpagedGame}', a game whose host the instance adapter has no page on, so its manifest names no page`]),
     ],
   };
 }
@@ -266,6 +266,14 @@ async function restoreFolders(
   };
 }
 
+async function submodulesWritten(adapter: Adapter): Promise<ModNote[]> {
+  try {
+    return (await adapter.writeSubmodules()).map(({ mod, note }) => ({ mod, note }));
+  } catch (err) {
+    return [{ mod: '.gitmodules', note: `the source mods are not submodules: ${errorMessage(err)}` }];
+  }
+}
+
 /** The modlist gestures, bound to the mEdit client and handing it the instance's facts. */
 export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
   const { client, adapter, instanceRoot, makeRepository } = deps;
@@ -290,10 +298,15 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       }
       try {
         await makeRepository();
-        return { applied: true };
       } catch (err) {
         return { applied: false, refusal: await refusalWithIgnoreListTakenBack(err) };
       }
+      try {
+        await adapter.refuseUnpublishedPins();
+      } catch (err) {
+        return { applied: false, refusal: `The repository was made, but it does not refuse a push of a commit a submodule's remote lacks: ${errorMessage(err)}` };
+      }
+      return { applied: true };
     },
 
     /** A mod whose folder, installation files or overridden game files the Instance adapter cannot answer is refused
@@ -316,7 +329,8 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       if (versioned.length === 0) return { applied: true, landed: [], refused, notes };
       const outcome = await client.updateManifest(
         versioned, { gameFiles: [...gameFiles], statCache: adapter.statCacheFolder }, { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
-      return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes };
+      if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
+      return { applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...await submodulesWritten(adapter)] };
     },
 
     /** Asks before anything is written, so a mod the Instance adapter gives no folder, which restore refuses, is not asked. */
