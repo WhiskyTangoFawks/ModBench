@@ -28,7 +28,7 @@ internal sealed class ManifestSources(
 
     /// <summary>Built is the source and commit that build the files no request hands, none when no line names one.</summary>
     internal sealed record Resolved(
-        IReadOnlyList<SourcedFile> Files, IReadOnlyList<Lack> Lacks, SharedSource? Built, IReadOnlyList<InstallationFile> InstallationFiles);
+        IReadOnlyList<SourcedFile> Files, IReadOnlyList<Lack> Lacks, SharedSource? Built);
 
     private sealed record Handed(InstallationFile File, Dictionary<string, HashedEntry> Entries);
 
@@ -52,9 +52,7 @@ internal sealed class ManifestSources(
         List<SharedSource> built = [.. manifest.Files.Select(file => file.Provider).OfType<FileProvider.Source>()
             .Select(source => new SharedSource(source.Remote, source.Commit)).Distinct()];
         if (built.Count > 1) lacks.Add(new Lack("its manifest names its source at more than one commit"));
-        List<InstallationFile> handed = [.. manifest.InstallationFiles
-            .Select(source => InstallationFileNamed(source.Name).Handed is { } found ? found.File with { Source = source.Source } : null).OfType<InstallationFile>()];
-        return new Resolved(sourced, [.. lacks.Distinct()], built.Count == 1 ? built[0] : null, handed);
+        return new Resolved(sourced, [.. lacks.Distinct()], built.Count == 1 ? built[0] : null);
     }
 
     private (Source?, Lack?) SourceOf(ManifestFile file) => manifest.BytesOf(file) switch

@@ -1006,7 +1006,6 @@ export interface components {
             name: string;
             sourceFolder: string;
             folder: string;
-            installationFiles: components["schemas"]["InstallationFileRequest"][];
             metadataFiles: string[];
             version?: string | null;
         };
@@ -1018,7 +1017,7 @@ export interface components {
             modsTotal: number;
         };
         /** @enum {string} */
-        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "InstallationFileMissing" | "BaseNotKnown" | "ArchiveFileNotAnAsset";
+        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "ArchiveFileNotAnAsset";
         BuildRequest: {
             mods: components["schemas"]["BuildModRequest"][];
             excludedSuffix: string;
@@ -1273,7 +1272,6 @@ export interface components {
         InitModRequest: {
             name: string;
             sourceFolder: string;
-            installationFiles: components["schemas"]["InstallationFileRequest"][];
             metadataFiles: string[];
         };
         /** @enum {string} */

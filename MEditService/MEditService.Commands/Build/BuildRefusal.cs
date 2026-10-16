@@ -20,13 +20,6 @@ public enum BuildRefusal
     /// <summary>The build configuration names an output folder that is not the mod's (mods.md, Build, story 4).</summary>
     OutputNotThisMod,
 
-    /// <summary>An installation file of the mod is gone from its path.</summary>
-    InstallationFileMissing,
-
-    /// <summary>The folder does not hold each installation file's entries at their own paths, as a FOMOD's choices or a
-    /// file deleted after install leave it, so where its files come from is not known.</summary>
-    BaseNotKnown,
-
     /// <summary>An archive takes a file that is not an asset of the source.</summary>
     ArchiveFileNotAnAsset,
 }

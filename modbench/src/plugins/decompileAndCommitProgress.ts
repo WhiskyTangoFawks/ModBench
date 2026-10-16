@@ -1,12 +1,10 @@
-import type { DecompileAndCommitProgress } from '../sourceCommands/sourceCommands';
+import type { InitStatus } from '../client';
 
 /** Pure, so it is testable without a VS Code harness. The counts are plugins, not records —
  *  decompile and commit serializes a whole plugin in one call, with no per-record progress to report — and this
  *  text must not mislabel them. */
-export function decompileAndCommitProgressMessage(mod: string, status: DecompileAndCommitProgress): string {
+export function decompileAndCommitProgressMessage(mod: string, status: InitStatus): string {
   switch (status.phase) {
-    case 'ReadingInstallationFiles':
-      return `Decompiling and committing "${mod}" — reading its installation files…`;
     case 'Idle':
       return `Decompiling and committing "${mod}"…`;
     case 'Parsing':
