@@ -3,13 +3,14 @@ import { fakeVscodeModule } from './fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { rm } from 'node:fs/promises';
+import { appendFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { pluginSyncOver } from '../../pluginsCommands/plugins';
 import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, snapshotTree,
 } from './corpusFixture';
-import { adapterOver, pluginsCommandsOver, providedPluginsIn, readPluginLines } from './adapterOver';
+import { adapterOver, pluginsCommandsOver, providedPluginsIn, readInstanceOf, readPluginLines } from './adapterOver';
 
 const NOT_INDEXED = { getPlugins: () => Promise.reject(new Error('mEdit is indexing')) };
 const moving = (...names: string[]) => names.map((name) => ({ name, origin: 'SomeMod' }));
@@ -77,6 +78,15 @@ describe('plugins.txt corpus', () => {
     });
     expect((await pluginOrder(dir)).at(-1)).toBe('NonAsciiRetexture - Addon.esl');
     expect(await enabledPlugins(dir)).not.toContain('NonAsciiRetexture - Addon.esl');
+  });
+
+  it('syncPlugins over a plugin the file repeats syncs on the first line and drops it', async () => {
+    await appendFile(join(dir, DEFAULT_PLUGINS), 'Unofficial Fallout 4 Patch.esp\r\n');
+    const result = await pluginSyncOver(adapterOver(dir))({
+      profile: PROFILE, pluginOrder: (await readInstanceOf(dir)).pluginOrder, provided: await providedPluginsIn(dir), inData: GAME_DATA_FOLDER, loadedWithNoLine: [],
+    });
+
+    expect(result).toMatchObject({ applied: true, wrote: true, dropped: ['Unofficial Fallout 4 Patch.esp'] });
   });
 
   it('reorderPlugins moves a plugin within load order, touching only plugins.txt', async () => {

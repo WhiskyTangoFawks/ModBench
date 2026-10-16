@@ -19,6 +19,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     gameRelease: 'Fallout4',
     mods: [],
     pluginOrder: [],
+    orderNotes: [],
     downloadedFiles: { kind: 'listed', downloadsDir: '/downloads', files: [] },
     gameFolder: GAME_FOLDER_NOT_FOUND,
     dataFolderPlugins: { kind: 'unresolved' },

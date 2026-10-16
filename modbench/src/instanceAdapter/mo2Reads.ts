@@ -2,11 +2,12 @@
 // instance keeps what.
 
 import { basename, dirname } from 'node:path';
-import { parsePlugins } from '../loadOrderFileCodec/pluginsText';
+import { firstLines, modLineKey } from '../loadOrderFileCodec/firstLines';
+import { parsePlugins, pluginKey, PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
 import { isArchiveName } from './archiveNames';
 import { parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
-import { entryNamed, parseModlist } from './codecs/modlistText';
+import { entryNamed, MODLIST_FILE_NAME, parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
 import { creationClubListFile, dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
 import { factsOf, get, isTracked, listDir, readOrReason, stampOf } from './files';
@@ -176,6 +177,11 @@ const modsWithMeta = async (source: ReadingSource, profile: string): Promise<Mod
   Promise.all((await source.modOrder(profile)).map(async (entry) =>
     (entry.kind === 'mod' ? { ...entry, ...(await source.modMeta(entry.name)) } : entry)));
 
+const withNotes = <T>(lines: readonly T[], keyOf: (line: T) => string, describe: (line: T) => string): { kept: T[]; notes: string[] } => {
+  const { kept, repeats } = firstLines(lines, keyOf);
+  return { kept, notes: repeats.map((line) => `${describe(line)} on more than one line; the first line holds`) };
+};
+
 async function settledMods(source: ReadingSource, profile: string): Promise<ModlistEntry[]> {
   const mods = await modsWithMeta(source, profile);
   if (mods.length > 0) return mods;
@@ -205,11 +211,13 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
   const settings = await source.settings();
   const { profile, gameName, gameRelease } = settings;
   const skippedLinks = new Map<string, string>();
-  const modsRead = settledMods(source, profile);
+  const modsRead = settledMods(source, profile).then((listed) =>
+    withNotes(listed, modLineKey, ({ kind, name }) => `${MODLIST_FILE_NAME} lists the ${kind} ${name}`));
+  const modsKept = modsRead.then(({ kept }) => kept);
   const modFoldersRead = source.modFolders((name, reason) => skippedLinks.set(name, reason));
   const sourceModsRead = source.sourceMods();
   const downloadsRead = settings.downloadedFiles();
-  const [mods, pluginOrder, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceMods, modFiles, folderMeta, holdsRepository] = await Promise.all([
+  const [mods, pluginsListed, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceMods, modFiles, folderMeta, holdsRepository] = await Promise.all([
     modsRead,
     source.pluginOrder(profile),
     downloadsRead,
@@ -224,15 +232,16 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
     modFoldersRead,
     source.originFiles({ kind: 'runtimeOutput' }),
     sourceModsRead,
-    modsRead.then(async (entries) => new Map(await Promise.all(entries.filter((entry) => entry.kind === 'mod')
+    modsKept.then(async (entries) => new Map(await Promise.all(entries.filter((entry) => entry.kind === 'mod')
       .map(async ({ name }) => [name, await source.originFiles({ kind: 'mod', name })] as const)))),
-    Promise.all([modsRead, modFoldersRead, downloadsRead]).then(([entries, folders, downloads]) =>
+    Promise.all([modsKept, modFoldersRead, downloadsRead]).then(([entries, folders, downloads]) =>
       folderMetaOf(source, entries, folders, downloads.kind === 'listed' && downloads.files !== undefined)),
     source.holdsRepository(),
   ]);
   const { archiveList, dataFolderArchives, ...gameFacts } = game;
+  const pluginOrder = withNotes(pluginsListed, ({ name }) => pluginKey(name), ({ name }) => `${PLUGINS_FILE_NAME} lists the plugin ${name}`);
   return {
-    profile, gameName, gameRelease, mods, pluginOrder, downloadedFiles, ...gameFacts,
+    profile, gameName, gameRelease, mods: mods.kept, pluginOrder: pluginOrder.kept, orderNotes: [...mods.notes, ...pluginOrder.notes], downloadedFiles, ...gameFacts,
     archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
     profiles, modFolders, skippedLinks, runtimeOutput, modFiles, folderMeta,
     sourceMods, holdsRepository,
