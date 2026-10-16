@@ -1186,9 +1186,9 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
   });
 
   it.each([
-    ['after', [held('Shared.esp', { origin: 'ModA', isImmutable: true, isTracked: true }), held('Shared.esp', { origin: 'ModB' })]],
-    ['before', [held('Shared.esp', { origin: 'ModB' }), held('Shared.esp', { origin: 'ModA', isImmutable: true, isTracked: true })]],
-  ])("never marks a plugin's records read-only or tracked for another plugin of the same name, listed %s it", async (_order, answer) => {
+    ['after', [held('Shared.esp', { origin: 'ModA', isImmutable: true }), held('Shared.esp', { origin: 'ModB', isTracked: true })]],
+    ['before', [held('Shared.esp', { origin: 'ModB', isTracked: true }), held('Shared.esp', { origin: 'ModA', isImmutable: true })]],
+  ])("never marks a plugin's records read-only or untracked for another plugin of the same name, listed %s it", async (_order, answer) => {
     const client = makeClient({
       recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
       records: { items: [recordSummary({ plugin: 'Shared.esp', formKey: '000001:Shared.esp', origin: 'ModB' })], total: 1 },
@@ -1200,8 +1200,8 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
     const [group] = await h.tree.getChildren(present(row, 'the Shared.esp row'));
     const [record] = await h.tree.getChildren(present(group, 'the Weapon group'));
 
-    expect(present(record, 'the record row').contextValue).toBe('record untracked editable');
-    expect(present(group, 'the Weapon group').contextValue).toBe('recordType untracked editable creatable');
+    expect(present(record, 'the record row').contextValue).toBe('record tracked editable');
+    expect(present(group, 'the Weapon group').contextValue).toBe('recordType tracked editable creatable');
   });
 });
 
@@ -1221,7 +1221,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
     const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
-    expect((await firstRecordUnder(h, present(row, 'the A.esp row'))).record.contextValue).toBe('record untracked editable');
+    expect((await firstRecordUnder(h, present(row, 'the A.esp row'))).record.contextValue).toBe('record untracked');
     const reads = client.calls.filter((c) => c.method === 'getRecords').length;
 
     await reconcile(h, [held('A.esp', { isTracked: true })]);
@@ -1906,7 +1906,7 @@ describe('PluginsTreeProvider — the row states its conditions', () => {
     const h = makeTree([plugin({ name: 'A.esp', line: 0, origin: 'SomeMod', enabled: false })]);
     await reconcile(h, [held('A.esp')]);
 
-    expect(await flags(h)).toEqual(['plugin', 'disabled', 'inUntrackedMod', 'untracked', 'editable']);
+    expect(await flags(h)).toEqual(['plugin', 'disabled', 'inUntrackedMod', 'untracked']);
   });
 });
 
@@ -1945,7 +1945,7 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
     h.tree.facts.indexed([], []);
     expect((await rowItem(h)).tooltip).toContain('read-only');
 
-    await reconcile(h, [held('A.esp')]);
+    await reconcile(h, [held('A.esp', { isTracked: true })]);
     expect((await rowItem(h)).tooltip).not.toContain('read-only');
   });
 
@@ -1986,7 +1986,7 @@ describe('PluginsTreeProvider — master-issue decoration', () => {
     await withIssues(h, ['Ghost.esm']);
     expect((await rowItem(h)).tooltip).toContain('Missing master');
 
-    await reconcile(h, [held('A.esp')]);
+    await reconcile(h, [held('A.esp', { isTracked: true })]);
 
     const item = await rowItem(h);
     expect(item.tooltip).toBe('A.esp\nSomeMod');
@@ -2101,14 +2101,14 @@ describe('PluginsTreeProvider — changed outside Modbench', () => {
 
 describe('PluginsTreeProvider — a healthy plugin row after a reconcile', () => {
   it('states only its kind and where decompile and commit applies, with no description and the base tooltip', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
-    await reconcile(h, [held('A.esp'), held('B.esp')]);
+    const h = makeTree([A_ROW(), B_ROW()], { instance: new FakeInstance({ ...valueOf([A_ROW(), B_ROW()]), trackedMods: new Set(['SomeMod']) }) });
+    await reconcile(h, [held('A.esp', { isTracked: true }), held('B.esp', { isTracked: true })]);
 
     const items = [await rowItem(h, 0), await rowItem(h, 1)];
 
     expect(items.map((i) => [i.contextValue, i.description, i.tooltip])).toEqual([
-      ['plugin enabled inUntrackedMod untracked editable', undefined, 'A.esp\nSomeMod'],
-      ['plugin enabled inUntrackedMod untracked editable', undefined, 'B.esp\nSomeMod'],
+      ['plugin enabled inTrackedMod tracked editable', undefined, 'A.esp\nSomeMod'],
+      ['plugin enabled inTrackedMod tracked editable', undefined, 'B.esp\nSomeMod'],
     ]);
   });
 });
