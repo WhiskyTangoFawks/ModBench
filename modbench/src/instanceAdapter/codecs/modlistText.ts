@@ -3,8 +3,7 @@
 // The top of the file is the winning end. Mutations edit the lines.
 
 import type { EntryRef, ModlistEntry, MovePlace, OrderEnd, SeparatorsPlace } from '../instanceAdapter';
-import { firstLines } from '../../loadOrderFileCodec/firstLines';
-import { editLines, entryLineIndices, stripBom } from '../../loadOrderFileCodec/lineScan';
+import { editLines, stripBom } from '../../loadOrderFileCodec/lineScan';
 
 /** The per-profile mod list, one line per mod in Mod override order. */
 export const MODLIST_FILE_NAME = 'modlist.txt';
