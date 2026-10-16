@@ -45,14 +45,17 @@ describe('the indicators each mod carries (mods.md, Indicators)', () => {
     expect(carriedBy(value, 'Loser')).toEqual(['redundant']);
   });
 
-  it('a mod between two copies of a file wins over one and loses to the other, so carries both', async () => {
+  it.each([
+    ['a file and one of its own', { Middle: [file('Middle', 'a.dds'), file('Middle', 'own.dds')] }, ['overwritesLooseFiles', 'overwrittenLooseFiles']],
+    ['its only file', { Middle: [file('Middle', 'a.dds')] }, ['overwritesLooseFiles', 'redundant']],
+  ])('a mod between two copies of %s overwrites the lower copy and loses to the higher', async (_, own, carried) => {
     const value = await indexedValueOf([mod('High'), mod('Middle'), mod('Low')], {
       High: { files: [file('High', 'a.dds')] },
-      Middle: { files: [file('Middle', 'a.dds'), file('Middle', 'own.dds')] },
+      Middle: { files: own.Middle },
       Low: { files: [file('Low', 'a.dds')] },
     });
 
-    expect(carriedBy(value, 'Middle')).toEqual(['overwritesLooseFiles', 'overwrittenLooseFiles']);
+    expect(carriedBy(value, 'Middle')).toEqual(carried);
   });
 
   it('a mod whose file loses to Overwrite\'s is overwritten', async () => {

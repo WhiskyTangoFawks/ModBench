@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Mod, Separator, ModlistEntry } from '../instance';
 import {
-  buildFileConflictIndex, modOrigin, goToModCandidates, inFileOrderConflict, fileOrderConflictOf, RUNTIME_OUTPUT, type ConflictEntry,
+  buildFileConflictIndex, modOrigin, goToModCandidates, inFileOrderConflict, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
 } from '../fileConflictIndex';
 import type { OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../loadOrderSnapshot';
@@ -289,5 +289,25 @@ describe('whether a copy of a file wins or loses its file order conflict', () =>
     expect(fileOrderConflictOf(entryOf(high), high)).toBe('none');
     expect(fileOrderConflictOf(entryOf(high, middle), low)).toBe('none');
     expect(fileOrderConflictOf(undefined, high)).toBe('none');
+  });
+});
+
+describe('whether a copy of a file wins the path or outranks a copy', () => {
+  it('wins the path when it is the winner, and not when another copy is', () => {
+    expect(winsPath(entryOf(high), high)).toBe(true);
+    expect(winsPath(entryOf(high, low), low)).toBe(false);
+    expect(winsPath(undefined, high)).toBe(false);
+  });
+
+  it('outranks a copy when a lower copy provides the path, winning the path or not', () => {
+    expect(outranksACopy(entryOf(high, middle, low), high)).toBe(true);
+    expect(outranksACopy(entryOf(high, middle, low), middle)).toBe(true);
+    expect(outranksACopy(entryOf(high, middle, low), low)).toBe(false);
+  });
+
+  it('outranks none for a sole copy, a copy that is no provider, and a path no one provides', () => {
+    expect(outranksACopy(entryOf(high), high)).toBe(false);
+    expect(outranksACopy(entryOf(high, middle), low)).toBe(false);
+    expect(outranksACopy(undefined, high)).toBe(false);
   });
 });
