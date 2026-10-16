@@ -38,7 +38,7 @@ export const FILE_CONFLICTS = {
     + 'With no mods given, every mod; otherwise the mods named, each by its name and, when a mod and a separator share it, its kind.',
   input: { mods: z.array(z.object({ name: z.string(), kind: z.enum(['mod', 'separator']).optional() })).optional() },
   of: (value: InstanceValue, { mods }: { mods?: ModName[] }): ModConflicts[] => {
-    const named = mods === undefined ? value.mods.filter(({ kind }) => kind === 'mod') : modsNamed(value.mods, mods);
+    const named = mods === undefined ? value.mods.filter(({ kind }) => kind === 'mod') : modsNamed(value, mods);
     const separator = named.find(({ kind }) => kind === 'separator');
     if (separator !== undefined) throw new Refusal(`"${separator.name}" is a separator; it has no files.`);
     return conflictsOf(value, named.map(({ name }) => name));

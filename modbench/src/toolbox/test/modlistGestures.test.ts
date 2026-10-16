@@ -182,6 +182,14 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     expect(sentMods(updateManifest)).toEqual([['Weapons_separator', 'ModA', 'ModB']]);
   });
 
+  it('takes a separator named without its case as the mod manager does, for itself and the mods it holds', async () => {
+    const { run } = register();
+
+    await run(UPDATE, separatorRow('weapons'), [separatorRow('weapons'), modRow('ModB'), modRow('ModA')]);
+
+    expect(sentMods(updateManifest)).toEqual([['Weapons_separator', 'ModA', 'ModB']]);
+  });
+
   it('refuses a selected row that is neither a mod nor a separator, naming it, and acts on the rest', async () => {
     const { reporter, run } = register();
 

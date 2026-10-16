@@ -24,6 +24,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     gameName: 'Fallout 4',
     gameRelease: 'Fallout4',
     nexusDomainOf: nexusDomainForMetaGame,
+    entryKey: ({ kind, name }) => (kind === 'separator' ? `${name}_separator` : name).toLowerCase(),
     gameFolder: GAME_FOLDER_NOT_FOUND,
     dataFolderPlugins: { kind: 'unresolved' },
     pluginsLoadedWithNoLine: undefined,

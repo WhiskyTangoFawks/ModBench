@@ -6,13 +6,13 @@ import { answerOf } from '../wire/readFailed';
 
 function trackedFoldersOf(
   plugins: readonly Pick<PluginMetadata, 'name' | 'origin'>[],
-  trackedMods: ReadonlySet<string>,
-  sourceDirs: ReadonlyMap<string, string>,
+  { trackedMods, sourceDirs, modOfOrigin }: Pick<TrackedRepositoriesDeps, 'trackedMods' | 'sourceDirs' | 'modOfOrigin'>,
 ): Map<string, string> {
   const folders = new Map<string, string>();
   for (const plugin of plugins) {
-    if (!trackedMods.has(plugin.origin)) continue;
-    const folder = sourceDirs.get(plugin.origin);
+    const mod = modOfOrigin(plugin.origin);
+    if (mod === undefined || !trackedMods().has(mod)) continue;
+    const folder = sourceDirs().get(mod);
     if (folder !== undefined) folders.set(pluginAddressKey(plugin), folder);
   }
   return folders;
@@ -55,7 +55,8 @@ interface GitExtensionExports {
 export interface TrackedRepositoriesDeps {
   readonly client: Pick<MEditClient, 'getPlugins'>;
   readonly outputChannel: Pick<vscode.LogOutputChannel, 'warn' | 'error'>;
-  /** The Instance value's own two facts this needs, read fresh at call time. */
+  /** The Instance value's own facts this needs, read fresh at call time. */
+  readonly modOfOrigin: (origin: string) => string | undefined;
   readonly trackedMods: () => ReadonlySet<string>;
   readonly sourceDirs: () => ReadonlyMap<string, string>;
 }
@@ -77,7 +78,7 @@ export function trackedRepositoriesOver(deps: TrackedRepositoriesDeps): TrackedR
   // One `openRepository` per distinct tracked folder (ADR-0007). A logged no-op when `vscode.git` is
   // unavailable: this only narrows the native UI, never blocks reading or editing.
   async function registerHeld(): Promise<void> {
-    const { client, outputChannel, trackedMods, sourceDirs } = deps;
+    const { client, outputChannel } = deps;
     try {
       const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
       if (!gitExtension) {
@@ -88,7 +89,7 @@ export function trackedRepositoriesOver(deps: TrackedRepositoriesDeps): TrackedR
       const gitApi = exports.getAPI(1);
 
       const plugins = answerOf(await client.getPlugins());
-      const folders = trackedFoldersOf(plugins, trackedMods(), sourceDirs());
+      const folders = trackedFoldersOf(plugins, deps);
       const folderRepositories = await registerTrackedRepositories(
         (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), [...folders.values()]);
       byPlugin = pluginRepositoriesOf(folders, folderRepositories);

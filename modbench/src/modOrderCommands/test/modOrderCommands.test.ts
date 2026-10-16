@@ -68,6 +68,15 @@ describe('setModsEnabled', () => {
     expect(fake.calls).toEqual([orderWrite([{ kind: 'enable', mod: 'Harder VATS', enabled: true }])]);
   });
 
+  it('lands a mod named as the mod manager matches names, whatever the case', async () => {
+    const { fake, commands } = over();
+
+    const outcome = await commands.setModsEnabled('Default', ['harder vats'], true);
+
+    expect(outcome).toEqual({ applied: true, outcome: { landed: ['harder vats'], refused: [] } });
+    expect(fake.calls).toEqual([orderWrite([{ kind: 'enable', mod: 'harder vats', enabled: true }])]);
+  });
+
   it('names an entry of the kind it is handed, when a separator shares the name of a mod', async () => {
     const { fake, commands } = over([separator('Gear'), mod('Armor')]);
 

@@ -8,7 +8,7 @@ const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled
 const row = (over: Partial<LoadOrderPlugin>): LoadOrderPlugin =>
   ({ name: 'A.esp', path: '/mods/ModA/A.esp', origin: 'ModA', line: 0, enabled: true, winning: true, ...over });
 const A = { name: 'A.esp', origin: 'ModA' };
-const standing = (mods: Mod[], plugins: LoadOrderPlugin[]) => pluginStanding({ mods, plugins, pluginsLoadedWithNoLine: [] }, A);
+const standing = (mods: Mod[], plugins: LoadOrderPlugin[]) => pluginStanding({ mods, plugins, pluginsLoadedWithNoLine: [], entryKey: ({ name }) => name.toLowerCase() }, A);
 
 describe('a plugin\'s standing', () => {
   it('is overridden by the mod whose enabled file wins its filename', () => {

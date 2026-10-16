@@ -158,7 +158,7 @@ const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =
   typeof value === 'object' && value !== null && 'resolveCustomTextEditor' in value;
 
 const NO_MODS: ModFacts = {
-  trackedMods: () => new Set<string>(), modDirs: () => new Map<string, string>(), standingOf: () => ({ kind: 'enabled' }),
+  trackedMods: () => new Set<string>(), modOfOrigin: () => undefined, standingOf: () => ({ kind: 'enabled' }),
   onChange: () => ({ dispose: () => undefined }),
 };
 
@@ -1246,7 +1246,7 @@ describe('what a record tab\'s webview posts', () => {
       const mEdit = client();
       mEdit.setQueryAnswer('getPlugins', plugins);
       mEdit.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin, isWinner: true, editorId: 'Gun' }]));
-      const modFacts = { ...NO_MODS, trackedMods: () => new Set(['ModA']), modDirs: () => new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB']]) };
+      const modFacts = { ...NO_MODS, trackedMods: () => new Set(['ModA']), modOfOrigin: (origin: string) => ['ModA', 'ModB'].find((mod) => mod.toLowerCase() === origin.toLowerCase()) };
       const { openDocument } = makeEditor(mEdit, undefined, modFacts);
       const tab = await openDocument(renderedUri(GUN, 'Gun.json'), { getText: () => '{}' });
 
@@ -1263,7 +1263,7 @@ describe('what a record tab\'s webview posts', () => {
       let tracked = new Set<string>();
       const changed: (() => void)[] = [];
       const modFacts = {
-        ...NO_MODS, trackedMods: () => tracked, modDirs: () => new Map([['ModB', '/mods/ModB']]),
+        ...NO_MODS, trackedMods: () => tracked, modOfOrigin: (origin: string) => (origin === 'ModB' ? origin : undefined),
         onChange: (listener: () => void) => { changed.push(listener); return { dispose: () => undefined }; },
       };
       const { openDocument } = makeEditor(mEdit, undefined, modFacts);

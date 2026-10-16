@@ -7,6 +7,7 @@ import {
   fileInFolder, isRootLevel, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
   type ModFolders, type ModlistEntry, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
+import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { pluginOrderOf } from './pluginOrder';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile, pluginCompanionRule } from '../tables/gamePaths';
@@ -170,11 +171,10 @@ export function buildLoadOrderRows(
   inData: DataFolderPlugins,
 ): (LoadOrderPlugin | LoadOrderPluginLine)[] {
   const winners = winningPlugins(index.files);
-  // The game matches a line to a file without case, so a case difference must not read as
-  // "disabled".
-  const enabledNames = new Set(pluginOrder.filter((line) => line.enabled).map((line) => foldPath(line.name)));
-  const lineByName = new Map<string, number>();
-  pluginOrder.forEach(({ name }, line) => lineByName.set(foldPath(name), line));
+  // The adapter hands each name once, and the game matches a line to a file without case, so a case
+  // difference must not read as "disabled".
+  const lineByName = new Map(pluginOrder.map(({ name }, line) => [pluginKey(name), line] as const));
+  const isEnabled = (name: string): boolean => pluginOrder[lineByName.get(pluginKey(name)) ?? -1]?.enabled ?? false;
 
   const listed = pluginOrder.flatMap(({ name }, line) => {
     const folded = foldPath(name);
@@ -185,7 +185,7 @@ export function buildLoadOrderRows(
     const plugins = provided !== undefined ? [provided] : spellings.length > 0
       ? spellings.map((spelled) => ({ name: spelled, path: dataFolderFile(gameFolder, spelled), origin: DATA_DIRECTORY_ORIGIN }))
       : [{ name, path: dataFolderFile(gameFolder, name), origin: DATA_DIRECTORY_ORIGIN }];
-    return plugins.map((plugin, i) => ({ ...plugin, line, enabled: enabledNames.has(folded), winning: i === 0 }));
+    return plugins.map((plugin, i) => ({ ...plugin, line, enabled: isEnabled(name), winning: i === 0 }));
   });
 
   const isWinning = ({ name, origin }: PluginFile) => {
@@ -196,8 +196,8 @@ export function buildLoadOrderRows(
   const outside = findPluginsOutsideLoadOrder([...index.filesByMod, [OVERWRITE_ORIGIN, overwriteFiles]], listed)
     .map((plugin) => ({
       ...plugin,
-      line: lineByName.get(foldPath(plugin.name)) ?? null,
-      enabled: enabledNames.has(foldPath(plugin.name)),
+      line: lineByName.get(pluginKey(plugin.name)) ?? null,
+      enabled: isEnabled(plugin.name),
       winning: isWinning(plugin),
     }));
 

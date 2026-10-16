@@ -98,7 +98,7 @@ interface NewPlugin {
   readonly sourceFolder?: string;
 }
 
-function placed(value: Pick<InstanceValue, 'mods' | 'paths'>, name: string, { origin, label }: { origin: string; label: string }): NewPlugin | string {
+function placed(value: Pick<InstanceValue, 'mods' | 'paths' | 'entryKey'>, name: string, { origin, label }: { origin: string; label: string }): NewPlugin | string {
   const where = placeFolder(value, origin);
   if ('lost' in where) return `${lostPlace(origin, where.lost)}, so "${name}" was not created.`;
   const { folder, sourceFolder } = where;

@@ -831,6 +831,14 @@ describe('the agent server, running a gesture', () => {
       expect(fired.calls).toEqual([['modbench.mod.move', new AgentCall([B], options)]]);
     });
 
+    it('names a mod as the mod manager matches names, firing the mod as the value spells it', async () => {
+      const options = { place: { kind: 'separator', name: 'textures' }, end: 'winning' };
+
+      await fire('mod_move', { argument: [{ name: 'b' }], options });
+
+      expect(fired.calls).toEqual([['modbench.mod.move', new AgentCall([B], { ...options, place: { kind: 'separator', name: 'Textures' } })]]);
+    });
+
     it('refuses a place nothing is named, firing nothing', async () => {
       const answer = await fire('mod_move', { argument: [{ name: 'B' }], options: { place: { kind: 'mod', name: 'Gone' }, end: 'winning' } });
 

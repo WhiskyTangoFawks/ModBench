@@ -98,7 +98,7 @@ describe('modbench.mod.decompileAndCommit', () => {
     const progress = { say: (message: string | undefined) => said.push(message) };
     const reporter = recordingReporter();
     registerDecompileAndCommitCommand({
-      progress, instance: instanceThatReads, commands, reporter, onCommitted, modsView: 'modbench.modList', modDirs: () => MOD_DIRS,
+      progress, instance: instanceThatReads, commands, reporter, onCommitted, modsView: 'modbench.modList', modOfOrigin: (origin) => [...MOD_DIRS.keys()].find((mod) => mod.toLowerCase() === origin.toLowerCase()),
     }, paletteSelection);
     return {
       handler: present(handlers.get('modbench.mod.decompileAndCommit'), 'the decompile and commit command registerDecompileAndCommitCommand registers'),
@@ -362,7 +362,7 @@ describe('modbench.mod.build', () => {
       },
       instance: instanceThatReads, gameRelease: () => 'Fallout4',
       reporter, problems: new BuildProblems(diagnostics),
-      modDirs: () => MOD_DIRS, sourceDirs: () => SOURCE_DIRS, modsView: 'modbench.modList',
+      modOfOrigin: (origin) => [...MOD_DIRS.keys()].find((mod) => mod.toLowerCase() === origin.toLowerCase()), sourceDirs: () => SOURCE_DIRS, modsView: 'modbench.modList',
       sourceFiles: (origin) => sourceFiles(FILES, origin),
       saveUnsaved: (mod) => {
         const files = sourceFiles(FILES, mod);

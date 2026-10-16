@@ -7,6 +7,7 @@ import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { PluginsCommands, PluginsDrop } from '../pluginsCommands/plugins';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
+import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import { type PluginsTreeProvider } from './PluginsTreeProvider';
 import type { PluginsTreeNode } from './pluginRows';
@@ -20,7 +21,7 @@ function isDrop(value: unknown): value is PluginsDrop {
 type DropBeside = Extract<PluginsDrop, { name: string }>;
 
 const dropsOnMoving = (plugins: readonly PluginAddress[], drop: PluginsDrop): drop is DropBeside =>
-  'name' in drop && plugins.some(({ name }) => name.toLowerCase() === drop.name.toLowerCase());
+  'name' in drop && plugins.some(({ name }) => pluginKey(name) === pluginKey(drop.name));
 
 interface MoveView extends Pick<PluginsTreeProvider, 'movePlaces'> {
   selection: () => readonly PluginsTreeNode[];

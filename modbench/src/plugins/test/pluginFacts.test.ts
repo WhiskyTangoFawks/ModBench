@@ -429,7 +429,8 @@ describe('PluginFacts — a later read that failed (common.md, States, story 6)'
 });
 
 describe('placeOf — where a plugin lives, from the instance value', () => {
-  const modDirs = new Map([['SomeMod', '/mods/SomeMod'], ['TrackedMod', '/mods/TrackedMod']]);
+  const mods = ['SomeMod', 'TrackedMod'];
+  const modOfOrigin = (origin: string) => mods.find((mod) => mod.toLowerCase() === origin.toLowerCase());
   const trackedMods = new Set(['TrackedMod']);
 
   it.each<[string, string, PluginPlace | undefined]>([
@@ -440,6 +441,6 @@ describe('placeOf — where a plugin lives, from the instance value', () => {
     ['the game folder', 'Data/', undefined],
     ['an origin no mod folder carries', 'Nowhere', undefined],
   ])('%s', (_label, origin, place) => {
-    expect(placeOf(origin, { modDirs, trackedMods })).toBe(place);
+    expect(placeOf(origin, { modOfOrigin, trackedMods })).toBe(place);
   });
 });

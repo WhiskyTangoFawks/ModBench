@@ -15,7 +15,7 @@ import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './d
 import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type ManagerNames, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
+  type EntryRef, type ManagerNames, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
 import { sameCopies, type FileCopies } from './sameCopies';
@@ -88,6 +88,8 @@ export interface InstanceValue {
   /** How a message names the mod manager and its mod-order file: the adapter's answer, before any
    *  read too. */
   readonly managerNames: ManagerNames;
+  /** How the mod manager matches an entry's name: the adapter's `entryKey`. */
+  readonly entryKey: (entry: EntryRef) => string;
   /** The game as the mod manager's configuration names it. */
   readonly gameName: string;
   /** Mutagen's release of that game; undefined when the tables hold none for it. */
@@ -169,7 +171,7 @@ function pathsOf(
   };
 }
 
-const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
+const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey'>): InstanceValue => ({
   mods: [],
   modGroups: { ungrouped: [], groups: [] },
   modFolders: [],
@@ -184,7 +186,8 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   plugins: [],
   downloads: { kind: 'listed', rows: [] },
   activeProfile: '',
-  managerNames,
+  managerNames: adapter.names,
+  entryKey: (entry) => adapter.entryKey(entry),
   gameName: '',
   gameRelease: undefined,
   nexusDomainOf: nexusDomainForMetaGame,
@@ -226,7 +229,7 @@ export class Instance implements Subscription {
   private readonly told = new Map<NoteKind, ReadonlySet<string>>();
 
   constructor(private readonly options: InstanceOptions) {
-    this.current = emptyValue(options.adapter.names);
+    this.current = emptyValue(options.adapter);
     this.changes = options.adapter.subscribe(() => this.schedule());
     let focused = options.window.state.focused;
     this.focus = options.window.onDidChangeWindowState((state) => {
@@ -434,6 +437,7 @@ export class Instance implements Subscription {
         },
       activeProfile: profile,
       managerNames: adapter.names,
+      entryKey: (entry) => adapter.entryKey(entry),
       gameName,
       nexusDomainOf: nexusDomainForMetaGame,
       gameRelease,

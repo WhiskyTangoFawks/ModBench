@@ -1,4 +1,5 @@
 import { foldPath } from '../instanceLoader/fileConflictIndex';
+import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { OriginFile } from '../instanceAdapter/instanceAdapter';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
@@ -23,8 +24,10 @@ type Entry = InstanceValue['mods'][number];
 
 const asNamed = ({ kind, name }: Entry): string => `${kind} ${name}`;
 
-function matchesOf(entries: readonly Entry[], { name, kind }: ModName): readonly Entry[] {
-  return entries.filter((entry) => entry.name === name && (kind === undefined || entry.kind === kind));
+type EntryKeys = Pick<InstanceValue, 'mods' | 'entryKey'>;
+
+function matchesOf({ mods, entryKey }: EntryKeys, { name, kind }: ModName): readonly Entry[] {
+  return mods.filter((entry) => (kind === undefined || entry.kind === kind) && entryKey(entry) === entryKey({ kind: entry.kind, name }));
 }
 
 function refusalFor(given: ModName, matches: readonly Entry[]): string | undefined {
@@ -33,8 +36,8 @@ function refusalFor(given: ModName, matches: readonly Entry[]): string | undefin
   return `"${given.name}" means more than one thing: ${matches.map(asNamed).join('; ')}. Name it with its kind.`;
 }
 
-export function modsNamed(entries: readonly Entry[], given: readonly ModName[]): Entry[] {
-  const resolved = given.map((one) => ({ one, matches: matchesOf(entries, one) }));
+export function modsNamed(value: EntryKeys, given: readonly ModName[]): Entry[] {
+  const resolved = given.map((one) => ({ one, matches: matchesOf(value, one) }));
   const refusals = resolved.flatMap(({ one, matches }) => refusalFor(one, matches) ?? []);
   if (refusals.length > 0) throw new Refusal(refusals.join(' '));
   return resolved.flatMap(({ matches }) => matches);
@@ -65,7 +68,7 @@ function fileIn(mod: Entry | undefined, given: FileName, own: readonly OriginFil
 
 /** Each file by its path in its mod, answered in the mod's own casing. */
 export function filesNamed(value: InstanceValue, given: readonly FileName[]): { mod: string; file: string }[] {
-  const mods = modsNamed(value.mods, given.map(({ mod }) => mod));
+  const mods = modsNamed(value, given.map(({ mod }) => mod));
   const resolved = given.map((one, at) => fileIn(mods[at], one, value.filesByMod.get(mods[at]?.name ?? '') ?? []));
   const refusals = resolved.filter((one) => typeof one === 'string');
   if (refusals.length > 0) throw new Refusal(refusals.join(' '));
@@ -84,7 +87,7 @@ function pluginRefusal({ name, origin }: PluginName, matches: readonly PluginAdd
 export function pluginsNamed(plugins: InstanceValue['plugins'], given: readonly PluginName[]): PluginAddress[] {
   const resolved = given.map((one) => ({
     one,
-    matches: plugins.filter(({ name, origin }) => name.toLowerCase() === one.name.toLowerCase()
+    matches: plugins.filter(({ name, origin }) => pluginKey(name) === pluginKey(one.name)
       && (one.origin === undefined || origin.toLowerCase() === one.origin.toLowerCase())).map(({ name, origin }) => ({ name, origin })),
   }));
   const refusals = resolved.flatMap(({ one, matches }) => pluginRefusal(one, matches) ?? []);
@@ -96,7 +99,7 @@ export function pluginsNamed(plugins: InstanceValue['plugins'], given: readonly 
 export function linesNamed(plugins: InstanceValue['plugins'], given: readonly PluginName[]): PluginAddress[] {
   const named = pluginsNamed(plugins, given);
   const refusals = named.flatMap((address) => {
-    const governing = plugins.find(({ name, winning }) => winning && name.toLowerCase() === address.name.toLowerCase());
+    const governing = plugins.find(({ name, winning }) => winning && pluginKey(name) === pluginKey(address.name));
     return governing === undefined || samePluginAddress(governing, address)
       ? []
       : `${asPlugin(address)} is overridden, and the line for "${address.name}" is ${asPlugin(governing)}'s. Name that one.`;
