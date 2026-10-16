@@ -1,4 +1,4 @@
-import type { InstanceValue } from '../instanceLoader/instance';
+import type { InstanceValue } from '../../instanceLoader/instance';
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, uriFrom,
