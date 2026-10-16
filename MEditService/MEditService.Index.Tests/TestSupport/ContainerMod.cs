@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.TestSupport;
 
-/// <summary>A tracked mod over <see cref="ContainerModPlugin"/>'s shared shape, the one records the
+/// <summary>A source mod over <see cref="ContainerModPlugin"/>'s shared shape, the one records the
 /// flat fixtures cannot exercise.</summary>
 internal sealed class ContainerMod : IDisposable
 {
@@ -43,7 +43,7 @@ internal sealed class ContainerMod : IDisposable
                 npc = mod.Npcs.AddNew(NpcEditorId).FormKey;
             }, origin: Origin)
             .BuildScattered()
-            .Tracked();
+            .CompiledPlugin();
 
         Entry = _fixture.Plugins.Single();
         (Cell, EmbedCell, TemporaryRef, PersistentRef, Worldspace, TopCell, TopCellRef) =
@@ -62,7 +62,7 @@ internal sealed class ContainerMod : IDisposable
 }
 
 /// <summary>The container mod with an index over it, reconciled the way the composition root
-/// reconciles: the Index reads the tracked tree.</summary>
+/// reconciles: the Index reads the compiled plugin tree.</summary>
 internal sealed class IndexedContainerMod : IDisposable
 {
     private readonly ContainerMod _mod = new();

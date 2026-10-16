@@ -27,7 +27,7 @@ const STAND_FILE = '/source/ModB/plugin-source/B.esp/Stand.json';
 
 const plugin = (address: typeof modA, over: Partial<PluginMetadata> = {}): PluginMetadata => ({
   ...address, path: `/mods/${address.origin}/${address.name}`, isLight: false, isMaster: false, isBlueprint: false, masters: [],
-  recordCount: 0, isImmutable: false, inLoadOrder: true, hasMatchingRecords: true, isTracked: true, hasParseFailure: false, pluginSourceUnreadable: null, ...over,
+  recordCount: 0, isImmutable: false, inLoadOrder: true, hasMatchingRecords: true, isCompiledPlugin: true, hasParseFailure: false, pluginSourceUnreadable: null, ...over,
 });
 
 const summary = (formKey: string, address: typeof modA, editorId?: string): RecordSummary => ({
@@ -67,7 +67,7 @@ const listed = (found: Awaited<ReturnType<ReturnType<typeof symbols>['symbolsFor
   found.map(({ name, plugin: { name: pluginName }, uri }) => ({ name, plugin: pluginName, uri: `${uri.scheme}:${uri.path}` }));
 
 describe('Go to Symbol in Workspace (plugin-source.md, In the text editor, story 4)', () => {
-  it('lists each tracked plugin\'s copy of a record it finds, named by its EditorID and FormKey, at the copy\'s document', async () => {
+  it('lists each compiled plugin\'s copy of a record it finds, named by its EditorID and FormKey, at the copy\'s document', async () => {
     const { symbolsFor } = symbols(
       [plugin(modA), plugin(modB)],
       [summary(GUN, modA, 'RustyGun'), summary(STAND, modB)],
@@ -80,11 +80,11 @@ describe('Go to Symbol in Workspace (plugin-source.md, In the text editor, story
     ]);
   });
 
-  it('searches every tracked plugin, active or not (ADR-0012)', async () => {
-    const untracked = { name: 'A.esp', origin: 'ModC' };
+  it('searches every compiled plugin, active or not (ADR-0012)', async () => {
+    const nonCompiledPlugin = { name: 'A.esp', origin: 'ModC' };
     const inactive = { name: 'D.esp', origin: 'ModD' };
     const { client, symbolsFor } = symbols(
-      [plugin(untracked, { isTracked: false }), plugin(modA), plugin(inactive, { inLoadOrder: false })], [], {});
+      [plugin(nonCompiledPlugin, { isCompiledPlugin: false }), plugin(modA), plugin(inactive, { inLoadOrder: false })], [], {});
 
     await symbolsFor('Rusty');
 
@@ -167,7 +167,7 @@ describe('Go to Symbol in Workspace (plugin-source.md, In the text editor, story
 
     expect(await symbolsFor('Rusty')).toEqual([]);
     expect(reporter.shownFailures).toEqual([
-      { severity: 'error', message: 'Go to Symbol in Workspace cannot list the tracked plugins.', detail: 'mEdit is down.' },
+      { severity: 'error', message: 'Go to Symbol in Workspace cannot list the compiled plugins.', detail: 'mEdit is down.' },
     ]);
   });
 });

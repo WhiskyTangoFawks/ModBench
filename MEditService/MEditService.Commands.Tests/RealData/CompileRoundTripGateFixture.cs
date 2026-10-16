@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.RealData;
 
-/// <summary>The cut-down plugin tracked, edited at a flat record and at a response its quest's
+/// <summary>The cut-down compiled plugin, edited at a flat record and at a response its quest's
 /// document carries, then compiled once. The compiled binary is kept apart from the mod folder, which
 /// a later compile writes again.</summary>
 public sealed class CompileRoundTripGateFixture : IDisposable
@@ -37,7 +37,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
 
     public CompileRoundTripGateFixture()
     {
-        CutDownPluginFixture.TrackedInto(ModFolder);
+        CutDownPluginFixture.CompiledPluginInto(ModFolder);
         Holder.Apply(SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, PluginPath, Plugin.Origin, Line: 0, Enabled: true, Winning: true)]));
         SourceModTree = CutDownPluginFixture.ReadSourceTree(ModFolder);

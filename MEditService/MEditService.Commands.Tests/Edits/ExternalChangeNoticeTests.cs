@@ -55,7 +55,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     [Fact]
     public async Task ASnapshot_NamesNoPlugin_ForTheBinaryARealCompileJustWrote()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.CompiledPlugin();
         mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
         await CompileServices.Over(mod.LoadOrder).CompileLandedAsync(mod.Plugin);
 
@@ -67,11 +67,11 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     }
 
     [Fact]
-    public void ASnapshot_NamesATrackedPlugin_WithTheStateOfItsBytes_WhenTheyDifferFromWhatModbenchLastWrote()
+    public void ASnapshot_NamesACompiledPlugin_WithTheStateOfItsBytes_WhenTheyDifferFromWhatModbenchLastWrote()
     {
-        var tracked = "the tracked binary"u8.ToArray();
-        var loadOrder = WithPlugins((PluginName, tracked));
-        Init((PluginName, tracked));
+        var compiledPlugin = "the compiled plugin binary"u8.ToArray();
+        var loadOrder = WithPlugins((PluginName, compiledPlugin));
+        Init((PluginName, compiledPlugin));
 
         Put(loadOrder, TestEditService.PutLoadOrderHandler(new LoadOrderHolder(), _notifications, new HashingAs("changed")));
 
@@ -86,11 +86,11 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     }
 
     [Fact]
-    public void ASnapshot_NamesATrackedPluginThatCannotBeRead_WithNoState()
+    public void ASnapshot_NamesACompiledPluginThatCannotBeRead_WithNoState()
     {
-        var tracked = "the tracked binary"u8.ToArray();
-        var loadOrder = WithPlugins((PluginName, tracked));
-        Init((PluginName, tracked));
+        var compiledPlugin = "the compiled plugin binary"u8.ToArray();
+        var loadOrder = WithPlugins((PluginName, compiledPlugin));
+        Init((PluginName, compiledPlugin));
         File.Delete(Path.Combine(ModFolder, PluginName));
 
         Put(loadOrder);
@@ -99,24 +99,24 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     }
 
     [Fact]
-    public void ASnapshot_NamesATrackedPlugin_WhoseLastWriteIsGone()
+    public void ASnapshot_NamesACompiledPlugin_WhoseLastWriteIsGone()
     {
-        var tracked = "the tracked binary"u8.ToArray();
-        var loadOrder = WithPlugins((PluginName, tracked));
-        Init((PluginName, tracked));
+        var compiledPlugin = "the compiled plugin binary"u8.ToArray();
+        var loadOrder = WithPlugins((PluginName, compiledPlugin));
+        Init((PluginName, compiledPlugin));
         LastWriteRecord.Delete(ModFolder);
 
         Put(loadOrder);
 
-        Assert.Equal([new ChangedPlugin(PluginName, Sha256(tracked))], TheExternalChange().Plugins);
+        Assert.Equal([new ChangedPlugin(PluginName, Sha256(compiledPlugin))], TheExternalChange().Plugins);
     }
 
     [Fact]
     public void ASnapshot_NamesThePluginsWhoseSourceIsUnreadable_ApartFromItsChangedOnes()
     {
-        var tracked = "the tracked binary"u8.ToArray();
-        var loadOrder = WithPlugins((PluginName, tracked), ("SourceUnreadable.esp", "never tracked"u8.ToArray()));
-        Init((PluginName, tracked));
+        var compiledPlugin = "the compiled plugin binary"u8.ToArray();
+        var loadOrder = WithPlugins((PluginName, compiledPlugin), ("SourceUnreadable.esp", "never compiled"u8.ToArray()));
+        Init((PluginName, compiledPlugin));
 
         Put(loadOrder);
 
@@ -130,13 +130,13 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     }
 
     [Fact]
-    public void ASnapshot_NamesNoPlugin_ForAChangedTrackedFileOrMetaIni()
+    public void ASnapshot_NamesNoPlugin_ForAChangedCompiledPluginFileOrMetaIni()
     {
-        var tracked = "the tracked binary"u8.ToArray();
-        var loadOrder = WithPlugins((PluginName, tracked));
+        var compiledPlugin = "the compiled plugin binary"u8.ToArray();
+        var loadOrder = WithPlugins((PluginName, compiledPlugin));
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=1.0.0\n");
         File.WriteAllText(Path.Combine(ModFolder, ".gitignore"), "*.esp\n");
-        Init((PluginName, tracked));
+        Init((PluginName, compiledPlugin));
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=2.0.0\n");
         File.WriteAllText(Path.Combine(ModFolder, ".gitignore"), "*.esp\n*.esm\n");
 
@@ -158,9 +158,9 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     [Fact]
     public void ASnapshot_NamesNoPlugin_OfAModWhoseRepositoryWent()
     {
-        var tracked = "the tracked binary"u8.ToArray();
-        WithPlugins((PluginName, tracked));
-        Init((PluginName, tracked));
+        var compiledPlugin = "the compiled plugin binary"u8.ToArray();
+        WithPlugins((PluginName, compiledPlugin));
+        Init((PluginName, compiledPlugin));
         var loadOrder = WithPlugins((PluginName, "changed-by-xedit"u8.ToArray()));
         Put(loadOrder);
         Assert.Single(TheExternalChange().Plugins);
@@ -177,9 +177,9 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     [Fact]
     public void ASnapshot_TellsNothingMore_OfAModWhoseRepositoryWentBeforeTheLastSnapshot()
     {
-        var tracked = "the tracked binary"u8.ToArray();
-        var loadOrder = WithPlugins((PluginName, tracked));
-        Init((PluginName, tracked));
+        var compiledPlugin = "the compiled plugin binary"u8.ToArray();
+        var loadOrder = WithPlugins((PluginName, compiledPlugin));
+        Init((PluginName, compiledPlugin));
         Put(loadOrder);
         AnotherTool.Delete(Path.Combine(ModFolder, ".git"));
         Put(loadOrder);
@@ -193,10 +193,10 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     [Fact]
     public void ASnapshot_NamesAPlugin_OfAnNonSourceModThatGainedARepository()
     {
-        var tracked = "the tracked binary"u8.ToArray();
-        var loadOrder = WithPlugins((PluginName, tracked));
+        var compiledPlugin = "the compiled plugin binary"u8.ToArray();
+        var loadOrder = WithPlugins((PluginName, compiledPlugin));
         Put(loadOrder);
-        Init((PluginName, tracked));
+        Init((PluginName, compiledPlugin));
         File.WriteAllBytes(Path.Combine(ModFolder, PluginName), "changed-by-xedit"u8.ToArray());
 
         Put(loadOrder);
@@ -223,9 +223,9 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     [Fact]
     public void ASnapshot_WritesNothing_IntoTheMod()
     {
-        var tracked = "the tracked binary"u8.ToArray();
-        WithPlugins((PluginName, tracked));
-        Init((PluginName, tracked));
+        var compiledPlugin = "the compiled plugin binary"u8.ToArray();
+        WithPlugins((PluginName, compiledPlugin));
+        Init((PluginName, compiledPlugin));
         var loadOrder = WithPlugins((PluginName, "changed-by-xedit"u8.ToArray()));
         var before = FilesUnder(ModFolder);
 
@@ -238,9 +238,9 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     [Fact]
     public void ASecondSnapshot_OverTheSameBytes_TellsTheSame()
     {
-        var tracked = "the tracked binary"u8.ToArray();
-        WithPlugins((PluginName, tracked));
-        Init((PluginName, tracked));
+        var compiledPlugin = "the compiled plugin binary"u8.ToArray();
+        WithPlugins((PluginName, compiledPlugin));
+        Init((PluginName, compiledPlugin));
         var loadOrder = WithPlugins((PluginName, "changed-by-xedit"u8.ToArray()));
 
         Put(loadOrder);
@@ -255,7 +255,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     [Fact]
     public void ASnapshot_NamesNoPlugin_WhenAnInterruptedCompileLeftTheOldBinary()
     {
-        var old = "the tracked binary"u8.ToArray();
+        var old = "the compiled plugin binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, old));
         Init((PluginName, old));
         LastWriteRecord.Interrupt(ModFolder, PluginName, TrailerHash("the compiled binary"u8.ToArray()), () => { });
@@ -268,7 +268,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     [Fact]
     public void ASnapshot_NamesNoPlugin_WhenTwoInterruptedCompilesInARowLeftTheOldBinary()
     {
-        var old = "the tracked binary"u8.ToArray();
+        var old = "the compiled plugin binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, old));
         Init((PluginName, old));
         LastWriteRecord.Interrupt(ModFolder, PluginName, TrailerHash("the first compile"u8.ToArray()), () => { });
@@ -282,7 +282,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     [Fact]
     public void ASnapshot_NamesNoPlugin_WhenAnInterruptedCompileLeftTheNewBinary()
     {
-        var old = "the tracked binary"u8.ToArray();
+        var old = "the compiled plugin binary"u8.ToArray();
         var compiled = "the compiled binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, old));
         Init((PluginName, old));
@@ -297,7 +297,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     [Fact]
     public async Task ASnapshot_NamesAPlugin_WhoseBinaryWasPutBackToTheOneBeforeALandedCompile()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.CompiledPlugin();
         var pluginPath = mod.LoadOrder.Plugin(mod.Plugin)?.Path ?? throw new InvalidOperationException("Expected the fixture's plugin in its load order.");
         var before = File.ReadAllBytes(pluginPath);
         mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);

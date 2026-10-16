@@ -23,7 +23,7 @@ public sealed class FormIdEditFailureTests
     {
         const string pluginName = "TwoUnits.esp";
         var placed = FormKey.Null;
-        using var mod = SourceModFixture.Tracked(pluginName, "TwoUnitsMod", m =>
+        using var mod = SourceModFixture.CompiledPlugin(pluginName, "TwoUnitsMod", m =>
         {
             var cell = new Cell(m) { EditorID = "TwoUnitsCell", WaterHeight = 0f };
             var placedRef = new PlacedObject(m) { EditorID = "TwoUnitsRef", Position = new Noggog.P3Float(0, 0, 0) };

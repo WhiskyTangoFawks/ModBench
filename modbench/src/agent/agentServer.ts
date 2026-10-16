@@ -15,7 +15,8 @@ import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
 import { INSTANCE_READS } from './instanceReads';
 import { Refusal } from '../drivingLib/refusal';
 import { parseOrRefuse } from './refusal';
-import { LIST_MOD_STATUSES, type ReadModStatus } from './modStatuses';
+import { LIST_MOD_STATUSES } from './modStatuses';
+import type { ReadModStatus } from '../client';
 import { LIST_REFERENCES, READ_RECORD } from './readRecord';
 import { RESOLVE_NAMES } from './resolveNames';
 import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironment';
@@ -30,7 +31,7 @@ export interface AgentServerOptions {
   mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences'>;
   terminalEnvironment: TerminalEnvironment;
   /** Absent with the instance. */
-  modStatus: ReadModStatus | undefined;
+  readStatus: ReadModStatus | undefined;
   reporter: Reporter;
   log: Log;
 }
@@ -86,10 +87,10 @@ A SELECT reads only the views: select_rows says which.
 
 Ask Modbench what the files cannot answer.`;
 
-function mcpServerOf({ instance, mEdit, terminalEnvironment, modStatus, log }: AgentServerOptions): McpServer {
+function mcpServerOf({ instance, mEdit, terminalEnvironment, readStatus, log }: AgentServerOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
   for (const read of INSTANCE_READS) register(server, log, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance)));
-  register(server, log, { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), modStatus));
+  register(server, log, { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), readStatus));
   register(server, log, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), args));
   register(server, log, RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
   register(server, log, RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));

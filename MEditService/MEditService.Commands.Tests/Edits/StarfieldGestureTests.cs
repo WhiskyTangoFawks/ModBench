@@ -18,7 +18,7 @@ public sealed class StarfieldGestureTests : IDisposable
     private const string LightName = "Light.esm";
     private const string MediumName = "Medium.esm";
     private const string UnrelatedName = "Unrelated.esm";
-    private const string TrackedName = "Tracked.esp";
+    private const string CompiledPluginName = "CompiledPlugin.esp";
 
     private readonly StarfieldInstance _instance = new();
     private readonly FormKey _weapon;
@@ -30,7 +30,7 @@ public sealed class StarfieldGestureTests : IDisposable
     private readonly FormKey _wanderer;
     private readonly PluginAddress _light;
     private readonly PluginAddress _unrelated;
-    private readonly PluginAddress _tracked;
+    private readonly PluginAddress _compiledPlugin;
 
     public StarfieldGestureTests()
     {
@@ -42,51 +42,51 @@ public sealed class StarfieldGestureTests : IDisposable
         interior.Temporary.Add(placed);
         light.Cells.Records.Add(Interior(interior));
         (_lightInterior, _lightPlaced) = (interior.FormKey, placed.FormKey);
-        _light = _instance.AddPlugin(light, "LightMod", tracked: false);
+        _light = _instance.AddPlugin(light, "LightMod", compiledPlugin: false);
 
         var medium = new StarfieldMod(ModKey.FromFileName(MediumName), StarfieldRelease.Starfield);
         medium.ModHeader.Flags |= StarfieldModHeader.HeaderFlag.Medium;
         _mediumKeyword = medium.Keywords.AddNew("MediumKeyword").FormKey;
-        _instance.AddPlugin(medium, "MediumMod", tracked: false);
+        _instance.AddPlugin(medium, "MediumMod", compiledPlugin: false);
 
-        _unrelated = _instance.AddPlugin(new StarfieldMod(ModKey.FromFileName(UnrelatedName), StarfieldRelease.Starfield), "UnrelatedMod", tracked: false);
+        _unrelated = _instance.AddPlugin(new StarfieldMod(ModKey.FromFileName(UnrelatedName), StarfieldRelease.Starfield), "UnrelatedMod", compiledPlugin: false);
 
-        var tracked = new StarfieldMod(ModKey.FromFileName(TrackedName), StarfieldRelease.Starfield);
+        var compiledPlugin = new StarfieldMod(ModKey.FromFileName(CompiledPluginName), StarfieldRelease.Starfield);
         var weapon = new Weapon(_weapon, StarfieldRelease.Starfield) { EditorID = "LightWeaponOverride", Keywords = [] };
         weapon.Keywords.Add(_mediumKeyword);
-        tracked.Weapons.Add(weapon);
-        var world = new Worldspace(tracked) { EditorID = "World" };
-        var here = new Cell(tracked) { EditorID = "Here", Grid = new CellGrid { Point = new P2Int(0, 0) } };
-        var wanderer = new PlacedObject(tracked) { EditorID = "Wanderer", MajorRecordFlagsRaw = Persistent, Position = new P3Float(350, 350, 0) };
+        compiledPlugin.Weapons.Add(weapon);
+        var world = new Worldspace(compiledPlugin) { EditorID = "World" };
+        var here = new Cell(compiledPlugin) { EditorID = "Here", Grid = new CellGrid { Point = new P2Int(0, 0) } };
+        var wanderer = new PlacedObject(compiledPlugin) { EditorID = "Wanderer", MajorRecordFlagsRaw = Persistent, Position = new P3Float(350, 350, 0) };
         here.Persistent.Add(wanderer);
         world.SubCells.Add(new WorldspaceBlock { Items = [new WorldspaceSubBlock { Items = [here] }] });
-        tracked.Worldspaces.Add(world);
+        compiledPlugin.Worldspaces.Add(world);
         (_world, _here, _wanderer) = (world.FormKey, here.FormKey, wanderer.FormKey);
-        tracked.ModHeader.MasterReferences.AddRange([new MasterReference { Master = light.ModKey }, new MasterReference { Master = medium.ModKey }]);
-        _tracked = _instance.AddPlugin(tracked, "SourceMod", tracked: true);
+        compiledPlugin.ModHeader.MasterReferences.AddRange([new MasterReference { Master = light.ModKey }, new MasterReference { Master = medium.ModKey }]);
+        _compiledPlugin = _instance.AddPlugin(compiledPlugin, "SourceMod", compiledPlugin: true);
     }
 
     public void Dispose() => _instance.Dispose();
 
     private const int Persistent = 0x400;
 
-    private static string Header => new FormKey(ModKey.FromFileName(TrackedName), 0).ToString();
+    private static string Header => new FormKey(ModKey.FromFileName(CompiledPluginName), 0).ToString();
 
     private IStarfieldModDisposableGetter Compiled() =>
         StarfieldMod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName(TrackedName), Path.Combine(_instance.ModFolderOf(_tracked), TrackedName)), StarfieldRelease.Starfield,
+            new ModPath(ModKey.FromFileName(CompiledPluginName), Path.Combine(_instance.ModFolderOf(_compiledPlugin), CompiledPluginName)), StarfieldRelease.Starfield,
             new BinaryReadParameters { MasterFlagsLookup = _instance.Added });
 
     private async Task<IStarfieldModDisposableGetter> CompiledAfterAsync()
     {
-        await _instance.CompileHandler.CompileLandedAsync(_tracked);
+        await _instance.CompileHandler.CompileLandedAsync(_compiledPlugin);
         return Compiled();
     }
 
     [Fact]
     public async Task AFieldEdit_OnAnOverrideOfALightMastersRecord_CompilesIntoTheStarfieldPlugin()
     {
-        var result = _instance.EditHandler.Set(_tracked, _weapon.ToString(), "EditorID", JsonDocument.Parse("\"Edited\"").RootElement);
+        var result = _instance.EditHandler.Set(_compiledPlugin, _weapon.ToString(), "EditorID", JsonDocument.Parse("\"Edited\"").RootElement);
 
         Assert.True(result.Applied, result.Message);
         using var compiled = await CompiledAfterAsync();
@@ -108,7 +108,7 @@ public sealed class StarfieldGestureTests : IDisposable
     [Fact]
     public async Task TheLightFlag_SetOnTheHeader_CompilesAsALightStarfieldPlugin()
     {
-        var result = _instance.EditHandler.Set(_tracked, Header, "IsSmallMaster", JsonDocument.Parse("true").RootElement);
+        var result = _instance.EditHandler.Set(_compiledPlugin, Header, "IsSmallMaster", JsonDocument.Parse("true").RootElement);
 
         Assert.True(result.Applied, result.Message);
         using var compiled = await CompiledAfterAsync();
@@ -118,7 +118,7 @@ public sealed class StarfieldGestureTests : IDisposable
     [Fact]
     public async Task AnInteriorCellOfALightMaster_CopiedInAroundAChild_CompilesAsAPartialForm()
     {
-        _instance.CopyHandler.CopySync([new RecordAt(_light, _lightPlaced.ToString())], CopyMode.Override, [_tracked], replace: false).OnlyLanded();
+        _instance.CopyHandler.CopySync([new RecordAt(_light, _lightPlaced.ToString())], CopyMode.Override, [_compiledPlugin], replace: false).OnlyLanded();
 
         using var compiled = await CompiledAfterAsync();
         var cell = compiled.Cells.Records.SelectMany(block => block.SubBlocks).SelectMany(sub => sub.Cells).Single(c => c.FormKey == _lightInterior);
@@ -130,7 +130,7 @@ public sealed class StarfieldGestureTests : IDisposable
     [Fact]
     public async Task ClearingPersistent_MovesTheReferenceIntoTheCellItsPositionFallsIn_AHundredUnitsAGridStep()
     {
-        var cleared = _instance.EditHandler.Set(_tracked, _wanderer.ToString(), "MajorRecordFlagsRaw", JsonDocument.Parse("0").RootElement);
+        var cleared = _instance.EditHandler.Set(_compiledPlugin, _wanderer.ToString(), "MajorRecordFlagsRaw", JsonDocument.Parse("0").RootElement);
 
         Assert.True(cleared.Applied, cleared.Message);
         using var compiled = await CompiledAfterAsync();
@@ -141,7 +141,7 @@ public sealed class StarfieldGestureTests : IDisposable
     [Fact]
     public async Task ACellCreatedOnAStarfieldWorldspace_CompilesAtItsGrid_InTheBlockAndSubBlockItFallsIn()
     {
-        var created = _instance.CreateHandler.CreateRecordSync(_tracked, "cell", _world.ToString(), new GridPosition(-9, 33));
+        var created = _instance.CreateHandler.CreateRecordSync(_compiledPlugin, "cell", _world.ToString(), new GridPosition(-9, 33));
 
         Assert.True(created.Applied, created.Message);
         using var compiled = await CompiledAfterAsync();
@@ -156,7 +156,7 @@ public sealed class StarfieldGestureTests : IDisposable
     [Fact]
     public void ACellCreatedWhereTheStarfieldWorldspaceHoldsOne_IsRefusedNamingIt()
     {
-        var refused = _instance.CreateHandler.CreateRecordSync(_tracked, "cell", _world.ToString(), new GridPosition(0, 0));
+        var refused = _instance.CreateHandler.CreateRecordSync(_compiledPlugin, "cell", _world.ToString(), new GridPosition(0, 0));
 
         Assert.Equal(RecordEditRefusal.ChildSlotHeldByAnotherRecord, refused.Refusal);
         Assert.Contains(_here.ToString(), refused.Message, StringComparison.Ordinal);
@@ -170,11 +170,11 @@ public sealed class StarfieldGestureTests : IDisposable
     {
         File.WriteAllBytes(Path.Combine(_instance.ModFolderOf(_light), LightName), "not a plugin"u8.ToArray());
 
-        var refused = Assert.Single((await _instance.CompileHandler.CompileAsync([_tracked])).Refused);
+        var refused = Assert.Single((await _instance.CompileHandler.CompileAsync([_compiledPlugin])).Refused);
 
         Assert.Equal(
             (CompileRefusal.MasterUnreadable,
-             $"{TrackedName} could not be compiled: its master {LightName} could not be read: the plugin — unknown: " +
+             $"{CompiledPluginName} could not be compiled: its master {LightName} could not be read: the plugin — unknown: " +
              "Could not read enough data to parse a Mod Header from stream.  Position: 0.  12 remaining < 24 expected. " +
              $"Fix or restore {LightName}, then compile again."),
             (refused.Refusal, refused.Message));
@@ -185,13 +185,13 @@ public sealed class StarfieldGestureTests : IDisposable
     {
         var wide = CreatedAt(0x10000);
 
-        var flagged = _instance.EditHandler.Set(_tracked, Header, "Flags", JsonDocument.Parse("[\"Medium\"]").RootElement);
+        var flagged = _instance.EditHandler.Set(_compiledPlugin, Header, "Flags", JsonDocument.Parse("[\"Medium\"]").RootElement);
 
         Assert.True(flagged.Applied, flagged.Message);
-        var refused = Assert.Single((await _instance.CompileHandler.CompileAsync([_tracked])).Refused);
+        var refused = Assert.Single((await _instance.CompileHandler.CompileAsync([_compiledPlugin])).Refused);
         Assert.Equal(
             (CompileRefusal.FormIdOutsideFlagLimit,
-             $"{TrackedName} is a medium plugin but holds native FormID(s) outside the medium range (0x0-0xFFFF): {wide}. " +
+             $"{CompiledPluginName} is a medium plugin but holds native FormID(s) outside the medium range (0x0-0xFFFF): {wide}. " +
              "Clear the medium flag, or change the records' FormIDs."),
             (refused.Refusal, refused.Message));
     }
@@ -199,14 +199,14 @@ public sealed class StarfieldGestureTests : IDisposable
     [Fact]
     public void CreateRecord_OnAMediumPluginWithNoFormKeyFreeInItsRange_IsRefusedNamingClearingTheFlag()
     {
-        Assert.True(_instance.EditHandler.Set(_tracked, Header, "Flags", JsonDocument.Parse("[\"Medium\"]").RootElement).Applied);
+        Assert.True(_instance.EditHandler.Set(_compiledPlugin, Header, "Flags", JsonDocument.Parse("[\"Medium\"]").RootElement).Applied);
         CreatedAt(0xFFFF);
 
-        var result = _instance.CreateHandler.CreateRecordSync(_tracked, "kywd");
+        var result = _instance.CreateHandler.CreateRecordSync(_compiledPlugin, "kywd");
 
         Assert.Equal(
             (RecordEditRefusal.FormKeySpaceExhausted,
-             $"{TrackedName} has no FormKey free at or above its Next Object ID, up to 0xFFFF, the last a medium plugin can address. " +
+             $"{CompiledPluginName} has no FormKey free at or above its Next Object ID, up to 0xFFFF, the last a medium plugin can address. " +
              "Clear the medium flag to draw above it."),
             (result.Refusal, result.Message));
     }
@@ -214,24 +214,24 @@ public sealed class StarfieldGestureTests : IDisposable
     [Fact]
     public void AFormKeyEdit_PastAMediumPluginsRange_IsRefused()
     {
-        Assert.True(_instance.EditHandler.Set(_tracked, Header, "Flags", JsonDocument.Parse("[\"Medium\"]").RootElement).Applied);
-        var created = _instance.CreateHandler.CreateRecordSync(_tracked, "kywd").NewFormKey.Require();
-        var wide = $"010000:{TrackedName}";
+        Assert.True(_instance.EditHandler.Set(_compiledPlugin, Header, "Flags", JsonDocument.Parse("[\"Medium\"]").RootElement).Applied);
+        var created = _instance.CreateHandler.CreateRecordSync(_compiledPlugin, "kywd").NewFormKey.Require();
+        var wide = $"010000:{CompiledPluginName}";
 
-        var result = _instance.EditHandler.SetFormId(_tracked, created, wide);
+        var result = _instance.EditHandler.SetFormId(_compiledPlugin, created, wide);
 
         Assert.Equal(
             (RecordEditRefusal.FormIdOutsideFlagLimit,
-             $"{wide} exceeds {TrackedName}'s medium local FormID range — a medium plugin can only address local FormIDs up to 0xFFFF. " +
+             $"{wide} exceeds {CompiledPluginName}'s medium local FormID range — a medium plugin can only address local FormIDs up to 0xFFFF. " +
              "Choose a FormID within that range, or clear the medium flag."),
             (result.Refusal, result.Message));
     }
 
     private FormKey CreatedAt(uint id)
     {
-        var formKey = new FormKey(ModKey.FromFileName(TrackedName), id);
-        var created = _instance.CreateHandler.CreateRecordSync(_tracked, "kywd");
-        var moved = _instance.EditHandler.Set(_tracked, created.NewFormKey.Require(), "FormKey", JsonSerializer.SerializeToElement(formKey.ToString()));
+        var formKey = new FormKey(ModKey.FromFileName(CompiledPluginName), id);
+        var created = _instance.CreateHandler.CreateRecordSync(_compiledPlugin, "kywd");
+        var moved = _instance.EditHandler.Set(_compiledPlugin, created.NewFormKey.Require(), "FormKey", JsonSerializer.SerializeToElement(formKey.ToString()));
         Assert.True(moved.Applied, moved.Message);
         return formKey;
     }
@@ -247,6 +247,6 @@ public sealed class StarfieldGestureTests : IDisposable
 
     private sealed class StarfieldInstance() : TestInstance(GameRelease.Starfield)
     {
-        public PluginAddress AddPlugin(StarfieldMod mod, string origin, bool tracked) => Add(mod, origin, tracked);
+        public PluginAddress AddPlugin(StarfieldMod mod, string origin, bool compiledPlugin) => Add(mod, origin, compiledPlugin);
     }
 }

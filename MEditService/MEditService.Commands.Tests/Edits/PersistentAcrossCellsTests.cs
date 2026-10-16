@@ -96,11 +96,11 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         mod.Worldspaces.Add(world);
     });
 
-    private void Load(bool masterTracked, bool masterHasPersistentCell = true, Fallout4Mod? middle = null)
+    private void Load(bool masterCompiledPlugin, bool masterHasPersistentCell = true, Fallout4Mod? middle = null)
     {
         _edited = Edited();
         _master = Master(masterHasPersistentCell);
-        _plugins.Load([(_master, masterTracked), .. middle is null ? [] : new[] { (middle, false) }, (_edited, true)]);
+        _plugins.Load([(_master, masterCompiledPlugin), .. middle is null ? [] : new[] { (middle, false) }, (_edited, true)]);
     }
 
     private Fallout4Mod Override => _edited ?? throw new InvalidOperationException("Load the plugins first.");
@@ -131,7 +131,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void SettingPersistent_WhereTheWorldspaceHoldsNoPersistentCell_CopiesItInFromItsMaster()
     {
-        Load(masterTracked: false);
+        Load(masterCompiledPlugin: false);
 
         SetFlags("Mover", Persistent);
 
@@ -146,7 +146,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void SettingPersistent_WithNoPersistentCellInAMaster_CreatesOne()
     {
-        Load(masterTracked: false, masterHasPersistentCell: false);
+        Load(masterCompiledPlugin: false, masterHasPersistentCell: false);
 
         SetFlags("Mover", Persistent);
 
@@ -160,7 +160,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void ClearingPersistent_WhereThePluginLacksTheCellAtItsPosition_CopiesItInFromItsMaster()
     {
-        Load(masterTracked: true);
+        Load(masterCompiledPlugin: true);
 
         SetFlags("Leaver", 0);
 
@@ -180,7 +180,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void SettingPersistent_CopiesTheMastersPersistentCellFromItsUnsavedText()
     {
-        Load(masterTracked: true);
+        Load(masterCompiledPlugin: true);
 
         _plugins.Unsaved.Apply([MastersUnsaved(World, "MasterPersistentCell", "UnsavedPersistent")]);
         SetFlags("Mover", Persistent);
@@ -191,7 +191,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void SettingPersistent_KeepsTheUnsavedTextOfThePluginsOwnWorldspaceDocument_ItLandsIn()
     {
-        Load(masterTracked: false);
+        Load(masterCompiledPlugin: false);
         var file = _plugins.DocumentFileOf(Override, World);
         var dirty = new DocumentChange(file, File.ReadAllText(file).Replace("\"World\"", "\"DirtyWorld\"", StringComparison.Ordinal));
 
@@ -204,7 +204,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void ClearingPersistent_CopiesTheMastersCellFromItsUnsavedText()
     {
-        Load(masterTracked: true);
+        Load(masterCompiledPlugin: true);
 
         _plugins.Unsaved.Apply([MastersUnsaved(MasterGridCell, "MasterGrid", "UnsavedGrid")]);
         SetFlags("Leaver", 0);
@@ -213,9 +213,9 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     }
 
     [Fact]
-    public void ClearingPersistent_WhereThePluginLacksTheCellAtItsPosition_CopiesItInFromAnUntrackedMaster()
+    public void ClearingPersistent_WhereThePluginLacksTheCellAtItsPosition_CopiesItInFromANonCompiledPluginMaster()
     {
-        Load(masterTracked: false);
+        Load(masterCompiledPlugin: false);
 
         SetFlags("Leaver", 0);
 
@@ -254,37 +254,37 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         }
     }
 
-    private sealed class UntrackingAModWhenAMasterIsRead(string modFolder) : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    private sealed class HidingTheRepositoryWhenAMasterIsRead(string modFolder) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
             RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas)
         {
             var repository = Path.Combine(modFolder, ".git");
-            if (Directory.Exists(repository)) Directory.Move(repository, Path.Combine(modFolder, ".git-untracked"));
+            if (Directory.Exists(repository)) Directory.Move(repository, Path.Combine(modFolder, ".git-nonCompiledPlugin"));
             return base.OpenRecordLookup(plugin, loadOrder, schemas);
         }
     }
 
     [Fact]
-    public void ClearingPersistent_WhoseModIsUntrackedWhileItIsPlanned_AnswersTheChangesUnderTheTreeItRead()
+    public void ClearingPersistent_WhoseModIsNonCompiledPluginWhileItIsPlanned_AnswersTheChangesUnderTheTreeItRead()
     {
-        Load(masterTracked: false);
+        Load(masterCompiledPlugin: false);
         var modFolder = _plugins.FolderOf(Override);
-        var services = TestEditService.Over(_plugins.Holder, adapter: new UntrackingAModWhenAMasterIsRead(modFolder));
+        var services = TestEditService.Over(_plugins.Holder, adapter: new HidingTheRepositoryWhenAMasterIsRead(modFolder));
         var handler = new TestEditor(services.GetRequiredService<EditRecordChangesHandler>());
 
         var result = handler.Edit(
             Address(Override), _keys["Leaver"].ToString(), SetAt(JsonDocument.Parse("0").RootElement, Member("MajorRecordFlagsRaw")));
 
         Assert.True(result.Applied, result.Message);
-        Directory.Move(Path.Combine(modFolder, ".git-untracked"), Path.Combine(modFolder, ".git"));
+        Directory.Move(Path.Combine(modFolder, ".git-nonCompiledPlugin"), Path.Combine(modFolder, ".git"));
         Assert.Equal(["Leaver"], Group(Document(MasterGridCell), "Temporary"));
     }
 
     [Fact]
     public void ClearingPersistent_WhoseLandingFaults_ThrowsTheFault_NeverRefusesItAsATreeMovedOutsideModbench()
     {
-        Load(masterTracked: false);
+        Load(masterCompiledPlugin: false);
         var services = TestEditService.Over(_plugins.Holder, adapter: new FaultingOnClosingAMasterAskedForACell());
         var handler = new TestEditor(services.GetRequiredService<EditRecordChangesHandler>());
 
@@ -297,7 +297,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void ClearingPersistent_WithNoCellAtItsPositionInAMaster_CreatesOneAtItsGrid()
     {
-        Load(masterTracked: true);
+        Load(masterCompiledPlugin: true);
 
         SetFlags("Wanderer", 0);
 
@@ -310,7 +310,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void SettingPersistent_WhereOnlyAPluginThatIsNoMasterOverridesThePersistentCell_CopiesItInFromTheMaster()
     {
-        Load(masterTracked: false, middle: Middle((_, world) => world.TopCell = new Cell(MasterPersistentCell, Fallout4Release.Fallout4)
+        Load(masterCompiledPlugin: false, middle: Middle((_, world) => world.TopCell = new Cell(MasterPersistentCell, Fallout4Release.Fallout4)
         {
             EditorID = "MiddlesPersistentCell",
             MajorRecordFlagsRaw = Persistent,
@@ -327,7 +327,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void SettingPersistent_WhereOnlyAPluginThatIsNoMasterHoldsAPersistentCell_CreatesOne()
     {
-        Load(masterTracked: false, masterHasPersistentCell: false, middle: Middle((mod, world) =>
+        Load(masterCompiledPlugin: false, masterHasPersistentCell: false, middle: Middle((mod, world) =>
             world.TopCell = new Cell(mod) { EditorID = "MiddlesPersistentCell", MajorRecordFlagsRaw = Persistent }));
 
         SetFlags("Mover", Persistent);
@@ -340,7 +340,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void SettingPersistent_WhereTheWorkingTreeHasMadeAPluginAMaster_CopiesThePersistentCellInFromIt()
     {
-        Load(masterTracked: false, middle: Middle((_, world) => world.TopCell = new Cell(MasterPersistentCell, Fallout4Release.Fallout4)
+        Load(masterCompiledPlugin: false, middle: Middle((_, world) => world.TopCell = new Cell(MasterPersistentCell, Fallout4Release.Fallout4)
         {
             EditorID = "MiddlesPersistentCell",
             MajorRecordFlagsRaw = Persistent,
@@ -357,7 +357,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void ClearingPersistent_WhereOnlyAPluginThatIsNoMasterHoldsTheCellAtItsPosition_CreatesOne()
     {
-        Load(masterTracked: false, middle: Middle((mod, world) =>
+        Load(masterCompiledPlugin: false, middle: Middle((mod, world) =>
             world.SubCells.Add(CellBlocks.Exterior(new Cell(mod) { EditorID = "MiddlesCell", Grid = new CellGrid { Point = new P2Int(9, 9) } }))));
 
         SetFlags("Wanderer", 0);
@@ -370,7 +370,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void ClearingPersistent_WhereAMasterHoldsTheCellAndAPluginThatIsNoMasterOverridesIt_CopiesTheMastersCell()
     {
-        Load(masterTracked: false, middle: Middle((_, world) => world.SubCells.Add(CellBlocks.Exterior(
+        Load(masterCompiledPlugin: false, middle: Middle((_, world) => world.SubCells.Add(CellBlocks.Exterior(
             new Cell(MasterGridCell, Fallout4Release.Fallout4)
             {
                 EditorID = "MiddlesGrid",
@@ -388,7 +388,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void SettingPersistent_WhenADocumentInThePluginsTreeIsNoJson_IsRefusedAsRecordParseFailed_NamingIt_AndAnswersNoChanges()
     {
-        Load(masterTracked: true);
+        Load(masterCompiledPlugin: true);
         _plugins.Respell(Override, _keys["Bystander"], "stat", "{", "[");
         var before = _plugins.Text(Override, _keys["Here"]);
 
@@ -405,7 +405,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void ClearingPersistent_WhereItCreatesACellAtItsGrid_MovesTheNextObjectIdPastTheCell()
     {
-        Load(masterTracked: true);
+        Load(masterCompiledPlugin: true);
 
         SetFlags("Wanderer", 0);
 
@@ -417,7 +417,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void SettingPersistent_WhereItCreatesThePersistentCell_MovesTheNextObjectIdPastTheCell()
     {
-        Load(masterTracked: false, masterHasPersistentCell: false);
+        Load(masterCompiledPlugin: false, masterHasPersistentCell: false);
 
         SetFlags("Mover", Persistent);
 

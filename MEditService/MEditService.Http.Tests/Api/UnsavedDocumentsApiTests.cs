@@ -21,7 +21,7 @@ public sealed class UnsavedDocumentsApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsTracked(Plugin);
+        await Client.PluginReportsCompiledPlugin(Plugin);
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         var document = OtherTool.SourceDocumentCarrying(OtherTool.ModFolderOf(fx, Origin), Plugin, Npc);
         using var stream = await Client.NotificationStream();
@@ -45,7 +45,7 @@ public sealed class UnsavedDocumentsApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsTracked(Plugin);
+        await Client.PluginReportsCompiledPlugin(Plugin);
         var document = OtherTool.SourceDocumentCarrying(OtherTool.ModFolderOf(fx, Origin), Plugin, Npc);
         using var stream = await Client.NotificationStream();
 

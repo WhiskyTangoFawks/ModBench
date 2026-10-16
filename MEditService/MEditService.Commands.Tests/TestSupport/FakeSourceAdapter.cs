@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
-/// <summary>Tracked mod folders holding their plugins' documents in memory. A verb the write path's document and
+/// <summary>Source mod folders holding their plugins' documents in memory. A verb the write path's document and
 /// refusal tests do not reach throws.</summary>
 internal sealed class FakeSourceAdapter : ISourceAdapter
 {
@@ -33,13 +33,13 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         return this;
     }
 
-    internal FakeSourceAdapter Tracking(string modFolder, params SourceDocument[] documents)
+    internal FakeSourceAdapter WithSourceMod(string modFolder, params SourceDocument[] documents)
     {
         _mods[modFolder] = new FakeMod(modFolder, documents.ToDictionary(document => document.FormKey, StringComparer.Ordinal));
         return this;
     }
 
-    internal FakeSourceAdapter TrackingUnreadable(string modFolder)
+    internal FakeSourceAdapter WithUnreadableSourceMod(string modFolder)
     {
         _mods[modFolder] = new FakeMod(modFolder, [], SourceReads: false);
         return this;
@@ -50,7 +50,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     public bool IsSourceMod(string modFolder) => _mods.ContainsKey(modFolder);
 
     public bool SourceReads(RegisteredPlugin plugin) =>
-        plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && _mods.TryGetValue(sourceFolder, out var tracked) && tracked.SourceReads;
+        plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && _mods.TryGetValue(sourceFolder, out var compiledPlugin) && compiledPlugin.SourceReads;
 
     public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => throw Unreached();
 

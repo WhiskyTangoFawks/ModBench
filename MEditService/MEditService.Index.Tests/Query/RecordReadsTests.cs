@@ -134,7 +134,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
                 mod.Npcs.GetOrAddAsOverride(masters[0].Npcs.Single());
             }, origin: "LaterMod")
             .BuildScattered()
-            .Tracked();
+            .CompiledPlugin();
         using var index = Indexes.Reconciled(fixture);
         var later = fixture.Plugins.Single(p => p.Name == "Later.esp");
         var overridden = index.DocumentOf(index.ListedIn(later.KeyOf()).Single(d => d.EditorId == "Mastered").FormKey, later.KeyOf());

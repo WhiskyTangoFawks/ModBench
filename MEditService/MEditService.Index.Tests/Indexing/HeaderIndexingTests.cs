@@ -129,9 +129,9 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void TheHeadersMastersField_FollowsTheWorkingTree_OfATrackedPlugin()
+    public void TheHeadersMastersField_FollowsTheWorkingTree_OfACompiledPlugin()
     {
-        using var fixture = new PluginFixtureBuilder("header-masters-tracked")
+        using var fixture = new PluginFixtureBuilder("header-masters-compiled-plugin")
             .WithPlugin("Kept.esm", mod => mod.Npcs.AddNew("KeptNpc"), origin: "KeptMod")
             .WithPlugin("Dropped.esm", mod => mod.Npcs.AddNew("DroppedNpc"), origin: "DroppedMod")
             .WithPlugin(
@@ -142,7 +142,7 @@ public class HeaderIndexingTests
                 },
                 origin: "MastersTestMod")
             .BuildScattered()
-            .Tracked();
+            .CompiledPlugin();
         using var index = Indexes.Reconciled(fixture);
         var plugin = fixture.Plugins.Single(p => p.Name == "MastersTest.esp");
         var header = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
@@ -169,7 +169,7 @@ public class HeaderIndexingTests
                 (mod, masters) => mod.Npcs.GetOrAddAsOverride(masters[0].Npcs.Single()).Keywords = [masters[0].Keywords.Single().ToLink()],
                 origin: "MastersTestMod")
             .BuildScattered()
-            .Tracked();
+            .CompiledPlugin();
         using var index = Indexes.Reconciled(fixture);
         var plugin = fixture.Plugins.Single(p => p.Name == "MastersTest.esp");
         var keptKeyword = index.ListedIn(fixture.Plugins.Single(p => p.Name == "Kept.esm").KeyOf()).Single(d => d.EditorId == "KeptKeyword");

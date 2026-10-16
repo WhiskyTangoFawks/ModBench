@@ -9,21 +9,21 @@ namespace MEditService.Http.Tests.Api;
 
 public sealed class RenameSourceApiTests : HostedTests
 {
-    private const string Plugin = "Tracked.esp";
+    private const string Plugin = "CompiledPlugin.esp";
     private const string Origin = "SourceMod";
-    private const string Npc = "TrackedNpc";
-    private const string UntrackedOrigin = "NonSourceMod";
+    private const string Npc = "CompiledPluginNpc";
+    private const string NonCompiledPluginOrigin = "NonSourceMod";
 
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("api-rename-source")
         .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
-        .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("OtherNpc"), origin: UntrackedOrigin)
+        .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("OtherNpc"), origin: NonCompiledPluginOrigin)
         .BuildScattered();
 
     protected override void DisposeFixtures() => _instance.Dispose();
 
     private string ModFolder => OtherTool.ModFolderOf(_instance, Origin);
 
-    private async Task Tracked()
+    private async Task CompiledPlugin()
     {
         (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
@@ -39,9 +39,9 @@ public sealed class RenameSourceApiTests : HostedTests
         (await response.AssertIsProblem(status)).GetProperty("refusal").GetString();
 
     [Fact]
-    public async Task RenamingATrackedPluginsSource_Is200_AnswersTheChanges_AndWritesNothing()
+    public async Task RenamingACompiledPluginsSource_Is200_AnswersTheChanges_AndWritesNothing()
     {
-        await Tracked();
+        await CompiledPlugin();
 
         var response = await RenameSource(Plugin, Origin, "Renamed.esp");
 
@@ -58,7 +58,7 @@ public sealed class RenameSourceApiTests : HostedTests
     [Fact]
     public async Task MovingWhatWasLastWritten_Is204()
     {
-        await Tracked();
+        await CompiledPlugin();
 
         var response = await MoveLastWritten(Plugin, Origin, "Renamed.esp");
 
@@ -68,7 +68,7 @@ public sealed class RenameSourceApiTests : HostedTests
     [Fact]
     public async Task MovingWhatWasLastWrittenWhenGitRefuses_Is500()
     {
-        await Tracked();
+        await CompiledPlugin();
         GitHooks.Write(ModFolder, "reference-transaction", "[ \"$1\" = prepared ] && exit 1\nexit 0");
 
         var response = await MoveLastWritten(Plugin, Origin, "Renamed.esp");
@@ -79,7 +79,7 @@ public sealed class RenameSourceApiTests : HostedTests
     [Fact]
     public async Task RenamingToANameThatIsNoPluginFile_Is400()
     {
-        await Tracked();
+        await CompiledPlugin();
 
         var response = await RenameSource(Plugin, Origin, "Renamed.txt");
 
@@ -89,7 +89,7 @@ public sealed class RenameSourceApiTests : HostedTests
     [Fact]
     public async Task RenamingAPluginNotInTheLoadOrder_Is404()
     {
-        await Tracked();
+        await CompiledPlugin();
 
         var response = await RenameSource("NoSuch.esp", Origin, "Renamed.esp");
 
@@ -99,17 +99,17 @@ public sealed class RenameSourceApiTests : HostedTests
     [Fact]
     public async Task RenamingAPluginWithNoPluginSource_Is409()
     {
-        await Tracked();
+        await CompiledPlugin();
 
-        var response = await RenameSource("Other.esp", UntrackedOrigin, "Renamed.esp");
+        var response = await RenameSource("Other.esp", NonCompiledPluginOrigin, "Renamed.esp");
 
-        Assert.Equal("NotTracked", await RefusalOf(response, HttpStatusCode.Conflict));
+        Assert.Equal("NotCompiledPlugin", await RefusalOf(response, HttpStatusCode.Conflict));
     }
 
     [Fact]
     public async Task RenamingASourceHoldingADocumentThatIsNoJson_Is422()
     {
-        await Tracked();
+        await CompiledPlugin();
         OtherTool.EditsASourceDocument(ModFolder, Plugin, Npc, "\"broken");
 
         var response = await RenameSource(Plugin, Origin, "Renamed.esp");
@@ -130,7 +130,7 @@ public sealed class RenameSourceApiTests : HostedTests
     [InlineData(Plugin, " ")]
     public async Task RenamingWithoutAPluginNameOrOrigin_Is400(string name, string origin)
     {
-        await Tracked();
+        await CompiledPlugin();
 
         var response = await RenameSource(name, origin, "Renamed.esp");
 
@@ -141,14 +141,14 @@ public sealed class RenameSourceApiTests : HostedTests
 [Collection(ProcessEnvironmentCollection.Name)]
 public sealed class RenameSourceWithoutGitApiTests : HostedTests
 {
-    private const string Plugin = "Tracked.esp";
+    private const string Plugin = "CompiledPlugin.esp";
     private const string Origin = "SourceMod";
 
     [Fact]
     public async Task RenamingWithGitMissing_Is500_AndLeavesTheSourceWhereItWas()
     {
         using var fx = new PluginFixtureBuilder("api-rename-source-without-git")
-            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("TrackedNpc"), origin: Origin)
+            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("CompiledPluginNpc"), origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(Origin)).EnsureSuccessStatusCode();

@@ -16,7 +16,7 @@ public sealed class UnreadablePluginSourceTests
     [Fact]
     public void CopyingOntoAPlugin_WhoseSourceIsUnreadable_IsRefusedTheSameWay()
     {
-        using var mod = ContainerCopyFixture.CreateWithTrackedSource();
+        using var mod = ContainerCopyFixture.CreateWithCompiledPluginSource();
         DeleteTheSourceOf(mod.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
 
         var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.FlatNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false);
@@ -29,7 +29,7 @@ public sealed class UnreadablePluginSourceTests
     [Fact]
     public void CopyingFromAPlugin_WhoseSourceIsUnreadable_ReadsItsPluginFile()
     {
-        using var mod = ContainerCopyFixture.CreateWithTrackedSource();
+        using var mod = ContainerCopyFixture.CreateWithCompiledPluginSource();
         DeleteTheSourceOf(mod.SourceModFolder, ContainerCopyFixture.SourcePluginName);
 
         var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.FlatNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false);

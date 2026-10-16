@@ -22,7 +22,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
     private ISourceRepository RequireOpened() =>
         TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
 
     private void Init(params TreeFile[] files) =>
         PluginBaselines.Init(
@@ -91,13 +91,13 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Open_OnAnUntrackedFolder_IsNull()
+    public void Open_OnANonSourceModFolder_IsNull()
     {
         Assert.Null(TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4));
     }
 
     [Fact]
-    public void Open_OnATrackedFolder_IsARepository()
+    public void Open_OnASourceModFolder_IsARepository()
     {
         PluginBaselines.InitWithNoRecords(_modFolder);
 

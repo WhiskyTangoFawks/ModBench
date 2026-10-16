@@ -42,7 +42,7 @@ public enum RenameSourceRefusal
     PluginNotLoaded,
 
     /// <summary>The plugin has no plugin source, so there is none to rename.</summary>
-    NotTracked,
+    NotCompiledPlugin,
 
     /// <summary>A plugin source of the mod already holds the new name, compared without case.</summary>
     NameTaken,

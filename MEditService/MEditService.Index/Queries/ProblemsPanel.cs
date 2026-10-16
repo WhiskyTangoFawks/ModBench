@@ -6,7 +6,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Queries;
 
-/// <summary>The Problems panel's source, per tracked plugin, active or not. A plugin whose read
+/// <summary>The Problems panel's source, per compiled plugin, active or not. A plugin whose read
 /// failed is answered with the files that stopped it, and the links of rows its tree gave.</summary>
 internal static class ProblemsPanel
 {

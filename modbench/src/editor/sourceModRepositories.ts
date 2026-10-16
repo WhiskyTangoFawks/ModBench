@@ -4,21 +4,21 @@ import { errorMessage } from '../ports/errorMessage';
 import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 import { answerOf } from '../wire/readFailed';
 
-function trackedFoldersOf(
+function compiledPluginFoldersOf(
   plugins: readonly Pick<PluginMetadata, 'name' | 'origin'>[],
-  { trackedMods, sourceDirs, modOfOrigin }: Pick<TrackedRepositoriesDeps, 'trackedMods' | 'sourceDirs' | 'modOfOrigin'>,
+  { listedSourceMods, sourceDirs, modOfOrigin }: Pick<SourceModRepositoriesDeps, 'listedSourceMods' | 'sourceDirs' | 'modOfOrigin'>,
 ): Map<string, string> {
   const folders = new Map<string, string>();
   for (const plugin of plugins) {
     const mod = modOfOrigin(plugin.origin);
-    if (mod === undefined || !trackedMods().has(mod)) continue;
+    if (mod === undefined || !listedSourceMods().has(mod)) continue;
     const folder = sourceDirs().get(mod);
     if (folder !== undefined) folders.set(pluginAddressKey(plugin), folder);
   }
   return folders;
 }
 
-async function registerTrackedRepositories<T>(
+async function registerSourceModRepositories<T>(
   openRepository: (sourceFolder: string) => Promise<T | null>,
   sourceFolders: readonly string[],
 ): Promise<Map<string, T | null>> {
@@ -51,18 +51,18 @@ interface GitExtensionExports {
   getAPI(version: 1): MinimalGitApi;
 }
 
-/** Where the tracked repositories come from and where a failure is told. */
-export interface TrackedRepositoriesDeps {
+/** Where the source mod repositories come from and where a failure is told. */
+export interface SourceModRepositoriesDeps {
   readonly client: Pick<MEditClient, 'getPlugins'>;
   readonly outputChannel: Pick<vscode.LogOutputChannel, 'warn' | 'error'>;
   /** The Instance value's own facts this needs, read fresh at call time. */
   readonly modOfOrigin: (origin: string) => string | undefined;
-  readonly trackedMods: () => ReadonlySet<string>;
+  readonly listedSourceMods: () => ReadonlySet<string>;
   readonly sourceDirs: () => ReadonlyMap<string, string>;
 }
 
-export interface TrackedRepositories {
-  /** Registers each tracked mod's repository with `vscode.git`, once per notice: a reconcile
+export interface SourceModRepositories {
+  /** Registers each source mod's repository with `vscode.git`, once per notice: a reconcile
    *  settled, or a landed decompile and commit. */
   registerRepositories: () => Promise<void>;
   /** `Repository.status()`, the same effect the SCM panel's Refresh button has, fired from the
@@ -71,30 +71,30 @@ export interface TrackedRepositories {
   refreshSourceControlFor: (plugin: PluginAddress) => void;
 }
 
-/** The session's tracked repositories by plugin, held here and refilled by each registration. */
-export function trackedRepositoriesOver(deps: TrackedRepositoriesDeps): TrackedRepositories {
+/** The session's source mod repositories by plugin, held here and refilled by each registration. */
+export function sourceModRepositoriesOver(deps: SourceModRepositoriesDeps): SourceModRepositories {
   let byPlugin = new Map<string, MinimalRepository | null>();
 
-  // One `openRepository` per distinct tracked folder (ADR-0007). A logged no-op when `vscode.git` is
+  // One `openRepository` per distinct source mod folder (ADR-0007). A logged no-op when `vscode.git` is
   // unavailable: this only narrows the native UI, never blocks reading or editing.
   async function registerHeld(): Promise<void> {
     const { client, outputChannel } = deps;
     try {
       const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
       if (!gitExtension) {
-        outputChannel.warn('[extension] vscode.git extension not found — tracked mods will not appear in Source Control');
+        outputChannel.warn('[extension] vscode.git extension not found — source mods will not appear in Source Control');
         return;
       }
       const exports = gitExtension.isActive ? gitExtension.exports : await gitExtension.activate();
       const gitApi = exports.getAPI(1);
 
       const plugins = answerOf(await client.getPlugins());
-      const folders = trackedFoldersOf(plugins, deps);
-      const folderRepositories = await registerTrackedRepositories(
+      const folders = compiledPluginFoldersOf(plugins, deps);
+      const folderRepositories = await registerSourceModRepositories(
         (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), [...folders.values()]);
       byPlugin = pluginRepositoriesOf(folders, folderRepositories);
     } catch (err) {
-      outputChannel.error(`[extension] registering tracked repositories with vscode.git failed: ${errorMessage(err)}`);
+      outputChannel.error(`[extension] registering source mod repositories with vscode.git failed: ${errorMessage(err)}`);
     }
   }
 

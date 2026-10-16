@@ -15,7 +15,7 @@ type Fact = { name: string; masters?: string[]; isBlueprint?: boolean; origin?: 
 const knowing = (...facts: Fact[]) => ({
   getPlugins: () => Promise.resolve(facts.map((f): PluginMetadata => ({
     path: `/data/${f.name}`, isLight: false, isMaster: false, recordCount: 0, isImmutable: false, inLoadOrder: true,
-    hasMatchingRecords: false, isTracked: false, hasParseFailure: false, pluginSourceUnreadable: null, masters: [], isBlueprint: false, origin: 'SomeMod', ...f,
+    hasMatchingRecords: false, isCompiledPlugin: false, hasParseFailure: false, pluginSourceUnreadable: null, masters: [], isBlueprint: false, origin: 'SomeMod', ...f,
   }))),
 });
 const moving = (...names: string[]) => names.map((name) => ({ name, origin: 'SomeMod' }));

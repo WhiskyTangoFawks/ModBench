@@ -78,20 +78,20 @@ function mockPlugin(over: Partial<PluginMetadata> & Pick<PluginMetadata, 'name' 
   return {
     isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0, isImmutable: false,
     masterIssues: [], hasMatchingRecords: true,
-    isTracked: false,
+    isCompiledPlugin: false,
     hasParseFailure: false,
     pluginSourceUnreadable: null,
     ...over,
   };
 }
-const TRACKED_PLUGIN = 'Tracked.esp';
-const TRACKED_ORIGIN = 'TrackedMod';
+const COMPILED_PLUGIN = 'CompiledPlugin.esp';
+const COMPILED_PLUGIN_ORIGIN = 'SourceMod';
 const MOCK_PLUGINS: MockPlugin[] = [
   mockPlugin({ name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data/', inLoadOrder: true }),
   mockPlugin({ name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data/', inLoadOrder: true }),
   mockPlugin({ name: 'Other.esp', path: '/data/Other.esp', origin: 'Data/', inLoadOrder: false }),
   mockPlugin({ name: 'Second.esp', path: '/data/Second.esp', origin: 'Data/', inLoadOrder: true }),
-  mockPlugin({ name: TRACKED_PLUGIN, path: `/mods/${TRACKED_ORIGIN}/${TRACKED_PLUGIN}`, origin: TRACKED_ORIGIN, inLoadOrder: true, isTracked: true }),
+  mockPlugin({ name: COMPILED_PLUGIN, path: `/mods/${COMPILED_PLUGIN_ORIGIN}/${COMPILED_PLUGIN}`, origin: COMPILED_PLUGIN_ORIGIN, inLoadOrder: true, isCompiledPlugin: true }),
 ];
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
@@ -108,23 +108,23 @@ function documentTextOf(body: string): unknown {
   return typeof parsed === 'object' && parsed !== null && 'documentText' in parsed ? parsed.documentText : undefined;
 }
 
-function trackedTextHeld(): string {
-  const held = handedUnsaved.at(-1)?.find((each) => isRecord(each) && each.path === TRACKED_FS_PATH);
-  return isRecord(held) && typeof held.text === 'string' ? held.text : readFileSync(TRACKED_FILE, 'utf8');
+function compiledPluginTextHeld(): string {
+  const held = handedUnsaved.at(-1)?.find((each) => isRecord(each) && each.path === COMPILED_PLUGIN_FS_PATH);
+  return isRecord(held) && typeof held.text === 'string' ? held.text : readFileSync(COMPILED_PLUGIN_FILE, 'utf8');
 }
 
 interface EditAsked { value: unknown; text: string }
 function editAskedOf(body: string): EditAsked {
   const parsed: unknown = JSON.parse(body);
   if (!isRecord(parsed) || !isRecord(parsed.edit)) throw new Error(`expected an edit, got: ${body}`);
-  return { value: parsed.edit.value, text: trackedTextHeld() };
+  return { value: parsed.edit.value, text: compiledPluginTextHeld() };
 }
 const editsAsked: EditAsked[] = [];
 const carriedIn = new Map<string, string>();
 const heldIn = new Map<string, string>();
 type EditAnswer = { status: number; body: unknown };
-const refusedAsUntracked: EditAnswer = { status: 409, body: { refusal: 'PluginNotTracked', detail: 'Tracked.esp is not tracked, so it is read-only.' } };
-let answerEdit: (asked: EditAsked) => EditAnswer = () => refusedAsUntracked;
+const refusedAsNonCompiledPlugin: EditAnswer = { status: 409, body: { refusal: 'PluginNotCompiledPlugin', detail: 'CompiledPlugin.esp is not a compiled plugin, so it is read-only.' } };
+let answerEdit: (asked: EditAsked) => EditAnswer = () => refusedAsNonCompiledPlugin;
 const deletesAsked: unknown[] = [];
 let answerDelete: EditAnswer = { status: 200, body: { applied: [], refused: [] } };
 
@@ -292,23 +292,23 @@ function createMockBackend(): http.Server {
     const copyFile = /^\/plugins\/([^/?]+)\/records\/([^/?]+)\/document\?/.exec(url);
     if (copyFile) {
       const [, plugin = '', formKey = ''] = copyFile;
-      const tracked = decodeURIComponent(plugin) === TRACKED_PLUGIN && new URL(url, 'http://x').searchParams.get('origin') === TRACKED_ORIGIN;
+      const compiledPlugin = decodeURIComponent(plugin) === COMPILED_PLUGIN && new URL(url, 'http://x').searchParams.get('origin') === COMPILED_PLUGIN_ORIGIN;
       res.writeHead(200, { 'Content-Type': 'application/json' });
       const decoded = decodeURIComponent(formKey);
-      const path = carriedIn.get(decoded) ?? TRACKED_FILE;
+      const path = carriedIn.get(decoded) ?? COMPILED_PLUGIN_FILE;
       const fsPath = vscode.Uri.file(path).fsPath;
-      const ownerOfFile = fsPath === TRACKED_FS_PATH ? TRACKED_FORM_KEY : heldIn.get(fsPath);
-      res.end(JSON.stringify(tracked
+      const ownerOfFile = fsPath === COMPILED_PLUGIN_FS_PATH ? COMPILED_PLUGIN_FORM_KEY : heldIn.get(fsPath);
+      res.end(JSON.stringify(compiledPlugin
         ? { kind: ownerOfFile === decoded ? 'OwnFile' : 'ContainersFile', location: path }
-        : { kind: 'Rendered', location: decoded === UNTRACKED_FORM_KEY ? UNTRACKED_FILE_NAME : renderedName(decoded) }));
+        : { kind: 'Rendered', location: decoded === NON_COMPILED_PLUGIN_FORM_KEY ? NON_COMPILED_PLUGIN_FILE_NAME : renderedName(decoded) }));
       return;
     }
     const rendered = /^\/plugins\/[^/?]+\/records\/([^/?]+)\/rendered-document\?/.exec(url)?.[1];
     if (rendered !== undefined) {
       const formKey = decodeURIComponent(rendered);
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(formKey === UNTRACKED_FORM_KEY
-        ? { fileName: UNTRACKED_FILE_NAME, text: untrackedText }
+      res.end(JSON.stringify(formKey === NON_COMPILED_PLUGIN_FORM_KEY
+        ? { fileName: NON_COMPILED_PLUGIN_FILE_NAME, text: nonCompiledPluginText }
         : { fileName: renderedName(formKey), text: renderedText(formKey) }));
       return;
     }
@@ -320,10 +320,10 @@ function createMockBackend(): http.Server {
         res.end();
         return;
       }
-      const holds = fsPath === TRACKED_FS_PATH ? TRACKED_FORM_KEY : fsPath && heldIn.get(fsPath);
+      const holds = fsPath === COMPILED_PLUGIN_FS_PATH ? COMPILED_PLUGIN_FORM_KEY : fsPath && heldIn.get(fsPath);
       res.writeHead(holds ? 200 : 422, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(holds
-        ? { formKey: holds, plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN }
+        ? { formKey: holds, plugin: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN }
         : { detail: `${filePath} declares no FormKey, so it is no record's document.` }));
       return;
     }
@@ -367,8 +367,8 @@ function createMockBackend(): http.Server {
       return;
     }
     if (wonFormKey !== undefined) {
-      const winner = [TRACKED_FORM_KEY, CHILD_FORM_KEY].includes(decodeURIComponent(wonFormKey))
-        ? { plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN } : { plugin: 'Fallout4.esm', origin: 'Data/' };
+      const winner = [COMPILED_PLUGIN_FORM_KEY, CHILD_FORM_KEY].includes(decodeURIComponent(wonFormKey))
+        ? { plugin: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN } : { plugin: 'Fallout4.esm', origin: 'Data/' };
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ formKey: decodeURIComponent(wonFormKey), ...winner }));
       return;
@@ -392,22 +392,22 @@ function createMockBackend(): http.Server {
       });
       return;
     }
-    const referenced = /^\/records\/([^/?]+)\/(?:references|references-in-active-or-tracked-plugins)$/.exec(url)?.[1];
+    const referenced = /^\/records\/([^/?]+)\/(?:references|references-in-active-or-compiled-plugins)$/.exec(url)?.[1];
     if (referenced !== undefined) {
       const row = (formKey: string, plugin: string, origin: string, fieldPath: string) =>
         ({ formKey, plugin, origin, fieldPath, recordType: 'WEAP', recordTypeName: 'Weapon' });
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(decodeURIComponent(referenced) === HELD_FORM_KEY ? [
-        row(TRACKED_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN, 'Model'), row(TRACKED_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN, 'Template'),
-        row(CHILD_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN, 'Base'), row(RENDERED_REFERRER_FORM_KEY, 'Fallout4.esm', 'Data/', 'Base'),
+        row(COMPILED_PLUGIN_FORM_KEY, COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN, 'Model'), row(COMPILED_PLUGIN_FORM_KEY, COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN, 'Template'),
+        row(CHILD_FORM_KEY, COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN, 'Base'), row(RENDERED_REFERRER_FORM_KEY, 'Fallout4.esm', 'Data/', 'Base'),
         row(HELD_FORM_KEY, 'Fallout4.esm', 'Data/', 'Template'),
       ] : []));
       return;
     }
-    if (url.startsWith('/records?') && new URL(url, 'http://x').searchParams.get('plugin') === TRACKED_PLUGIN) {
-      const summary = (formKey: string, editorId: string) => ({ formKey, plugin: TRACKED_PLUGIN, loadOrderIndex: 4, isWinner: true, editorId,
-        origin: TRACKED_ORIGIN, workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false });
-      const items = [summary(TRACKED_FORM_KEY, 'TrackedGun'), summary(CHILD_FORM_KEY, 'TrackedRef')];
+    if (url.startsWith('/records?') && new URL(url, 'http://x').searchParams.get('plugin') === COMPILED_PLUGIN) {
+      const summary = (formKey: string, editorId: string) => ({ formKey, plugin: COMPILED_PLUGIN, loadOrderIndex: 4, isWinner: true, editorId,
+        origin: COMPILED_PLUGIN_ORIGIN, workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false });
+      const items = [summary(COMPILED_PLUGIN_FORM_KEY, 'CompiledPluginGun'), summary(CHILD_FORM_KEY, 'CompiledPluginRef')];
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ items, total: items.length }));
       return;
@@ -424,40 +424,40 @@ function createMockBackend(): http.Server {
   });
 }
 
-const TRACKED_FORM_KEY = '000801:Tracked.esp';
-const CHILD_FORM_KEY = '000802:Tracked.esp';
-const SECOND_CHILD_FORM_KEY = '000804:Tracked.esp';
+const COMPILED_PLUGIN_FORM_KEY = '000801:CompiledPlugin.esp';
+const CHILD_FORM_KEY = '000802:CompiledPlugin.esp';
+const SECOND_CHILD_FORM_KEY = '000804:CompiledPlugin.esp';
 const HELD_FORM_KEY = '000801:Held.esp';
 const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
 const RENDERED_REFERRER_FORM_KEY = '000803:Fallout4.esm';
-const TRACKED_FILE = path.join(
-  mkdtempSync(path.join(os.tmpdir(), 'modbench-tracked-')), 'source', TRACKED_ORIGIN, 'plugin-source', TRACKED_PLUGIN, 'Weapons', 'TrackedGun.json');
-mkdirSync(path.dirname(TRACKED_FILE), { recursive: true });
-writeFileSync(TRACKED_FILE, JSON.stringify({
-  FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun', Model: HELD_FORM_KEY, Placed: [
-    { FormKey: CHILD_FORM_KEY, EditorID: 'TrackedRef', Base: HELD_FORM_KEY }, { FormKey: SECOND_CHILD_FORM_KEY, EditorID: 'SecondRef' },
+const COMPILED_PLUGIN_FILE = path.join(
+  mkdtempSync(path.join(os.tmpdir(), 'modbench-compiled-plugin-')), 'source', COMPILED_PLUGIN_ORIGIN, 'plugin-source', COMPILED_PLUGIN, 'Weapons', 'CompiledPluginGun.json');
+mkdirSync(path.dirname(COMPILED_PLUGIN_FILE), { recursive: true });
+writeFileSync(COMPILED_PLUGIN_FILE, JSON.stringify({
+  FormKey: COMPILED_PLUGIN_FORM_KEY, EditorID: 'CompiledPluginGun', Model: HELD_FORM_KEY, Placed: [
+    { FormKey: CHILD_FORM_KEY, EditorID: 'CompiledPluginRef', Base: HELD_FORM_KEY }, { FormKey: SECOND_CHILD_FORM_KEY, EditorID: 'SecondRef' },
   ],
 }));
-const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
-const METADATA_FILE = path.join(path.dirname(TRACKED_FILE), 'GroupRecordData.json');
+const COMPILED_PLUGIN_FS_PATH = vscode.Uri.file(COMPILED_PLUGIN_FILE).fsPath;
+const METADATA_FILE = path.join(path.dirname(COMPILED_PLUGIN_FILE), 'GroupRecordData.json');
 writeFileSync(METADATA_FILE, JSON.stringify({ Type: 'WEAP' }));
 const METADATA_FS_PATH = vscode.Uri.file(METADATA_FILE).fsPath;
 const copyQuery = (formKey: string, plugin: string, origin: string) => `formKey=${encodeURIComponent(formKey)}&name=${plugin}&origin=${encodeURIComponent(origin)}`;
 const RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT = 10;
-const trackedChildUri = vscode.Uri.file(TRACKED_FILE)
-  .with({ scheme: 'modbench-child-record', query: copyQuery(CHILD_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN) }).toString(true);
+const compiledPluginChildUri = vscode.Uri.file(COMPILED_PLUGIN_FILE)
+  .with({ scheme: 'modbench-child-record', query: copyQuery(CHILD_FORM_KEY, COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN) }).toString(true);
 const renderedUri = (formKey: string) =>
   `modbench-rendered:/Data%2F/Fallout4.esm/${renderedName(formKey)}?${copyQuery(formKey, 'Fallout4.esm', 'Data/')}`;
 
 
-const UNTRACKED_FORM_KEY = '000801:Untracked.esp';
-const UNTRACKED_FILE_NAME = 'UntrackedGun - 000801_Untracked.esp.json';
-let untrackedText = '{ "EditorID": "UntrackedGun" }';
+const NON_COMPILED_PLUGIN_FORM_KEY = '000801:NonCompiledPlugin.esp';
+const NON_COMPILED_PLUGIN_FILE_NAME = 'NonCompiledPluginGun - 000801_NonCompiledPlugin.esp.json';
+let nonCompiledPluginText = '{ "EditorID": "NonCompiledPluginGun" }';
 
-const MOCK_COMPARISONS = new Map<string, CompareResult>([[TRACKED_FORM_KEY, comparisonOf(TRACKED_FORM_KEY, [
-  { plugin: TRACKED_PLUGIN, isWinner: true, editorId: 'TrackedGun' },
+const MOCK_COMPARISONS = new Map<string, CompareResult>([[COMPILED_PLUGIN_FORM_KEY, comparisonOf(COMPILED_PLUGIN_FORM_KEY, [
+  { plugin: COMPILED_PLUGIN, isWinner: true, editorId: 'CompiledPluginGun' },
 ])], [CHILD_FORM_KEY, comparisonOf(CHILD_FORM_KEY, [
-  { plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN, isWinner: true, editorId: 'TrackedRef' },
+  { plugin: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN, isWinner: true, editorId: 'CompiledPluginRef' },
 ])], [HELD_FORM_KEY, comparisonOf(HELD_FORM_KEY, [
   { plugin: 'Held.esp', isWinner: false, editorId: 'OldGun' },
   { plugin: 'Patch.esp', isWinner: true, editorId: 'NewGun', fields: [
@@ -708,7 +708,7 @@ describe('modbench.record.open', () => {
     assert.strictEqual(tab.isPreview, false);
   });
 
-  it('opens the headers of two untracked plugins of one file name from different origins as two tabs', async () => {
+  it('opens the headers of two non-compiled plugins of one file name from different origins as two tabs', async () => {
     const tabsBefore = openTabs().length;
 
     await inSecondGroup();
@@ -724,12 +724,12 @@ describe('modbench.record.open', () => {
 const PROBE_SPACING_MS = 1000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-describe('a tracked copy of a record', () => {
-  const trackedCopy = { formKey: TRACKED_FORM_KEY, plugin: { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN } };
+describe('a compiled plugin copy of a record', () => {
+  const compiledPluginCopy = { formKey: COMPILED_PLUGIN_FORM_KEY, plugin: { name: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN } };
   const fileTabs = () => openTabs().filter((t) =>
-    t.input instanceof vscode.TabInputCustom && t.input.uri.fsPath === TRACKED_FS_PATH && t.input.viewType === 'modbench.record');
-  const reads = () => requestLog.filter((line) => line === `GET /records/${encodeURIComponent(TRACKED_FORM_KEY)}/compare`).length;
-  const trackedPlugin = present(MOCK_PLUGINS.find((p) => p.name === TRACKED_PLUGIN), 'the tracked plugin\'s row');
+    t.input instanceof vscode.TabInputCustom && t.input.uri.fsPath === COMPILED_PLUGIN_FS_PATH && t.input.viewType === 'modbench.record');
+  const reads = () => requestLog.filter((line) => line === `GET /records/${encodeURIComponent(COMPILED_PLUGIN_FORM_KEY)}/compare`).length;
+  const compiledPlugin = present(MOCK_PLUGINS.find((p) => p.name === COMPILED_PLUGIN), 'the compiled plugin\'s row');
 
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
@@ -737,37 +737,37 @@ describe('a tracked copy of a record', () => {
   it('opens as its file in the record grid, titled with the file\'s name after its read lands', async () => {
     const readsBefore = reads();
 
-    await openRecord(trackedCopy);
+    await openRecord(compiledPluginCopy);
     const [tab] = await waitFor('the file\'s tab', () => fileTabs().length > 0 && fileTabs());
     await waitFor('the record\'s read', () => reads() > readsBefore);
     await sleep(500);
 
-    assert.strictEqual(tab?.label, 'TrackedGun.json');
-    assert.deepStrictEqual(fileTabs().map((t) => t.label), ['TrackedGun.json']);
+    assert.strictEqual(tab?.label, 'CompiledPluginGun.json');
+    assert.deepStrictEqual(fileTabs().map((t) => t.label), ['CompiledPluginGun.json']);
   });
 
   it('reads its own column from the file on disk while it is saved and its plugin is not active, so it shows', async () => {
-    Object.assign(trackedPlugin, { inLoadOrder: false });
+    Object.assign(compiledPlugin, { inLoadOrder: false });
     try {
-      await openRecord(trackedCopy);
+      await openRecord(compiledPluginCopy);
 
-      await waitFor('a read of the saved text', () => comparedTexts.includes(readFileSync(TRACKED_FILE, 'utf8')));
+      await waitFor('a read of the saved text', () => comparedTexts.includes(readFileSync(COMPILED_PLUGIN_FILE, 'utf8')));
     } finally {
-      Object.assign(trackedPlugin, { inLoadOrder: true });
+      Object.assign(compiledPlugin, { inLoadOrder: true });
     }
   });
 
   it('reads its own column from the file\'s unsaved text', async () => {
-    await openRecord(trackedCopy);
+    await openRecord(compiledPluginCopy);
     await waitFor('the file\'s tab', () => fileTabs().length > 0);
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(COMPILED_PLUGIN_FILE));
     const saved = document.getText();
     const replaceAll = async (text: string) => {
       const edit = new vscode.WorkspaceEdit();
       edit.replace(document.uri, new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)), text);
       await vscode.workspace.applyEdit(edit);
     };
-    const unsaved = JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'Unsaved' });
+    const unsaved = JSON.stringify({ FormKey: COMPILED_PLUGIN_FORM_KEY, EditorID: 'Unsaved' });
 
     try {
       await replaceAll(unsaved);
@@ -779,46 +779,46 @@ describe('a tracked copy of a record', () => {
   });
 
   it('opens as its file when it wins and the record is given without a plugin', async () => {
-    await openRecord({ formKey: TRACKED_FORM_KEY });
+    await openRecord({ formKey: COMPILED_PLUGIN_FORM_KEY });
 
     await waitFor('the file\'s tab', () => fileTabs().length === 1);
   });
 
   it('shows the file already open in a tab, and does not open it twice', async () => {
-    await openRecord(trackedCopy);
+    await openRecord(compiledPluginCopy);
     await waitFor('the file\'s tab', () => fileTabs().length > 0);
     await vscode.commands.executeCommand('workbench.action.keepEditor');
     await openRecord({ formKey: 'Fallout4.esm:000070' });
     await waitFor('both tabs', () => openTabs().length === 2 || undefined);
 
-    await openRecord(trackedCopy);
+    await openRecord(compiledPluginCopy);
 
     await waitFor('the file\'s tab active', () => {
       const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
-      return input instanceof vscode.TabInputCustom && input.uri.fsPath === TRACKED_FS_PATH;
+      return input instanceof vscode.TabInputCustom && input.uri.fsPath === COMPILED_PLUGIN_FS_PATH;
     });
     assert.strictEqual(openTabs().length, 2);
   });
 
   it('shows the file already open in a tab, which reads beside its own the records opened with it, and none once its record is opened alone', async () => {
-    await openRecord(trackedCopy);
+    await openRecord(compiledPluginCopy);
     await waitFor('the file\'s tab', () => fileTabs().length > 0);
-    const copies = [trackedCopy, { formKey: 'Fallout4.esm:000070', plugin: { name: 'Fallout4.esm', origin: 'Data/' } }];
+    const copies = [compiledPluginCopy, { formKey: 'Fallout4.esm:000070', plugin: { name: 'Fallout4.esm', origin: 'Data/' } }];
 
-    await openRecord([trackedCopy, { formKey: 'Fallout4.esm:000070' }]);
+    await openRecord([compiledPluginCopy, { formKey: 'Fallout4.esm:000070' }]);
     await waitFor('the records read side by side', () => comparedSideBySide.some((asked) => JSON.stringify(asked) === JSON.stringify(copies)));
     const readsBefore = reads();
-    await openRecord(trackedCopy);
+    await openRecord(compiledPluginCopy);
 
     await waitFor('the record read alone', () => reads() > readsBefore);
     assert.strictEqual(openTabs().length, 1);
   });
 
   it('opens in the record grid by the route VS Code opens any file by, reading the record mEdit says it holds', async () => {
-    const asked = `GET /plugin-source/record?path=${encodeURIComponent(TRACKED_FS_PATH)}`;
+    const asked = `GET /plugin-source/record?path=${encodeURIComponent(COMPILED_PLUGIN_FS_PATH)}`;
     const readsBefore = requestLog.filter((line) => line === asked).length;
 
-    await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(TRACKED_FILE));
+    await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(COMPILED_PLUGIN_FILE));
 
     await waitFor('the file\'s tab in the record grid', () => fileTabs().length === 1);
     await waitFor('mEdit asked which record the file holds', () => requestLog.filter((line) => line === asked).length > readsBefore);
@@ -841,10 +841,10 @@ describe('a tracked copy of a record', () => {
   });
 });
 
-describe('a child record of a tracked plugin', () => {
-  const plugin = { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN };
+describe('a child record of a compiled plugin', () => {
+  const plugin = { name: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN };
   const childCopy = { formKey: CHILD_FORM_KEY, plugin };
-  const containerText = readFileSync(TRACKED_FILE, 'utf8');
+  const containerText = readFileSync(COMPILED_PLUGIN_FILE, 'utf8');
   const recordTabs = () => openTabs().filter((t) => t.input instanceof vscode.TabInputCustom && t.input.viewType === 'modbench.record');
   const childTab = () => recordTabs().find((t) => t.input instanceof vscode.TabInputCustom && t.input.uri.scheme !== 'file');
   const childUri = () => {
@@ -857,16 +857,16 @@ describe('a child record of a tracked plugin', () => {
     return vscode.workspace.openTextDocument(tab.input.uri);
   };
 
-  const OTHER_CELL = path.join(path.dirname(TRACKED_FILE), 'OtherCell.json');
+  const OTHER_CELL = path.join(path.dirname(COMPILED_PLUGIN_FILE), 'OtherCell.json');
 
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
   afterEach(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    writeFileSync(TRACKED_FILE, containerText);
+    writeFileSync(COMPILED_PLUGIN_FILE, containerText);
     rmSync(OTHER_CELL, { force: true });
     carriedIn.clear();
     heldIn.clear();
-    answerEdit = () => refusedAsUntracked;
+    answerEdit = () => refusedAsNonCompiledPlugin;
   });
 
   const openLoaded = async (record: RecordToOpen, pinned?: true) => {
@@ -882,7 +882,7 @@ describe('a child record of a tracked plugin', () => {
 
   it('follows its record to the file that carries it now, as when its cell\'s file moves or it crosses into another cell', async () => {
     writeFileSync(OTHER_CELL, containerText);
-    heldIn.set(vscode.Uri.file(OTHER_CELL).fsPath, '000803:Tracked.esp');
+    heldIn.set(vscode.Uri.file(OTHER_CELL).fsPath, '000803:CompiledPlugin.esp');
     await openRecord(childCopy);
     await childDocument();
     carriedIn.set(CHILD_FORM_KEY, OTHER_CELL);
@@ -895,18 +895,18 @@ describe('a child record of a tracked plugin', () => {
 
   it('follows, in each child\'s tab of a moved container, its own record, the tab in the background staying there and the focus where it was', async () => {
     writeFileSync(OTHER_CELL, containerText);
-    heldIn.set(vscode.Uri.file(OTHER_CELL).fsPath, '000803:Tracked.esp');
+    heldIn.set(vscode.Uri.file(OTHER_CELL).fsPath, '000803:CompiledPlugin.esp');
     for (const formKey of [CHILD_FORM_KEY, SECOND_CHILD_FORM_KEY]) {
       await openLoaded({ formKey, plugin });
       await vscode.commands.executeCommand('workbench.action.keepEditor');
     }
     await inSecondGroup();
-    await openLoaded({ formKey: TRACKED_FORM_KEY, plugin }, true);
+    await openLoaded({ formKey: COMPILED_PLUGIN_FORM_KEY, plugin }, true);
     const shows = (tab: vscode.Tab | undefined) =>
       tab?.input instanceof vscode.TabInputCustom ? [tab.input.uri.path, new URLSearchParams(tab.input.uri.query).get('formKey')] : [];
     await vscode.commands.executeCommand('workbench.action.focusSecondEditorGroup');
     const focused = vscode.window.tabGroups.activeTabGroup;
-    assert.deepStrictEqual([focused.viewColumn, shows(focused.activeTab)[0]], [vscode.ViewColumn.Two, vscode.Uri.file(TRACKED_FILE).path],
+    assert.deepStrictEqual([focused.viewColumn, shows(focused.activeTab)[0]], [vscode.ViewColumn.Two, vscode.Uri.file(COMPILED_PLUGIN_FILE).path],
       'the container\'s tab in focus beside them');
     carriedIn.set(CHILD_FORM_KEY, OTHER_CELL);
     carriedIn.set(SECOND_CHILD_FORM_KEY, OTHER_CELL);
@@ -923,11 +923,11 @@ describe('a child record of a tracked plugin', () => {
   });
 
   it('follows its record to the FormKey an edit of its FormID gives it', async () => {
-    const NEW_KEY = '000F00:Tracked.esp';
+    const NEW_KEY = '000F00:CompiledPlugin.esp';
     await openRecord(childCopy);
     await childDocument();
     answerEdit = () => ({ status: 200, body: {
-      formKey: CHILD_FORM_KEY, path: 'FormKey', moves: [], deletions: [], newFormKey: NEW_KEY, documents: [{ path: TRACKED_FILE, text: containerText }],
+      formKey: CHILD_FORM_KEY, path: 'FormKey', moves: [], deletions: [], newFormKey: NEW_KEY, documents: [{ path: COMPILED_PLUGIN_FILE, text: containerText }],
     } });
 
     await vscode.commands.executeCommand('modbench.record.editField',
@@ -939,12 +939,12 @@ describe('a child record of a tracked plugin', () => {
   });
 
   it('opens in a tab of its own in the second group, on its container\'s file, titled with its own name', async () => {
-    await openRecord({ formKey: TRACKED_FORM_KEY, plugin });
+    await openRecord({ formKey: COMPILED_PLUGIN_FORM_KEY, plugin });
     await inSecondGroup();
     await openPinnedRecord({ ...childCopy });
 
-    await waitFor('the child\'s tab titled with its EditorID', () => childTab()?.label === 'TrackedRef');
-    assert.deepStrictEqual(recordTabs().map((t) => t.label).sort(), ['TrackedGun.json', 'TrackedRef']);
+    await waitFor('the child\'s tab titled with its EditorID', () => childTab()?.label === 'CompiledPluginRef');
+    assert.deepStrictEqual(recordTabs().map((t) => t.label).sort(), ['CompiledPluginGun.json', 'CompiledPluginRef']);
     assert.strictEqual((await childDocument()).getText(), containerText);
   });
 
@@ -953,18 +953,18 @@ describe('a child record of a tracked plugin', () => {
     await childDocument();
     await vscode.commands.executeCommand('workbench.action.keepEditor');
 
-    await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(TRACKED_FILE));
+    await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(COMPILED_PLUGIN_FILE));
 
     await waitFor('the container\'s own tab', () => recordTabs().some((t) => t.input instanceof vscode.TabInputCustom && t.input.uri.scheme === 'file'));
     assert.strictEqual(recordTabs().length, 2);
   });
 
   it('shows a change saved from its tab in its container\'s tab in the other group, and one saved from the container\'s in its own', async () => {
-    await openRecord({ formKey: TRACKED_FORM_KEY, plugin });
+    await openRecord({ formKey: COMPILED_PLUGIN_FORM_KEY, plugin });
     await inSecondGroup();
     await openPinnedRecord({ ...childCopy });
     const child = await childDocument();
-    const container = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    const container = await vscode.workspace.openTextDocument(vscode.Uri.file(COMPILED_PLUGIN_FILE));
     const replaceAll = async (document: vscode.TextDocument, text: string) => {
       const edit = new vscode.WorkspaceEdit();
       edit.replace(document.uri, new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)), text);
@@ -972,19 +972,19 @@ describe('a child record of a tracked plugin', () => {
       await document.save();
     };
 
-    const fromChild = JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'SavedFromChild' });
+    const fromChild = JSON.stringify({ FormKey: COMPILED_PLUGIN_FORM_KEY, EditorID: 'SavedFromChild' });
     await replaceAll(child, fromChild);
-    assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), fromChild);
+    assert.strictEqual(readFileSync(COMPILED_PLUGIN_FILE, 'utf8'), fromChild);
     await waitFor('the container\'s file to show the child\'s save, saved', () => container.getText() === fromChild && !container.isDirty);
 
-    const fromContainer = JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'SavedFromContainer' });
+    const fromContainer = JSON.stringify({ FormKey: COMPILED_PLUGIN_FORM_KEY, EditorID: 'SavedFromContainer' });
     await replaceAll(container, fromContainer);
-    for (const res of sseClients) writeSseFrame(res, 'rows-changed', { plugin: plugin.name, origin: plugin.origin, keys: [TRACKED_FORM_KEY] });
+    for (const res of sseClients) writeSseFrame(res, 'rows-changed', { plugin: plugin.name, origin: plugin.origin, keys: [COMPILED_PLUGIN_FORM_KEY] });
     await waitFor('the child\'s document to show the container\'s save', () => child.getText() === fromContainer);
   });
 
   describe('and its container\'s document', () => {
-    const CELL_FORM_KEY = '000803:Tracked.esp';
+    const CELL_FORM_KEY = '000803:CompiledPlugin.esp';
     let cells = 0;
     let cell = '';
     const cellText = (editorID: string, rest = {}) => JSON.stringify({ FormKey: CELL_FORM_KEY, EditorID: editorID, ...rest });
@@ -1003,7 +1003,7 @@ describe('a child record of a tracked plugin', () => {
     };
 
     beforeEach(() => {
-      cell = path.join(path.dirname(TRACKED_FILE), `Cell${++cells}.json`);
+      cell = path.join(path.dirname(COMPILED_PLUGIN_FILE), `Cell${++cells}.json`);
       writeFileSync(cell, cellText('Cell'));
       heldIn.set(vscode.Uri.file(cell).fsPath, CELL_FORM_KEY);
       carriedIn.set(CELL_FORM_KEY, cell);
@@ -1155,23 +1155,23 @@ describe('a child record of a tracked plugin', () => {
   });
 });
 
-describe('an edit in a tracked copy\'s grid', () => {
-  const plugin = { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN };
-  const savedText = readFileSync(TRACKED_FILE, 'utf8');
-  const MOVED_FILE = path.join(path.dirname(TRACKED_FILE), 'Moved.json');
-  const MOVED_FORM_KEY = '000900:Tracked.esp';
+describe('an edit in a compiled plugin copy\'s grid', () => {
+  const plugin = { name: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN };
+  const savedText = readFileSync(COMPILED_PLUGIN_FILE, 'utf8');
+  const MOVED_FILE = path.join(path.dirname(COMPILED_PLUGIN_FILE), 'Moved.json');
+  const MOVED_FORM_KEY = '000900:CompiledPlugin.esp';
   const edit = (formKey: string, value: unknown) => vscode.commands.executeCommand(
     'modbench.record.editField', { formKey, plugin: plugin.name, origin: plugin.origin }, { op: 'set', path: [{ kind: 'member', name: 'Edits' }], value });
   const editedText = ({ text, value }: EditAsked) => `${text}+${String(value)}`;
   const answeredIn = (file: string, moved: { moves: unknown[]; newFormKey: string } = { moves: [], newFormKey: '' }) => (asked: EditAsked): EditAnswer => ({
     status: 200,
-    body: { formKey: TRACKED_FORM_KEY, path: 'Edits', deletions: [], ...moved, newFormKey: moved.newFormKey || null, documents: [{ path: file, text: editedText(asked) }] },
+    body: { formKey: COMPILED_PLUGIN_FORM_KEY, path: 'Edits', deletions: [], ...moved, newFormKey: moved.newFormKey || null, documents: [{ path: file, text: editedText(asked) }] },
   });
   const recordTabsOn = (fsPath: string) => openTabs().filter((t) =>
     t.input instanceof vscode.TabInputCustom && t.input.viewType === 'modbench.record' && t.input.uri.fsPath === fsPath);
   const openFileTab = async () => {
-    await openRecord({ formKey: TRACKED_FORM_KEY, plugin });
-    await waitFor('the file\'s tab', () => recordTabsOn(TRACKED_FS_PATH).length > 0);
+    await openRecord({ formKey: COMPILED_PLUGIN_FORM_KEY, plugin });
+    await waitFor('the file\'s tab', () => recordTabsOn(COMPILED_PLUGIN_FS_PATH).length > 0);
   };
   const shown = (document: vscode.TextDocument) => ({ text: document.getText(), unsaved: document.isDirty });
 
@@ -1179,28 +1179,28 @@ describe('an edit in a tracked copy\'s grid', () => {
   afterEach(async () => {
     await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    answerEdit = () => refusedAsUntracked;
-    if (existsSync(MOVED_FILE)) renameSync(MOVED_FILE, TRACKED_FILE);
-    writeFileSync(TRACKED_FILE, savedText);
+    answerEdit = () => refusedAsNonCompiledPlugin;
+    if (existsSync(MOVED_FILE)) renameSync(MOVED_FILE, COMPILED_PLUGIN_FILE);
+    writeFileSync(COMPILED_PLUGIN_FILE, savedText);
   });
 
   it('changes the file\'s document to the text mEdit answers for the document\'s own text, and leaves it unsaved', async () => {
     await openFileTab();
-    answerEdit = answeredIn(TRACKED_FILE);
+    answerEdit = answeredIn(COMPILED_PLUGIN_FILE);
 
-    await edit(TRACKED_FORM_KEY, 1);
+    await edit(COMPILED_PLUGIN_FORM_KEY, 1);
 
     assert.strictEqual(editsAsked.at(-1)?.text, savedText);
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(COMPILED_PLUGIN_FILE));
     assert.deepStrictEqual(shown(document), { text: `${savedText}+1`, unsaved: true });
-    assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), savedText);
+    assert.strictEqual(readFileSync(COMPILED_PLUGIN_FILE, 'utf8'), savedText);
   });
 
   it('is undone by VS Code\'s Undo in the tab, over the document', async () => {
     await openFileTab();
-    answerEdit = answeredIn(TRACKED_FILE);
-    await edit(TRACKED_FORM_KEY, 1);
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    answerEdit = answeredIn(COMPILED_PLUGIN_FILE);
+    await edit(COMPILED_PLUGIN_FORM_KEY, 1);
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(COMPILED_PLUGIN_FILE));
     await waitFor('the edit in the document', () => document.getText() === `${savedText}+1`);
 
     await vscode.commands.executeCommand('undo');
@@ -1210,34 +1210,34 @@ describe('an edit in a tracked copy\'s grid', () => {
 
   it('builds each edit on the text the one before it left, the second fired before the first is applied', async () => {
     await openFileTab();
-    answerEdit = answeredIn(TRACKED_FILE);
+    answerEdit = answeredIn(COMPILED_PLUGIN_FILE);
 
-    await Promise.all([edit(TRACKED_FORM_KEY, 1), edit(TRACKED_FORM_KEY, 2)]);
+    await Promise.all([edit(COMPILED_PLUGIN_FORM_KEY, 1), edit(COMPILED_PLUGIN_FORM_KEY, 2)]);
 
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(COMPILED_PLUGIN_FILE));
     assert.strictEqual(document.getText(), `${savedText}+1+2`);
   });
 
   it('changes no document when mEdit refuses the edit, and says why, naming the field', async () => {
     await openFileTab();
 
-    await edit(TRACKED_FORM_KEY, 1);
+    await edit(COMPILED_PLUGIN_FORM_KEY, 1);
 
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(COMPILED_PLUGIN_FILE));
     assert.deepStrictEqual(shown(document), { text: savedText, unsaved: false });
-    await waitFor('the refusal in the Modbench log', () => modbenchLog().includes('Edits: Tracked.esp is not tracked, so it is read-only.'));
+    await waitFor('the refusal in the Modbench log', () => modbenchLog().includes('Edits: CompiledPlugin.esp is not a compiled plugin, so it is read-only.'));
   });
 
   it('moves the file where mEdit answers, and the tab goes with it, reading the record it moved to from the document', async () => {
     await openFileTab();
-    answerEdit = answeredIn(MOVED_FILE, { moves: [{ from: TRACKED_FILE, to: MOVED_FILE }], newFormKey: MOVED_FORM_KEY });
+    answerEdit = answeredIn(MOVED_FILE, { moves: [{ from: COMPILED_PLUGIN_FILE, to: MOVED_FILE }], newFormKey: MOVED_FORM_KEY });
     const readsBefore = comparedTexts.length;
 
-    await edit(TRACKED_FORM_KEY, 'moved');
+    await edit(COMPILED_PLUGIN_FORM_KEY, 'moved');
 
     await waitFor('the tab on the moved file', () => recordTabsOn(vscode.Uri.file(MOVED_FILE).fsPath).length === 1);
-    assert.deepStrictEqual(recordTabsOn(TRACKED_FS_PATH), []);
-    assert.strictEqual(existsSync(TRACKED_FILE), false);
+    assert.deepStrictEqual(recordTabsOn(COMPILED_PLUGIN_FS_PATH), []);
+    assert.strictEqual(existsSync(COMPILED_PLUGIN_FILE), false);
     const moved = await vscode.workspace.openTextDocument(vscode.Uri.file(MOVED_FILE));
     assert.deepStrictEqual(shown(moved), { text: `${savedText}+moved`, unsaved: false });
     await waitFor('the moved tab to read its new record from the document', () => comparedTexts.slice(readsBefore).includes(`${savedText}+moved`));
@@ -1246,19 +1246,19 @@ describe('an edit in a tracked copy\'s grid', () => {
   it('moves the file with the tab, which keeps beside its record the records it showed beside it', async () => {
     const column = { formKey: 'Fallout4.esm:000070', plugin: { name: 'Fallout4.esm', origin: 'Data/' } };
     const openedAt = comparedSideBySide.length;
-    await openRecord([{ formKey: TRACKED_FORM_KEY, plugin }, column]);
+    await openRecord([{ formKey: COMPILED_PLUGIN_FORM_KEY, plugin }, column]);
     await waitFor('the records read side by side', () => comparedSideBySide.slice(openedAt).some((asked) => JSON.stringify(asked).includes(column.formKey)));
-    answerEdit = answeredIn(MOVED_FILE, { moves: [{ from: TRACKED_FILE, to: MOVED_FILE }], newFormKey: MOVED_FORM_KEY });
+    answerEdit = answeredIn(MOVED_FILE, { moves: [{ from: COMPILED_PLUGIN_FILE, to: MOVED_FILE }], newFormKey: MOVED_FORM_KEY });
     const readsBefore = comparedSideBySide.length;
 
-    await edit(TRACKED_FORM_KEY, 'moved');
+    await edit(COMPILED_PLUGIN_FORM_KEY, 'moved');
 
     await waitFor('the moved tab to read its new record beside the same records', () => comparedSideBySide.slice(readsBefore).some((asked) =>
       Array.isArray(asked) && JSON.stringify(asked.map((copy: unknown) => isRecord(copy) && copy.formKey)) === JSON.stringify([MOVED_FORM_KEY, column.formKey])));
   });
 
   it('edits a child record through its own tab\'s document, which its container\'s document shows, both unsaved', async () => {
-    const cell = path.join(path.dirname(TRACKED_FILE), 'EditedCell.json');
+    const cell = path.join(path.dirname(COMPILED_PLUGIN_FILE), 'EditedCell.json');
     writeFileSync(cell, savedText);
     carriedIn.set(CHILD_FORM_KEY, cell);
     try {
@@ -1284,8 +1284,8 @@ describe('an edit in a tracked copy\'s grid', () => {
     }
   });
   it('leaves its own tab and its container\'s both saved with the edit when VS Code\'s refactoring auto-save saves the container\'s file, an edit that also deletes a folder', async () => {
-    const cell = path.join(path.dirname(TRACKED_FILE), 'EditedCell.json');
-    const doomed = path.join(path.dirname(TRACKED_FILE), 'DoomedWithEdit');
+    const cell = path.join(path.dirname(COMPILED_PLUGIN_FILE), 'EditedCell.json');
+    const doomed = path.join(path.dirname(COMPILED_PLUGIN_FILE), 'DoomedWithEdit');
     mkdirSync(doomed, { recursive: true });
     writeFileSync(path.join(doomed, 'Child.json'), '{}');
     writeFileSync(cell, savedText);
@@ -1314,10 +1314,10 @@ describe('an edit in a tracked copy\'s grid', () => {
   });
 });
 
-describe('deleting a record in a tracked copy', () => {
-  const plugin = { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN };
-  const savedText = readFileSync(TRACKED_FILE, 'utf8');
-  const folder = path.join(path.dirname(TRACKED_FILE), 'DoomedNpc');
+describe('deleting a record in a compiled plugin copy', () => {
+  const plugin = { name: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN };
+  const savedText = readFileSync(COMPILED_PLUGIN_FILE, 'utf8');
+  const folder = path.join(path.dirname(COMPILED_PLUGIN_FILE), 'DoomedNpc');
   const warn = vscode.window.showWarningMessage;
 
   afterEach(async () => {
@@ -1325,7 +1325,7 @@ describe('deleting a record in a tracked copy', () => {
     await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     rmSync(folder, { recursive: true, force: true });
-    const restored = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    const restored = await vscode.workspace.openTextDocument(vscode.Uri.file(COMPILED_PLUGIN_FILE));
     const restoring = new vscode.WorkspaceEdit();
     restoring.replace(restored.uri, new vscode.Range(0, 0, restored.lineCount, 0), savedText);
     await vscode.workspace.applyEdit(restoring);
@@ -1336,7 +1336,7 @@ describe('deleting a record in a tracked copy', () => {
   it('asks after mEdit was handed the dirty plugin source, deletes the answered folder recursively, and VS Code\'s refactoring auto-save saves the rewritten document', async () => {
     mkdirSync(path.join(folder, 'Nested'), { recursive: true });
     writeFileSync(path.join(folder, 'Nested', 'Child.json'), '{}');
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(COMPILED_PLUGIN_FILE));
     await vscode.window.showTextDocument(document);
     const dirtied = new vscode.WorkspaceEdit();
     dirtied.insert(document.uri, new vscode.Position(0, 0), ' ');
@@ -1344,19 +1344,19 @@ describe('deleting a record in a tracked copy', () => {
     assert.ok(document.isDirty, 'the plugin source should be unsaved before the delete');
     const unsavedText = document.getText();
     answerDelete = { status: 200, body: { applied: [{
-      record: { formKey: TRACKED_FORM_KEY, plugin: plugin.name, origin: plugin.origin },
-      moves: [], deletions: [folder], documents: [{ path: TRACKED_FILE, text: 'rewritten' }],
+      record: { formKey: COMPILED_PLUGIN_FORM_KEY, plugin: plugin.name, origin: plugin.origin },
+      moves: [], deletions: [folder], documents: [{ path: COMPILED_PLUGIN_FILE, text: 'rewritten' }],
     }], refused: [] } };
     (vscode.window as { showWarningMessage: unknown }).showWarningMessage = () => Promise.resolve('Delete');
 
     await vscode.commands.executeCommand('modbench.record.delete', {
-      label: 'TrackedGun', argument: { kind: 'record', plugin, formKey: TRACKED_FORM_KEY },
+      label: 'CompiledPluginGun', argument: { kind: 'record', plugin, formKey: COMPILED_PLUGIN_FORM_KEY },
     });
 
     const asked = deletesAsked.at(-1);
-    assert.deepStrictEqual(asked, { held: [{ path: TRACKED_FS_PATH, text: unsavedText }] });
+    assert.deepStrictEqual(asked, { held: [{ path: COMPILED_PLUGIN_FS_PATH, text: unsavedText }] });
     assert.ok(!existsSync(folder), 'the answered folder should be deleted with what is in it');
-    assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), 'rewritten');
+    assert.strictEqual(readFileSync(COMPILED_PLUGIN_FILE, 'utf8'), 'rewritten');
     assert.ok(!document.isDirty, 'VS Code\'s refactoring auto-save should have saved the rewritten document');
   });
 });
@@ -1407,8 +1407,8 @@ describe('a record opened from a column\'s header', () => {
   });
 });
 
-describe('an untracked copy of a record', () => {
-  const untrackedCopy = { formKey: UNTRACKED_FORM_KEY, plugin: { name: 'Untracked.esp', origin: 'UntrackedMod' } };
+describe('a non-compiled plugin copy of a record', () => {
+  const nonCompiledPluginCopy = { formKey: NON_COMPILED_PLUGIN_FORM_KEY, plugin: { name: 'NonCompiledPlugin.esp', origin: 'NonSourceMod' } };
   const renderedTabs = () => openTabs().filter((t) =>
     t.input instanceof vscode.TabInputCustom && t.input.uri.scheme === 'modbench-rendered' && t.input.viewType === 'modbench.record');
   const renderedDocument = async () => {
@@ -1421,15 +1421,15 @@ describe('an untracked copy of a record', () => {
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
 
   it('opens in the record grid as the document mEdit renders, titled with the name its file would have', async () => {
-    await openRecord(untrackedCopy);
+    await openRecord(nonCompiledPluginCopy);
 
     const document = await renderedDocument();
-    assert.deepStrictEqual(renderedTabs().map((t) => t.label), [UNTRACKED_FILE_NAME]);
-    assert.strictEqual(document.getText(), untrackedText);
+    assert.deepStrictEqual(renderedTabs().map((t) => t.label), [NON_COMPILED_PLUGIN_FILE_NAME]);
+    assert.strictEqual(document.getText(), nonCompiledPluginText);
   });
 
   it('opens in the record grid by the route VS Code opens any document by', async () => {
-    await openRecord(untrackedCopy);
+    await openRecord(nonCompiledPluginCopy);
     const { uri } = await renderedDocument();
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 
@@ -1439,15 +1439,15 @@ describe('an untracked copy of a record', () => {
   });
 
   it('reads mEdit\'s rendering again when mEdit reports the copy changed', async () => {
-    await openRecord(untrackedCopy);
+    await openRecord(nonCompiledPluginCopy);
     const document = await renderedDocument();
 
-    untrackedText = '{ "EditorID": "UntrackedGun", "Name": "Changed" }';
+    nonCompiledPluginText = '{ "EditorID": "NonCompiledPluginGun", "Name": "Changed" }';
     for (const res of sseClients) {
-      writeSseFrame(res, 'rows-changed', { plugin: untrackedCopy.plugin.name, origin: untrackedCopy.plugin.origin, keys: [UNTRACKED_FORM_KEY] });
+      writeSseFrame(res, 'rows-changed', { plugin: nonCompiledPluginCopy.plugin.name, origin: nonCompiledPluginCopy.plugin.origin, keys: [NON_COMPILED_PLUGIN_FORM_KEY] });
     }
 
-    await waitFor('the document to change', () => document.getText() === untrackedText);
+    await waitFor('the document to change', () => document.getText() === nonCompiledPluginText);
   });
 });
 describe('Referenced By, as VS Code\'s References view takes it', () => {
@@ -1461,14 +1461,14 @@ describe('Referenced By, as VS Code\'s References view takes it', () => {
   const anchoredAt = async ({ uri, range }: vscode.Location) =>
     [uri.toString(true), (await vscode.workspace.openTextDocument(uri)).offsetAt(range.start)];
 
-  it('takes a tracked record\'s list, anchored at its FormKey in its file', async () => {
-    const input = await shown(TRACKED_FORM_KEY, 'Referenced By: TrackedGun');
+  it('takes a compiled plugin record\'s list, anchored at its FormKey in its file', async () => {
+    const input = await shown(COMPILED_PLUGIN_FORM_KEY, 'Referenced By: CompiledPluginGun');
 
     assert.deepStrictEqual(await anchoredAt(input.location),
-      [vscode.Uri.file(TRACKED_FILE).toString(true), readFileSync(TRACKED_FILE, 'utf8').indexOf(`"${TRACKED_FORM_KEY}"`)]);
+      [vscode.Uri.file(COMPILED_PLUGIN_FILE).toString(true), readFileSync(COMPILED_PLUGIN_FILE, 'utf8').indexOf(`"${COMPILED_PLUGIN_FORM_KEY}"`)]);
   });
 
-  it('takes an untracked record\'s list, anchored at its FormKey in mEdit\'s rendering of it', async () => {
+  it('takes a non-compiled plugin record\'s list, anchored at its FormKey in mEdit\'s rendering of it', async () => {
     const input = await shown(HELD_FORM_KEY, 'Referenced By: NewGun');
 
     assert.deepStrictEqual(await anchoredAt(input.location),
@@ -2002,16 +2002,16 @@ describe('A FormKey in plugin source', () => {
   };
   const definedText = async ({ uri, range }: vscode.Location) => (await vscode.workspace.openTextDocument(uri)).getText(range);
 
-  it('goes to the definition of a FormKey whose winning copy is tracked: its file, at the record\'s own FormKey member', async () => {
+  it('goes to the definition of a FormKey whose winning copy is a compiled plugin: its file, at the record\'s own FormKey member', async () => {
     await activated();
-    const [definition, ...more] = await definitionsOf(TRACKED_FORM_KEY);
+    const [definition, ...more] = await definitionsOf(COMPILED_PLUGIN_FORM_KEY);
 
     assert.deepStrictEqual(more, []);
-    assert.strictEqual(definition?.uri.fsPath, TRACKED_FS_PATH);
-    assert.strictEqual(await definedText(definition), `"FormKey":"${TRACKED_FORM_KEY}"`);
+    assert.strictEqual(definition?.uri.fsPath, COMPILED_PLUGIN_FS_PATH);
+    assert.strictEqual(await definedText(definition), `"FormKey":"${COMPILED_PLUGIN_FORM_KEY}"`);
   });
 
-  it('goes to the definition of a FormKey whose winning copy is untracked: mEdit\'s rendering of it, at the record\'s own FormKey member', async () => {
+  it('goes to the definition of a FormKey whose winning copy is non-compiled plugin: mEdit\'s rendering of it, at the record\'s own FormKey member', async () => {
     await activated();
     const [definition, ...more] = await definitionsOf(HELD_FORM_KEY);
 
@@ -2022,14 +2022,14 @@ describe('A FormKey in plugin source', () => {
 
   it('goes to the definition of a FormKey whose winning copy is a child record: its own tab on its owner\'s file, at its own FormKey member', async () => {
     await activated();
-    for (const res of sseClients) writeSseFrame(res, 'rows-changed', { plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN, keys: [CHILD_FORM_KEY] });
+    for (const res of sseClients) writeSseFrame(res, 'rows-changed', { plugin: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN, keys: [CHILD_FORM_KEY] });
 
     const definition = await waitFor('the definition on the child\'s own member', async () => {
       const [found, ...more] = await definitionsOf(CHILD_FORM_KEY);
-      return more.length === 0 && found?.uri.toString(true) === trackedChildUri && await definedText(found) === `"FormKey":"${CHILD_FORM_KEY}"` && found;
+      return more.length === 0 && found?.uri.toString(true) === compiledPluginChildUri && await definedText(found) === `"FormKey":"${CHILD_FORM_KEY}"` && found;
     });
 
-    assert.strictEqual(definition.range.start.character, readFileSync(TRACKED_FILE, 'utf8').indexOf(`"FormKey":"${CHILD_FORM_KEY}"`));
+    assert.strictEqual(definition.range.start.character, readFileSync(COMPILED_PLUGIN_FILE, 'utf8').indexOf(`"FormKey":"${CHILD_FORM_KEY}"`));
   });
 
   it('lists every record that references it, one entry for each plugin\'s copy at its reference, a record referencing itself never at its declaration', async () => {
@@ -2037,12 +2037,12 @@ describe('A FormKey in plugin source', () => {
     const found = await vscode.commands.executeCommand<vscode.Location[]>('vscode.executeReferenceProvider', document.uri, positionIn(HELD_FORM_KEY));
     const entries = await Promise.all(found.map(async ({ uri, range }) =>
       [uri.toString(true), (await vscode.workspace.openTextDocument(uri)).offsetAt(range.start)]));
-    const tracked = readFileSync(TRACKED_FILE, 'utf8');
+    const compiledPlugin = readFileSync(COMPILED_PLUGIN_FILE, 'utf8');
     const quoted = `"${HELD_FORM_KEY}"`;
 
     assert.deepStrictEqual(entries.sort(), [
-      [vscode.Uri.file(TRACKED_FILE).toString(true), tracked.indexOf(quoted)],
-      [trackedChildUri, tracked.lastIndexOf(quoted)],
+      [vscode.Uri.file(COMPILED_PLUGIN_FILE).toString(true), compiledPlugin.indexOf(quoted)],
+      [compiledPluginChildUri, compiledPlugin.lastIndexOf(quoted)],
       [renderedUri(RENDERED_REFERRER_FORM_KEY), renderedText(RENDERED_REFERRER_FORM_KEY).indexOf(quoted)],
       [renderedUri(HELD_FORM_KEY), renderedText(HELD_FORM_KEY).lastIndexOf(quoted)],
     ].sort());
@@ -2074,19 +2074,19 @@ describe('A FormKey in plugin source', () => {
     assert.ok(requestLog.slice(asked).includes(`GET /records/${encodeURIComponent(NOT_HELD_FORM_KEY)}`), 'sanity: mEdit was asked');
   });
 
-  it('finds a record across the tracked plugins by Go to Symbol in Workspace, each copy at its document', async () => {
+  it('finds a record across the compiled plugins by Go to Symbol in Workspace, each copy at its document', async () => {
     await activated();
     const asked = requestLog.length;
-    const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>('vscode.executeWorkspaceSymbolProvider', 'Tracked');
+    const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>('vscode.executeWorkspaceSymbolProvider', 'CompiledPlugin');
 
     assert.deepStrictEqual(found.map((symbol) => [symbol.name, symbol.containerName, symbol.location.uri.toString(true)]).sort(), [
-      [`TrackedGun [${TRACKED_FORM_KEY}]`, `${TRACKED_PLUGIN} (${TRACKED_ORIGIN})`, vscode.Uri.file(TRACKED_FILE).toString(true)],
-      [`TrackedRef [${CHILD_FORM_KEY}]`, `${TRACKED_PLUGIN} (${TRACKED_ORIGIN})`, trackedChildUri],
+      [`CompiledPluginGun [${COMPILED_PLUGIN_FORM_KEY}]`, `${COMPILED_PLUGIN} (${COMPILED_PLUGIN_ORIGIN})`, vscode.Uri.file(COMPILED_PLUGIN_FILE).toString(true)],
+      [`CompiledPluginRef [${CHILD_FORM_KEY}]`, `${COMPILED_PLUGIN} (${COMPILED_PLUGIN_ORIGIN})`, compiledPluginChildUri],
     ].sort());
     assert.deepStrictEqual(requestLog.slice(asked).filter((line) => line.startsWith('GET /records?')).map((line) => {
       const query = new URL(line.slice('GET '.length), 'http://x').searchParams;
       return [query.get('search'), query.get('plugin'), query.get('origin')];
-    }), [['Tracked', TRACKED_PLUGIN, TRACKED_ORIGIN]]);
+    }), [['CompiledPlugin', COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN]]);
   });
 
   const offeredIn = async (doc: vscode.TextDocument, text: string): Promise<string[]> => {

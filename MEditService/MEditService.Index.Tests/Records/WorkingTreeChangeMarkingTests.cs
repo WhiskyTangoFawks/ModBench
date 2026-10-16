@@ -34,7 +34,7 @@ public sealed class WorkingTreeChangeMarkingTests : IDisposable
                 mod.Npcs.Set(basePlugin.Npcs.First(n => n.FormKey == keptFk).DeepCopy());
             }, origin: "WinnerMod")
             .BuildScattered()
-            .Tracked();
+            .CompiledPlugin();
         _base = _fixture.Plugins.Single(p => p.Name == "Base.esm");
         _baseKey = _base.KeyOf();
         _winnerKey = _fixture.Plugins.Single(p => p.Name == "Winner.esp").KeyOf();

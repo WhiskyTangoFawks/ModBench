@@ -117,7 +117,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
     {
         var result = RenameSource(new PluginAddress(plugin, origin), "New.esp");
 
-        Assert.Equal(RenameSourceRefusal.NotTracked, result.Refusal);
+        Assert.Equal(RenameSourceRefusal.NotCompiledPlugin, result.Refusal);
         Assert.Contains(plugin, result.Message, StringComparison.Ordinal);
         Assert.False(Directory.Exists(PluginSourceRoot.In(_sourceMod, "New.esp")));
         Assert.False(Directory.Exists(PluginSourceRoot.In(_nonSourceMod, "New.esp")));
@@ -239,12 +239,12 @@ public sealed class RenameSourceHandlerTests : IDisposable
         Apply(newName);
     }
 
-    private void Apply(string trackedPlugin)
+    private void Apply(string compiledPlugin)
     {
         List<LoadOrderEntry> entries =
         [
             new(MasterName, Path.Combine(_game, MasterName), PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
-            new(trackedPlugin, Path.Combine(_sourceMod, trackedPlugin), SourceModName, 1, Enabled: true, Winning: true),
+            new(compiledPlugin, Path.Combine(_sourceMod, compiledPlugin), SourceModName, 1, Enabled: true, Winning: true),
             new("Other.esp", Path.Combine(_nonSourceMod, "Other.esp"), NonSourceModName, 2, Enabled: true, Winning: true),
         ];
         if (File.Exists(Path.Combine(_sourceMod, "Loose.esp")))

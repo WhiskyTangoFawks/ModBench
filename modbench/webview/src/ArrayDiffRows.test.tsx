@@ -327,7 +327,7 @@ describe('RecordPanel — array editing', () => {
 
   function renderEditablePanel() {
     const client = panelClient(() => intArrayCompareResult, {
-      plugins: [{ name: 'MyMod.esp', isTracked: true }],
+      plugins: [{ name: 'MyMod.esp', isCompiledPlugin: true }],
     });
     return { client, ...render(<RecordPanel client={client} />) };
   }
@@ -439,7 +439,7 @@ const scalarResult: CompareResult = compareResultFixture({
 
 function renderEditablePanel() {
   const client = panelClient(() => currentCompare, {
-    plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isTracked: true }],
+    plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isCompiledPlugin: true }],
   });
   return { client, ...render(<RecordPanel client={client} />) };
 }
@@ -583,7 +583,7 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
         values: { 'Fallout4.esm': master, 'MyMod.esp': override },
         winnerColumn: 'MyMod.esp', cellStates: {}, children: rows,
       })],
-    }), { plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isTracked: true }] });
+    }), { plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isCompiledPlugin: true }] });
     return render(<RecordPanel client={client} />);
   }
 
@@ -718,7 +718,7 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
 describe('RecordPanel — an element of an array without a key is addressed at its position in this column', () => {
   function renderLinkArrayPanel() {
     const client = panelClient(() => sequenceAlignedLinkArrayCompareResult, {
-      plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isTracked: true }],
+      plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isCompiledPlugin: true }],
     });
     return render(<RecordPanel client={client} />);
   }
@@ -826,7 +826,7 @@ describe('RecordPanel — an element after a null slot is addressed at its own i
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     vi.mocked(vscode.postMessage).mockClear();
     render(<RecordPanel client={panelClient(() => sequenceAlignedWithNullSlot, {
-      plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isTracked: true }],
+      plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isCompiledPlugin: true }],
     })} />);
   });
   afterEach(() => vi.unstubAllGlobals());
@@ -881,7 +881,7 @@ describe('RecordPanel — an array whose one slot is null', () => {
         values: { 'MyMod.esp': [null] },
         children: [diffNode({ fieldName: '[0]', values: { 'MyMod.esp': null }, indexes: { 'MyMod.esp': 0 } })],
       })],
-    }), { plugins: [{ name: 'MyMod.esp', isTracked: true }] })} />);
+    }), { plugins: [{ name: 'MyMod.esp', isCompiledPlugin: true }] })} />);
     await waitFor(() => screen.getByText('Items'));
     const items = required(screen.getByText('Items').closest('tr'), 'the Items row');
     fireEvent.click(within(items).getByRole('button', { expanded: true }));

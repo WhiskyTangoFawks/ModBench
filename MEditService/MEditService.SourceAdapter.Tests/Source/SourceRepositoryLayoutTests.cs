@@ -39,16 +39,16 @@ public sealed class SourceRepositoryLayoutTests
         using var modFolder = new ScratchDirectory("medit-layout-roundtrip-");
         PluginBaselines.InitWithNoRecords(modFolder);
         var repository = TestAdapters.Source().Open(TestMod.In(modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
+            ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be a source mod.");
         var plugin = new PluginAddress(pluginFileName, TestMod.Name);
         repository.Put(plugin, new SourceDocument(formKeyString, recordType, editorId, "{}")).Wrote();
 
         var path = Path.GetRelativePath(
             modFolder, Directory.EnumerateFiles(Path.Combine(modFolder, "plugin-source"), "*.json", SearchOption.AllDirectories).Single());
 
-        var segmentsUnderTheOneRootTrackAndPutBothWriteTo = path.Split(Path.DirectorySeparatorChar);
-        Assert.Equal("plugin-source", segmentsUnderTheOneRootTrackAndPutBothWriteTo[0]);
-        Assert.Equal(pluginFileName, segmentsUnderTheOneRootTrackAndPutBothWriteTo[1]);
+        var segmentsUnderTheOneRootInitAndPutBothWriteTo = path.Split(Path.DirectorySeparatorChar);
+        Assert.Equal("plugin-source", segmentsUnderTheOneRootInitAndPutBothWriteTo[0]);
+        Assert.Equal(pluginFileName, segmentsUnderTheOneRootInitAndPutBothWriteTo[1]);
 
         var document = repository.RecordOf(plugin, new RecordIdentity(formKeyString, recordType, editorId)).Value();
 
@@ -64,7 +64,7 @@ public sealed class SourceRepositoryLayoutTests
     {
         using var modFolder = new ScratchDirectory("medit-layout-init-");
 
-        TrackMixed(modFolder,
+        InitMixed(modFolder,
             new TreeFile("RecordData.json", [1]),
             new TreeFile(Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json"), [2]));
 
@@ -81,7 +81,7 @@ public sealed class SourceRepositoryLayoutTests
         using var modFolder = new ScratchDirectory("medit-layout-init-");
         var directory = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP");
 
-        TrackMixed(modFolder,
+        InitMixed(modFolder,
             new TreeFile(Path.Combine(directory, "RecordData.json"), [1]),
             new TreeFile(Path.Combine(directory, "0, 0", "GroupRecordData.json"), [2]));
 
@@ -91,7 +91,7 @@ public sealed class SourceRepositoryLayoutTests
             SourceFilesIn(modFolder));
     }
 
-    private static void TrackMixed(string modFolder, params TreeFile[] tree) =>
+    private static void InitMixed(string modFolder, params TreeFile[] tree) =>
         TestAdapters.Source().Init(modFolder, [(tree, new DecompiledPlugin("Mixed.ESP", null))]);
 
     private static List<string> SourceFilesIn(string modFolder) =>
@@ -104,7 +104,7 @@ public sealed class SourceRepositoryLayoutTests
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
         var door = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP", "RecordData.json");
-        TrackMixed(modFolder, new TreeFile("RecordData.json", [0]), new TreeFile(door, [1]));
+        InitMixed(modFolder, new TreeFile("RecordData.json", [0]), new TreeFile(door, [1]));
 
         Assert.Equal(["RecordData.json", door], TreePathsOf(modFolder));
     }
@@ -113,7 +113,7 @@ public sealed class SourceRepositoryLayoutTests
     public void TreeOf_GivesAContainerTheDoorsName_WhateverItsDirectoryOrFileIsCalled()
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
-        TrackMixed(modFolder, new TreeFile("RecordData.json", [0]));
+        InitMixed(modFolder, new TreeFile("RecordData.json", [0]));
         WriteByHand(modFolder, Path.Combine("Worldspaces", "ByHand", "W - 000800_Mixed.ESP.json"));
 
         Assert.Equal(["RecordData.json", Path.Combine("Worldspaces", "ByHand", "RecordData.json")], TreePathsOf(modFolder));
@@ -123,7 +123,7 @@ public sealed class SourceRepositoryLayoutTests
     public void InSourceNames_NamesAContainerByTheFileHeld_NotByTheLeafItWouldBear()
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
-        TrackMixed(modFolder, new TreeFile("RecordData.json", [0]));
+        InitMixed(modFolder, new TreeFile("RecordData.json", [0]));
         WriteByHand(modFolder, Path.Combine("Worldspaces", "ByHand", "Hand.json"));
         var read = new PluginDiagnosis(Path.Combine("Worldspaces", "ByHand", "RecordData.json"), PluginDiagnosis.UnknownClass, null, "bad JSON");
 
@@ -137,7 +137,7 @@ public sealed class SourceRepositoryLayoutTests
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
         var flat = Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json");
-        TrackMixed(modFolder, new TreeFile("RecordData.json", [0]), new TreeFile(flat, [1]));
+        InitMixed(modFolder, new TreeFile("RecordData.json", [0]), new TreeFile(flat, [1]));
         var read = new PluginDiagnosis(flat, PluginDiagnosis.UnknownClass, null, "bad JSON");
 
         var named = RepositoryOver(modFolder).InSourceNames(Mixed, read);
@@ -150,7 +150,7 @@ public sealed class SourceRepositoryLayoutTests
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
         var container = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP");
-        TrackMixed(modFolder, new TreeFile("RecordData.json", [0]), new TreeFile(Path.Combine(container, "RecordData.json"), [1]));
+        InitMixed(modFolder, new TreeFile("RecordData.json", [0]), new TreeFile(Path.Combine(container, "RecordData.json"), [1]));
         var read = new PluginDiagnosis(
             null, PluginDiagnosis.UnknownClass, null, $"from path: RecordData.json, then {Path.Combine(container, "RecordData.json")}");
 
@@ -167,7 +167,7 @@ public sealed class SourceRepositoryLayoutTests
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
         var container = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP");
-        TrackMixed(modFolder, new TreeFile("RecordData.json", [0]), new TreeFile(Path.Combine(container, "RecordData.json"), [1]));
+        InitMixed(modFolder, new TreeFile("RecordData.json", [0]), new TreeFile(Path.Combine(container, "RecordData.json"), [1]));
         var read = new PluginDiagnosis(
             null, PluginDiagnosis.UnknownClass, null, $"Could not read {Path.Combine(container, "RecordData.json")}.");
 
@@ -182,7 +182,7 @@ public sealed class SourceRepositoryLayoutTests
     public void TreeOf_RefusesADirectoryHoldingTwoDocumentsAndNoneNamedForIt()
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
-        TrackMixed(modFolder, new TreeFile("RecordData.json", [0]));
+        InitMixed(modFolder, new TreeFile("RecordData.json", [0]));
         WriteByHand(modFolder, Path.Combine("Worldspaces", "ByHand", "One.json"));
         WriteByHand(modFolder, Path.Combine("Worldspaces", "ByHand", "Two.json"));
 
@@ -193,7 +193,7 @@ public sealed class SourceRepositoryLayoutTests
     public void TreeOf_LeavesAFlatRecordTheDoorReadsAsItIs()
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
-        TrackMixed(modFolder, new TreeFile("RecordData.json", [0]));
+        InitMixed(modFolder, new TreeFile("RecordData.json", [0]));
         var flat = Path.Combine("npc_", "sub", "SomeNpc - 000800_Mixed.ESP.json");
         WriteByHand(modFolder, flat);
 
@@ -201,18 +201,18 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     [Fact]
-    public void TreeOf_AnswersTheTreeTrackWasHanded_ItsHeaderByTheDoorsName_AndNoOtherFileANewOne()
+    public void TreeOf_AnswersTheTreeInitWasHanded_ItsHeaderByTheDoorsName_AndNoOtherFileANewOne()
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
         var npc = Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json");
 
-        TrackMixed(modFolder, new TreeFile("RecordData.json", [1]), new TreeFile(npc, [2]));
+        InitMixed(modFolder, new TreeFile("RecordData.json", [1]), new TreeFile(npc, [2]));
 
         Assert.Equal(["RecordData.json", npc], TreePathsOf(modFolder));
     }
 
     [Fact]
-    public void ReadBackOf_TheDoorsTree_IsThatTree_SoAGateCompilingItCompilesWhatTrackWrites()
+    public void ReadBackOf_TheDoorsTree_IsThatTree_SoAGateCompilingItCompilesWhatInitWrites()
     {
         var container = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP");
         TreeFile[] tree =
@@ -233,7 +233,7 @@ public sealed class SourceRepositoryLayoutTests
     private static readonly PluginAddress Mixed = new("Mixed.ESP", TestMod.Name);
 
     private static ISourceRepository RepositoryOver(string modFolder) =>
-        TestAdapters.Source().Open(TestMod.In(modFolder), Release) ?? throw new InvalidOperationException($"Expected '{modFolder}' tracked.");
+        TestAdapters.Source().Open(TestMod.In(modFolder), Release) ?? throw new InvalidOperationException($"Expected '{modFolder}' to be a source mod.");
 
     private static List<string> TreePathsOf(string modFolder) =>
         [.. RepositoryOver(modFolder).TreeOf(Mixed).Value().Files.Select(file => file.RelativePath).Order(StringComparer.Ordinal)];

@@ -7,9 +7,9 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
 {
     private static readonly PluginAddress PluginAt = new("Mine.esp", "Mod");
 
-    private readonly ScratchDirectory _modFolder = new("medit-istracked-mod-");
+    private readonly ScratchDirectory _modFolder = new("medit-issourcemod-mod-");
 
-    private readonly ScratchDirectory _sourceFolder = new("medit-istracked-source-");
+    private readonly ScratchDirectory _sourceFolder = new("medit-issourcemod-source-");
 
     private RegisteredPlugin Registered => new(PluginAt.Name, PluginAt.Origin, "", new PluginProvider.FromMod("Mod", _modFolder, _sourceFolder), Line: null, PluginStrings.None);
 
@@ -28,7 +28,7 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
     }
 
     [Fact]
-    public void SourceReads_TreeInTheModsOwnTrackedFolder_IsFalse()
+    public void SourceReads_TreeInTheModsOwnSourceModFolder_IsFalse()
     {
         CommitOnMain(_modFolder);
         MakeTree(_modFolder);
@@ -94,7 +94,7 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
     }
 
     [Fact]
-    public void SourceReads_TrackedModHoldingThePluginsTree_IsTrue()
+    public void SourceReads_SourceModHoldingThePluginsTree_IsTrue()
     {
         CommitOnMain();
         MakeTree();
@@ -103,7 +103,7 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
     }
 
     [Fact]
-    public void SourceReads_TrackedModHoldingNoTreeForThePlugin_IsFalseThoughTracked()
+    public void SourceReads_SourceModHoldingNoTreeForThePlugin_IsFalseThoughSourceMod()
     {
         CommitOnMain();
 
@@ -112,7 +112,7 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
     }
 
     [Fact]
-    public void SourceReads_TreeInAModThatIsNotTracked_IsFalse()
+    public void SourceReads_TreeInAModThatIsNotSourceMod_IsFalse()
     {
         MakeTree();
 

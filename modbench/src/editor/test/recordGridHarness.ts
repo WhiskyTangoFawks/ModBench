@@ -84,11 +84,11 @@ export async function register({
     ask: vi.fn(),
     focusedView,
     recordViewIds: ['test.view'],
-    modFacts: { trackedMods: () => new Set(), modOfOrigin: () => undefined, standingOf: () => ({ kind: 'enabled' }), onChange: () => ({ dispose: () => undefined }) },
+    modFacts: { listedSourceMods: () => new Set(), modOfOrigin: () => undefined, standingOf: () => ({ kind: 'enabled' }), onChange: () => ({ dispose: () => undefined }) },
     recordWrite: (command) => command(),
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     locateRecord: () => Promise.resolve(undefined),
-    conditionsOf: () => ({ tracked: false, editable: false }),
+    conditionsOf: () => ({ editable: false }),
   });
   focusedView.follow('test.view', {
     get selection() { return selection(); },

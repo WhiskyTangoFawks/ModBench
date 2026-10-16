@@ -10,7 +10,7 @@ import { parseMetaIni } from './codecs/metaIni';
 import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
 import { creationClubListFile, dataFolderOf, gameReleaseForGame, loadedWithNoLineOf } from '../tables/gamePaths';
-import { factsOf, get, isTracked, listDir, readOrReason, stampOf } from './files';
+import { factsOf, get, isRepository, listDir, readOrReason, stampOf } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileOrigin, type GameFolder, type InstanceAdapter, type InstanceReading,
   type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided, type SourceMods,
@@ -163,7 +163,7 @@ export function readingSource(context: Mo2Context): ReadingSource {
 
     sourceMods: () => sourceModsIn(instanceRoot),
 
-    holdsRepository: () => isTracked(instanceRoot),
+    holdsRepository: () => isRepository(instanceRoot),
     watchNotes: () => watch.watchNotes(),
   };
 }

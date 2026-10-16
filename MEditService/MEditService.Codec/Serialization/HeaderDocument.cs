@@ -28,7 +28,7 @@ public static class HeaderDocument
                 fileSystem: NoRecordFolders.Instance, streamCreator: capture));
 
         // The one canonical-formatting guarantee the kernel does not make, applied identically to the
-        // tracked tree, so content_hash is a real git object name for the header on every platform.
+        // compiled plugin tree, so content_hash is a real git object name for the header on every platform.
         return [.. capture.Bytes().Where(b => b != (byte)'\r')];
     }
 

@@ -44,14 +44,14 @@ function rowIdentity(kind: 'mod' | 'separator', name: string): string {
 function modContextValue(mod: Pick<Mod, 'nexusId' | 'enabled'>, facts: ModFacts | undefined): string {
   const flags = [
     mod.nexusId !== undefined && 'hasNexus', mod.enabled ? 'enabled' : 'disabled',
-    facts?.holdsPlugin === true && 'holdsPlugin', facts !== undefined && (facts.tracked ? 'tracked' : 'untracked'),
+    facts?.holdsPlugin === true && 'holdsPlugin', facts !== undefined && (facts.sourceMod ? 'sourceMod' : 'nonSourceMod'),
   ];
   return ['mod', ...flags.filter((f): f is string => f !== false)].join(' ');
 }
 
 interface ModFacts {
   readonly holdsPlugin: boolean;
-  readonly tracked: boolean;
+  readonly sourceMod: boolean;
   readonly sourceFolder?: string;
   /** Shown only while the instance holds a repository (modlist-source.md, Status, story 1). */
   readonly status?: ModStatus;
@@ -102,7 +102,7 @@ export class ModNode extends vscode.TreeItem {
     this.nexusGame = mod.gameName;
     this.description = joined([mod.version, facts?.status && statusDescription(facts.status)]);
     this.tooltip = modTooltip(mod, facts);
-    this.iconPath = new vscode.ThemeIcon(facts?.tracked ? 'repo' : 'package');
+    this.iconPath = new vscode.ThemeIcon(facts?.sourceMod ? 'repo' : 'package');
     this.contextValue = modContextValue(mod, facts);
     this.checkboxState = mod.enabled
       ? vscode.TreeItemCheckboxState.Checked
@@ -357,10 +357,10 @@ export class ModListProvider
     const folders = this.instanceValue.foldersByMod.get(m.name) ?? [];
     const shown = shownUnder(parentShown, this.matches, m.name);
     const found = shown === 'matching' ? narrowToMatches(files, folders, this.matches) : { files, folders };
-    const tracked = this.instanceValue.trackedMods.has(m.name);
+    const sourceMod = this.instanceValue.listedSourceMods.has(m.name);
     return new ModNode(m, {
-      holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked,
-      sourceFolder: tracked ? this.instanceValue.paths.sourceDirs.get(m.name) : undefined,
+      holdsPlugin: this.modsHoldingPlugin.has(m.name), sourceMod,
+      sourceFolder: sourceMod ? this.instanceValue.paths.sourceDirs.get(m.name) : undefined,
       status: this.statusOf(m),
     }, found.files, found.folders, shown);
   }

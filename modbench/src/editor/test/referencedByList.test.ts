@@ -43,7 +43,7 @@ function indexed(references: ReferenceResult[]): InMemoryMEditClient {
   return client;
 }
 
-const NOTHING_EDITABLE: ConditionsOf = () => ({ tracked: false, editable: false });
+const NOTHING_EDITABLE: ConditionsOf = () => ({ editable: false });
 
 async function listOf(client: InMemoryMEditClient, list = 'a list', conditionsOf: ConditionsOf = NOTHING_EDITABLE) {
   const read = await readReferencedBy(client, leveledLog(), TARGET, list, conditionsOf);
@@ -198,8 +198,7 @@ describe('the Referenced By list — where a referrer is held', () => {
 
 describe('the Referenced By list — what a plugin copy offers', () => {
   const EDITABLE_MOD = 'EditableMod';
-  const conditions: ConditionsOf = ({ origin }) =>
-    origin === EDITABLE_MOD ? { tracked: true, editable: true } : { tracked: origin === 'TrackedMod', editable: false };
+  const conditions: ConditionsOf = ({ origin }) => ({ editable: origin === EDITABLE_MOD });
   const HOLDS_CHILDREN = [{ type: 'dial', displayName: 'Dialog Topic' }];
 
   async function listedAs(references: ReferenceResult[], children: typeof HOLDS_CHILDREN) {
@@ -210,18 +209,17 @@ describe('the Referenced By list — what a plugin copy offers', () => {
   }
 
   it.each([
-    ['an editable tracked plugin, for a record that can hold a child', EDITABLE_MOD, HOLDS_CHILDREN, 'referencedByHolder tracked editable container'],
-    ['an editable tracked plugin, for a record that can hold none', EDITABLE_MOD, [], 'referencedByHolder tracked editable'],
-    ['a tracked plugin that is not editable', 'TrackedMod', HOLDS_CHILDREN, 'referencedByHolder tracked'],
-    ['a plugin of neither kind', 'Fallout4.esm', HOLDS_CHILDREN, 'referencedByHolder untracked'],
+    ['an editable plugin, for a record that can hold a child', EDITABLE_MOD, HOLDS_CHILDREN, 'referencedByHolder editable container'],
+    ['an editable plugin, for a record that can hold none', EDITABLE_MOD, [], 'referencedByHolder editable'],
+    ['a plugin that is not editable', 'Fallout4.esm', HOLDS_CHILDREN, 'referencedByHolder'],
   ])('is stated as Plugins states it for %s', async (_, origin, children, expected) => {
     expect((await listedAs([reference({ formKey: '000002:Fallout4.esm', origin })], children)).offers).toEqual([expected]);
   });
 
-  it('asks what a record can hold of an editable tracked plugin\'s copy only', async () => {
+  it('asks what a record can hold of an editable plugin\'s copy only', async () => {
     const { client } = await listedAs([
       reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD, plugin: 'E.esp' }),
-      reference({ formKey: '000002:Fallout4.esm', origin: 'TrackedMod' }),
+      reference({ formKey: '000002:Fallout4.esm', origin: 'SourceMod' }),
       reference({ formKey: '000002:Fallout4.esm', origin: 'Fallout4.esm' }),
     ], HOLDS_CHILDREN);
     expect(client.calls.filter((c) => c.method === 'getChildRecordTypes')).toEqual([
@@ -235,7 +233,7 @@ describe('the Referenced By list — what a plugin copy offers', () => {
     const log = leveledLog();
     const { provider } = await readReferencedBy(client, log, TARGET, 'a list', conditions);
     const [referrer] = provider.getChildren();
-    expect(provider.getChildren(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder tracked editable']);
+    expect(provider.getChildren(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder editable']);
     expect(log.lines.warn).toHaveLength(1);
     expect(log.lines.warn[0]).toContain(`getChildRecordTypes(${EDITABLE_MOD}, Fallout4.esm, 000002:Fallout4.esm)`);
   });

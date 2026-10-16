@@ -38,7 +38,7 @@ internal static class ModelIdentity
                && FindFirstHeaderFieldDivergence(original, originalHeader, recompiled, recompiledHeader) is { } field
             ? new Divergence(
                 PluginHeader.RecordType, FormKey.Null, null,
-                $"TES4 header field '{field}' changed after being recompiled from its own tracked source.")
+                $"TES4 header field '{field}' changed after being recompiled from its own plugin source.")
             : null;
     }
 
@@ -68,7 +68,7 @@ internal static class ModelIdentity
             if (changed != null)
             {
                 return new Divergence(originalRecord.GetType().Name, originalRecord.FormKey, originalRecord.EditorID,
-                    $"differs after being recompiled from its own tracked source — field '{changed}' changed.");
+                    $"differs after being recompiled from its own plugin source — field '{changed}' changed.");
             }
         }
 

@@ -413,7 +413,7 @@ describe('modbench.mod.build', () => {
 
     await handler({
       webviewSection: 'recordHeader', argument: { kind: 'record', formKey: '000801:Other.esp', plugin: OTHER },
-      editable: true, inMod: 'tracked', preventDefaultContextMenuItems: true,
+      editable: true, inMod: 'sourceMod', preventDefaultContextMenuItems: true,
     });
 
     expect(buildCalls()).toEqual([[['ModB']]]);
@@ -810,7 +810,7 @@ describe('modbench.plugin.decompile', () => {
 
   function row(plugin: { name: string; origin: string }): PluginNode {
     const node = new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);
-    node.contextValue = 'plugin enabled inTrackedMod untracked editable';
+    node.contextValue = 'plugin enabled inSourceMod nonCompiledPlugin editable';
     return node;
   }
 

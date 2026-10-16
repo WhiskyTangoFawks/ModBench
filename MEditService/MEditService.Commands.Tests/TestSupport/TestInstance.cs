@@ -80,9 +80,9 @@ public abstract class TestInstance : IDisposable
 
     public string ModFolderOf(PluginAddress plugin) => FolderOf(plugin.Origin);
 
-    /// <summary>The next plugin in load order. A tracked one is a mod's plugin, tracked as it is added;
-    /// one that masters another is tracked over the load order so far, which holds its masters.</summary>
-    protected PluginAddress Add(IMod mod, string origin, bool tracked = true, Listing listing = Listing.Winning)
+    /// <summary>The next plugin in load order. A compiled one is a mod's plugin, made so as it is added;
+    /// one that masters another is built over the load order so far, which holds its masters.</summary>
+    protected PluginAddress Add(IMod mod, string origin, bool compiledPlugin = true, Listing listing = Listing.Winning)
     {
         if (_loadOrder is not null) throw new InvalidOperationException("The load order is sealed.");
         if (mod.GameRelease != _release) throw new InvalidOperationException($"{mod.ModKey} is a {mod.GameRelease} plugin in a {_release} instance.");
@@ -98,10 +98,10 @@ public abstract class TestInstance : IDisposable
         var entry = new LoadOrderEntry(name, path, origin, line, Enabled: true, Winning: listing != Listing.Overridden);
         _entries.Add(entry);
 
-        if (!tracked) Write(mod, path);
+        if (!compiledPlugin) Write(mod, path);
         else if (entry.Provider is not PluginProvider.FromMod)
             throw new InvalidOperationException($"'{origin}' is not a mod, so its plugin has no folder to init.");
-        else if (mod.MasterReferences.Count == 0) TrackedTemplates.WriteTracked(folder, mod);
+        else if (mod.MasterReferences.Count == 0) CompiledPluginTemplates.WriteCompiledPlugin(folder, mod);
         else
         {
             Write(mod, path);
@@ -118,7 +118,7 @@ public abstract class TestInstance : IDisposable
     public IReadOnlyCache<IModMasterStyledGetter, ModKey> Added => _added;
 
     /// <summary>The repository over the mod providing <paramref name="plugin"/>, or null when its
-    /// folder is not tracked.</summary>
+    /// folder is not a source mod.</summary>
     public ISourceRepository? RepositoryOf(PluginAddress plugin) =>
         LoadOrder.ProviderOf(plugin) is PluginProvider.FromMod mod ? TestAdapters.Source().Open(mod, _release) : null;
 
@@ -141,7 +141,7 @@ public abstract class TestInstance : IDisposable
         Holder.Apply(_loadOrder);
     }
 
-    /// <summary>Fixes the load order: a fixture whose tests read a tracked tree before any handler runs
+    /// <summary>Fixes the load order: a fixture whose tests read a compiled plugin tree before any handler runs
     /// seals at the end of its construction.</summary>
     protected LoadOrderSnapshot Seal() => _loadOrder ??= Snapshot();
 

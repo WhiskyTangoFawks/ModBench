@@ -6,8 +6,8 @@ import type {
 } from '../instanceAdapter/instanceAdapter';
 import { EMPTY_MOD_NAME, goneFromDisk, modNameTakenRefusal } from '../coreLib/commandRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
-import type { ModStatus } from '../client';
-import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
+import type { ModStatus, ReadModStatus } from '../client';
+import { failureReason, isReadFailed } from '../wire/readFailed';
 
 /** What a mod is installed from: an archive or a folder the user picked, or a downloaded file by
  *  its name and path in the instance value, with the Nexus ids and version its metadata holds. */
@@ -53,11 +53,9 @@ const FORCE_TO_REPLACE = 'Request it again with force to replace its files.';
 const statusUnread = (mod: string, why: string): string =>
   `"${mod}" status could not be read: ${why.replace(/\.$/, '')}. ${FORCE_TO_REPLACE}`;
 
-export type ReadStatus = (mods: readonly string[]) => Promise<readonly ModStatus[] | ReadFailed>;
-
 // What an upgrade over the mod would lose, or why mEdit could not say (agent.md, Any agent, story 7).
 async function upgradeRefusal(
-  { adapter, readStatus }: { adapter: InstanceAdapter; readStatus: ReadStatus }, target: InstallTarget, force: boolean,
+  { adapter, readStatus }: { adapter: InstanceAdapter; readStatus: ReadModStatus }, target: InstallTarget, force: boolean,
 ): Promise<string | undefined> {
   if (force || target.kind !== 'upgrade') return undefined;
   const mod = target.name;
@@ -85,7 +83,7 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
 /** `modbench.mod.install`, then a downloaded file marked installed. `downloadRefusal` says why the
  *  mark failed, so a landed install is not reported as failed (downloads.md, Reporting, story 1). */
 export async function installMod(
-  deps: { adapter: InstanceAdapter; readStatus: ReadStatus },
+  deps: { adapter: InstanceAdapter; readStatus: ReadModStatus },
   source: ModSource, target: InstallTarget, gameName: string, force: boolean,
 ): Promise<CommandResult<{ isFomod: boolean; downloadRefusal?: string }>> {
   if (target.kind === 'new' && target.name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };

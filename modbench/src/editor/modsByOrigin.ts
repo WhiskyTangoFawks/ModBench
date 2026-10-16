@@ -4,7 +4,7 @@ import type { PluginAddress } from '../wire/pluginAddress';
 import type { PluginStanding } from '../instanceLoader/pluginStanding';
 
 export interface ModFacts {
-  trackedMods: () => ReadonlySet<string>;
+  listedSourceMods: () => ReadonlySet<string>;
   modOfOrigin: (origin: string) => string | undefined;
   standingOf: (plugin: PluginAddress) => PluginStanding;
   onChange: (listener: () => void) => vscode.Disposable;
@@ -12,9 +12,9 @@ export interface ModFacts {
 
 /** An origin in no mod, as the game's and Overwrite's are, is left out. */
 export function modsByOrigin(origins: Iterable<string>, facts: ModFacts): Record<string, ModRepository> {
-  const trackedMods = facts.trackedMods();
+  const listedSourceMods = facts.listedSourceMods();
   return Object.fromEntries([...new Set(origins)].flatMap((origin) => {
     const mod = facts.modOfOrigin(origin);
-    return mod === undefined ? [] : [[origin, trackedMods.has(mod) ? 'tracked' : 'untracked'] as const];
+    return mod === undefined ? [] : [[origin, listedSourceMods.has(mod) ? 'sourceMod' : 'nonSourceMod'] as const];
   }));
 }

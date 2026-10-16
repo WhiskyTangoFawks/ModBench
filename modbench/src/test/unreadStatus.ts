@@ -1,3 +1,3 @@
-import type { ReadStatus } from '../modOrderCommands/install';
+import type { ReadModStatus } from '../client';
 
-export const unreadStatus: ReadStatus = () => Promise.reject(new Error('unscripted'));
+export const unreadStatus: ReadModStatus = () => Promise.reject(new Error('unscripted'));

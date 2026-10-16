@@ -187,10 +187,10 @@ describe('cellContext, every cell\'s own items and every menu its cell is the ta
 
 describe('headerCellContext, unconditional on the column\'s read-only-ness, as copying from an immutable column is the headline use case', () => {
   it('identifies the header cell, carrying the column\'s own record identity', () => {
-    expect(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', { editable: true, inMod: 'tracked' })).toEqual({
+    expect(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', { editable: true, inMod: 'sourceMod' })).toEqual({
       webviewSection: 'recordHeader',
       argument: { kind: 'record', plugin: { name: 'MyMod.esp', origin: 'ModA' }, formKey: '000001:Fallout4.esm' },
-      editable: true, inMod: 'tracked', preventDefaultContextMenuItems: true,
+      editable: true, inMod: 'sourceMod', preventDefaultContextMenuItems: true,
     });
   });
 });
@@ -215,7 +215,7 @@ describe('stringValueContext, the string-cell right-click menu\'s own identity a
     });
   });
 
-  it('carries readOnly: true for an immutable/untracked/not-in-load-order column unchanged', () => {
+  it('carries readOnly: true for an immutable/non-compiled plugin/not-in-load-order column unchanged', () => {
     expect(stringValueContext(
       '000001:Fallout4.esm', 'Fallout4.esm', 'Data', 'Dogmeat', 'Name', 'Dogmeat', true, NAME_PATH,
     ).readOnly).toBe(true);

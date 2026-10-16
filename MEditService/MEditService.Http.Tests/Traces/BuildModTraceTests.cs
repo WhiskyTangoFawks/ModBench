@@ -12,13 +12,13 @@ public sealed class BuildModTraceTests : HostedTests
     private const string Plugin = "Built.esp";
     private const string SecondPlugin = "AlsoBuilt.esp";
     private const string Origin = "BuiltMod";
-    private const string UntrackedPlugin = "Untracked.esp";
-    private const string UntrackedOrigin = "NonSourceMod";
+    private const string NonCompiledPlugin = "NonCompiledPlugin.esp";
+    private const string NonCompiledPluginOrigin = "NonSourceMod";
 
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("trace-build-mod")
         .WithPlugin(Plugin, mod => mod.Npcs.AddNew("BuiltNpc"), origin: Origin)
         .WithPlugin(SecondPlugin, mod => mod.Npcs.AddNew("AlsoBuiltNpc"), origin: Origin)
-        .WithPlugin(UntrackedPlugin, mod => mod.Npcs.AddNew("UntrackedNpc"), origin: UntrackedOrigin)
+        .WithPlugin(NonCompiledPlugin, mod => mod.Npcs.AddNew("NonCompiledPluginNpc"), origin: NonCompiledPluginOrigin)
         .BuildScattered();
 
     protected override void DisposeFixtures() => _instance.Dispose();
@@ -27,7 +27,7 @@ public sealed class BuildModTraceTests : HostedTests
 
     private string StatCache => Path.Combine(_instance.Root, "stat-cache");
 
-    private async Task LoadedWithOneModFolderAndTracked()
+    private async Task LoadedWithOneModFolderAndCompiledPlugin()
     {
         _builtFolder = Path.GetDirectoryName(_instance.Plugins.Single(p => p.Name == Plugin).Path).Require();
         var second = _instance.Plugins.Single(p => p.Name == SecondPlugin);
@@ -47,7 +47,7 @@ public sealed class BuildModTraceTests : HostedTests
     [Fact]
     public async Task BuildingAMod_CompilesEveryPluginOfItFromItsSource_NamesThePluginChangedOutsideModbench_AndReportsItsProgress()
     {
-        await LoadedWithOneModFolderAndTracked();
+        await LoadedWithOneModFolderAndCompiledPlugin();
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         var otherFormKey = await Client.FirstFormKey(SecondPlugin, Origin);
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
@@ -77,7 +77,7 @@ public sealed class BuildModTraceTests : HostedTests
     [Fact]
     public async Task RestoringAModWhoseSourceIsAbsent_ClonesItFromTheRemoteItsManifestNames_AndBuildsItAtThatCommit()
     {
-        await LoadedWithOneModFolderAndTracked();
+        await LoadedWithOneModFolderAndCompiledPlugin();
         var source = Client.SourceFolderSentFor(Origin);
         var remote = Path.Combine(_instance.Root, "remote");
         foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
@@ -115,14 +115,14 @@ public sealed class BuildModTraceTests : HostedTests
     [Fact]
     public async Task BuildingAModWhoseSourceHoldsNoBuildConfiguration_RefusesItByName_AndBuildsTheRest()
     {
-        await LoadedWithOneModFolderAndTracked();
-        var untrackedFolder = Path.GetDirectoryName(_instance.Plugins.Single(p => p.Name == UntrackedPlugin).Path).Require();
+        await LoadedWithOneModFolderAndCompiledPlugin();
+        var nonCompiledPluginFolder = Path.GetDirectoryName(_instance.Plugins.Single(p => p.Name == NonCompiledPlugin).Path).Require();
 
-        var answer = await Answer(await Client.Build([(UntrackedOrigin, untrackedFolder), (Origin, _builtFolder)], StatCache));
+        var answer = await Answer(await Client.Build([(NonCompiledPluginOrigin, nonCompiledPluginFolder), (Origin, _builtFolder)], StatCache));
 
         Assert.Equal([Origin], answer.GetProperty("applied").EnumerateArray().Select(m => m.GetProperty("mod").GetString()));
         var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
-        Assert.Equal(UntrackedOrigin, refused.GetProperty("item").GetString());
+        Assert.Equal(NonCompiledPluginOrigin, refused.GetProperty("item").GetString());
         Assert.Equal("SourceUnreadable", refused.GetProperty("refusal").GetString());
         Assert.EndsWith("holds no build configuration.", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
@@ -130,7 +130,7 @@ public sealed class BuildModTraceTests : HostedTests
     [Fact]
     public async Task BuildingAModWithAnArchiveToPack_PacksItAsTheRequestsVariantSays()
     {
-        await LoadedWithOneModFolderAndTracked();
+        await LoadedWithOneModFolderAndCompiledPlugin();
         var source = Client.SourceFolderSentFor(Origin);
         Directory.CreateDirectory(Path.Combine(source, "assets", "meshes"));
         File.WriteAllText(Path.Combine(source, "assets", "meshes", "a.nif"), "mesh");
@@ -172,7 +172,7 @@ public sealed class BuildModTraceTests : HostedTests
     [MemberData(nameof(NotARequestToBuild))]
     public async Task ARequestThatDoesNotSayWhatToBuild_Is400(string lacking, string body)
     {
-        await LoadedWithOneModFolderAndTracked();
+        await LoadedWithOneModFolderAndCompiledPlugin();
 
         using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
         var response = await Client.PostAsync("/build", content);

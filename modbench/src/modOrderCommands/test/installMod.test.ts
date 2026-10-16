@@ -3,7 +3,7 @@ import { modlistCommands, type ModSource } from '../modOrderCommands';
 import type { InstallSource, InstallTarget } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { ModStatus } from '../../client';
-import type { ReadStatus } from '../install';
+import type { ReadModStatus } from '../../client';
 import type { ReadFailed } from '../../wire/readFailed';
 import { unreadStatus } from '../../test/unreadStatus';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -15,7 +15,7 @@ const NEW_MOD: InstallTarget = { kind: 'new', name: MOD };
 const UPGRADED = { kind: 'upgrade', name: 'Harder VATS' } as const;
 const DOWNLOADED = { kind: 'downloadedFile', name: 'Freshly-1-0.7z', path: '/downloads/Freshly-1-0.7z' } as const;
 
-function install(source: ModSource, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, readStatus: ReadStatus = unreadStatus) {
+function install(source: ModSource, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, readStatus: ReadModStatus = unreadStatus) {
   const fake = fakeInstanceAdapter(undefined, answers);
   const outcome = modlistCommands(fake.adapter, new InMemoryMEditClient(), readStatus).installMod(source, target, GAME_NAME, force);
   return outcome.then((result) => ({ result, calls: fake.calls }));
@@ -24,7 +24,7 @@ function install(source: ModSource, target: InstallTarget = NEW_MOD, answers: In
 const statusOf = (over: Partial<ModStatus> = {}): ModStatus =>
   ({ mod: UPGRADED.name, noManifest: false, differing: [], namedByNoLine: [], gone: [], noProvider: [], metadataDiffers: false, ...over });
 
-const reading = (answer: readonly ModStatus[] | ReadFailed) => vi.fn<ReadStatus>().mockResolvedValue(answer);
+const reading = (answer: readonly ModStatus[] | ReadFailed) => vi.fn<ReadModStatus>().mockResolvedValue(answer);
 
 describe('installMod', () => {
   describe('an upgrade without force', () => {

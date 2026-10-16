@@ -23,7 +23,7 @@ public sealed class PersistentFlagEditTests : IDisposable
 
     public PersistentFlagEditTests()
     {
-        _mod = SourceModFixture.Tracked("Persistence.esp", "PersistenceMod", plugin =>
+        _mod = SourceModFixture.CompiledPlugin("Persistence.esp", "PersistenceMod", plugin =>
         {
             var inside = NewCell(plugin, "Inside", Cell.Flag.IsInteriorCell);
             inside.Temporary.Add(Placed(plugin, "InsideTemp", 0, 1f, 2f));

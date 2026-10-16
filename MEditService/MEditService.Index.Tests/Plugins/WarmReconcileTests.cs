@@ -136,21 +136,21 @@ public sealed class WarmReconcileTests
     }
 
     [Fact]
-    public async Task ATrackedPlugin_IsValidatedAgainstItsSourceTreeOnEveryLoad()
+    public async Task ACompiledPlugin_IsValidatedAgainstItsSourceTreeOnEveryLoad()
     {
         var holder = new LoadOrderHolder();
-        const string plugin = "Tracked.esp";
-        using var fixture = new PluginFixtureBuilder("warm-tracked")
-            .WithPlugin(plugin, m => m.Npcs.AddNew("TrackedNpc"), origin: "SourceMod")
+        const string plugin = "CompiledPlugin.esp";
+        using var fixture = new PluginFixtureBuilder("warm-compiled-plugin")
+            .WithPlugin(plugin, m => m.Npcs.AddNew("CompiledPluginNpc"), origin: "SourceMod")
             .BuildScattered()
-            .Tracked();
+            .CompiledPlugin();
         var entry = fixture.Plugins.Single();
 
         string npcSourceFile;
         using (var second = OpenIndex(holder))
         {
             second.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
-            var npc = second.ListedIn(entry.KeyOf()).Single(row => row.EditorId == "TrackedNpc");
+            var npc = second.ListedIn(entry.KeyOf()).Single(row => row.EditorId == "CompiledPluginNpc");
             npcSourceFile = entry.SourceFileOf(second.DocumentOf(npc.FormKey, entry.KeyOf()));
         }
 
@@ -161,7 +161,7 @@ public sealed class WarmReconcileTests
 
         var text = await File.ReadAllTextAsync(npcSourceFile);
         await File.WriteAllTextAsync(
-            npcSourceFile, text.Replace("\"TrackedNpc\"", "\"EditedBetweenLoads\"", StringComparison.Ordinal));
+            npcSourceFile, text.Replace("\"CompiledPluginNpc\"", "\"EditedBetweenLoads\"", StringComparison.Ordinal));
         using var fourth = OpenIndex(holder);
         fourth.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
         Assert.Contains(

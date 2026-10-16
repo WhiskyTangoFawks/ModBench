@@ -14,8 +14,8 @@ from tests.fixture_medit import (
     files_and_bytes,
     fixture_medit,
     holding_unsaved,
+    init_mod,
     source_folder,
-    track,
     window_of,
 )
 
@@ -28,7 +28,7 @@ class EditAgainstTheFixtureInstance(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.fixture = cls.enterClassContext(fixture_medit())
-        track(cls.fixture, CONDITIONS.origin)
+        init_mod(cls.fixture, CONDITIONS.origin)
         cls.source = source_folder(cls.fixture.instance, CONDITIONS.origin)
         [cls.recipe_file] = cls.source.rglob(RECIPE_FILE)
 
@@ -43,7 +43,7 @@ class EditAgainstTheFixtureInstance(unittest.TestCase):
         before = files_and_bytes(light)
         with window_of(self.fixture.url), self.assertRaises(medit.MEditError) as raised:
             medit.edit(LIGHT.name, LIGHT_RECORD, 'set', 'EditorID', 'Renamed')
-        self.assertIn(f'{LIGHT.name} is not tracked', str(raised.exception))
+        self.assertIn(f'{LIGHT.name} is not a compiled plugin', str(raised.exception))
         self.assertEqual(files_and_bytes(light), before)
         self.assertFalse(source_folder(self.fixture.instance, LIGHT.origin).exists())
 

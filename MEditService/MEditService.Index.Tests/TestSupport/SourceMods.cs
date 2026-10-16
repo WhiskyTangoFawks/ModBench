@@ -7,12 +7,12 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.TestSupport;
 
-/// <summary>A tracked mod folder made the Source repository's own way: the binary read as the tree
+/// <summary>A source mod folder made the Source repository's own way: the binary read as the tree
 /// it would commit, committed as the baseline. The Index then reads the tree, never the
 /// binary.</summary>
 internal static class SourceMods
 {
-    internal static void Track(string pluginPath, GameRelease release = GameRelease.Fallout4)
+    internal static void Init(string pluginPath, GameRelease release = GameRelease.Fallout4)
     {
         var modFolder = Path.GetDirectoryName(pluginPath)
             ?? throw new ArgumentException("A plugin path names a file inside a mod folder.", nameof(pluginPath));
@@ -27,13 +27,13 @@ internal static class SourceMods
         TestAdapters.Source().Init(modFolder, [(source.Files, new DecompiledPlugin(pluginName, source.BinarySha256))]);
     }
 
-    internal static void Track(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>
-        Track(entry.Path, release);
+    internal static void Init(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>
+        Init(entry.Path, release);
 
-    /// <summary>Every plugin of the fixture tracked, so the Index reads each from its tree.</summary>
-    internal static ScatteredFixtureData Tracked(this ScatteredFixtureData fixture)
+    /// <summary>Every plugin of the fixture source mod, so the Index reads each from its tree.</summary>
+    internal static ScatteredFixtureData CompiledPlugin(this ScatteredFixtureData fixture)
     {
-        foreach (var entry in fixture.Plugins) Track(entry);
+        foreach (var entry in fixture.Plugins) Init(entry);
         return fixture;
     }
 
@@ -43,9 +43,9 @@ internal static class SourceMods
     internal static PluginAddress KeyOf(this LoadOrderEntry entry) => new(entry.Name, entry.Origin);
 
     internal static string ModFolderOf(this LoadOrderEntry entry) =>
-        Path.GetDirectoryName(entry.Path) ?? throw new ArgumentException("A tracked entry sits in a mod folder.", nameof(entry));
+        Path.GetDirectoryName(entry.Path) ?? throw new ArgumentException("A compiled plugin entry sits in a mod folder.", nameof(entry));
 
-    /// <summary>The file the tracked tree keeps <paramref name="identity"/>'s document in, asked of
+    /// <summary>The file the compiled plugin tree keeps <paramref name="identity"/>'s document in, asked of
     /// the repository: an embedded child names its container's file.</summary>
     internal static string SourceFileOf(this LoadOrderEntry entry, RecordIdentity identity, GameRelease release = GameRelease.Fallout4)
     {
@@ -58,13 +58,13 @@ internal static class SourceMods
     internal static string SourceFileOf(this LoadOrderEntry entry, RecordDetail document) =>
         entry.SourceFileOf(new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));
 
-    /// <summary>The record's own text in the tracked tree: a container's with its children in it, as an
+    /// <summary>The record's own text in the compiled plugin tree: a container's with its children in it, as an
     /// edit starts from.</summary>
     internal static string SourceTextOf(this LoadOrderEntry entry, RecordDetail document) =>
         RepositoryOf(entry).RecordOf(entry.KeyOf(), new RecordIdentity(document.FormKey, document.RecordType, document.EditorId)).Value()?.Body
             ?? throw new InvalidOperationException($"No document in {entry.Name}'s tree holds {document.FormKey}.");
 
-    /// <summary>Git run against the tracked mod folder: the "other tool" actor, never an
+    /// <summary>Git run against the source mod folder: the "other tool" actor, never an
     /// assertion channel.</summary>
     internal static string Git(this LoadOrderEntry entry, params string[] args) =>
         GitProbe.Run(Path.Combine(entry.ModFolderOf(), ".git"), entry.ModFolderOf(), args);

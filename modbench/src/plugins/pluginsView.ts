@@ -55,7 +55,7 @@ export interface PluginsViewDeps {
   client: PluginFactsClient & RenamePluginDeps['client'] & DecompileDeps['client']
     & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onLoadOrderStatus' | 'onReconnected' | 'onStatusChanged' | 'setFilter' | 'clearFilter' | 'createPlugin'>;
   statusBar: StatusBar;
-  /** Registers the tracked mods' repositories: a reconcile reached Ready, or a decompile and commit landed. */
+  /** Registers the source mods' repositories: a reconcile reached Ready, or a decompile and commit landed. */
   registerRepositories: () => Promise<void>;
   ask: AskQuestion;
   recordWrite: RecordWrite;
@@ -84,7 +84,7 @@ export interface PluginsView extends vscode.Disposable {
   /** The load order Editing could not put: its refusal is this view's message line too. */
   loadOrderPut: SyncFailureReport;
   copyValue: CopyValueAdapter;
-  /** What mEdit has told the view of a plugin's tracking and editability. */
+  /** What mEdit has told the view of whether a plugin is a compiled plugin, and its editability. */
   conditionsOf: (plugin: PluginAddress) => PluginConditions;
   progress: PluginsViewProgress;
   narrator: ReconcileNarrator;

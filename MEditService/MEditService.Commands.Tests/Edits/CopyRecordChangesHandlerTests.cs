@@ -11,7 +11,7 @@ public sealed class CopyRecordChangesHandlerTests
     [Theory]
     [InlineData(CopyMode.New)]
     [InlineData(CopyMode.Override)]
-    public void CopyingTwoRecordsIntoTwoDestinations_WhereOneIsUntracked_LandsInTheTrackedOne_AndAnswersPerItem(CopyMode mode)
+    public void CopyingTwoRecordsIntoTwoDestinations_WhereOneIsNonCompiledPlugin_LandsInTheCompiledPluginOne_AndAnswersPerItem(CopyMode mode)
     {
         using var mod = CopyFixture.Create();
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
@@ -25,7 +25,7 @@ public sealed class CopyRecordChangesHandlerTests
         Assert.Equal(
             [new CopyItem(npc, mod.SourcePlugin), new CopyItem(faction, mod.SourcePlugin)],
             result.Refused.Select(refused => refused.Item));
-        Assert.All(result.Refused, refused => Assert.Equal(RecordEditRefusal.PluginNotTracked, refused.Refusal));
+        Assert.All(result.Refused, refused => Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, refused.Refusal));
     }
 
     [Theory]
@@ -51,7 +51,7 @@ public sealed class CopyRecordChangesHandlerTests
     [InlineData(true)]
     public void CopyingAsOverride_IntoTheRecordsOwnPlugin_WritesNothing_AndIsNoRefusal(bool replace)
     {
-        using var mod = CopyFixture.Create(trackSource: true);
+        using var mod = CopyFixture.Create(initSource: true);
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
         LeaveTextTheCodecWouldRespell(mod);
         var before = SourceModTree.Records(mod.SourceModFolder, mod.SourcePlugin);
@@ -115,9 +115,9 @@ public sealed class CopyRecordChangesHandlerTests
     }
 
     [Fact]
-    public void CopyChanges_OfATrackedSourcesRecord_CarryTheSourcesUnsavedText()
+    public void CopyChanges_OfACompiledPluginSourcesRecord_CarryTheSourcesUnsavedText()
     {
-        using var mod = CopyFixture.Create(trackSource: true);
+        using var mod = CopyFixture.Create(initSource: true);
         var npc = mod.Document(mod.SourcePlugin, mod.SourceNpc.ToString()).Require();
         var unsaved = new DocumentChange(
             TreeTampering.FileOf(mod.SourceModFolder, mod.SourcePlugin, npc.Identity),

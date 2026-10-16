@@ -19,7 +19,7 @@ public sealed class ContainerOwnDocumentTests
     {
         private readonly ScatteredFixtureData _data;
 
-        public Fixture(bool tracked)
+        public Fixture(bool compiledPlugin)
         {
             ContainerModPlugin.Keys keys = default;
             FormKey quest = default, topic = default, response = default;
@@ -35,7 +35,7 @@ public sealed class ContainerOwnDocumentTests
                     (quest, topic, response) = (q.FormKey, t.FormKey, r.FormKey);
                 }, origin: Origin)
                 .BuildScattered();
-            if (tracked) _data.Tracked();
+            if (compiledPlugin) _data.CompiledPlugin();
             (Keys, Quest, Topic, Response) = (keys, quest.ToString(), topic.ToString(), response.ToString());
             Index = Indexes.Reconciled(_data);
         }
@@ -66,9 +66,9 @@ public sealed class ContainerOwnDocumentTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void AContainersStoredDocument_HoldsItsOwnFields_AndNoneOfItsChildren(bool tracked)
+    public void AContainersStoredDocument_HoldsItsOwnFields_AndNoneOfItsChildren(bool compiledPlugin)
     {
-        using var fixture = new Fixture(tracked);
+        using var fixture = new Fixture(compiledPlugin);
         var keys = fixture.Keys;
 
         Assert.Equal(
@@ -86,9 +86,9 @@ public sealed class ContainerOwnDocumentTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void EachChild_IsStoredAsItsOwnRecord_AndItsContainerStillHoldsIt(bool tracked)
+    public void EachChild_IsStoredAsItsOwnRecord_AndItsContainerStillHoldsIt(bool compiledPlugin)
     {
-        using var fixture = new Fixture(tracked);
+        using var fixture = new Fixture(compiledPlugin);
         var keys = fixture.Keys;
 
         Assert.Equal(
@@ -114,7 +114,7 @@ public sealed class ContainerOwnDocumentTests
     [Fact]
     public void AContainerEditedInItsTree_IsStoredWithItsOwnFieldsOnly()
     {
-        using var fixture = new Fixture(tracked: true);
+        using var fixture = new Fixture(compiledPlugin: true);
         var cell = fixture.Keys.EmbedCell.ToString();
         fixture.Entry.HandEdit(
             fixture.Index.DocumentOf(cell, Plugin), $"\"{ContainerModPlugin.EmbedCellEditorId}\"", "\"EditedCell\"");
@@ -130,9 +130,9 @@ public sealed class ContainerOwnDocumentTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void AContainersFields_AreItsOwn_WithNoRowForAChildSlot(bool tracked)
+    public void AContainersFields_AreItsOwn_WithNoRowForAChildSlot(bool compiledPlugin)
     {
-        using var fixture = new Fixture(tracked);
+        using var fixture = new Fixture(compiledPlugin);
         var cell = fixture.Keys.EmbedCell.ToString();
         string[] childSlots = ["Persistent", "Temporary", "NavigationMeshes", "Landscape", "DialogTopics", "Scenes", "DialogBranches"];
 
@@ -145,9 +145,9 @@ public sealed class ContainerOwnDocumentTests
     }
 
     [Fact]
-    public void ATrackedContainersFields_ReadFromItsWholeFile_AreItsOwn()
+    public void ACompiledPluginContainersFields_ReadFromItsWholeFile_AreItsOwn()
     {
-        using var fixture = new Fixture(tracked: true);
+        using var fixture = new Fixture(compiledPlugin: true);
         var cell = fixture.Keys.EmbedCell.ToString();
         var file = fixture.Entry.SourceFileOf(fixture.Index.DocumentOf(cell, Plugin));
 

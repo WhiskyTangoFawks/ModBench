@@ -11,7 +11,7 @@ public sealed class BrokenLinkProjectionTests
     [Fact]
     public void AnEditPointingALinkAtAFormKeyNoPluginProvides_Lands()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.CompiledPlugin();
 
         var result = mod.EditHandler.Set(
             mod.Plugin, mod.Npc.ToString(), "Keywords", Json("[\"ABCDEF:NoSuchPlugin.esp\"]"));
@@ -22,7 +22,7 @@ public sealed class BrokenLinkProjectionTests
     [Fact]
     public void AnEditPointingALinkAtTheWrongRecordType_Lands()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.CompiledPlugin();
 
         var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "Keywords", Json($"[\"{mod.Race}\"]"));
 

@@ -5,7 +5,7 @@ import { modOfOrigin } from './modOfOrigin';
 import type { PluginAddress } from '../wire/pluginAddress';
 
 export interface InstanceFacts {
-  trackedMods: () => ReadonlySet<string>;
+  listedSourceMods: () => ReadonlySet<string>;
   sourceMods: () => ReadonlySet<string>;
   modOfOrigin: (origin: string) => string | undefined;
   sourceDirs: () => ReadonlyMap<string, string>;
@@ -15,7 +15,7 @@ export interface InstanceFacts {
 }
 
 export const factsOf = (instance: Instance): InstanceFacts => ({
-  trackedMods: () => instance.value.trackedMods,
+  listedSourceMods: () => instance.value.listedSourceMods,
   sourceMods: () => instance.value.sourceMods,
   modOfOrigin: (origin) => modOfOrigin(instance.value, origin)?.name,
   sourceDirs: () => instance.value.paths.sourceDirs,
@@ -25,7 +25,7 @@ export const factsOf = (instance: Instance): InstanceFacts => ({
 });
 
 export const NO_INSTANCE_FACTS: InstanceFacts = {
-  trackedMods: () => new Set(),
+  listedSourceMods: () => new Set(),
   sourceMods: () => new Set(),
   modOfOrigin: () => undefined,
   sourceDirs: () => new Map(),

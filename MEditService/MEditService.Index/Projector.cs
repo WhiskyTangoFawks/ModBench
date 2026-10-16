@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Index;
 
-/// <summary>Reads a system of record (a tracked plugin's source tree, or its binary's hash) and writes
+/// <summary>Reads a system of record (a compiled plugin's source tree, or its binary's hash) and writes
 /// what differs into the Store (ADR-0015).</summary>
 internal sealed class Projector(
     Store index, Func<PluginAddress, PluginMetadata?> held, ISourceAdapter source, ILogger logger)
@@ -32,7 +32,7 @@ internal sealed class Projector(
         cancel.ThrowIfCancellationRequested();
 
         // Over rather than Open: the documents read the same either way, and a repository verb over an
-        // untracked folder answers empty instead of throwing.
+        // folder that is no source mod answers empty instead of throwing.
         var repository = Over(plugin.Registered);
 
         var timer = Stopwatch.StartNew();
@@ -93,7 +93,7 @@ internal sealed class Projector(
         var key = plugin.Key;
 
         // The tree is what these rows are re-derived from, so it is what the plugin is derived from
-        // (ADR-0007), bytes moved or not: a plugin tracked after indexing arrives here
+        // (ADR-0007), bytes moved or not: a plugin made compiled after indexing arrives here
         // still stamped from its binary.
         if (source.SourceReads(plugin))
             index.RestampDerivation(key, DerivedFrom.SourceTree);
@@ -198,7 +198,7 @@ internal sealed class Projector(
     // rebuild the caller owns.
     private ValidationReport ValidateAgainstBinary(RegisteredPlugin plugin)
     {
-        // Nothing vouches for these rows (an in-memory mod, or a tracked plugin whose folder went
+        // Nothing vouches for these rows (an in-memory mod, or a compiled plugin whose folder went
         // away), so there is nothing to compare them against.
         if (index.IndexedFile(plugin.Key) is not { } claim) return ValidationReport.Clean;
 

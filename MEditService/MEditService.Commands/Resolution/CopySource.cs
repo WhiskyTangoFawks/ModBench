@@ -37,7 +37,7 @@ internal sealed class CopySource(
     internal WriteSessions Sessions => sessions;
 
     /// <summary>The record type and EditorID this plugin's copy names <paramref name="formKey"/>, or
-    /// null when it holds nothing under that key. A tracked document that is no record document is
+    /// null when it holds nothing under that key. A compiled plugin document that is no record document is
     /// unreadable, not none.</summary>
     internal CopyRead<RecordIdentity?> Identity(string formKey) =>
         _tree is { } tree
@@ -60,7 +60,7 @@ internal sealed class CopySource(
         return RecordFlags(identity).Then<bool>(flags => (flags & PartialFormFlag.Bit) != 0);
     }
 
-    /// <summary>The record's own text: the working tree's own bytes when tracked, otherwise the loaded
+    /// <summary>The record's own text: the working tree's own bytes when a compiled plugin, otherwise the loaded
     /// plugin's record through the codec — byte for byte what init would have written.</summary>
     internal CopyRead<string> Body(RecordIdentity identity)
     {

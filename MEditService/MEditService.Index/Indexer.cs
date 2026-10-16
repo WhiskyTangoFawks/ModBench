@@ -808,7 +808,7 @@ internal sealed class Indexer : IDisposable
     }
 
     // ADR-0010: a plugin the store has seen, still matching the disk, is registered, not
-    // indexed; ADR-0015 validates a tracked plugin by content on that same warm path.
+    // indexed; ADR-0015 validates a compiled plugin by content on that same warm path.
     private ReadOutcome RegisterWarmOrIndex(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
     {
         if (scope.Store.IndexedContentHash(plugin.Key) != null && WarmRegister(scope, plugin, state, token))
@@ -835,7 +835,7 @@ internal sealed class Indexer : IDisposable
         return outcome;
     }
 
-    // ADR-0007; HeldPlugins still reads a tracked plugin's metadata off its binary.
+    // ADR-0007; HeldPlugins still reads a compiled plugin's metadata off its binary.
 
     // One commit for the whole plugin, whichever door it came through (ADR-0015).
     private ReadOutcome IndexOnePlugin(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token) =>
@@ -1009,7 +1009,7 @@ internal sealed class Indexer : IDisposable
                 _logger.LogWarning("Reconciling {Plugin}: {Failure}; reading it whole", key.Name, stopped.Reason);
                 return true;
             }
-            // An untracked plugin's rows went with its file, and the file is back.
+            // A non-compiled plugin's rows went with its file, and the file is back.
             return report.NeedsRebuild || (!holdsTree && scope.Store.IndexedContentHash(key) is null);
         }
         catch (Exception ex) when (FailsOnePlugin(ex, token))

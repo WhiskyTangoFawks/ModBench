@@ -14,19 +14,19 @@ public sealed class SourceRepositoryMintingTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    private ISourceRepository Tracked()
+    private ISourceRepository SourceMod()
     {
         PluginBaselines.Init(
             _modFolder,
             [new TreeFile("plugin-source/Other.esp/Npcs/Other - 000001_Other.esp.json", "{}"u8.ToArray())]);
         return TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to be tracked.");
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to be a source mod.");
     }
 
     [Fact]
     public void APutThatSucceeds_MintsThePluginRootAndGroupFolder_WhichTheFailingPutBelowLeavesNoneOf()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
 
         repository.Put(Plugin, new SourceDocument("000800:Minting.esp", "npc_", "Fits", "{\"FormKey\": \"000800:Minting.esp\"}")).Wrote();
 
@@ -39,7 +39,7 @@ public sealed class SourceRepositoryMintingTests : IDisposable
     [InlineData("cell", "Cells")]
     public void APutOfATypeHoldingChildren_LandsUnderItsGroupFolder(string recordType, string groupFolder)
     {
-        var repository = Tracked();
+        var repository = SourceMod();
 
         repository.Put(Plugin, new SourceDocument("000800:Minting.esp", recordType, "Holder", "{\"FormKey\": \"000800:Minting.esp\"}")).Wrote();
 

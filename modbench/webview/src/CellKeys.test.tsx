@@ -57,7 +57,7 @@ const record = compareResultFixture({
 
 const plugins = [
   { name: 'Fallout4.esm', isImmutable: true },
-  { name: 'MyMod.esp', isTracked: true },
+  { name: 'MyMod.esp', isCompiledPlugin: true },
 ];
 
 const posted = () => vi.mocked(vscode.postMessage).mock.calls.map(([m]) => m);

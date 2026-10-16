@@ -48,7 +48,7 @@ export interface FixturePlugin {
   name: string;
   origin?: string | null;
   isImmutable?: boolean;
-  isTracked?: boolean;
+  isCompiledPlugin?: boolean;
   pluginSourceUnreadable?: UnreadableSource | null;
 }
 
@@ -86,8 +86,8 @@ export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}):
       // edits and reloads must not hand the panel the same reference twice.
       result: structuredClone(compare()),
       immutableSet: columnsWhere(p => p.isImmutable === true),
-      // ADR-0007: an unstated plugin is untracked.
-      trackedSet: columnsWhere(p => p.isTracked === true),
+      // ADR-0007: an unstated plugin is non-compiled plugin.
+      compiledPluginSet: columnsWhere(p => p.isCompiledPlugin === true),
       editableSet: new Set(plugins.filter(pluginCanBeEdited).map(x => columnKey({ name: x.name, origin: x.origin ?? 'Data/' }))),
       sourceUnreadableReasons: unreadableSources(plugins.map(p => ({ ...p, origin: p.origin ?? 'Data/' }))),
       modsByOrigin: opts.modsByOrigin ?? {},

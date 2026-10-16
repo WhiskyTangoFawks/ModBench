@@ -79,7 +79,7 @@ public sealed class SourceTreeDocumentsTests : IDisposable
 
     private ISourceRepository Repository =>
         TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
 
     private Dictionary<string, PluginDocument> Documents() =>
         Repository.ReadDocuments(

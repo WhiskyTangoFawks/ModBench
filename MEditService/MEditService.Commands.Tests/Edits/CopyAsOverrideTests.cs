@@ -8,7 +8,7 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class CopyAsOverrideTests
 {
     [Fact]
-    public void CopyRecordAsOverride_FromAnUntrackedSource_LandsUnderTheSameFormKey()
+    public void CopyRecordAsOverride_FromANonCompiledPluginSource_LandsUnderTheSameFormKey()
     {
         using var mod = CopyFixture.Create();
         var sourceBefore = mod.SourcePluginBytes();
@@ -25,9 +25,9 @@ public sealed class CopyAsOverrideTests
     }
 
     [Fact]
-    public void CopyRecordAsOverride_FromATrackedSource_ReadsItsCurrentDocument()
+    public void CopyRecordAsOverride_FromACompiledPluginSource_ReadsItsCurrentDocument()
     {
-        using var mod = CopyFixture.Create(trackSource: true);
+        using var mod = CopyFixture.Create(initSource: true);
         var original = mod.Document(mod.SourcePlugin, mod.SourceNpc.ToString()).Require();
         mod.Overwrite(mod.SourcePlugin, original with { Body = original.Body.Replace(CopyFixture.SourceNpcEditorId, "MutatedOnDisk") });
 
@@ -39,17 +39,17 @@ public sealed class CopyAsOverrideTests
     }
 
     [Fact]
-    public void CopyRecordAsOverride_FromAnUntrackedSource_WritesTheSameTextATrackedSourceWould()
+    public void CopyRecordAsOverride_FromANonCompiledPluginSource_WritesTheSameTextACompiledPluginSourceWould()
     {
-        using var untracked = CopyFixture.Create();
-        using var tracked = CopyFixture.Create(trackSource: true);
+        using var nonCompiledPlugin = CopyFixture.Create();
+        using var compiledPlugin = CopyFixture.Create(initSource: true);
 
-        untracked.CopyHandler.CopySync([new RecordAt(untracked.SourcePlugin, untracked.SourceNpc.ToString())], CopyMode.Override, [untracked.DestinationPlugin], replace: false).OnlyLanded();
-        tracked.CopyHandler.CopySync([new RecordAt(tracked.SourcePlugin, tracked.SourceNpc.ToString())], CopyMode.Override, [tracked.DestinationPlugin], replace: false).OnlyLanded();
+        nonCompiledPlugin.CopyHandler.CopySync([new RecordAt(nonCompiledPlugin.SourcePlugin, nonCompiledPlugin.SourceNpc.ToString())], CopyMode.Override, [nonCompiledPlugin.DestinationPlugin], replace: false).OnlyLanded();
+        compiledPlugin.CopyHandler.CopySync([new RecordAt(compiledPlugin.SourcePlugin, compiledPlugin.SourceNpc.ToString())], CopyMode.Override, [compiledPlugin.DestinationPlugin], replace: false).OnlyLanded();
 
         Assert.Equal(
-            tracked.Document(tracked.DestinationPlugin, tracked.SourceNpc.ToString()).Require().Body,
-            untracked.Document(untracked.DestinationPlugin, untracked.SourceNpc.ToString()).Require().Body);
+            compiledPlugin.Document(compiledPlugin.DestinationPlugin, compiledPlugin.SourceNpc.ToString()).Require().Body,
+            nonCompiledPlugin.Document(nonCompiledPlugin.DestinationPlugin, nonCompiledPlugin.SourceNpc.ToString()).Require().Body);
     }
 
     [Fact]

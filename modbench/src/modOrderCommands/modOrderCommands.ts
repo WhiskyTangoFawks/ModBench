@@ -9,11 +9,11 @@ import {
 import { EMPTY_MOD_NAME, entryNameRefusal, goneFromDisk, newModNameRefusal, type EntryKey, type TakenNames } from '../coreLib/commandRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
-import { isRefused, type MEditClient } from '../client';
-import { installMod, type ReadStatus } from './install';
+import { isRefused, type MEditClient, type ReadModStatus } from '../client';
+import { installMod } from './install';
 export type { SelectionResult };
 export type { InstallTarget } from '../instanceAdapter/instanceAdapter';
-export type { ModSource, ReadStatus } from './install';
+export type { ModSource } from './install';
 
 async function changeModOrderLanding(
   adapter: InstanceAdapter, profile: string, decide: DecideModOrder,
@@ -417,7 +417,7 @@ export function modSyncOver(adapter: InstanceAdapter): ModSyncRun {
 }
 
 /** The modlist's commands, bound to one instance: each takes the gesture's arguments only. */
-export function modlistCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['mEdit'], readStatus: ReadStatus) {
+export function modlistCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['mEdit'], readStatus: ReadModStatus) {
   const entryKey: EntryKey = (entry) => adapter.entryKey(entry);
   return {
     setModsEnabled: (...args: TailOf<typeof setModsEnabled>) => setModsEnabled(adapter, ...args),

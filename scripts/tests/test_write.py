@@ -14,8 +14,8 @@ from tests.fixture_medit import (
     changed,
     fixture_medit,
     holding_unsaved,
+    init_mod,
     source_folder,
-    track,
     watcher_resends_load_order,
     window_of,
 )
@@ -26,7 +26,7 @@ NEW_PLUGIN = 'MBDevNew.esp'
 class WriteAgainstTheFixtureInstance(unittest.TestCase):
     def setUp(self) -> None:
         self.fixture = self.enterContext(fixture_medit())
-        track(self.fixture, CONDITIONS.origin)
+        init_mod(self.fixture, CONDITIONS.origin)
         self.source = source_folder(self.fixture.instance, CONDITIONS.origin)
         self.enterContext(window_of(self.fixture.url))
 
@@ -95,7 +95,7 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
     def test_raises_for_a_copy_into_a_plugin_with_no_source_and_writes_nothing(self) -> None:
         with self.assertRaises(medit.MEditError) as raised:
             medit.copy(CONDITIONS.name, RECIPE, LIGHT.name, mode='new')
-        self.assertIn(f'{LIGHT.name} is not tracked', str(raised.exception))
+        self.assertIn(f'{LIGHT.name} is not a compiled plugin', str(raised.exception))
         self.assertEqual(changed(self.source), [])
 
     def test_creates_a_plugin_in_a_mod_with_its_source(self) -> None:

@@ -18,7 +18,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         { StaleHeaderPlugins.FullFileName, 11 },
     };
 
-    public static TheoryData<string> TrackAndCompileGeneratedPlugins => new()
+    public static TheoryData<string> InitAndCompileGeneratedPlugins => new()
     {
         StaleHeaderPlugins.SettingsFileName,
         StaleHeaderPlugins.LightFileName,
@@ -30,7 +30,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     public async Task Save_OfAGeneratedPluginWithAStaleHeader_KeepsItsNextObjectId_AndDerivesNumRecordsFromContent(
         string fileName, uint derivedNumRecords)
     {
-        using var scratch = new TrackedScratch(fileName);
+        using var scratch = new CompiledPluginScratch(fileName);
         var stale = StaleHeaderPlugins.Named(fileName);
         Assert.Equal((stale.StoredNextObjectId, stale.StoredNumRecords), ReadHeaderStats(scratch.PluginPath));
 
@@ -44,10 +44,10 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     [Theory]
-    [MemberData(nameof(TrackAndCompileGeneratedPlugins))]
+    [MemberData(nameof(InitAndCompileGeneratedPlugins))]
     public async Task Init_OfAGeneratedPluginWithAStaleHeader_Succeeds(string fileName)
     {
-        using var scratch = new TrackedScratch(fileName);
+        using var scratch = new CompiledPluginScratch(fileName);
 
         await scratch.InitAsync();
 
@@ -55,10 +55,10 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     [Theory]
-    [MemberData(nameof(TrackAndCompileGeneratedPlugins))]
+    [MemberData(nameof(InitAndCompileGeneratedPlugins))]
     public async Task Compile_OfAGeneratedPluginWithAStaleHeader_ReproducesTheSourceContent(string fileName)
     {
-        using var scratch = new TrackedScratch(fileName);
+        using var scratch = new CompiledPluginScratch(fileName);
         using var before = new ScratchDirectory("medit-stale-header-before-");
         var original = Path.Combine(before, fileName);
         File.Copy(scratch.PluginPath, original);
@@ -76,7 +76,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     [InlineData(StaleHeaderPlugins.FullFileName)]
     public async Task Compile_OfAGeneratedPluginDeflatedAtAnotherLevel_RewritesItsCompressedRecordsAtMutagensLevel(string fileName)
     {
-        using var scratch = new TrackedScratch(fileName);
+        using var scratch = new CompiledPluginScratch(fileName);
         var originalHeader = RawPlugin.FirstMiscZlibHeader(await File.ReadAllBytesAsync(scratch.PluginPath));
         await scratch.InitAsync();
 
@@ -88,7 +88,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     [Fact]
     public async Task Init_WithAnExtraRecordInTheRecompiledPlugin_NamesThatRecord()
     {
-        using var scratch = new TrackedScratch(StaleHeaderPlugins.SettingsFileName);
+        using var scratch = new CompiledPluginScratch(StaleHeaderPlugins.SettingsFileName);
         FormKey? extra = null;
 
         async Task<IMod> DeserializeThenAddAnNpc(string folder, CancellationToken ct)
@@ -117,7 +117,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         return (overlay.ModHeader.Stats.NextFormID, overlay.ModHeader.Stats.NumRecords);
     }
 
-    private sealed class TrackedScratch : IDisposable
+    private sealed class CompiledPluginScratch : IDisposable
     {
         internal LoadOrderHolder Holder { get; } = new();
         private readonly ScratchDirectory _gameDirectory = new("medit-stale-header-game-");
@@ -127,7 +127,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         public string PluginPath { get; }
         public PluginAddress Plugin { get; }
 
-        public TrackedScratch(string fileName)
+        public CompiledPluginScratch(string fileName)
         {
             PluginPath = Path.Combine(ModFolder, fileName);
             StaleHeaderPlugins.Named(fileName).WriteInto(ModFolder);

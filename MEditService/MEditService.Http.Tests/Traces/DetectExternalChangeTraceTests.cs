@@ -16,20 +16,20 @@ public sealed class DetectExternalChangeTraceTests : HostedTests
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.5f, origin: Origin)
             .BuildScattered();
 
-    private async Task<ScatteredFixtureData> Tracked()
+    private async Task<ScatteredFixtureData> CompiledPlugin()
     {
         var fx = Owned(OneMod());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsTracked(Plugin);
+        await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;
     }
 
     [Fact]
     public async Task APluginAnotherToolRewrote_IsNamedOnTheStream_WithItsMod()
     {
-        var fx = await Tracked();
+        var fx = await CompiledPlugin();
         using var stream = await Client.NotificationStream();
 
         OtherTool.WritesThePlugin(

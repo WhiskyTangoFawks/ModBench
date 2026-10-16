@@ -9,7 +9,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Two mod folders, because the interesting question — does a FormID edit rewrite a FormLink
 /// in a different mod folder's own repo — cannot be asked of one. No index anywhere in it.</summary>
-public sealed class TwoModReferenceFixture : TestInstance, ITrackedPlugins
+public sealed class TwoModReferenceFixture : TestInstance, ICompiledPlugins
 {
     public const string ReferencerPluginName = "Winner.esp";
     public const string TargetPluginName = "Base.esm";
@@ -31,7 +31,7 @@ public sealed class TwoModReferenceFixture : TestInstance, ITrackedPlugins
     public FormKey TargetRace { get; }
     public FormKey ReferencerNpc { get; }
 
-    private TwoModReferenceFixture(bool trackReferencer)
+    private TwoModReferenceFixture(bool initReferencer)
     {
         var targetMod = new Fallout4Mod(ModKey.FromFileName(TargetPluginName), Fallout4Release.Fallout4);
         var race = targetMod.Races.AddNew(TargetRaceEditorId);
@@ -45,9 +45,9 @@ public sealed class TwoModReferenceFixture : TestInstance, ITrackedPlugins
         var referencerNpc = referencerMod.Npcs.AddNew(ReferencerNpcEditorId);
         referencerNpc.Race.SetTo(race);
         ReferencerNpc = referencerNpc.FormKey;
-        ReferencerPlugin = Add(referencerMod, ReferencerOrigin, trackReferencer);
+        ReferencerPlugin = Add(referencerMod, ReferencerOrigin, initReferencer);
         Seal();
     }
 
-    public static TwoModReferenceFixture Create(bool trackReferencer) => new(trackReferencer);
+    public static TwoModReferenceFixture Create(bool initReferencer) => new(initReferencer);
 }

@@ -11,7 +11,7 @@ public sealed class ScriptEditTraceTests : HostedTests
     private const string Origin = "ScriptedMod";
     private const string Npc = "ScriptedNpc";
 
-    private async Task<(string NpcFile, string FormKey)> LoadedAndTracked()
+    private async Task<(string NpcFile, string FormKey)> LoadedAndCompiledPlugin()
     {
         var fx = Owned(new PluginFixtureBuilder("trace-script-edit")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
@@ -27,7 +27,7 @@ public sealed class ScriptEditTraceTests : HostedTests
     [Fact]
     public async Task AnEdit_Is204()
     {
-        var (_, formKey) = await LoadedAndTracked();
+        var (_, formKey) = await LoadedAndCompiledPlugin();
 
         var response = await Client.ScriptEdit(formKey, Plugin, Origin, "HeightMax", 0.75);
 
@@ -37,7 +37,7 @@ public sealed class ScriptEditTraceTests : HostedTests
     [Fact]
     public async Task AnEditOfAFileHeldUnsaved_Is409_WithItsOwnRefusal()
     {
-        var (file, formKey) = await LoadedAndTracked();
+        var (file, formKey) = await LoadedAndCompiledPlugin();
         await Client.HandUnsaved((file, await File.ReadAllTextAsync(file) + " "));
 
         var response = await Client.ScriptEdit(formKey, Plugin, Origin, "HeightMax", 0.75);

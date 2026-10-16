@@ -47,7 +47,7 @@ interface ModsKeyContext {
   readonly singleCompareFileRow: boolean;
   readonly holdsEnabledMod: boolean;
   readonly holdsDisabledMod: boolean;
-  readonly holdsUntrackedModWithPlugin: boolean;
+  readonly holdsNonSourceModWithPlugin: boolean;
   readonly holdsIncludedFile: boolean;
   readonly holdsExcludedFile: boolean;
 }
@@ -67,12 +67,12 @@ export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (ro
     selectionKind: kinds.size === 1 ? onlyKind : undefined,
     singleRow: onlyRow !== undefined,
     singleOpenFolderRow: openFolderArgument({ focused: onlyRow, selection }) !== undefined,
-    singleOpenSourceRow: onlyRow?.kind === 'mod' && onlyRow.facts?.tracked === true,
+    singleOpenSourceRow: onlyRow?.kind === 'mod' && onlyRow.facts?.sourceMod === true,
     singleGoToModRow: onlyRow?.kind === 'file' && onlyRow.conflict !== 'none',
     singleCompareFileRow: onlyRow?.kind === 'file' && onlyRow.conflict === 'loses',
     holdsEnabledMod: mods.some(isEnabled),
     holdsDisabledMod: mods.some((row) => !isEnabled(row)),
-    holdsUntrackedModWithPlugin: mods.some((row) => row.facts?.holdsPlugin === true && !row.facts.tracked),
+    holdsNonSourceModWithPlugin: mods.some((row) => row.facts?.holdsPlugin === true && !row.facts.sourceMod),
     holdsIncludedFile: files.some((row) => row.exclusion === 'included'),
     holdsExcludedFile: files.some((row) => row.exclusion === 'excluded'),
   };

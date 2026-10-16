@@ -16,7 +16,7 @@ public sealed class RowsChangedNotificationTests
         using var fixture = new PluginFixtureBuilder("rows-changed")
             .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
             .BuildScattered()
-            .Tracked();
+            .CompiledPlugin();
         var entry = fixture.Plugins.Single();
         var notifications = new InMemoryNotificationPublisher();
         using var index = Indexes.Reconciled(fixture, notifications: notifications);
@@ -38,7 +38,7 @@ public sealed class RowsChangedNotificationTests
         using var fixture = new PluginFixtureBuilder("rows-changed-delete")
             .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
             .BuildScattered()
-            .Tracked();
+            .CompiledPlugin();
         var entry = fixture.Plugins.Single();
         var notifications = new InMemoryNotificationPublisher();
         using var index = Indexes.Reconciled(fixture, notifications: notifications);
@@ -102,7 +102,7 @@ public sealed class RowsChangedNotificationTests
                 still = mod.Npcs.AddNew("StillNpc").FormKey;
             }, origin: "FixtureMod")
             .BuildScattered()
-            .Tracked();
+            .CompiledPlugin();
         var notifications = new InMemoryNotificationPublisher();
         var index = Indexes.Reconciled(fixture, notifications: notifications);
         return (fixture, fixture.Plugins.Single(), notifications, index, moved, still);

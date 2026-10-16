@@ -6,7 +6,7 @@ import { PluginFacts, placeOf, type PluginPlace } from '../pluginFacts';
 
 const A = { name: 'A.esp', origin: 'SomeMod' };
 
-const held = (overrides: Partial<PluginMetadata> = {}): PluginMetadata => pluginMetadataFixture({ name: 'A.esp', isTracked: true, ...overrides });
+const held = (overrides: Partial<PluginMetadata> = {}): PluginMetadata => pluginMetadataFixture({ name: 'A.esp', isCompiledPlugin: true, ...overrides });
 const failure = (reason: string, address = A): PluginLoadFailure => ({ ...address, reason });
 const diagnosis = (text: string, address = A): PluginDiagnosisReport => (
   { plugin: address.name, origin: address.origin, defectClass: 'fixed-size-subrecord-short', message: text, text }
@@ -22,8 +22,8 @@ type Scene = (facts: PluginFacts) => void;
 const failed: Scene = (facts) => facts.reconciled([], [failure('Malformed record')]);
 const masters = (...missing: string[]): Scene => (facts) => facts.reconciled([held({ masterIssues: missing })], []);
 const unreadable: Scene = (facts) => facts.reconciled([held({ hasParseFailure: true })], []);
-const sourceUnreadable: Scene = (facts) => facts.reconciled([held({ isTracked: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })], []);
-const sourceUnreadableForGood: Scene = (facts) => facts.reconciled([held({ isTracked: true, pluginSourceUnreadable: { reason: 'Twin folders.', decompileRepairs: false } })], []);
+const sourceUnreadable: Scene = (facts) => facts.reconciled([held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })], []);
+const sourceUnreadableForGood: Scene = (facts) => facts.reconciled([held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Twin folders.', decompileRepairs: false } })], []);
 const changed: Scene = (facts) => changedOutside(facts, 'SomeMod', 'A.esp');
 const malformed: Scene = (facts) => facts.diagnosed([diagnosis('first'), diagnosis('second')]);
 const scenes = (...parts: Scene[]): Scene => (facts) => parts.forEach((part) => part(facts));
@@ -250,11 +250,11 @@ describe('PluginFacts — the Problems panel reads the answers the rows read', (
 
 describe('PluginFacts — what a row states about its plugin', () => {
   it.each([
-    ['nothing before mEdit answers', undefined, [], { tracked: false, editable: false }],
-    ['a plugin with no source', { isTracked: false }, ['untracked'], { tracked: false, editable: false }],
-    ['a tracked, editable plugin', { isTracked: true }, ['tracked', 'editable'], { tracked: true, editable: true }],
-    ['a tracked, read-only plugin', { isTracked: true, isImmutable: true }, ['tracked'], { tracked: true, editable: false }],
-    ['a tracked plugin whose plugin source is unreadable', { isTracked: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }, ['tracked'], { tracked: true, editable: false }],
+    ['nothing before mEdit answers', undefined, [], { editable: false }],
+    ['a plugin with no source', { isCompiledPlugin: false }, ['nonCompiledPlugin'], { editable: false }],
+    ['an editable compiled plugin', { isCompiledPlugin: true }, ['compiledPlugin', 'editable'], { editable: true }],
+    ['a read-only compiled plugin', { isCompiledPlugin: true, isImmutable: true }, ['compiledPlugin'], { editable: false }],
+    ['a compiled plugin whose plugin source is unreadable', { isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }, ['compiledPlugin'], { editable: false }],
   ] as const)('%s', (_label, overrides, flags, conditions) => {
     const facts = new PluginFacts();
     if (overrides !== undefined) facts.reconciled([held(overrides)], []);
@@ -358,7 +358,7 @@ describe('PluginFacts — what a row expands into (plugins.md, States, stories 2
 describe('PluginFacts — a name under two origins reads its own plugin', () => {
   const MOD_A = { name: 'Shared.esp', origin: 'ModA' };
   const MOD_B = { name: 'Shared.esp', origin: 'ModB' };
-  const sharedAt = (origin: string, overrides: Partial<PluginMetadata> = {}) => pluginMetadataFixture({ name: 'Shared.esp', origin, isTracked: true, ...overrides });
+  const sharedAt = (origin: string, overrides: Partial<PluginMetadata> = {}) => pluginMetadataFixture({ name: 'Shared.esp', origin, isCompiledPlugin: true, ...overrides });
   const bothHeld = (modB: Partial<PluginMetadata>): Scene => (facts) => facts.reconciled([sharedAt('ModA'), sharedAt('ModB', modB)], []);
   const CLEAN = {
     description: undefined, icon: undefined, tooltipLines: ['Shared.esp', 'ModA'], editable: true, hiddenByRecordFilter: false, expansion: RECORDS,
@@ -430,17 +430,17 @@ describe('PluginFacts — a later read that failed (common.md, States, story 6)'
 });
 
 describe('placeOf — where a plugin lives, from the instance value', () => {
-  const modOfOrigin = modOfOriginIn('SomeMod', 'TrackedMod');
-  const trackedMods = new Set(['TrackedMod']);
+  const modOfOrigin = modOfOriginIn('SomeMod', 'SourceMod');
+  const listedSourceMods = new Set(['SourceMod']);
 
   it.each<[string, string, PluginPlace | undefined]>([
-    ['a mod without a repository', 'SomeMod', 'inUntrackedMod'],
-    ['a mod with a repository', 'TrackedMod', 'inTrackedMod'],
-    ['a mod named without case', 'trackedmod', 'inTrackedMod'],
+    ['a mod without a repository', 'SomeMod', 'inNonSourceMod'],
+    ['a mod with a repository', 'SourceMod', 'inSourceMod'],
+    ['a mod named without case', 'sourcemod', 'inSourceMod'],
     ['Overwrite', 'overwrite/', 'inOverwrite'],
     ['the game folder', 'Data/', undefined],
     ['an origin no mod folder carries', 'Nowhere', undefined],
   ])('%s', (_label, origin, place) => {
-    expect(placeOf(origin, { modOfOrigin, trackedMods })).toBe(place);
+    expect(placeOf(origin, { modOfOrigin, listedSourceMods })).toBe(place);
   });
 });

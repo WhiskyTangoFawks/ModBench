@@ -31,7 +31,7 @@ export function heldFolderWatchFor(glob: string, deps: HeldFolderWatchDeps): Hel
   return process.platform === 'linux' && glob.endsWith('**') ? heldFolderWatch(deps) : undefined;
 }
 
-const within = (path: string, under: string): boolean => under === path || under.startsWith(`${path}${sep}`);
+const isWithin = (folder: string, path: string): boolean => folder === path || folder.startsWith(`${path}${sep}`);
 
 // Node names the folder in a watch error's message; without it, the reason is the same for every folder it fails on.
 function reasonOf(error: unknown): string {
@@ -69,9 +69,9 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
   // A deletion can be heard after the folder is made again at the same path, and the folder made again is kept.
   const removed = (path: string): void => {
     if (existsSync(path)) return;
-    for (const folder of watched.keys()) if (within(path, folder)) forget(folder);
-    for (const folder of createdFolders) if (within(path, folder)) createdFolders.delete(folder);
-    for (const folder of failed.keys()) if (within(path, folder)) failed.delete(folder);
+    for (const folder of watched.keys()) if (isWithin(folder, path)) forget(folder);
+    for (const folder of createdFolders) if (isWithin(folder, path)) createdFolders.delete(folder);
+    for (const folder of failed.keys()) if (isWithin(folder, path)) failed.delete(folder);
   };
 
   const fail = (folder: string, error: unknown): void => {

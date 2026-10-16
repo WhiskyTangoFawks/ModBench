@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-public sealed class TrackedProjectionTests : IDisposable
+public sealed class CompiledPluginProjectionTests : IDisposable
 {
     private const string NpcEditorId = "FixtureNpc";
     private const string OtherNpcEditorId = "UntouchedNpc";
@@ -19,17 +19,17 @@ public sealed class TrackedProjectionTests : IDisposable
     private readonly string _npc;
     private readonly string _otherNpc;
 
-    public TrackedProjectionTests()
+    public CompiledPluginProjectionTests()
     {
         FormKey npc = default, otherNpc = default;
-        _fixture = new PluginFixtureBuilder("tracked-projection")
+        _fixture = new PluginFixtureBuilder("compiled-plugin-projection")
             .WithPlugin("Fixture.esp", mod =>
             {
                 npc = mod.Npcs.AddNew(NpcEditorId).FormKey;
                 otherNpc = mod.Npcs.AddNew(OtherNpcEditorId).FormKey;
             }, origin: "FixtureMod")
             .BuildScattered()
-            .Tracked();
+            .CompiledPlugin();
         _mod = _fixture.Plugins.Single();
         (_npc, _otherNpc) = (npc.ToString(), otherNpc.ToString());
         _notifications.OnPublish = n =>
@@ -61,7 +61,7 @@ public sealed class TrackedProjectionTests : IDisposable
     }
 
     [Fact]
-    public async Task ATrackedPluginReDerivedFromADirtyTree_AdvancesTheSequenceExactlyOnce()
+    public async Task ACompiledPluginReDerivedFromADirtyTree_AdvancesTheSequenceExactlyOnce()
     {
         var before = _index.Sequence;
 

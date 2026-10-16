@@ -12,7 +12,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
     private const string Plugin = "Rendered.esp";
     private const string Origin = "RenderedMod";
 
-    private async Task<ScatteredFixtureData> Untracked()
+    private async Task<ScatteredFixtureData> NonCompiledPlugin()
     {
         var fx = Owned(new PluginFixtureBuilder("api-rendered-document")
             .WithPlugin(Plugin, mod =>
@@ -52,9 +52,9 @@ public sealed class RenderedDocumentApiTests : HostedTests
     [InlineData("npc_", "RenderedNpc")]
     [InlineData("qust", "RenderedQuest")]
     [InlineData(null, null)]
-    public async Task AnUntrackedCopy_IsTheFileTrackWrites_ByNameAndText_TheHeadersWithNoRecordType(string? recordType, string? editorId)
+    public async Task ANonCompiledPluginCopy_IsTheFileInitWrites_ByNameAndText_TheHeadersWithNoRecordType(string? recordType, string? editorId)
     {
-        var fx = await Untracked();
+        var fx = await NonCompiledPlugin();
         var formKey = recordType is null ? $"000000:{Plugin}" : await Client.FormKeyNamed(Plugin, Origin, recordType, editorId.Require());
         var (fileName, text) = await RenderedOk(formKey);
 
@@ -67,9 +67,9 @@ public sealed class RenderedDocumentApiTests : HostedTests
     }
 
     [Fact]
-    public async Task AnUntrackedContainer_IsTheFileTrackWrites_WithoutItsChildren()
+    public async Task ANonCompiledPluginContainer_IsTheFileInitWrites_WithoutItsChildren()
     {
-        var fx = await Untracked();
+        var fx = await NonCompiledPlugin();
         var (_, text) = await RenderedOk(await Client.FormKeyNamed(Plugin, Origin, "cell", "RenderedRoom"));
 
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
@@ -81,13 +81,13 @@ public sealed class RenderedDocumentApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ATrackedCopy_IsNamedAsItsFileIs_AfterARenameByHand()
+    public async Task ACompiledPluginCopy_IsNamedAsItsFileIs_AfterARenameByHand()
     {
-        var fx = await Untracked();
+        var fx = await NonCompiledPlugin();
         var npc = await Client.FormKeyNamed(Plugin, Origin, "npc_", "RenderedNpc");
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsTracked(Plugin);
+        await Client.PluginReportsCompiledPlugin(Plugin);
         var written = Directory.EnumerateFiles(ModFolderOf(fx), "RenderedNpc - *.json", SearchOption.AllDirectories).Single();
 
         File.Move(written, Path.Combine(Path.GetDirectoryName(written).Require(), "Named By Hand.json"));
@@ -96,13 +96,13 @@ public sealed class RenderedDocumentApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ATrackedCopyTwoDocumentsClaim_Is422_SayingSo()
+    public async Task ACompiledPluginCopyTwoDocumentsClaim_Is422_SayingSo()
     {
-        var fx = await Untracked();
+        var fx = await NonCompiledPlugin();
         var npc = await Client.FormKeyNamed(Plugin, Origin, "npc_", "RenderedNpc");
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsTracked(Plugin);
+        await Client.PluginReportsCompiledPlugin(Plugin);
         var written = Directory.EnumerateFiles(ModFolderOf(fx), "RenderedNpc - *.json", SearchOption.AllDirectories).Single();
 
         File.Copy(written, Path.Combine(Path.GetDirectoryName(written).Require(), $"Twin - {npc.Replace(':', '_')}.json"));
@@ -114,7 +114,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
     [Fact]
     public async Task ACopyThePluginDoesNotHold_Is404()
     {
-        await Untracked();
+        await NonCompiledPlugin();
         var npc = await Client.FormKeyNamed(Plugin, Origin, "npc_", "RenderedNpc");
 
         await (await Rendered(npc, origin: "AnotherMod")).AssertIsProblem(HttpStatusCode.NotFound);
@@ -123,7 +123,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
     [Fact]
     public async Task ACopyNamedWithoutItsOrigin_Is400()
     {
-        await Untracked();
+        await NonCompiledPlugin();
 
         await (await Rendered($"000000:{Plugin}", origin: null)).AssertIsProblem(HttpStatusCode.BadRequest);
     }

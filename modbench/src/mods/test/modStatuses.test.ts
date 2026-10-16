@@ -7,14 +7,14 @@ import type { ModStatus } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ReadFailed } from '../../wire/readFailed';
 import { ModStatuses } from '../modStatuses';
-import type { ReadStatus } from '../../modOrderCommands/modOrderCommands';
+import type { ReadModStatus } from '../../client';
 import { status } from './modStatusFixture';
 
 const settled = () => new Promise((resolve) => { setTimeout(resolve, 0); });
 
 const UNREACHABLE: ReadFailed = { failed: 'unreachable' };
 
-function statusesOver(read: ReadStatus, mods: readonly string[] = []) {
+function statusesOver(read: ReadModStatus, mods: readonly string[] = []) {
   const client = new InMemoryMEditClient();
   const logged: string[] = [];
   const statuses = new ModStatuses(client, read, (line) => { logged.push(line); }, () => mods);
@@ -33,7 +33,7 @@ const unreadable = (mod: string, why: string): ModStatus => status(mod, { unread
 
 describe('each mod\'s status (modlist-source.md, Status)', () => {
   it('is read for each mod mEdit pushes as changed, and held until the next push names it', async () => {
-    const read = vi.fn<ReadStatus>()
+    const read = vi.fn<ReadModStatus>()
       .mockResolvedValueOnce([status('ModA', { noManifest: true }), status('ModB')])
       .mockResolvedValueOnce([status('ModB', { differing: ['a.nif'] })]);
     const { statuses, pushed } = statusesOver(read);
@@ -46,7 +46,7 @@ describe('each mod\'s status (modlist-source.md, Status)', () => {
   });
 
   it('is read for every mod when the stream opens again, since a push made while it was down is lost', async () => {
-    const read = vi.fn<ReadStatus>().mockResolvedValue([status('ModA'), status('ModB')]);
+    const read = vi.fn<ReadModStatus>().mockResolvedValue([status('ModA'), status('ModB')]);
     const { statuses, reconnected } = statusesOver(read, ['ModA', 'ModB']);
 
     await reconnected();
@@ -56,7 +56,7 @@ describe('each mod\'s status (modlist-source.md, Status)', () => {
 
   it('keeps the answer to the later push when an earlier read answers last', async () => {
     let answerFirst!: (answer: readonly ModStatus[]) => void;
-    const read = vi.fn<ReadStatus>()
+    const read = vi.fn<ReadModStatus>()
       .mockReturnValueOnce(new Promise((resolve) => { answerFirst = resolve; }))
       .mockResolvedValueOnce([status('ModA')]);
     const { statuses, pushed } = statusesOver(read);
@@ -82,7 +82,7 @@ describe('each mod\'s status (modlist-source.md, Status)', () => {
 
 describe('a status read that fails (common.md, Reporting)', () => {
   it('keeps each mod\'s last status, says so on the message line, and clears it once a read lands', async () => {
-    const read = vi.fn<ReadStatus>()
+    const read = vi.fn<ReadModStatus>()
       .mockResolvedValueOnce([status('ModA', { noManifest: true })])
       .mockResolvedValueOnce(UNREACHABLE)
       .mockResolvedValueOnce([status('ModA')]);
@@ -99,7 +99,7 @@ describe('a status read that fails (common.md, Reporting)', () => {
   });
 
   it('keeps an unreadable mod\'s last status, and the message line names it until its status reads', async () => {
-    const read = vi.fn<ReadStatus>()
+    const read = vi.fn<ReadModStatus>()
       .mockResolvedValueOnce([status('ModA', { noManifest: true })])
       .mockResolvedValueOnce([unreadable('ModA', 'a file could not be read: EACCES')])
       .mockResolvedValueOnce([status('ModA')]);
@@ -117,7 +117,7 @@ describe('a status read that fails (common.md, Reporting)', () => {
   });
 
   it('logs each reason once in the Output, and again only when it changes', async () => {
-    const read = vi.fn<ReadStatus>()
+    const read = vi.fn<ReadModStatus>()
       .mockResolvedValueOnce(UNREACHABLE)
       .mockResolvedValueOnce(UNREACHABLE)
       .mockResolvedValueOnce([unreadable('ModA', 'EACCES')])
@@ -133,7 +133,7 @@ describe('a status read that fails (common.md, Reporting)', () => {
   });
 
   it('shows the status of a mod whose stat cache mEdit could not write, and says so on the message line until it writes', async () => {
-    const read = vi.fn<ReadStatus>()
+    const read = vi.fn<ReadModStatus>()
       .mockResolvedValueOnce([status('ModA', { noManifest: true, statCacheNotWritten: 'EROFS' })])
       .mockResolvedValueOnce([status('ModA')]);
     const { statuses, pushed } = statusesOver(read);
@@ -148,7 +148,7 @@ describe('a status read that fails (common.md, Reporting)', () => {
   });
 
   it('logs a stat cache mEdit could not write once in the Output, and again only when the reason changes', async () => {
-    const read = vi.fn<ReadStatus>()
+    const read = vi.fn<ReadModStatus>()
       .mockResolvedValueOnce([status('ModA', { statCacheNotWritten: 'EROFS' })])
       .mockResolvedValueOnce([status('ModA', { statCacheNotWritten: 'EROFS' })])
       .mockResolvedValueOnce([status('ModA', { statCacheNotWritten: 'ENOSPC' })]);

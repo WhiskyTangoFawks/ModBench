@@ -5,13 +5,13 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
 
-/// <summary>Each tracked plugin changed outside Modbench (ADR-0003), and each tracked mod's
+/// <summary>Each compiled plugin changed outside Modbench (ADR-0003), and each source mod's
 /// plugins whose plugin source is unreadable.</summary>
 internal sealed class ExternalChangeCheck(INotificationPublisher notifications, IPluginAdapter adapter, ISourceAdapter source)
 {
     private readonly Lock _checking = new();
     // A mod whose repository went since is told it names no changed plugin.
-    private HashSet<string> _trackedAtLastCheck = new(StringComparer.Ordinal);
+    private HashSet<string> _compiledPluginAtLastCheck = new(StringComparer.Ordinal);
 
     public void Check(LoadOrderSnapshot snapshot)
     {
@@ -21,20 +21,20 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
 
         lock (_checking)
         {
-            var tracked = new HashSet<string>(StringComparer.Ordinal);
+            var compiledPlugin = new HashSet<string>(StringComparer.Ordinal);
             foreach (var mod in mods)
             {
                 if (source.Open(mod.Key, snapshot.GameRelease) is { } repository)
                 {
-                    tracked.Add(mod.Key.Folder);
+                    compiledPlugin.Add(mod.Key.Folder);
                     Tell(mod.Key.Name, repository, [.. mod]);
                 }
-                else if (_trackedAtLastCheck.Contains(mod.Key.Folder))
+                else if (_compiledPluginAtLastCheck.Contains(mod.Key.Folder))
                 {
                     notifications.Publish(new ExternalChangeNotification(mod.Key.Name, []));
                 }
             }
-            _trackedAtLastCheck = tracked;
+            _compiledPluginAtLastCheck = compiledPlugin;
         }
     }
 

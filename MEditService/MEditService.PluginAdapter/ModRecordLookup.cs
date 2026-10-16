@@ -85,7 +85,7 @@ internal sealed class ModRecordLookup : IPluginRecords
         return cells;
     }
 
-    // Every child slot names its parent, which is what a tracked plugin reads out of the owner
+    // Every child slot names its parent, which is what a compiled plugin reads out of the owner
     // document instead. A block is not a record, so a worldspace's cells are not here.
     private Dictionary<string, DocumentContainment> BuildContainments()
     {

@@ -69,7 +69,7 @@ public sealed class CompilePluginLinkTests : IDisposable
 
     private ISourceRepository HostRepository() =>
         TestAdapters.Source().Open(TestMod.Of(_host, _hostFolder), GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected {_hostFolder} to already be a tracked repository.");
+            ?? throw new InvalidOperationException($"Expected {_hostFolder} to already be a compiled plugin repository.");
 
     private void PointTheNpcAt(FormKey keyword) =>
         SourceEdits.Rewrite<Npc>(
@@ -116,7 +116,7 @@ public sealed class CompilePluginLinkTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_ForALinkIntoATrackedPlugin_ReadsThatPluginsFile_NotItsWorkingTree()
+    public async Task Compile_ForALinkIntoACompiledPlugin_ReadsThatPluginsFile_NotItsWorkingTree()
     {
         SourceModTree.Remove(_targetFolder, _target, new RecordIdentity(_targetKeyword.ToString(), "kywd", TargetKeywordEditorId));
 

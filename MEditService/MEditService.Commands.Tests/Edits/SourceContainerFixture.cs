@@ -6,9 +6,9 @@ using Noggog;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A tracked mod holding the one shape a flat record cannot show: a worldspace, whose
+/// <summary>A source mod holding the one shape a flat record cannot show: a worldspace, whose
 /// directory a FormID edit moves whole, subtree and all. No index anywhere in it.</summary>
-public sealed class SourceContainerFixture : TestInstance, ITrackedPlugin
+public sealed class SourceContainerFixture : TestInstance, ICompiledPlugin
 {
     public const string PluginName = "SourceContainer.esp";
     public const string Origin = "SourceContainerMod";

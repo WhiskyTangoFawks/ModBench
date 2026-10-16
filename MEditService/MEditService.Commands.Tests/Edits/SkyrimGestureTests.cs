@@ -15,13 +15,13 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class SkyrimGestureTests : IDisposable
 {
     private const string MasterName = "Master.esm";
-    private const string TrackedName = "Tracked.esp";
+    private const string CompiledPluginName = "CompiledPlugin.esp";
 
     private readonly SkyrimInstance _instance = new();
     private readonly FormKey _masterInteriorCell;
     private readonly FormKey _masterPlaced;
     private readonly FormKey _npc;
-    private readonly PluginAddress _tracked;
+    private readonly PluginAddress _compiledPlugin;
 
     public SkyrimGestureTests()
     {
@@ -31,27 +31,27 @@ public sealed class SkyrimGestureTests : IDisposable
         interior.Persistent.Add(placed);
         master.Cells.Records.Add(Interior(interior));
         (_masterInteriorCell, _masterPlaced) = (interior.FormKey, placed.FormKey);
-        _instance.AddPlugin(master, "MasterMod", tracked: false);
+        _instance.AddPlugin(master, "MasterMod", compiledPlugin: false);
 
-        var tracked = new SkyrimMod(ModKey.FromFileName(TrackedName), SkyrimRelease.SkyrimSE);
-        _npc = tracked.Npcs.AddNew("TrackedNpc").FormKey;
-        _tracked = _instance.AddPlugin(tracked, "SourceMod", tracked: true);
+        var compiledPlugin = new SkyrimMod(ModKey.FromFileName(CompiledPluginName), SkyrimRelease.SkyrimSE);
+        _npc = compiledPlugin.Npcs.AddNew("CompiledPluginNpc").FormKey;
+        _compiledPlugin = _instance.AddPlugin(compiledPlugin, "SourceMod", compiledPlugin: true);
     }
 
     public void Dispose() => _instance.Dispose();
 
-    private string TrackedPath => Path.Combine(_instance.ModFolderOf(_tracked), TrackedName);
+    private string CompiledPluginPath => Path.Combine(_instance.ModFolderOf(_compiledPlugin), CompiledPluginName);
 
     private ISkyrimModDisposableGetter Compiled() =>
-        SkyrimMod.CreateFromBinaryOverlay(new ModPath(ModKey.FromFileName(TrackedName), TrackedPath), SkyrimRelease.SkyrimSE);
+        SkyrimMod.CreateFromBinaryOverlay(new ModPath(ModKey.FromFileName(CompiledPluginName), CompiledPluginPath), SkyrimRelease.SkyrimSE);
 
     [Fact]
     public async Task AFieldEdit_CompilesIntoTheSkyrimPlugin()
     {
-        var result = _instance.EditHandler.Set(_tracked, _npc.ToString(), "Height", JsonDocument.Parse("1.25").RootElement);
+        var result = _instance.EditHandler.Set(_compiledPlugin, _npc.ToString(), "Height", JsonDocument.Parse("1.25").RootElement);
 
         Assert.True(result.Applied, result.Message);
-        await _instance.CompileHandler.CompileLandedAsync(_tracked);
+        await _instance.CompileHandler.CompileLandedAsync(_compiledPlugin);
         using var compiled = Compiled();
         Assert.Equal(1.25f, compiled.Npcs[_npc].Height);
     }
@@ -59,12 +59,12 @@ public sealed class SkyrimGestureTests : IDisposable
     [Fact]
     public async Task TheLightFlag_SetOnTheHeader_CompilesAsALightSkyrimPlugin()
     {
-        var header = new FormKey(ModKey.FromFileName(TrackedName), 0).ToString();
+        var header = new FormKey(ModKey.FromFileName(CompiledPluginName), 0).ToString();
 
-        var result = _instance.EditHandler.Set(_tracked, header, "IsSmallMaster", JsonDocument.Parse("true").RootElement);
+        var result = _instance.EditHandler.Set(_compiledPlugin, header, "IsSmallMaster", JsonDocument.Parse("true").RootElement);
 
         Assert.True(result.Applied, result.Message);
-        await _instance.CompileHandler.CompileLandedAsync(_tracked);
+        await _instance.CompileHandler.CompileLandedAsync(_compiledPlugin);
         using var compiled = Compiled();
         Assert.True(compiled.IsSmallMaster);
     }
@@ -73,10 +73,10 @@ public sealed class SkyrimGestureTests : IDisposable
     public void AnInteriorCellOfAMasterOtherThanSkyrimEsm_CopiedInAroundAChild_IsAPartialForm()
     {
         _instance.CopyHandler.CopySync(
-            [new RecordAt(new PluginAddress(MasterName, "MasterMod"), _masterPlaced.ToString())], CopyMode.Override, [_tracked], replace: false)
+            [new RecordAt(new PluginAddress(MasterName, "MasterMod"), _masterPlaced.ToString())], CopyMode.Override, [_compiledPlugin], replace: false)
             .OnlyLanded();
 
-        var copied = JsonNode.Parse(SourceModTree.Body(_instance.ModFolderOf(_tracked), _tracked, _masterInteriorCell.ToString())).Require();
+        var copied = JsonNode.Parse(SourceModTree.Body(_instance.ModFolderOf(_compiledPlugin), _compiledPlugin, _masterInteriorCell.ToString())).Require();
         Assert.NotEqual(0, copied["MajorRecordFlagsRaw"].Require().GetValue<int>() & PartialFormFlag.Bit);
         Assert.Null(copied["WaterHeight"]);
     }
@@ -92,6 +92,6 @@ public sealed class SkyrimGestureTests : IDisposable
 
     private sealed class SkyrimInstance() : TestInstance(GameRelease.SkyrimSE)
     {
-        public PluginAddress AddPlugin(SkyrimMod mod, string origin, bool tracked) => Add(mod, origin, tracked);
+        public PluginAddress AddPlugin(SkyrimMod mod, string origin, bool compiledPlugin) => Add(mod, origin, compiledPlugin);
     }
 }

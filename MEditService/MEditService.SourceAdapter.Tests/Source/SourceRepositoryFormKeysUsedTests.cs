@@ -24,19 +24,19 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
     private string Git(params string[] args) =>
         GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 
-    private ISourceRepository Tracked(params TreeFile[] files)
+    private ISourceRepository SourceMod(params TreeFile[] files)
     {
         if (files.Length == 0) PluginBaselines.InitWithNoRecords(_modFolder);
         else PluginBaselines.Init(_modFolder, files);
         return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
     }
 
     [Fact]
     public void AnUncommittedHeaderDocument_IsHeld_ThoughNoRefButTheWorkingTreeCarriesIt()
     {
         var headerPath = PluginSourceRoot.HeaderDocument(PluginName);
-        var repository = Tracked(new TreeFile(headerPath, "{\"MasterReferences\": []}"u8.ToArray()));
+        var repository = SourceMod(new TreeFile(headerPath, "{\"MasterReferences\": []}"u8.ToArray()));
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(PluginName));
 
         var headerPathInGitsForwardSlashes = headerPath.Replace('\\', '/');
@@ -52,7 +52,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
     [InlineData("Npcs/Misnamed - 000900_FormKeysUsed.esp.json")]
     public void AnUncommittedDocumentNamedForNoKeyItDeclares_IsHeld(string relativePath)
     {
-        var repository = Tracked();
+        var repository = SourceMod();
         var file = Path.Combine(_modFolder, PluginSourceRoot.For(PluginName), relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
         File.WriteAllText(file, $"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": \"Hidden\"}}");
@@ -64,7 +64,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
     public void ADocumentCommittedWithAnEditorIdThatIsNoString_IsHeld_OnceTheTreeHoldsItReadable()
     {
         var relativePath = Path.Combine(PluginSourceRoot.For(PluginName), "Npcs", $"Fixed - 000850_{PluginName}.json");
-        var repository = Tracked(new TreeFile(relativePath, System.Text.Encoding.UTF8.GetBytes($"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": 5}}")));
+        var repository = SourceMod(new TreeFile(relativePath, System.Text.Encoding.UTF8.GetBytes($"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": 5}}")));
         File.WriteAllText(Path.Combine(_modFolder, relativePath), $"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": \"Fixed\"}}");
 
         Assert.True(repository.FormKeysUsed(Plugin).Value().Contains($"000850:{PluginName}"));
@@ -82,7 +82,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
             PluginSourceRoot.For(PluginName), "Worldspaces",
             $"{worldspace.EditorID} - {worldspace.FormKey.ID:X6}_{worldspace.FormKey.ModKey.FileName}"));
 
-        var repository = Tracked(
+        var repository = SourceMod(
             new TreeFile(worldspacePath, Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(worldspace, Release))));
 
         var movedInTheWorkingTreeAlone = $"00080A:{PluginName}";

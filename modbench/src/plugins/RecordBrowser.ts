@@ -53,7 +53,7 @@ function collapsibleWhen(hasChildren: boolean): vscode.TreeItemCollapsibleState 
 // with the row's own read-only-ness story is an open question.
 
 // A row whose plugin no caller has described offers no record edit.
-const NOT_EDITABLE: PluginConditions = { tracked: false, editable: false };
+const NOT_EDITABLE: PluginConditions = { editable: false };
 
 // A row opens its own plugin's copy (commands.md, Argument: "Singular means the clicked row").
 function openCopyCommand(formKey: string, plugin: PluginAddress): vscode.Command {

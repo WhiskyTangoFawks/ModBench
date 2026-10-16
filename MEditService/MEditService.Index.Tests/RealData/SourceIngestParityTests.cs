@@ -12,7 +12,7 @@ namespace MEditService.Index.Tests.RealData;
 public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClassFixture<SourceParityFixture>
 {
     [Fact]
-    public void TheTrackedPluginReallyIngestedFromSource_NotViaTheBinaryFallback()
+    public void TheCompiledPluginReallyIngestedFromSource_NotViaTheBinaryFallback()
     {
         Assert.Empty(fixture.FromSource.Status.Failures);
         Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(RealDataPlugin.PluginFileName, SourceParityFixture.Origin, "", new PluginProvider.FromMod(SourceParityFixture.Origin, fixture.ModFolder, fixture.ModFolder), Line: null, PluginStrings.None)));
@@ -42,7 +42,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     }
 
     [Fact]
-    public void TheSameRecordsExist_TrackedAndUntracked()
+    public void TheSameRecordsExist_CompiledPluginAndNonCompiledPlugin()
     {
         var binary = AllFormKeysInOneUnpagedQuery(fixture.BinaryInstanceRoot).ToHashSet(StringComparer.Ordinal);
         var source = AllFormKeysInOneUnpagedQuery(fixture.SourceInstanceRoot).ToHashSet(StringComparer.Ordinal);
@@ -96,7 +96,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     }
 
     [Fact]
-    public void TheHeaderRow_IsByteIdentical_TrackedAndUntracked_AndToTheTreesOwnFile()
+    public void TheHeaderRow_IsByteIdentical_CompiledPluginAndNonCompiledPlugin_AndToTheTreesOwnFile()
     {
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(RealDataPlugin.PluginFileName));
 
@@ -110,7 +110,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         Assert.Equal(binaryBody, sourceBody);
 
         var headerFile = Path.Combine(fixture.ModFolder, PluginSourceRoot.HeaderDocument(RealDataPlugin.PluginFileName));
-        Assert.True(File.Exists(headerFile), $"expected the tracked tree to hold {headerFile}");
+        Assert.True(File.Exists(headerFile), $"expected the compiled plugin tree to hold {headerFile}");
         Assert.Equal(File.ReadAllBytes(headerFile), Encoding.UTF8.GetBytes(sourceBody));
     }
 
@@ -118,7 +118,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     [InlineData("holdings")]
     [InlineData("cell_location")]
     [InlineData("form_references")]
-    public void ASideTablesRows_AreIdentical_TrackedAndUntracked(string relation)
+    public void ASideTablesRows_AreIdentical_CompiledPluginAndNonCompiledPlugin(string relation)
     {
         var binary = RowsOf(fixture.BinaryInstanceRoot, relation);
         var source = RowsOf(fixture.SourceInstanceRoot, relation);
@@ -128,8 +128,8 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         var onlySource = source.Except(binary, StringComparer.Ordinal).ToList();
         Assert.True(
             binary.SequenceEqual(source, StringComparer.Ordinal),
-            $"{relation}: {binary.Count} rows untracked, {source.Count} tracked." +
-            $"\nOnly untracked:\n{string.Join('\n', onlyBinary.Take(20))}\nOnly tracked:\n{string.Join('\n', onlySource.Take(20))}");
+            $"{relation}: {binary.Count} rows from the plugin file, {source.Count} from plugin source." +
+            $"\nOnly plugin file:\n{string.Join('\n', onlyBinary.Take(20))}\nOnly plugin source:\n{string.Join('\n', onlySource.Take(20))}");
     }
 
     private static IEnumerable<string> AllFormKeysInOneUnpagedQuery(string instanceRoot) =>

@@ -97,7 +97,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     await register({ meditClient });
   }
 
-  it('opens a tracked copy\'s file in the record grid, as a preview', async () => {
+  it('opens a compiled plugin copy\'s file in the record grid, as a preview', async () => {
     await registerAnswering(inFile(FILE));
 
     await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin } });
@@ -116,7 +116,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
       .toEqual([{ viewColumn: -1, preview: false }]);
   });
 
-  it('opens an untracked copy, which has no file, as the document mEdit renders it as, in the record grid', async () => {
+  it('opens a non-compiled plugin copy, which has no file, as the document mEdit renders it as, in the record grid', async () => {
     await registerAnswering(rendered('Gun.json'));
 
     await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin } });
@@ -124,7 +124,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     expect(opened()).toEqual([['/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', 'modbench.record']]);
   });
 
-  it('opens an untracked plugin\'s header as the document mEdit renders it as', async () => {
+  it('opens a non-compiled plugin\'s header as the document mEdit renders it as', async () => {
     await registerAnswering(rendered('A.esp.json'));
 
     await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: '000000:A.esp', plugin } });
@@ -132,7 +132,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     expect(opened()).toEqual([['/ModA/A.esp/A.esp.json?formKey=000000%3AA.esp&name=A.esp&origin=ModA', 'modbench.record']]);
   });
 
-  it('opens an untracked placed reference as its own rendered document, named by its own EditorID', async () => {
+  it('opens a non-compiled plugin placed reference as its own rendered document, named by its own EditorID', async () => {
     const PLACED = '000803:A.esp';
     await registerAnswering(rendered('SharedRef - 000803_A.esp.json'));
 

@@ -2,13 +2,13 @@
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
 import * as vscode from 'vscode';
-import { createMEditClient, stopMEditClient, type MEditClient } from './client';
+import { createMEditClient, stopMEditClient, type MEditClient, type ReadModStatus } from './client';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
-import { createEditor, trackedRepositoriesOver, type Editor } from './editor';
+import { createEditor, sourceModRepositoriesOver, type Editor } from './editor';
 import { createSourceLanguage, formKeyLocation } from './sourceLanguage';
 import { saveModPluginSource } from './sourceLanguage/dirtyPluginSource';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
@@ -23,7 +23,6 @@ import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { sevenZip, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
-import type { ReadModStatus } from './agent/modStatuses';
 import { agentPort, attachPort, gameDirectoryOverrides, inheritedPythonPath, onGameDirectoryChange, onStringsLanguageChange, onTerminalEnvChange, stringsLanguage } from './workspaceConfig';
 import { createPlugins, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
@@ -76,7 +75,7 @@ interface ViewsDeps {
 interface InstanceSide {
   /** Absent together, on the path with no instance to read. */
   instance?: Instance;
-  modStatus?: ReadModStatus;
+  readStatus?: ReadModStatus;
   toolboxProvider: ToolboxProvider;
   sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
@@ -144,16 +143,16 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
   const modlist = modlistSourceCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(instanceRoot), trash });
-  const modStatus: ReadModStatus = (names) => modlist.modStatus(names);
+  const readStatus: ReadModStatus = (names) => modlist.modStatus(names);
   const mods = own(createModsView({
-    instance, commands: modlistCommands(adapter, client, modStatus), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
+    instance, commands: modlistCommands(adapter, client, readStatus), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
     downloadInstall: {
       reporter: reporterFor('downloadList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),
       progressViewId: DOWNLOADS_KEY_ARGS.view,
     },
     nexusRow: nexusRowInFocusedView(own, deps.focusedView, ['modbench.modList', 'modbench.downloads'], 'modbench.mod.nexusRowIn'),
-    modStatus: { push: client, read: modStatus },
+    modStatus: { push: client, readStatus },
   }));
   const { editing } = plugins;
   void editing.enter(instance.landed());
@@ -182,7 +181,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     commands, nextRefill: plugins.nextRefill, instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
-    instance, toolboxProvider, modStatus,
+    instance, toolboxProvider, readStatus,
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue],
     downloadsSelection: () => downloadsView.selection,
@@ -234,16 +233,16 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const ownedByViews = ownership();
   const opened = openInstance(outputChannel, ownedByViews.own);
-  const trackedRepositories = trackedRepositoriesOver({ client: meditClient, outputChannel, ...opened.facts });
+  const sourceModRepositories = sourceModRepositoriesOver({ client: meditClient, outputChannel, ...opened.facts });
   const sourceEditing: SourceEditing = {
     applyWorkspaceChanges: (items) => applyWorkspaceChanges(items),
     oneAtATime: oneAtATime(),
-    refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
+    refreshSourceControlFor: sourceModRepositories.refreshSourceControlFor,
   };
   const reporterFor = (tag: string) => makeReporter(outputChannel, tag);
   const plugins = createPlugins({
     client: meditClient, facts: opened.facts, channel: outputChannel, reporterFor,
-    registerRepositories: trackedRepositories.registerRepositories, ask: askQuestion, sourceEditing,
+    registerRepositories: sourceModRepositories.registerRepositories, ask: askQuestion, sourceEditing,
   });
   const editor = createEditor({
     context, meditClient, outputChannel,
@@ -272,7 +271,7 @@ export function activate(context: vscode.ExtensionContext): void {
     views,
     plugins,
     editor,
-    serveAgent({ port: agentPort(), instance: views.instance, modStatus: views.modStatus, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel }),
+    serveAgent({ port: agentPort(), instance: views.instance, readStatus: views.readStatus, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel }),
     reachMEditFromTerminals(context.environmentVariableCollection, meditClient, vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath, inheritedPythonPath, onTerminalEnvChange),
     createSourceLanguage({
       client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),

@@ -6,10 +6,10 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Two mod folders and one load order, since a copy across plugins is unaskable of one.
-/// <see cref="SourcePlugin"/> defaults untracked: a Data-directory master's own file is its only
+/// <summary>Two mod folders and one load order, as a copy across plugins needs two.
+/// <see cref="SourcePlugin"/> defaults to no compiled plugin: a Data-directory master's own file is its only
 /// representation. No index anywhere in it.</summary>
-public sealed class CopyFixture : TestInstance, ITrackedPlugins
+public sealed class CopyFixture : TestInstance, ICompiledPlugins
 {
     public const string SourcePluginName = "Source.esm";
     public const string SourceOrigin = "SourceMod";
@@ -36,7 +36,7 @@ public sealed class CopyFixture : TestInstance, ITrackedPlugins
     public const string DestinationNpcEditorId = "DestinationNpc";
     public FormKey DestinationNpc { get; }
 
-    private CopyFixture(bool trackSource)
+    private CopyFixture(bool initSource)
     {
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
         var npc = sourceMod.Npcs.AddNew(SourceNpcEditorId);
@@ -45,7 +45,7 @@ public sealed class CopyFixture : TestInstance, ITrackedPlugins
         var relation = new Relation();
         relation.Target.SetTo(faction);
         faction.Relations.Add(relation);
-        SourcePlugin = Add(sourceMod, SourceOrigin, trackSource);
+        SourcePlugin = Add(sourceMod, SourceOrigin, initSource);
         (SourceNpc, SelfLinkingFaction) = (npc.FormKey, faction.FormKey);
         SourceNpcWithNoEditorId = namelessNpc.FormKey;
 
@@ -62,8 +62,8 @@ public sealed class CopyFixture : TestInstance, ITrackedPlugins
     }
 
     /// <summary>The source plugin's own bytes, so "a copy, not a move" is asserted against the file
-    /// an untracked source is read from.</summary>
+    /// a plugin with no plugin source is read from.</summary>
     public byte[] SourcePluginBytes() => File.ReadAllBytes(Path.Combine(SourceModFolder, SourcePluginName));
 
-    public static CopyFixture Create(bool trackSource = false) => new(trackSource);
+    public static CopyFixture Create(bool initSource = false) => new(initSource);
 }

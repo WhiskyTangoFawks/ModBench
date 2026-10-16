@@ -24,7 +24,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
             .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
             .WithPlugin("Partner.esp", mod => mod.Npcs.AddNew("PartnerNpc"), origin: "PartnerMod")
             .BuildScattered()
-            .Tracked();
+            .CompiledPlugin();
         _mod = _fixture.Plugins.Single(p => p.Name == "Fixture.esp");
         _partner = _fixture.Plugins.Single(p => p.Name == "Partner.esp");
         _npc = npc.ToString();
@@ -98,17 +98,17 @@ public sealed class InactivePluginProjectionTests : IDisposable
     }
 
     [Fact]
-    public void ATrackedPluginThatIsNotActive_IsStillReadAsTracked()
+    public void ACompiledPluginThatIsNotActive_IsStillReadAsCompiledPlugin()
     {
         Reconcile(active: false);
 
         var row = _index.PluginRowOf(_mod.KeyOf()) ?? throw new InvalidOperationException("Expected the plugin's row.");
-        Assert.True(row.IsTracked);
+        Assert.True(row.IsCompiledPlugin);
         Assert.Null(row.PluginSourceUnreadable);
     }
 
     [Fact]
-    public void ASnapshotThatMovesNothing_ProjectsNothingForATrackedPluginThatIsNotActive()
+    public void ASnapshotThatMovesNothing_ProjectsNothingForACompiledPluginThatIsNotActive()
     {
         Reconcile(active: false);
 

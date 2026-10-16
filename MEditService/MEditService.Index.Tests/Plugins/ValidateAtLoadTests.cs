@@ -26,7 +26,7 @@ public sealed class ValidateAtLoadTests : IDisposable
                 mod.Npcs.AddNew("UneditedNpc");
             }, origin: "FixtureMod")
             .BuildScattered()
-            .Tracked();
+            .CompiledPlugin();
         _entry = _fixture.Plugins.Single();
         _formKey = npc.ToString();
     }

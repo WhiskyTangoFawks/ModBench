@@ -10,10 +10,10 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class ValidationFaultTests : IDisposable
 {
-    private const string PluginName = "Untracked.esp";
+    private const string PluginName = "NonCompiledPlugin.esp";
 
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("validation-fault")
-        .WithPlugin(PluginName, mod => mod.Npcs.AddNew("UntrackedNpc"), origin: "NonSourceMod")
+        .WithPlugin(PluginName, mod => mod.Npcs.AddNew("NonCompiledPluginNpc"), origin: "NonSourceMod")
         .BuildScattered();
     private readonly LoadOrderHolder _holder = new();
     private readonly List<LogEntry> _log = [];

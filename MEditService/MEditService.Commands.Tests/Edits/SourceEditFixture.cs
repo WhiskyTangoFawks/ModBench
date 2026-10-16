@@ -8,9 +8,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>The write side as ADR-0015 has it: a temporary tracked tree, a load order
+/// <summary>The write side as ADR-0015 has it: a temporary compiled plugin tree, a load order
 /// value, the codec and the schema. No index and no factory anywhere in it.</summary>
-public sealed class SourceEditFixture : TestInstance, ITrackedPlugin
+public sealed class SourceEditFixture : TestInstance, ICompiledPlugin
 {
     public const string ModFolderOrigin = "FixtureMod";
     public const string PluginName = "Fixture.esp";
@@ -33,7 +33,7 @@ public sealed class SourceEditFixture : TestInstance, ITrackedPlugin
     public FormKey Cell { get; }
     public FormKey Quest { get; }
 
-    private SourceEditFixture(bool track, string pluginName, bool isLight)
+    private SourceEditFixture(bool isSourceMod, string pluginName, bool isLight)
     {
         ActualPluginName = pluginName;
         var mod = new Fallout4Mod(ModKey.FromFileName(pluginName), Fallout4Release.Fallout4)
@@ -59,17 +59,17 @@ public sealed class SourceEditFixture : TestInstance, ITrackedPlugin
         mod.Quests.Add(quest);
         (Worldspace, Cell, Quest) = (worldspace.FormKey, cell.FormKey, quest.FormKey);
 
-        // Tracked through the real service: what an edit does to a git working tree is the thing
+        // A compiled plugin through the real service: what an edit does to a git working tree is the thing
         // under test, and no mock can answer that.
-        Plugin = Add(mod, ModFolderOrigin, track);
+        Plugin = Add(mod, ModFolderOrigin, isSourceMod);
     }
 
-    public static SourceEditFixture Tracked() => new(track: true, PluginName, isLight: false);
+    public static SourceEditFixture CompiledPlugin() => new(isSourceMod: true, PluginName, isLight: false);
 
-    public static SourceEditFixture TrackedLight(string pluginName = PluginName) =>
-        new(track: true, pluginName, isLight: true);
+    public static SourceEditFixture CompiledPluginLight(string pluginName = PluginName) =>
+        new(isSourceMod: true, pluginName, isLight: true);
 
-    public static SourceEditFixture Untracked() => new(track: false, PluginName, isLight: false);
+    public static SourceEditFixture NonCompiledPlugin() => new(isSourceMod: false, PluginName, isLight: false);
 
     public ISourceRepository? Repository => RepositoryOf(Plugin);
 

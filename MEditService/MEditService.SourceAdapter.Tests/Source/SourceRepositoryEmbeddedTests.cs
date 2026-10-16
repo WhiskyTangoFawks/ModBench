@@ -93,7 +93,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release));
 
     private ISourceRepository Repository =>
-        TestAdapters.Source().Open(TestMod.In(_modFolder), Release) ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+        TestAdapters.Source().Open(TestMod.In(_modFolder), Release) ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
 
     private static RecordIdentity Identity(IMajorRecordGetter record, string recordType) =>
         new(record.FormKey.ToString(), recordType, record.EditorID);

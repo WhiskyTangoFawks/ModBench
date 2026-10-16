@@ -147,7 +147,7 @@ def source_folder(instance: pathlib.Path, mod: str) -> pathlib.Path:
     return instance / 'source' / mod
 
 
-def track(fixture: Fixture, mod: str) -> None:
+def init_mod(fixture: Fixture, mod: str) -> None:
     call('POST', fixture.url + '/init', {'mods': [
         {'name': mod, 'sourceFolder': str(source_folder(fixture.instance, mod)), 'installationFiles': [], 'metadataFiles': []}]})
 

@@ -28,11 +28,11 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
 
     private readonly ScratchDirectory _modFolder = new("medit-file-of-a-record-");
 
-    public SourceRepositoryFileOfARecordTests() => TrackFiledIn(_modFolder);
+    public SourceRepositoryFileOfARecordTests() => InitFiledIn(_modFolder);
 
     public void Dispose() => _modFolder.Dispose();
 
-    private static void TrackFiledIn(string modFolder) =>
+    private static void InitFiledIn(string modFolder) =>
         PluginBaselines.Init(modFolder, [
             new TreeFile(PluginSourceRoot.HeaderDocument(PluginName), "{\"MasterReferences\": []}"u8.ToArray()),
             new TreeFile(NpcDocument, "{\"FormKey\": \"000800:Filed.esp\", \"EditorID\": \"FiledNpc\"}"u8.ToArray()),
@@ -55,7 +55,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
 
     private ISourceRepository Repository =>
         TestAdapters.Source().Open(new PluginProvider.FromMod(Origin, _modFolder, _modFolder), Release)
-        ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+        ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
 
     private static LoadOrderEntry Entry(string modFolder, string origin) =>
         new(PluginName, Path.Combine(modFolder, PluginName), origin, Line: 0, Enabled: true, Winning: true);
@@ -171,7 +171,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     public void AFileInTheSourceOfOneOfTwoPluginsOfOneName_HoldsThatPluginsRecord()
     {
         using var other = new ScratchDirectory("medit-file-of-a-record-other-");
-        TrackFiledIn(other);
+        InitFiledIn(other);
 
         var record = RecordOf(
             Path.Combine(other, NpcDocument), LoadOrder(Entry(_modFolder, Origin), Entry(other, "OtherMod") with { Winning = false }));
@@ -184,30 +184,30 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     {
         var document = Path.Combine(_modFolder, "Loose.json");
 
-        Assert.Equal($"{document} is under no tracked plugin's source.", WhyRefused(document));
+        Assert.Equal($"{document} is under no compiled plugin's source.", WhyRefused(document));
     }
 
     [Fact]
     public void ASourceInAModTheLoadOrderDoesNotName_IsRefused()
     {
         using var other = new ScratchDirectory("medit-file-of-a-record-unlisted-");
-        TrackFiledIn(other);
+        InitFiledIn(other);
         var npcFile = Path.Combine(other, NpcDocument);
 
-        Assert.Equal($"{npcFile} is under no tracked plugin's source.", WhyRefused(npcFile));
+        Assert.Equal($"{npcFile} is under no compiled plugin's source.", WhyRefused(npcFile));
     }
 
     [Fact]
     public void ASourceInAModWithNoRepository_IsRefused()
     {
-        using var untracked = new ScratchDirectory("medit-file-of-a-record-untracked-");
-        var npcFile = Path.Combine(untracked, NpcDocument);
+        using var nonSourceMod = new ScratchDirectory("medit-file-of-a-record-nonSourceMod-");
+        var npcFile = Path.Combine(nonSourceMod, NpcDocument);
         Directory.CreateDirectory(Path.GetDirectoryName(npcFile).Require());
         File.WriteAllText(npcFile, "{\"FormKey\": \"000800:Filed.esp\", \"EditorID\": \"FiledNpc\"}");
 
         Assert.Equal(
-            $"{npcFile} is under no tracked plugin's source.",
-            WhyRefused(npcFile, LoadOrder(Entry(_modFolder, Origin) with { Winning = false }, Entry(untracked, "NonSourceMod"))));
+            $"{npcFile} is under no compiled plugin's source.",
+            WhyRefused(npcFile, LoadOrder(Entry(_modFolder, Origin) with { Winning = false }, Entry(nonSourceMod, "NonSourceMod"))));
     }
 
     [Fact]
@@ -220,7 +220,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     public void AGroupsMetadataFile_HoldsNoRecord_UnderASourceTheLoadOrderDoesNotName()
     {
         using var other = new ScratchDirectory("medit-file-of-a-record-unlisted-");
-        TrackFiledIn(other);
+        InitFiledIn(other);
 
         Assert.IsType<RecordOfFileAnswer.HoldsNone>(new GitSourceAdapter(new UnsavedDocuments()).RecordOfFile(LoadOrder(), Path.Combine(other, GroupMetadata)));
     }

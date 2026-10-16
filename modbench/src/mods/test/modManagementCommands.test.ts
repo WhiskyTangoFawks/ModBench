@@ -203,7 +203,7 @@ describe('registerModContextCommands: modbench.mod.rename', () => {
     showInputBox.mockResolvedValueOnce('Renamed');
     const sourceInstance = {
       ...instance,
-      value: { ...instance.value, trackedMods: new Set(['Mod A']), paths: { ...instance.value.paths, sourceDirs: new Map([['Mod A', '/instance/source/Old A']]) } },
+      value: { ...instance.value, listedSourceMods: new Set(['Mod A']), paths: { ...instance.value.paths, sourceDirs: new Map([['Mod A', '/instance/source/Old A']]) } },
     };
 
     registerModContextCommands({ commands, instance: sourceInstance, viewSelection: () => [], reporter: recordingReporter(), ask: scriptedDialog(), trash: vi.fn(), log: vi.fn() });
@@ -270,7 +270,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
       'Default', instance.value.mods, [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
   });
 
-  const facts = { holdsPlugin: true, tracked: true };
+  const facts = { holdsPlugin: true, sourceMod: true };
 
   it('warns, naming the source, of a mod uninstalled whose source could not be trashed, and does not report the uninstall failed', async () => {
     uninstallMods.mockResolvedValueOnce({
@@ -1320,7 +1320,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
   const instance = {
     ...instanceThatReads,
     value: instanceValueFixture({
-      trackedMods: new Set(['M']),
+      listedSourceMods: new Set(['M']),
       paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map(), sourceDirs: new Map([['M', '/instance/source/M']]) },
     }),
   };
@@ -1535,7 +1535,7 @@ describe('open source: a source mod\'s source folder', () => {
   const instance = {
     ...instanceThatReads,
     value: instanceValueFixture({
-      trackedMods: new Set(['Source Mod']),
+      listedSourceMods: new Set(['Source Mod']),
       paths: {
         overwriteDir: undefined, downloadsDir: '', modDirs: new Map(),
         sourceDirs: new Map([['Source Mod', '/instance/source/Source Mod']]),

@@ -107,7 +107,7 @@ public sealed class CompilePluginContainerTests : IDisposable
         mod.Quests.Add(questC);
         (_questC, _topicC2) = (questC.FormKey, topicC2.FormKey);
 
-        TrackedTemplates.WriteTracked(_modFolder, mod);
+        CompiledPluginTemplates.WriteCompiledPlugin(_modFolder, mod);
         (_cellA, _cellB, _cellATemporaryRef) = (cellA.FormKey, cellB.FormKey, cellATemporaryRef.FormKey);
         (_worldspace, _topCell, _exteriorCell) = (worldspace.FormKey, topCell.FormKey, exteriorCell.FormKey);
         (_questA, _questB) = (questA.FormKey, questB.FormKey);

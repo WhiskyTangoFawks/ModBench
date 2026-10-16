@@ -120,7 +120,7 @@ async function referrerNode({ list, conditionsOf, client, log }: Lookups, copies
     const address = { name: held.plugin, origin: held.origin };
     return [(async () => {
       const conditions = conditionsOf(address);
-      const container = conditions.tracked && conditions.editable && await holdsChildren(client, log, address, first.formKey);
+      const container = conditions.editable && await holdsChildren(client, log, address, first.formKey);
       return new ReferencedByHolderNode(list, first.formKey, editorId, address, fields.map(r => r.fieldPath), conditions, container);
     })()];
   }));

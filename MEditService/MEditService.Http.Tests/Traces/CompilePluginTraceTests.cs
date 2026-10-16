@@ -13,17 +13,17 @@ public sealed class CompilePluginTraceTests : HostedTests
     private const string Origin = "CompiledMod";
     private const string OtherPlugin = "AlsoCompiled.esp";
     private const string OtherOrigin = "AlsoCompiledMod";
-    private const string UntrackedPlugin = "Untracked.esp";
-    private const string UntrackedOrigin = "NonSourceMod";
+    private const string NonCompiledPlugin = "NonCompiledPlugin.esp";
+    private const string NonCompiledPluginOrigin = "NonSourceMod";
 
     private static ScatteredFixtureData ThreeMods() =>
         new PluginFixtureBuilder("trace-compile-a-plugin")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("CompiledNpc"), origin: Origin)
             .WithPlugin(OtherPlugin, mod => mod.Npcs.AddNew("AlsoCompiledNpc"), origin: OtherOrigin)
-            .WithPlugin(UntrackedPlugin, mod => mod.Npcs.AddNew("UntrackedNpc"), origin: UntrackedOrigin)
+            .WithPlugin(NonCompiledPlugin, mod => mod.Npcs.AddNew("NonCompiledPluginNpc"), origin: NonCompiledPluginOrigin)
             .BuildScattered();
 
-    private async Task<ScatteredFixtureData> LoadedAndTracked()
+    private async Task<ScatteredFixtureData> LoadedAndCompiledPlugin()
     {
         var fx = ThreeMods();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
@@ -40,7 +40,7 @@ public sealed class CompilePluginTraceTests : HostedTests
     [Fact]
     public async Task CompilingAnEditedPlugin_AnswersItApplied_AndItsBytesCarryTheEdit()
     {
-        using var fx = await LoadedAndTracked();
+        using var fx = await LoadedAndCompiledPlugin();
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
 
@@ -53,16 +53,16 @@ public sealed class CompilePluginTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task CompilingASelection_WithAnUntrackedPlugin_CompilesTheOthers_AndRefusesItByName()
+    public async Task CompilingASelection_WithANonCompiledPlugin_CompilesTheOthers_AndRefusesItByName()
     {
-        using var fx = await LoadedAndTracked();
+        using var fx = await LoadedAndCompiledPlugin();
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         var otherFormKey = await Client.FirstFormKey(OtherPlugin, OtherOrigin);
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
         (await Client.Edit(otherFormKey, OtherPlugin, OtherOrigin, "HeightMax", 0.5)).EnsureSuccessStatusCode();
 
         var answer = await Answer(await Client.Compile(
-            [(Plugin, Origin), (UntrackedPlugin, UntrackedOrigin), (OtherPlugin, OtherOrigin)]));
+            [(Plugin, Origin), (NonCompiledPlugin, NonCompiledPluginOrigin), (OtherPlugin, OtherOrigin)]));
 
         Assert.Equal(
             [(Plugin, Origin), (OtherPlugin, OtherOrigin)],
@@ -70,11 +70,11 @@ public sealed class CompilePluginTraceTests : HostedTests
                 .Select(p => (p.GetProperty("name").GetString(), p.GetProperty("origin").GetString())));
         var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
         Assert.Equal(
-            (UntrackedPlugin, UntrackedOrigin),
+            (NonCompiledPlugin, NonCompiledPluginOrigin),
             (refused.GetProperty("item").GetProperty("name").GetString(), refused.GetProperty("item").GetProperty("origin").GetString()));
-        Assert.Equal("PluginNotTracked", refused.GetProperty("refusal").GetString());
+        Assert.Equal("PluginNotCompiledPlugin", refused.GetProperty("refusal").GetString());
         Assert.Equal(
-            $"{UntrackedPlugin} is not tracked, so there is no source to compile.",
+            $"{NonCompiledPlugin} is not a compiled plugin, so there is no source to compile.",
             refused.GetProperty("message").GetString());
         Assert.Equal(0.75, await HeightMaxOfTheWrittenBytes(fx, Plugin, Origin, formKey), 3);
         Assert.Equal(0.5, await HeightMaxOfTheWrittenBytes(fx, OtherPlugin, OtherOrigin, otherFormKey), 3);
@@ -83,7 +83,7 @@ public sealed class CompilePluginTraceTests : HostedTests
     [Fact]
     public async Task CompilingASelectionNamingAPluginTwice_AnswersItAppliedOnce()
     {
-        using var fx = await LoadedAndTracked();
+        using var fx = await LoadedAndCompiledPlugin();
 
         var answer = await Answer(await Client.Compile([(Plugin, Origin), (Plugin, Origin)]));
 
@@ -130,7 +130,7 @@ public sealed class CompilePluginTraceTests : HostedTests
     [Fact]
     public async Task CompilingNoPlugin_Is400()
     {
-        using var fx = await LoadedAndTracked();
+        using var fx = await LoadedAndCompiledPlugin();
 
         var response = await Client.Compile([]);
 
@@ -140,7 +140,7 @@ public sealed class CompilePluginTraceTests : HostedTests
     [Fact]
     public async Task CompilingAPluginWithoutAnOrigin_Is400()
     {
-        using var fx = await LoadedAndTracked();
+        using var fx = await LoadedAndCompiledPlugin();
 
         var response = await Client.Compile([(Plugin, string.Empty)]);
 
@@ -150,7 +150,7 @@ public sealed class CompilePluginTraceTests : HostedTests
     [PosixFact]
     public async Task CompilingWhenOnePluginsBytesCannotBeWritten_RefusesItByName_AndCompilesTheOthers()
     {
-        using var fx = await LoadedAndTracked();
+        using var fx = await LoadedAndCompiledPlugin();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
 
         OtherTool.SetsThePermissions(modFolder, "500");

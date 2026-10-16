@@ -229,7 +229,7 @@ public sealed class GitMissingApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsTracked(Plugin);
+        await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;
     }
 

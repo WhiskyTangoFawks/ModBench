@@ -156,9 +156,9 @@ public sealed class CopyAsNewTests
     }
 
     [Fact]
-    public void CopyRecordAsNewRecord_OnAQuestFromATrackedSource_Succeeds()
+    public void CopyRecordAsNewRecord_OnAQuestFromACompiledPluginSource_Succeeds()
     {
-        using var fixture = ContainerCopyFixture.CreateWithTrackedSource();
+        using var fixture = ContainerCopyFixture.CreateWithCompiledPluginSource();
 
         var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Quest.ToString())], CopyMode.New, [fixture.DestinationPlugin], replace: false);
 

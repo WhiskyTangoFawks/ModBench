@@ -17,7 +17,7 @@ public sealed class UnreadableBinaryTests : IDisposable
     private readonly ScratchDirectory _instance = new("medit-unreadable-binary-instance-");
     private string _gameDirectory => _game.Path;
     private string _instanceRoot => _instance.Path;
-    private const string PluginName = "Untracked.esp";
+    private const string PluginName = "NonCompiledPlugin.esp";
     private const string Origin = "NonSourceMod";
     private readonly string _modFolder;
     private readonly string _pluginPath;
@@ -53,10 +53,10 @@ public sealed class UnreadableBinaryTests : IDisposable
     private void Reconcile(params LoadOrderEntry[] entries) =>
         _index.Reconcile(_holder, _gameDirectory, entries, GameRelease.Fallout4, _instanceRoot);
 
-    private void UntrackedOverAnUnreadableBinary()
+    private void NonCompiledPluginOverAnUnreadableBinary()
     {
         WriteValidPlugin(_pluginPath);
-        SourceMods.Track(_pluginPath);
+        SourceMods.Init(_pluginPath);
         Reconcile(Entry);
         AnotherTool.Delete(Path.Combine(_modFolder, ".git"));
         File.WriteAllText(_pluginPath, "not a plugin");
@@ -69,7 +69,7 @@ public sealed class UnreadableBinaryTests : IDisposable
     [Fact]
     public void AReDerivationThatCannotReadTheBinary_FailsThatPluginAlone_AndTheRestLand()
     {
-        UntrackedOverAnUnreadableBinary();
+        NonCompiledPluginOverAnUnreadableBinary();
 
         Assert.Equal(LoadOrderState.Ready, _index.Status.State);
         Assert.Contains(_index.Status.Failures, f => f.Name == PluginName && f.Origin == Origin);
@@ -80,7 +80,7 @@ public sealed class UnreadableBinaryTests : IDisposable
     [Fact]
     public void AReDerivationThatCannotReadTheBinary_IsNotReadAgain_WhileItsBytesHold()
     {
-        UntrackedOverAnUnreadableBinary();
+        NonCompiledPluginOverAnUnreadableBinary();
         var before = _notifications.Notifications.Count;
         var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
         other.Npcs.AddNew("OtherNpcChangedBesideTheUnreadableOne");
@@ -94,7 +94,7 @@ public sealed class UnreadableBinaryTests : IDisposable
     [Fact]
     public void AReDerivationThatCannotReadTheBinary_ReadsAgainOnceItsBytesChange()
     {
-        UntrackedOverAnUnreadableBinary();
+        NonCompiledPluginOverAnUnreadableBinary();
 
         WriteValidPlugin(_pluginPath);
         _index.NextSnapshotUntil(() => _index.Status.Failures.All(f => f.Name != PluginName), "the status without the plugin's failure");

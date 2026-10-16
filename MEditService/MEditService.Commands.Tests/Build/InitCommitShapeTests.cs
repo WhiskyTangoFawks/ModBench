@@ -59,7 +59,7 @@ public sealed class InitCommitShapeTests : IDisposable
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
-        var source = new FakeSourceAdapter().Tracking(_modFolder);
+        var source = new FakeSourceAdapter().WithSourceMod(_modFolder);
 
         var result = await Init(TestAdapters.Mutagen(), source);
 

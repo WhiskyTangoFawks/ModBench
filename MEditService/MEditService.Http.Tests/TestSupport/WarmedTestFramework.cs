@@ -29,7 +29,7 @@ public sealed class WarmedTestFramework(IMessageSink diagnostics) : SchemaWarmed
         (await client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await client.Init(Origin)).EnsureSuccessStatusCode();
         await client.NextSnapshot(fx);
-        await client.PluginReportsTracked(Plugin);
+        await client.PluginReportsCompiledPlugin(Plugin);
         var formKey = await client.FirstFormKey(Plugin, Origin);
         (await client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
         (await client.Compile([(Plugin, Origin)])).EnsureSuccessStatusCode();

@@ -29,9 +29,9 @@ public sealed class WriteGatesOverAFakeSourceTests
         return TestEditService.Over(holder, source: source);
     }
 
-    private static IServiceProvider OverADiskThatTracksWhatTheFakeDoesNot(FakeSourceAdapter source, out SourceEditFixture disk)
+    private static IServiceProvider OverADiskThatInitsWhatTheFakeDoesNot(FakeSourceAdapter source, out SourceEditFixture disk)
     {
-        disk = SourceEditFixture.Tracked();
+        disk = SourceEditFixture.CompiledPlugin();
         return TestEditService.Over(disk.Holder, source: source);
     }
 
@@ -42,32 +42,32 @@ public sealed class WriteGatesOverAFakeSourceTests
     [Fact]
     public void EditingAPluginOfAnNonSourceMod_IsRefused_NamingTheInitCommand()
     {
-        var services = OverADiskThatTracksWhatTheFakeDoesNot(new FakeSourceAdapter(), out var disk);
+        var services = OverADiskThatInitsWhatTheFakeDoesNot(new FakeSourceAdapter(), out var disk);
         using var _ = disk;
 
         var result = services.GetRequiredService<EditRecordChangesHandler>()
             .Changes(disk.Plugin, disk.Npc.ToString(), SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).Outcome;
 
-        Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, result.Refusal);
         Assert.Contains("Decompile and commit its mod", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void EditingAFormKeyNoDocumentHolds_OnAnUntrackedPlugin_StillRefusesAsUntracked()
+    public void EditingAFormKeyNoDocumentHolds_OnANonCompiledPlugin_StillRefusesAsNonCompiledPlugin()
     {
-        var services = OverADiskThatTracksWhatTheFakeDoesNot(new FakeSourceAdapter(), out var disk);
+        var services = OverADiskThatInitsWhatTheFakeDoesNot(new FakeSourceAdapter(), out var disk);
         using var _ = disk;
 
         var result = services.GetRequiredService<EditRecordChangesHandler>()
             .Changes(disk.Plugin, $"ABCDEF:{disk.Plugin.Name}", SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).Outcome;
 
-        Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, result.Refusal);
     }
 
     [Fact]
     public void EditingAPlugin_WhoseSourceIsUnreadable_IsRefusedBeforeAnySessionOpens_NamingDecompile()
     {
-        var source = new FakeSourceAdapter().TrackingUnreadable(ModFolder);
+        var source = new FakeSourceAdapter().WithUnreadableSourceMod(ModFolder);
 
         var result = SetHeight(Over(source), Npc).Outcome;
 
@@ -79,7 +79,7 @@ public sealed class WriteGatesOverAFakeSourceTests
     [Fact]
     public void CreatingARecordInAPlugin_WhoseSourceIsUnreadable_IsRefusedTheSameWay()
     {
-        var source = new FakeSourceAdapter().TrackingUnreadable(ModFolder);
+        var source = new FakeSourceAdapter().WithUnreadableSourceMod(ModFolder);
 
         var result = Over(source).GetRequiredService<CreateRecordChangesHandler>().CreateRecord(Plugin, "npc_").Outcome;
 
@@ -88,9 +88,9 @@ public sealed class WriteGatesOverAFakeSourceTests
     }
 
     [Fact]
-    public void EditingAFormKeyNoDocumentOfATrackedPlugin_IsRefusedAsRecordNotFound()
+    public void EditingAFormKeyNoDocumentOfACompiledPlugin_IsRefusedAsRecordNotFound()
     {
-        var source = new FakeSourceAdapter().Tracking(ModFolder, NpcDocument());
+        var source = new FakeSourceAdapter().WithSourceMod(ModFolder, NpcDocument());
 
         var result = SetHeight(Over(source), $"000900:{Plugin.Name}").Outcome;
 
@@ -100,7 +100,7 @@ public sealed class WriteGatesOverAFakeSourceTests
     [Fact]
     public void EditingAField_AnswersTheDocumentRewritten_UnderTheModFolder()
     {
-        var source = new FakeSourceAdapter().Tracking(ModFolder, NpcDocument());
+        var source = new FakeSourceAdapter().WithSourceMod(ModFolder, NpcDocument());
 
         var answered = SetHeight(Over(source), Npc);
 

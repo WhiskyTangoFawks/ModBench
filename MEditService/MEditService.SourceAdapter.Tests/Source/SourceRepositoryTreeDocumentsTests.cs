@@ -29,13 +29,13 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     private static readonly string NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk =
         Path.Combine("plugin-source", PluginName, "Npcs", $"{NpcEditorId} - 000800_{PluginName}.json");
 
-    private ISourceRepository Tracked()
+    private ISourceRepository SourceMod()
     {
         PluginBaselines.Init(
             _modFolder,
             [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
         return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
     }
 
     private static (string, string, string?, string) Tuple(SourceDocument document) =>
@@ -48,20 +48,20 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
 
     private static string HeaderFormKey => PluginHeader.FormKeyFor(ModKey.FromFileName(PluginName));
 
-    private ISourceRepository TrackedWithHeader()
+    private ISourceRepository SourceModWithHeader()
     {
         PluginBaselines.Init(
             _modFolder,
             [new TreeFile(HeaderRelativePath, Encoding.UTF8.GetBytes(HeaderBody)),
              new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
         return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
     }
 
     [Fact]
     public void TheTreesDocuments_HoldThePluginHeaderUnderTheFormKeyPluginHeaderComputes()
     {
-        var header = TreeDocuments.Of(TrackedWithHeader(), Plugin).SingleOrDefault(d => d.FormKey == HeaderFormKey);
+        var header = TreeDocuments.Of(SourceModWithHeader(), Plugin).SingleOrDefault(d => d.FormKey == HeaderFormKey);
 
         Assert.NotNull(header);
         Assert.Equal(PluginHeader.RecordType, header.RecordType);
@@ -71,7 +71,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     [Fact]
     public void TheTreesDocuments_AreEveryDocumentPut()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
         var weapon = new SourceDocument("000900:Fixture.esp", "weap", "FixtureWeapon",
             "{\n  \"FormKey\": \"000900:Fixture.esp\",\n  \"EditorID\": \"FixtureWeapon\"\n}");
         var race = new SourceDocument("000A00:Fixture.esp", "race", null,
@@ -89,7 +89,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     [Fact]
     public void TheTreesDocuments_DropARecordRemoved()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
 
         repository.Remove(Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId)).Wrote();
 
@@ -99,7 +99,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     [Fact]
     public void FormKeysUsed_AKeyTheWorkingTreeDeleted_IsNotUsed_ThoughTheLastCommitHoldsIt()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
         repository.Remove(Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId)).Wrote();
 
         Assert.DoesNotContain(NpcFormKey, repository.FormKeysUsed(Plugin).Value());
@@ -108,7 +108,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     [Fact]
     public void FormKeysUsed_AKeyCreatedSinceTheLastCommit_IsUsed()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
         repository.Put(Plugin, new SourceDocument("000900:Fixture.esp", "weap", "Later", LaterBody)).Wrote();
 
         Assert.Equal(
@@ -119,13 +119,13 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     [Fact]
     public void FormKeysUsed_APluginWithNoSourceOfItsOwn_IsEmpty()
     {
-        Assert.Empty(Tracked().FormKeysUsed(new PluginAddress("Other.esp", TestMod.Name)).Value());
+        Assert.Empty(SourceMod().FormKeysUsed(new PluginAddress("Other.esp", TestMod.Name)).Value());
     }
 
     [Fact]
     public void FormKeysUsed_SkipsGroupMetadataAndAStrayFileDeclaringNoFormKey_ForADocumentIsWhatDeclaresAFormKeyNotWhereItSits()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
         var npcsFolder = Path.Combine(PluginSourceRoot.In(_modFolder, PluginName), "Npcs");
         File.WriteAllText(Path.Combine(npcsFolder, "GroupRecordData.json"), "{\n  \"Type\": \"npc_\"\n}");
         File.WriteAllText(Path.Combine(npcsFolder, "notes.json"), "{\n  \"Note\": \"scratch\"\n}");
@@ -133,9 +133,9 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
         Assert.Equal([NpcFormKey], repository.FormKeysUsed(Plugin).Value().ToList());
     }
 
-    private ISourceRepository TrackedWithNpcDeclaring(string declared)
+    private ISourceRepository SourceModWithNpcDeclaring(string declared)
     {
-        var repository = Tracked();
+        var repository = SourceMod();
         var path = Path.Combine(PluginSourceRoot.In(_modFolder, PluginName), "Npcs", Path.GetFileName(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk));
         File.WriteAllText(path, NpcBody.Replace(NpcFormKey, declared));
         return repository;
@@ -144,7 +144,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     [Fact]
     public void TheTreesDocuments_NameARecordByMutagensSpellingOfItsFormKey_ThoughTheTextDelimitsItWithAnUnderscore()
     {
-        var repository = TrackedWithNpcDeclaring("000800_Fixture.esp");
+        var repository = SourceModWithNpcDeclaring("000800_Fixture.esp");
 
         Assert.Equal([NpcFormKey], TreeDocuments.Of(repository, Plugin).Select(d => d.FormKey).ToList());
         Assert.Equal([NpcFormKey], repository.FormKeysUsed(Plugin).Value().ToList());
@@ -153,7 +153,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     [Fact]
     public void TheTreesDocuments_RefuseADocumentWhoseFormKeyMutagenCannotParse_NamingItAndWhatItDeclares()
     {
-        var repository = TrackedWithNpcDeclaring("not-a-formkey");
+        var repository = SourceModWithNpcDeclaring("not-a-formkey");
 
         var refused = Assert.IsType<SourceFailure.Unreadable>(
             repository.ReadDocuments(Plugin, documents => documents.Records.ToList()).Stopped());
@@ -165,7 +165,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     [Fact]
     public void FormKeysUsed_RefusesADocumentWhoseFormKeyMutagenCannotParse_RatherThanLoseIt()
     {
-        var repository = TrackedWithNpcDeclaring("not-a-formkey");
+        var repository = SourceModWithNpcDeclaring("not-a-formkey");
 
         var refused = Assert.IsType<SourceFailure.Unreadable>(repository.FormKeysUsed(Plugin).Stopped());
 
@@ -175,7 +175,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     [Fact]
     public void ARecordsDocument_SpellingThePluginInAnotherCase_IsTheRecordTheKeyNames()
     {
-        var repository = TrackedWithNpcDeclaring("000800:fixture.esp");
+        var repository = SourceModWithNpcDeclaring("000800:fixture.esp");
 
         Assert.NotNull(repository.RecordByFormKey(Plugin, NpcFormKey).Value());
     }
@@ -183,7 +183,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     [Fact]
     public void TheTextGivenForARecord_SpellingThePluginInAnotherCase_IsTheRecordTheKeyNames()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
 
         var found = repository.RecordFromText(Plugin, NpcFormKey, NpcBody.Replace(NpcFormKey, "000800:fixture.esp")).Value();
 
@@ -193,7 +193,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     [Fact]
     public void TwoDocumentsDeclaringOneFormKey_WithThePluginInDifferentCase_AreRefusedAsAClaimOfBoth()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
         var npcsFolder = Path.Combine(PluginSourceRoot.In(_modFolder, PluginName), "Npcs");
         File.WriteAllText(Path.Combine(npcsFolder, "Twin.json"), NpcBody.Replace(NpcFormKey, "000800:fixture.esp"));
 

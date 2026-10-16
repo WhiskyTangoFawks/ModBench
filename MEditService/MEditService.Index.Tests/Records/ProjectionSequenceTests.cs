@@ -30,7 +30,7 @@ public sealed class ProjectionSequenceTests : IDisposable
             }, origin: "BaseMod")
             .WithPlugin("Partner.esp", mod => mod.Npcs.AddNew("PartnerNpc"), origin: "PartnerMod")
             .BuildScattered()
-            .Tracked();
+            .CompiledPlugin();
         _base = _fixture.Plugins.Single(p => p.Name == "Base.esm");
         _partner = _fixture.Plugins.Single(p => p.Name == "Partner.esp");
         _baseKey = _base.KeyOf();
