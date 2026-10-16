@@ -141,9 +141,8 @@ public static class DocumentTokens
     /// JSON object, which a member can be read from.</summary>
     public static string? WhyNotADocument(string text) => Document.TryRead(text, out _, out var whyNot) ? null : whyNot;
 
-    /// <summary>False only when the bytes certainly do not spell <paramref name="formKeyUtf8"/> in any of Mutagen's
-    /// spellings: the plugin file name is literal in every one, and JSON spells it other than literally only
-    /// through a \u escape, since no plugin file name holds a quote, backslash, slash or control character.</summary>
+    /// <summary>False only when the bytes certainly do not spell <paramref name="formKeyUtf8"/> in any spelling
+    /// Mutagen reads: each holds the plugin file name literally, unless a \u escape spells it.</summary>
     public static bool MayCarry(byte[] document, byte[] formKeyUtf8) =>
         document.AsSpan().IndexOf(formKeyUtf8.AsSpan(formKeyUtf8.AsSpan().IndexOf((byte)':') + 1)) >= 0
         || document.AsSpan().IndexOf(@"\u"u8) >= 0;

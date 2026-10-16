@@ -8,5 +8,5 @@ public static class CanonicalFormKey
 {
     public static string? Of(string text) => FormKey.TryFactory(text, out var parsed) ? parsed.ToString() : null;
 
-    public static string OfOrAsWritten(string text) => Of(text) ?? text;
+    internal static string OfOrAsWritten(string text) => Of(text) ?? text;
 }
