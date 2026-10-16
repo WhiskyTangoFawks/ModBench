@@ -2,8 +2,8 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Commands;
 
-/// <summary>A script's create gesture: the plugin goes into the place its origin names, an enabled mod or Overwrite, as the gesture's pick offers, and the write is marked for the
-/// next read to wait on (ADR-0015).</summary>
+/// <summary>A script's create gesture: the plugin goes into the place its origin names, one the gesture's pick offers, and
+/// the write is marked for the next read to wait on (ADR-0015).</summary>
 public sealed class CreatePluginInModHandler
 {
     private readonly CreatePluginHandler _create;

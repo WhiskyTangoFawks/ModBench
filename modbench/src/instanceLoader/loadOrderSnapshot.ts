@@ -284,7 +284,7 @@ export function loadOrderSnapshotOf(value: {
   const { dataFolder } = value.gameFolder;
   // The filter states a found game folder's own guarantee, never an unchecked cast.
   const rows = value.plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined);
-  const modPlace = (name: string): PluginPlace | undefined => {
+  const modPlace = (name: string): { name: string; folder: string; sourceFolder?: string } | undefined => {
     const folder = value.modFolders?.holding({ kind: 'mod', name });
     if (folder === undefined) return undefined;
     const sourceFolder = value.sourceDirs.get(name);

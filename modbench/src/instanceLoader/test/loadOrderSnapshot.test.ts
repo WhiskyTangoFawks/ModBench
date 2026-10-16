@@ -472,7 +472,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     };
     const value: Parameters<typeof stampedSnapshot>[0] = {
       dataFolder: '/game/Data',
-      mods: [],
+      places: [], mods: [],
       statCache: '/mo2/stat-cache',
       plugins: [{
         name: 'A.esp', path: '/a/A.esp', origin: 'ModA', provider: { kind: 'Game' }, line: 0, lineNamesIt: true,
