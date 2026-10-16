@@ -42,7 +42,10 @@ internal sealed class ManifestBuilder
             var holding = byHash[file.Hash].ToList();
             if (holding.Count == 0) continue;
             var entry = byPath.TryGetValue(file.Path, out var samePath) && samePath.Hash == file.Hash ? samePath : holding[0];
-            return FileProvider.Holding(new FileBytes.InInstallationFile(name, entry.Path), _indexes[0].Name, file.Path);
+            var held = new FileBytes.InInstallationFile(name, entry.Path);
+            return held.IsWhatFirstInstallationFileNamesAt(_indexes[0].Name, file.Path)
+                ? new FileProvider.FirstInstallationFile()
+                : new FileProvider.InstallationFileEntry(name, entry.Path);
         }
 
         return _gameFiles.TryGetValue(file.Path, out var game) && game.Hash == file.Hash

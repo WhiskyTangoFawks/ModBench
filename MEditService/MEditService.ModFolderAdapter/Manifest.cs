@@ -40,15 +40,26 @@ public abstract record FileBytes
 {
     private FileBytes() { }
 
-    public sealed record InInstallationFile(string Name, string Path) : FileBytes;
+    public sealed record InInstallationFile(string Name, string Path) : FileBytes
+    {
+        /// <summary>Whether the line at <paramref name="linePath"/> names these bytes as <see cref="FileProvider.FirstInstallationFile"/>.</summary>
+        public bool IsWhatFirstInstallationFileNamesAt(string firstInstallationFile, string linePath) =>
+            Name == firstInstallationFile && string.Equals(Path, linePath, StringComparison.OrdinalIgnoreCase);
+    }
 
     public sealed record InGameFile(string Path) : FileBytes;
 
     public sealed record AtCommit(string Remote, string Commit, string Path) : FileBytes;
 
-    public sealed record Unnamed : FileBytes;
+    public sealed record Unnamed : FileBytes
+    {
+        internal Unnamed() { }
+    }
 
-    public sealed record NoInstallationFile : FileBytes;
+    public sealed record NoInstallationFile : FileBytes
+    {
+        internal NoInstallationFile() { }
+    }
 }
 
 /// <summary>An installation file by its name, or a game file by its path under the game folder. Source is
@@ -66,13 +77,6 @@ public abstract record FileProvider
     public sealed record FirstInstallationFile : FileProvider;
 
     public sealed record InstallationFileEntry(string InstallationFile, string Path) : FileProvider;
-
-    /// <summary>The provider that makes <see cref="Manifest.BytesOf"/> name <paramref name="held"/> for the line at
-    /// <paramref name="linePath"/>.</summary>
-    public static FileProvider Holding(FileBytes.InInstallationFile held, string firstInstallationFile, string linePath) =>
-        held.Name == firstInstallationFile && string.Equals(held.Path, linePath, StringComparison.OrdinalIgnoreCase)
-            ? new FirstInstallationFile()
-            : new InstallationFileEntry(held.Name, held.Path);
 
     public sealed record GameFile(string Path) : FileProvider;
 
