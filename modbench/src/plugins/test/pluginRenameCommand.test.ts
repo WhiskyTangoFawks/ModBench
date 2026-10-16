@@ -192,6 +192,18 @@ describe('modbench.plugin.rename', () => {
       expect(await validate('PATCH.esp')).toBe('"ModA" already holds "PATCH.esp".');
     });
 
+    it('refuses by the extensions mEdit allows now', async () => {
+      const { validate, client } = setup();
+      client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esp']);
+      expect(await validate('Patch.esl')).toBe('Extension must be .esm or .esp');
+    });
+
+    it('shows why when the name cannot be checked, rather than rejecting', async () => {
+      const { validate, fake } = setup();
+      vi.spyOn(fake.adapter, 'originHoldsPlugin').mockRejectedValue(new Error('EACCES'));
+      expect(await validate('Other.esp')).toBe('Could not check "Other.esp": EACCES');
+    });
+
     it('lets through a name only another place holds', async () => {
       const { validate } = setup();
       expect(await validate('Elsewhere.esp')).toBeUndefined();
@@ -286,8 +298,23 @@ describe('modbench.plugin.rename, called by the agent', () => {
     expect(reporter.reports).toEqual([]);
   });
 
+  it('refuses a name its place holds as a refusal result, renaming nothing', async () => {
+    const { client, fake, run } = setup();
+
+    expect(await run(calling('Taken.esp'))).toMatchObject({ applied: false, refusal: '"ModA" already holds "Taken.esp".' });
+
+    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([]);
+    expect(fake.calls).toEqual([]);
+  });
+
+  it('refuses by the extensions mEdit allows now', async () => {
+    const { client, run } = setup();
+    client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esp']);
+
+    expect(await run(calling('Renamed.esl'))).toMatchObject({ applied: false, refusal: 'Extension must be .esm or .esp' });
+  });
+
   it.each([
-    ['a name its place holds', calling('Taken.esp'), '"ModA" already holds "Taken.esp".'],
     ['more than one plugin', calling('Renamed.esp', [PLUGIN, PLUGIN]), 'carries one plugin'],
   ])('refuses %s, renaming nothing', async (_what, call, reason) => {
     const { client, fake, run } = setup();

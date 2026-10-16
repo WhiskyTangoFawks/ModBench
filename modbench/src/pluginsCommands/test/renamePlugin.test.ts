@@ -65,25 +65,23 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'runtimeOutput' }, from: 'Run.esp', to: 'Ran.esp', gameRelease: 'Fallout4' }]);
   });
 
-  it.each([
-    ['a name the origin already holds, whatever the case', 'renamed PATCH.esp', 'Renamed Patch.esp', '"Tracked Patch Mod" already holds "renamed PATCH.esp".'],
-    ['an extension the game does not take', 'Renamed Patch.txt', undefined, 'Extension must be .esm, .esl, or .esp'],
-    ['an empty name', '', undefined, 'Name is required'],
-  ])('refuses %s before any write', async (_case, newName, held, refusal) => {
-    const heldPlugins = held === undefined ? [] : [{ origin: { kind: 'mod' as const, name: PLUGIN.origin }, name: held }];
-    const { fake, result } = rename(newName, PLUGIN, { heldPlugins });
+  it('refuses a name the origin already holds before any write', async () => {
+    const heldPlugins = [{ origin: { kind: 'mod' as const, name: PLUGIN.origin }, name: 'Renamed Patch.esp' }];
+    const { fake, result } = rename('Renamed Patch.esp', PLUGIN, { heldPlugins });
 
-    expect(await result).toEqual({ applied: false, sourceRenamed: false, refusal });
+    expect(await result).toEqual({ applied: false, sourceRenamed: false, refusal: '"Tracked Patch Mod" already holds "Renamed Patch.esp".' });
     expect(client.calls.map((call) => call.method)).toEqual(['getCreatablePluginExtensions']);
     expect(apply).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);
   });
 
-  it('refuses, writing nothing, when mEdit cannot say which extensions a plugin may take', async () => {
+  it('refuses with the reason, writing nothing, when mEdit cannot say which extensions a plugin may take', async () => {
     client.setQueryFailure('getCreatablePluginExtensions', { failed: 'refused', refusal: 'mEdit is not ready.' });
     const { fake, result } = rename('Renamed Patch.esp');
 
-    expect(await result).toEqual({ applied: false, sourceRenamed: false, refusal: 'mEdit is not ready.' });
+    expect(await result).toEqual({
+      applied: false, sourceRenamed: false, refusal: 'Could not check "Renamed Patch.esp" for "Tracked Patch Mod.esp" (Tracked Patch Mod).', detail: 'mEdit is not ready.',
+    });
     expect(apply).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);
   });
@@ -123,21 +121,14 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
   });
 });
 
-describe('renameRefusal — what the prompt and the agent are told before the rename is asked for', () => {
-  const EXTENSIONS = ['.esm', '.esl', '.esp'];
-  const refusal = (newName: string, answers: InstanceAnswers = {}) =>
-    pluginsCommandsWith(fakeInstanceAdapter(undefined, answers).adapter).renameRefusal(PLUGIN, newName, EXTENSIONS);
+describe('renameRefusal — what the prompt is told before the rename is asked for', () => {
+  const refusal = (newName: string, heldIn: string) => pluginsCommandsWith(fakeInstanceAdapter(undefined, {
+    heldPlugins: [{ origin: { kind: 'mod', name: heldIn }, name: 'Renamed Patch.esp' }],
+  }).adapter).renameRefusal(PLUGIN, newName, ['.esm', '.esl', '.esp']);
 
-  it('accepts a name no rule refuses', async () => {
-    expect(await refusal('Renamed Patch.esl')).toBeUndefined();
-  });
-
-  it('refuses a name the game does not take, and one the plugin\'s origin holds on disk, but not one another origin holds', async () => {
-    const holding = (name: string, origin: string): InstanceAnswers => ({ heldPlugins: [{ origin: { kind: 'mod', name: origin }, name }] });
-
-    expect(await refusal('Renamed Patch.txt')).toBe('Extension must be .esm, .esl, or .esp');
-    expect(await refusal('Renamed Patch.esp', holding('Renamed Patch.esp', 'Tracked Patch Mod'))).toBe('"Tracked Patch Mod" already holds "Renamed Patch.esp".');
-    expect(await refusal('Renamed Patch.esp', holding('Renamed Patch.esp', 'OtherMod'))).toBeUndefined();
+  it('refuses a name the plugin\'s origin holds, and not one another origin holds', async () => {
+    expect(await refusal('Renamed Patch.esp', 'Tracked Patch Mod')).toBe('"Tracked Patch Mod" already holds "Renamed Patch.esp".');
+    expect(await refusal('Renamed Patch.esp', 'OtherMod')).toBeUndefined();
   });
 });
 

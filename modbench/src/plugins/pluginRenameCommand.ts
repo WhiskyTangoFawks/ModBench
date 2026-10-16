@@ -9,11 +9,11 @@ import { applyUnreported } from '../drivingLib/applyAnswered';
 import type { SourceEditing } from '../drivingLib/sourceEditing';
 import type { AskQuestion } from '../ports/dialog';
 import type { Reporter } from '../ports/reporter';
-import { answerOf } from '../wire/readFailed';
+import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { Refusal } from '../drivingLib/refusal';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
-import { creatablePluginExtensionsOf } from './pluginName';
+import { creatablePluginExtensionsOf } from './creatablePluginExtensions';
 import type { PluginsTreeNode } from './pluginRows';
 
 export interface RenamePluginDeps {
@@ -40,7 +40,7 @@ async function renamed({ commands, source, instance }: RenameDeps, plugin: Plugi
   const result = await commands.renamePlugin({ apply }, plugin, newName, instance.value.gameRelease);
   if (result.applied) return { applied: true, outcome: { landed: [{ name: newName, origin: plugin.origin }], refused: [] } };
   if ('reported' in result) return refused(`${couldNot} may be partly renamed. Reverting the source rename in git undoes it.`, result.reported);
-  if (!result.sourceRenamed) return refused(result.refusal);
+  if (!result.sourceRenamed) return refused(result.refusal, result.detail);
   return refused(`${couldNot} was renamed, its file and lines were not. Reverting the source rename in git undoes it.`, result.refusal);
 }
 
@@ -56,8 +56,14 @@ export function registerRenamePluginCommand(
       const creatableExtensions = await creatablePluginExtensionsOf(client, reporter);
       if (creatableExtensions === undefined) return undefined;
 
-      const refusal = (value: string): Promise<string | undefined> | undefined =>
-        value === '' || value === plugin.name ? undefined : commands.renameRefusal(plugin, value, creatableExtensions);
+      const refusal = async (value: string): Promise<string | undefined> => {
+        if (value === '' || value === plugin.name) return undefined;
+        try {
+          return await commands.renameRefusal(plugin, value, creatableExtensions);
+        } catch (err) {
+          return `Could not check "${value}": ${errorMessage(err)}`;
+        }
+      };
       const newName = await promptRename('Rename plugin', plugin.name, refusal);
       if (newName === undefined) return undefined;
 
@@ -72,8 +78,6 @@ export function registerRenamePluginCommand(
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a plugin carries one plugin.');
       const plugin = pluginOf(only);
-      const refusal = await commands.renameRefusal(plugin, name, answerOf(await client.getCreatablePluginExtensions()));
-      if (refusal !== undefined) throw new Refusal(refusal);
       return { plugin, newName: name };
     },
     run: async ({ plugin, newName }) => vscode.window.withProgress({ location: { viewId: PLUGINS_KEY_ARGS.view } }, () =>

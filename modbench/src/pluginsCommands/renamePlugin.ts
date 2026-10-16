@@ -24,7 +24,7 @@ export type RenameConfirmed = { confirmed: true } | { confirmed: false; refusal?
 export type PluginRenameResult =
   | { applied: true }
   | { applied: false; reported: string }
-  | { applied: false; sourceRenamed: boolean; refusal: string };
+  | { applied: false; sourceRenamed: boolean; refusal: string; detail?: string };
 
 const CONFIRM = 'Rename';
 
@@ -63,19 +63,21 @@ async function renameRefusal(
   return await access.adapter.originHoldsPlugin(fileOriginOf(plugin.origin), newName) ? `"${plugin.origin}" already holds "${newName}".` : undefined;
 }
 
-async function refusalBeforeWrite(access: PluginRenameAccess, plugin: PluginAddress, newName: string): Promise<string | undefined> {
+async function refusalBeforeWrite(access: PluginRenameAccess, plugin: PluginAddress, newName: string): Promise<PluginRenameResult | undefined> {
+  let refusal: string | undefined;
   try {
-    return await renameRefusal(access, plugin, newName, answerOf(await access.client.getCreatablePluginExtensions()));
+    refusal = await renameRefusal(access, plugin, newName, answerOf(await access.client.getCreatablePluginExtensions()));
   } catch (err) {
-    return errorMessage(err);
+    return { applied: false, sourceRenamed: false, refusal: `Could not check "${newName}" for "${plugin.name}" (${plugin.origin}).`, detail: errorMessage(err) };
   }
+  return refusal === undefined ? undefined : { applied: false, sourceRenamed: false, refusal };
 }
 
 async function renamePlugin(
   access: PluginRenameAccess, source: { apply(changes: SourceChanges): Promise<string | undefined> }, plugin: PluginAddress, newName: string, gameRelease: string | undefined,
 ): Promise<PluginRenameResult> {
-  const refusal = await refusalBeforeWrite(access, plugin, newName);
-  if (refusal !== undefined) return { applied: false, sourceRenamed: false, refusal };
+  const refused = await refusalBeforeWrite(access, plugin, newName);
+  if (refused !== undefined) return refused;
   const changes = await access.client.getRenameSourceChanges(plugin, newName);
   if (isRefused(changes)) return { applied: false, sourceRenamed: false, refusal: changes.message };
   const unapplied = await source.apply(changes);

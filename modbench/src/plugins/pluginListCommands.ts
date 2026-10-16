@@ -16,7 +16,7 @@ import type { SelectionResult } from '../pluginsCommands/plugins';
 import { answerOf } from '../wire/readFailed';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { Refusal } from '../drivingLib/refusal';
-import { creatablePluginExtensionsOf } from './pluginName';
+import { creatablePluginExtensionsOf } from './creatablePluginExtensions';
 import { pluginNameRefusal } from '../pluginsCommands/pluginName';
 import type { Reporter } from '../ports/reporter';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
