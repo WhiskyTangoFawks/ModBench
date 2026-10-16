@@ -35,7 +35,7 @@ up() {
   dir="$(mktemp -d /tmp/modbench-accept.XXXX)"
   instance="$dir/instance"
   if [ -n "$source" ]; then cp -a "$source" "$instance"
-  else mkdir -p "$instance" && (cd "$root/DevList" && git ls-files -z | xargs -0 cp --parents -t "$instance")
+  else mkdir -p "$instance" && (cd "$root/DevListFallout" && git ls-files -z | xargs -0 cp --parents -t "$instance")
   fi
   mkdir -p "$instance/.vscode" "$instance/modbench" "$dir/user/User" "$dir/ext"
   if [ ! -f "$instance/modbench/index.duckdb" ] && [ -f "$seed/index.duckdb" ]; then cp "$seed"/index.duckdb* "$instance/modbench/"; fi
