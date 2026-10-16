@@ -4,9 +4,8 @@
 import * as vscode from 'vscode';
 import type { MEditClient, ModStatus } from '../client';
 import { messageLine, type SyncMessage } from '../drivingLib/nameFilter';
-import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
-
-export type ReadStatus = (mods: readonly string[]) => Promise<readonly ModStatus[] | ReadFailed>;
+import { failureReason, isReadFailed } from '../wire/readFailed';
+import type { ReadStatus } from '../modOrderCommands/modOrderCommands';
 
 /** Each mod's status as mEdit last answered it. A read that fails keeps the last good one, and says so on the view's
  *  message line and once in the Output (common.md, Reporting). */
@@ -123,18 +122,3 @@ export const differingFiles = ({ differing, namedByNoLine }: ModStatus): Readonl
 
 /** Whether the mod counts in the view's badge (modlist-source.md, Status, story 5). */
 export const countsInBadge = (status: ModStatus): boolean => status.noManifest || differs(status);
-
-const listed = (what: string, files: readonly string[]): string | undefined =>
-  (files.length > 0 ? `${what}: ${files.join(', ')}` : undefined);
-
-/** What an upgrade over the mod would lose: its lack of a manifest, and each file its manifest cannot restore (agent.md, Any agent, story 7). */
-export const upgradeLoss = (status: ModStatus): string | undefined => {
-  const parts = [
-    status.noManifest ? 'it has no manifest' : undefined,
-    listed('files whose bytes differ from its manifest', status.differing),
-    listed('files no line of its manifest names', status.namedByNoLine),
-    listed('files its manifest names that its folder lacks', status.gone),
-    listed('files with no provider', status.noProvider),
-  ].filter((part) => part !== undefined);
-  return parts.length === 0 ? undefined : parts.join('; ');
-};

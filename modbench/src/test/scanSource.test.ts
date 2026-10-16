@@ -179,7 +179,7 @@ describe('boxesIn and referencesOf, parameterised by root', () => {
 
   it('defaults to the real source tree', () => {
     expect(boxesIn().map((box) => box.name)).toContain('loadOrderFileCodec');
-    expect(referencesOf('modOrderCommands')).toEqual(['client', 'coreLib', 'instanceAdapter', 'ports']);
+    expect(referencesOf('modOrderCommands')).toEqual(['client', 'coreLib', 'instanceAdapter', 'ports', 'wire']);
   });
 });
 

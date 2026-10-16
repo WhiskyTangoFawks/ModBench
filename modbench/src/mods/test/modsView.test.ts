@@ -1,3 +1,4 @@
+import { unreadStatus } from '../../test/unreadStatus';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
@@ -110,7 +111,7 @@ const shownRows = async () => (await present(h.providers.get('modbench.modList')
 const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row));
 
 const otherDeps = () => ({
-  commands: modlistCommands(fakeInstanceAdapter().adapter, unscriptedMEdit), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
+  commands: modlistCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
   extensionUri: Uri.file('/extension'), warnIfFomod: vi.fn(), downloadInstall: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
   modStatus: { push: new InMemoryMEditClient(), read: () => Promise.resolve([]) },
 });

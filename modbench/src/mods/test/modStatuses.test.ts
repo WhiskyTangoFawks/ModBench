@@ -6,7 +6,8 @@ vi.mock('vscode', () => ({ EventEmitter }));
 import type { ModStatus } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ReadFailed } from '../../wire/readFailed';
-import { ModStatuses, type ReadStatus } from '../modStatuses';
+import { ModStatuses } from '../modStatuses';
+import type { ReadStatus } from '../../modOrderCommands/modOrderCommands';
 import { status } from './modStatusFixture';
 
 const settled = () => new Promise((resolve) => { setTimeout(resolve, 0); });

@@ -1,3 +1,4 @@
+import { unreadStatus } from './unreadStatus';
 import { describe, it, expect, vi } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, MarkdownString } from './vscodeMock';
 
@@ -30,8 +31,8 @@ describe('the Downloads-Mods seam: modbench.mod.install given a Downloads row', 
     const { qp, escape } = fakeQuickPick<{ label: string }>();
     createQuickPick.mockReturnValue(qp);
     registerModInstallCommands({
-      commands: modlistCommands(fakeInstanceAdapter().adapter, new InMemoryMEditClient()), instance,
-      reporterFor: () => recordingReporter(), warnIfFomod: vi.fn(), readStatus: () => Promise.reject(new Error('a view call reads no status')),
+      commands: modlistCommands(fakeInstanceAdapter().adapter, new InMemoryMEditClient(), unreadStatus), instance,
+      reporterFor: () => recordingReporter(), warnIfFomod: vi.fn(),
       downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     });
     const node = new DownloadNode(downloadRowFixture('foo.7z'));
