@@ -1,3 +1,4 @@
+import type { InstanceValue } from '../../instanceLoader/instance';
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, uriFrom,
@@ -242,23 +243,6 @@ describe('registerCreatePluginCommand', () => {
     ]);
   });
 
-  it('offers no Overwrite while the value names no folder for it', async () => {
-    const client = new InMemoryMEditClient();
-    const mo2 = makeMo2();
-    mo2.instance.value = { ...mo2.instance.value, paths: { ...mo2.instance.value.paths, overwriteDir: undefined } };
-    showInputBox.mockResolvedValue('New.esp');
-    const offered: string[] = [];
-    showQuickPick.mockImplementation((places: Place[]) => {
-      offered.push(...places.map((place) => place.label));
-      return Promise.resolve(undefined);
-    });
-
-    const { run } = invoke(client, mo2);
-    await run();
-
-    expect(offered).not.toContain('Overwrite');
-  });
-
   it('reports the refusal mEdit answered with at error, and lands no toast', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createPlugin', { refused: true, message: 'Could not create "MyPatch.esp" — A file is already there.' });
@@ -312,9 +296,9 @@ describe('registerCreatePluginCommand', () => {
 describe('modbench.plugin.create, called by the agent', () => {
   const place = (origin: string, name = 'MyPatch.esp') => new AgentCall([], { name, place: origin });
 
-  function invokeAgent(call: AgentCall<{ name: string; place: string }>, client = new InMemoryMEditClient()) {
-    client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esl', '.esp']);
+  function invokeAgent(call: AgentCall<{ name: string; place: string }>, client = new InMemoryMEditClient(), paths: Partial<InstanceValue['paths']> = {}) {
     const mo2 = makeMo2();
+    mo2.instance.value = { ...mo2.instance.value, paths: { ...mo2.instance.value.paths, ...paths } };
     const reporter = recordingReporter();
     registerCreatePluginCommand(client, mo2.instance, reporter);
     const run = present(handlers.get('modbench.plugin.create'), "the create plugin command's registered handler");
@@ -348,25 +332,28 @@ describe('modbench.plugin.create, called by the agent', () => {
       { method: 'createPlugin', args: [WROTE, '/instance/mods/Winning Mod', '/instance/source/Winning Mod'] });
   });
 
-  it('answers the refusal mEdit answered, reporting nothing', async () => {
+  it.each([
+    ['a file already there', place('Winning Mod'), 'A file is already there.'],
+    ['a name that is no plugin file', place('Winning Mod', 'MyPatch.txt'), 'MyPatch.txt must be .esm, .esl or .esp.'],
+  ])('answers the refusal mEdit gave for %s, with its reason and reporting nothing', async (_what, call, message) => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', { refused: true, message: 'A file is already there.' });
-    const { reporter, answer } = invokeAgent(place('Winning Mod'), client);
+    client.setCommandResult('createPlugin', { refused: true, message });
+    const { reporter, answer } = invokeAgent(call, client);
 
-    expect(await answer()).toEqual({ applied: false, refusal: 'A file is already there.' });
+    expect(await answer()).toEqual({ applied: false, refusal: message });
     expect(reporter.reports).toEqual([]);
   });
 
   it.each([
-    ['a name with an extension no plugin takes', place('Winning Mod', 'MyPatch.txt'), 'Extension must be .esm, .esl, or .esp'],
-    ['a place that is not an enabled mod', place('Disabled Mod'), '"Disabled Mod" is not an enabled mod or Overwrite that lacks "MyPatch.esp".'],
-    ['a place that already holds the name', place('Holding Mod'), '"Holding Mod" is not an enabled mod or Overwrite that lacks "MyPatch.esp".'],
-  ])('refuses %s, creating nothing', async (_what, call, reason) => {
-    const { client, answer } = invokeAgent(call);
+    ['a place that is not an enabled mod', place('Disabled Mod'), {}, '"Disabled Mod" is not an enabled mod or Overwrite that lacks "MyPatch.esp".'],
+    ['a place that already holds the name', place('Holding Mod'), {}, '"Holding Mod" is not an enabled mod or Overwrite that lacks "MyPatch.esp".'],
+    ['an Overwrite whose folder is unread', place('overwrite/'), { overwriteDir: undefined }, 'Overwrite has no folder yet, so "MyPatch.esp" was not created.'],
+  ])('refuses %s, creating nothing', async (_what, call, paths, reason) => {
+    const { client, answer } = invokeAgent(call, undefined, paths);
 
     await expect(answer()).rejects.toThrow(reason);
 
-    expect(client.calls.map(({ method }) => method)).toEqual(['getCreatablePluginExtensions']);
+    expect(client.calls).toEqual([]);
   });
 });
 
