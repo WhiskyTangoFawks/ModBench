@@ -203,9 +203,9 @@ public sealed class BuildHandler
     {
         try
         {
-            return _modFolders.ReadManifest(mod.Folder, mod.Name)?.Files
-                .Where(line => line.Provider is FileProvider.FirstInstallationFile or FileProvider.InstallationFileEntry)
-                .Select(line => line.Path) ?? [];
+            return _modFolders.ReadManifest(mod.Folder, mod.Name) is { } manifest
+                ? manifest.Files.Where(line => manifest.BytesOf(line) is FileBytes.InInstallationFile).Select(line => line.Path)
+                : [];
         }
         catch (InvalidDataException)
         {

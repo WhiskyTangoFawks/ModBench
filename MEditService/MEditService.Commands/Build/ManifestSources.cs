@@ -43,7 +43,7 @@ internal sealed class ManifestSources(
             .. manifest.InstallationFiles.Select(source => InstallationFileNamed(source.Name).Lack).OfType<Lack>(),
             .. manifest.GameFiles.Select(source => GameFileOf(source.Name).Lack).OfType<Lack>(),
         ];
-        foreach (var file in manifest.Files.Where(file => file.Provider is not FileProvider.Source))
+        foreach (var file in manifest.Files)
         {
             var (source, lack) = SourceOf(file);
             if (source is not null) sourced.Add(new SourcedFile(file.Path, source));
@@ -57,15 +57,14 @@ internal sealed class ManifestSources(
         return new Resolved(sourced, [.. lacks.Distinct()], built.Count == 1 ? built[0] : null, handed);
     }
 
-    private (Source?, Lack?) SourceOf(ManifestFile file) => file.Provider switch
+    private (Source?, Lack?) SourceOf(ManifestFile file) => manifest.BytesOf(file) switch
     {
-        FileProvider.NoProvider => (null, new Lack($"'{file.Path}' has no provider")),
-        FileProvider.FirstInstallationFile => manifest.InstallationFiles is [var first, ..]
-            ? EntryOf(first.Name, file.Path)
-            : (null, new Lack($"'{file.Path}' names no installation file")),
-        FileProvider.InstallationFileEntry entry => EntryOf(entry.InstallationFile, entry.Path),
-        FileProvider.GameFile game => GameFileOf(game.Path),
-        _ => throw new ArgumentOutOfRangeException(nameof(file), file.Provider, null),
+        FileBytes.Unnamed => (null, new Lack($"'{file.Path}' has no provider")),
+        FileBytes.NoInstallationFile => (null, new Lack($"'{file.Path}' names no installation file")),
+        FileBytes.InInstallationFile held => EntryOf(held.Name, held.Path),
+        FileBytes.InGameFile game => GameFileOf(game.Path),
+        FileBytes.AtCommit => (null, null),
+        var other => throw new ArgumentOutOfRangeException(nameof(file), other, null),
     };
 
     private (Source?, Lack?) EntryOf(string name, string entryPath)
