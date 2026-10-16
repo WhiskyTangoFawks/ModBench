@@ -30,7 +30,7 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
 
     private string ViewColumnType(string table, string column) =>
         IndexFiles.Rows(fixture.InstanceRoot,
-            $"SELECT data_type FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{column}'")
+            $"SELECT data_type FROM information_schema.columns WHERE table_schema = 'main' AND table_name = '{table}' AND column_name = '{column}'")
             .Single()[0];
 
     [Theory]
@@ -112,6 +112,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
     public void AnArrayOrStructMember_HasNoViewColumn(string table, string column)
     {
         Assert.Empty(IndexFiles.Rows(fixture.InstanceRoot,
-            $"SELECT 1 FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{column}'"));
+            $"SELECT 1 FROM information_schema.columns WHERE table_schema = 'main' AND table_name = '{table}' AND column_name = '{column}'"));
     }
 }

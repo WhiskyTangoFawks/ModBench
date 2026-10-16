@@ -7,6 +7,9 @@ public sealed class SqlDoorSealTests(SqlDoorFixture fixture) : IClassFixture<Sql
 {
     [Theory]
     [InlineData("SELECT form_key FROM mirror.records")]
+    [InlineData("SELECT form_key FROM main.npc_")]
+    [InlineData("SELECT form_key FROM winners")]
+    [InlineData("SELECT name AS form_key FROM sqlite_master")]
     [InlineData("SELECT form_key FROM records WHERE form_key IN (SELECT form_key FROM mirror.records)")]
     [InlineData("SELECT table_name AS form_key FROM information_schema.tables")]
     [InlineData("SELECT form_key FROM query('SELECT form_key FROM mirror.records')")]
@@ -35,7 +38,6 @@ public sealed class SqlDoorSealTests(SqlDoorFixture fixture) : IClassFixture<Sql
 
     [Theory]
     [InlineData("SELECT form_key FROM records")]
-    [InlineData("SELECT form_key FROM main.npc_")]
     [InlineData("WITH held AS (SELECT form_key FROM records) SELECT form_key FROM held")]
     [InlineData("SELECT form_key FROM records, unnest([1, 2]) AS t(n)")]
     public void AFilterOfThePublicRelations_IsAccepted(string sql) => Assert.True(fixture.Index.Accepts(sql));

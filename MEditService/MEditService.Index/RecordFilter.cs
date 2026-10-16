@@ -34,10 +34,10 @@ internal sealed class RecordFilter(Store store)
         }
 
         var connection = store.Connection;
-        if (SqlDoor.RefusalOf(connection, sql) is { } refusal)
+        store.CreateRecordTypeViews();
+        if (SqlDoor.RefusalOf(connection, sql, TableDdlBuilder.ActiveSchema) is { } refusal)
             return refusal;
 
-        store.CreateRecordTypeViews();
         try
         {
             if (!ReturnsFormKey(connection, sql)) return "Filter SQL must return a form_key column";

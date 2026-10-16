@@ -74,6 +74,50 @@ public class SelectTests(TestPluginFixture fixture)
         Assert.Contains(reason, refused.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("SELECT table_name FROM information_schema.tables", "information_schema.tables")]
+    [InlineData("SELECT name, sql FROM sqlite_master WHERE type = 'table'", "sqlite_master")]
+    [InlineData("SELECT * FROM winners", "winners")]
+    [InlineData("SELECT * FROM active_plugins", "active_plugins")]
+    [InlineData("SELECT * FROM registrations", "registrations")]
+    [InlineData("SELECT * FROM plugin_records", "plugin_records")]
+    [InlineData("SELECT * FROM mirror.holdings", "mirror.holdings")]
+    [InlineData("SELECT * FROM main.records", "main.records")]
+    public void ASelectOfAnythingButTheViews_IsRefused_NamingTheRelationAndTheViews(string sql, string relation)
+    {
+        using var index = LoadedIndex();
+
+        var refused = index.Queries.SelectRows(sql).Refused();
+
+        Assert.Equal(IndexRefusal.SelectRejected, refused.Refusal);
+        Assert.Contains($"{relation} is not one", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("records, form_references, holdings", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("view_columns", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASelectOfViewColumns_ListsEachViewWithItsColumns()
+    {
+        using var index = LoadedIndex();
+
+        var columns = index.Queries.SelectRows("SELECT view_name, column_name FROM view_columns").Value()
+            .Select(row => (row.GetProperty("view_name").GetString(), row.GetProperty("column_name").GetString())).ToList();
+
+        Assert.Contains(("records", "is_active"), columns);
+        Assert.Contains(("npc_", "editor_id"), columns);
+        Assert.DoesNotContain(columns, column => column.Item1 == "view_columns");
+    }
+
+    [Fact]
+    public void ASelect_NamingACommonTableExpression_IsAnswered()
+    {
+        using var index = LoadedIndex();
+
+        Assert.Equal(
+            TestPluginFixture.RecordCount,
+            index.Queries.SelectRows("WITH winners AS (SELECT form_key FROM npc_) SELECT form_key FROM winners").Value().Length);
+    }
+
     [Fact]
     public void ASelect_WithNoLoadOrder_IsRefused()
     {
