@@ -18,8 +18,8 @@ class ResolveAgainstTheFixtureInstance(unittest.TestCase):
 
     def test_names_a_record_by_its_editor_id_or_form_key_and_several_names_in_one_call(self) -> None:
         with window_of(self.url):
-            by_editor_id, by_form_key = medit.resolve('10mmFromA', CONFLICTED_RECORD)
-        record = medit.RecordName(CONFLICTED_RECORD, '10mmFromA')
+            by_editor_id, by_form_key = medit.resolve('10mmFromB', CONFLICTED_RECORD)
+        record = medit.RecordName(CONFLICTED_RECORD, '10mmFromB')
         self.assertEqual(by_editor_id, record)
         self.assertEqual(by_form_key, record)
 

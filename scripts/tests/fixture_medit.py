@@ -27,7 +27,9 @@ CONFLICT_B = Plugin('MBDevConflictB.esp', 'MB-DEV Conflict B')
 EMPTY_MOD = 'MB-DEV Scratch'
 OVERWRITE = 'overwrite/'
 # DevList's plugins.txt in its order, each enabled.
-PLUGINS = [CONFLICT_B, CONFLICT_A, LIGHT, CONDITIONS, Plugin('MBDevMissingMaster.esp', 'MB-DEV Missing Master')]
+PLUGINS = [
+    Plugin('MBDevFixes.esm', 'MB-DEV Fixes'), Plugin('MBDevFixesAddon.esp', 'MB-DEV Fixes Addon'), CONFLICT_A, CONFLICT_B,
+    LIGHT, CONDITIONS, Plugin('MBDevMissingMaster.esp', 'MB-DEV Missing Master'), Plugin('MBDevPatchAB.esp', 'MB-DEV Patch A+B')]
 RECIPE = '000800:MBDevConditions.esp'
 RECIPE_FILE = 'MBDevConditionedRecipe - *.json'
 LIGHT_RECORD = '000800:MBDevLight.esl'

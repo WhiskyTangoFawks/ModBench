@@ -46,8 +46,8 @@ class ReadAgainstTheFixtureInstance(unittest.TestCase):
 
     def test_raises_naming_a_record_given_as_a_plugin(self) -> None:
         with window_of(self.url), self.assertRaises(medit.MEditError) as raised:
-            medit.read('10mmFromA', CONFLICTED_RECORD)
-        self.assertIn('10mmFromA is not a plugin', str(raised.exception))
+            medit.read('10mmFromB', CONFLICTED_RECORD)
+        self.assertIn('10mmFromB is not a plugin', str(raised.exception))
 
     def test_finds_no_record_that_references_a_record_nothing_references(self) -> None:
         with window_of(self.url):
