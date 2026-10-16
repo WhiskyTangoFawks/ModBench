@@ -352,10 +352,10 @@ export interface HashedDownload extends HashedFile {
 /** A downloaded file the mod manager records a mod as installed from, with its hashes. */
 export interface InstallationFile extends HashedDownload {
   readonly path: string;
-  /** Where the mod manager's metadata says the file comes from, as one line of text. */
+  /** The file's page on its host, a string the Instance adapter formats and the rest keeps opaque. */
   readonly source?: string;
-  /** The game the metadata names when the registry has no Nexus domain for it, so the file carries no source. */
-  readonly unsourcedGame?: string;
+  /** The game the metadata names when the registry has no Nexus domain for it, so the file carries no page. */
+  readonly unpagedGame?: string;
 }
 
 interface MetadataInstallationFile {

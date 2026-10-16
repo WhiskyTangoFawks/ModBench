@@ -11,7 +11,7 @@ import type { FileRead, InstalledFileId, InstallationFile, InstanceAdapter, ModM
 import { downloadFile, modMetaFileIn, settingsFile } from './layout';
 import { currentDownloadsDir, folderHolding, newModFolder, type Mo2Context } from './mo2Context';
 import type { ReadingSource } from './mo2Reads';
-import { formatNexusSource, parseNexusSource } from './nexusSource';
+import { formatNexusPage, parseNexusPage } from './nexusPage';
 
 // MO2 records a file installed from outside the downloads folder by its whole path, and reinstalls from the
 // downloads folder by its name once that path is gone.
@@ -19,18 +19,19 @@ async function reinstallPath(context: Mo2Context, recorded: string): Promise<str
   return isAbsolute(recorded) && (await exists(recorded)) ? recorded : downloadFile(await currentDownloadsDir(context), basename(recorded));
 }
 
-// A mod with no game of its own is the instance's game's.
-async function nexusSourceOf(
-  { gameName, nexusId, installedFiles = [] }: ModMeta, { instanceRoot }: Mo2Context,
-): Promise<Pick<InstallationFile, 'source' | 'unsourcedGame'>> {
-  if (nexusId === undefined && installedFiles.length === 0) return {};
-  const game = gameName ?? readGameName(await get(settingsFile(instanceRoot)));
-  const domain = nexusDomainForMetaGame(game);
-  return domain === undefined ? { unsourcedGame: game } : { source: formatNexusSource({ game: domain, modId: nexusId, files: installedFiles }) };
-}
+// The file a mod's metadata names: the first installed from its Nexus mod, else the first.
+const installedFileOf = ({ nexusId, installedFiles = [] }: ModMeta): InstalledFileId | undefined =>
+  installedFiles.find((file) => file.nexusId === nexusId) ?? installedFiles[0];
 
-const sameFiles = (a: readonly InstalledFileId[], b: readonly InstalledFileId[]): boolean =>
-  formatNexusSource({ game: '', modId: undefined, files: a }) === formatNexusSource({ game: '', modId: undefined, files: b });
+// A mod with no game of its own is the instance's game's.
+async function nexusPageOf(meta: ModMeta, { instanceRoot }: Mo2Context): Promise<Pick<InstallationFile, 'source' | 'unpagedGame'>> {
+  const file = installedFileOf(meta);
+  const modId = file?.nexusId || meta.nexusId;
+  if (!modId) return {};
+  const game = meta.gameName ?? readGameName(await get(settingsFile(instanceRoot)));
+  const domain = nexusDomainForMetaGame(game);
+  return domain === undefined ? { unpagedGame: game } : { source: formatNexusPage({ game: domain, modId, fileId: file?.fileId }) };
+}
 
 async function metaGameFor(domain: string, { instanceRoot }: Mo2Context): Promise<string | undefined> {
   const instanceGame = readGameName(await get(settingsFile(instanceRoot)));
@@ -39,15 +40,17 @@ async function metaGameFor(domain: string, { instanceRoot }: Mo2Context): Promis
 
 type MetadataPlan = { readonly unwritable: string } | { readonly file: string; readonly held: string; readonly changes: Partial<OwnedMetaKeys> };
 
-async function sourceChanges(carried: ModMeta, source: string, context: Mo2Context): Promise<Partial<OwnedMetaKeys> | { readonly unwritable: string }> {
-  const nexus = parseNexusSource(source);
-  if (nexus === undefined) return { unwritable: `its source '${source}' is not a Nexus source, the only one MO2's metadata holds` };
+async function pageChanges(carried: ModMeta, page: string, context: Mo2Context): Promise<Partial<OwnedMetaKeys> | { readonly unwritable: string }> {
+  const nexus = parseNexusPage(page);
+  if (nexus === undefined) return { unwritable: `its page '${page}' is not a Nexus page, the only host MO2's metadata holds` };
   const gameName = await metaGameFor(nexus.game, context);
-  if (gameName === undefined) return { unwritable: `its source names the Nexus game '${nexus.game}', which Modbench has no game for` };
+  if (gameName === undefined) return { unwritable: `its page names the Nexus game '${nexus.game}', which Modbench has no game for` };
+  const carriedFile = installedFileOf(carried);
+  const sameFile = nexus.fileId === undefined ? carriedFile === undefined : carriedFile?.fileId === nexus.fileId && carriedFile.nexusId === nexus.modId;
   return {
     ...(carried.gameName !== undefined && nexusDomainForMetaGame(carried.gameName) === nexus.game ? {} : { gameName }),
     ...(nexus.modId === carried.nexusId ? {} : { nexusId: nexus.modId }),
-    ...(sameFiles(nexus.files, carried.installedFiles ?? []) ? {} : { installedFiles: nexus.files }),
+    ...(sameFile ? {} : { installedFiles: nexus.fileId === undefined ? undefined : [{ nexusId: nexus.modId, fileId: nexus.fileId }] }),
   };
 }
 
@@ -64,9 +67,9 @@ async function planMetadata(context: Mo2Context, mod: string, { version, install
   if (chosen === undefined) return { file, held, changes };
   if (chosen.name !== heldName) Object.assign(changes, { archiveFilename: chosen.name });
   if (chosen.source !== undefined) {
-    const fromSource = await sourceChanges(carried, chosen.source, context);
-    if ('unwritable' in fromSource) return fromSource;
-    Object.assign(changes, fromSource);
+    const fromPage = await pageChanges(carried, chosen.source, context);
+    if ('unwritable' in fromPage) return fromPage;
+    Object.assign(changes, fromPage);
   } else if (chosen.name !== heldName) {
     Object.assign(changes, {
       ...(carried.nexusId === undefined ? {} : { nexusId: undefined }),
@@ -78,7 +81,7 @@ async function planMetadata(context: Mo2Context, mod: string, { version, install
 
 async function metadataOf(meta: ModMeta, context: Mo2Context): Promise<ModMetadata> {
   const { archiveFilename } = meta;
-  const { source } = await nexusSourceOf(meta, context);
+  const { source } = await nexusPageOf(meta, context);
   return { version: meta.version, installationFiles: archiveFilename === undefined ? [] : [{ name: basename(archiveFilename), source }] };
 }
 
@@ -113,7 +116,7 @@ export function mo2Installation(
       if (located.kind === 'unreadable') return refused(located.reason);
       const path = located.answer;
       const hashed = await downloadedFileHash(path);
-      return hashed.kind === 'read' ? { kind: 'read', answer: [{ path, ...(await nexusSourceOf(meta, context)), ...hashed.answer }] } : refused(hashed.reason);
+      return hashed.kind === 'read' ? { kind: 'read', answer: [{ path, ...(await nexusPageOf(meta, context)), ...hashed.answer }] } : refused(hashed.reason);
     },
 
     async downloadedFile(name) {
