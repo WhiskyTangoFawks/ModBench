@@ -340,6 +340,15 @@ describe('modbench.plugin.create, called by the agent', () => {
     expect(reporter.reports).toEqual([]);
   });
 
+  it('answers mEdit\'s refusal of a name that is no plugin file, with its reason', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('createPlugin', { refused: true, message: 'MyPatch.txt must be .esm, .esl or .esp.' });
+    const { reporter, answer } = invokeAgent(place('Winning Mod', 'MyPatch.txt'), client);
+
+    expect(await answer()).toEqual({ applied: false, refusal: 'MyPatch.txt must be .esm, .esl or .esp.' });
+    expect(reporter.reports).toEqual([]);
+  });
+
   it('refuses an Overwrite whose folder is unread, saying so', async () => {
     const { client, answer } = invokeAgent(place('overwrite/'), undefined, { overwriteDir: undefined });
 
