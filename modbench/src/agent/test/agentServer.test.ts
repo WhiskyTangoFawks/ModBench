@@ -122,7 +122,7 @@ describe('the agent server, given an instance value', () => {
   it('hands the client its instructions on initialize', async () => {
     const client = await clientOf(new FakeInstance(VALUE));
 
-    expect(client.getInstructions()).toBeTruthy();
+    expect(client.getInstructions()).toContain('SELECT * FROM view_columns');
   });
 
   it('hands a shell the variables the terminals of its window hold, as they are now', async () => {
@@ -1071,6 +1071,15 @@ describe('the agent server, given an input its tool does not take', () => {
     expect(refusal.text).toContain(input);
     expect(lines).toEqual([`[agent] ${name}: ${refusal.text}`]);
     expect(reporter.reports).toEqual([]);
+  });
+
+  it('tells the agent select_rows reads only the views, and where their columns are listed', async () => {
+    const { tools } = await (await clientOf(new FakeInstance(VALUE))).listTools();
+
+    const description = tools.find((tool) => tool.name === 'select_rows')?.description;
+    expect(description).toContain('only the views');
+    expect(description).toContain('is_active');
+    expect(description).toContain('view_columns');
   });
 
   it('still advertises the input select_rows takes', async () => {
