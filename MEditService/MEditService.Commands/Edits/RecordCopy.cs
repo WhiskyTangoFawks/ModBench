@@ -7,6 +7,7 @@ using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Edits;
 
@@ -16,9 +17,17 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
 {
     /// <summary>The compiled plugin a copy lands in: its session and its key. No folder — every
     /// write here is a put, and the repository decides where a document goes.</summary>
-    internal readonly record struct Destination(IWriteSession Session, PluginAddress Plugin)
+    internal readonly record struct Destination(IWriteSession Session, PluginAddress Plugin, Language? NotLocalizedIn = null)
     {
         internal ISourceRepository Repository => Session.Repository;
+
+        /// <summary>The document as this destination holds it: a plugin that is not localized holds a translated
+        /// string in the strings language alone.</summary>
+        internal string Landing(string body, GameRelease release, string recordType) =>
+            NotLocalizedIn is { } language ? TranslatedStringValues.InLanguage(body, language, release, recordType) : body;
+
+        internal SourceDocument Landing(SourceDocument document, GameRelease release) =>
+            document with { Body = Landing(document.Body, release, document.RecordType) };
     }
 
     /// <summary>A copy of a child the destination lacks, as every Copy as Override: own fields only, so a copied
@@ -161,7 +170,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
                 $"{source.Plugin.Name} does not hold {cellFormKey} — its own worldspace named it.");
         if (!source.Body(sourceCell).Holds(out var sourceCellText, out why)) return WriteTargets.RefuseUnreadableSource(cellFormKey, why);
         var landing = WithGridFrom(sourceCellText, cell with { RecordType = sourceCell.RecordType }, release);
-        var (session, plugin) = destination;
+        var (session, plugin, _) = destination;
         if (worldspaceCopy is not null) session.Apply(session.Repository.ChangesToPut(plugin, worldspaceCopy));
         session.Apply(session.Repository.ChangesToPutInWorldspace(plugin, landing, worldspaceFormKey));
         return RecordEditResult.Success();
@@ -241,6 +250,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
             refused = WriteTargets.RefuseUnreadableSource(container.FormKey, why);
             return false;
         }
+        copy = destination.Landing(copy, release);
         return true;
     }
 
