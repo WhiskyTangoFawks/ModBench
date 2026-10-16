@@ -1,10 +1,11 @@
+using MEditService.Codec.Schema;
 namespace MEditService.SourceAdapter;
 
 /// <summary>A FormKey two documents hold, as their own record or as an embedded child, is neither's,
 /// and one a document holds twice is not that document's to give either copy of (ADR-0006).</summary>
 internal sealed class OneDocumentPerFormKey(string sourceFolder)
 {
-    private readonly Dictionary<string, List<string>> _holdings = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<string>> _holdings = new(FormKeyComparer.Instance);
 
     /// <summary>Every FormKey held more than once.</summary>
     internal IReadOnlyList<ClaimedFormKey> Claimed =>

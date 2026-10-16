@@ -230,7 +230,7 @@ public sealed class Document
 
         foreach (var child in ChildrenOf(ownerRecordType, types))
         {
-            if (string.Equals(child.FormKey, formKey, StringComparison.Ordinal))
+            if (FormKeyComparer.Instance.Equals(child.FormKey, formKey))
                 return new DocumentContainment(CanonicalFormKey.OfOrAsWritten(ownKey), ownerRecordType, child.SlotName);
 
             if (!types.IsEmbeddedSlot(ownerRecordType, child.SlotName) || child.RecordType is not { } childType) continue;

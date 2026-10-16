@@ -131,7 +131,7 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
         if (TheOneHolding(holding, spelled) is { } own)
         {
             var document = DeclaredIn(own, text, plugin.Name);
-            if (document.FormKey != spelled)
+            if (!FormKeyComparer.Instance.Equals(document.FormKey, spelled))
                 throw SourceStopException.Unreadable($"The text given for {Path.GetRelativePath(_sourceFolder, own)} declares {document.FormKey}, not {spelled}.");
             return (document.Identity with { FormKey = spelled }, document);
         }
@@ -235,7 +235,7 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
             if (DocumentText.ReadOrNull(_files, documentPath) is not { } text) continue;
             var relativePath = Path.GetRelativePath(_sourceFolder, documentPath);
             if (ReadableDocumentAt(relativePath, text, pluginFileName) is not { } document) continue;
-            if (document.FormKey != spelled) continue;
+            if (!FormKeyComparer.Instance.Equals(document.FormKey, spelled)) continue;
 
             // A path-ambiguous group's document names its own type, and that name is the codec's
             // rather than the schema's table, so the codec maps it to one.
@@ -298,7 +298,7 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
 
     private int ChildrenCarrying(string document, string formKey) =>
         DocumentText.BytesOrNull(_files, document) is { } bytes
-            ? DocumentTokens.FormKeysIn(bytes, _release).Count(key => key.Position == FormKeyPosition.Embedded && key.FormKey == formKey)
+            ? DocumentTokens.FormKeysIn(bytes, _release).Count(key => key.Position == FormKeyPosition.Embedded && FormKeyComparer.Instance.Equals(key.FormKey, formKey))
             : 0;
 
     // Every read that finds a document by its text remembers it, so no put later in this operation

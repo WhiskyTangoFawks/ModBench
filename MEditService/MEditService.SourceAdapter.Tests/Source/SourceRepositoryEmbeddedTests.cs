@@ -367,6 +367,14 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
+    public void AChildSpellingThePluginInAnotherCase_IsTheRecordTheKeyNames()
+    {
+        SpellTheTemporaryRefAs(_temporaryRef.FormKey.ToString().ToLowerInvariant());
+
+        Assert.NotNull(Repository.RecordByFormKey(Plugin, _temporaryRef.FormKey.ToString()).Value());
+    }
+
+    [Fact]
     public void ReadingTheTree_RefusesAChildDeclaringNoFormKey_NamingItsOwnersFileAndWhat_ItDeclares()
     {
         SpellTheTemporaryRefAs("NotAFormKey");

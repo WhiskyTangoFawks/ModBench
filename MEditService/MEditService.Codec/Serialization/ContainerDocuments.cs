@@ -63,6 +63,6 @@ public sealed class ContainerDocuments(GameRelease release)
         EmbeddedChildLocator.OwnerTypeOf(ownerRecordType, ownerBytes, _types) is { } ownerType
             ? Document.Read(ownerBytes)?.EmbeddedDescendantsOf(ownerType, _types)
                 .Cast<ChildDocument?>()
-                .FirstOrDefault(child => string.Equals(child?.FormKey, formKey, StringComparison.Ordinal))
+                .FirstOrDefault(child => FormKeyComparer.Instance.Equals(child?.FormKey, formKey))
             : null;
 }

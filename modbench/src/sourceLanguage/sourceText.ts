@@ -18,7 +18,7 @@ interface ProblemPlace {
   fieldPath?: string | null;
 }
 
-const FORM_KEY = /^[0-9A-F]{6}[:_].+$/i;
+const FORM_KEY = /^[0-9A-F]{6}[:_].+\.(esm|esp|esl)$/i;
 
 // Mutagen reads either delimiter and either hex case as one FormKey; the Index names it by the colon and upper case.
 const canonicalFormKey = (text: string): string => FORM_KEY.test(text) ? `${text.slice(0, 6).toUpperCase()}:${text.slice(7)}` : text;

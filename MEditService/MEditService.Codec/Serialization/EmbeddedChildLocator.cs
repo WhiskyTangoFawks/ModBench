@@ -31,7 +31,7 @@ public static class EmbeddedChildLocator
     {
         foreach (var child in All(ownerBytes, ownerRecordType, release))
         {
-            if (string.Equals(child.FormKey, formKey, StringComparison.Ordinal)) return child.Span;
+            if (FormKeyComparer.Instance.Equals(child.FormKey, formKey)) return child.Span;
         }
         return null;
     }

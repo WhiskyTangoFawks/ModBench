@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Serialization;
@@ -59,7 +60,7 @@ public static class ContainerDocumentEdits
     /// <see cref="ChildTextOf"/> reads for it, from one read of the owner.</summary>
     public static IReadOnlyDictionary<string, EmbeddedChildSpan> EmbeddedChildSpansOf(byte[] ownerBytes, string? ownerRecordType, GameRelease release)
     {
-        var spans = new Dictionary<string, EmbeddedChildSpan>(StringComparer.Ordinal);
+        var spans = new Dictionary<string, EmbeddedChildSpan>(FormKeyComparer.Instance);
         foreach (var (formKey, span) in EmbeddedChildLocator.All(ownerBytes, ownerRecordType, release)) spans.TryAdd(formKey, span);
         return spans;
     }

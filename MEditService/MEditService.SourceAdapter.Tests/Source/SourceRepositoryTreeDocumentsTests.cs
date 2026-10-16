@@ -171,4 +171,22 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
 
         Assert.Contains("declares not-a-formkey, which is no FormKey", refused.Reason, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ARecordsDocument_SpellingThePluginInAnotherCase_IsTheRecordTheKeyNames()
+    {
+        var repository = TrackedWithNpcDeclaring("000800:fixture.esp");
+
+        Assert.NotNull(repository.RecordByFormKey(Plugin, NpcFormKey).Value());
+    }
+
+    [Fact]
+    public void TheTextGivenForARecord_SpellingThePluginInAnotherCase_IsTheRecordTheKeyNames()
+    {
+        var repository = Tracked();
+
+        var found = repository.RecordFromText(Plugin, NpcFormKey, NpcBody.Replace(NpcFormKey, "000800:fixture.esp")).Value();
+
+        Assert.NotNull(found);
+    }
 }

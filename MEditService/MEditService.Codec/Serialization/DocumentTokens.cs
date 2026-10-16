@@ -142,8 +142,11 @@ public static class DocumentTokens
     public static string? WhyNotADocument(string text) => Document.TryRead(text, out _, out var whyNot) ? null : whyNot;
 
     /// <summary>False only when the bytes certainly do not spell <paramref name="formKeyUtf8"/> in any spelling
-    /// Mutagen reads: each holds the plugin file name literally, unless a \u escape spells it.</summary>
-    public static bool MayCarry(byte[] document, byte[] formKeyUtf8) =>
-        document.AsSpan().IndexOf(formKeyUtf8.AsSpan(formKeyUtf8.AsSpan().IndexOf((byte)':') + 1)) >= 0
-        || document.AsSpan().IndexOf(@"\u"u8) >= 0;
+    /// Mutagen reads: each holds the plugin file name, in any case, unless a \u escape spells it.</summary>
+    public static bool MayCarry(byte[] document, byte[] formKeyUtf8)
+    {
+        var name = Encoding.UTF8.GetString(formKeyUtf8.AsSpan(formKeyUtf8.AsSpan().IndexOf((byte)':') + 1));
+        return Encoding.UTF8.GetString(document).Contains(name, StringComparison.OrdinalIgnoreCase)
+            || document.AsSpan().IndexOf(@"\u"u8) >= 0;
+    }
 }

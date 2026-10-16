@@ -34,6 +34,11 @@ describe('a document spelling a FormKey as Mutagen reads it, not as the Index wr
     expect(formKeyAt(spelled, spelled.indexOf('00080a_A') + 1)).toMatchObject({ formKey: '00080A:A.esp' });
   });
 
+  it('takes an EditorID that merely looks like a FormKey for none', () => {
+    const editorId = '{ "FormKey": "000800:A.esp", "EditorID": "ABCDEF_Foo" }';
+    expect(formKeyAt(editorId, editorId.indexOf('ABCDEF_Foo') + 1)).toBeUndefined();
+  });
+
   it('names the canonical FormKey as the record enclosing a string', () => {
     expect(fieldAt(spelled, spelled.indexOf('00080A:B') + 1)).toMatchObject({ recordFormKey: '00080A:A.esp' });
   });
