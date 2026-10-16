@@ -28,9 +28,8 @@ public static class TranslatedStringValues
         return ordered;
     }
 
-    /// <summary><paramref name="text"/> with each translated string that holds several languages written as its
-    /// <paramref name="language"/> text alone, which is all a plugin that is not localized holds (xEdit copies the
-    /// current language's string). A string with no text in <paramref name="language"/> stays as it was.</summary>
+    /// <summary>Each translated string as its <paramref name="language"/> text alone, as xEdit writes it into a
+    /// plugin that is not localized. A string with no text in that language stays as it was.</summary>
     public static string InLanguage(string text, Language language, GameRelease release, string recordType)
     {
         var root = JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected a record document.");
