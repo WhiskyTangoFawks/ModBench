@@ -37,15 +37,12 @@ internal sealed class ManifestBuilder
 
     public FileProvider ProviderOf(HashedFile file)
     {
-        if (_indexes.Count > 0 && _indexes[0].ByPath.TryGetValue(file.Path, out var sameFirst) && sameFirst.Hash == file.Hash)
-            return new FileProvider.FirstInstallationFile();
-
         foreach (var (name, byHash, byPath) in _indexes)
         {
             var holding = byHash[file.Hash].ToList();
             if (holding.Count == 0) continue;
             var entry = byPath.TryGetValue(file.Path, out var samePath) && samePath.Hash == file.Hash ? samePath : holding[0];
-            return new FileProvider.InstallationFileEntry(name, entry.Path);
+            return FileProvider.Holding(new FileBytes.InInstallationFile(name, entry.Path), _indexes[0].Name, file.Path);
         }
 
         return _gameFiles.TryGetValue(file.Path, out var game) && game.Hash == file.Hash
