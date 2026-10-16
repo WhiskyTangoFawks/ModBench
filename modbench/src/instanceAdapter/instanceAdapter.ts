@@ -467,10 +467,8 @@ export interface InstanceAdapter {
   writeIgnoreList(): Promise<void>;
   /** Takes back the ignore list `writeIgnoreList` wrote. */
   removeIgnoreList(): Promise<void>;
-  /** Makes each source mod with a remote a submodule of the instance repository: its entry in `.gitmodules` with its
-   *  remote and branch, and its line in the ignore list. A source mod gone or with no remote loses both. Writes nothing
-   *  when the instance holds no repository. Names each source mod whose remote or branch it could not read, and gives it
-   *  no entry. */
+  /** Makes each source mod with a remote a submodule of the instance repository, with its entry in `.gitmodules` and its
+   *  line in the ignore list; a source mod gone or without a remote loses both. Names each source mod it could not read. */
   writeSubmodules(): Promise<readonly SubmoduleNote[]>;
   /** Makes the instance repository refuse a push while a commit it pins for a submodule is missing from that submodule's remote. */
   refuseUnpublishedPins(): Promise<void>;

@@ -266,6 +266,15 @@ async function restoreFolders(
   };
 }
 
+async function pinsRefusedOrWhy(adapter: Adapter): Promise<string | undefined> {
+  try {
+    await adapter.refuseUnpublishedPins();
+    return undefined;
+  } catch (err) {
+    return `The repository was made, but it does not refuse a push of a commit a submodule's remote lacks: ${errorMessage(err)}`;
+  }
+}
+
 async function submodulesWritten(adapter: Adapter): Promise<ModNote[]> {
   try {
     return (await adapter.writeSubmodules()).map(({ mod, note }) => ({ mod, note }));
@@ -301,12 +310,8 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       } catch (err) {
         return { applied: false, refusal: await refusalWithIgnoreListTakenBack(err) };
       }
-      try {
-        await adapter.refuseUnpublishedPins();
-      } catch (err) {
-        return { applied: false, refusal: `The repository was made, but it does not refuse a push of a commit a submodule's remote lacks: ${errorMessage(err)}` };
-      }
-      return { applied: true };
+      const unrefused = await pinsRefusedOrWhy(adapter);
+      return unrefused === undefined ? { applied: true } : { applied: false, refusal: unrefused };
     },
 
     /** A mod whose folder, installation files or overridden game files the Instance adapter cannot answer is refused

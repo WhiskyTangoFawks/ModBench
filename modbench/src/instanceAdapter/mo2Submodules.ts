@@ -35,7 +35,10 @@ async function submoduleOf(folder: string): Promise<Submodule | undefined | stri
 async function sourceEntries(instanceRoot: string, file: string): Promise<string[]> {
   if (!(await exists(file))) return [];
   const listed = await git(instanceRoot, 'config', '-f', file, '--null', '--get-regexp', String.raw`^submodule\..*\.path$`)
-    .catch((err: { code?: number }) => { if (err.code === 1) return ''; throw err; });
+    .catch((err: unknown) => {
+      if (typeof err === 'object' && err !== null && 'code' in err && err.code === 1) return '';
+      throw err;
+    });
   return listed.split('\0').filter((entry) => entry !== '')
     .flatMap((entry) => {
       const [key = '', path = ''] = entry.split('\n');
