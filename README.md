@@ -20,7 +20,7 @@ The UX is borrowed, not invented: mod management follows MO2, record editing fol
 - Mods: install from a file or a folder, separators, drag to order, enable.
 - Plugins: `plugins.txt` order and checkboxes. Each active plugin expands into its record types, records and worldspace and cell tree.
 - Record editor: an xEdit-style record panel across the active plugins, with conflict colours, in-place editing, copy as override and new record.
-- Version control: Git Init Modlist, Decompile and Commit Mod, Decompile Plugin, Build Mod, VS Code's Source Control panel, and external-change handling.
+- Version control: Git Init Modlist, Update Mod Manifest, Restore Mod from Manifest, Decompile and Commit Mod, Decompile Plugin, Build Mod, VS Code's Source Control panel, and external-change handling.
 - Referenced By: what points at a record, in VS Code's References view.
 - Record filter: plain `.sql` files against the record index.
 - Toolbox: the instance's game and active profile, switch profile, refresh.
