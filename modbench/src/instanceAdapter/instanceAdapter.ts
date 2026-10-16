@@ -283,7 +283,7 @@ export interface SubmoduleNote { readonly mod: string; readonly note: string }
 
 /** What writing the submodules says: a note for each source mod it could not read or write, and the lines about
  *  a folder that is no source mod and about the files it could not write. */
-export interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly other: readonly string[] }
+interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly other: readonly string[] }
 
 /** Whether the game gets a file of a mod or of Overwrite. */
 export type OriginFileMark = 'Excluded' | 'Included';
@@ -476,8 +476,8 @@ export interface InstanceAdapter {
   writeSubmodules(): Promise<SubmoduleReport>;
   /** Rejects, naming it, when a pre-push hook is already where `refuseUnpublishedPins` would write one, repository or none yet. */
   checkPushRefusalFree(): Promise<void>;
-  /** Makes the instance repository refuse a push while a commit it pins for a source mod is on none of that source mod's
-   *  remotes, by `push.recurseSubmodules` and a pre-push hook. Rejects, writing nothing, when a pre-push hook is there. */
+  /** Makes the instance repository refuse a push of a pin that is on none of its source mod's remotes. Rejects, writing
+   *  nothing, when a pre-push hook is there. */
   refuseUnpublishedPins(): Promise<void>;
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;

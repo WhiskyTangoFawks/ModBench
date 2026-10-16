@@ -2,7 +2,7 @@ import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type {
   DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, GameFile, HashedFile, InstallationFile,
   InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
-  ModFolder, ModFolders, ModMetadata, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription, SubmoduleReport } from '../instanceAdapter/instanceAdapter';
+  ModFolder, ModFolders, ModMetadata, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription } from '../instanceAdapter/instanceAdapter';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { filesWinningFirst, pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
@@ -91,7 +91,7 @@ export interface InstanceAnswers {
   gameFiles?: readonly GameFile[];
   installed?: InstallOutcome;
   /** What writing the submodules says. */
-  submodules?: SubmoduleReport;
+  submodules?: Awaited<ReturnType<InstanceAdapter['writeSubmodules']>>;
   /** Downloaded files that are gone: they get no mark. */
   goneDownloads?: ReadonlySet<string>;
   /** A write that rejects with the message this returns for it, after it is recorded. */

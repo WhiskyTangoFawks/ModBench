@@ -225,7 +225,7 @@ describe('the MO2 adapter\'s repository', () => {
       expect([report.notes, existsSync(join(root, '.gitmodules'))]).toEqual([[{ mod: 'Detached', note: expect.stringContaining('branch') as unknown }], false]);
     });
 
-    it('keeps the entry and the line of a source mod whose branch it can no longer read, and names it', async () => {
+    it('keeps the entry and the line of a source mod whose branch it cannot read, and names it', async () => {
       const { adapter, folder } = await submoduleOfOne();
       git(folder, 'checkout', '--quiet', '--detach');
 
