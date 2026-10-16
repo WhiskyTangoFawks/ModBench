@@ -2,7 +2,6 @@ using MEditService.Commands.Build;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.ModFolderAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -72,39 +71,12 @@ public sealed class InitHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Init_TakesTheFilesNoInstallationFileYields_AsTheAssets()
-    {
-        WriteInModFolder("textures/kept.dds", "as installed");
-        WriteInModFolder("textures/edited.dds", "edited after install");
-        WriteInModFolder("meshes/added.nif", "added after install");
-        var installed = InstallationFileHolding(("textures/kept.dds", "as installed"), ("textures/edited.dds", "as installed, before the edit"));
-
-        var result = await InitWith(new ModToInit(Origin, SourceFolder, [installed], []));
-
-        Assert.Single(result.Landed);
-        Assert.Equal(["assets/meshes/added.nif", "assets/textures/edited.dds"], CommittedAssets());
-        Assert.Equal("edited after install", File.ReadAllText(Path.Combine(SourceFolder, "assets", "textures", "edited.dds")));
-    }
-
-    [Fact]
-    public async Task Init_TakesAFileAnInstallationFileYieldsFromAnotherPathInIt_AsYielded()
-    {
-        WriteInModFolder("textures/chosen.dds", "an option the installer chose");
-        var installed = InstallationFileHolding(("00 Core/textures/chosen.dds", "an option the installer chose"));
-
-        var result = await InitWith(new ModToInit(Origin, SourceFolder, [installed], []));
-
-        Assert.Single(result.Landed);
-        Assert.Empty(CommittedAssets());
-    }
-
-    [Fact]
-    public async Task Init_OfAModWithNoInstallationFile_TakesEveryFileAsAnAsset_ButWhatCompileWritesAndTheModManagersFiles()
+    public async Task Init_TakesEveryFileAsAnAsset_ButWhatCompileWritesAndTheModManagersFiles()
     {
         WriteInModFolder("meta.ini", "[General]");
         WriteInModFolder("Scripts/Quest.pex", "a script");
 
-        await InitWith(new ModToInit(Origin, SourceFolder, [], ["meta.ini"]));
+        await InitWith(new ModToInit(Origin, SourceFolder, ["meta.ini"]));
 
         Assert.Equal(["assets/Scripts/Quest.pex"], CommittedAssets());
     }
@@ -117,7 +89,7 @@ public sealed class InitHandlerTests : IDisposable
         FileModes.Set(held, "000");
         try
         {
-            var result = await InitWith(new ModToInit(Origin, SourceFolder, [], []));
+            var result = await InitWith(new ModToInit(Origin, SourceFolder, []));
 
             var refused = Assert.Single(result.Refused);
             Assert.Equal(InitRefusal.ModFilesUnreadable, refused.Refusal);
@@ -141,21 +113,6 @@ public sealed class InitHandlerTests : IDisposable
         var file = Path.Combine(_mod.Folder, path);
         Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
         File.WriteAllText(file, text);
-    }
-
-    private InstallationFile InstallationFileHolding(params (string Path, string Text)[] entries)
-    {
-        var extracted = Directory.CreateDirectory(Path.Combine(_instanceRoot, "extracted")).FullName;
-        foreach (var (path, text) in entries)
-        {
-            var file = Path.Combine(extracted, path);
-            Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
-            File.WriteAllText(file, text);
-        }
-        var hashedAsAModsFiles = new ModFolderRepository(TimeProvider.System).Files(extracted, "installed", new HashSet<string>(), statCache: null).Files;
-        return new InstallationFile(
-            Path.Combine(_instanceRoot, "downloads", "installed.7z"), Source: null, Size: 1, Hash: "AAAAAAAAAAA=",
-            [.. hashedAsAModsFiles.Select(entry => new HashedEntry(entry.Path, entry.Hash))]);
     }
 
     private string[] CommittedAssets() =>
