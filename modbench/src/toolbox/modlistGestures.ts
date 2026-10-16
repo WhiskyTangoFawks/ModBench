@@ -90,10 +90,10 @@ function rowsOf(deps: ModlistGestureDeps, clicked: unknown, selected: readonly u
   return isModOrSeparator(clicked) ? gestureEntry(clicked, selected, () => [], isClickedRow).selection : [];
 }
 
-// modlist-source.md, Every mod: every mod folder, in every profile, never the Mods view's rows.
+// modlist-repository.md, Every mod: every mod folder, in every profile, never the Mods view's rows.
 const everyMod = (value: InstanceValue): string[] => (value.modFolders ?? []).map(({ modName }) => modName);
 
-// modlist-source.md, Every mod, story 3: a separator stands for itself and its mods.
+// modlist-repository.md, Every mod, story 3: a separator stands for itself and its mods.
 function modsHeldBy(kind: unknown, name: string, value: InstanceValue): string[] | undefined {
   if (kind !== 'mod' && kind !== 'separator') return undefined;
   const asked: EntryRef = { kind, name };
@@ -133,7 +133,7 @@ function modsToRun(deps: ModlistGestureDeps, clicked: unknown, selected: readonl
   return { mods: [...new Set(mods)], refused, everyMod: false, view: deps.modsView };
 }
 
-// modlist-source.md, Every mod, story 5: progress by mod with Cancel, which stops after the mod in hand. The
+// modlist-repository.md, Every mod, story 5: progress by mod with Cancel, which stops after the mod in hand. The
 // Toolbox's message line says what the notification says (Reporting).
 function withProgressAndCancel<T>(
   { say }: ModlistGestureDeps, run: (show: (message: string) => void, signal: AbortSignal) => Promise<T>,
@@ -195,7 +195,7 @@ const counted = (count: number, one: string, many: string): string => `${count} 
 const statCacheNotWritten = (landed: readonly { mod: string; statCacheNotWritten?: string | null }[]): string[] =>
   landed.flatMap(({ mod, statCacheNotWritten: why }) => (why ? [`${mod}: the stat cache could not be written: ${why}`] : []));
 
-// modlist-source.md, Update manifest, story 8: one line, the modlist's validation, with each refused mod and each
+// modlist-repository.md, Update manifest, story 8: one line, the modlist's validation, with each refused mod and each
 // file with no provider in the Output.
 function reportUpdated(reporter: Reporter, label: Label, outcome: Omit<Extract<UpdateManifestResult, { applied: true }>, 'applied'>): void {
   const unprovided = outcome.landed.flatMap(({ mod, noProvider }) => noProvider.map((path) => `${mod}: ${path}`));
@@ -226,7 +226,7 @@ async function confirmRestore(ask: AskQuestion, label: Label, { mods, everyMod: 
   return (await ask(question, { modal: true, detail: 'A change no manifest holds is lost.' }, RESTORE)) === RESTORE;
 }
 
-// modlist-source.md, Restore from manifest, story 2: the question only when the restore destroys something.
+// modlist-repository.md, Restore from manifest, story 2: the question only when the restore destroys something.
 async function restoreFromManifest(deps: ModlistGestureDeps, toRun: ModsToRun): Promise<void> {
   const { commands, instance, reporter } = deps;
   const { mods, refused, view } = toRun;
@@ -301,7 +301,7 @@ function restoreMessage(status: RestoreStatus, label: Label): string {
   }
 }
 
-// modlist-source.md, Reporting: one line, with each skipped mod, each stat cache not written and each mod built from
+// modlist-repository.md, Reporting: one line, with each skipped mod, each stat cache not written and each mod built from
 // changes no commit holds in the Output.
 function reportRestored(reporter: Reporter, total: number, outcome: Omit<Extract<RestoreResult, { applied: true }>, 'applied'>): void {
   const warnings = [...statCacheNotWritten(outcome.landed), ...uncommittedWarnings(outcome.landed)];

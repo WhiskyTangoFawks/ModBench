@@ -2,13 +2,13 @@
 
 The Toolbox shows the instance itself: which game it is for and which profile is active, with the gestures that act on the whole instance. Its template is MO2's top bar, run box and profile combo ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../../out-of-scope/mo2.md) says why (divergence 1). Its gestures are in [commands.md](../commands.md) under Instance, Profile and Modlist. What every view shares is in [common.md](common.md).
 
-Each story cites its source. A story with no source is owned here.
+Each story cites what decides it. A story that cites nothing is owned here.
 
 ## The view
 
 A native tree view, `modbench.toolbox`, first in the `modbench` container and open by default (commands.md, Where surfaces live). It is a readout, not a list: each row is one fact about the instance, and a row's click is that fact's gesture. So the list rules in common do not apply to it: it has no name filter, no sort direction, no Collapse All, and selecting several rows means nothing.
 
-As a user, I want every row to read the instance value and nothing else, so the Toolbox never disagrees with the views below it. Source: ADR-0015
+As a user, I want every row to read the instance value and nothing else, so the Toolbox never disagrees with the views below it. Cites: ADR-0015
 
 ## Rows
 
@@ -16,7 +16,7 @@ As a user, I want every row to read the instance value and nothing else, so the 
 |---|---|---|---|---|
 | Game | the game the instance is for, as the mod manager's configuration names it | `$(game)` | the game folder | none |
 | Profile | the active profile's name | `$(account)` | "Switch profile" | `switch` |
-| Modlist | "no repository", or "repository" ([modlist-source.md](modlist-source.md)) | `$(source-control)` | "Git init" with no repository | `git init` with no repository, else none |
+| Modlist | "no repository", or "repository" ([modlist-repository.md](modlist-repository.md)) | `$(source-control)` | "Git init" with no repository | `git init` with no repository, else none |
 
 As a user, I want the game folder to be the one my setting names, else the one the mod manager's configuration names, else the one Modbench finds on this machine.
 
@@ -39,17 +39,17 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 
 ### Switch profile
 
-As a user, I want a pick of the instance's profiles, the active one marked. Choosing one switches to it; Esc switches nothing. Source: catalog `switch`
+As a user, I want a pick of the instance's profiles, the active one marked. Choosing one switches to it; Esc switches nothing. Cites: catalog `switch`
 
 ### Refresh
 
-As a user, I want no confirmation, and the view's progress bar while it runs. Source: Confirm what destroys: refresh deletes only derived state, and rebuilds it
+As a user, I want no confirmation, and the view's progress bar while it runs. Cites: Confirm what destroys: refresh deletes only derived state, and rebuilds it
 
 ## Reporting
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. A refresh refused because another window holds the index to say "This instance's index is open in another Modbench window", and to name the instance. Modbench cannot name the other window. Source: catalog `refresh`; Never silently wrong
+1. A refresh refused because another window holds the record index to say "This instance's record index is open in another Modbench window", and to name the instance. Modbench cannot name the other window. Cites: catalog `refresh`; Never silently wrong
 2. A failed refresh to say why.
 
 ## Test seam

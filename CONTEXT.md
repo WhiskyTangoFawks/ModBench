@@ -154,6 +154,11 @@ A record that holds a reference to the record the Referenced By list is about. I
 
 Avoid: referencing record, back-reference
 
+# Record index
+mEdit's index of every record the load order holds, derived from the plugins and rebuilt from them.
+
+Avoid: index (alone; git's index, the downloaded files' index and a plugin's load index are others)
+
 # FormKey
 A record's identity: its origin plugin and its ID inside that plugin. It is not a FormID, which also depends on load position.
 

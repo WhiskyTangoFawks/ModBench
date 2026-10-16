@@ -241,7 +241,7 @@ export type RestoreMod = components['schemas']['RestoreFromManifestModRequest'];
 export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestRequest'], 'mods' | 'gesture'>;
 
 
-/** A mod's folder against its manifest (modlist-source.md, Status), or why it could not be read. */
+/** A mod's folder against its manifest (modlist-repository.md, Status), or why it could not be read. */
 export type ModStatus = components['schemas']['ModStatus'];
 export type ReadModStatus = (mods: readonly string[]) => Promise<readonly ModStatus[] | ReadFailed>;
 

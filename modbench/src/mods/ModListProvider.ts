@@ -53,7 +53,7 @@ interface ModFacts {
   readonly holdsPlugin: boolean;
   readonly sourceMod: boolean;
   readonly sourceFolder?: string;
-  /** Shown only while the instance holds a repository (modlist-source.md, Status, story 1). */
+  /** Shown only while the instance holds a repository (modlist-repository.md, Status, story 1). */
   readonly status?: ModStatus;
 }
 
@@ -226,7 +226,7 @@ export class ModListProvider
     return entry?.enabled ?? row.mod.enabled;
   }
 
-  /** The modlist's badge: how many mods differ from their manifests or have none (modlist-source.md, Status, story 5). */
+  /** The modlist's badge: how many mods differ from their manifests or have none (modlist-repository.md, Status, story 5). */
   badge(): { value: number; tooltip: string } | undefined {
     const count = this.instanceValue.mods.filter((entry) => {
       const status = this.statusOf(entry);

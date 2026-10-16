@@ -31,7 +31,7 @@ function statusesOver(read: ReadModStatus, mods: readonly string[] = []) {
 
 const unreadable = (mod: string, why: string): ModStatus => status(mod, { unreadable: { manifest: false, why } });
 
-describe('each mod\'s status (modlist-source.md, Status)', () => {
+describe('each mod\'s status (modlist-repository.md, Status)', () => {
   it('is read for each mod mEdit pushes as changed, and held until the next push names it', async () => {
     const read = vi.fn<ReadModStatus>()
       .mockResolvedValueOnce([status('ModA', { noManifest: true }), status('ModB')])

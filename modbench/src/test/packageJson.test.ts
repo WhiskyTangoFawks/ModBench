@@ -1004,7 +1004,7 @@ describe('package.json build\'s palette entry', () => {
   });
 });
 
-describe('package.json git init, update manifest and restore from manifest follow modlist-source.md, Menus and keys', () => {
+describe('package.json git init, update manifest and restore from manifest follow modlist-repository.md, Menus and keys', () => {
   const HAS_REPOSITORY = 'modbench.modlist.hasRepository';
   const hasRepository = { ...inInstance, [HAS_REPOSITORY]: true };
   const onRow = (view: string, viewItem: string, facts: Context): [string, string][] =>

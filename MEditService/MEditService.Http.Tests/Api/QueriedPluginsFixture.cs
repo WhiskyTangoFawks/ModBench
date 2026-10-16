@@ -18,7 +18,7 @@ public sealed class QueriedPluginsFixture : IApiPluginFixture<QueriedPluginsFixt
     public const string HeldPlugin = "Held.esp";
     public const string HeldMod = "HeldMod";
 
-    public ScatteredFixtureData Data { get; } = new PluginFixtureBuilder("query-index")
+    public ScatteredFixtureData Data { get; } = new PluginFixtureBuilder("query-record-index")
         .WithPlugin(UserPlugin, OneOfEveryKind, origin: UserMod)
         .WithPlugin(ListedPlugin, OutOfEditorIdOrder, origin: ListedMod)
         .WithPlugin(HeldPlugin, HeldByAnotherRecord, origin: HeldMod)

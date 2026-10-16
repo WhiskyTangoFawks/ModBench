@@ -206,7 +206,7 @@ const heldInEachFolderOf = (folder: string, files: readonly string[]): string[] 
 ];
 
 /** The whitelist: the ignore list itself, the mod manager's configuration, each profile's mod order, plugin order
- *  and INIs, and each mod's manifest. Each mod's metadata stays out (modlist-source.md, The repository, story 2). */
+ *  and INIs, and each mod's manifest. Each mod's metadata stays out (modlist-repository.md, The repository, story 2). */
 export const WHITELIST_IGNORE_LIST = `${[
   '/*', `!/${IGNORE_LIST_FILE}`, `!/${SETTINGS_FILE_NAME}`,
   ...heldInEachFolderOf(PROFILES, [MODLIST_FILE_NAME, PLUGINS_FILE_NAME, PLUGIN_ORDER_FILE, `*.${anyCase('ini')}`]),

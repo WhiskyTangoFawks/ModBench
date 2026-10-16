@@ -20,7 +20,7 @@ internal static partial class SharedSources
         return (new SharedSource(url, git.HeadCommit()), git.HoldsUncommittedChanges(), !git.RemoteHoldsHead(remote));
     }
 
-    // modlist-source.md, The manifest, story 8: no path from this machine, and so no credential, is committed. A URL
+    // modlist-repository.md, The manifest, story 8: no path from this machine, and so no credential, is committed. A URL
     // that cannot be read safely is not written at all.
     private static string? Shareable(string url)
     {

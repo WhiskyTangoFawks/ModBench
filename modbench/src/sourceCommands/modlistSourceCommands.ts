@@ -116,7 +116,7 @@ async function readMods(
   return { sent: signal?.aborted ? [] : sent, gameFiles: [...gameFiles.values()], refused, notes };
 }
 
-// modlist-source.md, Restore from manifest, story 8: the manifest names them, and only mEdit reads it.
+// modlist-repository.md, Restore from manifest, story 8: the manifest names them, and only mEdit reads it.
 const noneBeforeTheManifestNamesThem: InstallationFilesOf = () => Promise.resolve({ kind: 'read', answer: [] });
 
 // A call that fails part way answers no mod, so none had its files no line names trashed: each is not finished.
@@ -175,7 +175,7 @@ async function restoreFromManifest(
   return { applied: false, refusal: restored.refusal, unfinished: [...restored.unfinished, ...unfinished.map(({ item }) => item)] };
 }
 
-// modlist-source.md, Restore from manifest, story 6: an interrupted restore names each mod it did not finish.
+// modlist-repository.md, Restore from manifest, story 6: an interrupted restore names each mod it did not finish.
 function cancelledBefore(mods: readonly string[], { landed, refused }: Extract<RestoreResult, { applied: true }>): ItemRefusal<string>[] {
   const answered = new Set([...landed.map(({ mod }) => mod), ...refused.map(({ item }) => item)]);
   return mods.filter((mod) => !answered.has(mod))
@@ -344,7 +344,7 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
       mods: readonly string[], instance: ModlistInstance, options: ModlistCallOptions<RestoreStatus> = {},
     ): Promise<RestoreResult> => restoreFromManifest(deps, mods, instance, options),
 
-    /** Each mod's folder against its manifest (modlist-source.md, Status). */
+    /** Each mod's folder against its manifest (modlist-repository.md, Status). */
     modStatus: async (mods: readonly string[]): Promise<readonly ModStatus[] | ReadFailed> => {
       const folders = await byFolder(adapter, mods);
       const asked = await withMetadataRead(folders, (mod) => adapter.modMetadata(mod));

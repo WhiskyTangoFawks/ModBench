@@ -33,7 +33,7 @@ public enum UpdateManifestRefusal
     NotWritten,
 
     /// <summary>A source mod whose folder differs from what its build wrote, or that its build wrote no manifest for
-    /// (modlist-source.md, Update manifest, story 5).</summary>
+    /// (modlist-repository.md, Update manifest, story 5).</summary>
     LeftToItsBuild,
 }
 

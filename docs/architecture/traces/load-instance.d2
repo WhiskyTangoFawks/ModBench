@@ -29,7 +29,7 @@ instancecommands -> client: "snapshot: the game release · every plugin and what
 
 refresh: "refresh, from the Toolbox" {
   toolbox -> instancecommands: refresh {class: loadorder}
-  instancecommands -> client: "rebuild the index" {class: loadorder}
+  instancecommands -> client: "rebuild the record index" {class: loadorder}
   client -> instancecommands: applied or refusal {class: loadorder}
   instancecommands."a refused rebuild stops here"
   instancecommands -> toolbox: applied or refusal {class: loadorder}
