@@ -11,6 +11,7 @@ public sealed class SqlDoorSealTests(SqlDoorFixture fixture) : IClassFixture<Sql
     [InlineData("SELECT form_key FROM winners")]
     [InlineData("(WITH plugin_records AS (SELECT 1 AS form_key) SELECT form_key FROM plugin_records) UNION ALL SELECT form_key FROM plugin_records")]
     [InlineData("WITH winners AS (SELECT form_key FROM winners) SELECT form_key FROM winners")]
+    [InlineData("WITH RECURSIVE winners AS (SELECT form_key FROM winners UNION ALL SELECT form_key FROM winners WHERE false) SELECT form_key FROM winners")]
     [InlineData("SELECT name AS form_key FROM sqlite_master")]
     [InlineData("SELECT form_key FROM records WHERE form_key IN (SELECT form_key FROM mirror.records)")]
     [InlineData("SELECT table_name AS form_key FROM information_schema.tables")]

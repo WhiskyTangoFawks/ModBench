@@ -37,7 +37,8 @@ internal static class SqlDoor
         private readonly HashSet<string> _views = new(views, StringComparer.OrdinalIgnoreCase);
 
         // The parse serializes a reference to a WITH's relation like any table reference. A WITH covers
-        // its own query node and the later entries of its list: outside, the name is the real relation's.
+        // its own query node and the later entries of its list, and a recursive one its right side: elsewhere
+        // the name is the real relation's.
         internal string? RefusalIn(JsonElement node, ImmutableHashSet<string> commonTableExpressions) => node.ValueKind switch
         {
             JsonValueKind.Object => RefusalInObject(node, commonTableExpressions),
@@ -49,9 +50,7 @@ internal static class SqlDoor
         {
             if (RefusalOfRef(node, commonTableExpressions) is { } refusal) return refusal;
 
-            var covered = node.TryGetProperty("cte_name", out var recursive) && recursive.GetString() is { } recursiveName
-                ? commonTableExpressions.Add(recursiveName)
-                : commonTableExpressions;
+            var covered = commonTableExpressions;
             if (node.TryGetProperty("cte_map", out var list))
             {
                 foreach (var entry in list.GetProperty("map").EnumerateArray())
@@ -60,7 +59,10 @@ internal static class SqlDoor
                     covered = covered.Add(entry.GetProperty("key").GetString() ?? "");
                 }
             }
-            return FirstRefusal(node.EnumerateObject().Where(p => p.Name != "cte_map").Select(p => p.Value), covered);
+            var recursiveName = node.TryGetProperty("cte_name", out var recursive) ? recursive.GetString() : null;
+            return node.EnumerateObject().Where(p => p.Name != "cte_map")
+                .Select(p => RefusalIn(p.Value, p.Name == "right" && recursiveName is not null ? covered.Add(recursiveName) : covered))
+                .FirstOrDefault(refusal => refusal is not null);
         }
 
         private string? FirstRefusal(IEnumerable<JsonElement> nodes, ImmutableHashSet<string> commonTableExpressions) =>

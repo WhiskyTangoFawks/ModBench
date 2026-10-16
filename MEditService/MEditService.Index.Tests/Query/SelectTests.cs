@@ -78,6 +78,7 @@ public class SelectTests(TestPluginFixture fixture)
     [InlineData("SELECT * FROM active_plugins", "active_plugins")]
     [InlineData("SELECT * FROM registrations", "registrations")]
     [InlineData("SELECT * FROM plugin_records", "plugin_records")]
+    [InlineData("WITH RECURSIVE sqlite_master AS (SELECT name FROM sqlite_master UNION ALL SELECT name FROM sqlite_master WHERE false) SELECT name FROM sqlite_master", "sqlite_master")]
     [InlineData("SELECT name FROM sqlite_master WHERE name IN (WITH sqlite_master AS (SELECT 'x' AS name) SELECT name FROM sqlite_master)", "sqlite_master")]
     public void ASelectOfAnythingButTheViews_IsRefused_NamingTheRelationAndTheViews(string sql, string relation)
     {

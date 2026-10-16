@@ -122,7 +122,7 @@ describe('the agent server, given an instance value', () => {
   it('hands the client its instructions on initialize', async () => {
     const client = await clientOf(new FakeInstance(VALUE));
 
-    expect(client.getInstructions()).toContain('SELECT * FROM view_columns');
+    expect(client.getInstructions()).toContain('select_rows says which');
   });
 
   it('hands a shell the variables the terminals of its window hold, as they are now', async () => {
