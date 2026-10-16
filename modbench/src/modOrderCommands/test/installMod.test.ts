@@ -39,18 +39,20 @@ describe('installMod', () => {
 
       expect(result).toEqual({
         applied: false,
-        refusal: `The upgrade would lose, in "Harder VATS": ${loss}. Request it again with force to replace them.`,
+        refusal: `The upgrade would lose, in "Harder VATS": ${loss}. Request it again with force to replace its files.`,
       });
       expect(calls).toEqual([]);
     });
 
     it.each<[string, ModStatus[] | ReadFailed, string]>([
-      ['a status read that failed', { failed: 'unreachable' }, 'mEdit could not be reached.'],
+      ['a status read that failed', { failed: 'unreachable' }, 'mEdit could not be reached'],
       ['a status mEdit could not read', [statusOf({ unreadable: { manifest: true, why: 'bad manifest' } })], 'bad manifest'],
     ])('refuses on %s and installs nothing', async (_, answer, why) => {
       const { result, calls } = await install(ARCHIVE, UPGRADED, {}, false, reading(answer));
 
-      expect(result).toMatchObject({ applied: false, refusal: expect.stringContaining(why) as unknown });
+      expect(result).toEqual({
+        applied: false, refusal: `"Harder VATS" status could not be read: ${why}. Request it again with force to replace its files.`,
+      });
       expect(calls).toEqual([]);
     });
 

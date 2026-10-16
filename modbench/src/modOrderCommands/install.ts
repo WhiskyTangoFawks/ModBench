@@ -48,6 +48,11 @@ const upgradeLoss = (status: ModStatus): string | undefined => {
   return parts.length === 0 ? undefined : parts.join('; ');
 };
 
+const FORCE_TO_REPLACE = 'Request it again with force to replace its files.';
+
+const statusUnread = (mod: string, why: string): string =>
+  `"${mod}" status could not be read: ${why.replace(/\.$/, '')}. ${FORCE_TO_REPLACE}`;
+
 export type ReadStatus = (mods: readonly string[]) => Promise<readonly ModStatus[] | ReadFailed>;
 
 // What an upgrade over the mod would lose, or why mEdit could not say (agent.md, Any agent, story 7).
@@ -57,15 +62,15 @@ async function upgradeRefusal(
   if (force || target.kind !== 'upgrade') return undefined;
   const mod = target.name;
   const answer = await readStatus([mod]);
-  if (isReadFailed(answer)) return `"${mod}" status could not be read: ${failureReason(answer)}`;
+  if (isReadFailed(answer)) return statusUnread(mod, failureReason(answer));
   const status = answer.find((read) => read.mod === mod);
   if (status === undefined) {
     return await adapter.modFolderPath(mod) === undefined ? undefined
-      : `"${mod}" has no status in the answer. Request it again with force to replace its files.`;
+      : `"${mod}" has no status in the answer. ${FORCE_TO_REPLACE}`;
   }
-  if (status.unreadable) return `"${mod}" status could not be read: ${status.unreadable.why}`;
+  if (status.unreadable) return statusUnread(mod, status.unreadable.why);
   const loss = upgradeLoss(status);
-  return loss === undefined ? undefined : `The upgrade would lose, in "${mod}": ${loss}. Request it again with force to replace them.`;
+  return loss === undefined ? undefined : `The upgrade would lose, in "${mod}": ${loss}. ${FORCE_TO_REPLACE}`;
 }
 
 async function markInstalled(adapter: InstanceAdapter, name: string): Promise<string | undefined> {
