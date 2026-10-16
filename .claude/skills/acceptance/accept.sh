@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A throwaway Modbench instance, headless: up | call <dir> <tool> [json] | tools <dir> | down <dir> | seed
+# A throwaway Modbench instance, headless: up [instance] | call <dir> <tool> [json] | tools <dir> | down <dir> | seed
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,15 +31,18 @@ up() {
   [ -f "$root/modbench/out/extension.js" ] && [ -x "$root/modbench/backend/MEditService.Http" ] || {
     echo "refused: build first, in modbench/ through slot-run: npm run build, npm run build:backend" >&2; exit 1; }
 
-  local dir port display
+  local source="${1:-}" dir port display instance
   dir="$(mktemp -d /tmp/modbench-accept.XXXX)"
-  (cd "$root" && git ls-files -z DevList | xargs -0 cp --parents -t "$dir")
-  mkdir -p "$dir/DevList/.vscode" "$dir/DevList/modbench" "$dir/user/User" "$dir/ext"
-  if [ -f "$seed/index.duckdb" ]; then cp "$seed"/index.duckdb* "$dir/DevList/modbench/"; fi
+  instance="$dir/instance"
+  if [ -n "$source" ]; then cp -a "$source" "$instance"
+  else mkdir -p "$instance" && (cd "$root/DevList" && git ls-files -z | xargs -0 cp --parents -t "$instance")
+  fi
+  mkdir -p "$instance/.vscode" "$instance/modbench" "$dir/user/User" "$dir/ext"
+  if [ ! -f "$instance/modbench/index.duckdb" ] && [ -f "$seed/index.duckdb" ]; then cp "$seed"/index.duckdb* "$instance/modbench/"; fi
 
   port="$(free_port)"
   echo "$port" > "$dir/port"
-  printf '{"modbench.agent.port": %s}\n' "$port" > "$dir/DevList/.vscode/settings.json"
+  printf '{"modbench.agent.port": %s}\n' "$port" > "$instance/.vscode/settings.json"
   # Modbench loads nothing in Restricted Mode, and a headless window cannot answer the trust prompt.
   printf '{"security.workspace.trust.enabled": false, "telemetry.telemetryLevel": "off", "update.mode": "none"}\n' \
     > "$dir/user/User/settings.json"
@@ -48,9 +51,11 @@ up() {
   Xvfb ":$display" -screen 0 1280x1024x24 -nolisten tcp >/dev/null 2>&1 &
   echo $! > "$dir/xvfb.pid"
   # Electron leaves Xvfb for the desktop's compositor while a Wayland session is in its environment.
-  env -u WAYLAND_DISPLAY -u XDG_SESSION_TYPE DISPLAY=":$display" setsid code \
+  # Git refuses a file:// submodule remote by default; a fixture's remote is a bare repository on disk.
+  env -u WAYLAND_DISPLAY -u XDG_SESSION_TYPE DISPLAY=":$display" \
+    GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=protocol.file.allow GIT_CONFIG_VALUE_0=always setsid code \
     --extensionDevelopmentPath="$root/modbench" --user-data-dir "$dir/user" --extensions-dir "$dir/ext" \
-    --disable-workspace-trust "$dir/DevList" > "$dir/code.log" 2>&1 &
+    --disable-workspace-trust "$instance" > "$dir/code.log" 2>&1 &
 
   local waited=0
   until python3 -I "$here/mcp.py" "$port" tools >/dev/null 2>&1; do
@@ -71,8 +76,8 @@ down() {
   local pids="" self=" $$ $PPID "
   for p in $(ls /proc | grep -E '^[0-9]+$'); do
     case "$self" in *" $p "*) continue;; esac
-    if tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -qF "$dir/" || ls -l "/proc/$p/fd" 2>/dev/null | grep -qF "$dir/"; then
-      tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -q "accept.sh" || pids="$pids $p"
+    if tr '\0' ' ' 2>/dev/null < "/proc/$p/cmdline" | grep -qF "$dir/" || ls -l "/proc/$p/fd" 2>/dev/null | grep -qF "$dir/"; then
+      tr '\0' ' ' 2>/dev/null < "/proc/$p/cmdline" | grep -q "accept.sh" || pids="$pids $p"
     fi
   done
   [ -n "$pids" ] && kill $pids 2>/dev/null || true
@@ -80,7 +85,7 @@ down() {
   for p in $pids; do [ -d "/proc/$p" ] && kill -9 "$p" 2>/dev/null || true; done
   [ -f "$dir/xvfb.pid" ] && kill "$(cat "$dir/xvfb.pid")" 2>/dev/null || true
   if [ "$keep" = "--keep-seed" ]; then
-    mkdir -p "$seed" && rm -f "$seed"/index.duckdb* && cp "$dir"/DevList/modbench/index.duckdb* "$seed/"
+    mkdir -p "$seed" && rm -f "$seed"/index.duckdb* && cp "$dir"/instance/modbench/index.duckdb* "$seed/"
   fi
   rm -rf "$dir"
   echo "down: $dir"
@@ -89,7 +94,7 @@ down() {
 port_of() { cat "$1/port"; }
 
 case "${1:-}" in
-  up) up ;;
+  up) up "${2:-}" ;;
   down) down "$2" "${3:-}" ;;
   tools) python3 -I "$here/mcp.py" "$(port_of "$2")" tools ;;
   call) python3 -I "$here/mcp.py" "$(port_of "$2")" call "$3" "${4:-{\}}" ;;
@@ -98,5 +103,5 @@ case "${1:-}" in
     line="$(up | tail -1)"; dir="${line#DIR=}"; dir="${dir%% *}"
     down "$dir" --keep-seed
     echo "seeded: $seed" ;;
-  *) echo "usage: accept.sh up | call <dir> <tool> [json] | tools <dir> | down <dir> | seed" >&2; exit 2 ;;
+  *) echo "usage: accept.sh up [instance] | call <dir> <tool> [json] | tools <dir> | down <dir> | seed" >&2; exit 2 ;;
 esac

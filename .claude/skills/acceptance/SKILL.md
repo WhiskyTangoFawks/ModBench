@@ -11,10 +11,11 @@ An acceptance run meets Modbench as the user's agent does: a real Extension Deve
 
 1. Build this worktree: in `modbench/`, through slot-run, `npm run build`, and `npm run build:backend` when `MEditService/` changed.
 2. `accept.sh up` copies `DevList` into a new folder under `/tmp`, seeds its index, starts VS Code on it, and waits until the index is ready. It prints `DIR=<folder> PORT=<port>`.
-3. `accept.sh tools <folder>` lists the tools and their inputs. `accept.sh call <folder> <tool> '<json>'` calls one and prints what it returned; a refusal exits non-zero.
-4. `accept.sh down <folder>`, pass or fail. It stops every process with a file open in the folder, the backend included, and deletes the folder.
+3. Shape the instance for the case. A change Modbench owns goes through its gestures: install, create empty mod, add separator, create plugin, build. A change it does not own is a plain file in the run's folder: a package in `downloads/`, a file in a mod folder, a profile's mod order. The report lists each shaping step, so another run can repeat the case. A shape that two cases need moves into `DevList`.
+4. Act and observe. `accept.sh tools <folder>` lists the tools and their inputs. `accept.sh call <folder> <tool> '<json>'` calls one and prints what it returned; a refusal exits non-zero.
+5. `accept.sh down <folder>`, pass or fail. It stops every process with a file open in the folder, the backend included, and deletes the folder.
 
-**Criterion:** each claim in the report quotes a call's result or a file's content, and `accept.sh down` printed `down:`.
+**Criterion:** the report lists the shaping steps, each claim in it quotes a call's result or a file's content, and `accept.sh down` printed `down:`.
 
 One run is up at a time: a host and its index hold gigabytes of memory, and `up` refuses while another run is up. The Windows VM holds 6 GB too; start a run only while no gate run is using the VM.
 
