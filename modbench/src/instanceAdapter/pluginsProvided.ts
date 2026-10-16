@@ -1,7 +1,7 @@
 // Where the game gets a file from: the merge a VFS performs over mod order.
 
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
-import { isPluginFile } from './pluginFile';
+import { isPluginFile, isRootLevel } from './pluginFile';
 import type { DataFolderPlugins, FileOrigin, ModlistEntry, OriginFile, PluginsProvided } from './instanceAdapter';
 
 export interface OriginProvides {
@@ -32,7 +32,7 @@ export function pluginsProvidedOf(
   if (dataFolderPlugins.kind !== 'listed') return dataFolderPlugins;
   const plugins = new Map<string, string>();
   const atRoots = winningFirst.flatMap(({ files }) => files).map((file) => file.relativePath)
-    .filter((relativePath) => !relativePath.includes('/') && isPluginFile(relativePath));
+    .filter((relativePath) => isRootLevel(relativePath) && isPluginFile(relativePath));
   for (const name of [...atRoots, ...[...dataFolderPlugins.names].sort()]) {
     if (!plugins.has(pluginKey(name))) plugins.set(pluginKey(name), name);
   }

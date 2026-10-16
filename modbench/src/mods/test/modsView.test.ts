@@ -203,7 +203,7 @@ describe('the Mods view registers its own gestures', () => {
     expect(h.state.commands.has(command)).toBe(true);
   });
 
-  it('runs mod sync on no argument', async () => {
+  it('runs mod sync when modbench.mod.sync fires', async () => {
     const sync = vi.fn(() => Promise.resolve({ applied: true as const, added: [], dropped: [] }));
     createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...modSyncAnswering(sync) });
 

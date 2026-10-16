@@ -23,10 +23,7 @@ import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
 import { ToolboxProvider } from '../toolbox/ToolboxProvider';
 import { modSyncOver, type ModSyncRun } from '../modOrderCommands/modOrderCommands';
 
-type ModSyncResult = Awaited<ReturnType<ModSyncRun>>;
-type PluginSyncResult = Awaited<ReturnType<PluginSyncRun>>;
-
-const noModSync = () => Promise.resolve<ModSyncResult>({ applied: true, added: [], dropped: [] });
+const noModSync: ModSyncRun = () => Promise.resolve({ applied: true, added: [], dropped: [] });
 
 const PROFILE = 'Default';
 const INI = '[General]\r\nselected_profile=@ByteArray(Default)\r\ngameName=Fallout 4\r\n';
@@ -54,7 +51,7 @@ function pastSequenceWithin(instance: Instance, sequence: number, ms: number): P
 async function wiredInstance(): Promise<{
   root: string;
   instance: Instance;
-  syncs: Promise<PluginSyncResult>[];
+  syncs: ReturnType<PluginSyncRun>[];
   plugins: () => Promise<string>;
 }> {
   const root = await mkdtemp(join(tmpdir(), 'plugins-loop-'));
@@ -71,7 +68,7 @@ async function wiredInstance(): Promise<{
   const instance = new Instance({ window: STEADY_WINDOW, adapter, log: { info: () => {}, warn: () => {}, error: () => {} } });
   instances.push(instance);
 
-  const syncs: Promise<PluginSyncResult>[] = [];
+  const syncs: ReturnType<PluginSyncRun>[] = [];
   instanceSyncs({
     instance, channel: { error: () => {}, info: () => {} }, syncMods: noModSync,
     syncPlugins: () => {
@@ -87,7 +84,7 @@ async function wiredInstance(): Promise<{
 }
 
 async function driveToQuiescence(
-  instance: Instance, syncs: Promise<PluginSyncResult>[], maxRounds: number,
+  instance: Instance, syncs: ReturnType<PluginSyncRun>[], maxRounds: number,
 ): Promise<{ writes: number; quiescent: boolean }> {
   let writes = 0;
   for (let round = 0; round < maxRounds; round++) {
@@ -134,7 +131,7 @@ const withProvider = (overrides: Partial<InstanceReading> = {}): Partial<Instanc
 });
 
 const pluginChanges = (fake: ReturnType<typeof fakeInstanceAdapter>) =>
-  fake.calls.flatMap((call) => (call.verb === 'changePluginOrder' ? call.changes : []));
+  fake.calls.flatMap((call) => (call.verb === 'changePluginOrderOverProvided' ? call.changes : []));
 
 async function settledFakeInstance(overrides: Partial<InstanceReading> = withProvider()) {
   const fake = fakeInstanceAdapter(readingFixture(overrides));
@@ -142,7 +139,7 @@ async function settledFakeInstance(overrides: Partial<InstanceReading> = withPro
     window: STEADY_WINDOW, adapter: fake.adapter, log: { info: () => {}, warn: () => {}, error: () => {} },
   });
   instances.push(instance);
-  const syncs: Promise<PluginSyncResult>[] = [];
+  const syncs: ReturnType<PluginSyncRun>[] = [];
   const syncPlugins = pluginSyncOver(fake.adapter);
   const { pluginSync } = instanceSyncs({
     instance, channel: { error: () => {}, info: () => {} }, syncMods: noModSync,
@@ -247,7 +244,7 @@ describe('a gesture writes the profile the Instance last landed', () => {
 
 describe('plugin sync, as each landed value drives it', () => {
   it('runs on every value that lands, from the first', async () => {
-    const syncPlugins = vi.fn(() => Promise.resolve<PluginSyncResult>({ applied: true, wrote: false, added: [], dropped: [] }));
+    const syncPlugins = vi.fn<PluginSyncRun>(() => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] }));
     const instance = new FakeInstance(instanceValueFixture());
     const { pluginSync } = instanceSyncs({ instance, syncMods: noModSync, channel: { error: vi.fn(), info: vi.fn() }, syncPlugins });
 

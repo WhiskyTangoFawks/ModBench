@@ -1,10 +1,10 @@
 // ADR-0013's snapshot. A plugins.txt line no mod provides names the Data folder's plugin.
 
 import {
-  foldPath, isRootLevel, type FileConflictIndex, type FileWinners,
+  foldPath, type FileConflictIndex, type FileWinners,
 } from './fileConflictIndex';
 import {
-  fileInFolder, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
+  fileInFolder, isRootLevel, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
   type ModFolders, type ModlistEntry, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
 import { pluginOrderOf } from './pluginOrder';

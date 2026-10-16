@@ -25,6 +25,12 @@ async function syncWithGameFolderHolding(dir: string, plugin: string): Promise<P
   return pluginSyncOver(adapterOver(dir, { gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') } }));
 }
 
+function pluginsFileHeld(dir: string): { release: () => void; done: Promise<void> } {
+  let release!: () => void;
+  const done = withLock(pluginsFile(dir, PROFILE), () => new Promise<void>((resolve) => { release = resolve; }));
+  return { release: () => { release(); }, done };
+}
+
 const pluginOrder = async (dir: string): Promise<string[]> =>
   (await readPluginLines(dir)).map((p) => p.name);
 const enabledPlugins = async (dir: string): Promise<string[]> =>
@@ -97,16 +103,15 @@ describe('plugins.txt corpus', () => {
   it('syncPlugins keeps, in its place and state, the line of a plugin the mod manager provides and lists while the sync waits on plugins.txt', async () => {
     const sync = await syncWithGameFolderHolding(dir, 'ccsbjfo4003-grenade.esl');
     await writeFile(join(dir, 'mods', 'Harder VATS', 'Harder VATS.esp'), '');
-    let release!: () => void;
-    const held = withLock(pluginsFile(dir, PROFILE), () => new Promise<void>((resolve) => { release = resolve; }));
+    const held = pluginsFileHeld(dir);
 
     const syncing = sync();
     await new Promise((resolve) => setTimeout(resolve, WAITING_ON_THE_LOCK_MS));
     const modlist = join(dir, DEFAULT_MODLIST);
     await writeFile(modlist, (await readFile(modlist, 'utf8')).replace('-Harder VATS', '+Harder VATS'));
     await writeFile(join(dir, DEFAULT_PLUGINS), (await readFile(join(dir, DEFAULT_PLUGINS), 'utf8')).replace('*Tracked Patch Mod.esp', '*Harder VATS.esp\r\n*Tracked Patch Mod.esp'));
-    release();
-    await held;
+    held.release();
+    await held.done;
 
     expect(await syncing).toMatchObject({ applied: true, dropped: ['Unofficial Fallout 4 Patch.esp'] });
     expect(await readPluginLines(dir)).toContainEqual({ name: 'Harder VATS.esp', enabled: true });

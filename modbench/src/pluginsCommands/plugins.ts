@@ -5,25 +5,47 @@ import { dropIndexIn, type Drop } from './dropIndex';
 import type { CommandResult, SelectionResult } from '../coreLib/commandResult';
 export type { SelectionResult };
 import { refuse } from '../ports/refuse';
+import { present } from '../ports/present';
 import type { MEditClient, PluginAddress } from '../client';
 import type { TailOf } from '../coreLib/boundCommand';
 import { pluginRenameCommands, type PluginRenameClient } from './renamePlugin';
 import { moveOrderRefusal, type PluginOrderFactsOf } from './pluginOrder';
 import type { ItemRefusal } from '../ports/selectionOutcome';
-import type { DecidePluginOrder, InstanceAdapter, PluginOrderChange, PluginsProvided } from '../instanceAdapter/instanceAdapter';
+import type {
+  DecidePluginOrder, DecidePluginOrderOverProvided, InstanceAdapter, PluginOrderChange, PluginsProvided,
+} from '../instanceAdapter/instanceAdapter';
 import { isReadFailed } from '../wire/readFailed';
 
-async function changePluginOrder(
-  adapter: InstanceAdapter, profile: string, decide: DecidePluginOrder,
-): Promise<CommandResult> {
+interface Decision<T> {
+  readonly changes: readonly PluginOrderChange[];
+  readonly decided: T;
+}
+
+// The adapter takes the changes alone, so what `decide` concluded comes back here. A change
+// already true of the order is not written: for `syncPlugins` that is the difference between a
+// loop that settles and one that does not.
+async function changeDeciding<A extends unknown[], T extends object>(
+  write: (decide: (...args: A) => readonly PluginOrderChange[]) => Promise<{ readonly wrote: boolean }>,
+  decide: (...args: A) => Decision<T>,
+): Promise<CommandResult<{ wrote: boolean; decided: T }>> {
+  const decisions: T[] = [];
   try {
-    // A change already true of the order is not written: for `syncPlugins` that is the
-    // difference between a loop that settles and one that does not.
-    const { wrote } = await adapter.changePluginOrder(profile, decide);
-    return { applied: true, wrote };
+    const { wrote } = await write((...args) => {
+      const { changes, decided } = decide(...args);
+      decisions.push(decided);
+      return changes;
+    });
+    return { applied: true, wrote, decided: present(decisions.at(-1), 'the decision the change landed on') };
   } catch (err) {
     return refuse(err);
   }
+}
+
+const overOrder = (adapter: InstanceAdapter, profile: string) => (decide: DecidePluginOrder) => adapter.changePluginOrder(profile, decide);
+
+async function changePluginOrder(adapter: InstanceAdapter, profile: string, decide: DecidePluginOrder): Promise<CommandResult> {
+  const outcome = await changeDeciding(overOrder(adapter, profile), (order) => ({ changes: decide(order), decided: {} }));
+  return outcome.applied ? { applied: true, wrote: outcome.wrote } : outcome;
 }
 
 /** One plugin's target state — the check box's own shape, where several rows toggled at once can
@@ -39,17 +61,17 @@ export interface PluginParticipation {
 async function setPluginsParticipation(
   adapter: InstanceAdapter, profile: string, entries: readonly PluginParticipation[],
 ): Promise<SelectionResult<string>> {
-  let landed: string[] = [];
-  let refused: ItemRefusal<string>[] = [];
-  const outcome = await changePluginOrder(adapter, profile, (order) => {
+  const outcome = await changeDeciding(overOrder(adapter, profile), (order) => {
     const known = new Set(order.map((entry) => entry.name));
     const found = entries.filter((entry) => known.has(entry.name));
-    landed = found.map((entry) => entry.name);
-    refused = entries.filter((entry) => !known.has(entry.name))
+    const refused: ItemRefusal<string>[] = entries.filter((entry) => !known.has(entry.name))
       .map((entry) => ({ item: entry.name, reason: `Plugin not found in plugins.txt: ${entry.name}` }));
-    return found.map(({ name, enabled }) => ({ kind: 'enable', plugin: name, enabled }));
+    return {
+      changes: found.map(({ name, enabled }): PluginOrderChange => ({ kind: 'enable', plugin: name, enabled })),
+      decided: { landed: found.map((entry) => entry.name), refused },
+    };
   });
-  return outcome.applied ? { applied: true, outcome: { landed, refused } } : outcome;
+  return outcome.applied ? { applied: true, outcome: outcome.decided } : outcome;
 }
 
 // `setPluginsParticipation`, one state for the whole selection — the menu and the key's own
@@ -123,27 +145,23 @@ function pluginLinesDelta(listed: readonly string[], { plugins, loadedWithNoLine
 
 async function syncPlugins(adapter: InstanceAdapter): Promise<PluginSyncResult> {
   const profile = await adapter.activeProfile();
-  const decided = { gameFolderNotFound: false };
-  let delta: PluginLinesDelta = { added: [], dropped: [] };
-  try {
-    const { wrote } = await adapter.changePluginOrderOverProvided(profile, (order, provided) => {
-      // Without the Data folder's listing, a line for a Data plugin would be dropped. A game folder
-      // not found is told once, as the instance's state (common.md, States, story 5).
-      if (provided.kind === 'unresolved') {
-        decided.gameFolderNotFound = true;
-        return [];
-      }
-      if (provided.kind === 'unreadable') throw new Error(`the game's Data folder cannot be listed: ${provided.reason}`);
-      delta = pluginLinesDelta(order.map((e) => e.name), provided);
-      return [
+  const overProvided = (decide: DecidePluginOrderOverProvided) => adapter.changePluginOrderOverProvided(profile, decide);
+  const outcome = await changeDeciding(overProvided, (order, provided): Decision<PluginLinesDelta | { gameFolderNotFound: true }> => {
+    // Without the Data folder's listing, a line for a Data plugin would be dropped. A game folder
+    // not found is told once, as the instance's state (common.md, States, story 5).
+    if (provided.kind === 'unresolved') return { changes: [], decided: { gameFolderNotFound: true } };
+    if (provided.kind === 'unreadable') throw new Error(`the game's Data folder cannot be listed: ${provided.reason}`);
+    const delta = pluginLinesDelta(order.map((e) => e.name), provided);
+    return {
+      changes: [
         ...delta.dropped.map((plugin): PluginOrderChange => ({ kind: 'drop', plugin })),
         ...delta.added.map((plugin): PluginOrderChange => ({ kind: 'add', plugin })),
-      ];
-    });
-    return decided.gameFolderNotFound ? { applied: false, toldAsInstanceState: true } : { applied: true, wrote, ...delta };
-  } catch (err) {
-    return refuse(err);
-  }
+      ],
+      decided: delta,
+    };
+  });
+  if (!outcome.applied) return outcome;
+  return 'gameFolderNotFound' in outcome.decided ? { applied: false, toldAsInstanceState: true } : { applied: true, wrote: outcome.wrote, ...outcome.decided };
 }
 
 /** Plugin sync over the active profile. */

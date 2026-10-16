@@ -6,7 +6,7 @@ import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type { MoveToTrash } from '../ports/trash';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
-export { fileExtension, isPluginFile } from './pluginFile';
+export { fileExtension, isPluginFile, isRootLevel } from './pluginFile';
 export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
 export { filesWinningFirst } from './pluginsProvided';
 
@@ -244,6 +244,9 @@ export type DecideModOrder = (order: readonly ModlistEntry[], folders: ModFolder
 /** Decides the changes to plugin order from the order as it stands when the changes land. */
 export type DecidePluginOrder = (order: readonly PluginEntry[]) => readonly PluginOrderChange[];
 
+/** Decides as `DecidePluginOrder` does, and from the plugins provided as they stand then too. */
+export type DecidePluginOrderOverProvided = (order: readonly PluginEntry[], provided: PluginsProvided) => readonly PluginOrderChange[];
+
 interface Written {
   readonly wrote: boolean;
 }
@@ -470,11 +473,9 @@ export interface InstanceAdapter {
    *  nothing is written. Adding a plugin that is there changes nothing. */
   changePluginOrder(profile: string, decide: DecidePluginOrder): Promise<Written>;
   /** As `changePluginOrder`, with the plugins `profile`'s mod order provides read after the order,
-   *  under its lock, against one read of the settings. An empty mod order is read again after a
-   *  settle, as `reading` reads it. */
-  changePluginOrderOverProvided(
-    profile: string, decide: (order: readonly PluginEntry[], provided: PluginsProvided) => readonly PluginOrderChange[],
-  ): Promise<Written>;
+   *  under its lock, the game folder's against one read of the settings. An empty mod order is read
+   *  again after a settle. */
+  changePluginOrderOverProvided(profile: string, decide: DecidePluginOrderOverProvided): Promise<Written>;
   /** A downloaded file that is gone gets no mark. Rejects when the downloads folder cannot be
    *  resolved. */
   markDownloadedFile(name: string, mark: DownloadedFileMark): Promise<Marked>;

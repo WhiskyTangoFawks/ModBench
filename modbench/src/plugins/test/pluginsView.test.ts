@@ -228,7 +228,7 @@ describe('the Plugins view registers its own gestures', () => {
     expect(h.picked).toEqual([['Cloned And Unlisted']]);
   });
 
-  it('runs plugin sync on no argument', async () => {
+  it('runs plugin sync when modbench.plugin.sync fires', async () => {
     const sync = vi.fn(() => Promise.resolve({ applied: true as const, wrote: false, added: [], dropped: [] }));
     pluginsView(instanceValueFixture(), { pluginSync: createPluginSync(sync, silentChannel) });
 

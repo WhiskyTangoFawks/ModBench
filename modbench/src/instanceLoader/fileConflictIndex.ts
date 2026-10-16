@@ -106,12 +106,6 @@ export interface FileConflictIndex {
   foldersByMod: Map<string, readonly OriginFolder[]>;
 }
 
-/** Whether a path sits at its origin's root, where plugins live, so a nested file sharing a
- *  plugin's name never matches one. */
-export function isRootLevel(relativePath: string): boolean {
-  return !relativePath.includes('/');
-}
-
 // A mod's own files and folders as the reading lists them; each entry the listing skipped is one
 // Output line.
 function modListing(

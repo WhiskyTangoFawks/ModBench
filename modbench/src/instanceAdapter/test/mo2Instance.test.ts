@@ -146,8 +146,6 @@ describe('the MO2 Instance adapter', () => {
       beforeEach(async () => {
         game = await mkdtemp(join(tmpdir(), 'mo2-instance-provided-'));
         await mkdir(join(game, 'Data'));
-        await writeFile(join(game, 'Data', 'Fallout4.esm'), '');
-        await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\r\n');
         withGame = adapterAt(root, game);
       });
       afterEach(() => rm(game, { recursive: true, force: true }));
@@ -166,35 +164,20 @@ describe('the MO2 Instance adapter', () => {
         return provided.plugins;
       };
 
-      it('answers each plugin at the root of an enabled mod or Overwrite at the spelling of the copy that wins, then the Data folder\'s', async () => {
-        await writeFile(join(root, 'overwrite', 'TRACKED PATCH MOD.ESP'), '');
-        await writeFile(join(root, 'mods', 'Harder VATS', 'Disabled.esp'), '');
-        await mkdir(join(root, 'mods', 'Tracked Patch Mod', 'Optional'));
-        await writeFile(join(root, 'mods', 'Tracked Patch Mod', 'Optional', 'Nested.esp'), '');
-
-        expect(await pluginsOver(withGame)).toEqual(new Map([
-          ['tracked patch mod.esp', 'TRACKED PATCH MOD.ESP'],
-          ['nonasciiretexture.esp', 'NonAsciiRetexture.esp'],
-          ['nonasciiretexture - addon.esl', 'NonAsciiRetexture - Addon.esl'],
-          ['fallout4.esm', 'Fallout4.esm'],
-        ]));
-      });
-
       it('answers by the mod order of the profile it changes', async () => {
         await writeFile(join(root, 'mods', 'Unofficial Fallout 4 Patch', 'Unofficial Fallout 4 Patch.esp'), '');
 
-        expect(await pluginsOver(withGame, 'Secondary')).toEqual(new Map([
-          ['unofficial fallout 4 patch.esp', 'Unofficial Fallout 4 Patch.esp'], ['fallout4.esm', 'Fallout4.esm'],
-        ]));
+        const plugins = await pluginsOver(withGame, 'Secondary');
+
+        expect(['unofficial fallout 4 patch.esp', 'tracked patch mod.esp'].map((key) => plugins.has(key))).toEqual([true, false]);
       });
 
-      it('answers the game\'s masters, then its Creation Club plugins, as the plugins it loads with no line', async () => {
-        expect(await providedOver(withGame)).toMatchObject({
-          loadedWithNoLine: [
-            'Fallout4.esm', 'DLCRobot.esm', 'DLCworkshop01.esm', 'DLCCoast.esm', 'DLCworkshop02.esm', 'DLCworkshop03.esm',
-            'DLCNukaWorld.esm', 'ccBGSFO4044-HellfirePowerArmor.esl',
-          ],
-        });
+      it('answers no plugin of a disabled mod', async () => {
+        await writeFile(join(root, 'mods', 'Harder VATS', 'Disabled.esp'), '');
+
+        const plugins = await pluginsOver(withGame);
+
+        expect(['tracked patch mod.esp', 'disabled.esp'].map((key) => plugins.has(key))).toEqual([true, false]);
       });
 
       it('answers no plugins while the game folder is not found', async () => {

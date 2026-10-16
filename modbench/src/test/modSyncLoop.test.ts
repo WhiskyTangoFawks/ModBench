@@ -18,10 +18,7 @@ import { cloneCorpusFixture, DEFAULT_MODLIST } from './mo2/corpusFixture';
 import { adapterOver } from './mo2/adapterOver';
 import { STEADY_WINDOW } from './steadyWindow';
 
-type ModSyncResult = Awaited<ReturnType<ModSyncRun>>;
-type PluginSyncResult = Awaited<ReturnType<PluginSyncRun>>;
-
-const noPluginSync = () => Promise.resolve<PluginSyncResult>({ applied: true, wrote: false, added: [], dropped: [] });
+const noPluginSync: PluginSyncRun = () => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] });
 
 const MOD = 'Freshly Installed Mod';
 const DATA_FOLDER = '/game/Data';
@@ -44,7 +41,7 @@ async function settledWiredInstance(): Promise<{
   root: string;
   instance: Instance;
   channel: ReturnType<typeof channelDouble>;
-  syncs: Promise<ModSyncResult>[];
+  syncs: ReturnType<ModSyncRun>[];
 }> {
   const root = cloneCorpusFixture();
   roots.push(root);
@@ -55,7 +52,7 @@ async function settledWiredInstance(): Promise<{
   });
   instances.push(instance);
   const channel = channelDouble();
-  const syncs: Promise<ModSyncResult>[] = [];
+  const syncs: ReturnType<ModSyncRun>[] = [];
   const { modSync } = instanceSyncs({
     instance, channel, syncPlugins: noPluginSync,
     syncMods: () => {
@@ -93,7 +90,7 @@ async function settledFakeInstance(overrides: Partial<InstanceReading>) {
   });
   instances.push(instance);
   const channel = channelDouble();
-  const syncs: Promise<ModSyncResult>[] = [];
+  const syncs: ReturnType<ModSyncRun>[] = [];
   const syncMods = modSyncOver(fake.adapter);
   const { modSync } = instanceSyncs({
     instance, channel, syncPlugins: noPluginSync,
@@ -165,7 +162,7 @@ describe('mod sync, as the Instance value drives it', () => {
 
 describe('mod sync, as each landed value drives it', () => {
   it('runs on every value that lands, from the first', async () => {
-    const syncMods = vi.fn(() => Promise.resolve<ModSyncResult>({ applied: true, added: [], dropped: [] }));
+    const syncMods = vi.fn<ModSyncRun>(() => Promise.resolve({ applied: true, added: [], dropped: [] }));
     const instance = new FakeInstance(instanceValueFixture());
     const { modSync } = instanceSyncs({ instance, syncPlugins: noPluginSync, channel: channelDouble(), syncMods });
 

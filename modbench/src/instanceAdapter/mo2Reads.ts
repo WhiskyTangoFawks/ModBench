@@ -254,7 +254,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
   };
 }
 
-/** The plugins `profile`'s mod order provides, every fact against one read of the settings. */
+/** The plugins `profile`'s mod order provides, the game folder's against one read of the settings. */
 export async function readPluginsProvided(source: ReadingSource, profile: string): Promise<PluginsProvided> {
   const settings = await source.settings();
   const [mods, runtimeOutput, gameFolder] = await Promise.all([
@@ -263,8 +263,8 @@ export async function readPluginsProvided(source: ReadingSource, profile: string
     settings.gameFolder(),
   ]);
   const [modFiles, dataFolderPlugins, creationClubList] = await Promise.all([
-    Promise.all(mods.filter((entry) => entry.kind === 'mod' && entry.enabled)
-      .map(async ({ name }) => [name, (await source.originRootFiles({ kind: 'mod', name })).files] as const)).then((listed) => new Map(listed)),
+    Promise.all(filesWinningFirst(mods, [], () => []).flatMap(({ origin }) => (origin.kind === 'mod' ? [origin] : []))
+      .map(async (origin) => [origin.name, (await source.originRootFiles(origin)).files] as const)).then((listed) => new Map(listed)),
     source.gameFolderPlugins(gameFolder),
     source.creationClubList(gameFolder, settings.gameRelease),
   ]);

@@ -45,7 +45,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
 
 export type AdapterCall =
   | { readonly verb: 'changeModOrder'; readonly profile: string; readonly changes: readonly ModOrderChange[] }
-  | { readonly verb: 'changePluginOrder'; readonly profile: string; readonly changes: readonly PluginOrderChange[] }
+  | { readonly verb: 'changePluginOrder' | 'changePluginOrderOverProvided'; readonly profile: string; readonly changes: readonly PluginOrderChange[] }
   | { readonly verb: 'markDownloadedFile'; readonly name: string; readonly mark: DownloadedFileMark }
   | { readonly verb: 'trashDownloadedFileMeta'; readonly name: string }
   | { readonly verb: 'selectProfile'; readonly profile: string }
@@ -199,7 +199,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         filesWinningFirst(current.mods, current.runtimeOutput.files, (mod) => current.modFiles.get(mod)?.files ?? []),
         current.dataFolderPlugins, loadedWithNoLineOf(current.gameRelease, current.creationClubList),
       ));
-      return record({ verb: 'changePluginOrder', profile, changes }, { wrote: changes.length > 0 });
+      return record({ verb: 'changePluginOrderOverProvided', profile, changes }, { wrote: changes.length > 0 });
     },
     markDownloadedFile: (name, mark) =>
       record({ verb: 'markDownloadedFile', name, mark }, answers.goneDownloads?.has(name) ? { gone: true } as const : { gone: false, wrote: true } as const),

@@ -22,6 +22,7 @@ const moving = (...names: string[]) => names.map((name) => ({ name, origin: 'Som
 const lines = (...names: string[]) => names.map((name) => ({ name, enabled: true }));
 const fakeOver = (...names: string[]) => fakeInstanceAdapter(readingFixture({ pluginOrder: lines(...names) }));
 const handed = (changes: readonly PluginOrderChange[], profile = PROFILE) => [{ verb: 'changePluginOrder', profile, changes }];
+const synced = (changes: readonly PluginOrderChange[], profile = PROFILE) => [{ verb: 'changePluginOrderOverProvided', profile, changes }];
 
 describe('reorderPlugins hands the adapter a move decided against the order it holds', () => {
   it('a move is its plugins and the index the drop settles to', async () => {
@@ -175,27 +176,27 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
     const { fake, result } = await sync({ order: ['Base.esp'], provided: ['Base.esp', 'zeta.esp', 'Alpha.esl'] });
 
     expect(result).toEqual({ applied: true, wrote: true, added: ['Alpha.esl', 'zeta.esp'], dropped: [] });
-    expect(fake.calls).toEqual(handed([{ kind: 'add', plugin: 'Alpha.esl' }, { kind: 'add', plugin: 'zeta.esp' }]));
+    expect(fake.calls).toEqual(synced([{ kind: 'add', plugin: 'Alpha.esl' }, { kind: 'add', plugin: 'zeta.esp' }]));
   });
 
   it('drops a line whose plugin nothing provides, and keeps one the game Data folder provides', async () => {
     const { fake, result } = await sync({ order: ['Base.esp', 'Gone.esp', 'DLCCoast.esm'], provided: ['Base.esp'], inData: inData('DLCCoast.esm') });
 
     expect(result).toEqual({ applied: true, wrote: true, added: [], dropped: ['Gone.esp'] });
-    expect(fake.calls).toEqual(handed([{ kind: 'drop', plugin: 'Gone.esp' }]));
+    expect(fake.calls).toEqual(synced([{ kind: 'drop', plugin: 'Gone.esp' }]));
   });
 
   it('writes the profile the mod manager selects', async () => {
     const { fake } = await sync({ order: ['Gone.esp'], profile: 'Other' });
 
-    expect(fake.calls).toEqual(handed([{ kind: 'drop', plugin: 'Gone.esp' }], 'Other'));
+    expect(fake.calls).toEqual(synced([{ kind: 'drop', plugin: 'Gone.esp' }], 'Other'));
   });
 
   it('appends a line for a plugin in the game\'s Data folder with none, as for a mod\'s', async () => {
     const { fake, result } = await sync({ order: ['Base.esp'], provided: ['Base.esp'], inData: inData('Loose.esp') });
 
     expect(result).toEqual({ applied: true, wrote: true, added: ['Loose.esp'], dropped: [] });
-    expect(fake.calls).toEqual(handed([{ kind: 'add', plugin: 'Loose.esp' }]));
+    expect(fake.calls).toEqual(synced([{ kind: 'add', plugin: 'Loose.esp' }]));
   });
 
   it.each<[string, Run]>([
@@ -208,7 +209,7 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
     const { fake, result } = await sync(run);
 
     expect(result).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
-    expect(fake.calls).toEqual(handed([]));
+    expect(fake.calls).toEqual(synced([]));
   });
 
   it.each<[string, string, string, string[]]>([
@@ -232,6 +233,6 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
     const { fake, result } = await sync({ order: ['Base.esp', 'Gone.esp'], provided: ['Base.esp', 'New.esp'], inData: { kind: 'unresolved' } });
 
     expect(result).toEqual({ applied: false, toldAsInstanceState: true });
-    expect(fake.calls).toEqual(handed([]));
+    expect(fake.calls).toEqual(synced([]));
   });
 });
