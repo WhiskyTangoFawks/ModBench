@@ -117,7 +117,9 @@ A plugin that another plugin lists as a dependency. A master loads earlier.
 Avoid: parent plugin (an override's plugin is not its child)
 
 # Source
-Source code: what a build compiles a mod from, in a source mod's repository. The word means nothing else.
+Source code: what a build compiles a mod from, in a source mod's repository.
+
+Avoid: source (for a package, a host, or where a file comes from: each has its own word)
 
 ## Plugin source
 Source that holds a plugin in its deserialized form.
@@ -198,6 +200,6 @@ Where a package is fetched from: a site such as Nexus, a store such as Steam, or
 Avoid: repository (MO2's word for a host), source
 
 # Manifest
-The one file in a mod folder that names its package and where each of the mod's files comes from in it. For a source mod the build writes it.
+The one file in a mod folder that names its package and its host. For a source mod the build writes it.
 
 Avoid: record (a plugin's unit of data), recipe, directives
