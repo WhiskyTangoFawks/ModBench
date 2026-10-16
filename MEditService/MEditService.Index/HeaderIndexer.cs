@@ -24,7 +24,8 @@ internal static class HeaderIndexer
         row.AppendValue(header.Text);
         row.AppendValue(SourceRepository.ContentStamp(header.Text));
         row.AppendNullValue();    // parse_diagnosis: the header is written from what already parsed
-        row.AppendValue(RecordMasters.Of(plugin, header.FormKey, []));
+        row.AppendValue(new List<string>());
+        row.AppendValue(RecordMasters.PluginNamedBy(header.FormKey));
         row.EndRow();
     }
 }

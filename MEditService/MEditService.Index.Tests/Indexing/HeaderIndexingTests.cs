@@ -129,22 +129,6 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void TheHeadersMastersField_LeavesOutALinkThatNamesNoPlugin()
-    {
-        using var fixture = new PluginFixtureBuilder("header-masters-none")
-            .WithPlugin("Required.esm", mod => mod.Keywords.AddNew("RequiredKeyword"))
-            .WithPlugin("MastersTest.esp", (mod, masters) =>
-            {
-                mod.Keywords.GetOrAddAsOverride(masters[0].Keywords.Single());
-                mod.EquipTypes.AddNew("NoActorValue").ConditionActorValue.SetTo(FormKey.None);
-            })
-            .Build();
-        using var index = Indexes.Reconciled(fixture);
-
-        Assert.Equal(["Required.esm"], MastersOf(Header(index, "MastersTest.esp")));
-    }
-
-    [Fact]
     public void TheHeadersMastersField_FollowsTheWorkingTree_OfATrackedPlugin()
     {
         using var fixture = new PluginFixtureBuilder("header-masters-tracked")

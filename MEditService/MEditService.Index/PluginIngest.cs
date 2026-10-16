@@ -166,7 +166,7 @@ internal sealed class PluginIngest
     }
 
     private List<PreparedRecord> Prepared(
-        List<PluginDocument> batch, string plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas, PhaseCounters counters)
+        List<PluginDocument> batch, string pluginFileName, IReadOnlyDictionary<string, RecordTableSchema> schemas, PhaseCounters counters)
     {
         // Per-document work is CPU-bound and independent, so it runs in parallel; only the appender
         // writes stay sequential.
@@ -176,7 +176,7 @@ internal sealed class PluginIngest
         {
             prepared = [.. batch
                 .AsParallel().AsOrdered()
-                .Select(document => PrepareRecord(document, plugin, schemas[document.RecordType]))];
+                .Select(document => PrepareRecord(document, pluginFileName, schemas[document.RecordType]))];
         }
         catch (AggregateException ex) when (ex.InnerExceptions.Count > 0)
         {
@@ -228,7 +228,7 @@ internal sealed class PluginIngest
     }
 
     internal PreparedRecord PrepareRecord(
-        PluginDocument document, string plugin, RecordTableSchema schema, List<ContainerDocuments.ChildDocument>? childDocuments = null)
+        PluginDocument document, string pluginFileName, RecordTableSchema schema, List<ContainerDocuments.ChildDocument>? childDocuments = null)
     {
         var root = Document.Parse(document.Text);
         var editorId = root.EditorId.EditorId;
@@ -272,7 +272,7 @@ internal sealed class PluginIngest
         return new PreparedRecord(
             document.RecordType, document.FormKey, ContainerDocumentEdits.WithChildSlotsCut(document.Text, document.RecordType, _release),
             SourceRepository.ContentStamp(document.Text), refs,
-            RecordMasters.Of(plugin, document.FormKey, refs.Select(r => r.TargetFormKey)), holdings, cellLocations, editorId, document.ParseDiagnosis);
+            RecordMasters.Of(pluginFileName, document.FormKey, refs.Select(r => r.TargetFormKey)), holdings, cellLocations, editorId, document.ParseDiagnosis);
     }
 
     private static void AppendPrepared(
@@ -289,6 +289,7 @@ internal sealed class PluginIngest
         row.AppendValue(prepared.ContentHash);
         row.AppendValue(prepared.ParseDiagnosis);
         row.AppendValue(prepared.Masters);
+        row.AppendValue(RecordMasters.PluginNamedBy(prepared.FormKey));
         row.EndRow();
     }
 

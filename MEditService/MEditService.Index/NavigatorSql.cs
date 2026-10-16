@@ -53,10 +53,10 @@ internal static class NavigatorSql
     /// <summary>A FormID is its filename's active load index, then its ID; a light plugin's take the
     /// FE prefix, so follow every full plugin's. Read off registrations, which land before the
     /// sweep.</summary>
-    internal static string FormIdOrder(string formKey) => $"""
+    internal static string FormIdOrder(string formKeyPlugin, string formKey) => $"""
         (SELECT row(fo.is_light, fo.load_order_idx)
          FROM {TableDdlBuilder.RegistrationsRelation} fo
-         WHERE fo.load_order_idx IS NOT NULL AND fo.plugin = split_part({formKey}, ':', 2)) NULLS LAST,
-        lower(split_part({formKey}, ':', 2)), split_part({formKey}, ':', 1)
+         WHERE fo.load_order_idx IS NOT NULL AND fo.plugin = {formKeyPlugin}) NULLS LAST,
+        lower({formKeyPlugin}), {formKey}
         """;
 }

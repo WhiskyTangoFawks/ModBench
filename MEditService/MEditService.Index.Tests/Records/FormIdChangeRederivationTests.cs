@@ -77,6 +77,19 @@ public sealed class FormIdChangeRederivationTests : IDisposable
     }
 
     [Fact]
+    public void AnEmbeddedNavigationMeshGivenALowerFormId_ListsFirstAmongItsCellsTemporaryChildren()
+    {
+        var cellKey = _mod.EmbedCell;
+        const string newNavmeshKey = "000001:ContainerFixture.esp";
+        var document = Index.DocumentOf(cellKey, _mod.Plugin);
+
+        Index.Edit(_mod.Entry, document, _mod.Entry.SourceTextOf(document)
+            .Replace(EmbeddedNavmeshKeyReadFromTheLiveChildRows, newNavmeshKey, StringComparison.Ordinal));
+
+        Assert.Equal(newNavmeshKey, Index.Queries.GetCellChildRecords(_mod.Plugin, cellKey).Value().Temporary[0].FormKey);
+    }
+
+    [Fact]
     public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_WithoutTheNextSnapshotsValidation_LeavesTheStaleRowInPlace()
     {
         var cellKey = _mod.EmbedCell;

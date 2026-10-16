@@ -210,7 +210,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 body            VARCHAR NOT NULL,
                 content_hash    VARCHAR NOT NULL,
                 parse_diagnosis VARCHAR,
-                masters         VARCHAR[] NOT NULL DEFAULT []
+                masters         VARCHAR[] NOT NULL DEFAULT [],
+                form_key_plugin VARCHAR {FilenameIdentity}
             )
             """);
 
