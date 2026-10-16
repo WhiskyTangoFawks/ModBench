@@ -1634,11 +1634,14 @@ describe('the MO2 Instance adapter', () => {
 
         expect(answer).toEqual({
           kind: 'read',
-          answer: [{ path: join(root, 'downloads', DOWNLOAD), source: 'nexus:fallout4:4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: ENTRY, hash: 'q7ZLRnu1+Os=' }] }],
+          answer: [{ path: join(root, 'downloads', DOWNLOAD), source: 'https://www.nexusmods.com/fallout4/mods/4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: ENTRY, hash: 'q7ZLRnu1+Os=' }] }],
         });
       });
 
-      describe('where the metadata says the file comes from', () => {
+      describe('its page on its host', () => {
+        const NEXUS = 'https://www.nexusmods.com/';
+        const FALLOUT_FILE = NEXUS + 'fallout4/mods/4598?tab=files&file_id=77';
+        const SKYRIM_FILE = NEXUS + 'skyrimspecialedition/mods/4598?tab=files&file_id=77';
         const FILES = '\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\n2\\modid=9\r\n2\\fileid=78\r\nsize=2\r\n';
         const sourceOf = async (general: string, installedFiles = ''): Promise<string | undefined> => {
           await writeFile(
@@ -1648,7 +1651,7 @@ describe('the MO2 Instance adapter', () => {
           return answer.kind === 'read' ? answer.answer[0]?.source : undefined;
         };
 
-        it('names no source for a game the registry has no Nexus domain for, and says which game', async () => {
+        it('names no page for a game the registry has no Nexus domain for, and says which game', async () => {
           await writeFile(
             join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\ngameName=EnderalSE\r\nmodid=4598\r\ninstallationFile=${DOWNLOAD}\r\n`,
           );
@@ -1656,16 +1659,17 @@ describe('the MO2 Instance adapter', () => {
           const answer = await adapter.installationFiles('Unofficial Fallout 4 Patch');
 
           const file = answer.kind === 'read' ? answer.answer[0] : undefined;
-          expect([file?.source, file?.unsourcedGame]).toEqual([undefined, 'EnderalSE']);
+          expect([file?.source, file?.unpagedGame]).toEqual([undefined, 'EnderalSE']);
         });
 
         it.each([
-          ['names the Nexus domain of MO2\'s short name for the game, the mod and each file installed', 'gameName=SkyrimSE\r\nmodid=4598\r\n', FILES, 'nexus:skyrimspecialedition:4598;4598:77;9:78'],
-          ['keeps the mod id when files are recorded', 'gameName=Fallout4\r\nmodid=4598\r\n', FILES, 'nexus:fallout4:4598;4598:77;9:78'],
-          ['keeps the files of a mod whose id is blank', 'gameName=Fallout4\r\n', FILES, 'nexus:fallout4:;4598:77;9:78'],
-          ['names the mod when no file is recorded', 'gameName=Fallout4\r\nmodid=4598\r\n', '', 'nexus:fallout4:4598'],
-          ['takes the instance\'s game for a mod with none, as MO2 does', 'modid=4598\r\n', '', 'nexus:fallout4:4598'],
-          ['reads the game as the instance\'s settings spell it', 'gameName=Fallout 4\r\nmodid=4598\r\n', '', 'nexus:fallout4:4598'],
+          ['names the file of the mod installed, on the Nexus domain of MO2\'s short name for the game', 'gameName=SkyrimSE\r\nmodid=4598\r\n', FILES, SKYRIM_FILE],
+          ['names the first file installed from the mod when others are recorded', 'gameName=Fallout4\r\nmodid=4598\r\n', FILES, FALLOUT_FILE],
+          ['names the first file installed when none is from the mod', 'gameName=Fallout4\r\nmodid=3\r\n', FILES, FALLOUT_FILE],
+          ['takes the mod of the file for a mod whose id is blank', 'gameName=Fallout4\r\n', FILES, FALLOUT_FILE],
+          ['names the mod when no file is recorded', 'gameName=Fallout4\r\nmodid=4598\r\n', '', NEXUS + 'fallout4/mods/4598'],
+          ['takes the instance\'s game for a mod with none, as MO2 does', 'modid=4598\r\n', '', NEXUS + 'fallout4/mods/4598'],
+          ['reads the game as the instance\'s settings spell it', 'gameName=Fallout 4\r\nmodid=4598\r\n', '', NEXUS + 'fallout4/mods/4598'],
           ['names nothing for a mod with no Nexus id', 'gameName=Fallout4\r\n', '', undefined],
           ['names nothing for MO2\'s default id', 'gameName=Fallout4\r\nmodid=-1\r\n', '', undefined],
         ])('%s', async (_name, general, installedFiles, expected) => {
@@ -1677,7 +1681,7 @@ describe('the MO2 Instance adapter', () => {
         const read = (answer: unknown): unknown => ({ kind: 'read', answer });
         const PATCH = 'Unofficial Fallout 4 Patch';
         const metaOf = (mod: string): string => join(root, 'mods', mod, 'meta.ini');
-        const NEXUS = 'nexus:fallout4:4598;4598:77';
+        const PAGE = 'https://www.nexusmods.com/fallout4/mods/4598?tab=files&file_id=77';
         const CHROME = 'comments=mine\r\ncolor=@Variant(\\0\\0\\0\\x43\\x1\\xff\\xff\\0\\0\\0\\0\\0\\0\\0\\0)\r\n';
         const patchMeta = (general: string): Promise<void> => writeFile(metaOf(PATCH), `[General]\r\ngameName=Fallout4\r\nmodid=4598\r\nversion=2.1.5.0\r\n${CHROME}${general}`);
         const mo2Written = (version: string): string =>
@@ -1690,13 +1694,13 @@ describe('the MO2 Instance adapter', () => {
         it('answers the version, and each installation file by its name with where it comes from', async () => {
           await patchMeta(`installationFile=${DOWNLOAD}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
 
-          expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFiles: [{ name: DOWNLOAD, source: NEXUS }] }));
+          expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFiles: [{ name: DOWNLOAD, source: PAGE }] }));
         });
 
         it('names an installation file recorded by its whole path by its name', async () => {
           await patchMeta('installationFile=/elsewhere/Patch.7z\r\n');
 
-          expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFiles: [{ name: 'Patch.7z', source: 'nexus:fallout4:4598' }] }));
+          expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFiles: [{ name: 'Patch.7z', source: 'https://www.nexusmods.com/fallout4/mods/4598' }] }));
         });
 
         it('answers none for a mod with no metadata', async () => {
@@ -1714,7 +1718,7 @@ describe('the MO2 Instance adapter', () => {
           await patchMeta('');
 
           await adapter.writeModMetadata(PATCH, {
-            version: '3.0', installationFiles: [{ name: 'Patch-3.7z', source: 'nexus:skyrimspecialedition:12;12:99' }],
+            version: '3.0', installationFiles: [{ name: 'Patch-3.7z', source: 'https://www.nexusmods.com/skyrimspecialedition/mods/12?tab=files&file_id=99' }],
           });
 
           const text = await readFile(metaOf(PATCH), 'utf8');
@@ -1728,7 +1732,7 @@ describe('the MO2 Instance adapter', () => {
 
         it.each([
           ['no version and the installation file it holds', { installationFiles: [{ name: DOWNLOAD }] }],
-          ['a source it holds no id for', { installationFiles: [{ name: DOWNLOAD, source: 'nexus:fallout4:' }] }],
+          ['a source it holds no id for', { installationFiles: [{ name: DOWNLOAD, source: 'https://www.nexusmods.com/fallout4/mods/0' }] }],
           ['the file it holds among others', { installationFiles: [{ name: 'Other.7z' }, { name: DOWNLOAD }] }],
         ])('leaves metadata MO2 wrote byte for byte when the manifest says %s', async (_name, metadata) => {
           const held = await holding(mo2Written(''));
@@ -1746,6 +1750,14 @@ describe('the MO2 Instance adapter', () => {
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
         });
 
+        it('leaves metadata byte for byte when the manifest names the file the metadata names among several', async () => {
+          const held = await holding(`[General]\r\ngameName=Fallout4\r\nmodid=4598\r\ninstallationFile=${DOWNLOAD}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\n2\\modid=4598\r\n2\\fileid=78\r\nsize=2\r\n`);
+
+          await adapter.writeModMetadata(PATCH, { installationFiles: [{ name: DOWNLOAD, source: PAGE }] });
+
+          expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
+        });
+
         it('changes only the value that differs', async () => {
           const held = await holding(mo2Written('1.0'));
 
@@ -1759,10 +1771,10 @@ describe('the MO2 Instance adapter', () => {
 
           await adapter.writeModMetadata(PATCH, { installationFiles: [{ name: DOWNLOAD }] });
 
-          expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFiles: [{ name: DOWNLOAD, source: 'nexus:fallout4:4598' }] }));
+          expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFiles: [{ name: DOWNLOAD, source: 'https://www.nexusmods.com/fallout4/mods/4598' }] }));
         });
 
-        it('gives a file the manifest names another name no source of the file it replaces, and keeps every other key', async () => {
+        it('gives a file the manifest names another name no page of the file it replaces, and keeps every other key', async () => {
           await patchMeta(`installationFile=${DOWNLOAD}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
 
           await adapter.writeModMetadata(PATCH, { installationFiles: [{ name: 'Patch-3.7z' }] });
@@ -1775,7 +1787,7 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(root, INI), (await readFile(join(root, INI), 'utf8')).replace(/gameName=.*/, 'gameName=Fallout 4 VR'));
           await holding(`[General]\r\ngameName=SkyrimSE\r\n`);
 
-          await adapter.writeModMetadata(PATCH, { installationFiles: [{ name: 'P.7z', source: 'nexus:fallout4:1' }] });
+          await adapter.writeModMetadata(PATCH, { installationFiles: [{ name: 'P.7z', source: 'https://www.nexusmods.com/fallout4/mods/1' }] });
 
           expect(await readFile(metaOf(PATCH), 'utf8')).toContain('gameName=Fallout 4 VR');
         });
@@ -1793,9 +1805,9 @@ describe('the MO2 Instance adapter', () => {
         });
 
         it.each([
-          ['a Nexus domain with no game', 'nexus:nowhere:1', 'nowhere'],
-          ['a source that is not a Nexus one', 'gitlab:a/b', 'gitlab:a/b'],
-        ])('cannot write a source naming %s, says why, and writes nothing', async (_name, source, mentioned) => {
+          ['a Nexus domain with no game', 'https://www.nexusmods.com/nowhere/mods/1', 'nowhere'],
+          ['a source that is not a Nexus one', 'https://gitlab.com/a/b', 'https://gitlab.com/a/b'],
+        ])('cannot write a page naming %s, says why, and writes nothing', async (_name, source, mentioned) => {
           const held = await holding(mo2Written('1.0'));
           const metadata = { version: '9', installationFiles: [{ name: 'P.7z', source }] };
 
@@ -1805,12 +1817,12 @@ describe('the MO2 Instance adapter', () => {
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
         });
 
-        it('can write a source naming a game the tables hold', async () => {
-          expect(await adapter.unwritableMetadata(PATCH, { installationFiles: [{ name: 'P.7z', source: 'nexus:fallout4:1' }] })).toBeUndefined();
+        it('can write a page naming a game the tables hold', async () => {
+          expect(await adapter.unwritableMetadata(PATCH, { installationFiles: [{ name: 'P.7z', source: 'https://www.nexusmods.com/fallout4/mods/1' }] })).toBeUndefined();
         });
 
         it('reads back as what it was handed', async () => {
-          const written = { version: '3.0', installationFiles: [{ name: 'Patch-3.7z', source: 'nexus:newvegas:5;5:6;7:8' }] };
+          const written = { version: '3.0', installationFiles: [{ name: 'Patch-3.7z', source: 'https://www.nexusmods.com/newvegas/mods/5?tab=files&file_id=6' }] };
 
           await adapter.writeModMetadata('Brand New', written);
 
