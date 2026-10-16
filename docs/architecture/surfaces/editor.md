@@ -22,11 +22,11 @@ As a user, I want:
 2. Open, from a row's menu, to open the record pinned in the editor group I am in, so later clicks leave it alone. This is an exception to VS Code's Explorer, which pins on a double click: an extension's tree receives none. Source: catalog `open`
 3. A file already open in a tab to be shown, not opened twice. Source: VS Code
 4. Several records opened at once to open one grid: the first record's file, with the others as its columns. Source: catalog `open`; xEdit Compare Selected
-5. The tab titled with the file's name, as any file is. The file is named by the record's EditorID, so the title carries it. A child record has no file of its own, so its tab, in a source plugin or not, is titled with its EditorID, or its FormKey when it has none. Source: ADR-0001; ADR-0020; plugin-source.md, The tree, story 1; ruling
+5. The tab titled with the file's name, as any file is. The file is named by the record's EditorID, so the title carries it. A child record has no file of its own, so its tab, in a compiled plugin or not, is titled with its EditorID, or its FormKey when it has none. Source: ADR-0001; ADR-0020; plugin-source.md, The tree, story 1; ruling
 6. Open from the palette, with no record given, to ask for one by EditorID, FormID or FormKey. Source: catalog `open`
 7. A tab I leave and come back to to be as I left it: the rows I expanded, the columns I collapsed, the focused cell and the scroll. Source: VS Code keeps a tab's place
 8. A record given without a plugin, from the palette, Referenced By or Go to record, to open the winning copy's file. Source: xEdit lands on the winning copy
-9. An unsource plugin's copy, or the copy of a plugin whose plugin source is unreadable, to open as a document mEdit renders from the plugin, read-only. It is not a file, so the file features above do not reach it. Source: ADR-0007; ADR-0001
+9. The copy of a plugin with no plugin source, or with an unreadable one, to open as a document mEdit renders from the plugin, read-only. It is not a file, so the file features above do not reach it. Source: ADR-0007; ADR-0001
 10. A child record, such as a placed reference, to open in a tab of its own, though it shares its cell's file. A change in either tab shows in both. A container's tab shows its own fields, never its child lists. Source: plugin-source.md, The tree, story 3; ruling
 11. A group's metadata file in plugin source to open in the text editor, as any JSON file does. Source: ADR-0001; Existing tools
 12. Records of different record types opened at once to open one grid too. Source: xedit.md, divergence 31
@@ -53,7 +53,7 @@ As a user, I want:
 5. Each column sized to fit, and its edge to drag to resize it.
 6. The grid to scroll sideways from a scrollbar that stays at the bottom of the panel at every vertical position.
 7. Opened on several records, one column for each, in the order I selected them, the first as the file. Source: xEdit Compare Selected; editor-conflicts.md, What takes part, story 6
-8. A click on a column's header to open that column's file, or its rendered document when the plugin is not a source plugin or its plugin source is unreadable, with the same columns, as a click opens a file in VS Code's Explorer: in the preview tab. Source: xEdit edits any column in one window; VS Code's preview editors
+8. A click on a column's header to open that column's file, or its rendered document when the plugin is not a compiled plugin or its plugin source is unreadable, with the same columns, as a click opens a file in VS Code's Explorer: in the preview tab. Source: xEdit edits any column in one window; VS Code's preview editors
 
 ### A column's header
 
@@ -70,11 +70,11 @@ As a user, I want:
 | `(overridden)` | another mod's file of the same name overrides the plugin | that the game loads that mod's file instead, naming the mod | CONTEXT.md, Overridden plugin |
 | `(not active)` | the plugin is disabled, or in a disabled mod | that the game does not load it, so no other copy is compared | ADR-0012 |
 | `(read-only)` | the game folder provides the plugin | that the game's plugins are not edited | ruling |
-| `(in Overwrite)` | the plugin is in Overwrite | that Overwrite is not a mod, and a plugin moved into a mod can become a source plugin | ruling |
-| `(no source)` | the plugin is not a source plugin | that Decompile and commit, in this header's menu, makes it editable | ADR-0007 |
-| `(plugin source unreadable)` | the plugin is a source plugin, and its plugin source is missing or cannot be read | why, and that decompile, in this header's menu, makes it editable | Never silently wrong |
+| `(in Overwrite)` | the plugin is in Overwrite | that Overwrite is not a mod, and a plugin moved into a mod can become a compiled plugin | ruling |
+| `(no source)` | the plugin is not a compiled plugin | that Decompile and commit, in this header's menu, makes it editable | ADR-0007 |
+| `(plugin source unreadable)` | the plugin is a compiled plugin, and its plugin source is missing or cannot be read | why, and that decompile, in this header's menu, makes it editable | Never silently wrong |
 | `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that the game ignores this copy's own fields | xEdit; [editor-fields.md](editor-fields.md) |
-| `(source)` | the plugin is a source plugin | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007 |
+| `(source)` | the plugin is a compiled plugin | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007 |
 
 A column shows one status, the first in this table that applies. A Partial Form or overridden column is dimmed, header and cells alike, so it reads as outside the conflict after the header scrolls away.
 
@@ -132,7 +132,7 @@ The row menus follow VS Code's groups: open, change, source control, copy, then 
 | Where | Items, in order |
 |---|---|
 | Cell | go to record (on a FormLink that resolves) · open field value (on a text field) · add (on an array, or an element of one) · remove (on an element) · move up · move down (on an element) · copy value |
-| Column header | referenced by · decompile and commit (a mod with no source) · decompile (in a source mod) · build (in a source mod) · copy… · delete (a source plugin) |
+| Column header | referenced by · decompile and commit (a mod with no source) · decompile (in a source mod) · build (in a source mod) · copy… · delete (a compiled plugin) |
 | Keys, on the focused cell | F2: edit. Ctrl+C: copy value. Ctrl+X: cut. Ctrl+V: paste. Delete: remove, or clear. Alt+Up, Alt+Down: move. |
 
 As a user, I want:

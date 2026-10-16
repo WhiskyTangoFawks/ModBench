@@ -20,7 +20,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. My agent to name an object as the views show it: a plugin by its file name, a mod or a separator by its name, a record by its EditorID or FormKey, a downloaded file by its file name, an archive or a folder outside my downloads by its path, and a file in a mod by its path in the mod.
+1. My agent to name an object as the views show it: a plugin by its file name, a mod or a separator by its name, a record by its EditorID or FormKey, a downloaded file by its file name, a file or a folder outside my downloads by its path, and a file in a mod by its path in the mod.
 2. A name that means more than one thing to be refused, and the refusal to list each match as my agent can name it: a plugin with its origin, a mod or a separator with which of the two it is. Nothing is picked for my agent; it names the one it means as the refusal lists it. Source: ADR-0012; Never silently wrong
 3. My agent to name several objects in one request, as my selection does. Source: common, A view, story 6
 
@@ -28,10 +28,10 @@ As a user, I want:
 
 As a user, I want:
 
-1. My agent to read any record in my load order, in a source plugin or not: each plugin's copy, and the copy that wins. Source: editor.md; editor-conflicts.md
+1. My agent to read any record in my load order, in a compiled plugin or not: each plugin's copy, and the copy that wins. Source: editor.md; editor-conflicts.md
 2. My agent to find a record by its EditorID or FormKey, and the records that reference it. Source: plugin-source.md, In the text editor, stories 2 and 4
 3. My agent to query the index with one SQL SELECT, and to get back the rows it selects, as scripts.md, Reading, story 6 says. Source: catalog, Record, `filter`
-4. My agent to edit a source plugin by editing its source, so each edit is a working-tree change I review, commit or discard in Source Control. Source: ADR-0007
+4. My agent to edit a compiled plugin by editing its source, so each edit is a working-tree change I review, commit or discard in Source Control. Source: ADR-0007
 5. My agent to see the problems I see in the Problems panel for the source it changed. Source: plugin-source.md, In the text editor, story 6
 6. My agent never to edit a plugin with no source. Editing needs a source, for my agent as for me. Source: ADR-0007
 7. My agent to open a record in an editor tab, to show me what it found. Source: catalog, Record, `open`

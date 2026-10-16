@@ -1,11 +1,11 @@
 # Plugin edits are git working-tree changes
 
-Plugin edits are git working-tree changes. A source mod's source ([ADR-0006](0006-a-source-plugins-truth-is-its-source.md)) lives in a repository of its own, in a source folder beside `mods/`: the plugin source, the mod's own assets, and its build configuration, which names the output folder. The mod folder is the build's output and nothing else.
+Plugin edits are git working-tree changes. A source mod's source ([ADR-0006](0006-a-compiled-plugins-truth-is-its-plugin-source.md)) lives in a repository of its own, in a source folder beside `mods/`: the plugin source, the mod's own assets, and its build configuration, which names the output folder. The mod folder is the build's output and nothing else.
 
 ## Consequences
 
 - The instance repository tracks files in `mods/` in place, which a nested repository would forbid.
-- Editing requires a source; viewing never does. A plugin with no source is read-only. The friction is deliberate: someone else's plugin is edited as a vendored mod, with upstream on `main` and the user's edits on a branch.
+- Editing requires a source; viewing never does. A plugin with no source is read-only. The friction is deliberate: someone else's plugin is edited as a vendored mod, with the author's releases on `main` and the user's edits on a branch.
 
 ## Alternatives rejected
 

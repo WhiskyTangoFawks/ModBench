@@ -29,7 +29,7 @@ Reviewed in October 2026. Mutagen's serialization could write a list one file pe
 
 ### Each child in a file of its own, with a position key in its own document
 
-An integer key moves the numbering from the file name into the document: an insert rewrites every later sibling's document. A key between its neighbours, such as a fraction, lets an insert touch one file. But a decompile reads only the plugin and assigns fresh keys, so the decompile of a new upstream version rewrites every key after the first insert.
+An integer key moves the numbering from the file name into the document: an insert rewrites every later sibling's document. A key between its neighbours, such as a fraction, lets an insert touch one file. But a decompile reads only the plugin and assigns fresh keys, so the decompile of the author's new release rewrites every key after the first insert.
 
 ### Each child in a file of its own, with a pointer to its previous sibling
 

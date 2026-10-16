@@ -45,8 +45,8 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 | Failed to read | mEdit could not read it | `$(error)` red | failed to read |
 | Master issues | it is active, and a master in its header is not (xedit.md, divergence 28); once the snapshot is indexed | `$(error)` red | 1 master issue, N master issues |
 | Unreadable records | a record could not be read into its document | `$(error)` red | unreadable records |
-| Plugin source unreadable | it is a source plugin, and its plugin source is missing or cannot be read | `$(warning)` yellow | plugin source unreadable |
-| Changed outside Modbench | it is a source plugin, and its bytes differ from what Modbench last wrote, or either cannot be read | `$(warning)` yellow | changed outside Modbench |
+| Plugin source unreadable | it is a compiled plugin, and its plugin source is missing or cannot be read | `$(warning)` yellow | plugin source unreadable |
+| Changed outside Modbench | it is a compiled plugin, and its bytes differ from what Modbench last wrote, or either cannot be read | `$(warning)` yellow | changed outside Modbench |
 | Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
 
 - A master issue never disables the plugin or cascades to its dependants. The check box stays as I set it. Source: xedit.md, divergence 28
@@ -131,7 +131,7 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open · referenced by · create record… (on a container record) · copy… · copy value · delete |
 | Check box | enable or disable |
-| Keys | Space: enable or disable. Enter: open, as a click does. F2: rename a source plugin. Delete: delete records. Ctrl+C: copy value. |
+| Keys | Space: enable or disable. Enter: open, as a click does. F2: rename a compiled plugin. Delete: delete records. Ctrl+C: copy value. |
 
 As a user, I want:
 
@@ -170,7 +170,7 @@ As a user, I want:
 As a user, I want:
 
 1. No prompt. While it runs, the view's message line names the mod and the phase. Source: catalog `decompile and commit`
-2. The repository to track `plugin-source/`, the mod's assets, the build configuration and `.gitignore`, and nothing else. The assets are the files no installation file yields. Source: ADR-0007
+2. The repository to track `plugin-source/`, the mod's assets, the build configuration and `.gitignore`, and nothing else. The assets are every other file of the mod. Source: ADR-0007; ADR-0023
 3. One commit, `Init <mod>`, holding the source of every plugin the mod provides, the assets and the build configuration.
 4. Each file's line endings kept as written.
 5. An init that refuses any plugin to write nothing and leave no repository, naming each refused plugin and why.

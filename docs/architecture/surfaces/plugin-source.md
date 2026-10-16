@@ -1,6 +1,6 @@
 # Plugin source
 
-The plugin source is a source plugin's text, and compile builds the plugin from it ([ADR-0006](../../adr/0006-a-source-plugins-truth-is-its-source.md)). Decompile and commit, and decompile, write it into the mod's repository, in the source folder beside `mods/`, under `plugin-source/`, and I read, diff and edit it as I would any source code. Its layout is Modbench's schema: Mutagen's serialization gives the structure, and Modbench changes it in the few places the stories below need. Mutagen decides what a record holds; Modbench decides where the text departs from Mutagen's, and nothing else does. Neither xEdit nor MO2 has a source, so every story is owned here.
+The plugin source is a compiled plugin's text, and compile builds the plugin from it ([ADR-0006](../../adr/0006-a-compiled-plugins-truth-is-its-plugin-source.md)). Decompile and commit, and decompile, write it into the mod's repository, in the source folder beside `mods/`, under `plugin-source/`, and I read, diff and edit it as I would any source code. Its layout is Modbench's schema: Mutagen's serialization gives the structure, and Modbench changes it in the few places the stories below need. Mutagen decides what a record holds; Modbench decides where the text departs from Mutagen's, and nothing else does. Neither xEdit nor MO2 has a source, so every story is owned here.
 
 ## The tree
 
@@ -18,7 +18,7 @@ As a user, I want:
 1. To decompile any plugin in my modlist, whatever tool wrote it and however it bends convention.
 2. To trust the source: it says what the plugin means, and compiling it unchanged gives a plugin that means the same, though its bytes may differ. Source: ADR-0006
 3. To be told when a plugin cannot become source without losing meaning, and never to get a source that quietly lost it. The refusal names the record, and says whether the plugin is malformed or Mutagen mishandles it, because the remedy differs. Source: Never silently wrong; CONTEXT.md, Malformed plugin
-4. To take a new upstream version into my edits myself: decompile it onto the mod's `main`, then merge my branch with git, where each conflict lands in one record's file. Source: ADR-0007
+4. To take the author's new release into my edits myself: decompile it onto the mod's `main`, then merge my branch with git, where each conflict lands in one record's file. Source: ADR-0007
 
 ## Changes outside Modbench
 
@@ -37,8 +37,8 @@ As a user, I want:
 1. Go to Definition on a FormKey to open the record, as Opening in [editor.md](editor.md) opens a record given without a plugin. Source: VS Code; xEdit Ctrl + click
 2. Find All References on a FormKey to list every record that references it, one entry for each plugin's copy, in the peek and in the References view. Source: VS Code; [editor-referenced-by.md](editor-referenced-by.md), The tree, stories 1, 2 and 4
 3. Hovering a FormKey to show `EditorID [FormKey]`, the record type, and the plugin whose copy wins. Source: xedit.md, divergence 10
-4. Go to Symbol in Workspace to find a record by EditorID or FormKey across every source plugin, and to open it. Source: VS Code; catalog `open` with no Argument
+4. Go to Symbol in Workspace to find a record by EditorID or FormKey across every compiled plugin, and to open it. Source: VS Code; catalog `open` with no Argument
 5. Completion inside a reference field to offer records by EditorID and insert the FormKey, and inside an enum field to offer its values. Source: VS Code; ADR-0005
-6. The Problems panel to carry, on the file of every source plugin, active or not, each refusal and warning compile would give that file, and a reference to a record that neither its plugin nor an active plugin holds. A problem appears as I type and clears the same way, since the index reads the unsaved document (ADR-0001). When mEdit cannot answer, the problems stay, and the language status says "Showing the last good read:" and the reason, with one line in the Output. No notification. The next good answer clears it. Source: Changes outside Modbench, stories 2 and 3; ADR-0015; ADR-0012; common, States, story 6; ADR-0019; VS Code's language status
+6. The Problems panel to carry, on the plugin source of every compiled plugin, active or not, each refusal and warning compile would give that file, and a reference to a record that neither its plugin nor an active plugin holds. A problem appears as I type and clears the same way, since the index reads the unsaved document (ADR-0001). When mEdit cannot answer, the problems stay, and the language status says "Showing the last good read:" and the reason, with one line in the Output. No notification. The next good answer clears it. Source: Changes outside Modbench, stories 2 and 3; ADR-0015; ADR-0012; common, States, story 6; ADR-0019; VS Code's language status
 7. Rename Symbol and the quick fixes to offer nothing on plugin source: changing a FormKey is editing the FormID field, and updating the references is a script. Source: xedit.md, divergence 9
 8. A language feature that fails to answer as any language server's feature does: with what it found, and a line in the Output for each reason. Source: VS Code; ADR-0019

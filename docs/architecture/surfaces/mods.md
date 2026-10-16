@@ -47,7 +47,7 @@ As a user, I want:
 |---|---|---|
 | Label | the separator's name, without MO2's `_separator` suffix | MO2 |
 | Check box, icon | none | MO2 draws a separator as a heading |
-| Description | no manifest, when it has none ([modlist-source.md](modlist-source.md), Status, story 7) | |
+| Description | its status against its manifest ([modlist-source.md](modlist-source.md), Status, story 7) | |
 | Identity | the row's kind and the separator's name | |
 
 ### Overwrite
@@ -144,7 +144,7 @@ As a user, I want:
 3. A drop on a separator to make the mods I dragged its first mods, as shown. A separator dropped on a separator lands directly above it, as shown.
 4. A drop below the last row to place what I dragged at the bottom of the view, as shown, above Overwrite when Overwrite is last.
 5. A drop where what I dragged cannot go to change nothing and say nothing: on Overwrite, on a row I am dragging, inside a separator I am dragging, or a separator on a mod. Source: MO2 refuses a separator on a mod; Doing nothing is not an error
-6. Nothing from outside the view to drop here: no archive, folder, file or downloaded file. Source: mo2.md
+6. Nothing from outside the view to drop here: no folder, file or downloaded file. Source: mo2.md
 7. Files and folders not to drag, and nothing to drop on them.
 
 ## Pickers, prompts and confirmations
@@ -181,7 +181,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. Build to write the mod folder from the source, without asking: the base is what the installation files provide, the source's assets override it, each plugin compiles from its plugin source, and the manifest is written last. A source plugin's source is the truth, and build makes the folder from it. Source: catalog `build`; ADR-0006; ADR-0007
+1. Build to write the mod folder from its repository alone, without asking: the source's assets copied, each plugin compiled from its plugin source, and the manifest written last. A compiled plugin's source is the truth, and build makes the folder from it. Source: catalog `build`; ADR-0006; ADR-0007; ADR-0023
 2. The build configuration in the source to name the output folder and, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
 3. A file in the folder the build did not make left where it is, and the mod shown as differing from its manifest. Restore from manifest removes it. Source: ADR-0022
 4. A build whose configuration names an output folder that is not this mod's folder refused, naming both, so a folder renamed outside Modbench is never overwritten. Source: ADR-0003
@@ -201,8 +201,8 @@ As a user, I want one confirmation for the selection that says the mods stay. So
 As a user, I want:
 
 1. A prompt for the name. A name a mod already has is refused in the prompt, before anything is written, with one wording for create and install. Esc creates nothing. Source: MO2
-2. Install from the Mods menu to ask first for an archive or a folder, then open a file picker or a folder picker. Source: catalog `install`, Argument: an archive or a folder
-3. The name prompt filled with the archive's name without its extension, or the folder's name. Source: MO2
+2. Install from the Mods menu to ask first for a file or a folder, then open a file picker or a folder picker. Source: catalog `install`, Argument: a file or a folder
+3. The name prompt filled with the file's name without its extension, or the folder's name. Source: MO2
 
 ### What install does
 
