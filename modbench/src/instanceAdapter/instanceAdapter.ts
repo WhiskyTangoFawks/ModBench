@@ -278,6 +278,11 @@ export interface SourceMods {
   readonly notes: readonly string[];
 }
 
+/** Why one source mod is not as a submodule would be. */
+export interface SubmoduleNote { readonly mod: string; readonly note: string }
+
+interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly other: readonly string[] }
+
 /** Whether the game gets a file of a mod or of Overwrite. */
 export type OriginFileMark = 'Excluded' | 'Included';
 
@@ -464,6 +469,19 @@ export interface InstanceAdapter {
   writeIgnoreList(): Promise<void>;
   /** Takes back the ignore list `writeIgnoreList` wrote. */
   removeIgnoreList(): Promise<void>;
+  /** Makes each source mod with a remote a submodule: its entry in `.gitmodules` and its line in the ignore list. A source mod
+   *  it cannot read keeps the entry and line it has. */
+  writeSubmodules(): Promise<SubmoduleReport>;
+  /** Whether the instance folder holds a repository now, read from disk. */
+  repositoryOnDisk(): Promise<boolean>;
+  /** Takes back the repository `git init` made. Rejects, removing nothing, when it holds a commit or a ref. */
+  removeRepository(): Promise<void>;
+  /** Rejects, naming it, when `core.hooksPath` points outside the git directory, or a pre-push hook is where
+   *  `refuseUnpublishedPins` would write one. */
+  checkPushRefusalFree(): Promise<void>;
+  /** Makes the instance repository refuse a push of a pin that is on none of its source mod's remotes. Rejects, writing
+   *  nothing, when a pre-push hook is there. */
+  refuseUnpublishedPins(): Promise<void>;
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** An origin file's size and hash at the path it is read from, remembered for this session alone: its lasting hash

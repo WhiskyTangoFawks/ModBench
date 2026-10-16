@@ -14,6 +14,7 @@ import { mo2OriginFiles } from './mo2OriginFiles';
 import type { Mo2Context } from './mo2Context';
 import { mo2Landing } from './mo2Landing';
 import { mo2Repository } from './mo2Repository';
+import { mo2Submodules } from './mo2Submodules';
 import { mo2PluginRename } from './mo2PluginRename';
 import { mo2Installation } from './mo2Installation';
 import { mo2Reads, readingSource, readInstance } from './mo2Reads';
@@ -57,7 +58,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter
     names,
     reading: () => readInstance(source),
     activeProfile: async () => (await source.settings()).profile,
-    ...mo2Reads(context), ...mo2Installation(context, hashes, source), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives), ...mo2Repository(context, hashes),
+    ...mo2Reads(context), ...mo2Installation(context, hashes, source), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives), ...mo2Repository(context, hashes), ...mo2Submodules(context),
     originFileHash: hashes.originFileHash,
     statCacheFolder: statCacheDir(instanceRoot),
     subscribe: (listener) => context.watch.subscribe(listener),

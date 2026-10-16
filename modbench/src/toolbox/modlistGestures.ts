@@ -175,7 +175,7 @@ async function updateManifestForAgent(
   return {
     applied: true,
     outcome: { landed: outcome.landed, refused: outcome.refused },
-    partial: warned('Update manifest:', [...unprovided, ...notesOf(label, result.notes), ...statCacheNotWritten(outcome.landed)]),
+    partial: warned('Update manifest:', [...unprovided, ...notesOf(label, result.notes), ...result.submoduleNotes, ...statCacheNotWritten(outcome.landed)]),
   };
 }
 
@@ -203,7 +203,7 @@ function reportUpdated(reporter: Reporter, label: Label, outcome: Omit<Extract<U
   const unchanged = outcome.landed.length - updated;
   const line = `Update manifest: ${unchanged} mod${unchanged === 1 ? '' : 's'} unchanged, ${updated} updated, `
     + `${outcome.refused.length} refused; ${counted(unprovided.length, 'file has', 'files have')} no provider.`;
-  const warnings = [...unprovided, ...notesOf(label, outcome.notes), ...statCacheNotWritten(outcome.landed)];
+  const warnings = [...unprovided, ...notesOf(label, outcome.notes), ...outcome.submoduleNotes, ...statCacheNotWritten(outcome.landed)];
   const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...warnings].join('\n');
   if (outcome.refused.length > 0) reporter.report('error', line, detail);
   else if (warnings.length > 0) reporter.report('warning', line, detail);
