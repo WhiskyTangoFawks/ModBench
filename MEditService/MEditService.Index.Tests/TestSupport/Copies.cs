@@ -10,8 +10,8 @@ internal static class Copies
     /// when the plugin holds none.</summary>
     internal static RecordDetail? CopyIn(this OpenedIndex index, string formKey, PluginAddress plugin)
     {
-        var compared = index.Queries.GetCompareRecords([new RecordCopy(formKey, plugin)]);
-        return compared.Value().Compare?.Overrides.Single();
+        var answer = index.Queries.GetCompareRecords([new RecordCopy(formKey, plugin)]).Value();
+        return (answer as CompareRecordsAnswer.Compared)?.Compare.Overrides.Single();
     }
 
     internal static RecordDetail DocumentOf(this OpenedIndex index, string formKey, PluginAddress plugin) =>

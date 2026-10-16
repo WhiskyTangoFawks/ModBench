@@ -3,7 +3,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Resolution;
 
@@ -30,25 +29,8 @@ internal sealed class RequiredMasters(PluginAddress plugin)
 
     internal void Add(PluginDocument document, RecordTableSchema schema)
     {
-        // An override carries another plugin's FormKey, which needs that plugin as a master
-        // whether or not the record references anything.
-        Require(document.FormKey);
-
-        foreach (var target in FormReferences.Collect(document.Text, schema.RecordColumns).Select(reference => reference.TargetFormKey))
-        {
-            _links.Add(target);
-            Require(target);
-        }
-    }
-
-    // The plugin half of a FormKey, which is how a reference names the master it needs. Mutagen's
-    // own parser, not a split on the colon: a FormKey's spelling is its definition.
-    internal static string? PluginNameIn(string formKey) =>
-        FormKey.TryFactory(formKey, out var parsed) ? parsed.ModKey.FileName.String : null;
-
-    private void Require(string formKey)
-    {
-        if (PluginNameIn(formKey) is { } master && !master.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
-            _masters.Add(master);
+        var links = FormReferences.Collect(document.Text, schema.RecordColumns).ConvertAll(reference => reference.TargetFormKey);
+        _links.UnionWith(links);
+        _masters.UnionWith(RecordMasters.Of(plugin.Name, document.FormKey, links));
     }
 }

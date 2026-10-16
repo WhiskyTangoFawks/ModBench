@@ -145,7 +145,7 @@ internal sealed class RelationReads(
 
         // xEdit's navigator lists a group in FormID order, and its record picker lists by EditorID.
         // (plugin, origin) makes either order total, so LIMIT/OFFSET pages stably.
-        var order = query.GroupOnly ? NavigatorSql.FormIdOrder("form_key") : "editor_id, form_key";
+        var order = query.GroupOnly ? NavigatorSql.FormIdOrder("r.form_key_plugin", "r.form_key") : "editor_id, form_key";
         var items = DuckDbSql.Rows(connection, $"""
             WITH RECURSIVE {NavigatorSql.AboveAFailure(scope, holdings)}
             SELECT {cols} FROM {scope.Records} r{unheld}{where}
@@ -462,7 +462,7 @@ internal sealed class RelationReads(
             FROM cell_location cl
             LEFT JOIN records c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
             WHERE cl.plugin = $1 AND cl.origin = $2 AND {where}{store.Filter.AlsoKeeps("cl", "cell_form_key")}
-            ORDER BY {blockOrder}, {NavigatorSql.FormIdOrder("cl.cell_form_key")}
+            ORDER BY {blockOrder}, {NavigatorSql.FormIdOrder("c.form_key_plugin", "cl.cell_form_key")}
             """, reader => new CellLocationSummary(
                 reader.GetString(0),
                 reader.GetStringOrNull(1),
@@ -507,7 +507,7 @@ internal sealed class RelationReads(
             FROM ({NavigatorSql.CellChildren}) p
             JOIN records r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
             WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3{store.Filter.AlsoKeeps("p")}
-            ORDER BY {NavigatorSql.FormIdOrder("p.form_key")}
+            ORDER BY {NavigatorSql.FormIdOrder("r.form_key_plugin", "p.form_key")}
             """, reader => (
                 Group: reader.GetString(0),
                 Summary: new ChildRecordSummary(
@@ -540,7 +540,7 @@ internal sealed class RelationReads(
     {
         using var connection = store.OpenReadConnection();
         return GetHoldings(
-            connection, plugin.Name, plugin.Origin, parentFormKey, store.Filter.AlsoKeeps("cc", "child"), NavigatorSql.FormIdOrder("cc.child"));
+            connection, plugin.Name, plugin.Origin, parentFormKey, store.Filter.AlsoKeeps("cc", "child"), NavigatorSql.FormIdOrder("r.form_key_plugin", "cc.child"));
     }
 
     /// <summary>Every child <paramref name="parentFormKey"/> holds, whatever filter is in force, by slot and
@@ -671,6 +671,7 @@ internal sealed class RelationReads(
         return DuckDbSql.Rows(connection, $"""
             SELECT cc.child, cc.slot, cc.slot_index
             FROM holdings cc
+            LEFT JOIN records r ON r.form_key = cc.child AND r.plugin = cc.plugin AND r.origin = cc.origin
             WHERE cc.parent = $1 AND cc.plugin = $2 AND cc.origin = $3{inFilter}
             ORDER BY {order}
             """, reader => new HoldingRow(parentFormKey, reader.GetString(0), reader.GetString(1), reader.GetInt32(2)),

@@ -5,23 +5,17 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Index;
 
-/// <summary>The masters a plugin's content requires (ADR-0008): the plugin every record it holds or
-/// links to belongs to, other than itself. No document holds them, so a header's masters field is
-/// answered from here.</summary>
+/// <summary>The masters a plugin's content requires (ADR-0008): those of every record it holds. No document
+/// holds them, so a header's masters field is answered from here.</summary>
 internal static class RequiredMasters
 {
-    // A FormKey is "<id>:<plugin filename>", and no filename holds a colon. A master no active plugin
-    // answers sorts after every one that does.
+    // Each record's masters are the codec's answer, stored at ingest. A master no active plugin answers
+    // sorts after every one that does.
     private const string InLoadOrder = $"""
-        WITH linked AS (
-            SELECT split_part(form_key, ':', 2) AS master
-            FROM {TableDdlBuilder.MirrorSchema}.records WHERE plugin = $1 AND origin = $2
-            UNION ALL
-            SELECT split_part(target_form_key, ':', 2)
-            FROM {TableDdlBuilder.MirrorSchema}.form_references WHERE source_plugin = $1 AND source_origin = $2),
-        required AS (
-            SELECT lower(master) AS name, min(master) AS master FROM linked
-            WHERE lower(master) <> lower($1)
+        WITH required AS (
+            SELECT lower(master) AS name, min(master) AS master
+            FROM (SELECT unnest(masters) AS master
+                  FROM {TableDdlBuilder.MirrorSchema}.records WHERE plugin = $1 AND origin = $2)
             GROUP BY name),
         loaded AS (
             SELECT lower(plugin) AS name, min(load_order_idx) AS load_order_idx

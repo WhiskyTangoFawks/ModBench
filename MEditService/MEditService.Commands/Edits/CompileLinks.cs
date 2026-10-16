@@ -1,6 +1,5 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
@@ -50,7 +49,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
         var unread = answers.UnreadableFiles.ToDictionary(
             file => file.FileName, file => file.Reason, StringComparer.OrdinalIgnoreCase);
         string? WhyUnchecked(string formKey) =>
-            RequiredMasters.PluginNameIn(formKey) is { } owner && unread.TryGetValue(owner, out var reason)
+            RecordMasters.PluginNamedBy(formKey) is { } owner && unread.TryGetValue(owner, out var reason)
                 ? $"{owner} could not be read, so this link was not checked: {reason}"
                 : null;
 

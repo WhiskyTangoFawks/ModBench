@@ -299,9 +299,18 @@ public sealed record NameQuery(string Name, string? Origin = null);
 /// <summary>What one name means: a plugin, or a record by its FormKey.</summary>
 public sealed record NamedObject(PluginAddress? Plugin, string? FormKey, string? EditorId);
 
-/// <summary>The comparison of the copies given, and the copies no plugin gave, in the order given. With any
-/// copy missing nothing is compared.</summary>
-public sealed record CopiesCompared(CompareResult? Compare, IReadOnlyList<MissingCopy> Missing);
+/// <summary>The comparison of every copy given, or, with any copy missing, the copies no plugin gave, in the
+/// order given.</summary>
+public abstract record CompareRecordsAnswer
+{
+    private CompareRecordsAnswer()
+    {
+    }
+
+    public sealed record Compared(CompareResult Compare) : CompareRecordsAnswer;
+
+    public sealed record Missing(IReadOnlyList<MissingCopy> Copies) : CompareRecordsAnswer;
+}
 
 // A tri-state rather than two booleans: the states are mutually exclusive. Deleted is absent
 // because a working-tree-deleted record has no row to describe.
