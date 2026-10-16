@@ -15,11 +15,22 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // every projection read names `mirror.`, and a write against a view fails loudly.
     internal const string MirrorSchema = "mirror";
 
+    internal const string ActiveSchema = "main";
+
+    /// <summary>The views a SELECT reads: the records of every plugin the index holds, each row saying whether
+    /// its plugin is active. A connection that reads them takes this schema as its search path.</summary>
+    internal const string IndexedSchema = "indexed";
+
+    internal const string ViewColumnsView = "view_columns";
+
+    /// <summary>The views both schemas hold whatever the game; each record type has a view of its own besides.</summary>
+    internal static IEnumerable<string> FixedViews => PublicViews.Select(view => view.Table).Append("form_lookup");
+
     // ADR-0012, and Mutagen's ModKey: a FormKey names its plugin by filename, so it
     // compares ignoring case too.
     internal const string FilenameIdentity = "COLLATE NOCASE";
 
-    // A view in `main` over a mirror table carrying a plugin identity: of records, which only the
+    // A view over a mirror table carrying a plugin identity: of records, which only the
     // active plugins answer, or of a plugin's own facts, which every registered plugin answers.
     // `registrations` and `mirror.files` have no view.
     private readonly record struct PublicView(
@@ -69,7 +80,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // the join cannot duplicate a row, and a hash join beats EXISTS on the full-scan reads that
     // dominate.
     private static string WinnerJoin(string alias, string pluginColumn, string originColumn) => $"""
-        LEFT JOIN {WinnersRelation} w
+        LEFT JOIN {ActiveSchema}.{WinnersRelation} w
                ON w.form_key = {alias}.form_key
               AND w.plugin = {alias}.{pluginColumn}
               AND w.origin = {alias}.{originColumn}
@@ -78,6 +89,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     public static void CreateTables(DuckDBConnection connection)
     {
         DuckDbSql.Execute(connection, $"CREATE SCHEMA IF NOT EXISTS {MirrorSchema}");
+        DuckDbSql.Execute(connection, $"CREATE SCHEMA IF NOT EXISTS {IndexedSchema}");
         CreateRecordsTable(connection);
         CreateRegistrationsTable(connection);
         CreateActiveTable(connection);
@@ -124,7 +136,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
     /// <summary>A plugin's own facts answer while the snapshot names it.</summary>
     internal static string RegisteredJoin(string alias, string pluginColumn, string originColumn) => $"""
-        JOIN {RegistrationsRelation} p ON p.plugin = {alias}.{pluginColumn} AND p.origin = {alias}.{originColumn}
+        JOIN {ActiveSchema}.{RegistrationsRelation} p ON p.plugin = {alias}.{pluginColumn} AND p.origin = {alias}.{originColumn}
         """;
 
     // ADR-0012, through this one predicate. A registration's load index is null when
@@ -138,31 +150,45 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     {
         foreach (var relation in PublicViews)
         {
-            CreatePublicView(connection, relation.Table, relation, relation.HoldsRecords
+            CreatePublicView(connection, ActiveSchema, relation.Table, relation, relation.HoldsRecords
                 ? ActiveJoin("t", relation.PluginColumn, relation.OriginColumn)
                 : RegisteredJoin("t", relation.PluginColumn, relation.OriginColumn));
+            CreatePublicView(connection, IndexedSchema, relation.Table, relation,
+                RegisteredJoin("t", relation.PluginColumn, relation.OriginColumn));
         }
 
         var records = PublicViews.Single(relation => relation.Table == "records");
-        CreatePublicView(connection, PluginRecordsView, records, RegisteredJoin("t", records.PluginColumn, records.OriginColumn));
+        CreatePublicView(connection, ActiveSchema, PluginRecordsView, records, RegisteredJoin("t", records.PluginColumn, records.OriginColumn));
 
         // form_key -> (record type, EditorID): the lookup exposes records' identity columns, not its
         // document.
+        const string lookupColumns = "t.form_key, t.plugin, t.origin, t.record_type, t.editor_id";
         CreatePublicView(
-            connection, "form_lookup", records, ActiveJoin("t", records.PluginColumn, records.OriginColumn),
-            columns: "t.form_key, t.plugin, t.origin, t.record_type, t.editor_id");
+            connection, ActiveSchema, "form_lookup", records, ActiveJoin("t", records.PluginColumn, records.OriginColumn), lookupColumns);
+        CreatePublicView(
+            connection, IndexedSchema, "form_lookup", records, RegisteredJoin("t", records.PluginColumn, records.OriginColumn), lookupColumns);
+
+        DuckDbSql.Execute(connection, $"""
+            CREATE OR REPLACE VIEW {IndexedSchema}.{ViewColumnsView} AS
+            SELECT table_name AS view_name, column_name, data_type
+            FROM information_schema.columns
+            WHERE table_catalog = current_database() AND table_schema = '{IndexedSchema}' AND table_name <> '{ViewColumnsView}'
+            ORDER BY table_name, ordinal_position
+            """);
     }
 
-    private static void CreatePublicView(DuckDBConnection connection, string view, PublicView relation, string scope, string columns = "t.*")
+    private static void CreatePublicView(
+        DuckDBConnection connection, string schema, string view, PublicView relation, string scope, string columns = "t.*")
     {
         var loadOrderColumn = relation.DerivesLoadOrder ? ", p.load_order_idx" : "";
         var winnerColumn = relation.DerivesWinner ? ", (w.form_key IS NOT NULL) AS is_winner" : "";
+        var activeColumn = schema == IndexedSchema ? ", (p.load_order_idx IS NOT NULL) AS is_active" : "";
         var winnerJoin = relation.DerivesWinner
             ? WinnerJoin("t", relation.PluginColumn, relation.OriginColumn)
             : "";
         DuckDbSql.Execute(connection, $"""
-            CREATE OR REPLACE VIEW "{view}" AS
-            SELECT {columns}{loadOrderColumn}{winnerColumn}
+            CREATE OR REPLACE VIEW {schema}."{view}" AS
+            SELECT {columns}{loadOrderColumn}{winnerColumn}{activeColumn}
             FROM {MirrorSchema}."{relation.Table}" t
             {scope}
             {winnerJoin}

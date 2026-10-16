@@ -74,6 +74,37 @@ public class SelectTests(TestPluginFixture fixture)
         Assert.Contains(reason, refused.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("SELECT * FROM active_plugins", "active_plugins")]
+    [InlineData("SELECT * FROM registrations", "registrations")]
+    [InlineData("SELECT * FROM plugin_records", "plugin_records")]
+    [InlineData("WITH RECURSIVE sqlite_master AS (SELECT name FROM sqlite_master UNION ALL SELECT name FROM sqlite_master WHERE false) SELECT name FROM sqlite_master", "sqlite_master")]
+    [InlineData("SELECT name FROM sqlite_master WHERE name IN (WITH sqlite_master AS (SELECT 'x' AS name) SELECT name FROM sqlite_master)", "sqlite_master")]
+    public void ASelectOfAnythingButTheViews_IsRefused_NamingTheRelationAndTheViews(string sql, string relation)
+    {
+        using var index = LoadedIndex();
+
+        var refused = index.Queries.SelectRows(sql).Refused();
+
+        Assert.Equal(IndexRefusal.SelectRejected, refused.Refusal);
+        Assert.Contains($"{relation} is not one", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("records, form_references, holdings", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("view_columns", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASelectOfViewColumns_ListsEachViewWithItsColumns()
+    {
+        using var index = LoadedIndex();
+
+        var columns = index.Queries.SelectRows("SELECT view_name, column_name FROM view_columns").Value()
+            .Select(row => (row.GetProperty("view_name").GetString(), row.GetProperty("column_name").GetString())).ToList();
+
+        Assert.Contains(("records", "is_active"), columns);
+        Assert.Contains(("npc_", "editor_id"), columns);
+        Assert.DoesNotContain(columns, column => column.Item1 == "view_columns");
+    }
+
     [Fact]
     public void ASelect_WithNoLoadOrder_IsRefused()
     {
