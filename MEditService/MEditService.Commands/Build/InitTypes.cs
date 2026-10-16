@@ -3,10 +3,9 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to init, by name, with the source folder its repository goes in, its installation files and the mod
-/// manager's own files in its folder, which no build makes.</summary>
-public sealed record ModToInit(
-    string Name, string SourceFolder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> MetadataFiles);
+/// <summary>A mod to init, by name, with the source folder its repository goes in and the mod manager's own files in
+/// its folder, which no build makes.</summary>
+public sealed record ModToInit(string Name, string SourceFolder, IReadOnlyList<string> MetadataFiles);
 
 /// <summary>Why init refused (ADR-0019): each value is a different way out, and the
 /// endpoint's status is one switch over them.</summary>

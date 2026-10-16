@@ -41,13 +41,13 @@ internal static class InitEveryPluginOf
 
 internal sealed record PluginInit(bool Applied, InitRefusal Refusal, string Message);
 
-/// <summary>Mods to init as the extension hands a mod with no installation file and no file of the mod manager's.</summary>
+/// <summary>Mods to init as the extension hands a mod with no file of the mod manager's.</summary>
 internal static class ToInit
 {
     /// <summary>Each mod with the source folder the load order's provider names for it, or its own name when none
     /// does.</summary>
     internal static IReadOnlyList<ModToInit> In(LoadOrderSnapshot? loadOrder, params string[] mods) =>
-        [.. mods.Select(mod => new ModToInit(mod, SourceFolderOf(loadOrder, mod), [], []))];
+        [.. mods.Select(mod => new ModToInit(mod, SourceFolderOf(loadOrder, mod), []))];
 
     private static string SourceFolderOf(LoadOrderSnapshot? loadOrder, string mod) =>
         loadOrder?.Plugins.Select(plugin => plugin.Provider).OfType<PluginProvider.FromMod>()

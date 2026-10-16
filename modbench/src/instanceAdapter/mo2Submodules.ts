@@ -1,0 +1,159 @@
+// A source mod with a remote is a submodule of the instance repository; git decides the config and the staging.
+
+import { execFile } from 'node:child_process';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { basename, isAbsolute, join, relative, resolve } from 'node:path';
+import { promisify } from 'node:util';
+import { errnoCode } from '../ports/errno';
+import { errorMessage } from '../ports/errorMessage';
+import { exists, get, isRepository, remove, write } from './files';
+import type { InstanceAdapter, SubmoduleNote } from './instanceAdapter';
+import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, withSourceModLines } from './layout';
+import type { Mo2Context } from './mo2Context';
+import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from './prePushHook';
+import { sourceModsIn } from './sourceMods';
+
+type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'>;
+
+const execFileAsync = promisify(execFile);
+
+const git = async (folder: string, ...args: string[]): Promise<string> =>
+  (await execFileAsync('git', ['-C', folder, ...args], { encoding: 'utf8' })).stdout;
+
+interface Submodule { readonly name: string; readonly url: string; readonly branch: string }
+
+async function submoduleOf(folder: string): Promise<Submodule | undefined | string> {
+  try {
+    const remotes = (await git(folder, 'remote')).split('\n').filter((remote) => remote !== '');
+    if (remotes.length === 0) return undefined;
+    const url = (await git(folder, 'remote', 'get-url', ...(remotes.includes('origin') ? ['origin'] : remotes.slice(0, 1)))).trim();
+    const branch = (await git(folder, 'symbolic-ref', '--short', 'HEAD').catch(() => '')).trim();
+    return branch === '' ? 'it has a remote but no branch checked out, so its entry stays as it was' : { name: basename(folder), url, branch };
+  } catch (err) {
+    return `its remote could not be read, so its entry stays as it was: ${errorMessage(err)}`;
+  }
+}
+
+async function sourceEntries(instanceRoot: string, file: string): Promise<string[]> {
+  if (!(await exists(file))) return [];
+  const listed = await git(instanceRoot, 'config', '-f', file, '--null', '--list');
+  return listed.split('\0').filter((entry) => entry !== '').flatMap((entry) => {
+    const [key = '', value = ''] = entry.split('\n');
+    return key.startsWith('submodule.') && key.endsWith('.path') && value.startsWith(sourceModPath(''))
+      ? [key.slice('submodule.'.length, -'.path'.length)] : [];
+  });
+}
+
+// An unset key is exit code 5.
+async function entryRemoved(instanceRoot: string, file: string, name: string): Promise<void> {
+  for (const key of ['path', 'url', 'branch']) {
+    await git(instanceRoot, 'config', '-f', file, '--unset-all', `submodule.${name}.${key}`).catch((err: unknown) => {
+      if (typeof err !== 'object' || err === null || !('code' in err) || err.code !== 5) throw err;
+    });
+  }
+}
+
+async function entryWritten(instanceRoot: string, file: string, { name, url, branch }: Submodule): Promise<void> {
+  await git(instanceRoot, 'config', '-f', file, `submodule.${name}.path`, sourceModPath(name));
+  await git(instanceRoot, 'config', '-f', file, `submodule.${name}.url`, url);
+  await git(instanceRoot, 'config', '-f', file, `submodule.${name}.branch`, branch);
+}
+
+// A hook outside the repository's own git directory would run in every repository that reads it.
+async function hooksFolder(instanceRoot: string): Promise<string> {
+  const repository = await isRepository(instanceRoot);
+  const gitDir = repository ? resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-common-dir')).trim()) : join(instanceRoot, '.git');
+  const configured = (await git(instanceRoot, 'config', '--type=path', '--get', 'core.hooksPath').catch(() => '')).trim();
+  const hooks = configured !== '' ? resolve(instanceRoot, configured)
+    : repository ? resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-path', 'hooks')).trim()) : join(gitDir, 'hooks');
+  if (relative(gitDir, hooks).startsWith('..') || isAbsolute(relative(gitDir, hooks))) {
+    throw new Error(`core.hooksPath points to ${hooks}, outside ${gitDir}, where a hook would run in every repository that reads it; git init writes no hook there.`);
+  }
+  return hooks;
+}
+
+const hookExists = (hook: string): Error => new Error(`${hook} already exists; git init does not write over it.`);
+
+export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
+  return {
+    async writeSubmodules() {
+      if (!(await isRepository(instanceRoot))) return { notes: [], other: [] };
+      const file = submodulesFile(instanceRoot);
+      const sources = await sourceModsIn(instanceRoot);
+      const modOf = new Map([...sources.folders].map(([mod, folder]) => [basename(folder), mod]));
+      const notes: SubmoduleNote[] = [];
+      const other = [...sources.notes];
+      const kept = new Set<string>();
+      let existing: string[] = [];
+      try {
+        existing = await sourceEntries(instanceRoot, file);
+      } catch (err) {
+        other.push(`${file} could not be read, so no source mod's entry is changed: ${errorMessage(err)}`);
+      }
+      for (const [mod, folder] of sources.folders) {
+        const found = await submoduleOf(folder);
+        const name = basename(folder);
+        if (typeof found === 'string') {
+          notes.push({ mod, note: found });
+          if (existing.includes(name)) kept.add(name);
+        } else if (found !== undefined) {
+          kept.add(name);
+          try {
+            await entryWritten(instanceRoot, file, found);
+          } catch (err) {
+            notes.push({ mod, note: `its entry could not be written: ${errorMessage(err)}` });
+          }
+        }
+      }
+      for (const name of existing) {
+        if (kept.has(name)) continue;
+        if (!modOf.has(name) && await isRepository(join(sourceRootDir(instanceRoot), name))) {
+          kept.add(name);
+          continue;
+        }
+        try {
+          await entryRemoved(instanceRoot, file, name);
+        } catch (err) {
+          other.push(`the entry of source/${name} could not be removed from ${file}: ${errorMessage(err)}`);
+        }
+      }
+      const ignoreFile = ignoreListFile(instanceRoot);
+      if (await exists(ignoreFile)) {
+        try {
+          const before = await get(ignoreFile);
+          const after = withSourceModLines(before, [...kept]);
+          if (after === undefined) other.push(`${ignoreFile} has a source mods marker with no match, so its source mod lines are left as they are`);
+          else if (after !== before) await write(ignoreFile, after);
+        } catch (err) {
+          other.push(`${ignoreFile} could not be written: ${errorMessage(err)}`);
+        }
+      }
+      return { notes, other };
+    },
+
+    repositoryOnDisk: () => isRepository(instanceRoot),
+
+    async removeRepository() {
+      if (!(await isRepository(instanceRoot))) return;
+      const holdsRefs = (await git(instanceRoot, 'for-each-ref')).trim() !== '';
+      const holdsHead = await git(instanceRoot, 'rev-parse', '--verify', '-q', 'HEAD').then(() => true, () => false);
+      if (holdsRefs || holdsHead) throw new Error(`${join(instanceRoot, '.git')} holds commits or refs that git init did not make, so it is kept.`);
+      await remove(join(instanceRoot, '.git'));
+    },
+
+    async checkPushRefusalFree() {
+      const hook = join(await hooksFolder(instanceRoot), PRE_PUSH_HOOK_NAME);
+      if (await exists(hook)) throw hookExists(hook);
+    },
+
+    async refuseUnpublishedPins() {
+      const hooks = await hooksFolder(instanceRoot);
+      await mkdir(hooks, { recursive: true });
+      const hook = join(hooks, PRE_PUSH_HOOK_NAME);
+      await writeFile(hook, PRE_PUSH_HOOK, { mode: 0o755, flag: 'wx' }).catch((err: unknown) => {
+        throw errnoCode(err) === 'EEXIST' ? hookExists(hook) : err;
+      });
+      await git(instanceRoot, 'config', 'push.recurseSubmodules', 'check');
+    },
+  };
+}

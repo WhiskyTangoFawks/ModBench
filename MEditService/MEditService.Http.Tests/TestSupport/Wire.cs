@@ -63,7 +63,7 @@ internal static class Wire
     internal static Task<HttpResponseMessage> Init(this HttpClient client, string mod) =>
         client.Init([mod]);
 
-    /// <summary>Each mod as one with no installation file and no file of the mod manager's.</summary>
+    /// <summary>Each mod as one with no file of the mod manager's.</summary>
     internal static Task<HttpResponseMessage> Init(this HttpClient client, IEnumerable<string> mods) =>
         client.PostAsJsonAsync("/init", new
         {
@@ -71,7 +71,6 @@ internal static class Wire
             {
                 name,
                 sourceFolder = client.SourceFolderSentFor(name),
-                installationFiles = Array.Empty<object>(),
                 metadataFiles = Array.Empty<string>(),
             }),
         });
@@ -84,7 +83,7 @@ internal static class Wire
         this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins) =>
         client.PostAsJsonAsync("/plugins/compile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }) });
 
-    /// <summary>Each mod by name and folder, with the source folder its load order sent, no installation file and MO2's
+    /// <summary>Each mod by name and folder, with the source folder its load order sent and MO2's
     /// meta.ini as its metadata file, under MO2's suffix for an excluded file.</summary>
     internal static Task<HttpResponseMessage> Build(
         this HttpClient client, IEnumerable<(string Name, string Folder)> mods, string statCache, object? archives = null, string? version = null) =>
@@ -95,7 +94,6 @@ internal static class Wire
                 name = mod.Name,
                 sourceFolder = client.SourceFolderSentFor(mod.Name),
                 folder = mod.Folder,
-                installationFiles = Array.Empty<object>(),
                 metadataFiles = new[] { "meta.ini" },
                 version,
             }),

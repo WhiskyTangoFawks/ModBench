@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../test/noDetectors';
 import { fakeArchiveReader } from '../../test/fakeArchiveReader';
@@ -11,6 +11,7 @@ import { fakeArchiveReader } from '../../test/fakeArchiveReader';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { mo2InstanceAdapter } from '../mo2Instance';
+import { PRE_PUSH_HOOK } from '../prePushHook';
 
 let root: string;
 
@@ -124,5 +125,403 @@ describe('the MO2 adapter\'s repository', () => {
 
     const shown = runGit('status', '--porcelain', '-z', '--untracked-files=all').split('\0').filter(Boolean).map((line) => line.slice(3));
     expect(shown.sort()).toEqual([...listed, '.gitignore'].sort());
+  });
+
+  describe('a source mod with a remote is a submodule', () => {
+    const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+    const SOURCE_BUILD = (output: string): string => JSON.stringify({ output });
+
+    async function sourceMod(folder: string, output: string, remote?: string): Promise<string> {
+      await put(`source/${folder}/build.json`, SOURCE_BUILD(output));
+      const path = join(root, 'source', folder);
+      git(path, 'init', '--quiet', '--initial-branch=main');
+      if (remote !== undefined) git(path, 'remote', 'add', 'origin', remote);
+      git(path, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '--allow-empty', '-m', 'first');
+      return path;
+    }
+
+    const submodulesNamed = (): string[] =>
+      runGit('config', '-f', '.gitmodules', '--get-regexp', String.raw`^submodule\..*\.url$`).split('\n').filter(Boolean).sort();
+
+    it('writes its entry in .gitmodules with its remote and its branch, and its line in the ignore list, so git stages it as a submodule', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
+      await sourceMod('Local', 'Local');
+
+      const report = await adapter.writeSubmodules();
+
+      runGit('add', '-A', '--', '.');
+      expect(report).toEqual({ notes: [], other: [] });
+      expect(submodulesNamed()).toEqual(['submodule.Mod A.url https://example.test/a.git']);
+      expect(runGit('config', '-f', '.gitmodules', 'submodule.Mod A.branch').trim()).toBe('main');
+      expect(runGit('config', '-f', '.gitmodules', 'submodule.Mod A.path').trim()).toBe('source/Mod A');
+      expect(runGit('ls-files', '-s', 'source').trim().split('\n').map((line) => line.slice(0, 6) + line.slice(line.indexOf('\t')))).toEqual(['160000\tsource/Mod A']);
+      expect(runGit('ls-files', '.gitmodules')).toBe('.gitmodules\n');
+    });
+
+    it('changes nothing when the source mods are as the last call left them', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
+      await adapter.writeSubmodules();
+      const before = [await readFile(join(root, '.gitmodules'), 'utf8'), await readFile(join(root, '.gitignore'), 'utf8')];
+
+      await adapter.writeSubmodules();
+
+      expect([await readFile(join(root, '.gitmodules'), 'utf8'), await readFile(join(root, '.gitignore'), 'utf8')]).toEqual(before);
+    });
+
+    it('takes the entry and the line of a source mod that is gone or lost its remote, and keeps the lines it did not write', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await put('.gitignore', `${await readFile(join(root, '.gitignore'), 'utf8')}mine/\n`);
+      const gone = await sourceMod('Gone', 'Gone', 'https://example.test/g.git');
+      const unlinked = await sourceMod('Unlinked', 'Unlinked', 'https://example.test/u.git');
+      await sourceMod('Kept', 'Kept', 'https://example.test/k.git');
+      await adapter.writeSubmodules();
+      await rm(gone, { recursive: true });
+      git(unlinked, 'remote', 'remove', 'origin');
+
+      await adapter.writeSubmodules();
+
+      expect(submodulesNamed()).toEqual(['submodule.Kept.url https://example.test/k.git']);
+      const ignoreList = await readFile(join(root, '.gitignore'), 'utf8');
+      expect([ignoreList.includes('Gone'), ignoreList.includes('Unlinked'), ignoreList.includes('Kept'), ignoreList.includes('mine/')]).toEqual([false, false, true, true]);
+    });
+
+    it('writes the entry of a source mod by the folder it is in, whatever mod its build names', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await sourceMod('Old Name', 'New Name', 'https://example.test/n.git');
+
+      await adapter.writeSubmodules();
+
+      expect(runGit('config', '-f', '.gitmodules', 'submodule.Old Name.path').trim()).toBe('source/Old Name');
+    });
+
+    async function submoduleOfOne(): Promise<{ adapter: Awaited<ReturnType<typeof instance>>; folder: string }> {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      const folder = await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
+      await adapter.writeSubmodules();
+      return { adapter, folder };
+    }
+
+    const urlOf = (): string => runGit('config', '-f', '.gitmodules', 'submodule.Mod A.url').trim();
+
+    it('names a source mod with a remote and no branch checked out, and writes no entry for it', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      const detached = await sourceMod('Detached', 'Detached', 'https://example.test/d.git');
+      git(detached, 'checkout', '--quiet', '--detach');
+
+      const report = await adapter.writeSubmodules();
+
+      expect([report.notes, existsSync(join(root, '.gitmodules'))]).toEqual([[{ mod: 'Detached', note: expect.stringContaining('branch') as unknown }], false]);
+    });
+
+    it('keeps the entry and the line of a source mod whose branch it cannot read, and names it', async () => {
+      const { adapter, folder } = await submoduleOfOne();
+      git(folder, 'checkout', '--quiet', '--detach');
+
+      const report = await adapter.writeSubmodules();
+
+      expect([report.notes.map(({ mod }) => mod), urlOf(), (await readFile(join(root, '.gitignore'), 'utf8')).includes('Mod A')]).toEqual([['Mod A'], 'https://example.test/a.git', true]);
+    });
+
+    it('names a source mod whose remote it cannot read, writes the others, and keeps its entry', async () => {
+      const { adapter, folder } = await submoduleOfOne();
+      await sourceMod('Mod B', 'Mod B', 'https://example.test/b.git');
+      await writeFile(join(folder, '.git', 'config'), '[remote "origin"\n');
+
+      const report = await adapter.writeSubmodules();
+
+      expect([report.notes.map(({ mod }) => mod), urlOf(), submodulesNamed().length]).toEqual([['Mod A'], 'https://example.test/a.git', 2]);
+    });
+
+    it('takes the entry of a source mod whose folder name holds brackets when it is gone, and goes on', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      const bracketed = await sourceMod('[NoDelete] Foo', '[NoDelete] Foo', 'https://example.test/f.git');
+      await sourceMod('Kept', 'Kept', 'https://example.test/k.git');
+      await adapter.writeSubmodules();
+      await rm(bracketed, { recursive: true });
+
+      const report = await adapter.writeSubmodules();
+
+      expect([report, submodulesNamed()]).toEqual([{ notes: [], other: [] }, ['submodule.Kept.url https://example.test/k.git']]);
+      expect(await readFile(join(root, '.gitignore'), 'utf8')).not.toContain('NoDelete');
+    });
+
+    it('keeps the entry and the line of a source mod whose build configuration it cannot read, and says which', async () => {
+      const { adapter, folder } = await submoduleOfOne();
+      await writeFile(join(folder, 'build.json'), 'not json');
+
+      const report = await adapter.writeSubmodules();
+
+      expect([report.other, urlOf(), (await readFile(join(root, '.gitignore'), 'utf8')).includes('Mod A')]).toEqual([
+        [expect.stringContaining('Mod A') as unknown], 'https://example.test/a.git', true,
+      ]);
+    });
+
+    it('rewrites its block where it stands, with the lines after it left after it, and changes nothing when nothing changed', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
+      await adapter.writeSubmodules();
+      await put('.gitignore', `${await readFile(join(root, '.gitignore'), 'utf8')}after/\n`);
+      const before = await readFile(join(root, '.gitignore'), 'utf8');
+      await adapter.writeSubmodules();
+      await sourceMod('Mod B', 'Mod B', 'https://example.test/b.git');
+
+      await adapter.writeSubmodules();
+      const lines = (await readFile(join(root, '.gitignore'), 'utf8')).split('\n');
+
+      expect([before, lines.indexOf('!/source/Mod B') < lines.indexOf('after/'), lines.at(-2)]).toEqual([before, true, 'after/']);
+    });
+
+    it.each([
+      ['begin', '# Source mods with a remote\n!/source/\n'],
+      ['end', '!/source/\n# End of source mods with a remote\n'],
+    ])('leaves the ignore list as it is when its block has only an %s marker, and names it', async (_marker, block) => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await put('.gitignore', `${await readFile(join(root, '.gitignore'), 'utf8')}${block}mine/\n`);
+      const before = await readFile(join(root, '.gitignore'), 'utf8');
+      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
+
+      const report = await adapter.writeSubmodules();
+
+      expect([await readFile(join(root, '.gitignore'), 'utf8'), report.other]).toEqual([before, [expect.stringContaining(join(root, '.gitignore')) as unknown]]);
+    });
+
+    it('keeps the lines of the ignore list it did not write, including blank lines and its own let-in of a source folder', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      const mine = `${await readFile(join(root, '.gitignore'), 'utf8')}\n!/source/\n/source/*\n!/source/Mine\n\nnotes/\n`;
+      await put('.gitignore', mine);
+      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
+
+      await adapter.writeSubmodules();
+      await adapter.writeSubmodules();
+      const lines = (await readFile(join(root, '.gitignore'), 'utf8')).split('\n').slice(0, -1);
+
+      expect([lines.filter((line) => line === '!/source/Mine').length, lines.includes('notes/'), lines.includes('!/source/Mod A'), lines.filter((line) => line === '').length]).toEqual([1, true, true, 2]);
+    });
+
+    it('says, naming it, that a pre-push hook is already in the repository', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await put('.git/hooks/pre-push', 'mine\n');
+
+      await expect(adapter.checkPushRefusalFree()).rejects.toThrow(join(root, '.git', 'hooks', 'pre-push'));
+    });
+
+    it('refuses before the repository exists when the global core.hooksPath points outside the instance, naming it and where', async () => {
+      const adapter = await instance();
+      await put('global.config', `[core]\n\thooksPath = ${join(root, 'global-hooks')}\n`);
+      vi.stubEnv('GIT_CONFIG_GLOBAL', join(root, 'global.config'));
+
+      try {
+        await expect(adapter.checkPushRefusalFree()).rejects.toThrow(new RegExp(`core\\.hooksPath.*${join(root, 'global-hooks').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+
+    it('reads a ~ in core.hooksPath as git does, so the refusal names where it points', async () => {
+      const adapter = await instance();
+      await put('global.config', '[core]\n\thooksPath = ~/.githooks\n');
+      vi.stubEnv('GIT_CONFIG_GLOBAL', join(root, 'global.config'));
+      vi.stubEnv('HOME', root);
+
+      try {
+        await expect(adapter.checkPushRefusalFree()).rejects.toThrow(join(root, '.githooks'));
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+
+    it('reads from disk whether the instance folder holds a repository', async () => {
+      const adapter = await instance();
+      const before = await adapter.repositoryOnDisk();
+      runGit('init', '--quiet');
+
+      expect([before, await adapter.repositoryOnDisk()]).toEqual([false, true]);
+    });
+
+    it('does not take back a repository that holds a commit, which git init did not make', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      runGit('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '--allow-empty', '-m', 'mine');
+
+      await expect(adapter.removeRepository()).rejects.toThrow(join(root, '.git'));
+
+      expect(runGit('log', '--format=%s').trim()).toBe('mine');
+    });
+
+    it('takes the repository it made back, leaving nothing of it', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+
+      await adapter.removeRepository();
+
+      expect(existsSync(join(root, '.git'))).toBe(false);
+    });
+
+    it('finds the place free when no hook is there', async () => {
+      const adapter = await instance();
+
+      await expect(adapter.checkPushRefusalFree()).resolves.toBeUndefined();
+    });
+
+    describe('a push of the modlist', () => {
+      const remotes: string[] = [];
+
+      afterEach(async () => {
+        await Promise.all(remotes.splice(0).map((folder) => rm(folder, { recursive: true, force: true })));
+      });
+
+      const bareRepository = async (): Promise<string> => {
+        const folder = await mkdtemp(join(tmpdir(), 'modbench-mo2-bare-'));
+        remotes.push(folder);
+        git(folder, 'init', '--quiet', '--bare', '--initial-branch=main');
+        return folder;
+      };
+
+      async function pinnedSourceMod() {
+        const adapter = await instance();
+        runGit('init', '--quiet', '--initial-branch=main');
+        runGit('config', 'user.name', 't');
+        runGit('config', 'user.email', 't@t');
+        await adapter.writeIgnoreList();
+        const mod = await sourceMod('Mod A', 'Mod A', await bareRepository());
+        await adapter.writeSubmodules();
+        runGit('remote', 'add', 'origin', await bareRepository());
+        return { adapter, mod };
+      }
+
+      const pin = (): void => {
+        runGit('add', '-A');
+        runGit('commit', '--quiet', '--allow-empty', '-m', 'pin');
+      };
+      const pushed = (): 'allowed' | 'refused' => {
+        try {
+          runGit('push', '--quiet', 'origin', 'main');
+          return 'allowed';
+        } catch {
+          return 'refused';
+        }
+      };
+
+      it('is refused while the source mod was never pushed, which git\'s own check lets through', async () => {
+        const { adapter } = await pinnedSourceMod();
+        await adapter.refuseUnpublishedPins();
+        pin();
+
+        expect(pushed()).toBe('refused');
+      });
+
+      it('is allowed once the source mod\'s remote holds the pin', async () => {
+        const { adapter, mod } = await pinnedSourceMod();
+        await adapter.refuseUnpublishedPins();
+        git(mod, 'push', '--quiet', 'origin', 'main');
+        pin();
+
+        expect(pushed()).toBe('allowed');
+      });
+
+      it('is refused while a pin it changes is missing from the source mod\'s tracked remote', async () => {
+        const { adapter, mod } = await pinnedSourceMod();
+        await adapter.refuseUnpublishedPins();
+        git(mod, 'push', '--quiet', 'origin', 'main');
+        pin();
+        const first = pushed();
+        git(mod, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '--allow-empty', '-m', 'second');
+        pin();
+
+        expect([first, pushed()]).toEqual(['allowed', 'refused']);
+      });
+
+      it('writes no hook outside the repository, whatever core.hooksPath points at, and says so', async () => {
+        const adapter = await instance();
+        runGit('init', '--quiet');
+        runGit('config', 'core.hooksPath', join(root, 'my-hooks'));
+
+        await expect(adapter.refuseUnpublishedPins()).rejects.toThrow(/core\.hooksPath.*my-hooks/);
+
+        expect(existsSync(join(root, 'my-hooks'))).toBe(false);
+      });
+
+      it('installs its hook in the git directory a .git file names', async () => {
+        const adapter = await instance();
+        const separate = join(root, '..', `${basename(root)}-git`);
+        runGit('init', '--quiet', '--separate-git-dir', separate);
+
+        await adapter.refuseUnpublishedPins();
+
+        expect(existsSync(join(separate, 'hooks', 'pre-push'))).toBe(true);
+        await rm(separate, { recursive: true, force: true });
+      });
+
+      it('allows a new branch from a clone that has not restored its source mods, when the remote holds their pins', async () => {
+        const { mod } = await pinnedSourceMod();
+        git(mod, 'push', '--quiet', 'origin', 'main');
+        pin();
+        runGit('push', '--quiet', 'origin', 'main');
+        const clone = await mkdtemp(join(tmpdir(), 'modbench-mo2-clone-'));
+        remotes.push(clone);
+        const origin = runGit('remote', 'get-url', 'origin').trim();
+        git(clone, 'clone', '--quiet', origin, 'modlist');
+        const cloned = join(clone, 'modlist');
+        await mkdir(join(cloned, 'source', 'Mod A'), { recursive: true });
+        await mkdir(join(cloned, '.git', 'hooks'), { recursive: true });
+        await writeFile(join(cloned, '.git', 'hooks', 'pre-push'), PRE_PUSH_HOOK, { mode: 0o755 });
+        git(cloned, 'config', 'user.name', 't');
+        git(cloned, 'config', 'user.email', 't@t');
+        git(cloned, 'commit', '--quiet', '--allow-empty', '-m', 'unrelated');
+
+        expect(() => git(cloned, 'push', '--quiet', 'origin', 'HEAD:refs/heads/other')).not.toThrow();
+      });
+
+      it('refuses a pin it has no checkout to verify, saying so', async () => {
+        const { mod } = await pinnedSourceMod();
+        git(mod, 'push', '--quiet', 'origin', 'main');
+        pin();
+        runGit('push', '--quiet', 'origin', 'main');
+        const clone = await mkdtemp(join(tmpdir(), 'modbench-mo2-clone-'));
+        remotes.push(clone);
+        git(clone, 'clone', '--quiet', runGit('remote', 'get-url', 'origin').trim(), 'modlist');
+        const cloned = join(clone, 'modlist');
+        await mkdir(join(cloned, 'source', 'Mod A'), { recursive: true });
+        await mkdir(join(cloned, '.git', 'hooks'), { recursive: true });
+        await writeFile(join(cloned, '.git', 'hooks', 'pre-push'), PRE_PUSH_HOOK, { mode: 0o755 });
+        git(cloned, 'config', 'user.name', 't');
+        git(cloned, 'config', 'user.email', 't@t');
+        git(cloned, 'update-index', '--add', '--cacheinfo', `160000,${'a'.repeat(40)},source/Mod A`);
+        git(cloned, 'commit', '--quiet', '-m', 'repin');
+
+        expect(() => execFileSync('git', ['push', '--quiet', 'origin', 'HEAD:refs/heads/other'], { cwd: cloned, stdio: 'pipe' })).toThrow(/no checkout/);
+      });
+
+      it('leaves a pre-push hook already in the repository as it is, naming it', async () => {
+        const adapter = await instance();
+        runGit('init', '--quiet');
+        await put('.git/hooks/pre-push', 'mine\n');
+
+        await expect(adapter.refuseUnpublishedPins()).rejects.toThrow(join(root, '.git', 'hooks', 'pre-push'));
+
+        expect(await readFile(join(root, '.git', 'hooks', 'pre-push'), 'utf8')).toBe('mine\n');
+      });
+    });
   });
 });

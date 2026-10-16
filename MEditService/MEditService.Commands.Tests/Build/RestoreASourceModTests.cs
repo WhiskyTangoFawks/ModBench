@@ -79,7 +79,7 @@ public sealed class RestoreASourceModTests : IDisposable
         written.WriteToBinary(plugin);
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: new PluginProvider.FromMod(ModName, ModFolder, remote))]));
-        Assert.Single((await TestEditService.InitHandler(_holder).InitAsync([new ModToInit(ModName, remote, [], [])])).Landed);
+        Assert.Single((await TestEditService.InitHandler(_holder).InitAsync([new ModToInit(ModName, remote, [])])).Landed);
         _folders.WriteManifest(ModFolder, ModName, new Manifest([], [], [new ManifestFile("Fixture.esp", new FileProvider.Source(remote, Git(remote, "rev-parse", "HEAD").Trim()))]));
         return plugin;
     }
@@ -171,21 +171,6 @@ public sealed class RestoreASourceModTests : IDisposable
         await Restore();
 
         Assert.Equal("1.2.3", _folders.ReadManifest(ModFolder, ModName)?.Version);
-    }
-
-    [Fact]
-    public async Task TheRebuild_KeepsWhereEachInstallationFileItsManifestNamesComesFrom()
-    {
-        var download = DownloadedZip.At(Path.Combine(_root, "downloads", "Mod.zip"), _root, ("readme.txt", "r"));
-        File.WriteAllText(Path.Combine(ModFolder, "readme.txt"), "r");
-        var named = new ManifestSource("Mod.zip", download.Size, download.Hash, "nexus:fallout4:4598");
-        _folders.WriteManifest(ModFolder, ModName, new Manifest(
-            [named], [],
-            [new ManifestFile("meshes/c.nif", new FileProvider.Source(RemoteFolder, _first)), new ManifestFile("readme.txt", new FileProvider.FirstInstallationFile())]));
-
-        Assert.Single((await Restore(download)).Landed);
-
-        Assert.Equal([named], _folders.ReadManifest(ModFolder, ModName)?.InstallationFiles);
     }
 
     private void ManifestedAt(string commit, string? remote = null, string? version = null) =>

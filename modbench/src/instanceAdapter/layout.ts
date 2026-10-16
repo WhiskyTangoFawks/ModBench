@@ -20,6 +20,7 @@ const DOWNLOADS = 'downloads';
 const HASH_INDEX = 'hash-index';
 const STAT_CACHE = 'stat-cache';
 const IGNORE_LIST_FILE = '.gitignore';
+const SUBMODULES_FILE = '.gitmodules';
 const MANIFEST_GLOB = '*.manifest';
 const PLUGIN_ORDER_FILE = 'loadorder.txt';
 
@@ -152,6 +153,12 @@ export const statCacheDir = (instanceRoot: string): string => join(instanceRoot,
 /** The instance repository's ignore list file. */
 export const ignoreListFile = (instanceRoot: string): string => join(instanceRoot, IGNORE_LIST_FILE);
 
+/** The instance repository's file of submodules. */
+export const submodulesFile = (instanceRoot: string): string => join(instanceRoot, SUBMODULES_FILE);
+
+/** A source mod's path in the instance repository, which is its submodule's path. */
+export const sourceModPath = (folderName: string): string => `${SOURCE}/${folderName}`;
+
 const BUILD_CONFIGURATION_FILE = 'build.json';
 
 /** The key of the build configuration that names the mod folder its build writes. */
@@ -205,10 +212,31 @@ const heldInEachFolderOf = (folder: string, files: readonly string[]): string[] 
   `!/${folder}/`, `/${folder}/*`, `!/${folder}/*/`, `/${folder}/*/*`, ...files.map((file) => `!/${folder}/*/${file}`),
 ];
 
+const escapedForIgnoreList = (name: string): string => name.replace(/[\\*?[]/g, String.raw`\$&`);
+
+const SOURCE_MODS_BEGIN = '# Source mods with a remote';
+const SOURCE_MODS_END = '# End of source mods with a remote';
+
+/** An ignore list with its block of `folderNames`, the source mods with a remote, made in place. Every line outside
+ *  the block is kept. Undefined when the block's markers do not pair. */
+export function withSourceModLines(ignoreList: string, folderNames: readonly string[]): string | undefined {
+  const lines = ignoreList.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  const begin = lines.indexOf(SOURCE_MODS_BEGIN);
+  const end = lines.indexOf(SOURCE_MODS_END);
+  if ((begin === -1) !== (end === -1) || end < begin) return undefined;
+  const block = folderNames.length === 0 ? [] : [
+    SOURCE_MODS_BEGIN, `!/${SOURCE}/`, `/${SOURCE}/*`, ...folderNames.map((name) => `!/${SOURCE}/${escapedForIgnoreList(name)}`), SOURCE_MODS_END,
+  ];
+  if (begin === -1) lines.push(...block);
+  else lines.splice(begin, end - begin + 1, ...block);
+  return `${lines.join('\n')}\n`;
+}
+
 /** The whitelist: the ignore list itself, the mod manager's configuration, each profile's mod order, plugin order
  *  and INIs, and each mod's manifest. Each mod's metadata stays out (modlist-repository.md, The repository, story 2). */
 export const WHITELIST_IGNORE_LIST = `${[
-  '/*', `!/${IGNORE_LIST_FILE}`, `!/${SETTINGS_FILE_NAME}`,
+  '/*', `!/${IGNORE_LIST_FILE}`, `!/${SUBMODULES_FILE}`, `!/${SETTINGS_FILE_NAME}`,
   ...heldInEachFolderOf(PROFILES, [MODLIST_FILE_NAME, PLUGINS_FILE_NAME, PLUGIN_ORDER_FILE, `*.${anyCase('ini')}`]),
   ...heldInEachFolderOf(MODS, [MANIFEST_GLOB]),
 ].join('\n')}\n`;

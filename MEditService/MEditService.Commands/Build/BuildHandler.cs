@@ -72,8 +72,7 @@ public sealed class BuildHandler
         }
 
         var plugins = Placed(loadOrder, mod, source.Plugins);
-        var installed = mod.InstallationFiles.SelectMany(file => file.Entries.Select(entry => (File: file, Entry: entry.Path))).ToList();
-        var compiled = CompiledPaths(loadOrder, plugins, [.. installed.Select(entry => entry.Entry), .. source.Assets.Select(asset => asset.Path)]);
+        var compiled = CompiledPaths(loadOrder, plugins, [.. source.Assets.Select(asset => asset.Path)]);
         var assets = source.Assets.Where(asset => !compiled.Contains(asset.Path)).ToDictionary(asset => asset.Path, StringComparer.OrdinalIgnoreCase);
         var notAnAsset = source.Archives.SelectMany(archive => archive.Files.Select(file => (Archive: archive.Path, File: file)))
             .FirstOrDefault(packed => !assets.ContainsKey(packed.File));
@@ -81,16 +80,10 @@ public sealed class BuildHandler
             return Refused(BuildRefusal.ArchiveFileNotAnAsset, $"'{notAnAsset.Archive}' takes '{notAnAsset.File}', which is not an asset of its source.");
 
         var written = new FolderWrite(_modFolders, mod.Folder, source.Exclude, instance.ExcludedSuffix);
-        var overridden = installed.Where(entry => compiled.Contains(entry.Entry) || assets.ContainsKey(entry.Entry)).ToHashSet();
-        if (WhyTheBaseIsNotKnown(mod, [.. installed.Except(overridden)], written) is { } unknown) return unknown;
 
         var packed = source.Archives.SelectMany(archive => archive.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var looseBase = installed.Where(entry => !compiled.Contains(entry.Entry) && !assets.ContainsKey(entry.Entry))
-            .GroupBy(entry => entry.Entry, StringComparer.OrdinalIgnoreCase).Select(paths => paths.Last())
-            .GroupBy(entry => entry.File, entry => entry.Entry);
         try
         {
-            foreach (var fromOne in looseBase) WriteBase(fromOne.Key, fromOne.ToHashSet(StringComparer.OrdinalIgnoreCase), written);
             foreach (var asset in assets.Values.Where(asset => !packed.Contains(asset.Path)))
             {
                 written.Write(asset.Path, output =>
@@ -111,7 +104,6 @@ public sealed class BuildHandler
         var archivesRefused = Pack(mod, source.Archives, assets, instance.Archives, written);
 
         Dictionary<string, Made> made = new(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in looseBase.SelectMany(fromOne => fromOne)) made[written.PathOf(path)] = new Made(FromSource: false, Vouched: true);
         foreach (var asset in assets.Values.Where(asset => !packed.Contains(asset.Path))) made[written.PathOf(asset.Path)] = new Made(FromSource: true, Vouched: true);
         foreach (var (path, vouched) in CompiledFiles(loadOrder, mod, plugins, landed)) made[path] = new Made(FromSource: true, vouched);
         foreach (var archive in source.Archives.Select(archive => archive.Path))
@@ -131,7 +123,7 @@ public sealed class BuildHandler
         try
         {
             var read = _modFolders.Files(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
-            var builder = new ManifestBuilder(mod.InstallationFiles.Select(file => (_modFolders.InstallationFileName(file.Path), file)), []);
+            var builder = new ManifestBuilder([], []);
             var files = read.Files.Where(file => made.ContainsKey(file.Path)).ToList();
             var manifest = builder.Manifest([.. files.Select(file => new ManifestFile(file.Path,
                 made[file.Path].FromSource && shared is { } source ? new FileProvider.Source(source.Remote, source.Commit) : builder.ProviderOf(file)))], mod.Version);
@@ -176,51 +168,6 @@ public sealed class BuildHandler
         plugins
             .SelectMany(plugin => _plugins.Exists(plugin.Path) ? _plugins.WrittenByCompile(plugin, paths, loadOrder.GameRelease) : [plugin.Name])
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-    // The base is each installation file's entries at their own paths (mods.md, Build, story 1); no other is guessed.
-    // A path the manifest says an installation file provides is held, so a fresh clone builds back (story 7).
-    private ItemAnswer<BuildRefusal, BuiltMod>? WhyTheBaseIsNotKnown(
-        ModToBuild mod, IReadOnlyList<(InstallationFile File, string Entry)> installed, FolderWrite written)
-    {
-        if (mod.InstallationFiles.FirstOrDefault(file => !_modFolders.InstallationFileExists(file.Path)) is { } missing)
-        {
-            return Refused(BuildRefusal.InstallationFileMissing,
-                $"its installation file '{missing.Path}' is gone.");
-        }
-
-        var inFolder = _modFolders.FilePaths(mod.Folder).Concat(PathsTheManifestNames(mod)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (installed.FirstOrDefault(entry => !inFolder.Contains(written.PathOf(entry.Entry))) is { File: { } file, Entry: { } entry })
-        {
-            return Refused(BuildRefusal.BaseNotKnown,
-                $"'{_modFolders.InstallationFileName(file.Path)}' installs '{entry}', which its folder does not hold at that path, " +
-                "so build cannot yet tell where its files come from.");
-        }
-
-        return null;
-    }
-
-    private IEnumerable<string> PathsTheManifestNames(ModToBuild mod)
-    {
-        try
-        {
-            return _modFolders.ReadManifest(mod.Folder, mod.Name) is { } manifest
-                ? manifest.Files.Where(line => manifest.BytesOf(line) is FileBytes.InInstallationFile).Select(line => line.Path)
-                : [];
-        }
-        catch (InvalidDataException)
-        {
-            return [];
-        }
-    }
-
-    private void WriteBase(InstallationFile installed, HashSet<string> entries, FolderWrite written)
-    {
-        using var archive = _modFolders.OpenInstallationFile(installed.Path);
-        ArchiveExtractor.Extract(archive, (entry, content) =>
-        {
-            if (entries.Contains(entry)) written.Write(entry, content.CopyTo);
-        });
-    }
 
     private async Task<(IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Landed, IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused)> CompileAsync(
         LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<RegisteredPlugin> plugins, FolderWrite written)
