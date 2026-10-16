@@ -1,3 +1,4 @@
+import { firstLines, modLineKey } from '../loadOrderFileCodec/firstLines';
 import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
@@ -403,8 +404,9 @@ async function syncMods(adapter: InstanceAdapter, profile: string, modFolders: r
   const toSync = new Set(modFolders.map((folder) => folder.path));
   let added: string[] = [];
   let dropped: string[] = [];
-  const outcome = await changeModOrder(adapter, profile, (order, folders) => {
+  const outcome = await changeModOrder(adapter, profile, (lines, folders) => {
     if (folders === undefined) throw new Error(NO_MOD_FOLDERS);
+    const order = firstLines(lines, modLineKey).kept;
     const gone = order.filter((entry) => folders.holding(entry) === undefined);
     const held = new Set(order.flatMap((entry) => folders.holding(entry)?.path ?? []));
     const unlisted = folders.all.filter((folder) => toSync.has(folder.path) && !held.has(folder.path))

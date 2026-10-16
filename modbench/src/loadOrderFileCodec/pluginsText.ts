@@ -102,14 +102,13 @@ export function renamePluginInText(text: string, pluginName: string, newName: st
  *  in; comment and blank lines keep their positions. */
 export function movePluginsInText(text: string, pluginNames: string[], toIndex: number): string {
   return editLines(text, (lines) => {
-    const wanted = new Set(pluginNames);
-    const isMoved = (line: string): boolean => isEntryLine(line) && wanted.has(pluginNameOf(line));
-    const found = new Set(lines.filter(isMoved).map(pluginNameOf));
-    const missing = pluginNames.find((n) => !found.has(n));
-    if (missing !== undefined) throw notFound(missing);
-
-    const block = lines.filter(isMoved);
-    const rest = lines.filter((line) => !isMoved(line));
+    const moved = new Set(pluginNames.map((name) => {
+      const at = entryLineAt(lines, name);
+      if (at < 0) throw notFound(name);
+      return at;
+    }));
+    const block = lines.filter((_, at) => moved.has(at));
+    const rest = lines.filter((_, at) => !moved.has(at));
     const entries = entryLineIndices(rest, isEntryLine);
     const atEntry = entries[Math.min(Math.max(0, toIndex), entries.length)];
     const lastEntry = entries.at(-1);

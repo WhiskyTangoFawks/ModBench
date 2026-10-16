@@ -2,6 +2,7 @@
 // instance keeps what.
 
 import { basename, dirname } from 'node:path';
+import { firstLines, modLineKey } from '../loadOrderFileCodec/firstLines';
 import { parsePlugins, pluginKey, PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
 import { isArchiveName } from './archiveNames';
 import { parseDownloadMeta } from './codecs/downloads';
@@ -176,20 +177,10 @@ const modsWithMeta = async (source: ReadingSource, profile: string): Promise<Mod
   Promise.all((await source.modOrder(profile)).map(async (entry) =>
     (entry.kind === 'mod' ? { ...entry, ...(await source.modMeta(entry.name)) } : entry)));
 
-// The reference tool skips a line whose name it has already read (profile.cpp), so the first line
-// holds; the game does the same with plugins.txt.
-function firstLines<T>(lines: readonly T[], keyOf: (line: T) => string, describe: (line: T) => string): { kept: T[]; notes: string[] } {
-  const read = new Set<string>();
-  const kept: T[] = [];
-  const notes: string[] = [];
-  for (const line of lines) {
-    const key = keyOf(line);
-    if (read.has(key)) notes.push(`${describe(line)} on more than one line; the first line holds`);
-    else kept.push(line);
-    read.add(key);
-  }
-  return { kept, notes };
-}
+const withNotes = <T>(lines: readonly T[], keyOf: (line: T) => string, describe: (line: T) => string): { kept: T[]; notes: string[] } => {
+  const { kept, repeats } = firstLines(lines, keyOf);
+  return { kept, notes: repeats.map((line) => `${describe(line)} on more than one line; the first line holds`) };
+};
 
 async function settledMods(source: ReadingSource, profile: string): Promise<ModlistEntry[]> {
   const mods = await modsWithMeta(source, profile);
@@ -221,7 +212,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
   const { profile, gameName, gameRelease } = settings;
   const skippedLinks = new Map<string, string>();
   const modsRead = settledMods(source, profile).then((listed) =>
-    firstLines(listed, ({ kind, name }) => `${kind}:${name}`, ({ kind, name }) => `${MODLIST_FILE_NAME} lists the ${kind} ${name}`));
+    withNotes(listed, modLineKey, ({ kind, name }) => `${MODLIST_FILE_NAME} lists the ${kind} ${name}`));
   const modsKept = modsRead.then(({ kept }) => kept);
   const modFoldersRead = source.modFolders((name, reason) => skippedLinks.set(name, reason));
   const sourceModsRead = source.sourceMods();
@@ -248,7 +239,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
     source.holdsRepository(),
   ]);
   const { archiveList, dataFolderArchives, ...gameFacts } = game;
-  const pluginOrder = firstLines(pluginsListed, ({ name }) => pluginKey(name), ({ name }) => `${PLUGINS_FILE_NAME} lists the plugin ${name}`);
+  const pluginOrder = withNotes(pluginsListed, ({ name }) => pluginKey(name), ({ name }) => `${PLUGINS_FILE_NAME} lists the plugin ${name}`);
   return {
     profile, gameName, gameRelease, mods: mods.kept, pluginOrder: pluginOrder.kept, orderNotes: [...mods.notes, ...pluginOrder.notes], downloadedFiles, ...gameFacts,
     archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,

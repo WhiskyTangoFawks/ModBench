@@ -13,24 +13,17 @@ describe('a line the instance repeats', () => {
   beforeEach(() => { dir = cloneCorpusFixture(); });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  it('is one mod in the reading, the first line holding, and a note names the repeat', async () => {
+  it.each([
+    { what: 'mod', file: DEFAULT_MODLIST, line: '-Tracked Patch Mod', note: 'modlist.txt lists the mod Tracked Patch Mod' },
+    { what: 'separator', file: DEFAULT_MODLIST, line: '+Unassigned (Modlist Development)_separator', note: 'modlist.txt lists the separator Unassigned (Modlist Development)' },
+    { what: 'plugin, whatever its case', file: DEFAULT_PLUGINS, line: 'NONASCIIRETEXTURE.ESP', note: 'plugins.txt lists the plugin NONASCIIRETEXTURE.ESP' },
+  ])('is one $what in the reading, the first line holding, and a note names the repeat', async ({ file, line, note }) => {
     const before = await readInstanceOf(dir);
-    await appendFile(join(dir, DEFAULT_MODLIST), '-Tracked Patch Mod\n');
+    await appendFile(join(dir, file), `${line}\n`);
 
     const reading = await readInstanceOf(dir);
 
-    expect(reading.mods).toEqual(before.mods);
-    expect(reading.orderNotes).toEqual(['modlist.txt lists the mod Tracked Patch Mod on more than one line; the first line holds']);
-  });
-
-  it('is one plugin in the reading, the first line holding, whatever its case, and a note names the repeat', async () => {
-    const before = await readInstanceOf(dir);
-    const name = (before.pluginOrder[0]?.name ?? '').toUpperCase();
-    await appendFile(join(dir, DEFAULT_PLUGINS), `${name}\n`);
-
-    const reading = await readInstanceOf(dir);
-
-    expect(reading.pluginOrder).toEqual(before.pluginOrder);
-    expect(reading.orderNotes).toEqual([`plugins.txt lists the plugin ${name} on more than one line; the first line holds`]);
+    expect({ mods: reading.mods, pluginOrder: reading.pluginOrder }).toEqual({ mods: before.mods, pluginOrder: before.pluginOrder });
+    expect(reading.orderNotes).toEqual([`${note} on more than one line; the first line holds`]);
   });
 });
