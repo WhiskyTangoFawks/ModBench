@@ -1,7 +1,7 @@
 using MEditService.Codec.Schema;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
-using MEditService.Index.Queries;
+using MEditService.RecordIndex.Queries;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 

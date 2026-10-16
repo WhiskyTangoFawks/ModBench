@@ -1,5 +1,5 @@
 using System.Text.Json;
-using MEditService.Index.Queries;
+using MEditService.RecordIndex.Queries;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RepositoriesLib;

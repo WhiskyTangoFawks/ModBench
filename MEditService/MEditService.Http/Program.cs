@@ -10,7 +10,7 @@ using MEditService.Commands.Composition;
 using MEditService.Http;
 using MEditService.Http.Endpoints;
 using MEditService.Http.Notifications;
-using MEditService.Index;
+using MEditService.RecordIndex;
 using MEditService.LoadOrder;
 using MEditService.ModFolderAdapter;
 using MEditService.PluginAdapter;

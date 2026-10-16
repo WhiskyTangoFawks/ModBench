@@ -1,0 +1,110 @@
+using MEditService.RecordIndex.Queries;
+using MEditService.RecordIndex.Tests.TestSupport;
+using MEditService.LoadOrder;
+using MEditService.TestSupport;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
+
+namespace MEditService.RecordIndex.Tests.Indexing;
+
+public sealed class SqlDoorSchemaTests : IDisposable
+{
+    private static readonly PluginAddress BaseKey = new("Base.esm", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress OverKey = new("Over.esp", PluginOrigin.DataDirectory);
+
+    private readonly PluginFixtureData _fixture;
+    private readonly OpenedIndex _index;
+    private readonly string _npc;
+
+    public SqlDoorSchemaTests()
+    {
+        FormKey npc = default;
+        _fixture = new PluginFixtureBuilder("sql-door")
+            .WithPlugin("Base.esm", mod => npc = mod.Npcs.AddNew("SharedNpc").FormKey)
+            .WithPlugin("Over.esp", (mod, built) =>
+            {
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Base.esm") });
+                mod.Npcs.Set(built[0].Npcs.First().DeepCopy());
+            })
+            .Build();
+        _npc = npc.ToString();
+        _index = Indexes.Reconciled(_fixture);
+    }
+
+    public void Dispose()
+    {
+        _index.Dispose();
+        _fixture.Dispose();
+    }
+
+    private IReadOnlyList<RecordSummary> Listing() =>
+        _index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Items;
+
+    [Fact]
+    public void ARecordTypeView_ExposesTheIdentityColumns_AndTheDerivedWinnerAndLoadOrder()
+    {
+        _index.SetFilter("SELECT form_key FROM npc_ WHERE is_winner AND editor_id = 'SharedNpc' AND load_order_idx = 1", "filter.sql");
+
+        var winner = Assert.Single(Listing(), i => i.IsWinner);
+        Assert.Equal(OverKey.Name, winner.Plugin);
+        Assert.Equal(_npc, winner.FormKey);
+
+        _index.SetFilter("SELECT form_key FROM npc_ WHERE plugin = 'Base.esm' AND NOT is_winner AND load_order_idx = 0", "filter.sql");
+        Assert.Contains(Listing(), i => i.Plugin == BaseKey.Name);
+    }
+
+    [Fact]
+    public void ARecordTypeView_SpellsTheEditorIdOnce_AsEditorId()
+    {
+        _index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'SharedNpc'", "filter.sql");
+        Assert.Equal(2, Listing().Count);
+
+        var unbound = _index.Queries.SetFilter("SELECT form_key FROM npc_ WHERE \"EditorID\" = 'SharedNpc'", "filter.sql");
+        Assert.Equal(IndexRefusal.FilterRejected, unbound?.Refusal);
+        Assert.Contains("Referenced column \"EditorID\" not found", unbound?.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("records", true)]
+    [InlineData("form_lookup", true)]
+    [InlineData("holdings", false)]
+    public void ARelation_ExposesWinner_OnlyWhereAReaderAsksForIt(string relation, bool exposesWinner)
+    {
+        var sql = $"SELECT form_key FROM {relation} WHERE is_winner";
+
+        if (exposesWinner)
+        {
+            _index.SetFilter(sql, "filter.sql");
+            Assert.NotEmpty(Listing());
+        }
+        else
+        {
+            Assert.Equal(IndexRefusal.FilterRejected, _index.Queries.SetFilter(sql, "filter.sql")?.Refusal);
+        }
+    }
+
+    [Theory]
+    [InlineData("records")]
+    [InlineData("form_lookup")]
+    public void ARelation_ExposesLoadOrderIndex(string relation)
+    {
+        _index.SetFilter($"SELECT form_key FROM {relation} WHERE load_order_idx = 1", "filter.sql");
+
+        Assert.Single(Listing(), i => i.Plugin == OverKey.Name);
+    }
+
+    [Fact]
+    public void AFilterNamingAnUnknownColumn_IsRefused_AndTheFilterInForceStands()
+    {
+        _index.SetFilter("SELECT form_key FROM npc_ WHERE plugin = 'Over.esp'", "filter.sql");
+
+        Assert.Equal(
+            IndexRefusal.FilterRejected,
+            _index.Queries.SetFilter("SELECT form_key FROM npc_ WHERE no_such_column = 1", "filter.sql")?.Refusal);
+
+        Assert.Equal("SELECT form_key FROM npc_ WHERE plugin = 'Over.esp'", _index.Queries.GetFilter().Value()?.Sql);
+        Assert.Single(Listing(), i => i.Plugin == OverKey.Name);
+    }
+}

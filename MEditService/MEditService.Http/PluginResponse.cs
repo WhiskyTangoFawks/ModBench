@@ -1,4 +1,4 @@
-using MEditService.Index.Queries;
+using MEditService.RecordIndex.Queries;
 using MEditService.Ports;
 
 namespace MEditService.Http;

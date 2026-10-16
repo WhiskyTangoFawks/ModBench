@@ -57,7 +57,7 @@ export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposa
     if (!outcome.applied) {
       if (outcome.heldElsewhere) {
         // toolbox.md, Reporting story 1: the spec's own words, naming this instance.
-        deps.reporter.report('error', "This instance's index is open in another Modbench window", deps.instanceRoot);
+        deps.reporter.report('error', "This instance's record index is open in another Modbench window", deps.instanceRoot);
       } else {
         deps.reporter.report('error', 'Could not rebuild the index.', outcome.refusal);
       }

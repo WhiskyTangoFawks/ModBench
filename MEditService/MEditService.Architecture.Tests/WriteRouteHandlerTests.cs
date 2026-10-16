@@ -1,6 +1,6 @@
 using System.Reflection;
 using MEditService.Commands;
-using MEditService.Index.Queries;
+using MEditService.RecordIndex.Queries;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,7 +29,7 @@ public sealed class WriteRouteHandlerTests
     ];
 
     private const string CommandsNamespace = "MEditService.Commands";
-    private const string QueriesNamespace = "MEditService.Index.Queries";
+    private const string QueriesNamespace = "MEditService.RecordIndex.Queries";
 
     private static readonly string[] PrefixesWhoseMutatingRoutesAreWriteRoutes = ["/records", "/plugins"];
 

@@ -6,8 +6,8 @@ client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
-index: @../target-architecture.medit_readmodel.index
-index.label: Record index
+recordindex: @../target-architecture.medit_readmodel.recordindex
+recordindex.label: Record index
 sourcelanguage: @../target-architecture.modbench_driving.sourcelanguage
 sourcelanguage.label: Source language
 textdocuments: @../target-architecture.modbench_repositories.textdocuments
@@ -28,8 +28,8 @@ instanceloader.label: Instance loader
 create: "create: the type pick first" {
   editor -> client: "on a plugin, the record types the game can create; on a container, the types it holds" {class: query}
   client -> http: question {class: query}
-  http -> index: question {class: query}
-  index -> http: "answer: the record types" {class: query}
+  http -> recordindex: question {class: query}
+  recordindex -> http: "answer: the record types" {class: query}
   http -> client: answer {class: query}
   client -> editor: the record types {class: query}
 }
@@ -40,7 +40,7 @@ unsaved: "on each change to plugin source" {
   client."hands them again on connect"
   client -> http: "the unsaved documents" {class: edit}
   http -> sourceadapter: "the unsaved documents, held" {class: edit}
-  sourceadapter -> index: "the trees whose held text changed" {class: signal}
+  sourceadapter -> recordindex: "the trees whose held text changed" {class: signal}
 }
 
 editor -> client: "the gesture and its Options" {class: edit}

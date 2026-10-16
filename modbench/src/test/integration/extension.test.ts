@@ -1915,7 +1915,7 @@ describe('Refresh rebuilds the index, then re-reads the instance', () => {
       assert.strictEqual(errors.length, 1, `expected exactly one error toast, got: ${JSON.stringify(errors)}`);
       const [toast] = errors;
       assert.ok(
-        toast?.includes("This instance's index is open in another Modbench window"),
+        toast?.includes("This instance's record index is open in another Modbench window"),
         `expected the refusal's words, got: ${toast}`,
       );
       assert.ok(toast?.includes(root), `expected the instance named, got: ${toast}`);

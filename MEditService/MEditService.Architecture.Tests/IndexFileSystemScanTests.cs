@@ -5,15 +5,15 @@ namespace MEditService.Architecture.Tests;
 
 public sealed class IndexFileSystemScanTests
 {
-    private const string IndexRoot = "MEditService.Index";
+    private const string IndexRoot = "MEditService.RecordIndex";
 
     private static readonly string[] FilesThatNameTheFileSystem =
     [
-        "MEditService.Index/Store.cs",
-        "MEditService.Index/IndexFile.cs",
-        "MEditService.Index/Indexer.cs",
-        "MEditService.Index/HeldPlugins.cs",
-        "MEditService.Index/IndexScope.cs",
+        "MEditService.RecordIndex/Store.cs",
+        "MEditService.RecordIndex/IndexFile.cs",
+        "MEditService.RecordIndex/Indexer.cs",
+        "MEditService.RecordIndex/HeldPlugins.cs",
+        "MEditService.RecordIndex/IndexScope.cs",
     ];
 
     private static readonly (string Label, string Pattern)[] FileSystemNeedlesWhoseStaticsAreAnchoredAgainstAMemberAccessOfTheSameName =

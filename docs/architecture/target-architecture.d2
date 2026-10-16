@@ -66,7 +66,7 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by the core, the read model 
 
 medit_readmodel: "MEDIT · Read model — the record index, a view over the repositories below it" {
   class: band; grid-rows: 1
-  index: "Record index — one deep module, rebuildable\nowns: the read model over every plugin\nhides: how records are stored and kept current" {
+  recordindex: "Record index — one deep module, rebuildable\nowns: the read model over every plugin\nhides: how records are stored and kept current" {
     indexer: "Indexer\nowns: every plugin's rows, kept current; it decides nothing\nhides: how records are kept current" {class: readmodel}
     store: "Store\nowns: every plugin's rows\nhides: DuckDB" {class: derived}
   }

@@ -1,0 +1,96 @@
+using MEditService.RecordIndex.Tests.TestSupport;
+using MEditService.LoadOrder;
+using MEditService.TestSupport;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+
+namespace MEditService.RecordIndex.Tests.Indexing;
+
+public class ConditionReferenceTests
+{
+    private static List<string> ConditionRefPaths(PluginFixtureData fixture, FormKey source, FormKey target)
+    {
+        using var index = Indexes.Reconciled(fixture);
+        return [.. index.Queries.GetReferences(target.ToString()).Value()
+            .Where(r => r.FormKey == source.ToString())
+            .Select(r => r.FieldPath)
+            .Order(StringComparer.Ordinal)];
+    }
+
+    [Fact]
+    public void AFormParameterIsAReference_AndANumberParameterSharingItsBytesIsNot()
+    {
+        FormKey cobj = default, quest = default;
+        using var fixture = new PluginFixtureBuilder("cond-refs-parameters")
+            .WithPlugin("CondRefs.esp", mod =>
+            {
+                var q = mod.Quests.AddNew("RefQuest");
+                quest = q.FormKey;
+                var data = new FunctionConditionData
+                {
+                    Function = Condition.Function.GetStageDone,
+                    ParameterTwoNumber = (int)q.FormKey.ID,
+                };
+                data.ParameterOneRecord.SetTo(q.FormKey);
+                var recipe = mod.ConstructibleObjects.AddNew("RefRecipe");
+                cobj = recipe.FormKey;
+                recipe.Conditions.Add(new ConditionFloat { ComparisonValue = 1f, Data = data });
+            })
+            .Build();
+
+        Assert.Equal(
+            ["Conditions[0].Data.ParameterOneRecord"],
+            ConditionRefPaths(fixture, cobj, quest));
+    }
+
+    [Fact]
+    public void AnIdleMemberIsNotFlaggedAsABrokenLink()
+    {
+        FormKey cobj = default;
+        using var fixture = new PluginFixtureBuilder("cond-refs-checkerror")
+            .WithPlugin("CondCheck.esp", mod =>
+            {
+                var data = new FunctionConditionData
+                {
+                    Function = Condition.Function.IsSneaking,
+                    RunOnType = Condition.RunOnType.Subject,
+                };
+                var recipe = mod.ConstructibleObjects.AddNew("CheckRecipe");
+                cobj = recipe.FormKey;
+                recipe.Conditions.Add(new ConditionFloat { ComparisonValue = 1f, Data = data });
+            })
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
+
+        var document = index.DocumentOf(cobj.ToString(), new PluginAddress("CondCheck.esp", PluginOrigin.DataDirectory));
+        var conditions = document.Fields.Single(f => f.Metadata.Name == "Conditions");
+
+        Assert.Null(conditions.CheckError);
+    }
+
+    [Theory]
+    [InlineData(Condition.RunOnType.Reference, "Conditions[0].Data.Reference")]
+    [InlineData(Condition.RunOnType.Subject, null)]
+    public void TheRunOnReferenceIsAReferenceOnlyUnderTheReferenceRunOn(
+        Condition.RunOnType runOn, string? expected)
+    {
+        FormKey cobj = default, quest = default;
+        using var fixture = new PluginFixtureBuilder($"cond-refs-runon-{runOn}")
+            .WithPlugin("CondRunOn.esp", mod =>
+            {
+                var q = mod.Quests.AddNew("RunOnQuest");
+                quest = q.FormKey;
+                var data = new FunctionConditionData { Function = Condition.Function.IsSneaking, RunOnType = runOn };
+                data.Reference.SetTo(q.FormKey);
+                var recipe = mod.ConstructibleObjects.AddNew("RunOnRecipe");
+                cobj = recipe.FormKey;
+                recipe.Conditions.Add(new ConditionFloat { ComparisonValue = 1f, Data = data });
+            })
+            .Build();
+
+        Assert.Equal(
+            expected == null ? [] : new[] { expected },
+            ConditionRefPaths(fixture, cobj, quest));
+    }
+}
