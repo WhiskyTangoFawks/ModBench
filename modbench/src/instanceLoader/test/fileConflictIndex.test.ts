@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { Mod, Separator, ModlistEntry } from '../instance';
+import type { Mod, Separator } from '../instance';
+import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
   buildFileConflictIndex, modOrigin, goToModCandidates, inFileOrderConflict, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
 } from '../fileConflictIndex';

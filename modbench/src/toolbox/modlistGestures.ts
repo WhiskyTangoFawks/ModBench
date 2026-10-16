@@ -3,7 +3,6 @@ import { AgentCall, argumentOfKind, type GestureResult, type PartialFailure } fr
 import { carriedArgument, rowNameOf } from '../drivingLib/argument';
 import { gestureEntry, isClickedRow } from '../drivingLib/gestureEntry';
 import type { FocusedView } from '../drivingLib/focusedView';
-import { groupModlist } from '../drivingLib/modlistTree';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { EntryRef, Instance, InstanceValue } from '../instanceLoader/instance';
 import { modLabelsOf, modNameOf } from '../instanceLoader/modName';
@@ -99,7 +98,7 @@ function modsHeldBy(kind: unknown, name: string, value: InstanceValue): string[]
   const modName = (entry: EntryRef): string => modNameOf(value.modNames, entry) ?? entry.name;
   if (kind === 'mod') return [modName({ kind, name })];
   if (kind !== 'separator') return undefined;
-  const group = groupModlist([...value.mods]).groups.find(({ separator }) => separator.name === name);
+  const group = value.modGroups.groups.find(({ separator }) => separator.name === name);
   const itself = modNameOf(value.modNames, { kind, name });
   return [...(itself === undefined ? [] : [itself]), ...(group?.mods.map(modName) ?? [])];
 }

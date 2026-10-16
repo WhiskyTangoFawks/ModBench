@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Mod, ModlistEntry, Separator } from '../../instanceLoader/instance';
+import type { Mod, Separator } from '../../instanceLoader/instance';
+import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 import {

@@ -2,12 +2,12 @@
 // instance keeps what.
 
 import { basename, dirname } from 'node:path';
-import { firstLines, modLineKey } from '../loadOrderFileCodec/firstLines';
+import { firstLines } from '../loadOrderFileCodec/firstLines';
 import { parsePlugins, pluginKey, PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
 import { isArchiveName } from './archiveNames';
 import { parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
-import { entryNamed, MODLIST_FILE_NAME, parseModlist } from './codecs/modlistText';
+import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
 import { creationClubListFile, dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
 import { factsOf, get, isTracked, listDir, readOrReason, stampOf } from './files';
@@ -20,6 +20,7 @@ import {
   modMetaFile, modSourceDir, pluginsFile, profilesDir, settingsFile,
 } from './layout';
 import { type ArchiveReads, mo2Archives } from './mo2Archives';
+import { groupModOrder } from './modGroups';
 import { entryKey, folderHolding, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
 import { sourceModsIn } from './sourceMods';
@@ -241,7 +242,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
   const { archiveList, dataFolderArchives, ...gameFacts } = game;
   const pluginOrder = withNotes(pluginsListed, ({ name }) => pluginKey(name), ({ name }) => `${PLUGINS_FILE_NAME} lists the plugin ${name}`);
   return {
-    profile, gameName, gameRelease, mods: mods.kept, pluginOrder: pluginOrder.kept, orderNotes: [...mods.notes, ...pluginOrder.notes], downloadedFiles, ...gameFacts,
+    profile, gameName, gameRelease, mods: mods.kept, modGroups: groupModOrder(mods.kept), pluginOrder: pluginOrder.kept, orderNotes: [...mods.notes, ...pluginOrder.notes], downloadedFiles, ...gameFacts,
     archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
     profiles, modFolders, skippedLinks, runtimeOutput, modFiles, folderMeta,
     sourceMods, holdsRepository,

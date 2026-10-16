@@ -79,6 +79,18 @@ export interface Separator {
 /** One entry in mod order. */
 export type ModlistEntry = Mod | Separator;
 
+/** A separator and the mods it holds: those between it and the previous separator, toward the winning end. */
+export interface ModGroup {
+  readonly separator: Separator;
+  readonly mods: readonly Mod[];
+}
+
+/** Mod order grouped by separator, winning-first like the order. The mods after the last separator, on the losing side, are ungrouped. */
+export interface ModGroups {
+  readonly ungrouped: readonly Mod[];
+  readonly groups: readonly ModGroup[];
+}
+
 /** A mod or a separator, by its kind and name. */
 export type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
 
@@ -181,8 +193,8 @@ export interface InstallTarget {
 export type InstallOutcome = { readonly landed: true; readonly isFomod: boolean } | { readonly landed: false };
 
 /** Names match as the manager matches them. An entry added at the winning end is disabled. A
- *  separator takes its folder's name; one added is enabled, gets its folder, and lands after the
- *  entry at `afterIndex`, first at -1. */
+ *  separator added is enabled and gets its folder, after its `anchor` mod or before the
+ *  first mod of its `anchor` separator's group. */
 export type ModOrderChange =
   | { readonly kind: 'enable'; readonly mod: string; readonly enabled: boolean }
   | { readonly kind: 'moveMods'; readonly mods: readonly string[]; readonly place: MovePlace; readonly end: OrderEnd }
@@ -193,7 +205,7 @@ export type ModOrderChange =
     readonly end: OrderEnd;
   }
   | { readonly kind: 'addAtWinningEnd'; readonly entry: EntryRef }
-  | { readonly kind: 'addSeparator'; readonly separator: string; readonly afterIndex: number }
+  | { readonly kind: 'addSeparator'; readonly separator: string; readonly anchor: EntryRef }
   | { readonly kind: 'renameSeparator'; readonly from: string; readonly to: string }
   | { readonly kind: 'renameMod'; readonly from: string; readonly to: string }
   | { readonly kind: 'dropMod'; readonly mod: string }
@@ -362,6 +374,8 @@ export interface InstanceReading extends InstanceGame {
   readonly profile: string;
   /** Mod order, a mod's meta folded into its entry. */
   readonly mods: readonly ModlistEntry[];
+  /** The same mod order grouped by separator. */
+  readonly modGroups: ModGroups;
   /** Each line of mod order or plugin order the reading left out because an earlier line names the same entry. */
   readonly orderNotes: readonly string[];
   readonly pluginOrder: readonly PluginEntry[];

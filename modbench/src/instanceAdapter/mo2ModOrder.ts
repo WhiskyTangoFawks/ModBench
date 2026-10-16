@@ -1,9 +1,9 @@
 // MO2's changes to mod order: the file spliced through its codec under its lock and written
 // whole; a separator's folder moves with its line, under the same lock.
 
-import { firstLines, modLineKey } from '../loadOrderFileCodec/firstLines';
+import { firstLines } from '../loadOrderFileCodec/firstLines';
 import {
-  deleteSeparatorInText, insertModAtWinningEnd, insertSeparatorAtIndexInText, moveModsInText, moveSeparatorsInText,
+  deleteSeparatorInText, insertModAtWinningEnd, insertSeparatorBesideInText, modLineKey, moveModsInText, moveSeparatorsInText,
   parseModlist, removeModFromText, renameModLineInText, renameSeparatorInText, separatorModName, setEnabledInText,
 } from './codecs/modlistText';
 import { ensureDir, get, remove, undoAll, type Undo, withLock, write } from './files';
@@ -72,7 +72,7 @@ function resolveModOrderChange(order: readonly ModlistEntry[], change: ModOrderC
     case 'addSeparator': {
       const name = separatorName(change.separator);
       requireUnlisted(order, name);
-      return { ...change, separator: name };
+      return { ...change, separator: name, anchor: { kind: change.anchor.kind, name: listedName(order, change.anchor) } };
     }
     case 'renameSeparator': {
       const from = separator(change.from);
@@ -104,7 +104,7 @@ function spliceModOrderChange(text: string, change: ModOrderChange): string {
       const { kind, name } = change.entry;
       return insertModAtWinningEnd(text, kind === 'separator' ? separatorModName(name) : name);
     }
-    case 'addSeparator': return insertSeparatorAtIndexInText(text, change.separator, change.afterIndex);
+    case 'addSeparator': return insertSeparatorBesideInText(text, change.separator, change.anchor);
     case 'renameSeparator': return renameSeparatorInText(text, change.from, change.to);
     case 'renameMod': return renameModLineInText(text, change.from, change.to);
     case 'dropMod': return removeModFromText(text, change.mod);

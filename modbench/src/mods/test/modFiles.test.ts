@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { Mod, OriginFile, ModlistEntry, OriginFolder } from '../../instanceLoader/instance';
+import type { Mod, OriginFile, OriginFolder } from '../../instanceLoader/instance';
+import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   uriFile, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,

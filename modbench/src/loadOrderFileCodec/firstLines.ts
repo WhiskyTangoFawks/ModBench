@@ -11,5 +11,3 @@ export function firstLines<T>(lines: readonly T[], keyOf: (line: T) => string): 
   }
   return { kept, repeats };
 }
-
-export const modLineKey = ({ kind, name }: { readonly kind: string; readonly name: string }): string => `${kind}:${name}`;

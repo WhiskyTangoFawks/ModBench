@@ -117,7 +117,7 @@ export function registerModMoveCommand(
       const rows = pluralArgument(entry, 'mod', 'separator');
       const modNames = rows.flatMap((row) => (row.kind === 'mod' ? [row.mod.name] : []));
       const separatorNames = rows.flatMap((row) => (row.kind === 'separator' ? [row.separator.name] : []));
-      const { mods: entries } = instance.value;
+      const { modGroups } = instance.value;
       const direction = view.direction();
       const given = moveTargetOf(option);
       const pick = async <T extends MovePlace>(items: MovePickItem<T>[], placeholder: string) => {
@@ -125,11 +125,11 @@ export function registerModMoveCommand(
         return picked && { place: picked.target, end: endAtTop(direction) };
       };
       if (modNames.length > 0 && separatorNames.length === 0) {
-        const target = given ?? await pick(modsMovePick(entries, direction, modNames), 'Move to…');
+        const target = given ?? await pick(modsMovePick(modGroups, direction, modNames), 'Move to…');
         return target && { kind: 'mod', names: modNames, target };
       }
       if (separatorNames.length > 0 && modNames.length === 0) {
-        const target = given ?? await pick(separatorsMovePick(entries, direction, separatorNames), 'Move above…');
+        const target = given ?? await pick(separatorsMovePick(modGroups, direction, separatorNames), 'Move above…');
         return target && { kind: 'separator', names: separatorNames, target };
       }
       return undefined;

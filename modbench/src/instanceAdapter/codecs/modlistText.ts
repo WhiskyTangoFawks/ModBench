@@ -3,7 +3,7 @@
 // The top of the file is the winning end. Mutations edit the lines.
 
 import type { EntryRef, ModlistEntry, MovePlace, OrderEnd, SeparatorsPlace } from '../instanceAdapter';
-import { firstLines, modLineKey } from '../../loadOrderFileCodec/firstLines';
+import { firstLines } from '../../loadOrderFileCodec/firstLines';
 import { editLines, entryLineIndices, stripBom } from '../../loadOrderFileCodec/lineScan';
 
 /** The per-profile mod list, one line per mod in Mod override order. */
@@ -61,13 +61,13 @@ export function setEnabledInText(text: string, modName: string, enabled: boolean
   });
 }
 
-/** `afterIndex` is 0-based among entry lines, and clamps to the last one. `-1` inserts before the
- *  first entry line, the one position "after index i" cannot reach. */
-export function insertSeparatorAtIndexInText(text: string, name: string, afterIndex: number): string {
+export const modLineKey = ({ kind, name }: EntryRef): string => `${kind}:${modNameKey(name)}`;
+
+/** Directly after a mod anchor, and before the first mod of a separator anchor's own group, taking none.
+ *  Throws if the anchor is absent. */
+export function insertSeparatorBesideInText(text: string, name: string, anchor: EntryRef): string {
   return editLines(text, (lines) => {
-    const entryLineIdx = firstLines(entryLineIndices(lines, isEntryLine), (at) => modLineKey(entryNamed((lines[at] ?? '').slice(1)))).kept;
-    const anchor = entryLineIdx[Math.max(0, Math.min(afterIndex, entryLineIdx.length - 1))];
-    const insertAt = anchor === undefined ? lines.length : afterIndex < 0 ? anchor : anchor + 1;
+    const insertAt = anchor.kind === 'mod' ? modLineAt(lines, anchor.name) + 1 : separatorBlockStartAt(lines, anchor.name);
     lines.splice(insertAt, 0, `+${separatorModName(name)}`);
     return lines;
   });
@@ -126,16 +126,14 @@ function separatorLineAt(lines: readonly string[], separatorName: string): numbe
   return sepIdx;
 }
 
-// A separator trails the mods it holds, so its block runs back to the previous separator, or to
-// `first` when none precedes it.
-function blockStartOf<T>(items: readonly T[], sepIdx: number, isSeparator: (item: T) => boolean, first: number): number {
-  const previous = items.slice(0, sepIdx).findLastIndex(isSeparator);
-  return previous === -1 ? Math.min(first, sepIdx) : previous + 1;
+// A separator trails the mods it holds, so its block runs back to the previous separator the
+// reading shows, or to the first entry line when none precedes it. A repeated line is no boundary.
+function lineBlockStartAt(lines: readonly string[], sepIdx: number): number {
+  const repeats = new Set(firstLines(entryLineIndices(lines, isEntryLine), (at) => modLineKey(entryNamed((lines[at] ?? '').slice(1)))).repeats);
+  const previous = lines.slice(0, sepIdx).findLastIndex((line, at) => isSeparatorLine(line) && !repeats.has(at));
+  // Starting at the first entry line, so a leading comment or blank line stays where it is.
+  return previous === -1 ? Math.min(firstEntryLineAt(lines), sepIdx) : previous + 1;
 }
-
-// Starting at the first entry line, so a leading comment or blank line stays where it is.
-const lineBlockStartAt = (lines: readonly string[], sepIdx: number): number =>
-  blockStartOf(lines, sepIdx, isSeparatorLine, firstEntryLineAt(lines));
 
 const separatorBlockStartAt = (lines: readonly string[], separatorName: string): number =>
   lineBlockStartAt(lines, separatorLineAt(lines, separatorName));

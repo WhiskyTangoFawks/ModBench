@@ -3,7 +3,6 @@
 import * as vscode from 'vscode';
 import type { InstanceValue, InstanceView, OriginFile } from '../instanceLoader/instance';
 import { fileOrderConflictOf, modOrigin, outranksACopy, winsPath } from '../instanceLoader/fileConflictIndex';
-import { groupModlist } from '../drivingLib/modlistTree';
 import type { WorkspaceSettings } from './workspaceSettings';
 
 /** Each indicator in the order mods.md's table lists them, with its name there.
@@ -17,7 +16,7 @@ export const MOD_INDICATORS = [
 
 type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 
-type IndicatorsValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod'>;
+type IndicatorsValue = Pick<InstanceValue, 'mods' | 'modGroups' | 'files' | 'filesByMod'>;
 
 function indicatorsOf(value: IndicatorsValue, name: string, files: readonly OriginFile[]): ModIndicator[] {
   const own = modOrigin(name);
@@ -52,7 +51,7 @@ interface Carriers {
 function carriersOf(value: IndicatorsValue): Carriers {
   const byName = modIndicators(value);
   const separators = new Map<string, readonly ModIndicator[]>();
-  for (const { separator, mods } of groupModlist([...value.mods]).groups) {
+  for (const { separator, mods } of value.modGroups.groups) {
     if (mods.length === 0) continue;
     const held = mods.flatMap((own) => byName.get(own.name) ?? []);
     separators.set(separatorRowUri(separator.name).toString(), MOD_INDICATORS.map(({ id }) => id).filter((id) => held.includes(id)));
