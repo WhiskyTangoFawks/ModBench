@@ -91,6 +91,8 @@ export interface InstanceAnswers {
   /** The game's files, which a mod's files of the same path, whatever the case, override. */
   gameFiles?: readonly GameFile[];
   installed?: InstallOutcome;
+  /** Whether the instance folder holds a repository on disk now, whatever its reading said. */
+  repositoryOnDisk?: boolean;
   /** What writing the submodules says. */
   submodules?: Awaited<ReturnType<InstanceAdapter['writeSubmodules']>>;
   /** Downloaded files that are gone: they get no mark. */
@@ -187,6 +189,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, undefined),
     removeIgnoreList: () => record({ verb: 'removeIgnoreList' }, undefined),
+    repositoryOnDisk: () => Promise.resolve(answers.repositoryOnDisk ?? false),
     removeRepository: () => record({ verb: 'removeRepository' }, undefined),
     checkPushRefusalFree: () => record({ verb: 'checkPushRefusalFree' }, undefined),
     writeSubmodules: () => record({ verb: 'writeSubmodules' }, answers.submodules ?? { notes: [], other: [] }),

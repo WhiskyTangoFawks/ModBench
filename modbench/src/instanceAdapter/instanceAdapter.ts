@@ -472,9 +472,12 @@ export interface InstanceAdapter {
   /** Makes each source mod with a remote a submodule: its entry in `.gitmodules` and its line in the ignore list. A source mod
    *  it cannot read keeps the entry and line it has. */
   writeSubmodules(): Promise<SubmoduleReport>;
-  /** Takes back the repository `git init` made, which is nothing but its git directory. */
+  /** Whether the instance folder holds a repository now, read from disk. */
+  repositoryOnDisk(): Promise<boolean>;
+  /** Takes back the repository `git init` made. Rejects, removing nothing, when it holds a commit or a ref. */
   removeRepository(): Promise<void>;
-  /** Rejects, naming it, when `core.hooksPath` points outside the repository's git directory, or a pre-push hook is already where `refuseUnpublishedPins` would write one, repository or none yet. */
+  /** Rejects, naming it, when `core.hooksPath` points outside the git directory, or a pre-push hook is where
+   *  `refuseUnpublishedPins` would write one. */
   checkPushRefusalFree(): Promise<void>;
   /** Makes the instance repository refuse a push of a pin that is on none of its source mod's remotes. Rejects, writing
    *  nothing, when a pre-push hook is there. */

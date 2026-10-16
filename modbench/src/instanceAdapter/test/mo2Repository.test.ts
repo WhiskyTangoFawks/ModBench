@@ -351,6 +351,24 @@ describe('the MO2 adapter\'s repository', () => {
       }
     });
 
+    it('reads from disk whether the instance folder holds a repository', async () => {
+      const adapter = await instance();
+      const before = await adapter.repositoryOnDisk();
+      runGit('init', '--quiet');
+
+      expect([before, await adapter.repositoryOnDisk()]).toEqual([false, true]);
+    });
+
+    it('does not take back a repository that holds a commit, which git init did not make', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      runGit('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '--allow-empty', '-m', 'mine');
+
+      await expect(adapter.removeRepository()).rejects.toThrow(join(root, '.git'));
+
+      expect(runGit('log', '--format=%s').trim()).toBe('mine');
+    });
+
     it('takes the repository it made back, leaving nothing of it', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');

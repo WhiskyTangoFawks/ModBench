@@ -13,7 +13,7 @@ import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from './prePushHook';
 import { sourceModsIn } from './sourceMods';
 
-type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository'>;
+type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'>;
 
 const execFileAsync = promisify(execFile);
 
@@ -131,7 +131,15 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       return { notes, other };
     },
 
-    removeRepository: () => remove(join(instanceRoot, '.git')),
+    repositoryOnDisk: () => isRepository(instanceRoot),
+
+    async removeRepository() {
+      if (!(await isRepository(instanceRoot))) return;
+      const holdsRefs = (await git(instanceRoot, 'for-each-ref')).trim() !== '';
+      const holdsHead = await git(instanceRoot, 'rev-parse', '--verify', '-q', 'HEAD').then(() => true, () => false);
+      if (holdsRefs || holdsHead) throw new Error(`${join(instanceRoot, '.git')} holds commits or refs that git init did not make, so it is kept.`);
+      await remove(join(instanceRoot, '.git'));
+    },
 
     async checkPushRefusalFree() {
       const hook = join(await hooksFolder(instanceRoot), PRE_PUSH_HOOK_NAME);

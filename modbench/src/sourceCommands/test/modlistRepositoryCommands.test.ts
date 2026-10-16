@@ -44,6 +44,14 @@ describe('modlistRepositoryCommands git init', () => {
     expect([result, repositories, adapter.calls]).toEqual([{ applied: false, refusal: '/instance already holds a repository.' }, [], []]);
   });
 
+  it('refuses a repository on disk that its last reading did not hold, and changes nothing', async () => {
+    const { commands, adapter, repositories } = commandsOver({ repositoryOnDisk: true });
+
+    const result = await commands.gitInit({ holdsRepository: false });
+
+    expect([result, repositories, adapter.calls]).toEqual([{ applied: false, refusal: '/instance already holds a repository.' }, [], []]);
+  });
+
   it('makes no repository when the ignore list could not be written, and says why', async () => {
     const { commands, repositories } = commandsOver({ refusals: refusing('writeIgnoreList', '/instance/.gitignore already exists') });
 
