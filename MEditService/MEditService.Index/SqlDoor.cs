@@ -49,8 +49,8 @@ internal static class SqlDoor
         {
             if (RefusalOfRef(node, commonTableExpressions) is { } refusal) return refusal;
 
-            var covered = node.TryGetProperty("cte_name", out var recursive) && recursive.ValueKind == JsonValueKind.String
-                ? commonTableExpressions.Add(recursive.GetString()!)
+            var covered = node.TryGetProperty("cte_name", out var recursive) && recursive.GetString() is { } recursiveName
+                ? commonTableExpressions.Add(recursiveName)
                 : commonTableExpressions;
             if (node.TryGetProperty("cte_map", out var list))
             {
