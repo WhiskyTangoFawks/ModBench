@@ -2,7 +2,7 @@
 
 import * as vscode from 'vscode';
 import type { InstanceValue, InstanceView, OriginFile } from '../instanceLoader/instance';
-import { modOrigin, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { fileOrderConflictOf, modOrigin, outranksACopy, winsPath } from '../instanceLoader/fileConflictIndex';
 import { groupModlist } from '../drivingLib/modlistTree';
 import type { WorkspaceSettings } from './workspaceSettings';
 
@@ -20,25 +20,16 @@ type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 type IndicatorsValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod'>;
 
 function indicatorsOf(value: IndicatorsValue, name: string, files: readonly OriginFile[]): ModIndicator[] {
-  let wins = false;
-  let loses = false;
-  let gets = false;
-  let provides = false;
-  for (const { relativePath } of files.filter((own) => !own.excluded)) {
-    const providers = value.files.get(relativePath)?.providers ?? [];
-    const at = providers.findIndex((provider) => sameOrigin(provider, modOrigin(name)));
-    if (at === -1) continue;
-    provides = true;
-    if (at < providers.length - 1) wins = true;
-    if (at > 0) loses = true;
-    else gets = true;
-  }
-  const redundant = provides && !gets;
+  const own = modOrigin(name);
+  const entries = files.filter((file) => !file.excluded).map((file) => value.files.get(file.relativePath));
+  const gets = entries.some((entry) => winsPath(entry, own));
+  const loses = entries.some((entry) => fileOrderConflictOf(entry, own) === 'loses');
+  const redundant = loses && !gets;
   const holds: Record<ModIndicator, boolean> = {
-    overwritesLooseFiles: wins,
+    overwritesLooseFiles: entries.some((entry) => outranksACopy(entry, own)),
     overwrittenLooseFiles: loses && !redundant,
     redundant,
-    containsExcludedFiles: files.some((own) => own.excluded),
+    containsExcludedFiles: files.some((file) => file.excluded),
   };
   return MOD_INDICATORS.flatMap(({ id }) => (holds[id] ? [id] : []));
 }

@@ -3,7 +3,7 @@
 
 import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, InstanceView, OriginFile, OriginFolder } from '../instanceLoader/instance';
-import { modOrigin, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { fileOrderConflictOf, modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { fileRowUri } from './modFiles';
 import type { WorkspaceSettings } from './workspaceSettings';
 
@@ -16,8 +16,7 @@ type FilesValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod' | 'folders
 const isNotDeployed = (enabled: boolean, entry: OriginFolder): boolean => !enabled || entry.excluded;
 
 function isFileNotGotten(value: FilesValue, origin: FileOrigin, enabled: boolean, file: OriginFile): boolean {
-  const winner = value.files.get(file.relativePath)?.winnerOrigin;
-  return isNotDeployed(enabled, file) || (winner !== undefined && !sameOrigin(winner, origin));
+  return isNotDeployed(enabled, file) || fileOrderConflictOf(value.files.get(file.relativePath), origin) === 'loses';
 }
 
 // A folder never loses: the game merges folders.
