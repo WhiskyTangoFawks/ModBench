@@ -105,6 +105,12 @@ describe('parseModlist', () => {
 const names = (text: string) => parseModlist(text).map((e) => e.name);
 
 describe('insertSeparatorAtIndexInText', () => {
+  it('counts the entries the reading shows: a repeated line ahead of the target is not one', () => {
+    const out = insertSeparatorAtIndexInText('+A\n+B\n-A\n+C\n+D\n', 'S', 2);
+
+    expect(out).toBe('+A\n+B\n-A\n+C\n+S_separator\n+D\n');
+  });
+
   it('inserts after the given entry index, preserving comment header, CRLF, and * lines', () => {
     const out = insertSeparatorAtIndexInText(defaultModlist(), 'New Sep', 0);
     expect(names(out)).toEqual([

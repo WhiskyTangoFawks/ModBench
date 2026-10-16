@@ -3,6 +3,7 @@
 // The top of the file is the winning end. Mutations edit the lines.
 
 import type { EntryRef, ModlistEntry, MovePlace, OrderEnd, SeparatorsPlace } from '../instanceAdapter';
+import { firstLines, modLineKey } from '../../loadOrderFileCodec/firstLines';
 import { editLines, entryLineIndices, stripBom } from '../../loadOrderFileCodec/lineScan';
 
 /** The per-profile mod list, one line per mod in Mod override order. */
@@ -64,7 +65,7 @@ export function setEnabledInText(text: string, modName: string, enabled: boolean
  *  first entry line, the one position "after index i" cannot reach. */
 export function insertSeparatorAtIndexInText(text: string, name: string, afterIndex: number): string {
   return editLines(text, (lines) => {
-    const entryLineIdx = entryLineIndices(lines, isEntryLine);
+    const entryLineIdx = firstLines(entryLineIndices(lines, isEntryLine), (at) => modLineKey(entryNamed((lines[at] ?? '').slice(1)))).kept;
     const anchor = entryLineIdx[Math.max(0, Math.min(afterIndex, entryLineIdx.length - 1))];
     const insertAt = anchor === undefined ? lines.length : afterIndex < 0 ? anchor : anchor + 1;
     lines.splice(insertAt, 0, `+${separatorModName(name)}`);

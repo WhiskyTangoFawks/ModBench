@@ -4,7 +4,7 @@ import { fakeVscodeModule } from './fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { modSyncOver, modlistCommands } from '../../modOrderCommands/modOrderCommands';
 import {
@@ -192,6 +192,13 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     });
     expect(after.has('mods/DragIn Manual Extract/textures/dummy.dds')).toBe(true);
     expect((await readModlistEntries(dir)).map((e) => e.name)).toContain('DragIn Manual Extract');
+  });
+
+  it('syncMods reports a missing mod its file repeats once', async () => {
+    await appendFile(join(dir, MODLIST), '+[NODELETE] Radfall\r\n');
+    const outcome = await modSyncOver(adapterOver(dir))({ profile: PROFILE, modFolders: (await adapterOver(dir).reading()).modFolders?.all ?? [] });
+
+    expect(outcome).toMatchObject({ applied: true, dropped: ['[NODELETE] Radfall', 'Radfall - All-In-One Survival Overhaul (separator)'] });
   });
 });
 

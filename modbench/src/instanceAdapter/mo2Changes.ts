@@ -1,6 +1,7 @@
 // MO2's changes to the plugin order, the profile, the mod folders and the downloaded files' metadata:
 // each file spliced through its own codec under its lock and written whole.
 
+import { firstLines } from '../loadOrderFileCodec/firstLines';
 import {
   appendPluginInText, movePluginsInText, parsePlugins, pluginKey, removePluginFromText, setPluginEnabledInText,
   type PluginEntry,
@@ -56,7 +57,7 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
   return {
     changePluginOrder(profile, decide) {
       return putIfChanged(pluginsFile(instanceRoot, profile), (text) =>
-        decide(parsePlugins(text)).reduce(splicePluginOrderChange, text));
+        decide(firstLines(parsePlugins(text), ({ name }) => pluginKey(name)).kept).reduce(splicePluginOrderChange, text));
     },
 
     async createModFolder(mod) {
