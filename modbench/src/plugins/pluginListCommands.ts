@@ -14,7 +14,6 @@ import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGest
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { SelectionResult } from '../pluginsCommands/plugins';
-import { answerOf } from '../wire/readFailed';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { Refusal } from '../drivingLib/refusal';
 import { creatablePluginExtensionsOf } from './creatablePluginExtensions';
@@ -84,6 +83,8 @@ async function promptPluginName(
   });
 }
 
+const placeLabel = (origin: string): string => origin === OVERWRITE_ORIGIN ? 'Overwrite' : origin;
+
 function lostPlace(origin: string, lost: 'gone' | 'disabled' | 'unread'): string {
   if (lost === 'unread') return 'Overwrite has no folder yet';
   return `The mod "${origin}" ${lost === 'gone' ? 'is gone' : 'was disabled'}`;
@@ -125,7 +126,7 @@ export function registerCreatePluginCommand(
         reporter.report('error', `Overwrite and every enabled mod already hold "${name}".`);
         return undefined;
       }
-      const items = places.map(({ name: origin }) => ({ label: origin === OVERWRITE_ORIGIN ? 'Overwrite' : origin, origin }));
+      const items = places.map(({ name: origin }) => ({ label: placeLabel(origin), origin }));
       const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Where should the new plugin live?' });
       if (!picked) return undefined;
 
@@ -137,11 +138,13 @@ export function registerCreatePluginCommand(
       return made;
     },
     fromAgent: async ({ options: { name, place } }) => {
-      const refusal = pluginNameRefusal(name, answerOf(await client.getCreatablePluginExtensions()));
-      if (refusal !== undefined) throw new Refusal(refusal);
       const chosen = pluginPlaces(instance.value, name).find(({ name: origin }) => origin.toLowerCase() === place.toLowerCase());
-      if (chosen === undefined) throw new Refusal(`"${place}" is not an enabled mod or Overwrite that lacks "${name}".`);
-      const made = placed(instance.value, name, { origin: chosen.name, label: chosen.name === OVERWRITE_ORIGIN ? 'Overwrite' : chosen.name });
+      if (chosen === undefined) {
+        const overwrite = placeFolder(instance.value, OVERWRITE_ORIGIN);
+        if (place.toLowerCase() === OVERWRITE_ORIGIN && 'lost' in overwrite) throw new Refusal(`${lostPlace(OVERWRITE_ORIGIN, overwrite.lost)}, so "${name}" was not created.`);
+        throw new Refusal(`"${place}" is not an enabled mod or Overwrite that lacks "${name}".`);
+      }
+      const made = placed(instance.value, name, { origin: chosen.name, label: placeLabel(chosen.name) });
       if (typeof made === 'string') throw new Refusal(made);
       return made;
     },
