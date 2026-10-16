@@ -24,8 +24,8 @@ export interface ConflictEntry {
   providers: FileOrigin[];
 }
 
-/** The winning copy when `own` loses, and the copies `own` wins over, winning-first, when it
- *  wins. None unless another enabled copy provides the path. */
+/** The winning copy when `own` loses the path, and the copies `own` outranks, winning-first, when
+ *  it wins the path. None unless another enabled copy provides the path. */
 export function goToModCandidates(entry: ConflictEntry | undefined, own: FileOrigin): FileOrigin[] {
   const providers = entry?.providers ?? [];
   const at = providers.findIndex((provider) => sameOrigin(provider, own));
@@ -39,13 +39,25 @@ export function inFileOrderConflict(entry: ConflictEntry | undefined, own: FileO
   return providers.length > 1 && providers.some((provider) => sameOrigin(provider, own));
 }
 
+/** Whether `own` wins the path: its copy is the one the game gets. */
+export const winsPath = (entry: ConflictEntry | undefined, own: FileOrigin): boolean =>
+  entry !== undefined && sameOrigin(entry.winnerOrigin, own);
+
+/** Whether `own` outranks a copy: it provides the path and a lower copy does too, whether or not
+ *  it wins the path. */
+export function outranksACopy(entry: ConflictEntry | undefined, own: FileOrigin): boolean {
+  const providers = entry?.providers ?? [];
+  const at = providers.findIndex((provider) => sameOrigin(provider, own));
+  return at !== -1 && at < providers.length - 1;
+}
+
 export type FileOrderConflict = 'none' | 'wins' | 'loses';
 
 /** Whether `own`'s copy is in a file order conflict, and wins it or loses it to another enabled
  *  copy or Overwrite. */
 export function fileOrderConflictOf(entry: ConflictEntry | undefined, own: FileOrigin): FileOrderConflict {
   if (entry === undefined || !inFileOrderConflict(entry, own)) return 'none';
-  return sameOrigin(entry.winnerOrigin, own) ? 'wins' : 'loses';
+  return winsPath(entry, own) ? 'wins' : 'loses';
 }
 
 /** Comparison keys only — never display, never written back to disk. Locale-independent,
