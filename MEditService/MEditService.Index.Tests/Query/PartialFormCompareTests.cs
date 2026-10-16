@@ -107,7 +107,7 @@ public sealed class PartialFormCompareTests : IDisposable
             .Select(plugin => new RecordCopy(_cellKey.ToString(), new PluginAddress(plugin, PluginOrigin.DataDirectory)))
             .ToList();
 
-        var waterHeight = _index.Queries.GetCompareRecords(copies).Value().Diffs.Single(d => d.FieldName == "WaterHeight");
+        var waterHeight = _index.Queries.GetCompareRecords(copies).Compared().Diffs.Single(d => d.FieldName == "WaterHeight");
 
         Assert.Equal(ConflictAll.NoConflict, waterHeight.ConflictAll);
     }

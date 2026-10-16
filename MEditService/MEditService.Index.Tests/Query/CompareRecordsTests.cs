@@ -65,7 +65,7 @@ public sealed class CompareRecordsTests : IDisposable
         new(record.FormKey.ToString(), plugin, text);
 
     private CompareResult Compare(params RecordCopy[] copies) =>
-        _index.Queries.GetCompareRecords(copies).Value();
+        _index.Queries.GetCompareRecords(copies).Compared();
 
     private static string Column(CompareResult compare, int index) =>
         compare.Overrides[index].Column ?? throw new InvalidOperationException("Expected the column to be named.");
@@ -196,15 +196,13 @@ public sealed class CompareRecordsTests : IDisposable
     }
 
     [Fact]
-    public void CopiesNoPluginHolds_AndNoTextGives_FailTheWholeQuery_NamingEachOne()
+    public void CopiesNoPluginHolds_AndNoTextGives_AreAnsweredWithNothingCompared_NamingEachOne()
     {
         var sword = Copy(_sword, BasePlugin);
         var chestInMod = Copy(_chest, ModPlugin);
-        var message = _index.Queries.GetCompareRecords([Copy(_chest, BasePlugin), sword, chestInMod]).Missing().Message;
+        var missing = _index.Queries.GetCompareRecords([Copy(_chest, BasePlugin), sword, chestInMod]).Missing();
 
-        Assert.Contains($"{sword.FormKey} in {BasePlugin.Name} ({BasePlugin.Origin})", message);
-        Assert.Contains($"{chestInMod.FormKey} in {ModPlugin.Name} ({ModPlugin.Origin})", message);
-        Assert.DoesNotContain($"{_chest.FormKey} in {BasePlugin.Name}", message);
+        Assert.Equal([sword, chestInMod], missing.Select(m => m.Copy));
     }
 
     [Fact]
@@ -213,19 +211,19 @@ public sealed class CompareRecordsTests : IDisposable
         var nowhere = new RecordCopy("00DEAD:Nowhere.esp", ModPlugin);
         var swordInBase = Copy(_sword, BasePlugin);
 
-        var refusal = _index.Queries.GetCompareRecords([Copy(_chest, BasePlugin), swordInBase, nowhere]).Missing();
+        var missing = _index.Queries.GetCompareRecords([Copy(_chest, BasePlugin), swordInBase, nowhere]).Missing();
 
         Assert.Equal(
             [(nowhere.FormKey, CopyMissingReason.RecordGone), (swordInBase.FormKey, CopyMissingReason.NotInPlugin)],
-            refusal.Missing.OrderBy(m => m.Reason == CopyMissingReason.NotInPlugin).Select(m => (m.Copy.FormKey, m.Reason)));
+            missing.OrderBy(m => m.Reason == CopyMissingReason.NotInPlugin).Select(m => (m.Copy.FormKey, m.Reason)));
     }
 
     [Fact]
     public void ARecordOnlyADisabledPluginHolds_IsNotGone()
     {
-        var refusal = _index.Queries.GetCompareRecords([Copy(_dagger, BasePlugin)]).Missing();
+        var missing = _index.Queries.GetCompareRecords([Copy(_dagger, BasePlugin)]).Missing();
 
-        Assert.Equal(CopyMissingReason.NotInPlugin, Assert.Single(refusal.Missing).Reason);
+        Assert.Equal(CopyMissingReason.NotInPlugin, Assert.Single(missing).Reason);
     }
 
     [Fact]
