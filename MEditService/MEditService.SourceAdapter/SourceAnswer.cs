@@ -112,12 +112,13 @@ public abstract record SourceFailure
         public override bool DecompileRepairs => false;
     }
 
-    /// <summary>A change names a path that is not in the mod folder, or an output that is not a folder name.</summary>
     public sealed record OutsideTheMod : SourceFailure
     {
         internal OutsideTheMod(string reason) : base(reason)
         {
         }
+
+        public override bool DecompileRepairs => false;
     }
 
     /// <summary>The file system would not give a read or write what it needs: a file or folder is gone,

@@ -31,7 +31,6 @@ public enum BuildConfigurationRefusal
     /// <summary>The source folder holds no build configuration, or one that cannot be read.</summary>
     Unreadable,
 
-    /// <summary>The change names an output that is no folder name, or a path outside the mod folder.</summary>
     OutsideTheMod,
 
     /// <summary>The file system refused the write.</summary>
