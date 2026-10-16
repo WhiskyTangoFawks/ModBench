@@ -1,0 +1,22 @@
+using System.Text.Json.Nodes;
+using MEditService.Codec.Schema;
+using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
+
+namespace MEditService.RecordIndex.Tests.TestSupport;
+
+/// <summary>What a link resolves to, as the compare shows it on the link's cell.</summary>
+internal static class LinkResolutions
+{
+    /// <summary>A link to <paramref name="target"/>, resolved: <paramref name="npc"/>'s copy in
+    /// <paramref name="plugin"/> with its Race pointed at the target, compared alone as the editor sends it.</summary>
+    internal static FormKeyResolution ResolutionOf(this OpenedIndex index, string npc, PluginAddress plugin, string target)
+    {
+        var document = JsonNode.Parse(index.BodyOf(npc, plugin))?.AsObject()
+            ?? throw new InvalidOperationException($"Expected {npc}'s document to be an object.");
+        document["Race"] = target;
+        var compare = index.Queries.GetCompareRecords([new RecordCopy(npc, plugin, document.ToJsonString())]).Compared();
+        return compare.Diffs.Single(diff => diff.FieldName == "Race").Resolutions?.Values.Single()
+            ?? throw new InvalidOperationException($"Expected the link to {target} to resolve or not.");
+    }
+}

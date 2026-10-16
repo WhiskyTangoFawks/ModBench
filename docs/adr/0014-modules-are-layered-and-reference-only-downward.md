@@ -9,7 +9,7 @@ Each module owns one responsibility and hides how it does it ([principles](../pr
 
 ## Alternatives rejected
 
-- Every module knows every other: the write path pushed rows into the index, queries re-read the source tree, and the load order, index and ingest were one type.
+- Every module knows every other: the write path pushed rows into the record index, queries re-read the source tree, and the load order, index and ingest were one type.
 - An architecture test library or an import-boundaries lint to hold the layers. Project references make the compiler the sweep on both sides: `ProjectReference` between the service's csproj files, TypeScript project references between the extension's per-box `tsconfig.json` files, and a gate holds every list to the rule.
 - A hand-drawn reference list per box, each arrow a ruling: a reference the rule permitted still stopped the work, so agents copied code and parked logic in the composition root rather than ask.
 - Shared code in the composition root: helpers that no box owned collected there, and the views imported the module whose job is to import them.

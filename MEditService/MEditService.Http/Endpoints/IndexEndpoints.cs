@@ -1,9 +1,9 @@
-using MEditService.Index.Queries;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 
 namespace MEditService.Http.Endpoints;
 
-/// <summary>The load order's status, sequence and record filter, and the index's rebuild, each one
+/// <summary>The load order's status, sequence and record filter, and the record index's rebuild, each one
 /// Queries call and the wire translation of its answer (ADR-0014).</summary>
 internal static class IndexEndpoints
 {
@@ -124,7 +124,7 @@ internal static class IndexEndpoints
         }
         if (EndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
-        // Answered once the store is empty again; the refill reports through the index status.
+        // Answered once the store is empty again; the refill reports through the record index status.
         return svc.RebuildStore(gameRelease, req.InstanceRoot) is { } refusal
             ? EndpointMapping.Refusal(refusal)
             : Results.NoContent();

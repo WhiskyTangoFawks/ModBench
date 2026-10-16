@@ -68,7 +68,7 @@ public sealed class IndexFailureApiTests : HostedTests
     {
         var problem = await (await Client.DeleteAsync("/load-order/filter")).AssertIsProblem(HttpStatusCode.InternalServerError);
 
-        Assert.DoesNotContain("The index failed.", problem.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain("The record index failed.", problem.GetRawText(), StringComparison.Ordinal);
     }
 
     [Fact]

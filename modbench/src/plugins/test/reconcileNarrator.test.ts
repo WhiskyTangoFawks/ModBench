@@ -26,7 +26,7 @@ function narrated(settle: (status: LoadOrderProgress) => Promise<void> = () => P
 
 const flushed = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-describe('the reconcile narrator, the view\'s progress and each row\'s indexed state following the index status whoever started the reconcile', () => {
+describe('the reconcile narrator, the view\'s progress and each row\'s indexed state following the record index status whoever started the reconcile', () => {
   it('shows a rebuild-started refill: rows reset to still indexing, progress while it runs, cleared on Ready', async () => {
     const { deps, progress, narrator } = narrated();
     narrator.hear(ready());
@@ -180,7 +180,7 @@ describe('the reconcile narrator: the refill a rebuild starts, which the rebuild
     expect(refilled).toBe(true);
   });
 
-  it('ends the wait at once when the index held nothing to refill', async () => {
+  it('ends the wait at once when the record index held nothing to refill', async () => {
     const { narrator } = narrated();
     narrator.hear(dropped());
 

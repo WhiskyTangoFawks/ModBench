@@ -134,7 +134,7 @@ internal static class MalformedPluginScan
         }
     }
 
-    // The index the dangling combination would have taken.
+    // The record index the dangling combination would have taken.
     private static int CountClosedGroups(List<string> template)
     {
         var closed = 0;

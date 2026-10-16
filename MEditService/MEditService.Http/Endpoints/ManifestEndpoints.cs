@@ -46,7 +46,7 @@ internal static class ManifestEndpoints
             .WithName("ModStatus")
             .WithTags("Modlist")
             .WithDescription(
-                "Each mod's folder against its manifest (modlist-source.md, Status), from its manifest, a stat of each file and " +
+                "Each mod's folder against its manifest (modlist-repository.md, Status), from its manifest, a stat of each file and " +
                 "the stat cache, which keeps what the read found: each file whose bytes differ, each file no line names, each " +
                 "file a line names that is gone and each file with no provider, or that it has no manifest or why it cannot be read.")
             .Produces<ModStatusResponse>()

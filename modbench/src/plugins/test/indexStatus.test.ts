@@ -57,7 +57,7 @@ function followed() {
 
 const flushed = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-describe('the Plugins view following the index status and mEdit\'s own', () => {
+describe('the Plugins view following the record index status and mEdit\'s own', () => {
   it('says Ready on the status bar counting the active plugins, not every plugin indexed, once the stream\'s Ready is handed to the tree', async () => {
     const { client, deps } = followed();
 
@@ -93,7 +93,7 @@ describe('the Plugins view following the index status and mEdit\'s own', () => {
 
   it.each([
     ['a later reconcile starts', { state: 'Reconciling', conflictsComputed: false, version: 2 }],
-    ['the index is dropped', { state: 'None', conflictsComputed: false, totalPlugins: 0, version: 2 }],
+    ['the record index is dropped', { state: 'None', conflictsComputed: false, totalPlugins: 0, version: 2 }],
   ] as const)('gives Ready back to mEdit\'s own state when %s', async (_when, over) => {
     const { client } = followed();
     client.emit(statusEvent());
@@ -120,7 +120,7 @@ describe('the Plugins view following the index status and mEdit\'s own', () => {
     expect(statusBarText()).toBe('$(plug) mEdit: Running');
   });
 
-  it('runs the view\'s progress while the index fills, and closes it on Ready', async () => {
+  it('runs the view\'s progress while the record index fills, and closes it on Ready', async () => {
     const { client, deps } = followed();
     let closed = false;
     deps.progress.while.mockImplementation((work: () => Promise<void>) => work().then(() => { closed = true; }));

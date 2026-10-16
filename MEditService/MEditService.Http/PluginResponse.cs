@@ -1,5 +1,5 @@
-using MEditService.Index.Queries;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 
 namespace MEditService.Http;
 

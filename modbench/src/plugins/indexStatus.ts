@@ -72,7 +72,7 @@ interface IndexStatusDeps {
   reporter: Reporter;
 }
 
-// plugins.md, States 2–4 and 6: the index status the stream carries drives the Plugins view,
+// plugins.md, States 2–4 and 6: the record index status the stream carries drives the Plugins view,
 // whoever started the reconcile. mEdit going away, or a stream reopening onto another process,
 // starts its versions over.
 export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileNarrator } & vscode.Disposable {

@@ -1,7 +1,7 @@
 using System.Text.Json;
-using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;
@@ -80,5 +80,5 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IQueries
     internal static void Replace(IServiceCollection services, string? rebuildRefusal = null) =>
         services.AddSingleton<IQueries>(new FailingQueries(rebuildRefusal));
 
-    private static InvalidOperationException Failed() => new("The index failed.");
+    private static InvalidOperationException Failed() => new("The record index failed.");
 }

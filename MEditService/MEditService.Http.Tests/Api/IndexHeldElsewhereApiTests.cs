@@ -6,7 +6,7 @@ namespace MEditService.Http.Tests.Api;
 
 public sealed class IndexHeldElsewhereApiTests : HostedTests
 {
-    private const string Refusal = "Another window holds the index.";
+    private const string Refusal = "Another window holds the record index.";
 
     protected override MEditHost CreateHost() => new(services => FailingQueries.Replace(services, Refusal));
 

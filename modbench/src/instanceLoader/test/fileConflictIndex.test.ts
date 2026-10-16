@@ -66,14 +66,14 @@ describe('buildFileConflictIndex', () => {
     expect(entry?.winnerOrigin).toEqual(modOrigin('ModB'));
   });
 
-  it('lists nested subdirectory relative paths through the index\'s iteration surface', () => {
+  it('lists nested subdirectory relative paths through the record index\'s iteration surface', () => {
     const index = indexOver([mod('ModA'), mod('ModB')], conflicting);
     const paths = [...index.files].map((e) => e.relativePath);
     expect(paths).toContain('meshes/onlyB.nif');
     expect(paths).toContain('textures/shared/foo.dds');
   });
 
-  it('excludes an enabled separator from the index — a separator is not a mod, even though it also carries `enabled`', () => {
+  it('excludes an enabled separator from the record index — a separator is not a mod, even though it also carries `enabled`', () => {
     const index = indexOver([separator('Unassigned'), mod('ModA'), mod('ModB')], conflicting);
     expect(index.filesByMod.has('Unassigned')).toBe(false);
     expect(index.files.get('textures/shared/foo.dds')?.winnerOrigin).toEqual(modOrigin('ModA'));
@@ -244,7 +244,7 @@ describe('the origins go to mod can name for a copy of a file', () => {
     expect(goToModCandidates(entryOf(high, middle, low), middle)).toEqual([high]);
   });
 
-  it('is every copy the winning copy wins over, in the order the index lists them', () => {
+  it('is every copy the winning copy wins over, in the order the record index lists them', () => {
     expect(goToModCandidates(entryOf(high, middle, low), high)).toEqual([middle, low]);
   });
 

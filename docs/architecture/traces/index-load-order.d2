@@ -15,7 +15,7 @@ commands: @../target-architecture.medit_core.commands
 commands.label: Commands
 loadorder: @../target-architecture.medit_kernel.loadorder
 loadorder.label: Load order state
-indexer: @../target-architecture.medit_readmodel.index.indexer
+indexer: @../target-architecture.medit_readmodel.recordindex.indexer
 indexer.label: Indexer
 codec: @../target-architecture.medit_kernel.codec
 codec.label: Codec + schema
@@ -23,7 +23,7 @@ sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
 pluginadapter: @../target-architecture.medit_repositories.pluginadapter
 pluginadapter.label: Plugin adapter
-store: @../target-architecture.medit_readmodel.index.store
+store: @../target-architecture.medit_readmodel.recordindex.store
 store.label: Store
 port: @../target-architecture.medit_kernel.ports
 port.label: Ports
@@ -46,10 +46,10 @@ pluginadapter -> indexer: "bytes (no source, or plugin source unreadable)" {clas
 indexer -> store: rows {class: query}
 loadorder -> indexer: the active plugins {class: query}
 indexer."winners and conflicts"
-indexer -> port: "index status: reconciling · ready · held elsewhere · failed" {class: push}
+indexer -> port: "record index status: reconciling · ready · held elsewhere · failed" {class: push}
 store -> port: "rows changed: keys, sequence" {class: push}
 indexer -> port: "plugin changed: the plugin, sequence" {class: push}
 indexer -> port: "record filter cleared: its source, the database's reason" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
-client -> views: "index status · rows changed · plugin changed · record filter cleared" {class: push}
+client -> views: "record index status · rows changed · plugin changed · record filter cleared" {class: push}

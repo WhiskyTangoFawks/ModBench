@@ -12,7 +12,7 @@ const instanceThatReads = () => ({ refresh: () => { steps.push('refresh'); retur
 const noPut = { latestLoadOrder: () => Promise.resolve(undefined) };
 
 describe('a record write', () => {
-  it('holds the Plugins view\'s progress until the index reaches the newest load order the read put', async () => {
+  it('holds the Plugins view\'s progress until the record index reaches the newest load order the read put', async () => {
     steps.length = 0;
     let reached!: () => void;
     const client = { latestLoadOrder: () => new Promise<undefined>((resolve) => { reached = () => resolve(undefined); }) };

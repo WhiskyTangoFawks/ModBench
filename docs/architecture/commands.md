@@ -90,7 +90,7 @@ A gesture that fits none of these stays in the tables. A new reason is added to 
 | Plugin source | Referenced By, Ctrl + click | - | [plugin-source.md](surfaces/plugin-source.md) |
 | Agent | - | - | [agent.md](surfaces/agent.md) |
 | Scripts | Apply Script | - | [scripts.md](surfaces/scripts.md) |
-| Modlist source | - | - | [modlist-source.md](surfaces/modlist-source.md) |
+| Modlist repository | - | - | [modlist-repository.md](surfaces/modlist-repository.md) |
 
 The xEdit Messages tab is not a surface. Failures go to the Output and the surface their severity calls for (ADR-0019); diagnostics go to the Problems panel.
 
@@ -106,7 +106,7 @@ The xEdit Messages tab is not a surface. Failures go to the Output and the surfa
 | Editor, Referenced By | VS Code's References view | - | opened by the gesture |
 | Mods, the conflict table | an editor tab | - | opened by the user |
 | Plugin source, the text editor | an editor tab | - | opened by the user |
-| Modlist source, the manifests | an editor tab, and Source Control | - | opened by the user |
+| Modlist repository, the manifests | an editor tab, and Source Control | - | opened by the user |
 
 No view defaults to the Secondary Side Bar: it is the home of chat. A user can still move any view there.
 
@@ -126,7 +126,7 @@ What every list view does to whatever it shows, whatever the object. common.md s
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
 | open settings | reads | `modbench.settings.open` | - | - | MO2 toolbar | Open VS Code's Settings editor, filtered to Modbench's settings. | none |
-| refresh | writes | `modbench.instance.refresh` | - | - | MO2 toolbar | Drop and rebuild the index, then re-read the instance from disk. One gesture for all of Modbench. It is a safety net, not how changes normally arrive. It is refused while another window holds the index. | load-instance |
+| refresh | writes | `modbench.instance.refresh` | - | - | MO2 toolbar | Drop and rebuild the record index, then re-read the instance from disk. One gesture for all of Modbench. It is a safety net, not how changes normally arrive. It is refused while another window holds the record index. | load-instance |
 
 ## Profile
 
@@ -136,7 +136,7 @@ What every list view does to whatever it shows, whatever the object. common.md s
 
 ## Modlist
 
-The instance's mods and profiles as git holds them ([modlist-source.md](surfaces/modlist-source.md)). Commit, branch, merge, log, diff and checkout are VS Code's. A checkout changes the manifests and leaves the mod folders as they were, and restore from manifest restores them.
+The instance's mods and profiles as git holds them ([modlist-repository.md](surfaces/modlist-repository.md)). Commit, branch, merge, log, diff and checkout are VS Code's. A checkout changes the manifests and leaves the mod folders as they were, and restore from manifest restores them.
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
@@ -202,10 +202,10 @@ A field gesture from the palette acts on the focused cell of the record tab in f
 | create | edits | `modbench.record.create` | plugin, or a container record | record type; grid position, for an exterior cell | xEdit navigator | Add a record to a plugin, or a child record to a record. | edit-record |
 | delete | edits | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | edit-record |
 | copy | edits | `modbench.record.copy` | records | mode: new or override; destination plugins; replace, for a destination that holds the record | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. A picker asks for the mode and another for the destination. If a destination already holds a copy, a confirmation asks whether to replace it. | edit-record |
-| open | reads | `modbench.record.open` | records, or a reference field | pinned | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open one grid: the first record's file, with the others as its columns. A plugin header is a record. The Go to Record menu item on a reference field opens the record it points to. With no Argument, a picker finds a record by EditorID, FormID or FormKey. | query-index |
-| referenced by | reads | `modbench.record.referencedBy` | a record | - | xEdit Referenced By | List the records that reference a record, in VS Code's References view. With no Argument, the record tab in focus, or a picker. | query-index |
+| open | reads | `modbench.record.open` | records, or a reference field | pinned | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open one grid: the first record's file, with the others as its columns. A plugin header is a record. The Go to Record menu item on a reference field opens the record it points to. With no Argument, a picker finds a record by EditorID, FormID or FormKey. | query-record-index |
+| referenced by | reads | `modbench.record.referencedBy` | a record | - | xEdit Referenced By | List the records that reference a record, in VS Code's References view. With no Argument, the record tab in focus, or a picker. | query-record-index |
 | open field value | reads | `modbench.record.openFieldValue` | record, plugin, field path | - | xEdit View grid | Open a field value in an editor tab. | none |
-| filter | reads | `modbench.record.filter`, `modbench.record.clearFilter` | - | query: a `.sql` file, or a new document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | query-index |
+| filter | reads | `modbench.record.filter`, `modbench.record.clearFilter` | - | query: a `.sql` file, or a new document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | query-record-index |
 
 ## Downloaded file
 

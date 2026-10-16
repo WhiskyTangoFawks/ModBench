@@ -136,7 +136,7 @@ describe('completionsAt (plugin-source.md, In the text editor, story 5)', () => 
     expect(client.searchRecords).not.toHaveBeenCalled();
   });
 
-  it('offers nothing for a record the index does not hold', async () => {
+  it('offers nothing for a record the record index does not hold', async () => {
     const client = asking([reference('Armor')], [record('Gun', GUN)], {});
 
     expect(await completingAtBar(client, documentOf('"Armor": "Gu|"'))).toBeUndefined();

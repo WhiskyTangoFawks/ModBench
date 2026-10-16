@@ -4,33 +4,33 @@ The conflict table shows one mod's file order conflicts: a row for each file it 
 
 The table is a grid, not a list, so the list rules in [common.md](common.md) do not apply to it. Its States and Reporting do.
 
-Each story cites its source. A story with no source is owned here.
+Each story cites what decides it. A story that cites nothing is owned here.
 
 ## Opening
 
 As a user, I want:
 
-1. Open conflicts, on a mod row, to open the mod's table as a preview editor, which my next open replaces. Source: catalog `open conflicts`; VS Code's preview editors
-2. The tab titled `Conflicts: <mod name>`. Source: MO2
-3. A mod whose table is open in a tab of its own to be shown, not opened twice. Source: VS Code
+1. Open conflicts, on a mod row, to open the mod's table as a preview editor, which my next open replaces. Cites: catalog `open conflicts`; VS Code's preview editors
+2. The tab titled `Conflicts: <mod name>`. Cites: MO2
+3. A mod whose table is open in a tab of its own to be shown, not opened twice. Cites: VS Code
 
 ## Columns
 
 As a user, I want:
 
-1. One column for each enabled mod that has a copy of a row's file, in mod order: losing on the left, winning on the right. Source: MO2; the record panel's columns
+1. One column for each enabled mod that has a copy of a row's file, in mod order: losing on the left, winning on the right. Cites: MO2; the record panel's columns
 2. The opened mod's column outlined, so I find it among the others.
-3. Each column's header to show the mod's name, coloured with the column's worst cell colour. Source: [editor-conflicts.md](editor-conflicts.md), Cells, story 2
-4. Overwrite as the rightmost column when it has a copy of a row's file. Source: [mods.md](mods.md), The tree, story 4
+3. Each column's header to show the mod's name, coloured with the column's worst cell colour. Cites: [editor-conflicts.md](editor-conflicts.md), Cells, story 2
+4. Overwrite as the rightmost column when it has a copy of a row's file. Cites: [mods.md](mods.md), The tree, story 4
 
 ## Rows
 
 As a user, I want:
 
 1. One row for each file the mod has that another enabled mod or Overwrite also has, as a folder tree: folders first, then files, each by name.
-2. An excluded file to take no part, in the mod that excluded it. Source: MO2
-3. Every folder expanded when the table opens, and to collapse and expand a folder by a click on it. Source: xEdit opens every row
-4. The keys that move through a VS Code tree to move through the rows: Up, Down, Home, End, Page Up and Page Down, and Right and Left to expand and collapse a folder. Source: VS Code's trees
+2. An excluded file to take no part, in the mod that excluded it. Cites: MO2
+3. Every folder expanded when the table opens, and to collapse and expand a folder by a click on it. Cites: xEdit opens every row
+4. The keys that move through a VS Code tree to move through the rows: Up, Down, Home, End, Page Up and Page Down, and Right and Left to expand and collapse a folder. Cites: VS Code's trees
 
 ## Cells
 
@@ -55,20 +55,20 @@ A cell takes the first state in this table that applies.
 
 As a user, I want:
 
-1. Each cell and each row coloured as [editor-conflicts.md](editor-conflicts.md) colours a field, from the states above. A collapsed folder shows the worst state beneath it, and an expanded one shows none. Source: editor-conflicts, Rows, story 2
+1. Each cell and each row coloured as [editor-conflicts.md](editor-conflicts.md) colours a field, from the states above. A collapsed folder shows the worst state beneath it, and an expanded one shows none. Cites: editor-conflicts, Rows, story 2
 2. Each cell to show one value of its copy. A setting chooses the value: the size, the date modified, or a letter for the contents. The size is the default. The letter is A for the master's contents, so two cells with the same letter hold the same file.
-3. A cell's tooltip to name the mod, the state in xEdit's words, the size and the date modified, so the colour is never the only way to tell. Source: editor-conflicts, The colours, story 2
+3. A cell's tooltip to name the mod, the state in xEdit's words, the size and the date modified, so the colour is never the only way to tell. Cites: editor-conflicts, The colours, story 2
 
 ## States
 
 As a user, I want:
 
-1. Before the first read lands, an empty table, so "not read yet" never reads as "no conflicts". Source: common, States, story 1
+1. Before the first read lands, an empty table, so "not read yet" never reads as "no conflicts". Cites: common, States, story 1
 2. A mod with no file order conflict to show "No file order conflicts." in place of the table.
-3. A mod that is disabled to show "Disabled: its files take no part in mod order." in place of the table. Source: MO2
+3. A mod that is disabled to show "Disabled: its files take no part in mod order." in place of the table. Cites: MO2
 4. A mod that is gone from the mod list to show that it is gone, naming it, in place of the table.
-5. The table to follow the disk: a change to any copy, or to mod order, shows with no action of mine. The folders I collapsed and the scroll stay. Source: common, A view, story 2; ADR-0015
-6. A copy that cannot be read to show no state and no value, and its tooltip to say why. Its row shows no colour, since its state is not known. One line in the Output. Source: Never silently wrong; ADR-0019
+5. The table to follow the disk: a change to any copy, or to mod order, shows with no action of mine. The folders I collapsed and the scroll stay. Cites: common, A view, story 2; ADR-0015
+6. A copy that cannot be read to show no state and no value, and its tooltip to say why. Its row shows no colour, since its state is not known. One line in the Output. Cites: Never silently wrong; ADR-0019
 
 ## Menus and keys
 
@@ -80,8 +80,8 @@ As a user, I want:
 
 As a user, I want:
 
-1. Compare file to open VS Code's diff editor, the cell's copy on the left and the winning copy on the right, titled with the file and both mods. Source: catalog `compare file`
-2. Open conflicts on a column header to open that mod's table. Source: catalog `open conflicts`
+1. Compare file to open VS Code's diff editor, the cell's copy on the left and the winning copy on the right, titled with the file and both mods. Cites: catalog `compare file`
+2. Open conflicts on a column header to open that mod's table. Cites: catalog `open conflicts`
 
 ## Test seam
 

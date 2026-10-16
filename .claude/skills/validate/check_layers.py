@@ -128,7 +128,7 @@ def reaches_its_bands_lib(src_id: str, dst_id: str):
 def load_boxes(zoom_out: Path):
     """Every box the zoom-out draws, a part of a box included, and each band's lib, which it
     does not draw, by column and name:
-    {'medit': {'index': 'medit_readmodel.index', 'queries': 'medit_readmodel.index.queries'}}."""
+    {'medit': {'recordindex': 'medit_readmodel.recordindex', 'queries': 'medit_readmodel.recordindex.queries'}}."""
     boxes = {}
     column, path = None, []
     for line in zoom_out.read_text().splitlines():

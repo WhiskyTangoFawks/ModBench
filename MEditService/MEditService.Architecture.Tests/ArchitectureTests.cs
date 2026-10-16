@@ -2,11 +2,11 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
-using MEditService.Index;
-using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RecordIndex;
+using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 
@@ -28,7 +28,7 @@ public sealed class ArchitectureTests
 
     private static readonly (Assembly Assembly, string Namespace)[] ReadModelAndWireRecordNamespaces =
     [
-        (typeof(IQueries).Assembly, "MEditService.Index.Queries"),
+        (typeof(IQueries).Assembly, "MEditService.RecordIndex.Queries"),
         (typeof(Program).Assembly, "MEditService.Http"),
     ];
 

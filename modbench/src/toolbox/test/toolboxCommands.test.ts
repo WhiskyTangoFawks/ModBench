@@ -209,7 +209,7 @@ describe('Refresh', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('keeps the Toolbox\'s progress open until mEdit\'s refill ends, not only until the rebuild answers with the index still empty', async () => {
+  it('keeps the Toolbox\'s progress open until mEdit\'s refill ends, not only until the rebuild answers with the record index still empty', async () => {
     let refillEnds!: () => void;
     const { run } = registerRefresh({ applied: true }, '/instance', new Promise<void>((resolve) => { refillEnds = resolve; }));
 
@@ -231,7 +231,7 @@ describe('Refresh', () => {
       'progress opens on modbench.toolbox', 'instance commands: refresh', 'Instance loader: read every file again', 'progress closes',
     ]);
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: "This instance's index is open in another Modbench window", detail: '/instance/FO4' },
+      { severity: 'error', message: "This instance is open in another Modbench window", detail: '/instance/FO4' },
     ]);
   });
 
@@ -245,7 +245,7 @@ describe('Refresh', () => {
       'progress opens on modbench.toolbox', 'instance commands: refresh', 'Instance loader: read every file again', 'progress closes',
     ]);
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not rebuild the index.', detail: refusal },
+      { severity: 'error', message: 'Could not refresh.', detail: refusal },
     ]);
   });
 

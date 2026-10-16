@@ -135,7 +135,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     }
 
     // The header is the one document with a file of its own that is not yielded here: it has its own
-    // member, and the index writes its row through a door of its own.
+    // member, and the record index writes its row through a door of its own.
     private IEnumerable<PluginDocument> DocumentsAt(string file, CellStructure? cell, OneDocumentPerFormKey holders)
     {
         if (SourceRepositoryLayout.CarriesNoRecord(file)) yield break;
@@ -250,7 +250,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
                 throw new InvalidOperationException(
                     $"{ownerFormKey}'s '{child.SlotName}' names '{child.FormKey}', yet the span reader finds no text for it.");
             }
-            // The index holds the file's own bytes (ADR-0005), so a hand edit the codec would respell
+            // The record index holds the file's own bytes (ADR-0005), so a hand edit the codec would respell
             // reaches it as the file spells it.
             var text = ContainerDocumentEdits.ChildTextAt(ownerBytes, span, _release);
             yield return (child, text, ownerFormKey);

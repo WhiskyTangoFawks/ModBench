@@ -40,7 +40,7 @@ internal static class DocumentText
     internal static string? FormKeyDeclaredIn(string text, string filePath, string pluginFileName)
     {
         // The header's document carries a ModKey rather than a FormKey; PluginHeader computes the
-        // FormKey the index files it under.
+        // FormKey the record index files it under.
         if (SourceRepositoryLayout.IsHeaderDocumentPath(filePath, pluginFileName))
             return SourceRepositoryLayout.HeaderFormKeyOf(pluginFileName);
 

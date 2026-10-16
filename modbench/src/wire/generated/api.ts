@@ -177,7 +177,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Each mod's folder against its manifest (modlist-source.md, Status), from its manifest, a stat of each file and the stat cache, which keeps what the read found: each file whose bytes differ, each file no line names, each file a line names that is gone and each file with no provider, or that it has no manifest or why it cannot be read. */
+        /** @description Each mod's folder against its manifest (modlist-repository.md, Status), from its manifest, a stat of each file and the stat cache, which keeps what the read found: each file whose bytes differ, each file no line names, each file a line names that is gone and each file with no provider, or that it has no manifest or why it cannot be read. */
         post: operations["ModStatus"];
         delete?: never;
         options?: never;
@@ -328,7 +328,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description What is wrong in each compiled plugin's source, on the file that holds the record: a reference to a record neither it nor an active plugin holds. Answers only once the index is ready. */
+        /** @description What is wrong in each compiled plugin's source, on the file that holds the record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready. */
         get: operations["GetPluginProblems"];
         put?: never;
         post?: never;
@@ -345,7 +345,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The plugins that list the plugin's file name as a master, and the plugins whose masters mEdit could not read. Answers only once the index is ready. */
+        /** @description The plugins that list the plugin's file name as a master, and the plugins whose masters mEdit could not read. Answers only once the record index is ready. */
         get: operations["GetPluginDependants"];
         put?: never;
         post?: never;

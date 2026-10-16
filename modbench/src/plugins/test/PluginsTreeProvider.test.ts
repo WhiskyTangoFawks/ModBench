@@ -1392,7 +1392,7 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
 
 describe('PluginsTreeProvider — the message line takes the first message that holds (common.md, States 5; plugins.md, States 1, 5 and 6)', () => {
   const GAME_FOLDER_MESSAGE = "Game folder not found: set modbench.mods.gameDirectory. The Toolbox's Game row names each place Modbench looked.";
-  const indexFailed = { kind: 'failed', message: 'the index threw' } as const;
+  const indexFailed = { kind: 'failed', message: 'the record index threw' } as const;
 
   const withoutGameFolder = (plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]) =>
     new FakeInstance({ ...valueOf(plugins), gameFolder: GAME_FOLDER_NOT_FOUND });
@@ -1409,7 +1409,7 @@ describe('PluginsTreeProvider — the message line takes the first message that 
     await h.tree.getChildren();
     h.tree.facts.refused(indexFailed);
 
-    expect(h.tree.viewMessage()).toBe('Indexing failed: the index threw');
+    expect(h.tree.viewMessage()).toBe('Indexing failed: the record index threw');
   });
 
   it('puts no rows over a record filter that matched nothing', async () => {

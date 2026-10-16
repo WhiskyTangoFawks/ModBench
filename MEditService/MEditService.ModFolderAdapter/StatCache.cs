@@ -3,7 +3,7 @@ using MEditService.RepositoriesLib;
 
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>What Modbench last read of one mod folder's files on this machine (modlist-source.md, Status, story 3), and
+/// <summary>What Modbench last read of one mod folder's files on this machine (modlist-repository.md, Status, story 3), and
 /// the hash each provider of its manifest fixes as the last update or restore was handed it.</summary>
 internal sealed class StatCache
 {

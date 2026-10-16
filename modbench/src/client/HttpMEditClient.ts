@@ -251,7 +251,7 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  /** Refresh's first step (commands.md, Instance), which refills the index against the load order
+  /** Refresh's first step (commands.md, Instance), which refills the record index against the load order
    *  mEdit holds. A 423 is `heldElsewhere` (ADR-0010), never a rejection. */
   async rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome> {
     try {

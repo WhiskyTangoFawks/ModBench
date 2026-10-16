@@ -94,8 +94,8 @@ public sealed class SourceRepository : ISourceRepository
     /// <summary>Why git cannot be run here, so no repository can be made or written; null when it can.</summary>
     internal static SourceFailure? WhyGitCannotRun() => SourceFailure.Answer(GitCli.EnsureOnPath);
 
-    /// <summary>The stamp of one document's text, as the UTF-8 the index stores it in: every side hashes
-    /// through here, so a file that is not valid UTF-8 stamps alike on disk and in the index.</summary>
+    /// <summary>The stamp of one document's text, as the UTF-8 the record index stores: every side hashes
+    /// through here, so a file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>
     public static string ContentStamp(string text) => TreeStamps.ContentStamp(text);
 
     /// <summary>The record's own text, or null when no document holds it. The identity comes back as
@@ -173,7 +173,7 @@ public sealed class SourceRepository : ISourceRepository
             ? new DocumentFile(unit.FullPath, unit.IsEmbedded)
             : null);
 
-    /// <summary>What the file at <paramref name="path"/> holds, read from its text as the index reads it.</summary>
+    /// <summary>What the file at <paramref name="path"/> holds, read from its text as the record index reads it.</summary>
     internal static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path, ISourceFiles files)
     {
         var fullPath = Path.GetFullPath(path);

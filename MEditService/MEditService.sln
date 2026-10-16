@@ -13,7 +13,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.Codec", "MEdit
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.Ports", "MEditService.Ports\MEditService.Ports.csproj", "{2B6C4D8B-9968-4AD8-8304-C675BFA7B308}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.Index", "MEditService.Index\MEditService.Index.csproj", "{1EDAAA4B-25D7-4194-A630-DE9A07CD9D5C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.RecordIndex", "MEditService.RecordIndex\MEditService.RecordIndex.csproj", "{1EDAAA4B-25D7-4194-A630-DE9A07CD9D5C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.SourceAdapter", "MEditService.SourceAdapter\MEditService.SourceAdapter.csproj", "{1E597442-FDBB-4B2E-9896-C52C69C3F0CA}"
 EndProject
@@ -31,7 +31,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.PluginAdapter.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.SourceAdapter.Tests", "MEditService.SourceAdapter.Tests\MEditService.SourceAdapter.Tests.csproj", "{FB3A63C6-61DC-4B9A-857E-6DAE70933D7C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.Index.Tests", "MEditService.Index.Tests\MEditService.Index.Tests.csproj", "{74967DAE-6BF5-4896-A326-B087682A8078}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.RecordIndex.Tests", "MEditService.RecordIndex.Tests\MEditService.RecordIndex.Tests.csproj", "{74967DAE-6BF5-4896-A326-B087682A8078}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.Commands.Tests", "MEditService.Commands.Tests\MEditService.Commands.Tests.csproj", "{D705C795-BDC2-44BF-8CAF-89D2B256A28F}"
 EndProject

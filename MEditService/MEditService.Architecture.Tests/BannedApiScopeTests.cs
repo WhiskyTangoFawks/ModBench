@@ -10,10 +10,10 @@ public sealed class BannedApiScopeTests
     [
         "MEditService.Commands",
         "MEditService.Http",
-        "MEditService.Index",
         "MEditService.LoadOrder",
         "MEditService.ModFolderAdapter",
         "MEditService.Ports",
+        "MEditService.RecordIndex",
         "MEditService.SourceAdapter",
     ];
 
@@ -32,7 +32,7 @@ public sealed class BannedApiScopeTests
         var configured = ConfiguredSeverities();
 
         Assert.All(
-            new[] { "MEditService.Index", "MEditService.Commands", "MEditService.Codec", "MEditService.PluginAdapter",
+            new[] { "MEditService.RecordIndex", "MEditService.Commands", "MEditService.Codec", "MEditService.PluginAdapter",
                 "MEditService.TestSupport" },
             project => Assert.Equal(ReportDiagnostic.Error, configured.For(Path.Combine(project, "Probe.cs"))));
     }

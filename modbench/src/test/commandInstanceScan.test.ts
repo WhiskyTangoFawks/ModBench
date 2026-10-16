@@ -50,7 +50,7 @@ describe('commands never walk the instance', () => {
     expect(offenders).toEqual({});
   });
 
-  it('flags a module that builds the index or reads overwrite/ itself', () => {
+  it('flags a module that builds the record index or reads overwrite/ itself', () => {
     const planted = "const index = await buildFileConflictIndex(entries, root, log);\nawait readdir(overwriteDir(root));\n";
     expect(walkersIn(planted)).toEqual(['buildFileConflictIndex', 'overwriteDir']);
   });

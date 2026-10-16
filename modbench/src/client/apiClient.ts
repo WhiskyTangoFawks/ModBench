@@ -90,7 +90,7 @@ export interface LoadOrderStatus {
   /** The Apply this status answers for. A client waits for this to reach its own Apply's
    *  version, never for a tick a fast or no-op reconcile can settle before it subscribes. */
   version: number;
-  /** The wire's `None`: no load order has arrived, or a rebuild dropped the index it filled. */
+  /** The wire's `None`: no load order has arrived, or a rebuild dropped the record index it filled. */
   holdsNone: boolean;
 }
 

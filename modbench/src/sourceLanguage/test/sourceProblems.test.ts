@@ -146,7 +146,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     await vi.waitFor(() => { expect(published.at(-1)?.size).toBe(1); });
   });
 
-  it('asks nothing while the index is not ready', async () => {
+  it('asks nothing while the record index is not ready', async () => {
     const { client, answered } = feed({});
     client.emit(loadOrderStatus(false));
 
@@ -178,7 +178,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     await vi.waitFor(() => { expect(published.map((problems) => problems.size)).toEqual([1, 0]); });
   });
 
-  it('says nothing when mEdit cannot answer at subscribe, and asks nothing on a save until the index is ready', async () => {
+  it('says nothing when mEdit cannot answer at subscribe, and asks nothing on a save until the record index is ready', async () => {
     const { client, reporter, answered } = feed({});
     await new Promise((settled) => { setTimeout(settled, 0); });
     client.emit({ kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
@@ -189,7 +189,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     expect(reporter.shownOnSurface).not.toHaveBeenCalled();
   });
 
-  it('asks nothing on a save when the index began reconciling while the ask at subscribe was in flight', async () => {
+  it('asks nothing on a save when the record index began reconciling while the ask at subscribe was in flight', async () => {
     let answer!: (problems: PluginProblems[]) => void;
     const { client, published, answered } = feed({}, sourceFolders, new Promise<PluginProblems[]>((resolve) => { answer = resolve; }));
     client.emit(loadOrderStatus(false));
@@ -202,7 +202,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
   });
 
-  it.each(['rows-changed', 'plugin-changed'])('asks nothing on %s while the index reconciles', async (kind) => {
+  it.each(['rows-changed', 'plugin-changed'])('asks nothing on %s while the record index reconciles', async (kind) => {
     const { client, answered } = feed({});
     await answered([]);
     client.emit(loadOrderStatus(false));

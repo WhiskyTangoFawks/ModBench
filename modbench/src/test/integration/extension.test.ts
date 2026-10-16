@@ -1885,7 +1885,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
   });
 });
 
-describe('Refresh rebuilds the index, then re-reads the instance', () => {
+describe('Refresh rebuilds the record index, then re-reads the instance', () => {
   afterEach(() => { rebuildIndexShouldFail = false; });
 
   it('POSTs /index/rebuild, then PUTs the load order the re-read built', async () => {
@@ -1894,12 +1894,12 @@ describe('Refresh rebuilds the index, then re-reads the instance', () => {
     await vscode.commands.executeCommand('modbench.instance.refresh');
 
     const rebuilt = requestLog.indexOf('POST /index/rebuild', since);
-    assert.ok(rebuilt !== -1, 'modbench.instance.refresh must rebuild the index');
+    assert.ok(rebuilt !== -1, 'modbench.instance.refresh must rebuild the record index');
     await waitFor('a PUT /load-order after the rebuild',
       () => requestLog.slice(rebuilt).includes('PUT /load-order') ? true : undefined);
   });
 
-  it('reports that another window holds the index, naming this instance', async () => {
+  it('reports that another window holds the record index, naming this instance', async () => {
     rebuildIndexShouldFail = true;
     const since = requestLog.length;
     const errors: string[] = [];
@@ -1915,7 +1915,7 @@ describe('Refresh rebuilds the index, then re-reads the instance', () => {
       assert.strictEqual(errors.length, 1, `expected exactly one error toast, got: ${JSON.stringify(errors)}`);
       const [toast] = errors;
       assert.ok(
-        toast?.includes("This instance's index is open in another Modbench window"),
+        toast?.includes("This instance is open in another Modbench window"),
         `expected the refusal's words, got: ${toast}`,
       );
       assert.ok(toast?.includes(root), `expected the instance named, got: ${toast}`);

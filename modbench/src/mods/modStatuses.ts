@@ -1,4 +1,4 @@
-// modlist-source.md, Status: each mod's folder against its manifest, read again for each mod mEdit pushes as changed
+// modlist-repository.md, Status: each mod's folder against its manifest, read again for each mod mEdit pushes as changed
 // (mod-status trace), and for every mod when the stream opens again.
 
 import * as vscode from 'vscode';
@@ -94,7 +94,7 @@ export class ModStatuses implements SyncMessage, vscode.Disposable {
 
 const counted = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
 
-// modlist-source.md, Status, stories 1 and 6.
+// modlist-repository.md, Status, stories 1 and 6.
 const differs = ({ differing, namedByNoLine, gone, metadataDiffers }: ModStatus): boolean => differing.length + namedByNoLine.length + gone.length > 0 || metadataDiffers;
 
 function stateOf(status: ModStatus): string | undefined {
@@ -112,12 +112,12 @@ export function statusDescription(status: ModStatus): string | undefined {
 /** What a separator row's description says of its status (mods.md, A row, Separator). */
 export const separatorDescription = ({ noManifest }: ModStatus): string | undefined => (noManifest ? 'no manifest' : undefined);
 
-/** What a mod row's tooltip says of the files its folder lacks (modlist-source.md, Status, story 4). */
+/** What a mod row's tooltip says of the files its folder lacks (modlist-repository.md, Status, story 4). */
 export const lackedLine = ({ gone }: ModStatus): string | undefined =>
   (gone.length > 0 ? `its folder lacks ${counted(gone.length, 'file', 'files')} its manifest names` : undefined);
 
 /** Each file of the mod whose row says differs, by its path on disk. */
 export const differingFiles = ({ differing, namedByNoLine }: ModStatus): ReadonlySet<string> => new Set([...differing, ...namedByNoLine]);
 
-/** Whether the mod counts in the view's badge (modlist-source.md, Status, story 5). */
+/** Whether the mod counts in the view's badge (modlist-repository.md, Status, story 5). */
 export const countsInBadge = (status: ModStatus): boolean => status.noManifest || differs(status);

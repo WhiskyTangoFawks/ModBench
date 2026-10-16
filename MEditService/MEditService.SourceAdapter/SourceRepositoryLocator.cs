@@ -84,7 +84,7 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
         if (!_files.DirectoryExists(sourceRoot)) return null;
 
         // The header's document declares a ModKey rather
-        // than the FormKey the index files it under, so no name or text in the tree carries that key.
+        // than the FormKey the record index files it under, so no name or text in the tree carries that key.
         if (spelled.Equals(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), StringComparison.OrdinalIgnoreCase))
         {
             return _files.FileExists(SourceRepositoryLayout.HeaderDocumentIn(_sourceFolder, plugin.Name))

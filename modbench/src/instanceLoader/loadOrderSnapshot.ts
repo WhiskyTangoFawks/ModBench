@@ -270,7 +270,7 @@ export function loadOrderSnapshotOf(value: {
   readonly modlist: SnapshotModlist;
 }): LoadOrderSnapshotValue<string> | LoadOrderSnapshotRefusal | undefined {
   // Without the game's masters or its archives the snapshot would be silently wrong (principles.md), so
-  // the index keeps what it holds until the folder can be read (common.md, States, story 5).
+  // the record index keeps what it holds until the folder can be read (common.md, States, story 5).
   if (value.gameFolder.kind !== 'found' || value.pluginsLoadedWithNoLine === undefined || value.archives.inData.kind !== 'listed') {
     return undefined;
   }

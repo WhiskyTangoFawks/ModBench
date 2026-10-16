@@ -21,7 +21,7 @@ The fallback #566 proposed. Modbench stages the renames, so Source Control pairs
 
 ### Each child in a file of its own, ordered by a list Modbench keeps in the container
 
-Built in #566, and deleted three days later by #745. The container's document held the ordered FormKeys of its children, and each child's file had a name from its identity alone. Mutagen's serialization has no hook for such a list, so Modbench wrote the list after each serialization and reordered each collection after each read. Each shape of the tree needed its own rule: a flat group needed a minted group document, a block level held its children in its own folder, and a cell's children stayed embedded. The list had to survive every reserialize and every document edit, and the list and the files could disagree, a failure no plugin has. #745 named it a second structural model that neither the plugin nor the index has.
+Built in #566, and deleted three days later by #745. The container's document held the ordered FormKeys of its children, and each child's file had a name from its identity alone. Mutagen's serialization has no hook for such a list, so Modbench wrote the list after each serialization and reordered each collection after each read. Each shape of the tree needed its own rule: a flat group needed a minted group document, a block level held its children in its own folder, and a cell's children stayed embedded. The list had to survive every reserialize and every document edit, and the list and the files could disagree, a failure no plugin has. #745 named it a second structural model that neither the plugin nor the record index has.
 
 ### The same list as a Mutagen customization
 

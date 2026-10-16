@@ -3,7 +3,7 @@ import { runWritingGesture, type RecordWrite } from '../drivingLib/writingGestur
 import type { Instance } from '../instanceLoader/instance';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
 
-// The read's load-order put is what the index must reach before the rows show the write.
+// The read's load-order put is what the record index must reach before the rows show the write.
 export function recordWriteOver(
   instance: Pick<Instance, 'refresh'>, client: Pick<MEditClient, 'latestLoadOrder'>,
 ): RecordWrite {

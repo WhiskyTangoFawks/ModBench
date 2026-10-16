@@ -73,7 +73,7 @@ describe('hashIndex', () => {
     expect(answers).toEqual([{ kind: 'read', answer: { size: 4, hash: HASH_OF_AAAA } }, { kind: 'read', answer: { size: 4, hash: HASH_OF_AAAA } }]);
   });
 
-  it('answers a downloaded file\'s size and hash and each entry\'s, extracting it in its folder and leaving only the index there', async () => {
+  it('answers a downloaded file\'s size and hash and each entry\'s, extracting it in its folder and leaving only the record index there', async () => {
     clockAnHourPastEveryWrite();
     const path = await fileHolding('Mod.7z', 'archive');
 
@@ -86,7 +86,7 @@ describe('hashIndex', () => {
     expect(await readdir(folder)).toEqual(['hashes.jsonl']);
   });
 
-  it('keeps a downloaded file\'s hash and a game file\'s in the index, and an origin file\'s nowhere but this session', async () => {
+  it('keeps a downloaded file\'s hash and a game file\'s in the record index, and an origin file\'s nowhere but this session', async () => {
     clockAnHourPastEveryWrite();
     const download = await fileHolding('Mod.7z', 'archive');
     const gameFile = await fileHolding('Game.esm', 'aaaa');
@@ -205,7 +205,7 @@ describe('hashIndex', () => {
     expect(vi.mocked(digestOf).mock.calls).toHaveLength(1);
   });
 
-  it('skips a line of the index it cannot read, as a crash mid-write leaves one, and trusts the lines it can', async () => {
+  it('skips a line of the record index it cannot read, as a crash mid-write leaves one, and trusts the lines it can', async () => {
     clockAnHourPastEveryWrite();
     const file = await fileHolding('Game.esm', 'aaaa');
     await hashIndex(folder, fakeArchiveReader([])).gameFileHash(file);

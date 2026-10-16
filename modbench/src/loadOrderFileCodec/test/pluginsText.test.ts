@@ -199,7 +199,7 @@ describe('movePluginsInText — byte-faithful reorder', () => {
     expect(out).toBe('B.esp\n*A.esp\nA.esp\nC.esp\n');
   });
 
-  it('lands at the index of the entries the reading shows: a repeated line ahead of the target is not one', () => {
+  it('lands at the record index of the entries the reading shows: a repeated line ahead of the target is not one', () => {
     const out = movePluginsInText('A.esp\nB.esp\nA.esp\nC.esp\nD.esp\n', ['D.esp'], 3);
 
     expect(names(out)).toEqual(['A.esp', 'B.esp', 'A.esp', 'C.esp', 'D.esp']);

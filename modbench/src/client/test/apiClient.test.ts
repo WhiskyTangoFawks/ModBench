@@ -41,7 +41,7 @@ describe('toLoadOrderStatus', () => {
     expect(status.refusal).toBeUndefined();
   });
 
-  it('says the index holds none for the None state, and only for it, as a rebuild drops the index before it refills and no other field tells it from a reconcile that has indexed nothing yet', () => {
+  it('says the record index holds none for the None state, and only for it, as a rebuild drops the record index before it refills and no other field tells it from a reconcile that has indexed nothing yet', () => {
     const tick = (state: 'None' | 'Reconciling') => toLoadOrderStatus({
       state, totalPlugins: 0, activePlugins: 0, version: 1, indexedPlugins: [], conflictsComputed: false, failures: [],
     });

@@ -62,10 +62,10 @@ class SelectWithoutAWindow(unittest.TestCase):
         self.assertIn('terminal', str(raised.exception))
 
     def test_raises_the_detail_of_a_problem_mEdit_answers(self) -> None:
-        problem = {'status': 503, 'detail': "mEdit's index is not ready: still reading."}
+        problem = {'status': 503, 'detail': "mEdit's record index is not ready: still reading."}
         with medit_answering(503, problem) as url, window_of(url), self.assertRaises(medit.MEditError) as raised:
             medit.select('SELECT 1')
-        self.assertEqual(str(raised.exception), "mEdit's index is not ready: still reading.")
+        self.assertEqual(str(raised.exception), "mEdit's record index is not ready: still reading.")
 
     def test_raises_the_status_of_an_answer_that_is_not_a_problem(self) -> None:
         with medit_answering(502, b'<html>Bad Gateway</html>') as url, window_of(url), self.assertRaises(medit.MEditError) as raised:
