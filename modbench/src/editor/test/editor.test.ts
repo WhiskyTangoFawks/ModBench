@@ -1,4 +1,5 @@
 import type { NotificationEvent } from '../../client/test/InMemoryMEditClient';
+import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, uriFrom, fakeUri } from '../../test/vscodeMock';
 import type { ReferencesViewInput } from '../referencesView';
@@ -158,7 +159,7 @@ const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =
   typeof value === 'object' && value !== null && 'resolveCustomTextEditor' in value;
 
 const NO_MODS: ModFacts = {
-  trackedMods: () => new Set<string>(), modDirs: () => new Map<string, string>(), standingOf: () => ({ kind: 'enabled' }),
+  trackedMods: () => new Set<string>(), modOfOrigin: () => undefined, standingOf: () => ({ kind: 'enabled' }),
   onChange: () => ({ dispose: () => undefined }),
 };
 
@@ -1246,7 +1247,7 @@ describe('what a record tab\'s webview posts', () => {
       const mEdit = client();
       mEdit.setQueryAnswer('getPlugins', plugins);
       mEdit.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin, isWinner: true, editorId: 'Gun' }]));
-      const modFacts = { ...NO_MODS, trackedMods: () => new Set(['ModA']), modDirs: () => new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB']]) };
+      const modFacts = { ...NO_MODS, trackedMods: () => new Set(['ModA']), modOfOrigin: modOfOriginIn('ModA', 'ModB') };
       const { openDocument } = makeEditor(mEdit, undefined, modFacts);
       const tab = await openDocument(renderedUri(GUN, 'Gun.json'), { getText: () => '{}' });
 
@@ -1263,7 +1264,7 @@ describe('what a record tab\'s webview posts', () => {
       let tracked = new Set<string>();
       const changed: (() => void)[] = [];
       const modFacts = {
-        ...NO_MODS, trackedMods: () => tracked, modDirs: () => new Map([['ModB', '/mods/ModB']]),
+        ...NO_MODS, trackedMods: () => tracked, modOfOrigin: modOfOriginIn('ModB'),
         onChange: (listener: () => void) => { changed.push(listener); return { dispose: () => undefined }; },
       };
       const { openDocument } = makeEditor(mEdit, undefined, modFacts);

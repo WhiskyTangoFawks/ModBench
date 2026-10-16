@@ -3,7 +3,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import {
-  entryNotFound, type DecideModOrder, type EntryRef, type FileOrigin, type InstanceAdapter,
+  entryNotFound, sameEntry, type DecideModOrder, type EntryRef, type FileOrigin, type InstanceAdapter,
   type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
 import { EMPTY_MOD_NAME, entryNameRefusal, goneFromDisk, newModNameRefusal, type EntryKey, type TakenNames } from '../coreLib/commandRefusals';
@@ -43,9 +43,9 @@ async function changeSeparator(adapter: InstanceAdapter, profile: string, decide
 
 type EntryKind = EntryRef['kind'];
 
-// A command names an entry by the name the value listed it under.
-const isListed = (order: readonly ModlistEntry[], entry: EntryRef): boolean =>
-  order.some((e) => e.kind === entry.kind && e.name === entry.name);
+// A command names an entry as the mod manager matches names.
+const isListed = (adapter: InstanceAdapter, order: readonly ModlistEntry[], entry: EntryRef): boolean =>
+  order.some((e) => sameEntry(adapter, e, entry));
 
 // Decided from mod order as it stands when the changes land, so an item gone since the view last
 // rendered is refused by name while the rest land in the same write.
@@ -55,7 +55,7 @@ async function changeSelection(
 ): Promise<SelectionResult<string>> {
   let outcome: SelectionOutcome<string> = { landed: [], refused: [] };
   const result = await changeModOrder(adapter, profile, (order) => {
-    const landed = names.filter((name) => isListed(order, { kind, name }));
+    const landed = names.filter((name) => isListed(adapter, order, { kind, name }));
     const refused = names.filter((name) => !landed.includes(name)).map((name) => ({ item: name, reason: entryNotFound({ kind, name }) }));
     outcome = { landed, refused };
     return changesFor(landed);
@@ -236,12 +236,12 @@ const dropOf = (entry: EntryRef): ModOrderChange =>
 async function trashThenUnlist(
   adapter: InstanceAdapter, profile: string, order: readonly ModlistEntry[], kind: EntryKind, names: readonly string[], trash: MoveToTrash,
 ): Promise<SelectionResult<TrashedEntry>> {
-  const refused: ItemRefusal<TrashedEntry>[] = names.filter((name) => !isListed(order, { kind, name }))
+  const refused: ItemRefusal<TrashedEntry>[] = names.filter((name) => !isListed(adapter, order, { kind, name }))
     .map((name) => ({ item: { name }, reason: entryNotFound({ kind, name }) }));
   const toUnlist: string[] = [];
   const trashed = new Set<string>();
   const sourceRefusals = new Map<string, string>();
-  for (const name of names.filter((n) => isListed(order, { kind, name: n }))) {
+  for (const name of names.filter((n) => isListed(adapter, order, { kind, name: n }))) {
     try {
       if (await adapter.trashEntryFolder({ kind, name }, trash)) trashed.add(name);
       toUnlist.push(name);

@@ -38,7 +38,7 @@ export const READ_RECORD = {
     { name, plugin }: { name: string; plugin?: { name: string; origin?: string } },
   ) => {
     const [formKey = ''] = await formKeysNamed(mEdit, [name]);
-    const [address] = plugin === undefined ? [] : pluginsNamed(value.plugins, [plugin]);
+    const [address] = plugin === undefined ? [] : pluginsNamed(value, [plugin]);
     if (address !== undefined) return copyOf(mEdit, address, formKey);
     const comparison = await mEdit.getComparison(formKey);
     if (isReadFailed(comparison)) throw new Refusal(failureReason(comparison));

@@ -1,7 +1,6 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import type { UnreadableSource } from '../wire/unreadableSource';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
-import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { ByPluginAddress } from './pluginAddress';
@@ -24,7 +23,7 @@ export type PluginPlace = 'inTrackedMod' | 'inUntrackedMod' | 'inOverwrite';
 
 /** The instance value's two facts about where a mod's plugins live. */
 export interface PlaceFacts {
-  readonly modDirs: ReadonlyMap<string, string>;
+  readonly modOfOrigin: (origin: string) => string | undefined;
   readonly trackedMods: ReadonlySet<string>;
 }
 
@@ -78,11 +77,9 @@ const changedOutside = (changed: boolean): PluginStatus | undefined => !changed 
 const malformed = (diagnosisTexts: readonly string[]): PluginStatus | undefined => diagnosisTexts.length === 0 ? undefined
   : { kind: 'malformed', words: 'malformed', tooltipLine: `Malformed: ${diagnosisTexts.join('; ')}` };
 
-// The instance value names each mod's folder, whatever the mod manager calls the others, and
-// each mod whose folder holds a repository.
-export function placeOf(origin: string, { modDirs, trackedMods }: PlaceFacts): PluginPlace | undefined {
+export function placeOf(origin: string, { modOfOrigin, trackedMods }: PlaceFacts): PluginPlace | undefined {
   if (origin === OVERWRITE_ORIGIN) return 'inOverwrite';
-  const mod = modOfOrigin(modDirs, origin);
+  const mod = modOfOrigin(origin);
   if (mod === undefined) return undefined;
   return trackedMods.has(mod) ? 'inTrackedMod' : 'inUntrackedMod';
 }

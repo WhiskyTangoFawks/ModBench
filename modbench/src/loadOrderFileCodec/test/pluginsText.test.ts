@@ -193,10 +193,10 @@ describe('movePluginsInText — byte-faithful reorder', () => {
     expect(movePluginsInText('A.esp\nB.esp', ['A.esp'], 1)).toBe('B.esp\nA.esp');
   });
 
-  it('moves the first line of a plugin the file repeats and leaves the repeat where it is', () => {
-    const out = movePluginsInText('A.esp\nB.esp\nC.esp\nA.esp\n', ['A.esp'], 1);
+  it('moves a plugin the file repeats with its repeat, the moved line still the first', () => {
+    const out = movePluginsInText('*A.esp\nB.esp\nC.esp\nA.esp\n', ['A.esp'], 1);
 
-    expect(names(out)).toEqual(['B.esp', 'A.esp', 'C.esp', 'A.esp']);
+    expect(out).toBe('B.esp\n*A.esp\nA.esp\nC.esp\n');
   });
 
   it('lands at the index of the entries the reading shows: a repeated line ahead of the target is not one', () => {
@@ -205,10 +205,16 @@ describe('movePluginsInText — byte-faithful reorder', () => {
     expect(names(out)).toEqual(['A.esp', 'B.esp', 'A.esp', 'C.esp', 'D.esp']);
   });
 
-  it('moves a plugin the file repeats to an index of the entries the reading shows', () => {
-    const out = movePluginsInText('A.esp\nB.esp\nA.esp\nC.esp\n', ['A.esp'], 1);
+  it('keeps the enabled state of a plugin the file repeats when it moves past its repeat', () => {
+    const out = movePluginsInText('*A.esp\nB.esp\nA.esp\nC.esp\n', ['A.esp'], 1);
 
-    expect(names(out)).toEqual(['B.esp', 'A.esp', 'A.esp', 'C.esp']);
+    expect(parsePlugins(out).find(({ name }) => name === 'A.esp')?.enabled).toBe(true);
+  });
+
+  it('moves a repeat spelled with other case along with its plugin', () => {
+    const out = movePluginsInText('*A.esp\nB.esp\na.ESP\nC.esp\n', ['A.esp'], 1);
+
+    expect(out).toBe('B.esp\n*A.esp\na.ESP\nC.esp\n');
   });
 
   it('moves a single plugin to the top (index 0), keeping the comment header first', () => {

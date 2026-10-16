@@ -136,6 +136,19 @@ describe('plugin participation is a change for each plugin the order lists', () 
     expect(fake.calls).toEqual(handed([{ kind: 'enable', plugin: 'Base.esp', enabled: false }, { kind: 'enable', plugin: 'Other.esp', enabled: true }]));
   });
 
+  it('a plugin named in another case than its line lands, for the check box and for enable alike', async () => {
+    const fake = fakeOver(...ORDER);
+    const commands = pluginsCommandsWith(fake.adapter);
+
+    const checkbox = await commands.setPluginsParticipation(PROFILE, [{ name: 'base.ESP', enabled: false }]);
+    const enable = await commands.setPluginsEnabled(PROFILE, ['other.esp'], true);
+
+    expect([checkbox, enable]).toEqual([
+      { applied: true, outcome: { landed: ['base.ESP'], refused: [] } },
+      { applied: true, outcome: { landed: ['other.esp'], refused: [] } },
+    ]);
+  });
+
   it('a plugin the order does not list is refused by name, and the rest still land in the one change', async () => {
     const fake = fakeOver(...ORDER);
 

@@ -2,6 +2,7 @@
 // call, and no path joined here.
 
 import type { InstanceValue } from '../instanceLoader/instance';
+import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { pluginPlacesOf } from '../instanceLoader/pluginPlacesOf';
 import { samePluginAddress, type PluginAddress, type PluginPlace } from '../wire/pluginAddress';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
@@ -19,10 +20,10 @@ export function pluginPlaces(value: Pick<InstanceValue, 'mods' | 'paths' | 'plug
  *  value names no folder for Overwrite yet. */
 export type PlaceFolder = PluginPlace | { readonly lost: 'gone' | 'disabled' | 'unread' };
 
-export function placeFolder(value: Pick<InstanceValue, 'mods' | 'paths'>, origin: string): PlaceFolder {
-  const place = pluginPlacesOf(value).find((held) => held.name === origin);
+export function placeFolder(value: Pick<InstanceValue, 'mods' | 'paths' | 'entryKey'>, origin: string): PlaceFolder {
+  const mod = modOfOrigin(value, origin)?.name ?? origin;
+  const place = pluginPlacesOf(value).find((held) => held.name === mod);
   if (place !== undefined) return place;
   if (origin === OVERWRITE_ORIGIN) return { lost: 'unread' };
-  const listed = value.mods.some((entry) => entry.kind === 'mod' && entry.name === origin) && value.paths.modDirs.has(origin);
-  return { lost: listed ? 'disabled' : 'gone' };
+  return { lost: value.paths.modDirs.has(mod) ? 'disabled' : 'gone' };
 }

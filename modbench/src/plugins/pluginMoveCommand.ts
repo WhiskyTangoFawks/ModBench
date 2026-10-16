@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { PluginAddress } from '../client';
+import { pluginNameKey } from '../wire/pluginAddress';
 import type { Instance } from '../instanceLoader/instance';
 import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { pluralArgument } from '../drivingLib/gestureEntry';
@@ -20,7 +21,7 @@ function isDrop(value: unknown): value is PluginsDrop {
 type DropBeside = Extract<PluginsDrop, { name: string }>;
 
 const dropsOnMoving = (plugins: readonly PluginAddress[], drop: PluginsDrop): drop is DropBeside =>
-  'name' in drop && plugins.some(({ name }) => name.toLowerCase() === drop.name.toLowerCase());
+  'name' in drop && plugins.some(({ name }) => pluginNameKey(name) === pluginNameKey(drop.name));
 
 interface MoveView extends Pick<PluginsTreeProvider, 'movePlaces'> {
   selection: () => readonly PluginsTreeNode[];
