@@ -33,6 +33,7 @@ A mod folder has one package ([ADR-0023](../../adr/0023-a-mod-folder-has-only-on
 12. The manifest to be a JSON file that I review in git. It has one line for the package and one for each file, the files in alphabetical order, so a diff shows what changed and nothing else. Source: Existing tools
 13. The manifest to name the installation file by its page on its host, such as the file's page on Nexus, so I can read it in a diff and open it.
 14. A mod from the game folder to differ only when a file it takes changes, never when the game folder gains or changes a file the mod does not take. Source: ADR-0023
+15. A mod from the game folder to name the game folder as its package, never to leave its package unnamed. A mod is from the game folder when its metadata names no installation file and the game folder holds each of its files with their bytes. Source: ADR-0023
 
 ## Status
 
