@@ -1,4 +1,7 @@
+*MBDevFixes.esm
+*MBDevFixesAddon.esp
 *MBDevConflictB.esp
 *MBDevConflictA.esp
 *MBDevConditions.esp
 *MBDevMissingMaster.esp
+*MBDevPatchAB.esp
