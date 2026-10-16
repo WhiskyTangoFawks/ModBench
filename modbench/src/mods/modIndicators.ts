@@ -1,8 +1,8 @@
 // mods.md, Indicators: a badge and a colour on a mod's row for each status that holds.
 
 import * as vscode from 'vscode';
-import type { InstanceValue, InstanceView, OriginFile } from '../instanceLoader/instance';
-import { fileOrderConflictOf, modOrigin } from '../instanceLoader/fileConflictIndex';
+import type { FileOrigin, InstanceValue, InstanceView, OriginFile } from '../instanceLoader/instance';
+import { fileOrderConflictOf, modOrigin, sameOrigin, type ConflictEntry } from '../instanceLoader/fileConflictIndex';
 import { groupModlist } from '../drivingLib/modlistTree';
 import type { WorkspaceSettings } from './workspaceSettings';
 
@@ -19,15 +19,23 @@ type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 
 type IndicatorsValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod'>;
 
+function outranksAnotherCopy(entry: ConflictEntry | undefined, own: FileOrigin): boolean {
+  const copies = entry?.providers ?? [];
+  const at = copies.findIndex((copy) => sameOrigin(copy, own));
+  return at !== -1 && at < copies.length - 1;
+}
+
 function indicatorsOf(value: IndicatorsValue, name: string, files: readonly OriginFile[]): ModIndicator[] {
-  const gettable = files.filter((own) => !own.excluded);
-  const outcomes = gettable.map((own) => fileOrderConflictOf(value.files.get(own.relativePath), modOrigin(name)));
-  const redundant = gettable.length > 0 && outcomes.every((outcome) => outcome === 'loses');
+  const own = modOrigin(name);
+  const entries = files.filter((file) => !file.excluded).map((file) => value.files.get(file.relativePath));
+  const gets = entries.some((entry) => entry !== undefined && sameOrigin(entry.winnerOrigin, own));
+  const loses = entries.some((entry) => fileOrderConflictOf(entry, own) === 'loses');
+  const redundant = loses && !gets;
   const holds: Record<ModIndicator, boolean> = {
-    overwritesLooseFiles: outcomes.includes('wins'),
-    overwrittenLooseFiles: outcomes.includes('loses') && !redundant,
+    overwritesLooseFiles: entries.some((entry) => outranksAnotherCopy(entry, own)),
+    overwrittenLooseFiles: loses && !redundant,
     redundant,
-    containsExcludedFiles: files.some((own) => own.excluded),
+    containsExcludedFiles: files.some((file) => file.excluded),
   };
   return MOD_INDICATORS.flatMap(({ id }) => (holds[id] ? [id] : []));
 }
