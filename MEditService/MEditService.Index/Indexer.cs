@@ -653,8 +653,8 @@ internal sealed class Indexer : IDisposable
         // plugin wait on the slowest before any could be indexed, and bury each open failure.
         foreach (var plugin in arriving)
         {
-            // At the top of each plugin rather than mid-plugin: a plugin's ingest is several
-            // transactions, so abandoning it partway would leave some committed and others not.
+            // At the top of each plugin rather than mid-plugin: a newer snapshot waits for the plugin in
+            // hand (see _disposal).
             token.ThrowIfCancellationRequested();
 
             PluginMetadata? metadata = null;

@@ -12,7 +12,7 @@ public class PluginReadInterruptionTests
         new PluginFixtureBuilder(name)
             .WithPlugin("Long.esp", mod =>
             {
-                for (var i = 0; i < 200; i++) mod.Npcs.AddNew($"LongNPC{i}");
+                for (var i = 0; i < 400; i++) mod.Npcs.AddNew($"LongNPC{i}");
             })
             .Build();
 
