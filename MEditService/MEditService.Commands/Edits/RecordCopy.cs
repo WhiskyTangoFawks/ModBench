@@ -235,7 +235,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
                 refused = WriteTargets.RefuseUnreadableSource(container.FormKey, why);
                 return false;
             }
-            copy = destination.Landing(PartialFormOf(document, schema, release), release);
+            copy = PartialFormOf(document, schema, release);
             return true;
         }
 
