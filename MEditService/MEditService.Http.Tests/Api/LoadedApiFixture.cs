@@ -38,6 +38,7 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
             gameDirectory = Plugin.DataFolder,
             instanceRoot = Plugin.InstanceRoot,
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
         resp.EnsureSuccessStatusCode();
     }

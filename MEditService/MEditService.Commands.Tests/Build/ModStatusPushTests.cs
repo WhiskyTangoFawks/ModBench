@@ -8,6 +8,7 @@ using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Tests.Build;
 
@@ -52,7 +53,7 @@ public sealed class ModStatusPushTests : IDisposable
     private void Put(params string[] mods) => Put([.. mods.Select(mod => new ModByFolder(mod, mod, ["meta.ini"]))]);
 
     private void Put(params ModByFolder[] mods) =>
-        Assert.True(_handler.Put(_dataFolder, _instanceRoot, GameRelease.Fallout4, [], [], [], [], [], [], new SnapshotMods(mods, "stat-cache")).Applied);
+        Assert.True(_handler.Put(_dataFolder, _instanceRoot, GameRelease.Fallout4, [], [], [], [], [], [], Language.English, new SnapshotMods(mods, "stat-cache")).Applied);
 
     private static ModByFolder Holding(string mod, string version) => new(mod, mod, ["meta.ini"], new ModMetadata(version, []));
 

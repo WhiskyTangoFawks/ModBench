@@ -28,7 +28,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance, each with its origin, path, provider, strings files and archives, the active plugins in load order, the plugins loaded with no line, the archives the game loads and the loose strings files it reads, as Mod Management decided them. Every archive and strings file carries its stamp. It names each mod, by its folder with its metadata files and the stat cache's folder, and each mod whose status then changed is pushed as mod-status-changed. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
+        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance, each with its origin, path, provider, strings files and archives, the active plugins in load order, the plugins loaded with no line, the archives the game loads, the loose strings files it reads and the language a translated text shows in, as Mod Management decided them. Every archive and strings file carries its stamp. It names each mod, by its folder with its metadata files and the stat cache's folder, and each mod whose status then changed is pushed as mod-status-changed. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
         put: operations["PutLoadOrder"];
         post?: never;
         delete?: never;
@@ -588,23 +588,6 @@ export interface paths {
          * @description Writes to the working tree what the same creation's changes answer, an unsaved document read in place of its file. Answers the new FormKey. A creation that would write a file held unsaved is refused naming it, and nothing is written.
          */
         post: operations["CreateRecord"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/strings-language": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** @description The language a translated text shows in, English until one is put. A change reads again the plugins whose rows took their texts in another language. */
-        put: operations["PutStringsLanguage"];
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1361,6 +1344,7 @@ export interface components {
             gameDirectory: string;
             instanceRoot: string;
             gameRelease: string;
+            stringsLanguage: string;
             mods: components["schemas"]["ModByFolder"][];
             statCache: string;
         };
@@ -1829,9 +1813,6 @@ export interface components {
         StampedFile: {
             path: string;
             stamp: string;
-        };
-        StringsLanguageRequest: {
-            language: string;
         };
         UnreadableSource: {
             reason: string;
@@ -3503,37 +3484,6 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    PutStringsLanguage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StringsLanguageRequest"];
-            };
-        };
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad Request */
-            400: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -40,6 +40,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
         put.EnsureSuccessStatusCode();
     }

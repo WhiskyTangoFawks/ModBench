@@ -4,6 +4,7 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -46,7 +47,7 @@ public sealed class LoadOrderLinkTargetsTests
     private static LinkAnswers Answers(IReadOnlyList<RegisteredPlugin> loadOrder, params string[] formKeys) =>
         Adapter.LinkTargets(
             new LoadOrderSnapshot(
-                DataFolderOf(loadOrder[0]), null, GameRelease.Fallout4, loadOrder, [.. loadOrder.Select(plugin => plugin.Key)], [], [], [], []),
+                DataFolderOf(loadOrder[0]), null, GameRelease.Fallout4, loadOrder, [.. loadOrder.Select(plugin => plugin.Key)], [], [], [], [], Language.English),
             loadOrder[^1],
             formKeys);
 

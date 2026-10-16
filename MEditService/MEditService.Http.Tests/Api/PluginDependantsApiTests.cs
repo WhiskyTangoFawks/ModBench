@@ -46,6 +46,7 @@ public sealed class PluginDependantsApiTests : IDisposable
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         })).EnsureSuccessStatusCode();
 
         var answer = await _client.GetFromJsonAsync<JsonElement>("/plugins/Base.esm/dependants?origin=BaseMod");

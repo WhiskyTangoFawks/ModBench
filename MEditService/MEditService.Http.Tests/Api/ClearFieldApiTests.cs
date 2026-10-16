@@ -34,6 +34,7 @@ public sealed class ClearFieldApiTests(LoadedApiFixture<TestPluginFixture> loade
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         })).EnsureSuccessStatusCode();
         (await _client.Init(Origin)).EnsureSuccessStatusCode();
         await _client.NextSnapshot(fx, Origin);

@@ -43,6 +43,7 @@ public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture
             places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
+            stringsLanguage = "English",
         });
         load.EnsureSuccessStatusCode();
     }
