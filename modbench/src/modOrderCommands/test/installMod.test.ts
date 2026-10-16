@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { modlistCommands, type ModSource } from '../modOrderCommands';
-import type { InstallSource, InstallTarget } from '../../instanceAdapter/instanceAdapter';
+import { modlistCommands, type ModPackage } from '../modOrderCommands';
+import type { InstallPackage, InstallTarget } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { ModStatus } from '../../client';
 import type { ReadModStatus } from '../../client';
@@ -10,14 +10,14 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const MOD = 'Freshly Installed Mod';
 const GAME_NAME = 'Fallout 4';
-const ARCHIVE: InstallSource = { kind: 'archive', path: '/elsewhere/Freshly-1-0.7z' };
+const ARCHIVE: InstallPackage = { kind: 'archive', path: '/elsewhere/Freshly-1-0.7z' };
 const NEW_MOD: InstallTarget = { kind: 'new', name: MOD };
 const UPGRADED = { kind: 'upgrade', name: 'Harder VATS' } as const;
 const DOWNLOADED = { kind: 'downloadedFile', name: 'Freshly-1-0.7z', path: '/downloads/Freshly-1-0.7z' } as const;
 
-function install(source: ModSource, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, readStatus: ReadModStatus = unreadStatus) {
+function install(installed: ModPackage, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, readStatus: ReadModStatus = unreadStatus) {
   const fake = fakeInstanceAdapter(undefined, answers);
-  const outcome = modlistCommands(fake.adapter, new InMemoryMEditClient(), readStatus).installMod(source, target, GAME_NAME, force);
+  const outcome = modlistCommands(fake.adapter, new InMemoryMEditClient(), readStatus).installMod(installed, target, GAME_NAME, force);
   return outcome.then((result) => ({ result, calls: fake.calls }));
 }
 
@@ -120,7 +120,7 @@ describe('installMod', () => {
     expect(result).toEqual({ applied: false, refusal: 'archive is corrupt' });
   });
 
-  it('says whether the source is a scripted installer, as the adapter found', async () => {
+  it('says whether the package is a scripted installer, as the adapter found', async () => {
     const { result } = await install(ARCHIVE, NEW_MOD, { installed: { landed: true, isFomod: true } });
 
     expect(result).toEqual({ applied: true, isFomod: true });
@@ -132,10 +132,10 @@ describe('installMod', () => {
     ['a downloaded file, recording its name, Nexus ids and version', { ...DOWNLOADED, modID: '111', fileID: '222', version: '3.0.0' },
       { kind: 'archive', path: DOWNLOADED.path },
       { gameName: GAME_NAME, archiveFilename: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFiles: [{ nexusId: '111', fileId: '222' }] }],
-  ] as const)('hands the adapter %s with the keys its meta is to hold', async (_, source, handed, keys) => {
-    const { calls } = await install(source);
+  ] as const)('hands the adapter %s with the keys its meta is to hold', async (_, installed, handed, keys) => {
+    const { calls } = await install(installed);
 
-    expect(calls[0]).toEqual({ verb: 'install', source: handed, target: NEW_MOD, keys });
+    expect(calls[0]).toEqual({ verb: 'install', package: handed, target: NEW_MOD, keys });
   });
 
   it('marks a downloaded file installed once it landed, and marks no file for an archive, though a downloaded file bears its name', async () => {

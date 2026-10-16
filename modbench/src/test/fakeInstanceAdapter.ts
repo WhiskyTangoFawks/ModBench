@@ -1,7 +1,7 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type {
   DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, GameFile, HashedFile, InstallationFile,
-  InstallOutcome, InstallSource, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
+  InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
   ModFolder, ModFolders, ModMetadata, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { groupModOrder } from '../instanceAdapter/modGroups';
@@ -60,7 +60,7 @@ export type AdapterCall =
   | { readonly verb: 'writeModMetadata'; readonly mod: string; readonly metadata: ModMetadata }
   | { readonly verb: 'writeIgnoreList' }
   | { readonly verb: 'removeIgnoreList' }
-  | { readonly verb: 'install'; readonly source: InstallSource; readonly target: InstallTarget; readonly keys: OwnedMetaKeys };
+  | { readonly verb: 'install'; readonly package: InstallPackage; readonly target: InstallTarget; readonly keys: OwnedMetaKeys };
 
 export type WriteVerb = AdapterCall['verb'];
 
@@ -220,8 +220,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     trashEntryFolder: (entry) => record({ verb: 'trashEntryFolder', entry }, !answers.foldersAbsent?.has(entry.name)),
     trashModFile: (mod, relativePath) => record({ verb: 'trashModFile', mod, relativePath }, undefined),
     trashSourceFolder: (mod) => record({ verb: 'trashSourceFolder', mod }, true),
-    install: (source, target, keys) =>
-      record<InstallOutcome>({ verb: 'install', source, target, keys }, answers.installed ?? { landed: true, isFomod: false }),
+    install: (installed, target, keys) =>
+      record<InstallOutcome>({ verb: 'install', package: installed, target, keys }, answers.installed ?? { landed: true, isFomod: false }),
     subscribe: (listener): Subscription => {
       listeners.add(listener);
       return { dispose: () => { listeners.delete(listener); } };
