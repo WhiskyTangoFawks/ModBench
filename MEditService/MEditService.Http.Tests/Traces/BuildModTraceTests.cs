@@ -96,7 +96,7 @@ public sealed class BuildModTraceTests : HostedTests
             {
                 new
                 {
-                    name = Origin, folder = _builtFolder, installationFiles = Array.Empty<object>(), metadataFiles = new[] { "meta.ini" },
+                    name = Origin, folder = _builtFolder, metadataFiles = new[] { "meta.ini" },
                     sourceFolder = absent,
                 },
             },
@@ -157,12 +157,12 @@ public sealed class BuildModTraceTests : HostedTests
     public static TheoryData<string, string> NotARequestToBuild => new()
     {
         { "no mod", "{\"mods\": [], \"excludedSuffix\": \".mohidden\"}" },
-        { "no folder", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"installationFiles\": []}], \"excludedSuffix\": \".mohidden\"}" },
-        { "no suffix", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"installationFiles\": []}], \"statCache\": \"c\"}" },
-        { "no stat cache", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"installationFiles\": []}], \"excludedSuffix\": \".mohidden\"}" },
+        { "no folder", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\"}], \"excludedSuffix\": \".mohidden\"}" },
+        { "no suffix", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"statCache\": \"c\"}" },
+        { "no stat cache", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"excludedSuffix\": \".mohidden\"}" },
         {
             "a variant both a BA2 and a BSA",
-            "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"installationFiles\": []}], \"excludedSuffix\": \".mohidden\", \"statCache\": \"c\", " +
+            "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"excludedSuffix\": \".mohidden\", \"statCache\": \"c\", " +
             "\"archives\": {\"general\": {\"ba2\": {\"version\": 1, \"compressed\": true}, \"bsa\": {\"version\": 105, \"archiveFlags\": 3, \"fileFlags\": 0}}, " +
             "\"textures\": {\"ba2\": {\"version\": 1, \"compressed\": true}}}}"
         },

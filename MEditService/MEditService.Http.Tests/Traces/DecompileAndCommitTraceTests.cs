@@ -46,34 +46,17 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task InitOfAModInstalledFromADownloadedFile_AsModbenchSendsIt_CommitsAsAssetsOnlyTheFilesItDoesNotYield()
+    public async Task Init_CommitsAsAssetsEveryFileOfTheMod_ButTheModManagersOwn()
     {
-        const string HashOfHello = "o22fiH2CxyY=";
         var modFolder = OtherTool.ModFolderOf(_instance, Origin);
-        OtherTool.WritesTheFile(Path.Combine(modFolder, "textures", "yielded.dds"), "hello");
+        OtherTool.WritesTheFile(Path.Combine(modFolder, "textures", "installed.dds"), "hello");
         OtherTool.WritesTheFile(Path.Combine(modFolder, "textures", "added.dds"), "added after install");
         await Loaded();
         var sourceFolder = Client.SourceFolderSentFor(Origin);
 
         var response = await Client.PostAsJsonAsync("/init", new
         {
-            mods = new[]
-            {
-                new
-                {
-                    name = Origin,
-                    sourceFolder,
-                    installationFiles = new[]
-                    {
-                        new
-                        {
-                            path = Path.Combine(_instance.Root, "downloads", "Mod.7z"), size = 28, hash = "yMPjZVarjmw=",
-                            entries = new[] { new { path = "textures/yielded.dds", hash = HashOfHello } },
-                        },
-                    },
-                    metadataFiles = new[] { "meta.ini" },
-                },
-            },
+            mods = new[] { new { name = Origin, sourceFolder, metadataFiles = new[] { "meta.ini" } } },
         });
 
         response.EnsureSuccessStatusCode();
@@ -81,7 +64,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         var committed = GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "ls-tree", "-r", "--name-only", "HEAD")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Where(path => path.StartsWith("assets/", StringComparison.Ordinal));
-        Assert.Equal(["assets/textures/added.dds"], committed);
+        Assert.Equal(["assets/textures/added.dds", "assets/textures/installed.dds"], committed);
     }
 
     [Fact]
@@ -111,28 +94,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
 
         var response = await Client.PostAsJsonAsync("/init", new
         {
-            mods = new[] { new { name = Origin, installationFiles = Array.Empty<object>(), metadataFiles = Array.Empty<string>() } },
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task InitOfAModWithAnInstallationFileThatHasNoHash_Is400()
-    {
-        await Loaded();
-
-        var response = await Client.PostAsJsonAsync("/init", new
-        {
-            mods = new[]
-            {
-                new
-                {
-                    name = Origin,
-                    installationFiles = new[] { new { path = "/downloads/Mod.7z", size = 1, entries = Array.Empty<object>() } },
-                    metadataFiles = new[] { "meta.ini" },
-                },
-            },
+            mods = new[] { new { name = Origin, metadataFiles = Array.Empty<string>() } },
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -145,7 +107,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
 
         var response = await Client.PostAsJsonAsync("/init", new
         {
-            mods = new[] { new { name = Origin, installationFiles = Array.Empty<object>(), metadataFiles = new[] { " " } } },
+            mods = new[] { new { name = Origin, metadataFiles = new[] { " " } } },
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

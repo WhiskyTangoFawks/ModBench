@@ -138,19 +138,17 @@ public sealed class InitHandler
         return ItemAnswer<InitRefusal, InitializedMod>.Landed(new InitializedMod([.. plugins.Select(p => p.Key)]));
     }
 
-    // The assets are the files no installation file yields (plugins.md, Init, story 2). What compile writes for the
-    // mod's plugins is a build output, and the mod manager's files are its own.
+    // The assets are every file of the mod but what compile writes for its plugins, a build output, and the mod
+    // manager's own files (plugins.md, Decompile and commit, story 2).
     private List<Asset> AssetsOf(PluginProvider.FromMod mod, ModToInit toInit, List<RegisteredPlugin> plugins, GameRelease release)
     {
         var all = _modFolders.Files(mod.Folder, mod.Name, toInit.MetadataFiles.ToHashSet(StringComparer.Ordinal), statCache: null).Files;
         var paths = all.Select(file => file.Path).ToList();
         var compiled = plugins.SelectMany(plugin => _plugins.WrittenByCompile(plugin, paths, release)).ToHashSet(StringComparer.Ordinal);
-        var matching = new ManifestBuilder(toInit.InstallationFiles.Select(file => (_modFolders.InstallationFileName(file.Path), file)), []);
         return
         [
             .. all
-                .Where(file => !compiled.Contains(file.Path)
-                    && matching.ProviderOf(file) is not (FileProvider.FirstInstallationFile or FileProvider.InstallationFileEntry))
+                .Where(file => !compiled.Contains(file.Path))
                 .Select(file => new Asset(file.Path, () => _modFolders.OpenFile(mod.Folder, file.Path))),
         ];
     }
