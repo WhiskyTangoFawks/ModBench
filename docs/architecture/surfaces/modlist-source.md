@@ -9,10 +9,11 @@ Each story cites its source. A story with no source is owned here.
 As a user, I want:
 
 1. The instance folder to be the repository, so a change I make in the mod manager or in Modbench is a working-tree change in Source Control. Source: ADR-0022
-2. The ignore list to be a whitelist: every manifest, each profile's mod order, plugin order and game INIs, and the mod manager's configuration. Everything else is ignored: each mod's metadata, the downloaded files' index and the source folder included.
+2. The ignore list to be a whitelist: every manifest, each profile's mod order, plugin order and game INIs, the mod manager's configuration, `.gitmodules`, and each source mod with a remote. Everything else is ignored: each mod's metadata, the downloaded files' index and each source mod with no remote included.
 3. Every mod, every separator and every profile in the commit, enabled or not. A disabled mod is still mine.
 4. The mod manager's configuration committed with the paths it holds. A clone on another machine edits them.
 5. Commit, diff, history, branches and merge to be VS Code's. Modbench adds no gesture for them. Source: Existing tools
+6. A push of the modlist refused while a commit it pins for a source mod is missing from that source mod's remote, so a clone can fetch every source mod. Git init sets this, and restore sets it on a clone. Source: Existing tools; Never silently wrong
 
 ## The manifest
 
@@ -75,6 +76,7 @@ As a user, I want:
 6. It stages nothing and commits nothing. Source: Existing tools
 7. A file whose stat matches Modbench's last read not hashed again, so an update after an update reads nothing. Source: Status, story 3
 8. One line when it lands: how many mods were unchanged, updated and refused, and how many files have no provider, with each refused mod and each such file in the Output. This report is the modlist's validation. Source: common, Reporting
+9. Each source mod with a remote made a submodule of the repository without a submodule command: update manifest writes its entry in `.gitmodules`, with its remote and its branch, so Source Control shows the source mod as a change, and my stage and commit record it. A source mod that is gone loses its entry. Source: ADR-0023; Existing tools
 
 ## Restore from manifest
 
@@ -82,7 +84,7 @@ As a user, I want:
 
 1. Each mod's folder to become what its manifest says: every file whose bytes differ written, and every file no line names sent to the trash. A file whose bytes already match is left alone, so a restore after a checkout costs only what the checkout changed. Source: ADR-0022
 2. One confirmation, only when the restore destroys something: a file whose bytes differ from the manifest's, a file no line names, or metadata whose version or where an installation file comes from differs from the manifest's. It names the mods, or says every mod, and says that a change no manifest holds is lost. A restore after a fresh clone asks nothing. Source: Confirm what destroys
-3. A source mod with a remote rebuilt from its submodule at the commit the repository pins, and the submodule cloned when it is absent. One at another commit is skipped and named with the commit, because Modbench never moves my repository. Source: ADR-0023; ADR-0003
+3. A source mod with a remote rebuilt from its submodule at the commit the repository pins, and the submodule cloned when it is absent. When the branch the submodule follows is at that commit, the branch is checked out, so I land on a branch. One at another commit is skipped and named with the commit, because Modbench never moves my repository. Source: ADR-0023; ADR-0003
 4. A mod skipped, and named with what it lacks, when its installation file or a game file its manifest names is missing or has other bytes, or when a file has no provider. Every other mod lands. Nothing is downloaded. Source: A selection is one gesture, and each item lands on its own
 5. A file the build makes, a compiled plugin or a packed archive, to come back as the build makes it, which can differ in bytes. Only what comes from a downloaded file is byte-checked. Source: ADR-0006
 6. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. This is an exception to A failed gesture writes nothing. Source: mods.md, What install does, story 5
