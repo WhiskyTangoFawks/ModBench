@@ -217,8 +217,8 @@ const escapedForIgnoreList = (name: string): string => name.replace(/[\\*?[]/g, 
 const SOURCE_MODS_BEGIN = '# Source mods with a remote';
 const SOURCE_MODS_END = '# End of source mods with a remote';
 
-/** An ignore list with the block that lets in the folders of `folderNames`, the source mods with a remote, made to hold
- *  them, in place. Every line outside the block is kept. Undefined when the block's markers do not pair. */
+/** An ignore list with its block of `folderNames`, the source mods with a remote, made in place. Every line outside
+ *  the block is kept. Undefined when the block's markers do not pair. */
 export function withSourceModLines(ignoreList: string, folderNames: readonly string[]): string | undefined {
   const lines = ignoreList.split('\n');
   if (lines.at(-1) === '') lines.pop();
