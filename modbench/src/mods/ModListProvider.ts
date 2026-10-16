@@ -230,7 +230,7 @@ export class ModListProvider
   badge(): { value: number; tooltip: string } | undefined {
     const count = this.instanceValue.mods.filter((entry) => {
       const status = this.statusOf(entry);
-      return status !== undefined && (entry.kind === 'mod' ? countsInBadge(status) : status.noManifest);
+      return status !== undefined && countsInBadge(status);
     }).length;
     return count === 0 ? undefined : { value: count, tooltip: `Mods that differ from their manifests or have none: ${count}` };
   }
