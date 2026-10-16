@@ -60,8 +60,8 @@ public sealed class ValidateByStampsTests : IDisposable
 
     private bool NpcNamed(string editorId) =>
         _index.Queries.GetCompareRecords([new RecordCopy(_npc, _mod.KeyOf())]).Holds(out var answer, out _)
-        && answer.Compare is { } compared
-        && compared.Overrides.Single().EditorId == editorId;
+        && answer is CompareRecordsAnswer.Compared compared
+        && compared.Compare.Overrides.Single().EditorId == editorId;
 
     private void ValidateUntilSourceUnreadable() =>
         _index.NextSnapshotUntil(() => SourceUnreadable, "the plugin file read in place of its source");

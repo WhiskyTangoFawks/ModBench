@@ -18,16 +18,10 @@ internal static class IndexAnswers
             : refused;
 
     /// <summary>The comparison the Index answered; a missing copy here is a broken fixture.</summary>
-    internal static CompareResult Compared(this Answer<CopiesCompared, IndexRefused> answer) =>
-        answer.Value().Compare ?? throw new InvalidOperationException("Expected every copy to be found here.");
-
-    /// <summary>The copies the Index found no plugin holding, which the test asked for.</summary>
-    internal static IReadOnlyList<MissingCopy> Missing(this Answer<CopiesCompared, IndexRefused> answer)
-    {
-        var compared = answer.Value();
-        Assert.Null(compared.Compare);
-        return compared.Missing;
-    }
+    internal static CompareResult Compared(this Answer<CompareRecordsAnswer, IndexRefused> answer) =>
+        answer.Value() is CompareRecordsAnswer.Compared compared
+            ? compared.Compare
+            : throw new InvalidOperationException("Expected every copy to be found here.");
 
     /// <summary>A filter the Index took; its refusal here is a broken fixture.</summary>
     internal static void Accepted(this IndexRefused? refused)

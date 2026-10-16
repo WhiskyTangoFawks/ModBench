@@ -155,7 +155,9 @@ internal sealed class WorkingTreeOverlay
         }
 
         List<ContainerDocuments.ChildDocument> children = [];
-        var prepared = _ingest.PrepareRecord(new PluginDocument(recordType, formKey, body), schema, children);
+        var prepared = _ingest.PrepareRecord(new PluginDocument(recordType, formKey, body), key.Name, schema, children);
+        DuckDbSql.Execute(_connection, "UPDATE mirror.records SET masters = $4 WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin, prepared.Masters);
 
         DeleteFormReferencesForRecord(key, formKey);
         if (prepared.Refs.Count > 0)

@@ -129,6 +129,22 @@ public class HeaderIndexingTests
     }
 
     [Fact]
+    public void TheHeadersMastersField_LeavesOutALinkThatNamesNoPlugin()
+    {
+        using var fixture = new PluginFixtureBuilder("header-masters-none")
+            .WithPlugin("Required.esm", mod => mod.Keywords.AddNew("RequiredKeyword"))
+            .WithPlugin("MastersTest.esp", (mod, masters) =>
+            {
+                mod.Keywords.GetOrAddAsOverride(masters[0].Keywords.Single());
+                mod.EquipTypes.AddNew("NoActorValue").ConditionActorValue.SetTo(FormKey.None);
+            })
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
+
+        Assert.Equal(["Required.esm"], MastersOf(Header(index, "MastersTest.esp")));
+    }
+
+    [Fact]
     public void TheHeadersMastersField_FollowsTheWorkingTree_OfATrackedPlugin()
     {
         using var fixture = new PluginFixtureBuilder("header-masters-tracked")
@@ -152,6 +168,35 @@ public class HeaderIndexingTests
         index.Delete(plugin, index.DocumentOf(droppedOverride.FormKey, plugin.KeyOf()));
 
         Assert.Equal(["Kept.esm"], MastersOf(index.DocumentOf(header, plugin.KeyOf())));
+    }
+
+    [Fact]
+    public void TheHeadersMastersField_GainsAMasterAnEditedRecordLinksTo()
+    {
+        using var fixture = new PluginFixtureBuilder("header-masters-edited")
+            .WithPlugin("Kept.esm", mod =>
+            {
+                mod.Npcs.AddNew("KeptNpc");
+                mod.Keywords.AddNew("KeptKeyword");
+            }, origin: "KeptMod")
+            .WithPlugin("Linked.esm", mod => mod.Keywords.AddNew("LinkedKeyword"), origin: "LinkedMod")
+            .WithPlugin(
+                "MastersTest.esp",
+                (mod, masters) => mod.Npcs.GetOrAddAsOverride(masters[0].Npcs.Single()).Keywords = [masters[0].Keywords.Single().ToLink()],
+                origin: "MastersTestMod")
+            .BuildScattered()
+            .Tracked();
+        using var index = Indexes.Reconciled(fixture);
+        var plugin = fixture.Plugins.Single(p => p.Name == "MastersTest.esp");
+        var keptKeyword = index.ListedIn(fixture.Plugins.Single(p => p.Name == "Kept.esm").KeyOf()).Single(d => d.EditorId == "KeptKeyword");
+        var linkedKeyword = index.ListedIn(fixture.Plugins.Single(p => p.Name == "Linked.esm").KeyOf()).Single(d => d.EditorId == "LinkedKeyword");
+        var npc = index.DocumentOf(index.ListedIn(plugin.KeyOf()).Single(d => d.EditorId == "KeptNpc").FormKey, plugin.KeyOf());
+
+        index.Edit(plugin, npc, plugin.SourceTextOf(npc).Replace(keptKeyword.FormKey, linkedKeyword.FormKey, StringComparison.Ordinal));
+
+        Assert.Equal(
+            ["Kept.esm", "Linked.esm"],
+            MastersOf(index.DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), plugin.KeyOf())));
     }
 
     [Fact]

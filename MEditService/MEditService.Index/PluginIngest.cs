@@ -37,7 +37,7 @@ internal sealed class PluginIngest
     // it is sequential. ParseDiagnosis is null for a record whose document was produced.
     internal sealed record PreparedRecord(
         string RecordType, string FormKey, string Body, string ContentHash, List<FormReferenceRow> Refs,
-        List<HoldingRow> Holdings, List<CellLocationRow> CellLocations,
+        List<string> Masters, List<HoldingRow> Holdings, List<CellLocationRow> CellLocations,
         string? EditorId, string? ParseDiagnosis);
 
     // ADR-0005, from the one stream that carries the documents. A DuckDB appender holds its rows
@@ -51,7 +51,7 @@ internal sealed class PluginIngest
         var timer = Stopwatch.StartNew();
         var counters = new PhaseCounters();
         var records = 0;
-        foreach (var prepared in Pipelined(Batches(documents.Records), batch => Prepared(batch, schemas, counters)))
+        foreach (var prepared in Pipelined(Batches(documents.Records), batch => Prepared(batch, plugin, schemas, counters)))
         {
             var appendTimer = Stopwatch.StartNew();
             Append(prepared, plugin, origin);
@@ -166,7 +166,7 @@ internal sealed class PluginIngest
     }
 
     private List<PreparedRecord> Prepared(
-        List<PluginDocument> batch, IReadOnlyDictionary<string, RecordTableSchema> schemas, PhaseCounters counters)
+        List<PluginDocument> batch, string plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas, PhaseCounters counters)
     {
         // Per-document work is CPU-bound and independent, so it runs in parallel; only the appender
         // writes stay sequential.
@@ -176,7 +176,7 @@ internal sealed class PluginIngest
         {
             prepared = [.. batch
                 .AsParallel().AsOrdered()
-                .Select(document => PrepareRecord(document, schemas[document.RecordType]))];
+                .Select(document => PrepareRecord(document, plugin, schemas[document.RecordType]))];
         }
         catch (AggregateException ex) when (ex.InnerExceptions.Count > 0)
         {
@@ -228,7 +228,7 @@ internal sealed class PluginIngest
     }
 
     internal PreparedRecord PrepareRecord(
-        PluginDocument document, RecordTableSchema schema, List<ContainerDocuments.ChildDocument>? childDocuments = null)
+        PluginDocument document, string plugin, RecordTableSchema schema, List<ContainerDocuments.ChildDocument>? childDocuments = null)
     {
         var root = Document.Parse(document.Text);
         var editorId = root.EditorId.EditorId;
@@ -272,7 +272,7 @@ internal sealed class PluginIngest
         return new PreparedRecord(
             document.RecordType, document.FormKey, ContainerDocumentEdits.WithChildSlotsCut(document.Text, document.RecordType, _release),
             SourceRepository.ContentStamp(document.Text), refs,
-            holdings, cellLocations, editorId, document.ParseDiagnosis);
+            RecordMasters.Of(plugin, document.FormKey, refs.Select(r => r.TargetFormKey)), holdings, cellLocations, editorId, document.ParseDiagnosis);
     }
 
     private static void AppendPrepared(
@@ -288,6 +288,7 @@ internal sealed class PluginIngest
         row.AppendValue(prepared.Body);
         row.AppendValue(prepared.ContentHash);
         row.AppendValue(prepared.ParseDiagnosis);
+        row.AppendValue(prepared.Masters);
         row.EndRow();
     }
 

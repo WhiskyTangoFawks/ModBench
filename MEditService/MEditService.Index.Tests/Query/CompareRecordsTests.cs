@@ -200,9 +200,9 @@ public sealed class CompareRecordsTests : IDisposable
     {
         var sword = Copy(_sword, BasePlugin);
         var chestInMod = Copy(_chest, ModPlugin);
-        var missing = _index.Queries.GetCompareRecords([Copy(_chest, BasePlugin), sword, chestInMod]).Missing();
+        var answer = _index.Queries.GetCompareRecords([Copy(_chest, BasePlugin), sword, chestInMod]).Value();
 
-        Assert.Equal([sword, chestInMod], missing.Select(m => m.Copy));
+        Assert.Equal([sword, chestInMod], Assert.IsType<CompareRecordsAnswer.Missing>(answer).Copies.Select(m => m.Copy));
     }
 
     [Fact]
@@ -211,19 +211,20 @@ public sealed class CompareRecordsTests : IDisposable
         var nowhere = new RecordCopy("00DEAD:Nowhere.esp", ModPlugin);
         var swordInBase = Copy(_sword, BasePlugin);
 
-        var missing = _index.Queries.GetCompareRecords([Copy(_chest, BasePlugin), swordInBase, nowhere]).Missing();
+        var answer = _index.Queries.GetCompareRecords([Copy(_chest, BasePlugin), swordInBase, nowhere]).Value();
 
         Assert.Equal(
             [(nowhere.FormKey, CopyMissingReason.RecordGone), (swordInBase.FormKey, CopyMissingReason.NotInPlugin)],
-            missing.OrderBy(m => m.Reason == CopyMissingReason.NotInPlugin).Select(m => (m.Copy.FormKey, m.Reason)));
+            Assert.IsType<CompareRecordsAnswer.Missing>(answer).Copies
+                .OrderBy(m => m.Reason == CopyMissingReason.NotInPlugin).Select(m => (m.Copy.FormKey, m.Reason)));
     }
 
     [Fact]
     public void ARecordOnlyADisabledPluginHolds_IsNotGone()
     {
-        var missing = _index.Queries.GetCompareRecords([Copy(_dagger, BasePlugin)]).Missing();
+        var answer = _index.Queries.GetCompareRecords([Copy(_dagger, BasePlugin)]).Value();
 
-        Assert.Equal(CopyMissingReason.NotInPlugin, Assert.Single(missing).Reason);
+        Assert.Equal(CopyMissingReason.NotInPlugin, Assert.Single(Assert.IsType<CompareRecordsAnswer.Missing>(answer).Copies).Reason);
     }
 
     [Fact]
