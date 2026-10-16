@@ -1,3 +1,4 @@
+import type { InstanceValue } from '../instanceLoader/instance';
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, uriFrom,
@@ -295,7 +296,7 @@ describe('registerCreatePluginCommand', () => {
 describe('modbench.plugin.create, called by the agent', () => {
   const place = (origin: string, name = 'MyPatch.esp') => new AgentCall([], { name, place: origin });
 
-  function invokeAgent(call: AgentCall<{ name: string; place: string }>, client = new InMemoryMEditClient(), paths: object = {}) {
+  function invokeAgent(call: AgentCall<{ name: string; place: string }>, client = new InMemoryMEditClient(), paths: Partial<InstanceValue['paths']> = {}) {
     const mo2 = makeMo2();
     mo2.instance.value = { ...mo2.instance.value, paths: { ...mo2.instance.value.paths, ...paths } };
     const reporter = recordingReporter();
@@ -331,41 +332,28 @@ describe('modbench.plugin.create, called by the agent', () => {
       { method: 'createPlugin', args: [WROTE, '/instance/mods/Winning Mod', '/instance/source/Winning Mod'] });
   });
 
-  it('answers the refusal mEdit answered, reporting nothing', async () => {
+  it.each([
+    ['a file already there', place('Winning Mod'), 'A file is already there.'],
+    ['a name that is no plugin file', place('Winning Mod', 'MyPatch.txt'), 'MyPatch.txt must be .esm, .esl or .esp.'],
+  ])('answers the refusal mEdit gave for %s, with its reason and reporting nothing', async (_what, call, message) => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', { refused: true, message: 'A file is already there.' });
-    const { reporter, answer } = invokeAgent(place('Winning Mod'), client);
+    client.setCommandResult('createPlugin', { refused: true, message });
+    const { reporter, answer } = invokeAgent(call, client);
 
-    expect(await answer()).toEqual({ applied: false, refusal: 'A file is already there.' });
+    expect(await answer()).toEqual({ applied: false, refusal: message });
     expect(reporter.reports).toEqual([]);
-  });
-
-  it('answers mEdit\'s refusal of a name that is no plugin file, with its reason', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', { refused: true, message: 'MyPatch.txt must be .esm, .esl or .esp.' });
-    const { reporter, answer } = invokeAgent(place('Winning Mod', 'MyPatch.txt'), client);
-
-    expect(await answer()).toEqual({ applied: false, refusal: 'MyPatch.txt must be .esm, .esl or .esp.' });
-    expect(reporter.reports).toEqual([]);
-  });
-
-  it('refuses an Overwrite whose folder is unread, saying so', async () => {
-    const { client, answer } = invokeAgent(place('overwrite/'), undefined, { overwriteDir: undefined });
-
-    await expect(answer()).rejects.toThrow('Overwrite has no folder yet, so "MyPatch.esp" was not created.');
-
-    expect(client.calls).toEqual([]);
   });
 
   it.each([
-    ['a place that is not an enabled mod', place('Disabled Mod'), '"Disabled Mod" is not an enabled mod or Overwrite that lacks "MyPatch.esp".'],
-    ['a place that already holds the name', place('Holding Mod'), '"Holding Mod" is not an enabled mod or Overwrite that lacks "MyPatch.esp".'],
-  ])('refuses %s, creating nothing', async (_what, call, reason) => {
-    const { client, answer } = invokeAgent(call);
+    ['a place that is not an enabled mod', place('Disabled Mod'), {}, '"Disabled Mod" is not an enabled mod or Overwrite that lacks "MyPatch.esp".'],
+    ['a place that already holds the name', place('Holding Mod'), {}, '"Holding Mod" is not an enabled mod or Overwrite that lacks "MyPatch.esp".'],
+    ['an Overwrite whose folder is unread', place('overwrite/'), { overwriteDir: undefined }, 'Overwrite has no folder yet, so "MyPatch.esp" was not created.'],
+  ])('refuses %s, creating nothing', async (_what, call, paths, reason) => {
+    const { client, answer } = invokeAgent(call, undefined, paths);
 
     await expect(answer()).rejects.toThrow(reason);
 
-    expect(client.calls.map(({ method }) => method)).toEqual([]);
+    expect(client.calls).toEqual([]);
   });
 });
 

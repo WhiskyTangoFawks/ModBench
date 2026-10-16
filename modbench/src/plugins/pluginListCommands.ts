@@ -10,6 +10,7 @@ import type { RowOf } from '../drivingLib/gestureEntry';
 import { viewCopyValueText } from '../drivingLib/copyValue';
 import { placeFolder, pluginPlaces } from './pluginPlaces';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
+import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
 import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { PluginAddress } from '../wire/pluginAddress';
@@ -83,7 +84,7 @@ async function promptPluginName(
   });
 }
 
-const placeLabel = (origin: string): string => origin === OVERWRITE_ORIGIN ? 'Overwrite' : origin;
+const placeLabel = (origin: string): string => origin === OVERWRITE_ORIGIN ? OVERWRITE_LABEL : origin;
 
 function lostPlace(origin: string, lost: 'gone' | 'disabled' | 'unread'): string {
   if (lost === 'unread') return 'Overwrite has no folder yet';
@@ -140,8 +141,10 @@ export function registerCreatePluginCommand(
     fromAgent: ({ options: { name, place } }) => {
       const chosen = pluginPlaces(instance.value, name).find(({ name: origin }) => origin.toLowerCase() === place.toLowerCase());
       if (chosen === undefined) {
-        const overwrite = placeFolder(instance.value, OVERWRITE_ORIGIN);
-        if (place.toLowerCase() === OVERWRITE_ORIGIN && 'lost' in overwrite) throw new Refusal(`${lostPlace(OVERWRITE_ORIGIN, overwrite.lost)}, so "${name}" was not created.`);
+        if (place.toLowerCase() === OVERWRITE_ORIGIN) {
+          const unread = placed(instance.value, name, { origin: OVERWRITE_ORIGIN, label: OVERWRITE_LABEL });
+          if (typeof unread === 'string') throw new Refusal(unread);
+        }
         throw new Refusal(`"${place}" is not an enabled mod or Overwrite that lacks "${name}".`);
       }
       const made = placed(instance.value, name, { origin: chosen.name, label: placeLabel(chosen.name) });
