@@ -40,3 +40,25 @@ describe('pluginPlaces', () => {
     expect(pluginPlaces(value, 'Other.esp').map((p) => p.origin)).toEqual(['Winning Mod', 'Losing Mod']);
   });
 });
+
+describe('placeFolder', () => {
+  it("answers Overwrite's folder, an enabled mod's folder, and a source mod's source folder, as the value names them", () => {
+    expect(placeFolder(value, 'overwrite/')).toEqual({ folder: join('/instance', 'overwrite') });
+    expect(placeFolder(value, 'Winning Mod'))
+      .toEqual({ folder: join('/instance', 'mods', 'Winning Mod'), sourceFolder: join('/instance', 'source', 'Winning Mod') });
+    expect(placeFolder(value, 'Losing Mod')).toEqual({ folder: join('/instance', 'mods', 'Losing Mod') });
+  });
+
+  it('answers a mod the value does not list as gone', () => {
+    expect(placeFolder(value, 'Uninstalled')).toEqual({ lost: 'gone' });
+  });
+
+  it('answers a mod the value lists but does not enable as disabled', () => {
+    expect(placeFolder(value, 'Disabled Mod')).toEqual({ lost: 'disabled' });
+  });
+
+  it('answers Overwrite as unread while the value names no folder for it', () => {
+    const unread = instanceValueFixture({ paths: { ...value.paths, overwriteDir: undefined } });
+    expect(placeFolder(unread, 'overwrite/')).toEqual({ lost: 'unread' });
+  });
+});
