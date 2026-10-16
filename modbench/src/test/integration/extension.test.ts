@@ -1770,11 +1770,17 @@ describe('Modbench, launching mEdit with the extension, puts the load order befo
 
 describe('The strings language setting is put again with the load order', () => {
   after(async () => {
-    await vscode.workspace.getConfiguration('modbench').update('stringsLanguage', undefined, vscode.ConfigurationTarget.Workspace);
+    await vscode.workspace.getConfiguration('modbench').update('stringsLanguage', undefined, vscode.ConfigurationTarget.Global);
   });
 
   it('PUTs /load-order naming the language a change of the setting chose', async () => {
-    await vscode.workspace.getConfiguration('modbench').update('stringsLanguage', 'French', vscode.ConfigurationTarget.Workspace);
+    let settled = putLoadOrders.length;
+    do {
+      settled = putLoadOrders.length;
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+    } while (putLoadOrders.length !== settled);
+
+    await vscode.workspace.getConfiguration('modbench').update('stringsLanguage', 'French', vscode.ConfigurationTarget.Global);
 
     await waitFor('a PUT /load-order naming French', () => putStringsLanguages.at(-1) === 'French' ? true : undefined);
   });
