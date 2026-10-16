@@ -417,6 +417,8 @@ export interface InstanceReading extends InstanceGame {
   readonly sourceMods: SourceMods;
   /** Whether the instance folder holds a repository. */
   readonly holdsRepository: boolean;
+  /** Each change the watch cannot hear, with why. */
+  readonly watchNotes: readonly string[];
 }
 
 export interface InstanceAdapter {

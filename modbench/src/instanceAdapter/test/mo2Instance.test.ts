@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   access, chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, writeFile,
 } from 'node:fs/promises';
-import type { PathLike } from 'node:fs';
+import { watch, type PathLike } from 'node:fs';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../test/noDetectors';
 import { present } from '../../ports/present';
@@ -19,6 +19,11 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   real.stat = actual.stat;
   real.readdir = actual.readdir;
   return { ...actual, rename: vi.fn(actual.rename), stat: vi.fn(actual.stat), readdir: vi.fn(actual.readdir) };
+});
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return { ...actual, watch: vi.fn(actual.watch) };
 });
 
 const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(real.rename, 'the real rename')(from, to);
@@ -985,23 +990,88 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(1);
     });
 
-    it.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher misses it only on Linux) signals a change in a folder that a folder heard created already held', async () => {
-      let signals = 0;
-      const subscription = adapterAt(root).subscribe(() => { signals++; });
-      const file = join(root, 'source', 'Harder VATS', 'plugin-source', 'Harder VATS.esp', 'Weapons', 'Gun.json');
-      await mkdir(dirname(file), { recursive: true });
-      const sourceWatch = live().find((w) => w.base === root && matchesGlob('source/A/x.json', w.pattern));
-      sourceWatch?.fireCreate(join(root, 'source'));
-      signals = 0;
+    describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher misses them only on Linux) the folders a folder heard created already held', () => {
+      const mod = (): string => join(root, 'source', 'Harder VATS');
+      const fireSourceCreated = (): void => {
+        live().find((w) => w.base === root && matchesGlob('source/A/x.json', w.pattern))?.fireCreate(join(root, 'source'));
+      };
+      const signalledWriting = async (file: string, signalled: () => boolean): Promise<boolean> => {
+        const deadline = Date.now() + 2_000;
+        while (!signalled()) {
+          if (Date.now() > deadline) return false;
+          await writeFile(file, `${Date.now()}`);
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        return true;
+      };
+      const watchedFolders = (): string[] => vi.mocked(watch).mock.calls.map(([folder]) => String(folder));
+      const until = async (done: () => boolean): Promise<void> => {
+        const deadline = Date.now() + 2_000;
+        while (!done() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 10));
+      };
 
-      const deadline = Date.now() + 2_000;
-      while (signals === 0 && Date.now() < deadline) {
-        await writeFile(file, `${Date.now()}`);
-        await new Promise((r) => setTimeout(r, 20));
-      }
-      subscription.dispose();
+      it('signals a change inside one', async () => {
+        let signals = 0;
+        const subscription = adapterAt(root).subscribe(() => { signals++; });
+        const file = join(mod(), 'plugin-source', 'Harder VATS.esp', 'Weapons', 'Gun.json');
+        await mkdir(dirname(file), { recursive: true });
+        fireSourceCreated();
+        signals = 0;
 
-      expect(signals).toBeGreaterThan(0);
+        const signalled = await signalledWriting(file, () => signals > 0);
+        subscription.dispose();
+
+        expect(signalled).toBe(true);
+      });
+
+      it('signals a change inside one once armed again after a disarm', async () => {
+        const watched = adapterAt(root);
+        const file = join(mod(), 'plugin-source', 'Harder VATS.esp', 'Gun.json');
+        await mkdir(dirname(file), { recursive: true });
+        vi.mocked(watch).mockClear();
+        const first = watched.subscribe(() => undefined);
+        fireSourceCreated();
+        await until(() => watchedFolders().includes(dirname(file)));
+        first.dispose();
+
+        let signals = 0;
+        const again = watched.subscribe(() => { signals++; });
+        const signalled = await signalledWriting(file, () => signals > 0);
+        again.dispose();
+
+        expect(signalled).toBe(true);
+      });
+
+      it('holds a repository\'s .git and its refs, and none of git\'s bookkeeping', async () => {
+        await mkdir(join(mod(), '.git', 'objects', 'ab'), { recursive: true });
+        await mkdir(join(mod(), '.git', 'refs', 'heads'), { recursive: true });
+        vi.mocked(watch).mockClear();
+        const subscription = adapterAt(root).subscribe(() => undefined);
+
+        fireSourceCreated();
+        await until(() => watchedFolders().includes(join(mod(), '.git', 'refs', 'heads')));
+        subscription.dispose();
+
+        expect(watchedFolders().sort()).toEqual([mod(), join(mod(), '.git'), join(mod(), '.git', 'refs'), join(mod(), '.git', 'refs', 'heads')].sort());
+      });
+
+      it.skipIf(process.getuid?.() === 0)('(root reads every folder) reads a folder whose watch failed into the next reading\'s notes, signalling it', async () => {
+        const unreadable = join(mod(), 'Unreadable');
+        await mkdir(unreadable, { recursive: true });
+        await chmod(unreadable, 0o000);
+        const watched = adapterAt(root);
+        let signals = 0;
+        const subscription = watched.subscribe(() => { signals++; });
+
+        fireSourceCreated();
+        signals = 0;
+        await until(() => signals > 0);
+        const { watchNotes } = await watched.reading();
+        await chmod(unreadable, 0o755);
+        subscription.dispose();
+
+        expect(watchNotes).toEqual([expect.stringContaining(unreadable)]);
+      });
     });
 
     it('follows the downloads folder the last read of the settings resolved, signalling once when it moves, not the one where the instance began, so a download landing in the folder the settings name now is heard', async () => {

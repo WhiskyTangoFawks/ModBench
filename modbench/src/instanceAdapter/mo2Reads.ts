@@ -59,6 +59,7 @@ export interface ReadingSource extends ArchiveReads {
   originRootFiles(origin: FileOrigin): Promise<OriginFiles>;
   sourceMods(): Promise<SourceMods>;
   holdsRepository(): Promise<boolean>;
+  watchNotes(): string[];
 }
 
 async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile[] | undefined> {
@@ -163,6 +164,7 @@ export function readingSource(context: Mo2Context): ReadingSource {
     sourceMods: () => sourceModsIn(instanceRoot),
 
     holdsRepository: () => isTracked(instanceRoot),
+    watchNotes: () => watch.notes(),
   };
 }
 
@@ -250,7 +252,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
     profile, gameName, gameRelease, mods: mods.kept, modGroups: groupModOrder(mods.kept), pluginOrder: pluginOrder.kept, orderNotes: [...mods.notes, ...pluginOrder.notes], downloadedFiles, ...gameFacts,
     archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
     profiles, modFolders, skippedLinks, runtimeOutput, modFiles, folderMeta,
-    sourceMods, holdsRepository,
+    sourceMods, holdsRepository, watchNotes: source.watchNotes(),
   };
 }
 

@@ -39,6 +39,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     folderMeta: new Map(),
     sourceMods: { folders: new Map(), folderOf: () => undefined, notes: [] },
     holdsRepository: false,
+    watchNotes: [],
     ...overrides,
   };
 }
