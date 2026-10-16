@@ -48,14 +48,15 @@ internal static class LoadOrderEndpoints
         // Never defaulted here (ADR-0013).
         if (req.Active is not { } active || req.LoadedWithNoLine is not { } loadedWithNoLine
             || req.Archives is not { } archives || req.StringsFiles is not { } stringsFiles || !AllStamped(archives, stringsFiles)
+            || req.Places is not { } places || places.Any(place => string.IsNullOrEmpty(place?.Name) || string.IsNullOrEmpty(place.Folder))
             || !ModsByFolder.AreWhole(req.Mods) || string.IsNullOrWhiteSpace(req.StatCache))
         {
-            return Results.Problem("The snapshot must state its active plugins, those loaded with no line, its archives, its strings files, its mods and the stat cache's folder.", statusCode: 400);
+            return Results.Problem("The snapshot must state its active plugins, those loaded with no line, its archives, its strings files, its places, its mods and the stat cache's folder.", statusCode: 400);
         }
 
         var result = handler.Put(
             req.GameDirectory, req.InstanceRoot, gameRelease,
-            registered, active, loadedWithNoLine, archives, stringsFiles,
+            registered, active, loadedWithNoLine, archives, stringsFiles, places,
             new SnapshotMods(req.Mods, req.StatCache));
         return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : EndpointMapping.Refusal(result);
     }

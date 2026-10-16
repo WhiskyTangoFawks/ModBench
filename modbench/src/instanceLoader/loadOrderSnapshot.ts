@@ -11,7 +11,7 @@ import { pluginOrderOf } from './pluginOrder';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile, pluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
-import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress, type StampedFile } from '../wire/pluginAddress';
+import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress, type PluginPlace, type StampedFile } from '../wire/pluginAddress';
 import type { ModByFolder } from '../wire/modByFolder';
 
 export { OVERWRITE_ORIGIN };
@@ -71,6 +71,8 @@ export interface LoadOrderSnapshotValue<F = StampedFile> {
   readonly archives: F[];
   /** The loose strings files the game reads, each at the path that wins. */
   readonly stringsFiles: F[];
+  /** Each enabled mod that has a mod folder, then Overwrite: where the plugin create gesture offers to put a plugin. */
+  readonly places: PluginPlace[];
   /** Each mod of the mod order that has a mod folder. */
   readonly mods: ModByFolder[];
   readonly statCache: string;
@@ -270,6 +272,7 @@ export function loadOrderSnapshotOf(value: {
   readonly modFolders: ModFolders | undefined;
   /** Each source mod's source folder, by mod name. */
   readonly sourceDirs: ReadonlyMap<string, string>;
+  readonly overwriteDir: string | undefined;
   readonly archives: ArchiveSources;
   readonly modlist: SnapshotModlist;
 }): LoadOrderSnapshotValue<string> | LoadOrderSnapshotRefusal | undefined {
@@ -281,14 +284,20 @@ export function loadOrderSnapshotOf(value: {
   const { dataFolder } = value.gameFolder;
   // The filter states a found game folder's own guarantee, never an unchecked cast.
   const rows = value.plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined);
+  const modPlace = (name: string): PluginPlace | undefined => {
+    const folder = value.modFolders?.holding({ kind: 'mod', name });
+    if (folder === undefined) return undefined;
+    const sourceFolder = value.sourceDirs.get(name);
+    return sourceFolder === undefined ? { name, folder: folder.path } : { name, folder: folder.path, sourceFolder };
+  };
   const whatProvides = (origin: string) => byOrigin<SnapshotProvider | undefined>(origin, {
     overwrite: { kind: 'None' },
     data: { kind: 'Game' },
     mod: (name) => {
-      const folder = value.modFolders?.holding({ kind: 'mod', name });
-      if (folder === undefined) return undefined;
-      const sourceFolder = value.sourceDirs.get(name);
-      return sourceFolder === undefined ? { kind: 'Mod', mod: name, folder: folder.path } : { kind: 'Mod', mod: name, folder: folder.path, sourceFolder };
+      const place = modPlace(name);
+      if (place === undefined) return undefined;
+      const { name: mod, ...where } = place;
+      return { kind: 'Mod', mod, ...where };
     },
   });
   const order = pluginOrderOf(
@@ -318,19 +327,19 @@ export function loadOrderSnapshotOf(value: {
     active,
     loadedWithNoLine: loadedWithNoLine.map(({ name, origin }) => ({ name, origin })),
     ...archivesAndStringsOf(value.archives, dataFolder, active),
-    mods: snapshotModsOf(value.modlist, value.modFolders, value.sourceDirs),
+    places: [
+      ...value.modlist.mods.flatMap((entry) => (entry.kind === 'mod' && entry.enabled ? modPlace(entry.name) ?? [] : [])),
+      ...(value.overwriteDir === undefined ? [] : [{ name: OVERWRITE_ORIGIN, folder: value.overwriteDir }]),
+    ],
+    mods: snapshotModsOf(value.modlist, value.modFolders),
     statCache: value.modlist.statCache,
   };
 }
 
-function snapshotModsOf(
-  { mods, metadataFiles }: SnapshotModlist, folders: ModFolders | undefined, sourceDirs: ReadonlyMap<string, string>,
-): ModByFolder[] {
+function snapshotModsOf({ mods, metadataFiles }: SnapshotModlist, folders: ModFolders | undefined): ModByFolder[] {
   return mods.flatMap((entry) => {
     const folder = folders?.holding(entry);
-    if (folder === undefined) return [];
-    const sourceFolder = entry.kind === 'mod' ? sourceDirs.get(entry.name) : undefined;
-    return [{ name: folder.modName, folder: folder.path, metadataFiles: [...metadataFiles], ...(sourceFolder === undefined ? {} : { sourceFolder }) }];
+    return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path, metadataFiles: [...metadataFiles] }];
   });
 }
 

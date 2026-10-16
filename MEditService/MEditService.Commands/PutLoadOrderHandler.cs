@@ -28,7 +28,8 @@ public sealed class PutLoadOrderHandler
     public PutLoadOrderResult Put(
         string dataFolder, string? instanceRoot, GameRelease gameRelease,
         IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine,
-        IReadOnlyList<StampedFile> archives, IReadOnlyList<StampedFile> stringsFiles, SnapshotMods mods)
+        IReadOnlyList<StampedFile> archives, IReadOnlyList<StampedFile> stringsFiles, IReadOnlyList<PluginPlace> places,
+        SnapshotMods mods)
     {
         if (!_plugins.GameFolderExists(dataFolder))
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.GameDirectoryNotFound, $"Game directory not found: {dataFolder}");
@@ -49,8 +50,7 @@ public sealed class PutLoadOrderHandler
         if (LoadOrderSnapshot.RefusalOf(plugins, active, loadedWithNoLine) is { } invalid)
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InvalidSnapshot, invalid);
 
-        var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active, loadedWithNoLine, archives, stringsFiles,
-            [.. mods.Mods.Select(mod => new PluginProvider.FromMod(mod.Name, mod.Folder, mod.SourceFolder))]);
+        var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active, loadedWithNoLine, archives, stringsFiles, places);
         var version = _holder.Apply(snapshot);
         _externalChanges.Check(snapshot);
         _modStatus.Check(mods);

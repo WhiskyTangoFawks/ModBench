@@ -89,7 +89,8 @@ def copy(plugin: Name, form_key: str, destination: Name, mode: CopyMode = 'overr
 
 
 def create_plugin(name: str, origin: str) -> Plugin:
-    """Writes an empty plugin, with its plugin source in a source mod, into the mod origin. The plugin joins the load order disabled, once Modbench's watcher sees it."""
+    """Writes an empty plugin, with its plugin source in a source mod, into an enabled mod or Overwrite, as the create
+    gesture does. The plugin joins the load order disabled, once Modbench's watcher sees it."""
     _call('POST', '/plugins/create-in-mod', {'origin': origin, 'name': name})
     return Plugin(name, origin)
 

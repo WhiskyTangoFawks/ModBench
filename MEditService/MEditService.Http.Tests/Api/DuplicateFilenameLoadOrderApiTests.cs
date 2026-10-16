@@ -37,6 +37,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
             mods = Array.Empty<object>(),
+            places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
         });

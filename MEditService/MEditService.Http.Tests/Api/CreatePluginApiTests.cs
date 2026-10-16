@@ -56,36 +56,50 @@ public sealed class CreatePluginApiTests : HostedTests
         Assert.False((await CreateARecordIn("Minted.esp", "MintedMod")).IsSuccessStatusCode);
     }
 
+    private Task<HttpResponseMessage> PutWithPlaces(ScatteredFixtureData fx, IEnumerable<LoadOrderEntry> plugins, params object[] places) =>
+        Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, plugins, places: places));
+
+    private Task<HttpResponseMessage> CreateInMod(string origin, string name) =>
+        Client.PostAsJsonAsync("/plugins/create-in-mod", new { origin, name });
+
     [Fact]
-    public async Task CreatingAPluginInAModTheSnapshotListsWithNoPlugin_WritesItInThatModsFolder()
+    public async Task CreatingAPluginInAPlaceTheSnapshotNamesWithNoPlugin_WritesItInThatPlacesFolder()
     {
         var fx = Owned(OneMod());
         var emptyFolder = NewModFolder(fx, "mod-empty");
-        var body = SnapshotPlugins.Body(
-            fx.GameDirectory, fx.InstanceRoot, fx.Plugins,
-            mods: new[] { new { name = "EmptyMod", folder = emptyFolder, metadataFiles = Array.Empty<string>() } });
-        (await Client.PutLoadOrderAndAwaitReady(body)).EnsureSuccessStatusCode();
+        (await PutWithPlaces(fx, fx.Plugins, new { name = "EmptyMod", folder = emptyFolder })).EnsureSuccessStatusCode();
 
-        var created = await Client.PostAsJsonAsync("/plugins/create-in-mod", new { origin = "EmptyMod", name = "Patch.esp" });
+        var created = await CreateInMod("EmptyMod", "Patch.esp");
 
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
         Assert.True(File.Exists(Path.Combine(emptyFolder, "Patch.esp")));
     }
 
     [Fact]
-    public async Task CreatingAPluginInASourceModTheSnapshotListsWithNoPlugin_LandsItsSourceInTheSourceFolderTheSnapshotNamed()
+    public async Task CreatingAPluginInAPlaceTheNextSnapshotAdds_IsRefusedBeforeAndWritesAfter()
+    {
+        var fx = Owned(OneMod());
+        var emptyFolder = NewModFolder(fx, "mod-later");
+        (await PutWithPlaces(fx, fx.Plugins)).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.NotFound, (await CreateInMod("LaterMod", "Patch.esp")).StatusCode);
+
+        (await PutWithPlaces(fx, fx.Plugins, new { name = "LaterMod", folder = emptyFolder })).EnsureSuccessStatusCode();
+
+        Assert.Equal(HttpStatusCode.OK, (await CreateInMod("LaterMod", "Patch.esp")).StatusCode);
+    }
+
+    [Fact]
+    public async Task CreatingAPluginInASourceModPlaceWithNoPlugin_LandsItsSourceInTheSourceFolderTheSnapshotNamed()
     {
         var fx = Owned(OneMod());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single(plugin => plugin.Origin == Origin).Path) ?? throw new InvalidOperationException("A mod plugin has a folder.");
         File.Delete(Path.Combine(modFolder, Held));
-        var body = SnapshotPlugins.Body(
-            fx.GameDirectory, fx.InstanceRoot, fx.Plugins.Where(plugin => plugin.Origin != Origin),
-            mods: new[] { new { name = Origin, folder = modFolder, metadataFiles = Array.Empty<string>(), sourceFolder = modFolder } });
-        (await Client.PutLoadOrderAndAwaitReady(body)).EnsureSuccessStatusCode();
+        (await PutWithPlaces(
+            fx, fx.Plugins.Where(plugin => plugin.Origin != Origin), new { name = Origin, folder = modFolder, sourceFolder = modFolder })).EnsureSuccessStatusCode();
 
-        var created = await Client.PostAsJsonAsync("/plugins/create-in-mod", new { origin = Origin, name = "Patch.esp" });
+        var created = await CreateInMod(Origin, "Patch.esp");
 
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
         Assert.True(Directory.Exists(Path.Combine(modFolder, "plugin-source", "Patch.esp")));

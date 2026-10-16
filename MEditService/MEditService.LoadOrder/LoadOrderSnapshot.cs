@@ -94,13 +94,13 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// every archive's copy.</summary>
     public IReadOnlyList<StampedFile> StringsFiles { get; }
 
-    /// <summary>Every mod of the load order, whether or not it provides a plugin.</summary>
-    public IReadOnlyList<PluginProvider.FromMod> Mods { get; }
+    /// <summary>Where a new plugin can live, whether or not the place holds a plugin yet.</summary>
+    public IReadOnlyList<PluginPlace> Places { get; }
 
     public LoadOrderSnapshot(
         string dataFolderPath, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<RegisteredPlugin> plugins,
         IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine, IReadOnlyList<StampedFile> archives,
-        IReadOnlyList<StampedFile> stringsFiles, IReadOnlyList<PluginProvider.FromMod> mods)
+        IReadOnlyList<StampedFile> stringsFiles, IReadOnlyList<PluginPlace> places)
     {
         if (RefusalOf(plugins, active, loadedWithNoLine) is { } refusal) throw new ArgumentException(refusal);
         DataFolderPath = dataFolderPath;
@@ -121,7 +121,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         _places = PlacesOf(Plugins, Active, LoadedWithNoLine);
         Archives = [.. archives];
         StringsFiles = [.. stringsFiles];
-        Mods = [.. mods];
+        Places = [.. places];
     }
 
     // A plugin with no line that is not active has no place.
@@ -211,7 +211,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         && LoadedWithNoLine.SequenceEqual(other.LoadedWithNoLine)
         && Archives.SequenceEqual(other.Archives)
         && StringsFiles.SequenceEqual(other.StringsFiles)
-        && Mods.SequenceEqual(other.Mods);
+        && Places.SequenceEqual(other.Places);
 
     public override bool Equals(object? obj) => Equals(obj as LoadOrderSnapshot);
 

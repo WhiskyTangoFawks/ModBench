@@ -31,6 +31,7 @@ public sealed class ClearFieldApiTests(LoadedApiFixture<TestPluginFixture> loade
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
             mods = Array.Empty<object>(),
+            places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
         })).EnsureSuccessStatusCode();

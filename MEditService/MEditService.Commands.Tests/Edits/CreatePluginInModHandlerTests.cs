@@ -25,7 +25,14 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
         [
             .. _data.Plugins,
             new LoadOrderEntry("First.esp", Path.Combine(_folder, "First.esp"), Mod, Line: 1, Enabled: true, Winning: true),
-        ]));
+        ], [new PluginPlace(Mod, _folder, _folder)]));
+    }
+
+    private void Place(PluginPlace place)
+    {
+        var held = _holder.Current;
+        _holder.Apply(new LoadOrderSnapshot(
+            held.DataFolderPath, held.InstanceRoot, held.GameRelease, held.Plugins, [], [], [], [], [.. held.Places, place]));
     }
 
     public void Dispose() => _data.Dispose();
@@ -46,13 +53,10 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task CreatePluginIn_AModTheLoadOrderHoldsNoPluginOf_WritesItInThatModsFolder()
+    public async Task CreatePluginIn_APlaceTheLoadOrderHoldsNoPluginOf_WritesItInThatPlacesFolder()
     {
         var emptyFolder = Directory.CreateDirectory(Path.Combine(_data.DataFolder, "EmptyMod")).FullName;
-        var held = _holder.Current;
-        _holder.Apply(new LoadOrderSnapshot(
-            held.DataFolderPath, held.InstanceRoot, held.GameRelease, held.Plugins, [], [], [], [],
-            [new PluginProvider.FromMod("EmptyMod", emptyFolder, null)]));
+        Place(new PluginPlace("EmptyMod", emptyFolder, null));
 
         var result = await Handler.CreatePluginIn("EmptyMod", "Patch.esp");
 
@@ -61,21 +65,16 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task CreatePluginIn_ASourceModTheLoadOrderHoldsNoPluginOf_LandsItsSourceInTheSourceFolderTheSnapshotNamed()
+    public async Task CreatePluginIn_Overwrite_WritesItInOverwritesFolder()
     {
-        var tracked = await TestEditService.InitHandler(_holder).InitAsync(ToInit.In(_holder.Held?.Snapshot, Mod));
-        Assert.Single(tracked.Landed);
-        File.Delete(Path.Combine(_folder, "First.esp"));
-        var held = _holder.Current;
-        _holder.Apply(new LoadOrderSnapshot(
-            held.DataFolderPath, held.InstanceRoot, held.GameRelease, SnapshotPlugins.Of(_data.Plugins), [], [], [], [],
-            [new PluginProvider.FromMod(Mod, _folder, _folder)]));
+        var overwrite = Directory.CreateDirectory(Path.Combine(_data.DataFolder, "overwrite")).FullName;
+        Place(new PluginPlace(PluginOrigin.Overwrite, overwrite, null));
 
-        var result = await Handler.CreatePluginIn(Mod, "Patch.esp");
+        var result = await Handler.CreatePluginIn(PluginOrigin.Overwrite, "Patch.esp");
 
         Assert.Null(result.Refusal);
-        var patch = new RegisteredPlugin("Patch.esp", Mod, Path.Combine(_folder, "Patch.esp"), new PluginProvider.FromMod(Mod, _folder, _folder), Line: null, PluginStrings.None);
-        Assert.True(TestAdapters.Source().SourceReads(patch));
+        Assert.Equal(new PluginAddress("Patch.esp", PluginOrigin.Overwrite), result.Created);
+        Assert.True(File.Exists(Path.Combine(overwrite, "Patch.esp")));
     }
 
     [Fact]
@@ -91,9 +90,8 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
 
     [Theory]
     [InlineData("NoSuchMod")]
-    [InlineData(PluginOrigin.Overwrite)]
     [InlineData(PluginOrigin.DataDirectory)]
-    public async Task CreatePluginIn_AnOriginThatIsNotAModOfTheLoadOrder_RefusesNamingItAndWritesNothing(string origin)
+    public async Task CreatePluginIn_AnOriginThatIsNoPlaceOfTheLoadOrder_RefusesNamingItAndWritesNothing(string origin)
     {
         var awaited = _holder.ArrivalAwaited;
 
