@@ -7,7 +7,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A source quest whose own FormKey comes from a plugin that loads before the destination, and
 /// whose dialog topic comes from one that loads after it.</summary>
-public sealed class LateChildFixture : TestInstance, ITrackedPlugins
+public sealed class LateChildFixture : TestInstance, ISourcePlugins
 {
     private const string EarlyName = "Early.esm";
     private const string LateName = "Late.esm";
@@ -28,9 +28,9 @@ public sealed class LateChildFixture : TestInstance, ITrackedPlugins
         quest.DialogTopics.Add(new DialogTopic(new FormKey(late, 0x800), Fallout4Release.Fallout4) { EditorID = "LateTopic" });
         source.Quests.Add(quest);
 
-        Add(new Fallout4Mod(early, Fallout4Release.Fallout4), "EarlyMod", tracked: false);
+        Add(new Fallout4Mod(early, Fallout4Release.Fallout4), "EarlyMod", sourcePlugin: false);
         DestinationPlugin = Add(new Fallout4Mod(ModKey.FromFileName("Destination.esp"), Fallout4Release.Fallout4), "DestinationMod");
-        Add(new Fallout4Mod(late, Fallout4Release.Fallout4), "LateMod", tracked: false);
-        SourcePlugin = Add(source, "SourceMod", tracked: false);
+        Add(new Fallout4Mod(late, Fallout4Release.Fallout4), "LateMod", sourcePlugin: false);
+        SourcePlugin = Add(source, "SourceMod", sourcePlugin: false);
     }
 }

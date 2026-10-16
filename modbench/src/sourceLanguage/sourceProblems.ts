@@ -102,7 +102,7 @@ function nextHeld(held: Map<string, Contribution>, answered: Map<string, Contrib
   }));
 }
 
-/** Publishes what mEdit answers is wrong in each tracked plugin's source. A plugin mEdit
+/** Publishes what mEdit answers is wrong in each source plugin's source. A plugin mEdit
  *  cannot answer for keeps the links it last had and takes the stops it now answers, and the
  *  language status says why. */
 export function feedSourceProblems(deps: SourceProblemsDeps): () => void {

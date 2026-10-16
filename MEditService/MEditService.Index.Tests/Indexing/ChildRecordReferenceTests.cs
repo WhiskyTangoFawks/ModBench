@@ -34,7 +34,7 @@ public sealed class ChildRecordReferenceTests : IDisposable
                 topic = t.FormKey;
             }, origin: "ChildMod")
             .BuildScattered()
-            .Tracked();
+            .SourcePlugin();
         _plugin = _fixture.Plugins.Single();
         (_quest, _topic, _global, _keyword) = (quest.ToString(), topic.ToString(), global.ToString(), keyword.ToString());
     }

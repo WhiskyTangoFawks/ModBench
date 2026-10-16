@@ -30,7 +30,7 @@ public sealed class LightRangeProblemTests : IDisposable
                 mod.Npcs.Add(new Npc(outside, Fallout4Release.Fallout4) { EditorID = "OutOfRange" });
             }, origin: "LightMod")
             .BuildScattered()
-            .Tracked();
+            .SourcePlugin();
         _light = _fixture.Plugins.Single();
         _outside = outside.ToString();
     }

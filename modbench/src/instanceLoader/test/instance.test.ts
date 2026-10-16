@@ -145,7 +145,7 @@ describe('Instance — the value', () => {
     expect(instance.value.holdsRepository).toBe(true);
   });
 
-  it('carries each mod a repository builds as tracked, with that repository as its source folder, and each repository alone as a source mod', async () => {
+  it('carries each mod a repository builds as a source mod, with that repository as its source folder, and each repository alone as a source mod', async () => {
     const { instance, logs } = loader({
       mods: [mod('Harder VATS'), mod('[NODELETE] Radfall'), mod('Plain')],
       sourceMods: sourceModsOf(
@@ -156,7 +156,7 @@ describe('Instance — the value', () => {
 
     await instance.refresh();
 
-    expect([...instance.value.trackedMods].sort()).toEqual(['Harder VATS', '[NODELETE] Radfall']);
+    expect([...instance.value.listedSourceMods].sort()).toEqual(['Harder VATS', '[NODELETE] Radfall']);
     expect([...instance.value.sourceMods].sort()).toEqual(['Cloned And Unlisted', 'Harder VATS', '[NODELETE] Radfall']);
     expect(instance.value.paths.sourceDirs.get('[NODELETE] Radfall')).toBe('/source/Renamed From');
     expect(instance.value.paths.sourceDirs.get('Cloned And Unlisted')).toBe('/source/Cloned And Unlisted');
@@ -168,7 +168,7 @@ describe('Instance — the value', () => {
 
     await instance.refresh();
 
-    expect(instance.value.trackedMods.has('Harder VATS')).toBe(false);
+    expect(instance.value.listedSourceMods.has('Harder VATS')).toBe(false);
     expect(instance.value.paths.sourceDirs.has('Harder VATS')).toBe(false);
     expect(instance.value.paths.sourceDirs.get('Harder VATS Renamed')).toBe('/source/Harder VATS');
   });
@@ -609,31 +609,31 @@ describe('Instance — game folder and the archives the game loads', () => {
   it('hands a mod\'s plugin a strings file added beside it, at the next read', async () => {
     const reading: Partial<InstanceReading> = {
       ...GAME_FOUND,
-      mods: [mod('Tracked Patch Mod')],
-      pluginOrder: [{ name: 'Tracked Patch Mod.esp', enabled: true }],
-      modFolders: modFoldersOf('Tracked Patch Mod'),
+      mods: [mod('Source Patch Mod')],
+      pluginOrder: [{ name: 'Source Patch Mod.esp', enabled: true }],
+      modFolders: modFoldersOf('Source Patch Mod'),
     };
-    const { instance, fake } = loader({ ...reading, modFiles: new Map([['Tracked Patch Mod', filesOfMod('Tracked Patch Mod', 'Tracked Patch Mod.esp')]]) });
+    const { instance, fake } = loader({ ...reading, modFiles: new Map([['Source Patch Mod', filesOfMod('Source Patch Mod', 'Source Patch Mod.esp')]]) });
     await instance.refresh();
 
-    const stringsFile = '/mods/Tracked Patch Mod/Strings/Tracked Patch Mod_en.STRINGS';
-    fake.read({ modFiles: new Map([['Tracked Patch Mod', filesOfMod('Tracked Patch Mod', 'Tracked Patch Mod.esp', 'Strings/Tracked Patch Mod_en.STRINGS')]]) });
+    const stringsFile = '/mods/Source Patch Mod/Strings/Source Patch Mod_en.STRINGS';
+    fake.read({ modFiles: new Map([['Source Patch Mod', filesOfMod('Source Patch Mod', 'Source Patch Mod.esp', 'Strings/Source Patch Mod_en.STRINGS')]]) });
     await instance.refresh();
 
     expect(instance.value.loadOrderSnapshot).toMatchObject({
-      plugins: expect.arrayContaining([expect.objectContaining({ origin: 'Tracked Patch Mod', stringsFiles: [expect.objectContaining({ path: stringsFile })] })]) as unknown,
+      plugins: expect.arrayContaining([expect.objectContaining({ origin: 'Source Patch Mod', stringsFiles: [expect.objectContaining({ path: stringsFile })] })]) as unknown,
     });
   });
 
   it('hands a mod\'s plugin the new stamp of a strings file rewritten beside it, at the next read', async () => {
-    const stringsFile = '/mods/Tracked Patch Mod/Strings/Tracked Patch Mod_en.STRINGS';
+    const stringsFile = '/mods/Source Patch Mod/Strings/Source Patch Mod_en.STRINGS';
     let changedNs = 1n;
     const { instance } = loader({
       ...GAME_FOUND,
-      mods: [mod('Tracked Patch Mod')],
-      pluginOrder: [{ name: 'Tracked Patch Mod.esp', enabled: true }],
-      modFolders: modFoldersOf('Tracked Patch Mod'),
-      modFiles: new Map([['Tracked Patch Mod', filesOfMod('Tracked Patch Mod', 'Tracked Patch Mod.esp', 'Strings/Tracked Patch Mod_en.STRINGS')]]),
+      mods: [mod('Source Patch Mod')],
+      pluginOrder: [{ name: 'Source Patch Mod.esp', enabled: true }],
+      modFolders: modFoldersOf('Source Patch Mod'),
+      modFiles: new Map([['Source Patch Mod', filesOfMod('Source Patch Mod', 'Source Patch Mod.esp', 'Strings/Source Patch Mod_en.STRINGS')]]),
     }, (adapter) => ({ ...adapter, fileStamp: (path) => Promise.resolve({ kind: 'read', answer: { size: 5n, modifiedNs: 1n, changedNs: path === stringsFile ? changedNs : 0n } }) }));
     await instance.refresh();
     const before = handedStringsFiles(instance.value.loadOrderSnapshot);
@@ -684,8 +684,8 @@ describe('Instance — game folder and the archives the game loads', () => {
 
   it('carries the paths a view renders: overwrite/, downloads/ and each listed mod\'s own folder, matched as the manager matches names, where it has one', async () => {
     const { instance } = loader({
-      mods: [mod('tracked'), mod('Radfall'), separator('Section')],
-      modFolders: modFoldersOf('Tracked'),
+      mods: [mod('sourcePlugin'), mod('Radfall'), separator('Section')],
+      modFolders: modFoldersOf('SourcePlugin'),
       runtimeOutput: { origin: 'overwrite', folder: '/overwrite', files: [], folders: [], notes: [] },
     });
 
@@ -694,7 +694,7 @@ describe('Instance — game folder and the archives the game loads', () => {
     const { paths } = instance.value;
     expect(paths.overwriteDir).toBe('/overwrite');
     expect(paths.downloadsDir).toBe('/downloads');
-    expect(paths.modDirs).toEqual(new Map([['tracked', '/mods/Tracked']]));
+    expect(paths.modDirs).toEqual(new Map([['sourcePlugin', '/mods/SourcePlugin']]));
   });
 
   it('carries a source folder for each source mod alone, one with no mod folder too, and hands it to the facts', async () => {

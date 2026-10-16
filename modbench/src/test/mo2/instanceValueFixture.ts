@@ -12,7 +12,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
   const base: Omit<InstanceValue, 'modGroups' | 'modNames'> = {
     mods: [],
     modFolders: [],
-    trackedMods: new Set(),
+    listedSourceMods: new Set(),
     sourceMods: new Set(),
     holdsRepository: false,
     profiles: ['Default'],

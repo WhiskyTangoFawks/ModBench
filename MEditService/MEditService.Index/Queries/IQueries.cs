@@ -26,7 +26,7 @@ public interface IQueries
     // Null when the plugin holds no such record.
     Answer<IReadOnlyList<RecordTypeChoice>?, IndexRefused> GetChildRecordTypes(PluginAddress plugin, string formKey);
     Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferences(string targetFormKey);
-    Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferencesInActiveOrTrackedPlugins(string targetFormKey);
+    Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferencesInActiveOrSourcePlugins(string targetFormKey);
     // Null when the plugin holds no such record; a source stop when its source tree cannot say.
     Answer<RenderedDocument?, IndexRefused> GetRenderedDocument(PluginAddress plugin, string formKey);
     // Null when the plugin holds no such record; a source stop when its source tree cannot say.

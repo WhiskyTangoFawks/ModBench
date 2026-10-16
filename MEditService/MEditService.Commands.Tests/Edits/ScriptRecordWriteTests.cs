@@ -41,13 +41,13 @@ public sealed class ScriptRecordWriteTests
     }
 
     [Fact]
-    public void ACopyIntoAnUntrackedPlugin_IsRefused()
+    public void ACopyIntoANonSourcePlugin_IsRefused()
     {
         using var mod = CopyFixture.Create();
 
         var outcome = Copy(mod, CopyMode.New, mod.SourcePlugin);
 
-        Assert.Equal(RecordEditRefusal.PluginNotTracked, outcome.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotSourcePlugin, outcome.Refusal);
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public sealed class ScriptRecordWriteTests
     [Fact]
     public void ACreate_IsWrittenToTheTree_AndAnswersTheNewFormKey()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var outcome = mod.ScriptCreateHandler.Create(mod.Plugin, "npc_");
 
@@ -78,7 +78,7 @@ public sealed class ScriptRecordWriteTests
     [Fact]
     public void ACreateReachingAFileHeldUnsaved_IsRefusedAsUnsavedChanges_AndWritesNothing()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var header = Path.Combine(mod.ModFolder, SourceModTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin));
         mod.Unsaved.Apply([new DocumentChange(header, File.ReadAllText(header) + " ")]);
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
@@ -92,7 +92,7 @@ public sealed class ScriptRecordWriteTests
     [Fact]
     public void ADelete_RemovesTheRecordsFile()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var outcome = Delete(mod, mod.Npc.ToString());
 
@@ -103,7 +103,7 @@ public sealed class ScriptRecordWriteTests
     [Fact]
     public void ADeleteOfAFileHeldUnsaved_IsRefusedAsUnsavedChanges_AndWritesNothing()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var file = Path.Combine(mod.ModFolder, mod.DocumentFile(mod.Npc.ToString()).Require());
         mod.Unsaved.Apply([new DocumentChange(file, File.ReadAllText(file) + " ")]);
 
@@ -116,7 +116,7 @@ public sealed class ScriptRecordWriteTests
     [Fact]
     public void ADeleteOfTheHeader_IsRefused_AndWritesNothing()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var outcome = Delete(mod, PluginHeader.IdentityOf(mod.ActualPluginName).FormKey);

@@ -7,9 +7,9 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Two mod folders and one load order, since a copy across plugins is unaskable of one.
-/// <see cref="SourcePlugin"/> defaults untracked: a Data-directory master's own file is its only
+/// <see cref="SourcePlugin"/> defaults non-source plugin: a Data-directory master's own file is its only
 /// representation. No index anywhere in it.</summary>
-public sealed class CopyFixture : TestInstance, ITrackedPlugins
+public sealed class CopyFixture : TestInstance, ISourcePlugins
 {
     public const string SourcePluginName = "Source.esm";
     public const string SourceOrigin = "SourceMod";
@@ -62,7 +62,7 @@ public sealed class CopyFixture : TestInstance, ITrackedPlugins
     }
 
     /// <summary>The source plugin's own bytes, so "a copy, not a move" is asserted against the file
-    /// an untracked source is read from.</summary>
+    /// a non-source plugin source is read from.</summary>
     public byte[] SourcePluginBytes() => File.ReadAllBytes(Path.Combine(SourceModFolder, SourcePluginName));
 
     public static CopyFixture Create(bool trackSource = false) => new(trackSource);

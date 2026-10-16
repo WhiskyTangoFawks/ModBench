@@ -338,26 +338,26 @@ describe('ModListProvider', () => {
     const enabled = present(rows.find((n) => n.mod.name === 'UFO4P'), 'the enabled row');
     const disabled = present(rows.find((n) => n.mod.name === 'Disabled Mod'), 'the disabled row');
 
-    expect(enabled.contextValue).toBe('mod hasNexus enabled untracked');
-    expect(disabled.contextValue).toBe('mod disabled untracked');
+    expect(enabled.contextValue).toBe('mod hasNexus enabled nonSourceMod');
+    expect(disabled.contextValue).toBe('mod disabled nonSourceMod');
   });
 
   it('a mod row states in its contextValue whether the instance value holds a plugin of it, and whether it holds a repository, which decompile and commit reads on a mod with a plugin and no repository and build reads on a mod with one', async () => {
     const value = instanceValueFixture({
-      mods: [mod('Patch'), mod('Textures'), mod('Tracked')],
-      trackedMods: new Set(['Tracked']),
+      mods: [mod('Patch'), mod('Textures'), mod('SourceMod')],
+      listedSourceMods: new Set(['SourceMod']),
       plugins: [
         { name: 'Patch.esp', origin: 'Patch', path: '/instance/mods/Patch/Patch.esp', line: 0, enabled: true, winning: true },
-        { name: 'Tracked.esp', origin: 'Tracked', path: '/instance/mods/Tracked/Tracked.esp', line: 1, enabled: true, winning: true },
+        { name: 'SourceMod.esp', origin: 'SourceMod', path: '/instance/mods/SourceMod/SourceMod.esp', line: 1, enabled: true, winning: true },
       ],
     });
     const rows = (await makeProvider([], { instance: new FakeInstance(value) }).getChildren())
       .filter((n): n is ModNode => n instanceof ModNode);
 
     expect(rows.map((n) => [n.mod.name, n.contextValue])).toEqual([
-      ['Tracked', 'mod enabled holdsPlugin tracked'],
-      ['Textures', 'mod enabled untracked'],
-      ['Patch', 'mod enabled holdsPlugin untracked'],
+      ['SourceMod', 'mod enabled holdsPlugin sourceMod'],
+      ['Textures', 'mod enabled nonSourceMod'],
+      ['Patch', 'mod enabled holdsPlugin nonSourceMod'],
     ]);
   });
 
@@ -693,7 +693,7 @@ describe('ModListProvider', () => {
     });
 
     it('shows $(repo) for a source mod, and its source folder in the tooltip as what the folder is built from', async () => {
-      const value = { ...(await contested()), trackedMods: new Set(['Loser']), paths: { ...instanceValueFixture().paths, sourceDirs: new Map([['Loser', '/instance/source/Loser']]) } };
+      const value = { ...(await contested()), listedSourceMods: new Set(['Loser']), paths: { ...instanceValueFixture().paths, sourceDirs: new Map([['Loser', '/instance/source/Loser']]) } };
       const provider = makeProvider([], { instance: new FakeInstance(value) });
       const rows = (await provider.getChildren()).filter((n): n is ModNode => n instanceof ModNode);
       const [winner, loser] = [rows.find((n) => n.mod.name === 'Winner'), rows.find((n) => n.mod.name === 'Loser')];

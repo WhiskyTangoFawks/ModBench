@@ -68,7 +68,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         Assert.Equal(["000000:Destination.esp", newFormKey], _mod.ChangedFormKeys(_mod.DestinationPlugin));
     }
 
-    private sealed class ParseFailedCopyFixture : IDisposable, ITrackedPlugins
+    private sealed class ParseFailedCopyFixture : IDisposable, ISourcePlugins
     {
         private const string SourcePluginName = MisshapedPerkPlugin.FileName;
         private const string SourceOrigin = "ParseFailedFixtureMod";
@@ -131,7 +131,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
 public sealed class ParseFailedDialogChildCopyRefusalTests : IDisposable
 {
-    private readonly ContainerCopyFixture _mod = ContainerCopyFixture.CreateWithTrackedSource();
+    private readonly ContainerCopyFixture _mod = ContainerCopyFixture.CreateWithSourcePluginSource();
 
     public void Dispose() => _mod.Dispose();
 

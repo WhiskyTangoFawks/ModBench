@@ -232,11 +232,11 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
 
     await answered(failed('Refers.esp\'s source holds no file for 000800:Refers.esp.'));
     await answered(failed('Refers.esp\'s source holds no file for 000800:Refers.esp.'));
-    await answered(failed('Refers.esp is tracked but no mod folder provides it.'));
+    await answered(failed('Refers.esp is a source plugin but no mod folder provides it.'));
 
     expect(reporter.shownOnSurface.mock.calls).toEqual([
       ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'Refers.esp\'s source holds no file for 000800:Refers.esp.'],
-      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'Refers.esp is tracked but no mod folder provides it.'],
+      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'Refers.esp is a source plugin but no mod folder provides it.'],
     ]);
   });
 
@@ -334,7 +334,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     const files = { '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"`, '/source/OtherMod/Other.esp/Npc.json': `"${MISSING}"` };
     const { answered, status } = feed(files);
     await answered([{ plugin: PLUGIN, problems: [problem()] }, { plugin: other, problems: [] }]);
-    const why = 'Refers.esp is tracked but no mod folder provides it.';
+    const why = 'Refers.esp is a source plugin but no mod folder provides it.';
 
     const shown = await answered([
       { plugin: PLUGIN, problems: [], failure: why },

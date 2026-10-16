@@ -126,7 +126,7 @@ const noSync = () => modSyncAnswering(() => Promise.resolve({ applied: true as c
 const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, enabled: true });
 
 const LISTED_MODS: ModlistEntry[] = [
-  mod('Ñoño\'s Retexture'), mod('Tracked Patch Mod'), mod('SKK Fast Start new game (Fallout 4)'),
+  mod('Ñoño\'s Retexture'), mod('Source mod Patch Mod'), mod('SKK Fast Start new game (Fallout 4)'),
   separator('Unassigned (Modlist Development)'),
   mod('[NODELETE] Radfall'), mod('Unofficial Fallout 4 Patch'),
   separator('Radfall - All-In-One Survival Overhaul'),
@@ -282,7 +282,7 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
   };
 
   it('reveals it expanded, neither selecting nor focusing it', async () => {
-    await mountFiltered('tracked');
+    await mountFiltered('source');
 
     expect(h.reveals).toEqual([
       { label: 'Unassigned (Modlist Development)', options: { select: false, focus: false, expand: true } },
@@ -298,7 +298,7 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
   it('writes a reveal VS Code refuses to the Output, naming the separator and why', async () => {
     h.revealRefusal.value = new Error('Cannot resolve tree item');
     const lines: string[] = [];
-    await mountFiltered('tracked', (line) => lines.push(line));
+    await mountFiltered('source', (line) => lines.push(line));
 
     expect(lines).toEqual([
       'Could not expand "Unassigned (Modlist Development)" for the filter: Cannot resolve tree item',
@@ -307,7 +307,7 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
 
   it('reveals nothing while the view is hidden, and reveals it once the view is shown', async () => {
     h.visible.value = false;
-    await mountFiltered('tracked');
+    await mountFiltered('source');
     expect(h.reveals).toEqual([]);
 
     h.visible.value = true;

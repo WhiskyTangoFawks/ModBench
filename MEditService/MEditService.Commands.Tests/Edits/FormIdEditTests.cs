@@ -16,7 +16,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void EditingTheFormId_MovesTheRecordToTheNewFormKey_OldGoneAtTheWorkingTree_NewChangedSinceTheLastCommit()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), FreeFormKey);
 
@@ -30,7 +30,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void EditingTheFormId_ToTheOneItHas_IsApplied_AndAnswersNoNewFormKey()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), mod.Npc.ToString());
 
@@ -41,7 +41,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void EditingTheFormId_OfTheHeader_RefusesItAsFieldReadOnly_WithItsMessage_AndAnswersNoChanges()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
@@ -60,7 +60,7 @@ public sealed class FormIdEditTests
     [InlineData("null")]
     public void EditingTheFormId_ToAValueThatIsNoFormKey_RefusesAsTheCodecsRejection_NamingTheField(string json)
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "FormKey", JsonDocument.Parse(json).RootElement);
@@ -74,7 +74,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void EditingTheFormId_ToOneAnotherRecordHolds_RefusesItAsTaken()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), mod.OtherNpc.ToString());
@@ -87,7 +87,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void EditingTheFormId_OnALightPlugin_Refuses_WhenTheValueExceedsTheLightRange()
     {
-        using var mod = SourceEditFixture.TrackedLight();
+        using var mod = SourceEditFixture.SourcePluginLight();
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
 
@@ -98,7 +98,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void EditingTheFormId_OnALightFlaggedEsl_PastTheLightRange_NamesClearingTheFlagAndRenamingOffEsl()
     {
-        using var mod = SourceEditFixture.TrackedLight("Fixture.esl");
+        using var mod = SourceEditFixture.SourcePluginLight("Fixture.esl");
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esl");
 
@@ -112,7 +112,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void EditingTheFormId_OnALightPluginWhoseHeaderVersionKeepsItsRangeAbove0x800_RefusesAValueBelowIt()
     {
-        using var mod = SourceEditFixture.TrackedLight();
+        using var mod = SourceEditFixture.SourcePluginLight();
         var headerFile = Path.Combine(mod.ModFolder, PluginSourceRoot.HeaderDocument(mod.Plugin.Name));
         var header = JsonNode.Parse(File.ReadAllText(headerFile)).Require();
         header["ModHeader"].Require()["Stats"].Require()["Version"] = 0.95f;
@@ -129,7 +129,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void EditingTheFormId_AfterTheLightFlagIsSetInTheSession_RefusesAValueAboveTheLightRangeImmediately()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var header = $"000000:{SourceEditFixture.PluginName}";
         Assert.True(mod.EditHandler.Set(mod.Plugin, header, "IsSmallMaster", JsonDocument.Parse("true").RootElement).Applied);
 
@@ -142,7 +142,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void EditingTheFormId_OnAnUnflaggedPlugin_Accepts_AValueAboveTheLightRange()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
 
@@ -153,7 +153,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void EditingTheFormId_Refuses_WhenTheValueNamesADifferentPlugin()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "900000:SomeOtherPlugin.esp");
 
@@ -179,7 +179,7 @@ public sealed class FormIdEditTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void EditingTheFormId_LeavesAReferencerInAnotherMod_AsItWas_TrackedOrNot(bool trackReferencer)
+    public void EditingTheFormId_LeavesAReferencerInAnotherMod_AsItWas_SourcePluginOrNot(bool trackReferencer)
     {
         using var two = TwoModReferenceFixture.Create(trackReferencer);
         var before = ReferencerState(two);
@@ -202,7 +202,7 @@ public sealed class FormIdEditTests
         const string pluginName = "SelfLinked.esp";
         const string newFormKey = "000F00:SelfLinked.esp";
         var race = FormKey.Null;
-        using var mod = SourceModFixture.Tracked(pluginName, "SelfLinkedMod", m =>
+        using var mod = SourceModFixture.SourcePlugin(pluginName, "SelfLinkedMod", m =>
         {
             var morphing = m.Races.AddNew("MorphingRace");
             morphing.MorphRace.SetTo(morphing);
@@ -226,21 +226,21 @@ public sealed class FormIdEditTests
     }
 
     [Fact]
-    public void EditingTheFormId_Refuses_WhenPluginIsUntracked_NamingTheInitCommand()
+    public void EditingTheFormId_Refuses_WhenPluginIsNonSourcePlugin_NamingTheInitCommand()
     {
-        using var mod = SourceEditFixture.Untracked();
+        using var mod = SourceEditFixture.NonSourcePlugin();
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), FreeFormKey);
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotSourcePlugin, result.Refusal);
         Assert.Contains("Decompile and commit its mod", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void EditingTheFormId_MovesTheNextObjectIdPastTheNewFormKey()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "000F00:Fixture.esp");
 
@@ -251,7 +251,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void EditingTheFormId_OnATreeWithNoHeaderDocument_RefusesAsUnreadable_AndWritesNothing()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         File.Delete(Path.Combine(mod.ModFolder, TreeTampering.HeaderDocumentOf(mod.Plugin.Name)));
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 

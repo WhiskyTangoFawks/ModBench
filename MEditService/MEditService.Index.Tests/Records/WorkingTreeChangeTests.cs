@@ -20,7 +20,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
         _fixture = new PluginFixtureBuilder("working-tree-change")
             .WithPlugin("Base.esm", mod => fk = mod.Npcs.AddNew("OriginalName").FormKey, origin: "BaseMod")
             .BuildScattered()
-            .Tracked();
+            .SourcePlugin();
         _base = _fixture.Plugins.Single();
         _baseKey = _base.KeyOf();
         _formKey = fk.ToString();

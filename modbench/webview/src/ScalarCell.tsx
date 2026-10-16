@@ -10,7 +10,7 @@ interface ScalarCellProps {
   value: unknown;
   meta: FieldMetadata;
   // There is no edit mode — editability is a property of the column (is the plugin mutable, is it
-  // tracked), never of a state the user toggles into.
+  // source plugin), never of a state the user toggles into.
   editable?: boolean;
   // Where an edited value goes. Absent is the ordinary state for every caller outside the
   // field grid — there is nowhere to write, so the cell

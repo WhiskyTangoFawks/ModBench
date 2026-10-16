@@ -42,7 +42,7 @@ public sealed record PluginDocument(
 public sealed record RecordTypeFailure(string RecordType, string Diagnosis);
 
 /// <summary>A plugin's documents, whichever door they came through: the binary through the Plugin
-/// adapter, or a tracked plugin's source tree.</summary>
+/// adapter, or a source plugin's source tree.</summary>
 public interface IPluginDocuments : IDisposable
 {
     /// <summary>The plugin header's own document — the whole-mod door's root

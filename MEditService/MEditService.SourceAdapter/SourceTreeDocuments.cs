@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>A tracked plugin's tree read as the documents it already holds (ADR-0007):
+/// <summary>A source plugin's tree read as the documents it already holds (ADR-0007):
 /// each file as it stands, plus the children a container's document embeds. Nothing is deserialized
 /// into a mod.</summary>
 internal sealed class SourceTreeDocuments : IPluginDocuments
@@ -43,7 +43,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             var path = Path.Combine(_sourceFolder, _headerRelativePath);
             var text = Read(path)
                 ?? throw new FileNotFoundException(
-                    $"'{_pluginFileName}' is tracked but its source tree holds no root " +
+                    $"'{_pluginFileName}' is a source plugin but its source tree holds no root " +
                     $"{Path.GetFileName(_headerRelativePath)}, so it describes no plugin.", path);
 
             if (DocumentTokens.WhyNotADocument(text) is { } why) throw Unreadable(path, $"it is no JSON document: {why}");

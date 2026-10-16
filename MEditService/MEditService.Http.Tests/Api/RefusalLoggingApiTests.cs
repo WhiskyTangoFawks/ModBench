@@ -11,7 +11,7 @@ public sealed class RefusalLoggingApiTests : HostedTests
     private const string Plugin = "Held.esp";
     private const string Origin = "HeldMod";
 
-    private async Task LoadedAndTracked()
+    private async Task LoadedAndSourcePlugin()
     {
         var fx = Owned(new PluginFixtureBuilder("api-refusal-logging")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("HeldNpc"), origin: Origin)
@@ -38,7 +38,7 @@ public sealed class RefusalLoggingApiTests : HostedTests
     [Fact]
     public async Task ARefusedDeleteItem_IsLoggedOnce_NamingTheRecordAndWhy()
     {
-        await LoadedAndTracked();
+        await LoadedAndSourcePlugin();
 
         await Client.PostAsJsonAsync("/records/delete-changes", new
         {
@@ -51,7 +51,7 @@ public sealed class RefusalLoggingApiTests : HostedTests
     [Fact]
     public async Task ARefusedEdit_IsLoggedOnce_NamingWhy()
     {
-        await LoadedAndTracked();
+        await LoadedAndSourcePlugin();
 
         await Client.Edit("000FFF:Held.esp", Plugin, Origin, "EditorID", "Renamed");
 
@@ -61,7 +61,7 @@ public sealed class RefusalLoggingApiTests : HostedTests
     [Fact]
     public async Task ARefusedScriptEdit_IsLoggedOnce_NamingWhy()
     {
-        await LoadedAndTracked();
+        await LoadedAndSourcePlugin();
 
         await Client.ScriptEdit("000FFF:Held.esp", Plugin, Origin, "EditorID", "Renamed");
 
@@ -71,7 +71,7 @@ public sealed class RefusalLoggingApiTests : HostedTests
     [Fact]
     public async Task ARefusedCreateRecord_IsLoggedOnce_NamingWhy()
     {
-        await LoadedAndTracked();
+        await LoadedAndSourcePlugin();
 
         await Client.CreateRecord(Plugin, Origin, "nosuch");
 

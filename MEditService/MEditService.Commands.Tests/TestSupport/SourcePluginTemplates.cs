@@ -6,14 +6,14 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
-/// <summary>Init is the slow step of a tracked fixture, and the mod folder it leaves names no
-/// absolute path, so each distinct mod folder is tracked once per run and copied into every test's
+/// <summary>Init is the slow step of a source plugin fixture, and the mod folder it leaves names no
+/// absolute path, so each distinct mod folder is made a source plugin once per run and copied into every test's
 /// own.</summary>
-internal static class TrackedTemplates
+internal static class SourcePluginTemplates
 {
     private static readonly ConcurrentDictionary<string, Lazy<ScratchDirectory>> Folders = new(StringComparer.Ordinal);
 
-    static TrackedTemplates() =>
+    static SourcePluginTemplates() =>
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
             foreach (var folder in Folders.Values.Where(folder => folder.IsValueCreated))
@@ -27,7 +27,7 @@ internal static class TrackedTemplates
     {
         var template = Folders.GetOrAdd(key, _ => new Lazy<ScratchDirectory>(() =>
         {
-            var folder = new ScratchDirectory("medit-tracked-template-");
+            var folder = new ScratchDirectory("medit-sourcePlugin-template-");
             make(folder.Path);
             return folder;
         })).Value;
@@ -35,9 +35,9 @@ internal static class TrackedTemplates
     }
 
     /// <summary><paramref name="mod"/>, which has no masters, written into
-    /// <paramref name="modFolder"/> and tracked there. Keyed on its bytes, so fixtures share a
+    /// <paramref name="modFolder"/> and source plugin there. Keyed on its bytes, so fixtures share a
     /// template only when their plugins are one.</summary>
-    internal static void WriteTracked(string modFolder, IModGetter mod)
+    internal static void WriteSourcePlugin(string modFolder, IModGetter mod)
     {
         using var binary = new MemoryStream();
         mod.WriteToBinary(binary);
@@ -55,7 +55,7 @@ internal static class TrackedTemplates
     internal static void TrackAlone(string modFolder, string pluginName, GameRelease release = GameRelease.Fallout4)
     {
         const string origin = "TemplateMod";
-        using var gameDirectory = new ScratchDirectory("medit-tracked-template-game-");
+        using var gameDirectory = new ScratchDirectory("medit-sourcePlugin-template-game-");
         var loadOrder = SnapshotPlugins.Snapshot(gameDirectory, instanceRoot: null, release,
             [new LoadOrderEntry(pluginName, Path.Combine(modFolder, pluginName), origin, Line: 0, Enabled: true, Winning: true)]);
         var result = InitEveryPluginOf.ModAsync(loadOrder, origin)

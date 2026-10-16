@@ -18,19 +18,19 @@ public sealed class SourceRepositoryRelativePathOfTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    private ISourceRepository Tracked()
+    private ISourceRepository SourceMod()
     {
         var header = new TreeFile(HeaderPath, "{\"MasterReferences\": []}"u8.ToArray());
         PluginBaselines.Init(
             _modFolder, [header]);
         return TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
     }
 
     [Fact]
     public void RelativePathOf_AHeaderFormKey_IsTheRootDocument_ThoughItHasNoGroupFolderOrFormKeyInItsFileName()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(PluginName));
 
         Assert.Equal(
@@ -41,7 +41,7 @@ public sealed class SourceRepositoryRelativePathOfTests : IDisposable
     [Fact]
     public void Remove_TheHeader_TakesItsDocumentAlone_ThoughItSharesItsFileNameWithAContainersDocument()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
         var neighbour = Path.Combine(PluginSourceRoot.In(_modFolder, PluginName), "Npcs", "Neighbour - 000800_Fixture.esp.json");
         Directory.CreateDirectory(Path.GetDirectoryName(neighbour).Require());
         File.WriteAllText(neighbour, "{\"FormKey\": \"000800:Fixture.esp\", \"EditorID\": \"Neighbour\"}");
@@ -56,7 +56,7 @@ public sealed class SourceRepositoryRelativePathOfTests : IDisposable
     [Fact]
     public void RelativePathOf_AnEmbeddedRecordNoDocumentCarries_AnswersNothing_ForAnEmbeddedTypeHasNoFileOfItsOwn()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
 
         Assert.Null(repository.RelativePathOf(Plugin, new RecordIdentity($"FFFFFF:{PluginName}", "PlacedObject", EditorId: null)).Value());
     }

@@ -27,7 +27,7 @@ public sealed class SourceRepositoryRefEncodingTests
     public void WriteBinary_ThenLastWrittenBinarySha256s_RoundTrips_ForANameWhichGitRefNamesForbid(string plugin)
     {
         using var modFolder = new ScratchDirectory("medit-refencoding-");
-        var repository = TrackedOver(modFolder, plugin);
+        var repository = SourceModOver(modFolder, plugin);
         var address = new PluginAddress(plugin, "TestMod");
 
         repository.WriteBinary(address, "DEADBEEF", () => { }).Value();
@@ -55,7 +55,7 @@ public sealed class SourceRepositoryRefEncodingTests
     public void WriteBinary_Throws_ForAnEmptyPluginName()
     {
         using var modFolder = new ScratchDirectory("medit-refencoding-");
-        var repository = TrackedOver(modFolder, "Test.esp");
+        var repository = SourceModOver(modFolder, "Test.esp");
 
         Assert.Throws<ArgumentException>(() => repository.WriteBinary(new PluginAddress("", "TestMod"), "DEADBEEF", () => { }).Value());
     }
@@ -63,7 +63,7 @@ public sealed class SourceRepositoryRefEncodingTests
     private static TreeFile[] FilesOf(string plugin) =>
         [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())];
 
-    private static ISourceRepository TrackedOver(ScratchDirectory modFolder, string plugin)
+    private static ISourceRepository SourceModOver(ScratchDirectory modFolder, string plugin)
     {
         PluginBaselines.Init(modFolder, FilesOf(plugin));
         return TestAdapters.Source().OverFolder(TestMod.In(modFolder), GameRelease.Fallout4);

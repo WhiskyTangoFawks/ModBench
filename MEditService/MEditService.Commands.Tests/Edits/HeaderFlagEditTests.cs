@@ -12,7 +12,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class HeaderFlagEditTests : IDisposable
 {
-    private readonly SourceEditFixture _fixture = SourceEditFixture.Tracked();
+    private readonly SourceEditFixture _fixture = SourceEditFixture.SourcePlugin();
 
     public void Dispose() => _fixture.Dispose();
 
@@ -60,7 +60,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     [Fact]
     public async Task Compile_OfAnEslWithAnOutOfRangeRecord_NamesRenamingItOffEslAmongTheRemedies()
     {
-        using var light = SourceEditFixture.TrackedLight("Fixture.esl");
+        using var light = SourceEditFixture.SourcePluginLight("Fixture.esl");
         SourceModTree.Seed(light.ModFolder, light.Plugin, "001000:Fixture.esl");
 
         var refused = Assert.Single((await CompileServices.Over(light.LoadOrder).CompileAsync([light.Plugin])).Refused);

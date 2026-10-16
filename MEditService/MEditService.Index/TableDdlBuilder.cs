@@ -56,7 +56,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             .Append(($"{MirrorSchema}.files", "plugin", "origin"));
 
     /// <summary>One row per indexed plugin naming which truth its rows came from, its source tree or
-    /// its binary: tracked-ness as a row, in the mirror because it is the rows' own fact.</summary>
+    /// its binary: being a source plugin as a row, in the mirror because it is the rows' own fact.</summary>
     internal const string PluginDerivationTable = "plugin_derivation";
 
     /// <summary>The Kind B diagnoses a plugin's binary proved when it was hashed, one row each, in

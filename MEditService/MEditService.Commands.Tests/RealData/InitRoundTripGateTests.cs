@@ -6,8 +6,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.RealData;
 
-public sealed class InitRoundTripGateTests(TrackedCutDownFixture fixture)
-    : IClassFixture<TrackedCutDownFixture>
+public sealed class InitRoundTripGateTests(SourcePluginCutDownFixture fixture)
+    : IClassFixture<SourcePluginCutDownFixture>
 {
     private static JsonNode RequireNode(JsonNode? node, string what) =>
         node ?? throw new InvalidOperationException($"Expected {what} to be present.");

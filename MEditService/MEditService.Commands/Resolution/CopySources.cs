@@ -4,7 +4,7 @@ using MEditService.LoadOrder;
 namespace MEditService.Commands.Resolution;
 
 /// <summary>The sources one Copy gesture reads, each plugin opened once for ordering the selection
-/// and for copying it. A tracked one is read through the sessions, so it sees the unsaved texts and the items before it.</summary>
+/// and for copying it. A source plugin one is read through the sessions, so it sees the unsaved texts and the items before it.</summary>
 internal sealed class CopySources(LoadOrderResolution resolution, WriteSessions sessions) : IDisposable
 {
     private readonly Dictionary<PluginAddress, CopySource> _opened = new(PluginAddress.Comparer);

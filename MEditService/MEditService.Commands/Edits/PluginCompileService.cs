@@ -34,7 +34,7 @@ internal sealed class PluginCompileService(
         var plugin = registered.Key;
         var loadOrder = loadOrderHolder.Current;
         if (registered.Provider is not PluginProvider.FromMod mod || !source.IsSourceMod(registered))
-            return CompileResult.Refused(CompileRefusal.PluginNotTracked, $"{plugin.Name} is not tracked, so there is no source to compile.");
+            return CompileResult.Refused(CompileRefusal.PluginNotSourcePlugin, $"{plugin.Name} is not a source plugin, so there is no source to compile.");
 
         if (source.WhySourceDoesNotRead(registered) is { } why)
         {

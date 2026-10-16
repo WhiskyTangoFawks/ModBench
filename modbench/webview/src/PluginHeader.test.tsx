@@ -13,7 +13,7 @@ const WHY = { reason: 'plugin-source holds no folder for MyMod.esp.', decompileR
 const TWINS = { reason: 'plugin-source holds FIXTURE.ESP and fixture.esp, which differ only in case.', decompileRepairs: false };
 const DIAGNOSIS = 'the PERK entry point did not have expected parameter type flag';
 
-type Facts = { override?: Partial<CompareOverride>; overriddenBy?: string | null; notActive?: boolean; isImmutable?: boolean; isTracked?: boolean; sourceUnreadable?: UnreadableSource };
+type Facts = { override?: Partial<CompareOverride>; overriddenBy?: string | null; notActive?: boolean; isImmutable?: boolean; isSourcePlugin?: boolean; sourceUnreadable?: UnreadableSource };
 
 function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typeof PluginHeader>> = {}) {
   const onToggleCollapse = vi.fn();
@@ -27,7 +27,7 @@ function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typ
         overriddenBy={facts.overriddenBy ?? null}
         notActive={facts.notActive ?? false}
         isImmutable={facts.isImmutable ?? false}
-        isTracked={facts.isTracked ?? true}
+        isSourcePlugin={facts.isSourcePlugin ?? true}
         sourceUnreadable={facts.sourceUnreadable}
         isFile={false}
         onOpen={vi.fn()}
@@ -69,17 +69,17 @@ describe('PluginHeader', () => {
     ['a file whose plugin is disabled, or in a disabled mod', { notActive: true }, '(not active)',
       'The game does not load it, so no other copy is compared.'],
     ['the game’s own plugin', { isImmutable: true }, '(read-only)', 'The game’s plugins are not edited.'],
-    ['a plugin in Overwrite', { override: { isInOverwrite: true }, isTracked: false }, '(in Overwrite)',
+    ['a plugin in Overwrite', { override: { isInOverwrite: true }, isSourcePlugin: false }, '(in Overwrite)',
       'Overwrite is not a mod; move the plugin into a mod and decompile and commit that mod.'],
-    ['a plugin that is not tracked', { isTracked: false }, '(untracked)',
+    ['a plugin that is not a source plugin', { isSourcePlugin: false }, '(not a source plugin)',
       '“Decompile and Commit Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, makes it editable.'],
-    ['a tracked plugin whose plugin source is unreadable', { sourceUnreadable: WHY }, '(plugin source unreadable)',
+    ['a source plugin whose plugin source is unreadable', { sourceUnreadable: WHY }, '(plugin source unreadable)',
       `${WHY.reason} Its records are its plugin file’s. “Decompile Plugin”, in this header’s menu, makes it editable.`],
-    ['a tracked plugin whose plugin source decompile does not repair', { sourceUnreadable: TWINS }, '(plugin source unreadable)',
+    ['a source plugin whose plugin source decompile does not repair', { sourceUnreadable: TWINS }, '(plugin source unreadable)',
       `${TWINS.reason} Its records are its plugin file’s.`],
     ['a Partial Form copy', { override: { isPartialForm: true } }, '(Partial Form)',
       'The game ignores this copy’s own fields.'],
-    ['a tracked plugin', {}, '(tracked)',
+    ['a source plugin', {}, '(source plugin)',
       'An edit lands in the mod’s working tree, for review in Source Control.'],
   ])('for %s, shows its status, and a tooltip of the file name, the origin and the reason', (_case, facts, status, reason) => {
     const { header } = renderHeader(facts);
@@ -94,11 +94,11 @@ describe('PluginHeader', () => {
     ['overridden over read-only', { overriddenBy: 'ModB', isImmutable: true }, '(overridden)', '(read-only)'],
     ['not active over read-only', { notActive: true, isImmutable: true }, '(not active)', '(read-only)'],
     ['read-only over in Overwrite', { override: { isInOverwrite: true }, isImmutable: true }, '(read-only)', '(in Overwrite)'],
-    ['in Overwrite over untracked', { override: { isInOverwrite: true }, isTracked: false }, '(in Overwrite)', '(untracked)'],
-    ['untracked over Partial Form', { override: { isPartialForm: true }, isTracked: false }, '(untracked)', '(Partial Form)'],
-    ['untracked over unreadable', { isTracked: false, sourceUnreadable: WHY }, '(untracked)', '(plugin source unreadable)'],
+    ['in Overwrite over non-source plugin', { override: { isInOverwrite: true }, isSourcePlugin: false }, '(in Overwrite)', '(not a source plugin)'],
+    ['non-source plugin over Partial Form', { override: { isPartialForm: true }, isSourcePlugin: false }, '(not a source plugin)', '(Partial Form)'],
+    ['non-source plugin over unreadable', { isSourcePlugin: false, sourceUnreadable: WHY }, '(not a source plugin)', '(plugin source unreadable)'],
     ['unreadable over Partial Form', { override: { isPartialForm: true }, sourceUnreadable: WHY }, '(plugin source unreadable)', '(Partial Form)'],
-    ['Partial Form over tracked', { override: { isPartialForm: true } }, '(Partial Form)', '(tracked)'],
+    ['Partial Form over source plugin', { override: { isPartialForm: true } }, '(Partial Form)', '(source plugin)'],
   ])('a column shows one status, the first that applies: %s', (_case, facts, shown, displaced) => {
     const { header } = renderHeader(facts);
     expect(header).toHaveTextContent(shown);
@@ -121,7 +121,7 @@ describe('PluginHeader', () => {
     const { header, onToggleCollapse } = renderHeader();
     fireEvent.click(header);
     fireEvent.click(screen.getByText('MyMod.esp'));
-    fireEvent.click(screen.getByText('(tracked)'));
+    fireEvent.click(screen.getByText('(source plugin)'));
     expect(onToggleCollapse).not.toHaveBeenCalled();
   });
 
@@ -132,7 +132,7 @@ describe('PluginHeader', () => {
 
   it('shows only its label while collapsed', () => {
     renderHeader({}, { collapsed: true });
-    expect(screen.queryByText('(tracked)')).not.toBeInTheDocument();
+    expect(screen.queryByText('(source plugin)')).not.toBeInTheDocument();
     expect(screen.getByText('MyMod.esp').parentElement).toHaveTextContent(/^\[01\] MyMod\.esp$/);
   });
 

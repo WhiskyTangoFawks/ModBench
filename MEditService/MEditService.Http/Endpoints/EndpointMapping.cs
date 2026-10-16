@@ -136,7 +136,7 @@ internal static class EndpointMapping
             RenameSourceRefusal.NotAPluginFile or RenameSourceRefusal.TreeNameNotThePlugins => 400,
             RenameSourceRefusal.PluginNotLoaded => 404,
             // The request is sound; the plugin's present state refuses it until that state changes.
-            RenameSourceRefusal.NotTracked or RenameSourceRefusal.NameTaken => 409,
+            RenameSourceRefusal.NotSourcePlugin or RenameSourceRefusal.NameTaken => 409,
             // The request is sound; the machine lacks git, or git or the disk refused the write.
             RenameSourceRefusal.GitUnavailable or RenameSourceRefusal.WriteFailed => 500,
             // Well-formed, addressed at something real, and its source holds a file nothing can read.
@@ -235,7 +235,7 @@ internal static class EndpointMapping
         r => r switch
         {
             // The request is sound; the plugin's present state refuses it until that state changes.
-            RecordEditRefusal.PluginNotTracked or RecordEditRefusal.PluginHasNoModFolder
+            RecordEditRefusal.PluginNotSourcePlugin or RecordEditRefusal.PluginHasNoModFolder
                 or RecordEditRefusal.PluginSourceUnreadable or RecordEditRefusal.UnsavedChanges => 409,
             RecordEditRefusal.RecordNotFound or RecordEditRefusal.FieldNotFound or RecordEditRefusal.PluginNotInLoadOrder => 404,
             // The envelope itself could not be read as a write: the request is malformed.

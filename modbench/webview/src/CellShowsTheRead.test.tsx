@@ -33,7 +33,7 @@ function recordNamed(name: string, formKey = FORM_KEY): CompareResult {
 
 const plugins = [
   { name: 'Fallout4.esm', isImmutable: true },
-  { name: 'MyMod.esp', origin: 'ModA', isTracked: true },
+  { name: 'MyMod.esp', origin: 'ModA', isSourcePlugin: true },
 ];
 
 let disk = recordNamed('Before');
@@ -87,7 +87,7 @@ describe('a record panel reading the FormKey its record moved to (editor.md, Sta
   const MOVED = '000002:Fallout4.esm';
   const answered = (result: CompareResult) => ({
     ok: true as const, result, immutableSet: new Set([columnKey({ name: 'Fallout4.esm', origin: 'Data/' })]),
-    trackedSet: new Set([columnKey({ name: 'MyMod.esp', origin: 'ModA' })]),
+    sourcePluginSet: new Set([columnKey({ name: 'MyMod.esp', origin: 'ModA' })]),
     editableSet: new Set([columnKey({ name: 'MyMod.esp', origin: 'ModA' })]),
     sourceUnreadableReasons: new Map(), modsByOrigin: {}, conflictsComputed: true, loadFailures: [],
     fileColumn: columnKey({ name: 'MyMod.esp', origin: 'ModA' }),

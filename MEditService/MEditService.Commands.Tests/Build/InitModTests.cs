@@ -106,12 +106,12 @@ public sealed class InitModTests
     [Fact]
     public async Task InitMod_OfAPluginInAModWithARepository_RefusesBeforeParsingIt()
     {
-        using var modFolder = new ScratchDirectory("medit-initservice-alreadytracked-");
-        using var gameDir = new ScratchDirectory("medit-initservice-alreadytracked-game-");
+        using var modFolder = new ScratchDirectory("medit-initservice-alreadysource-");
+        using var gameDir = new ScratchDirectory("medit-initservice-alreadysource-game-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("SomeNpc");
-        TrackedTemplates.WriteTracked(modFolder, mod);
+        SourcePluginTemplates.WriteSourcePlugin(modFolder, mod);
 
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,

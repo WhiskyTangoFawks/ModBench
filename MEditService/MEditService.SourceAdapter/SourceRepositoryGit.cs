@@ -1,6 +1,6 @@
 namespace MEditService.SourceAdapter;
 
-/// <summary>The git repository under one source folder (ADR-0007): whether it is tracked, what it
+/// <summary>The git repository under one source folder (ADR-0007): whether it is a source mod, what it
 /// committed, and the refs that remember the binary Modbench last wrote. Every verb tolerates the
 /// folder having vanished since last observed.</summary>
 internal sealed class SourceRepositoryGit(string sourceFolder)
@@ -38,7 +38,7 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
         return File.Exists(config) && File.ReadLines(config).Any(line => line.Trim() == $"[{InitMarkSection}]");
     }
 
-    // Read off the ref store's files, not by running git: every read of a tracked plugin asks this.
+    // Read off the ref store's files, not by running git: every read of a source plugin asks this.
     // A branch is a loose ref file until git packs it into packed-refs.
     private static bool HasMainBranch(string gitDir) =>
         File.Exists(Path.Combine(gitDir, "refs", "heads", "main")) || PackedBranches(gitDir).Contains("main");

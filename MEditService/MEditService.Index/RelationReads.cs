@@ -340,18 +340,18 @@ internal sealed class RelationReads(
         return GetReferences(connection, "form_references fr", "", targetFormKey);
     }
 
-    private static readonly string ActiveOrTrackedReferrers = $"""
+    private static readonly string ActiveOrSourcePluginReferrers = $"""
         {TableDdlBuilder.MirrorSchema}.form_references fr
         {TableDdlBuilder.RegisteredJoin("fr", "source_plugin", "source_origin")}
         JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
           ON d.plugin = fr.source_plugin AND d.origin = fr.source_origin
         """;
 
-    /// <summary>The same read over the active plugins and the inactive tracked ones (ADR-0012).</summary>
-    public IReadOnlyList<ReferenceRow> GetReferencedByInActiveOrTrackedPlugins(string targetFormKey)
+    /// <summary>The same read over the active plugins and the inactive source plugin ones (ADR-0012).</summary>
+    public IReadOnlyList<ReferenceRow> GetReferencedByInActiveOrSourcePlugins(string targetFormKey)
     {
         using var connection = store.OpenReadConnection();
-        return GetReferences(connection, ActiveOrTrackedReferrers, $"AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')", targetFormKey);
+        return GetReferences(connection, ActiveOrSourcePluginReferrers, $"AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')", targetFormKey);
     }
 
     /// <summary>Every plugin at least one filtered record matches, restricted to

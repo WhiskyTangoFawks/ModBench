@@ -63,8 +63,8 @@ export interface InstanceValue {
   readonly modFolders: readonly ModFolder[] | undefined;
   /** The mod manager's name for the folder of each mod order entry that has one (`modNameOf`). */
   readonly modNames: ReadonlyMap<string, string>;
-  /** The tracked mods (ADR-0007). */
-  readonly trackedMods: ReadonlySet<string>;
+  /** The source mods (ADR-0007). */
+  readonly listedSourceMods: ReadonlySet<string>;
   /** Every mod a repository in the source folder builds, listed in the mod order or not. */
   readonly sourceMods: ReadonlySet<string>;
   /** Whether the instance folder holds a repository. */
@@ -177,7 +177,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey'>): Insta
   modGroups: { ungrouped: [], groups: [] },
   modFolders: [],
   modNames: new Map(),
-  trackedMods: new Set(),
+  listedSourceMods: new Set(),
   sourceMods: new Set(),
   holdsRepository: false,
   profiles: [],
@@ -423,7 +423,7 @@ export class Instance implements Subscription {
       modGroups: reading.modGroups,
       modFolders: modFolderList,
       modNames,
-      trackedMods: new Set(entries.flatMap((entry) => (entry.kind === 'mod' && paths.sourceDirs.has(entry.name) ? [entry.name] : []))),
+      listedSourceMods: new Set(entries.flatMap((entry) => (entry.kind === 'mod' && paths.sourceDirs.has(entry.name) ? [entry.name] : []))),
       sourceMods: new Set(paths.sourceDirs.keys()),
       holdsRepository: reading.holdsRepository,
       profiles,

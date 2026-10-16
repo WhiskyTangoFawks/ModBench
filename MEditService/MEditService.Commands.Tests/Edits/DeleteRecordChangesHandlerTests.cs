@@ -15,7 +15,7 @@ public sealed class DeleteRecordChangesHandlerTests
     [Fact]
     public void DeleteRecords_LandsEachRecordOnItsOwn_AndRefusesTheOneThatCannotWithItsReason()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var header = new RecordAt(mod.Plugin, PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName)));
         var npc = new RecordAt(mod.Plugin, mod.Npc.ToString());
         var otherNpc = new RecordAt(mod.Plugin, mod.OtherNpc.ToString());
@@ -35,7 +35,7 @@ public sealed class DeleteRecordChangesHandlerTests
     [Fact]
     public void DeleteRecords_NamingOneRecordTwice_DeletesItOnce_AndRefusesNothing()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var npc = new RecordAt(mod.Plugin, mod.Npc.ToString());
         var otherNpc = new RecordAt(mod.Plugin, mod.OtherNpc.ToString());
 
@@ -52,7 +52,7 @@ public sealed class DeleteRecordChangesHandlerTests
     [Fact]
     public void DeleteRecords_WhenAnotherToolLeftTwoDocumentsClaimingOneRecord_RefusesThatRecord_AndLandsTheRest()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         TreeTampering.Duplicate(mod.ModFolder, mod.Plugin, mod.NpcIdentity);
         var otherNpc = new RecordAt(mod.Plugin, mod.OtherNpc.ToString());
         var npc = new RecordAt(mod.Plugin, mod.Npc.ToString());
@@ -71,7 +71,7 @@ public sealed class DeleteRecordChangesHandlerTests
     [Fact]
     public void DeleteChanges_AnswerTheRecordsFileAsADeletion_AndWriteNothing()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var result = mod.DeleteHandler.DeleteChangesSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
@@ -101,7 +101,7 @@ public sealed class DeleteRecordChangesHandlerTests
     [Fact]
     public void DeleteChanges_OfARecordWhoseUnsavedTextGivesItAnotherFormKey_DeleteItsFileUnderThatKey()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var npc = SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, SourceEditFixture.NpcEditorId);
         var retyped = $"000F00:{mod.Plugin.Name}";
         var file = TreeTampering.FileOf(mod.ModFolder, mod.Plugin, mod.NpcIdentity);
@@ -130,7 +130,7 @@ public sealed class DeleteRecordChangesHandlerTests
     [Fact]
     public void DeleteRecords_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
         var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, headerFormKey)]);
@@ -144,7 +144,7 @@ public sealed class DeleteRecordChangesHandlerTests
     [Fact]
     public void DeleteRecords_RemovesTheRecordFromTheTree()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
@@ -155,7 +155,7 @@ public sealed class DeleteRecordChangesHandlerTests
     [Fact]
     public void DeleteRecords_LeavesOtherRecordsUntouched()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
@@ -163,21 +163,21 @@ public sealed class DeleteRecordChangesHandlerTests
     }
 
     [Fact]
-    public void DeleteRecords_Refuses_WhenPluginIsUntracked_NamingTheInitCommand()
+    public void DeleteRecords_Refuses_WhenPluginIsNonSourcePlugin_NamingTheInitCommand()
     {
-        using var mod = SourceEditFixture.Untracked();
+        using var mod = SourceEditFixture.NonSourcePlugin();
 
         var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(RecordEditRefusal.PluginNotTracked, refused.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotSourcePlugin, refused.Refusal);
         Assert.Contains("Decompile and commit its mod", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void DeleteRecords_Refuses_ForAnUnknownFormKey()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, "FFFFFF:Fixture.esp")]);
 

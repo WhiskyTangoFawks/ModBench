@@ -39,7 +39,7 @@ public sealed class SourceRepositoryLayoutTests
         using var modFolder = new ScratchDirectory("medit-layout-roundtrip-");
         PluginBaselines.InitWithNoRecords(modFolder);
         var repository = TestAdapters.Source().Open(TestMod.In(modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
+            ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be a source mod.");
         var plugin = new PluginAddress(pluginFileName, TestMod.Name);
         repository.Put(plugin, new SourceDocument(formKeyString, recordType, editorId, "{}")).Wrote();
 
@@ -233,7 +233,7 @@ public sealed class SourceRepositoryLayoutTests
     private static readonly PluginAddress Mixed = new("Mixed.ESP", TestMod.Name);
 
     private static ISourceRepository RepositoryOver(string modFolder) =>
-        TestAdapters.Source().Open(TestMod.In(modFolder), Release) ?? throw new InvalidOperationException($"Expected '{modFolder}' tracked.");
+        TestAdapters.Source().Open(TestMod.In(modFolder), Release) ?? throw new InvalidOperationException($"Expected '{modFolder}' to be a source mod.");
 
     private static List<string> TreePathsOf(string modFolder) =>
         [.. RepositoryOver(modFolder).TreeOf(Mixed).Value().Files.Select(file => file.RelativePath).Order(StringComparer.Ordinal)];

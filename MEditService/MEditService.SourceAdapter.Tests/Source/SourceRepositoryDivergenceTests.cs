@@ -31,7 +31,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
 
     private ISourceRepository Repository =>
         TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
 
     private static string HeaderPath => PluginSourceRoot.HeaderDocument(PluginName);
 

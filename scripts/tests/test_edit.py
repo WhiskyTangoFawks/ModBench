@@ -43,7 +43,7 @@ class EditAgainstTheFixtureInstance(unittest.TestCase):
         before = files_and_bytes(light)
         with window_of(self.fixture.url), self.assertRaises(medit.MEditError) as raised:
             medit.edit(LIGHT.name, LIGHT_RECORD, 'set', 'EditorID', 'Renamed')
-        self.assertIn(f'{LIGHT.name} is not tracked', str(raised.exception))
+        self.assertIn(f'{LIGHT.name} is not a source plugin', str(raised.exception))
         self.assertEqual(files_and_bytes(light), before)
         self.assertFalse(source_folder(self.fixture.instance, LIGHT.origin).exists())
 

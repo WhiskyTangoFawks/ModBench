@@ -11,9 +11,9 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     private static readonly PluginAddress Test = new("Test.esp", "TestMod");
     private static readonly PluginAddress Other = new("Other.esp", "TestMod");
 
-    private const string OthersTrackedBinary = "TRACKED-FOR-OTHER";
+    private const string OthersSourceModBinary = "SOURCE_MOD-FOR-OTHER";
 
-    private static ISourceRepository TrackedOver(ScratchDirectory modFolder)
+    private static ISourceRepository SourceModOver(ScratchDirectory modFolder)
     {
         TestAdapters.Source().Init(
             modFolder,
@@ -21,7 +21,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
                 ([new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())],
                     new DecompiledPlugin("Test.esp", null)),
                 ([new TreeFile("plugin-source/Other.esp/npc_/Other.esp/000002.json", "{}"u8.ToArray())],
-                    new DecompiledPlugin("Other.esp", OthersTrackedBinary)),
+                    new DecompiledPlugin("Other.esp", OthersSourceModBinary)),
             ]);
         return TestAdapters.Source().OverFolder(TestMod.In(modFolder), GameRelease.Fallout4);
     }
@@ -30,7 +30,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     public void TheLastWrittenBinary_IsWhatTheWriteRecorded_OnceTheWriteReturns()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
-        var repository = TrackedOver(modFolder);
+        var repository = SourceModOver(modFolder);
 
         repository.WriteBinary(Test, "DEADBEEF1234", () => { }).Value();
 
@@ -41,7 +41,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     public void TheLastWrittenBinaries_NameTheNewBinaryBesideTheOldOne_UntilTheWriteReturns()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
-        var repository = TrackedOver(modFolder);
+        var repository = SourceModOver(modFolder);
         repository.WriteBinary(Test, "FIRST", () => { }).Value();
 
         IReadOnlyList<string>? during = null;
@@ -55,7 +55,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     public void TheLastWrittenBinaries_StayNamingTheOldAndTheNewBinary_WhenTheWriteFails()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
-        var repository = TrackedOver(modFolder);
+        var repository = SourceModOver(modFolder);
         repository.WriteBinary(Test, "FIRST", () => { }).Value();
 
         Assert.IsType<SourceFailure.Inaccessible>(repository.WriteBinary(Test, "SECOND", () => throw new IOException("disk full")).Stopped());
@@ -67,7 +67,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     public void AGitFailureAfterTheWrite_ReportsTheRecordUnfinished_AndTheBinaryStaysWritten()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
-        var repository = TrackedOver(modFolder);
+        var repository = SourceModOver(modFolder);
         repository.WriteBinary(Test, "FIRST", () => { }).Value();
         var written = false;
 
@@ -86,7 +86,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     public void AGitFailureBeforeTheWrite_AnswersItAndNeverWrites()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
-        var repository = TrackedOver(modFolder);
+        var repository = SourceModOver(modFolder);
         repository.WriteBinary(Test, "FIRST", () => { }).Value();
         LastWriteRecord.RefuseRefUpdates(modFolder);
         var written = false;
@@ -102,26 +102,26 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     public void ThePluginsOfOneInit_AnswerOnlyTheirOwnBinaries()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
-        var repository = TrackedOver(modFolder);
+        var repository = SourceModOver(modFolder);
         Assert.Empty(repository.LastWrittenBinarySha256s(Test).Value());
 
         repository.WriteBinary(Test, "FOR-TEST", () => { }).Value();
 
         Assert.Equal(["FOR-TEST"], repository.LastWrittenBinarySha256s(Test).Value());
-        Assert.Equal([OthersTrackedBinary], repository.LastWrittenBinarySha256s(Other).Value());
+        Assert.Equal([OthersSourceModBinary], repository.LastWrittenBinarySha256s(Other).Value());
     }
 
     [Fact]
     public void TheLastWrittenBinaries_AreEmptyNotAThrow_ForAPluginNothingWasRecordedFor()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
-        var repository = TrackedOver(modFolder);
+        var repository = SourceModOver(modFolder);
 
         Assert.Empty(repository.LastWrittenBinarySha256s(new PluginAddress("Unknown.esp", "TestMod")).Value());
     }
 
     [Fact]
-    public void TheLastWrittenBinaries_AreEmpty_ForAnUntrackedFolder()
+    public void TheLastWrittenBinaries_AreEmpty_ForANonSourceModFolder()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
 
@@ -132,7 +132,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     public void ARepositoryOpenedForAMod_RefusesToWriteTheRecordOfAPluginAnotherModProvides()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
-        TrackedOver(modFolder);
+        SourceModOver(modFolder);
         var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder, modFolder), GameRelease.Fallout4);
 
         Assert.Throws<ArgumentException>(() => repository.WriteBinary(new PluginAddress("Test.esp", "OtherMod"), "ABC", () => { }).Value());
@@ -143,7 +143,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     public void ARepositoryOpenedForAMod_RefusesToReadTheRecordOfAPluginAnotherModProvides()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
-        TrackedOver(modFolder);
+        SourceModOver(modFolder);
         var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder, modFolder), GameRelease.Fallout4);
 
         Assert.Throws<ArgumentException>(() => repository.LastWrittenBinarySha256s(new PluginAddress("Test.esp", "OtherMod")).Value());
@@ -153,7 +153,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     public void ARepositoryOpenedForAMod_RefusesToReplaceTheSourceOfAPluginAnotherModProvides()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
-        TrackedOver(modFolder);
+        SourceModOver(modFolder);
         var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder, modFolder), GameRelease.Fallout4);
 
         Assert.Throws<ArgumentException>(() => repository.ReplaceSourceFrom(new PluginAddress("Test.esp", "OtherMod"), [], "ABC"));
@@ -164,7 +164,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     public void ARepositoryOpenedForAMod_AnswersThePluginsThatModProvides()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
-        TrackedOver(modFolder);
+        SourceModOver(modFolder);
         var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TESTMOD", modFolder, modFolder), GameRelease.Fallout4);
 
         repository.WriteBinary(Test, "ABC", () => { }).Value();

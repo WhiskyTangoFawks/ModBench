@@ -106,8 +106,8 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     [InlineData(false, false, false, false)]
     [InlineData(true, false, true, false)]
     [InlineData(true, true, true, true)]
-    public void GetPlugins_MarksTrackedAndPluginSourceUnreadable_AsTheIndexDerivedThePlugin(
-        bool trackTheMod, bool removeThePluginSource, bool tracked, bool pluginSourceUnreadable)
+    public void GetPlugins_MarksSourcePluginAndPluginSourceUnreadable_AsTheIndexDerivedThePlugin(
+        bool trackTheMod, bool removeThePluginSource, bool sourcePlugin, bool pluginSourceUnreadable)
     {
         var fixture = Built(TwoNpcsPlugin());
         var entry = fixture.Plugins.Single();
@@ -116,21 +116,21 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
         var plugin = Reconciled(fixture).PluginRowOf(PluginKey) ?? throw new InvalidOperationException("Expected the plugin's row.");
 
-        Assert.Equal((tracked, pluginSourceUnreadable), (plugin.IsTracked, plugin.PluginSourceUnreadable is not null));
+        Assert.Equal((sourcePlugin, pluginSourceUnreadable), (plugin.IsSourcePlugin, plugin.PluginSourceUnreadable is not null));
     }
 
     [Fact]
-    public void GetPlugins_MarksTrackedPerPlugin_NotPerFilename()
+    public void GetPlugins_MarksSourcePluginPerPlugin_NotPerFilename()
     {
         var fixture = Built(new PluginFixtureBuilder("record-query")
-            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Tracked"), origin: "SourceMod")
-            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Untracked"), origin: "NonSourceMod"));
+            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("SourcePlugin"), origin: "SourceMod")
+            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("NonSourcePlugin"), origin: "NonSourceMod"));
         SourceMods.Track(fixture.Plugins.Single(p => p.Origin == "SourceMod"));
 
         var plugins = Reconciled(fixture).Queries.GetPlugins().Value();
 
-        Assert.True(plugins.Single(p => p.Plugin.Origin == "SourceMod").IsTracked);
-        Assert.False(plugins.Single(p => p.Plugin.Origin == "NonSourceMod").IsTracked);
+        Assert.True(plugins.Single(p => p.Plugin.Origin == "SourceMod").IsSourcePlugin);
+        Assert.False(plugins.Single(p => p.Plugin.Origin == "NonSourceMod").IsSourcePlugin);
     }
 
     private OpenedIndex PatchOfAGhostMaster() => Reconciled(new PluginFixtureBuilder("record-query")

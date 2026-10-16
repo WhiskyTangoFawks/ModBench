@@ -12,7 +12,7 @@ public enum RecordEditRefusal
     None,
 
     /// <summary>The way out is init, once per mod (ADR-0007).</summary>
-    PluginNotTracked,
+    PluginNotSourcePlugin,
 
     /// <summary>The way out is decompile.</summary>
     PluginSourceUnreadable,

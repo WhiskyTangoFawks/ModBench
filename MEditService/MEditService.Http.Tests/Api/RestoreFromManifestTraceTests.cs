@@ -59,7 +59,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         File.WriteAllText(Path.Combine(ModFolder, "edited.txt"), "edited");
         File.Delete(Path.Combine(ModFolder, "kept.txt"));
         File.Delete(Path.Combine(ModFolder, "Game.esm"));
-        File.WriteAllText(Path.Combine(ModFolder, "untracked.txt"), "mine");
+        File.WriteAllText(Path.Combine(ModFolder, "nonSourcePlugin.txt"), "mine");
     }
 
     private JsonObject Request(string gesture, string downloadName, bool handsTheDownload = true)
@@ -239,7 +239,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
 
         Assert.Equal(Mod, destroys.GetProperty("mod").GetString());
         Assert.Equal(["edited.txt"], Paths(destroys, "differing"));
-        Assert.Equal(["untracked.txt"], Paths(destroys, "namedByNoLine"));
+        Assert.Equal(["nonSourcePlugin.txt"], Paths(destroys, "namedByNoLine"));
     }
 
     [Fact]
@@ -254,7 +254,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
 
         var restored = Assert.Single(body.GetProperty("applied").EnumerateArray());
         Assert.Equal(["Game.esm", "edited.txt", "kept.txt"], Paths(restored, "written"));
-        Assert.Equal(["untracked.txt"], Paths(restored, "namedByNoLine"));
+        Assert.Equal(["nonSourcePlugin.txt"], Paths(restored, "namedByNoLine"));
         Assert.Equal((Original, "kept", "vanilla"), (FileText("edited.txt"), FileText("kept.txt"), FileText("Game.esm")));
         var progress = await stream.EventsUntil("restore-from-manifest-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
         Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Mod);
@@ -284,7 +284,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         var destroys = Assert.Single((await WhatRestoreDestroys()).EnumerateArray());
 
         Assert.Empty(Paths(destroys, "differing"));
-        Assert.Equal(["untracked.txt"], Paths(destroys, "namedByNoLine"));
+        Assert.Equal(["nonSourcePlugin.txt"], Paths(destroys, "namedByNoLine"));
     }
 
     [Fact]

@@ -14,7 +14,7 @@ public sealed class ExteriorCellCopyRollbackTests
     [InlineData(CopyMode.New, true)]
     public void ACopyThatMintsTheWorldspace_AndFailsOnTheCell_LeavesTheDestinationTreeAsItWas(CopyMode mode, bool ofAPlacedReference)
     {
-        using var fixture = ContainerCopyFixture.CreateWithTrackedSource();
+        using var fixture = ContainerCopyFixture.CreateWithSourcePluginSource();
         var cell = new RecordIdentity(fixture.ExteriorCell.ToString(), "cell", ContainerCopyFixture.ExteriorCellEditorId);
         TreeTampering.BlockWriteAsPlacedIn(
             fixture.SourceModFolder, fixture.SourcePlugin, cell, fixture.DestinationModFolder, fixture.DestinationPlugin);

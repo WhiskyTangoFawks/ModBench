@@ -140,9 +140,9 @@ const twoSiblingFieldsResult: CompareResult = compareResultFixture({
   ],
 });
 
-const partialFormTrackedPluginsResponse = [
+const partialFormSourcePluginsResponse = [
   { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
-  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isTracked: true },
+  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isSourcePlugin: true },
 ];
 
 const partialFormCompareResult: CompareResult = compareResultFixture({
@@ -210,9 +210,9 @@ const flagsCompareResult: CompareResult = compareResultFixture({
   ],
 });
 
-const trackedMyModPluginsForTheRealEditableColumnsGate = [
+const sourcePluginMyModPluginsForTheRealEditableColumnsGate = [
   { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
-  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isTracked: true },
+  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isSourcePlugin: true },
 ];
 
 const structFieldMeta: FieldMetadata = fieldMeta({
@@ -325,7 +325,7 @@ describe('RecordPanel — a file whose plugin is disabled, or in a disabled mod'
     overrides: [compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'File Name' }] })],
     diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp|ModA': 'File Name' }, winnerColumn: 'MyMod.esp|ModA' })],
   });
-  const opts: PanelOpts = { plugins: [{ name: 'MyMod.esp', origin: 'ModA', isTracked: true }], fileColumn: 'MyMod.esp|ModA', fileCopyAlone: true };
+  const opts: PanelOpts = { plugins: [{ name: 'MyMod.esp', origin: 'ModA', isSourcePlugin: true }], fileColumn: 'MyMod.esp|ModA', fileCopyAlone: true };
 
   beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); });
   afterEach(() => vi.unstubAllGlobals());
@@ -366,7 +366,7 @@ describe('RecordPanel — a file whose plugin another mod\'s file overrides', ()
     diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp|ModA': 'File Name', 'Other.esp|ModC': 'Other Name' }, winnerColumn: 'Other.esp|ModC' })],
   });
   const opts: PanelOpts = {
-    plugins: [{ name: 'MyMod.esp', origin: 'ModA', isTracked: true }, { name: 'Other.esp', origin: 'ModC', isTracked: true }],
+    plugins: [{ name: 'MyMod.esp', origin: 'ModA', isSourcePlugin: true }, { name: 'Other.esp', origin: 'ModC', isSourcePlugin: true }],
     fileColumn: 'MyMod.esp|ModA', fileOverriddenBy: 'ModB',
   };
 
@@ -409,21 +409,21 @@ describe('RecordPanel — a file whose plugin another mod\'s file overrides', ()
 });
 
 describe('RecordPanel — the file\'s column', () => {
-  const twoTracked: CompareResult = compareResultFixture({
+  const twoSourcePlugin: CompareResult = compareResultFixture({
     overrides: [
       compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'File Name' }] }),
       compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Other.esp', origin: 'ModB', isWinner: true, editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Other Name' }] }),
     ],
     diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp|ModA': 'File Name', 'Other.esp|ModB': 'Other Name' }, winnerColumn: 'Other.esp|ModB' })],
   });
-  const bothTracked = [{ name: 'MyMod.esp', origin: 'ModA', isTracked: true }, { name: 'Other.esp', origin: 'ModB', isTracked: true }];
+  const bothSourcePlugin = [{ name: 'MyMod.esp', origin: 'ModA', isSourcePlugin: true }, { name: 'Other.esp', origin: 'ModB', isSourcePlugin: true }];
   const headerOf = (plugin: string) => required(screen.getByText(plugin).closest('th'), `${plugin}'s header`);
 
   beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('is the one column a cell edits in: a cell of another tracked column opens no editor and tells no edit', async () => {
-    renderPanel(twoTracked, { plugins: bothTracked, fileColumn: 'MyMod.esp|ModA' });
+  it('is the one column a cell edits in: a cell of another source plugin column opens no editor and tells no edit', async () => {
+    renderPanel(twoSourcePlugin, { plugins: bothSourcePlugin, fileColumn: 'MyMod.esp|ModA' });
     await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('Other Name'));
@@ -437,7 +437,7 @@ describe('RecordPanel — the file\'s column', () => {
   });
 
   it('is marked in its header, to the eye and to a screen reader, and no other column is', async () => {
-    renderPanel(twoTracked, { plugins: bothTracked, fileColumn: 'MyMod.esp|ModA' });
+    renderPanel(twoSourcePlugin, { plugins: bothSourcePlugin, fileColumn: 'MyMod.esp|ModA' });
     await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
 
     expect(headerOf('MyMod.esp')).toHaveAttribute('aria-current', 'true');
@@ -447,7 +447,7 @@ describe('RecordPanel — the file\'s column', () => {
   });
 
   it('opens another column\'s copy on Enter or Space on its focused header, and nothing on another key or on its own header', async () => {
-    renderPanel(twoTracked, { plugins: bothTracked, fileColumn: 'MyMod.esp|ModA' });
+    renderPanel(twoSourcePlugin, { plugins: bothSourcePlugin, fileColumn: 'MyMod.esp|ModA' });
     await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
     vi.mocked(vscode.postMessage).mockClear();
 
@@ -462,7 +462,7 @@ describe('RecordPanel — the file\'s column', () => {
   });
 
   it('opens another column\'s copy on a click on its header, and nothing on a click on its own or on a collapse control', async () => {
-    renderPanel(twoTracked, { plugins: bothTracked, fileColumn: 'MyMod.esp|ModA' });
+    renderPanel(twoSourcePlugin, { plugins: bothSourcePlugin, fileColumn: 'MyMod.esp|ModA' });
     await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
     vi.mocked(vscode.postMessage).mockClear();
 
@@ -507,12 +507,12 @@ describe('RecordPanel — column header native right-click menu', () => {
   });
 
   it.each([
-    ['a tracked, editable', { isTracked: true, isImmutable: false }, true],
-    ['an untracked', { isTracked: false, isImmutable: false }, false],
-    ['a tracked, plugin-source-unreadable', { isTracked: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }, false],
-    ['a read-only', { isTracked: true, isImmutable: true }, false],
-    ['an untracked read-only', { isTracked: false, isImmutable: true }, false],
-  ])('the header of %s plugin says whether delete applies to it, only where the plugin is tracked and its plugin source reads', async (_what, facts, editable) => {
+    ['a source plugin, editable', { isSourcePlugin: true, isImmutable: false }, true],
+    ['a non-source plugin', { isSourcePlugin: false, isImmutable: false }, false],
+    ['a source plugin, plugin-source-unreadable', { isSourcePlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }, false],
+    ['a read-only', { isSourcePlugin: true, isImmutable: true }, false],
+    ['a non-source plugin read-only', { isSourcePlugin: false, isImmutable: true }, false],
+  ])('the header of %s plugin says whether delete applies to it, only where the plugin is a source plugin and its plugin source reads', async (_what, facts, editable) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const compare = compareResultFixture({
       conflictAll: 'OnlyOne',
@@ -536,12 +536,12 @@ describe('RecordPanel — column header native right-click menu', () => {
   });
 
   it.each([
-    ['an active plugin in a tracked mod', { isTracked: true }, { ModA: 'tracked' }, 'tracked'],
-    ['a disabled plugin in a tracked mod', { isTracked: true, isImmutable: true }, { ModA: 'tracked' }, 'tracked'],
-    ['an active plugin in an untracked mod', { isTracked: false }, { ModA: 'untracked' }, 'untracked'],
-    ['a disabled plugin in an untracked mod', { isTracked: false, isImmutable: true }, { ModA: 'untracked' }, 'untracked'],
-    ['a plugin the game provides', { isTracked: false, isImmutable: true }, {}, 'none'],
-    ['a plugin in Overwrite', { isTracked: false }, {}, 'none'],
+    ['an active plugin in a source mod', { isSourcePlugin: true }, { ModA: 'sourceMod' }, 'sourceMod'],
+    ['a disabled plugin in a source mod', { isSourcePlugin: true, isImmutable: true }, { ModA: 'sourceMod' }, 'sourceMod'],
+    ['an active plugin in a non-source mod', { isSourcePlugin: false }, { ModA: 'nonSourceMod' }, 'nonSourceMod'],
+    ['a disabled plugin in a non-source mod', { isSourcePlugin: false, isImmutable: true }, { ModA: 'nonSourceMod' }, 'nonSourceMod'],
+    ['a plugin the game provides', { isSourcePlugin: false, isImmutable: true }, {}, 'none'],
+    ['a plugin in Overwrite', { isSourcePlugin: false }, {}, 'none'],
   ] as const)('the header of %s names the repository state of its origin\'s mod, which decompile and commit and decompile are offered on', async (_what, facts, modsByOrigin, inMod) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const compare = compareResultFixture({
@@ -579,17 +579,17 @@ describe('RecordPanel — column header native right-click menu', () => {
         winnerColumn: 'MyMod.esp', cellStates: {},
       })],
     });
-    const { container, client } = renderPanel(compare, { plugins: [{ name: 'MyMod.esp', origin: 'ModA' }], modsByOrigin: { ModA: 'untracked' } });
+    const { container, client } = renderPanel(compare, { plugins: [{ name: 'MyMod.esp', origin: 'ModA' }], modsByOrigin: { ModA: 'nonSourceMod' } });
     const inMod = () => parseJsonRecord(container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}').inMod;
-    await waitFor(() => expect(inMod()).toBe('untracked'));
+    await waitFor(() => expect(inMod()).toBe('nonSourceMod'));
 
-    sendMessage({ type: EXTENSION_TO_WEBVIEW.MODS_CHANGED, modsByOrigin: { ModA: 'tracked' } });
+    sendMessage({ type: EXTENSION_TO_WEBVIEW.MODS_CHANGED, modsByOrigin: { ModA: 'sourceMod' } });
 
-    await waitFor(() => expect(inMod()).toBe('tracked'));
+    await waitFor(() => expect(inMod()).toBe('sourceMod'));
     expect(client.load).toHaveBeenCalledTimes(1);
   });
 
-  it('offers no delete on a column whose tracked state is unknown, when the page is given no plugin facts a column is neither tracked nor untracked', async () => {
+  it('offers no delete on a column whose source plugin state is unknown, when the page is given no plugin facts a column is neither source plugin nor non-source plugin', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const compare = compareResultFixture({
       conflictAll: 'OnlyOne',
@@ -604,7 +604,7 @@ describe('RecordPanel — column header native right-click menu', () => {
       })],
     });
     const load = vi.fn().mockResolvedValue({
-      ok: true, result: compare, immutableSet: null, trackedSet: null, editableSet: null, sourceUnreadableReasons: null, modsByOrigin: {}, conflictsComputed: true, loadFailures: [],
+      ok: true, result: compare, immutableSet: null, sourcePluginSet: null, editableSet: null, sourceUnreadableReasons: null, modsByOrigin: {}, conflictsComputed: true, loadFailures: [],
       fileColumn: undefined, fileCopyAlone: false, fileOverriddenBy: null,
     } satisfies Loaded);
     const { container } = renderPanel(compare, { load });
@@ -634,7 +634,7 @@ describe('RecordPanel — a Partial Form column', () => {
 
   it('reads (Partial Form) in its dimmed header, with no control on it', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel(partialFormCompareResult, { plugins: partialFormTrackedPluginsResponse });
+    renderPanel(partialFormCompareResult, { plugins: partialFormSourcePluginsResponse });
     await waitFor(() => expect(screen.getByText('(Partial Form)')).toBeInTheDocument());
 
     const th = required(screen.getByText('MyMod.esp').closest('th'), 'the column\u2019s header');
@@ -645,7 +645,7 @@ describe('RecordPanel — a Partial Form column', () => {
   it('is dimmed under an earlier status too', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(partialFormCompareResult, { plugins: pluginsResponse });
-    await waitFor(() => expect(screen.getByText('(untracked)')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('(not a source plugin)')).toBeInTheDocument());
 
     expect(screen.getByText('MyMod.esp').closest('th')).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
@@ -683,17 +683,17 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('control: a scalar cell in the identical tracked, editable column the flags cases use opens an editable input on double click', async () => {
-    renderPanel(flagsCompareResult, { plugins: trackedMyModPluginsForTheRealEditableColumnsGate });
+  it('control: a scalar cell in the identical source plugin, editable column the flags cases use opens an editable input on double click', async () => {
+    renderPanel(flagsCompareResult, { plugins: sourcePluginMyModPluginsForTheRealEditableColumnsGate });
     await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
 
     fireEvent.doubleClick(screen.getByText('Override Name'));
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
-  it('opens no input on a cell of a tracked column whose plugin source is unreadable', async () => {
+  it('opens no input on a cell of a source plugin column whose plugin source is unreadable', async () => {
     renderPanel(flagsCompareResult, {
-      plugins: trackedMyModPluginsForTheRealEditableColumnsGate.map(p => ({ ...p, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })),
+      plugins: sourcePluginMyModPluginsForTheRealEditableColumnsGate.map(p => ({ ...p, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })),
     });
     await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
 
@@ -702,7 +702,7 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
   });
 
   it('a flags row opens expanded with its checkboxes; collapsing shows the summary and expanding restores them', async () => {
-    renderPanel(flagsCompareResult, { plugins: trackedMyModPluginsForTheRealEditableColumnsGate });
+    renderPanel(flagsCompareResult, { plugins: sourcePluginMyModPluginsForTheRealEditableColumnsGate });
     await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(4));
     const flagsRow = () => required(screen.getByText('Flags').closest('tr'), "the Flags row");
 
@@ -715,7 +715,7 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
   });
 
   it('reads a read-only column\u2019s flags as the editable column\u2019s do, as nothing marks its cells ahead of time, and writes nothing on a click', async () => {
-    renderPanel(flagsCompareResult, { plugins: trackedMyModPluginsForTheRealEditableColumnsGate });
+    renderPanel(flagsCompareResult, { plugins: sourcePluginMyModPluginsForTheRealEditableColumnsGate });
     await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(4));
     const [, masterCell, modCell] = Array.from(required(screen.getByText('Flags').closest('tr'), 'the Flags row').querySelectorAll('td'));
     const boxesOf = (cell: Element | undefined) =>
@@ -730,11 +730,11 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
   });
 
   it('toggling a flag posts set of the member with the names now set', async () => {
-    renderPanel(flagsCompareResult, { plugins: trackedMyModPluginsForTheRealEditableColumnsGate });
+    renderPanel(flagsCompareResult, { plugins: sourcePluginMyModPluginsForTheRealEditableColumnsGate });
     await waitFor(() => expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0));
     vi.mocked(vscode.postMessage).mockClear();
 
-    const modCell = required(screen.getByText('Flags').closest('tr')?.lastElementChild, 'the tracked column\u2019s cell');
+    const modCell = required(screen.getByText('Flags').closest('tr')?.lastElementChild, 'the source plugin column\u2019s cell');
     fireEvent.click(required(modCell.querySelector('input'), 'its first flag'));
 
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
@@ -1113,7 +1113,7 @@ describe('RecordPanel — keys through the rows', () => {
   });
 
   it('acts on no key while an editor is open, where the keys edit its text', async () => {
-    const { container } = await focusedOn('Name', { plugins: trackedMyModPluginsForTheRealEditableColumnsGate }, flagsCompareResult);
+    const { container } = await focusedOn('Name', { plugins: sourcePluginMyModPluginsForTheRealEditableColumnsGate }, flagsCompareResult);
     const valueCell = required(screen.getByText('Override Name').closest('td'), 'the editable Name cell');
     fireEvent.click(valueCell);
     fireEvent.doubleClick(valueCell);
@@ -1149,7 +1149,7 @@ describe('RecordPanel — a plugin mEdit cannot read', () => {
 
   it('goes once a read lands with the plugin readable again', async () => {
     const answered = (loadFailures: PluginLoadFailure[]) => ({
-      ok: true as const, result: compareResult, immutableSet: new Set<ColumnKey>(), trackedSet: new Set<ColumnKey>(),
+      ok: true as const, result: compareResult, immutableSet: new Set<ColumnKey>(), sourcePluginSet: new Set<ColumnKey>(),
       sourceUnreadableReasons: new Map<ColumnKey, UnreadableSource>(),
       modsByOrigin: {},
       conflictsComputed: true, loadFailures,
@@ -1269,7 +1269,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
 });
 
 const loaded = (result: CompareResult | null, conflictsComputed = true, gone = ['000001:Fallout4.esm'], copiesLacking: string[] = []) => ({
-  ok: true as const, ...(result === null ? { result, gone, copiesLacking } : { result }), immutableSet: new Set<ColumnKey>(), trackedSet: new Set<ColumnKey>(), sourceUnreadableReasons: new Map<ColumnKey, UnreadableSource>(), modsByOrigin: {}, conflictsComputed, loadFailures: [],
+  ok: true as const, ...(result === null ? { result, gone, copiesLacking } : { result }), immutableSet: new Set<ColumnKey>(), sourcePluginSet: new Set<ColumnKey>(), sourceUnreadableReasons: new Map<ColumnKey, UnreadableSource>(), modsByOrigin: {}, conflictsComputed, loadFailures: [],
   editableSet: new Set<ColumnKey>(), fileColumn: undefined, fileCopyAlone: false, fileOverriddenBy: null,
 } satisfies Loaded);
 
@@ -1810,8 +1810,8 @@ const unionCompareResult: CompareResult = compareResultFixture({
   ],
 });
 
-const unionTrackedPluginsResponse = [
-  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true },
+const unionSourcePluginsResponse = [
+  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isSourcePlugin: true },
 ];
 
 describe('RecordPanel — an abstract union\'s leaf is an editable field, a Mutagen class name being a wire token the user is never shown: the panel displays the reflector\'s labels and posts the values', () => {
@@ -1822,7 +1822,7 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field, a Muta
   afterEach(() => vi.unstubAllGlobals());
 
   async function renderLevel() {
-    renderPanel(unionCompareResult, { plugins: unionTrackedPluginsResponse });
+    renderPanel(unionCompareResult, { plugins: unionSourcePluginsResponse });
     await waitFor(() => expect(screen.getByText('Level')).toBeInTheDocument());
     await waitFor(() => expect(screen.getByText('Kind')).toBeInTheDocument());
   }
@@ -1906,7 +1906,7 @@ describe('RecordPanel — an absent member reads as its default, the document om
   afterEach(() => vi.unstubAllGlobals());
 
   async function renderExpanded() {
-    renderPanel(compare, { plugins: trackedMyModPluginsForTheRealEditableColumnsGate });
+    renderPanel(compare, { plugins: sourcePluginMyModPluginsForTheRealEditableColumnsGate });
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Stats'));
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Weight'));
   }
@@ -1985,7 +1985,7 @@ describe('RecordPanel — a member of an absent owner reads as nothing, not as z
   afterEach(() => vi.unstubAllGlobals());
 
   it('an unset nullable struct reads as empty, and its member as nothing rather than zero', async () => {
-    renderPanel(compare, { plugins: trackedMyModPluginsForTheRealEditableColumnsGate });
+    renderPanel(compare, { plugins: sourcePluginMyModPluginsForTheRealEditableColumnsGate });
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Bounds'));
     expect(cellAt('Bounds', 2).textContent).toBe('');
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('X'));
@@ -1995,7 +1995,7 @@ describe('RecordPanel — a member of an absent owner reads as nothing, not as z
   });
 
   it('an element past the column\'s own length reads as nothing, not zero', async () => {
-    renderPanel(compare, { plugins: trackedMyModPluginsForTheRealEditableColumnsGate });
+    renderPanel(compare, { plugins: sourcePluginMyModPluginsForTheRealEditableColumnsGate });
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Values'));
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('[1]'));
 
@@ -2004,7 +2004,7 @@ describe('RecordPanel — a member of an absent owner reads as nothing, not as z
   });
 
   it('a Partial Form column\'s fields read as nothing, the classifier nulling every field so none is absent-by-default', async () => {
-    renderPanel(partialFormCompareResult, { plugins: partialFormTrackedPluginsResponse });
+    renderPanel(partialFormCompareResult, { plugins: partialFormSourcePluginsResponse });
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Name'));
     expect(cellAt('Name', 1).textContent).toBe('Original Name');
     expect(cellAt('Name', 2).textContent).toBe('');
@@ -2026,7 +2026,7 @@ describe('RecordPanel — a member of an absent owner reads as nothing, not as z
           winnerColumn: 'Fallout4.esm', cellStates: {},
         })],
       })],
-    }), { plugins: partialFormTrackedPluginsResponse });
+    }), { plugins: partialFormSourcePluginsResponse });
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Size'));
     fireEvent.click(required(required(gridBodyRowsNotHeaderLoadIndexes().getByText('Size').closest('td'), "the 'Size' cell's td ancestor").querySelector('button'), "the 'Size' row's expand button"));
     expect(cellAt('Size', 1).textContent).toBe('{…}');
@@ -2069,7 +2069,7 @@ describe('RecordPanel — an absent non-nullable struct reads as its default mem
   afterEach(() => vi.unstubAllGlobals());
 
   async function renderExpanded() {
-    renderPanel(compare, { plugins: trackedMyModPluginsForTheRealEditableColumnsGate });
+    renderPanel(compare, { plugins: sourcePluginMyModPluginsForTheRealEditableColumnsGate });
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Width'));
   }
 
@@ -2105,7 +2105,7 @@ describe('RecordPanel — a translated string leaf, whose document spelling is a
   afterEach(() => vi.unstubAllGlobals());
 
   it('reads the text and posts set of the whole object with the new Value', async () => {
-    renderPanel(compare, { plugins: unionTrackedPluginsResponse });
+    renderPanel(compare, { plugins: unionSourcePluginsResponse });
     await waitFor(() => screen.getByText('Base name'));
     vi.mocked(vscode.postMessage).mockClear();
 
@@ -2120,7 +2120,7 @@ describe('RecordPanel — a translated string leaf, whose document spelling is a
   });
 });
 
-describe('RecordPanel — a column whose record failed to parse stays in the grid rather than vanishing, showing what was stored and offering nothing that writes; both columns are tracked and mutable, so only the diagnosis can explain a read-only cell', () => {
+describe('RecordPanel — a column whose record failed to parse stays in the grid rather than vanishing, showing what was stored and offering nothing that writes; both columns are a source plugin and mutable, so only the diagnosis can explain a read-only cell', () => {
   const PARSE_DIAGNOSIS = 'the PERK entry point did not have expected parameter type flag';
 
   const keywordsMeta: FieldMetadata = fieldMeta({
@@ -2155,8 +2155,8 @@ describe('RecordPanel — a column whose record failed to parse stays in the gri
   });
 
   const plugins = [
-    { name: 'Broken.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true },
-    { name: 'Good.esp', isImmutable: false, loadOrderIndex: 1, isTracked: true },
+    { name: 'Broken.esp', isImmutable: false, loadOrderIndex: 0, isSourcePlugin: true },
+    { name: 'Good.esp', isImmutable: false, loadOrderIndex: 1, isSourcePlugin: true },
   ];
 
   const contextsFor = (container: HTMLElement, plugin: string) =>
@@ -2327,7 +2327,7 @@ describe('RecordPanel — the Record Header', () => {
       diffNode({ fieldName: 'Name', values: { 'MyMod.esp': 'A Name' }, winnerColumn: 'MyMod.esp' }),
     ],
   });
-  const tracked = [{ name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true }];
+  const sourcePlugin = [{ name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isSourcePlugin: true }];
 
   const rows = (container: HTMLElement) => Array.from(container.querySelectorAll('tbody tr'));
   const rowLabels = (container: HTMLElement) =>
@@ -2341,7 +2341,7 @@ describe('RecordPanel — the Record Header', () => {
 
   it('is the grid\'s first row, holding the header members mEdit names, in its order and under its labels', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
-    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: sourcePlugin });
     await waitFor(() => screen.getByText('A Name'));
 
     expect(rowLabels(container)).toEqual(['Record Header', 'Record Flags', 'FormID', 'Version Control Info 1', 'Name']);
@@ -2350,7 +2350,7 @@ describe('RecordPanel — the Record Header', () => {
 
   it('reads the FormKey in the row the metadata marks as the record\'s FormKey, under the label it gives', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
-    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc', 'Form Key'), { plugins: tracked });
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc', 'Form Key'), { plugins: sourcePlugin });
     await waitFor(() => screen.getByText('A Name'));
 
     expect(cellOf(container, 'Form Key').textContent).toBe('MovedNpc [000800:MyMod.esp]');
@@ -2358,7 +2358,7 @@ describe('RecordPanel — the Record Header', () => {
 
   it('collapses to its own row, hiding the header members', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
-    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: sourcePlugin });
     await waitFor(() => screen.getByText('A Name'));
 
     fireEvent.doubleClick(screen.getByText('Record Header'));
@@ -2368,7 +2368,7 @@ describe('RecordPanel — the Record Header', () => {
 
   it('edits a header member as any field: a typed number posts a set of that member', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
-    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: sourcePlugin });
     await waitFor(() => screen.getByText('A Name'));
     vi.mocked(vscode.postMessage).mockClear();
 
@@ -2383,7 +2383,7 @@ describe('RecordPanel — the Record Header', () => {
 
   it('reads Record Flags as its flags, and a check box posts the integer with that bit set', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
-    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: sourcePlugin });
     await waitFor(() => screen.getByText('A Name'));
     vi.mocked(vscode.postMessage).mockClear();
 
@@ -2396,7 +2396,7 @@ describe('RecordPanel — the Record Header', () => {
 
   it('opens the FormID on the FormKey and posts a set of the record\'s FormKey member with the one typed', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
-    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: sourcePlugin });
     await waitFor(() => screen.getByText('A Name'));
     vi.mocked(vscode.postMessage).mockClear();
 
@@ -2414,7 +2414,7 @@ describe('RecordPanel — the Record Header', () => {
 
   it('reads a plugin header\'s FormID as its FormKey, opening no editor and giving the reason', async () => {
     vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
-    const { container } = renderPanel(pluginHeader(), { plugins: tracked });
+    const { container } = renderPanel(pluginHeader(), { plugins: sourcePlugin });
     await waitFor(() => screen.getByText('A Name'));
 
     expect(rowLabels(container)).toEqual(['Record Header', 'FormID', 'Name']);
@@ -2426,7 +2426,7 @@ describe('RecordPanel — the Record Header', () => {
 
   it('opens the editor on a record\'s FormID', async () => {
     vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
-    const { container } = renderPanel(native('000000:MyMod.esp', null), { plugins: tracked });
+    const { container } = renderPanel(native('000000:MyMod.esp', null), { plugins: sourcePlugin });
     await waitFor(() => screen.getByText('A Name'));
 
     fireEvent.doubleClick(within(formIdCell(container)).getByText('000000:MyMod.esp'));
@@ -2452,8 +2452,8 @@ describe('RecordPanel — the Record Header', () => {
       ],
     });
   const stampPlugins = [
-    { name: 'Base.esm', isImmutable: false, loadOrderIndex: 0, isTracked: true },
-    { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isTracked: true },
+    { name: 'Base.esm', isImmutable: false, loadOrderIndex: 0, isSourcePlugin: true },
+    { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isSourcePlugin: true },
   ];
   const stampCells = (container: HTMLElement) =>
     Array.from(required(rows(container).find(tr => tr.querySelector('td')?.textContent === 'Version Control Info 1'),
@@ -2513,7 +2513,7 @@ describe('RecordPanel — the Record Header', () => {
 
   it('edits a Partial Form copy\'s header member', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
-    const { container } = renderPanel(partialFormCopyWithHeaderMembersAndNoFieldsOfItsOwn(), { plugins: tracked });
+    const { container } = renderPanel(partialFormCopyWithHeaderMembersAndNoFieldsOfItsOwn(), { plugins: sourcePlugin });
     await waitFor(() => screen.getByText('(Partial Form)'));
     vi.mocked(vscode.postMessage).mockClear();
 
@@ -2534,7 +2534,7 @@ describe('RecordPanel — the Record Header', () => {
       ...record,
       overrides: record.overrides.map(o => ({ ...o, fields: [{ metadata: editorIdMeta, value: 'Inside' }, ...o.fields] })),
       diffs: [diffNode({ fieldName: 'EditorID', values: { 'MyMod.esp': 'Inside' }, winnerColumn: 'MyMod.esp' }), ...record.diffs],
-    }, { plugins: tracked });
+    }, { plugins: sourcePlugin });
     await waitFor(() => screen.getByText('(Partial Form)'));
     vi.mocked(vscode.postMessage).mockClear();
 
@@ -2549,7 +2549,7 @@ describe('RecordPanel — the Record Header', () => {
 
   it('reads a Partial Form copy\'s own field empty, opening no editor', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
-    const { container } = renderPanel(partialFormCopyWithHeaderMembersAndNoFieldsOfItsOwn(), { plugins: tracked });
+    const { container } = renderPanel(partialFormCopyWithHeaderMembersAndNoFieldsOfItsOwn(), { plugins: sourcePlugin });
     await waitFor(() => screen.getByText('(Partial Form)'));
 
     const cell = cellOf(container, 'Name');
@@ -2561,7 +2561,7 @@ describe('RecordPanel — the Record Header', () => {
 
   it('offers the FormID no open-field-value menu, where a text field offers one, open field value being a text field\'s and the FormID reading as a reference', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
-    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: sourcePlugin });
     await waitFor(() => screen.getByText('A Name'));
 
     const menuOf = (cell: Element) => cell.closest('[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '';
@@ -2572,7 +2572,7 @@ describe('RecordPanel — the Record Header', () => {
 
 describe('RecordPanel — a field the schema marks read-only, the reason coming from the field\'s own metadata with nothing in the panel deciding it', () => {
   const reason = 'a known upstream defect';
-  const tracked = [{ name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true }];
+  const sourcePlugin = [{ name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isSourcePlugin: true }];
   const lockedName = fieldMeta({ name: 'Name', type: 'string', readOnlyReason: reason });
   const compare = compareResultFixture({
     overrides: [
@@ -2588,7 +2588,7 @@ describe('RecordPanel — a field the schema marks read-only, the reason coming 
   afterEach(() => vi.unstubAllGlobals());
 
   it('opens no editor and gives the reason as the cell\'s tooltip', async () => {
-    renderPanel(compare, { plugins: tracked });
+    renderPanel(compare, { plugins: sourcePlugin });
     await waitFor(() => screen.getByText('A Name'));
 
     fireEvent.doubleClick(screen.getByText('A Name'));
@@ -2605,7 +2605,7 @@ describe('RecordPanel — a field the schema marks read-only, the reason coming 
         formKey: '000800:MyMod.esp', plugin: 'MyMod.esp', isWinner: true, editorId: 'Npc',
         fields: [{ metadata: open, value: 'A Name' }],
       })],
-    }, { plugins: tracked });
+    }, { plugins: sourcePlugin });
     await waitFor(() => screen.getByText('A Name'));
 
     expect(required(screen.getByText('A Name').closest('td'), 'the cell')).toHaveAttribute('title', 'Single Record');
@@ -2621,18 +2621,18 @@ describe('RecordPanel — several records side by side', () => {
     ],
     diffs: [diffNode({ fieldName: 'Name', values: { '0#A.esp': 'Gun Name', '1#A.esp': 'Ammo Name' }, winnerColumn: '1#A.esp' })],
   });
-  const tracked = [{ name: 'A.esp', isTracked: true }];
+  const sourcePlugin = [{ name: 'A.esp', isSourcePlugin: true }];
 
   beforeEach(() => { vi.stubGlobal('mEditFormKey', GUN); });
   afterEach(() => vi.unstubAllGlobals());
 
   it('shows one column for each record, in the order given, though two come from one plugin, each with its plugin\'s status', async () => {
-    renderPanel(sideBySide, { plugins: tracked });
+    renderPanel(sideBySide, { plugins: sourcePlugin });
 
     await waitFor(() => expect(screen.getByText('Ammo Name')).toBeInTheDocument());
     const nameCells = Array.from(required(screen.getByText('Gun Name').closest('tr'), 'the Name row').querySelectorAll('td')).slice(1);
     expect(nameCells.map(cell => cell.textContent)).toEqual(['Gun Name', 'Ammo Name']);
-    expect(screen.getAllByText('(tracked)')).toHaveLength(2);
+    expect(screen.getAllByText('(source plugin)')).toHaveLength(2);
   });
 
   it('opens another record\'s copy in this tab on a click on its header, with the same records as its columns, that one first as the file', async () => {
@@ -2642,7 +2642,7 @@ describe('RecordPanel — several records side by side', () => {
       formKey: KNIFE, plugin: 'B.esp', origin: 'ModB', isWinner: true, editorId: 'Knife', fields: [{ metadata: strMeta, value: 'Knife Name' }], conflictThis: null, column: '2#B.esp|ModB',
     }));
     required(threeRecords.diffs[0], 'the Name row').values['2#B.esp|ModB'] = 'Knife Name';
-    renderPanel(threeRecords, { plugins: tracked, fileColumn: '0#A.esp' });
+    renderPanel(threeRecords, { plugins: sourcePlugin, fileColumn: '0#A.esp' });
     await waitFor(() => expect(screen.getByText('Knife Name')).toBeInTheDocument());
     vi.mocked(vscode.postMessage).mockClear();
 
@@ -2658,13 +2658,13 @@ describe('RecordPanel — several records side by side', () => {
   it('names the first record, the file\'s, in its header, though another record\'s copy is a winner', async () => {
     const firstLoses = structuredClone(sideBySide);
     required(firstLoses.overrides[0], 'the first copy').isWinner = false;
-    renderPanel(firstLoses, { plugins: tracked });
+    renderPanel(firstLoses, { plugins: sourcePlugin });
 
     await waitFor(() => expect(screen.getByText('Non-Player Character Gun [000801:A.esp]')).toBeInTheDocument());
   });
 
   it('files a string field\'s own tab under its column\'s record', async () => {
-    renderPanel(sideBySide, { plugins: tracked });
+    renderPanel(sideBySide, { plugins: sourcePlugin });
     await waitFor(() => expect(screen.getByText('Ammo Name')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('Ammo Name'));
@@ -2673,14 +2673,14 @@ describe('RecordPanel — several records side by side', () => {
   });
 
   it('says nothing of an incomplete comparison: the colours compare copies of one record', async () => {
-    renderPanel(sideBySide, { plugins: tracked, conflictsComputed: false });
+    renderPanel(sideBySide, { plugins: sourcePlugin, conflictsComputed: false });
 
     await waitFor(() => expect(screen.getByText('Ammo Name')).toBeInTheDocument());
     expect(screen.queryByText(required(recordPanelIncompleteMessage(false), 'the message'))).not.toBeInTheDocument();
   });
 
-  it('edits in the first record\'s column alone, the file\'s, though another record\'s copy is in the same tracked plugin', async () => {
-    renderPanel(sideBySide, { plugins: tracked, fileColumn: '0#A.esp' });
+  it('edits in the first record\'s column alone, the file\'s, though another record\'s copy is in the same source plugin', async () => {
+    renderPanel(sideBySide, { plugins: sourcePlugin, fileColumn: '0#A.esp' });
     await waitFor(() => expect(screen.getByText('Ammo Name')).toBeInTheDocument());
 
     fireEvent.doubleClick(screen.getByText('Ammo Name'));
@@ -2696,7 +2696,7 @@ describe('RecordPanel — several records side by side', () => {
   });
 
   it('reads at once with the records the host shows beside its own from now on', async () => {
-    const { client } = renderPanel(sideBySide, { plugins: tracked });
+    const { client } = renderPanel(sideBySide, { plugins: sourcePlugin });
     await waitFor(() => expect(client.load).toHaveBeenCalledTimes(1));
     const columns = [{ formKey: AMMO, plugin: { name: 'A.esp', origin: 'Data/' } }];
 
@@ -2734,21 +2734,21 @@ describe('RecordPanel — several records coloured as xEdit\'s Compare Selected 
   afterEach(() => vi.unstubAllGlobals());
 
   it('paints a row where the records disagree as a Conflict row', async () => {
-    renderPanel(compare, { plugins: [{ name: 'A.esp', isTracked: true }] });
+    renderPanel(compare, { plugins: [{ name: 'A.esp', isSourcePlugin: true }] });
 
     await screen.findByText('Ammo Name');
     expect(row().style.backgroundColor).toBe('var(--vscode-modbench-conflictRowConflict)');
   });
 
   it('gives no cell a state until a column is focused', async () => {
-    renderPanel(compare, { plugins: [{ name: 'A.esp', isTracked: true }] });
+    renderPanel(compare, { plugins: [{ name: 'A.esp', isSourcePlugin: true }] });
     await screen.findByText('Ammo Name');
 
     expect(backgrounds()).toEqual(['', '', '']);
   });
 
   it('takes each cell\'s state from mEdit for the focused column, and recolours as the focus moves', async () => {
-    renderPanel(compare, { plugins: [{ name: 'A.esp', isTracked: true }] });
+    renderPanel(compare, { plugins: [{ name: 'A.esp', isSourcePlugin: true }] });
     await screen.findByText('Ammo Name');
 
     fireEvent.click(required(screen.getAllByText('Gun Name')[0], 'the first Gun Name cell'));
@@ -2759,7 +2759,7 @@ describe('RecordPanel — several records coloured as xEdit\'s Compare Selected 
   });
 
   it('gives no cell a state when the label column is focused', async () => {
-    renderPanel(compare, { plugins: [{ name: 'A.esp', isTracked: true }] });
+    renderPanel(compare, { plugins: [{ name: 'A.esp', isSourcePlugin: true }] });
     await screen.findByText('Ammo Name');
     fireEvent.click(screen.getByText('Ammo Name'));
 

@@ -59,7 +59,7 @@ public sealed class CopyAsOverrideLocalizedTests : IDisposable
     }
 
     [Fact]
-    public void CopyRecordAsOverride_FromAnUntrackedLocalizedSource_CarriesItsTranslatedStrings()
+    public void CopyRecordAsOverride_FromANonSourcePluginLocalizedSource_CarriesItsTranslatedStrings()
     {
         var destination = new PluginAddress(DestinationPluginName, DestinationOrigin);
 

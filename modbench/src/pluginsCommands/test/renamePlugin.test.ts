@@ -11,11 +11,11 @@ import { present } from '../../ports/present';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
-const PLUGIN = { name: 'Tracked Patch Mod.esp', origin: 'Tracked Patch Mod' };
+const PLUGIN = { name: 'Source Patch Mod.esp', origin: 'Source Patch Mod' };
 const CHILD = { name: 'Child.esp', origin: 'ChildMod' };
 const OTHER = { name: 'Other.esp', origin: 'OtherMod' };
 
-const CHANGES = { treeName: 'Tracked Patch Mod.esp', moves: [{ from: '/m/plugin-source/Tracked Patch Mod.esp', to: '/m/plugin-source/Renamed Patch.esp' }], deletions: [], documents: [] };
+const CHANGES = { treeName: 'Source Patch Mod.esp', moves: [{ from: '/m/plugin-source/Source Patch Mod.esp', to: '/m/plugin-source/Renamed Patch.esp' }], deletions: [], documents: [] };
 
 describe('renamePlugin — the plugin source first, then the file and its lines', () => {
   let client: InMemoryMEditClient;
@@ -49,11 +49,11 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     expect(client.calls).toEqual([
       { method: 'getCreatablePluginExtensions', args: [] },
       { method: 'getRenameSourceChanges', args: [PLUGIN, 'Renamed Patch.esp'] },
-      { method: 'moveLastWritten', args: [PLUGIN, 'Tracked Patch Mod.esp', 'Renamed Patch.esp'] },
+      { method: 'moveLastWritten', args: [PLUGIN, 'Source Patch Mod.esp', 'Renamed Patch.esp'] },
     ]);
     expect(applied).toEqual([CHANGES]);
     expect(fake.calls).toEqual([
-      { verb: 'renamePlugin', origin: { kind: 'mod', name: 'Tracked Patch Mod' }, from: 'Tracked Patch Mod.esp', to: 'Renamed Patch.esp', gameRelease: 'Fallout4' },
+      { verb: 'renamePlugin', origin: { kind: 'mod', name: 'Source Patch Mod' }, from: 'Source Patch Mod.esp', to: 'Renamed Patch.esp', gameRelease: 'Fallout4' },
     ]);
   });
 
@@ -69,7 +69,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     const heldPlugins = [{ origin: { kind: 'mod' as const, name: PLUGIN.origin }, name: 'Renamed Patch.esp' }];
     const { fake, result } = rename('Renamed Patch.esp', PLUGIN, { heldPlugins });
 
-    expect(await result).toEqual({ applied: false, sourceRenamed: false, refusal: '"Tracked Patch Mod" already holds "Renamed Patch.esp".' });
+    expect(await result).toEqual({ applied: false, sourceRenamed: false, refusal: '"Source Patch Mod" already holds "Renamed Patch.esp".' });
     expect(client.calls.map((call) => call.method)).toEqual(['getCreatablePluginExtensions']);
     expect(apply).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);
@@ -80,18 +80,18 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     const { fake, result } = rename('Renamed Patch.esp');
 
     expect(await result).toEqual({
-      applied: false, sourceRenamed: false, refusal: 'Could not check "Renamed Patch.esp" for "Tracked Patch Mod.esp" (Tracked Patch Mod).', detail: 'mEdit is not ready.',
+      applied: false, sourceRenamed: false, refusal: 'Could not check "Renamed Patch.esp" for "Source Patch Mod.esp" (Source Patch Mod).', detail: 'mEdit is not ready.',
     });
     expect(apply).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);
   });
 
   it('applies nothing and renames nothing when mEdit refuses the changes, and carries the refusal', async () => {
-    client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename the source of "Tracked Patch Mod.esp" — NotTracked' });
+    client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename the source of "Source Patch Mod.esp" — NotSourcePlugin' });
     const { fake, result } = rename('Renamed Patch.esp');
 
     expect(await result).toEqual({
-      applied: false, sourceRenamed: false, refusal: 'Could not rename the source of "Tracked Patch Mod.esp" — NotTracked',
+      applied: false, sourceRenamed: false, refusal: 'Could not rename the source of "Source Patch Mod.esp" — NotSourcePlugin',
     });
     expect(apply).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);
@@ -127,7 +127,7 @@ describe('renameRefusal — what the prompt is told before the rename is asked f
   }).adapter).renameRefusal(PLUGIN, newName, ['.esm', '.esl', '.esp']);
 
   it('refuses a name the plugin\'s origin holds, and not one another origin holds', async () => {
-    expect(await refusal('Renamed Patch.esp', 'Tracked Patch Mod')).toBe('"Tracked Patch Mod" already holds "Renamed Patch.esp".');
+    expect(await refusal('Renamed Patch.esp', 'Source Patch Mod')).toBe('"Source Patch Mod" already holds "Renamed Patch.esp".');
     expect(await refusal('Renamed Patch.esp', 'OtherMod')).toBeUndefined();
   });
 });
@@ -159,7 +159,7 @@ describe('confirmRename — what is known before any write', () => {
 
     expect(ask.asked).toHaveLength(1);
     const question = present(ask.asked[0], 'the one recorded question');
-    expect(question.message).toContain('Tracked Patch Mod.esp');
+    expect(question.message).toContain('Source Patch Mod.esp');
     expect(question.buttons).toEqual(['Rename']);
     expect(question.detail).toContain('Child.esp (ChildMod)');
     expect(question.detail).toContain('Other.esp (OtherMod)');

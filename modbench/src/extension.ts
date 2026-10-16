@@ -2,13 +2,13 @@
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
 import * as vscode from 'vscode';
-import { createMEditClient, stopMEditClient, type MEditClient } from './client';
+import { createMEditClient, stopMEditClient, type MEditClient, type ReadModStatus } from './client';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
-import { createEditor, trackedRepositoriesOver, type Editor } from './editor';
+import { createEditor, sourceModRepositoriesOver, type Editor } from './editor';
 import { createSourceLanguage, formKeyLocation } from './sourceLanguage';
 import { saveModPluginSource } from './sourceLanguage/dirtyPluginSource';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
@@ -23,7 +23,6 @@ import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { sevenZip, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
-import type { ReadModStatus } from './agent/modStatuses';
 import { agentPort, attachPort, gameDirectoryOverrides, inheritedPythonPath, onGameDirectoryChange, onStringsLanguageChange, onTerminalEnvChange, stringsLanguage } from './workspaceConfig';
 import { createPlugins, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
@@ -234,16 +233,16 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const ownedByViews = ownership();
   const opened = openInstance(outputChannel, ownedByViews.own);
-  const trackedRepositories = trackedRepositoriesOver({ client: meditClient, outputChannel, ...opened.facts });
+  const sourceModRepositories = sourceModRepositoriesOver({ client: meditClient, outputChannel, ...opened.facts });
   const sourceEditing: SourceEditing = {
     applyWorkspaceChanges: (items) => applyWorkspaceChanges(items),
     oneAtATime: oneAtATime(),
-    refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
+    refreshSourceControlFor: sourceModRepositories.refreshSourceControlFor,
   };
   const reporterFor = (tag: string) => makeReporter(outputChannel, tag);
   const plugins = createPlugins({
     client: meditClient, facts: opened.facts, channel: outputChannel, reporterFor,
-    registerRepositories: trackedRepositories.registerRepositories, ask: askQuestion, sourceEditing,
+    registerRepositories: sourceModRepositories.registerRepositories, ask: askQuestion, sourceEditing,
   });
   const editor = createEditor({
     context, meditClient, outputChannel,

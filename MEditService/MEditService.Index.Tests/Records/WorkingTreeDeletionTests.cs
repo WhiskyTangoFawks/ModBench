@@ -42,7 +42,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
                 mod.Npcs.Set(basePlugin.Npcs.First(n => n.FormKey == npc).DeepCopy());
             }, origin: "WinnerMod")
             .BuildScattered()
-            .Tracked();
+            .SourcePlugin();
         _base = _fixture.Plugins.Single(p => p.Name == "Base.esm");
         _winner = _fixture.Plugins.Single(p => p.Name == "Winner.esp");
         _baseKey = _base.KeyOf();

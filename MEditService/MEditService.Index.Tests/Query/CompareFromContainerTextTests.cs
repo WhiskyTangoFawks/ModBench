@@ -44,7 +44,7 @@ public sealed class CompareFromContainerTextTests : IDisposable
                 mod.Worldspaces.Add(world);
             }, origin: Plugin.Origin)
             .BuildScattered()
-            .Tracked();
+            .SourcePlugin();
         (_room, _placed, _world, _topCellRef) = (room.Require(), placed.Require(), world.Require(), topCellRef.Require());
         _loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(_log)));
         _index = Indexes.Reconciled(_fixture, loggerFactory: _loggerFactory);

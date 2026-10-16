@@ -11,7 +11,7 @@ public sealed class CopyRecordChangesHandlerTests
     [Theory]
     [InlineData(CopyMode.New)]
     [InlineData(CopyMode.Override)]
-    public void CopyingTwoRecordsIntoTwoDestinations_WhereOneIsUntracked_LandsInTheTrackedOne_AndAnswersPerItem(CopyMode mode)
+    public void CopyingTwoRecordsIntoTwoDestinations_WhereOneIsNonSourcePlugin_LandsInTheSourcePluginOne_AndAnswersPerItem(CopyMode mode)
     {
         using var mod = CopyFixture.Create();
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
@@ -25,7 +25,7 @@ public sealed class CopyRecordChangesHandlerTests
         Assert.Equal(
             [new CopyItem(npc, mod.SourcePlugin), new CopyItem(faction, mod.SourcePlugin)],
             result.Refused.Select(refused => refused.Item));
-        Assert.All(result.Refused, refused => Assert.Equal(RecordEditRefusal.PluginNotTracked, refused.Refusal));
+        Assert.All(result.Refused, refused => Assert.Equal(RecordEditRefusal.PluginNotSourcePlugin, refused.Refusal));
     }
 
     [Theory]
@@ -115,7 +115,7 @@ public sealed class CopyRecordChangesHandlerTests
     }
 
     [Fact]
-    public void CopyChanges_OfATrackedSourcesRecord_CarryTheSourcesUnsavedText()
+    public void CopyChanges_OfASourcePluginSourcesRecord_CarryTheSourcesUnsavedText()
     {
         using var mod = CopyFixture.Create(trackSource: true);
         var npc = mod.Document(mod.SourcePlugin, mod.SourceNpc.ToString()).Require();

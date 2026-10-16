@@ -19,12 +19,12 @@ export interface PluginStatus {
 
 export type StatusIcon = 'error' | 'warning';
 
-export type PluginPlace = 'inTrackedMod' | 'inUntrackedMod' | 'inOverwrite';
+export type PluginPlace = 'inSourceMod' | 'inNonSourceMod' | 'inOverwrite';
 
 /** The instance value's two facts about where a mod's plugins live. */
 export interface PlaceFacts {
   readonly modOfOrigin: (origin: string) => string | undefined;
-  readonly trackedMods: ReadonlySet<string>;
+  readonly listedSourceMods: ReadonlySet<string>;
 }
 
 /** What a plugin row expands into: its records, the error row naming why not, or the still-indexing row. */
@@ -40,7 +40,7 @@ const CHANGED_OUTSIDE_TEXT = 'Changed outside Modbench: its bytes differ from wh
 
 interface PluginRead {
   readOnly: boolean;
-  tracked: boolean;
+  sourcePlugin: boolean;
   sourceUnreadable: UnreadableSource | undefined;
   masterIssues?: string[];
   parseFailure: boolean;
@@ -77,11 +77,11 @@ const changedOutside = (changed: boolean): PluginStatus | undefined => !changed 
 const malformed = (diagnosisTexts: readonly string[]): PluginStatus | undefined => diagnosisTexts.length === 0 ? undefined
   : { kind: 'malformed', words: 'malformed', tooltipLine: `Malformed: ${diagnosisTexts.join('; ')}` };
 
-export function placeOf(origin: string, { modOfOrigin, trackedMods }: PlaceFacts): PluginPlace | undefined {
+export function placeOf(origin: string, { modOfOrigin, listedSourceMods }: PlaceFacts): PluginPlace | undefined {
   if (origin === OVERWRITE_ORIGIN) return 'inOverwrite';
   const mod = modOfOrigin(origin);
   if (mod === undefined) return undefined;
-  return trackedMods.has(mod) ? 'inTrackedMod' : 'inUntrackedMod';
+  return listedSourceMods.has(mod) ? 'inSourceMod' : 'inNonSourceMod';
 }
 
 /** mEdit's answers about each plugin, joined by (origin, filename), and the status each row
@@ -146,7 +146,7 @@ export class PluginFacts {
     const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
       reads.set(p, {
-        readOnly: !pluginCanBeEdited(p), tracked: p.isTracked,
+        readOnly: !pluginCanBeEdited(p), sourcePlugin: p.isSourcePlugin,
         sourceUnreadable: p.pluginSourceUnreadable ?? undefined, parseFailure: p.hasParseFailure,
         masterIssues: p.masterIssues ?? this.reads.get(p)?.masterIssues,
       });
@@ -168,7 +168,7 @@ export class PluginFacts {
     for (const r of reports) this.diagnosisTexts.append({ name: r.plugin, origin: r.origin }, r.text);
   }
 
-  /** Each settle of a tracked mod names every plugin of it that changed outside Modbench, so it
+  /** Each settle of a source mod names every plugin of it that changed outside Modbench, so it
    *  replaces what the mod's last settle named. */
   externalChange(event: NotificationPayloads['external-change']): void {
     this.changedByMod.set(event.origin, event.changedPlugins.map(({ name }) => ({ name, origin: event.origin })));
@@ -257,18 +257,18 @@ export class PluginFacts {
     return [...lines, ...this.statuses(address).map((s) => s.tooltipLine)];
   }
 
-  /** Nothing until mEdit answers: an unknown is neither tracked nor untracked, nor editable. */
+  /** Nothing until mEdit answers: an unknown is neither source plugin nor non-source plugin, nor editable. */
   contextFlags(address: PluginAddress): string[] {
     const read = this.reads.get(address);
     const flags: string[] = [];
-    if (read !== undefined) flags.push(read.tracked ? 'tracked' : 'untracked');
+    if (read !== undefined) flags.push(read.sourcePlugin ? 'sourcePlugin' : 'nonSourcePlugin');
     if (read?.readOnly === false) flags.push('editable');
     return flags;
   }
 
   conditions(address: PluginAddress): PluginConditions {
     const read = this.reads.get(address);
-    return { tracked: read?.tracked === true, editable: read?.readOnly === false };
+    return { editable: read?.readOnly === false };
   }
 
   /** What the Problems panel shows, read from the same answers as the rows' statuses. */

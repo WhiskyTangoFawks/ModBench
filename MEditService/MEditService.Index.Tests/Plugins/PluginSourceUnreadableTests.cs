@@ -21,7 +21,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
         _fixture = new PluginFixtureBuilder("plugin-source-unreadable")
             .WithPlugin(PluginName, mod => npc = mod.Npcs.AddNew(NpcEditorId).FormKey, origin: "FixtureMod")
             .BuildScattered()
-            .Tracked();
+            .SourcePlugin();
         _entry = _fixture.Plugins.Single();
         _npc = npc.ToString();
     }

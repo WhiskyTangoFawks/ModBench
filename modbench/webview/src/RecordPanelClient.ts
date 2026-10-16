@@ -24,7 +24,7 @@ interface LoadedPanel {
   ok: true; immutableSet: Set<ColumnKey> | null;
   // Null exactly when immutableSet is, but degrading the opposite way: to "nothing is
   // editable" (commands.md, No dead entries). Read fail-closed.
-  trackedSet: Set<ColumnKey> | null;
+  sourcePluginSet: Set<ColumnKey> | null;
   sourceUnreadableReasons: Map<ColumnKey, UnreadableSource> | null;
   // The columns whose copy can be written; null exactly when immutableSet is.
   editableSet: Set<ColumnKey> | null;
@@ -82,7 +82,7 @@ export function createRecordPanelClient(): RecordPanelClient {
         ok: true,
         ...read,
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p))) : null,
-        trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p))) : null,
+        sourcePluginSet: pluginList ? new Set(pluginList.filter(p => p.isSourcePlugin).map(p => columnKey(p))) : null,
         editableSet: pluginList ? new Set(pluginList.filter(pluginCanBeEdited).map(p => columnKey(p))) : null,
         sourceUnreadableReasons: pluginList ? unreadableSources(pluginList) : null,
         modsByOrigin: answer.modsByOrigin,

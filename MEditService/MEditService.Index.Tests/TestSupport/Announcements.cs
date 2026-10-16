@@ -31,14 +31,14 @@ internal static class Announcements
         return notifications.Since(start);
     }
 
-    /// <summary>An untracked plugin's binary rewritten: announced as the plugin.</summary>
+    /// <summary>A non-source plugin's binary rewritten: announced as the plugin.</summary>
     internal static Predicate<INotification> Touched(LoadOrderEntry plugin)
     {
         PluginBinaries.Touch(plugin.Path);
         return PluginChanged(plugin);
     }
 
-    /// <summary>A tracked plugin's one NPC renamed on disk under a new name: announced as its rows.</summary>
+    /// <summary>A source plugin's one NPC renamed on disk under a new name: announced as its rows.</summary>
     internal static Predicate<INotification> RenamedByHand(this LoadOrderEntry plugin, OpenedIndex index)
     {
         var listed = index.Queries.GetRecords(["npc_"], plugin.KeyOf(), search: null, limit: 1, offset: 0).Value().Items.Single();

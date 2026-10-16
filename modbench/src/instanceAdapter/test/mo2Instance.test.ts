@@ -170,7 +170,7 @@ describe('the MO2 Instance adapter', () => {
 
         const plugins = await pluginsOver(withGame, 'Secondary');
 
-        expect(['unofficial fallout 4 patch.esp', 'tracked patch mod.esp'].map((key) => plugins.has(key))).toEqual([true, false]);
+        expect(['unofficial fallout 4 patch.esp', 'source patch mod.esp'].map((key) => plugins.has(key))).toEqual([true, false]);
       });
 
       it('answers no plugin of a disabled mod', async () => {
@@ -178,7 +178,7 @@ describe('the MO2 Instance adapter', () => {
 
         const plugins = await pluginsOver(withGame);
 
-        expect(['tracked patch mod.esp', 'disabled.esp'].map((key) => plugins.has(key))).toEqual([true, false]);
+        expect(['source patch mod.esp', 'disabled.esp'].map((key) => plugins.has(key))).toEqual([true, false]);
       });
 
       it('answers no plugins while the game folder is not found', async () => {
@@ -196,7 +196,7 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(path, complete);
           await vi.advanceTimersByTimeAsync(1000);
 
-          expect((await plugins).has('tracked patch mod.esp')).toBe(true);
+          expect((await plugins).has('source patch mod.esp')).toBe(true);
         } finally {
           vi.useRealTimers();
         }
@@ -223,7 +223,7 @@ describe('the MO2 Instance adapter', () => {
             creationClubList: ['ccBGSFO4044-HellfirePowerArmor.esl'],
           });
           expect(reading.pluginOrder).toEqual([
-            { name: 'NonAsciiRetexture.esp', enabled: true }, { name: 'Tracked Patch Mod.esp', enabled: true },
+            { name: 'NonAsciiRetexture.esp', enabled: true }, { name: 'Source Patch Mod.esp', enabled: true },
             { name: 'Unofficial Fallout 4 Patch.esp', enabled: true }, { name: 'ccSBJFO4003-Grenade.esl', enabled: true },
           ]);
         } finally {
@@ -236,7 +236,7 @@ describe('the MO2 Instance adapter', () => {
 
         expect(mods).toHaveLength(10);
         expect(mods.map((entry) => `${entry.kind}:${entry.name}`).slice(0, 4)).toEqual([
-          'mod:Ñoño\'s Retexture', 'mod:Tracked Patch Mod', 'mod:SKK Fast Start new game (Fallout 4)', 'separator:Unassigned (Modlist Development)',
+          'mod:Ñoño\'s Retexture', 'mod:Source Patch Mod', 'mod:SKK Fast Start new game (Fallout 4)', 'separator:Unassigned (Modlist Development)',
         ]);
         expect(mods[0]).toMatchObject({ version: '1.0.0', nexusId: '99001' });
         expect(mods[2]).toMatchObject({
@@ -248,7 +248,7 @@ describe('the MO2 Instance adapter', () => {
         const { modGroups } = await adapter.reading();
 
         expect(modGroups.groups.map(({ separator, mods }) => [separator.name, mods.map((m) => m.name)])).toEqual([
-          ['Unassigned (Modlist Development)', ['Ñoño\'s Retexture', 'Tracked Patch Mod', 'SKK Fast Start new game (Fallout 4)']],
+          ['Unassigned (Modlist Development)', ['Ñoño\'s Retexture', 'Source Patch Mod', 'SKK Fast Start new game (Fallout 4)']],
           ['Radfall - All-In-One Survival Overhaul', ['[NODELETE] Radfall', 'Unofficial Fallout 4 Patch']],
         ]);
         expect(modGroups.ungrouped.map((m) => m.name)).toEqual(['ENBoost - 12k', 'Harder VATS', 'Cracked and Smudged Pip-Boy Screen']);
@@ -274,7 +274,7 @@ describe('the MO2 Instance adapter', () => {
         expect(reading.runtimeOutput.files.map((file) => file.relativePath)).toEqual(['F4SE/Plugins/SomePlugin.log']);
         expect([...reading.modFiles.keys()]).toEqual(reading.mods.filter((entry) => entry.kind === 'mod').map((entry) => entry.name));
         expect(reading.modFiles.get('Ñoño\'s Retexture')?.files).toHaveLength(2);
-        expect(reading.modFiles.get('Tracked Patch Mod')?.files).toHaveLength(1);
+        expect(reading.modFiles.get('Source Patch Mod')?.files).toHaveLength(1);
         expect(reading.modFiles.get('Harder VATS')?.files).toEqual([]);
       });
 
@@ -501,7 +501,7 @@ describe('the MO2 Instance adapter', () => {
 
       expect(modNames(order).slice(0, 4)).toEqual([
         "mod:Ñoño's Retexture:true",
-        'mod:Tracked Patch Mod:true',
+        'mod:Source Patch Mod:true',
         'mod:SKK Fast Start new game (Fallout 4):true',
         'separator:Unassigned (Modlist Development):false',
       ]);
@@ -645,7 +645,7 @@ describe('the MO2 Instance adapter', () => {
     it('answers the plugins in plugin order, with their enabled state', async () => {
       expect(await source.pluginOrder('Default')).toEqual([
         { name: 'NonAsciiRetexture.esp', enabled: true },
-        { name: 'Tracked Patch Mod.esp', enabled: true },
+        { name: 'Source Patch Mod.esp', enabled: true },
         { name: 'Unofficial Fallout 4 Patch.esp', enabled: true },
         { name: 'ccSBJFO4003-Grenade.esl', enabled: true },
       ]);
@@ -2213,7 +2213,7 @@ describe('the MO2 Instance adapter', () => {
         'separator:Orphan:false',
         'mod:New Mod:false',
         "mod:Ñoño's Retexture:true",
-        'mod:Tracked Patch Mod:true',
+        'mod:Source Patch Mod:true',
         'mod:SKK Fast Start new game (Fallout 4):true',
         'separator:Unassigned (Modlist Development):false',
         'mod:[NODELETE] Radfall:true',
@@ -2308,7 +2308,7 @@ describe('the MO2 Instance adapter', () => {
       const before = await text(root, DEFAULT_MODLIST);
       const mtime = (await stat(join(root, DEFAULT_MODLIST))).mtimeMs;
 
-      expect(await change([{ kind: 'enable', mod: 'Tracked Patch Mod', enabled: true }])).toMatchObject({ wrote: false });
+      expect(await change([{ kind: 'enable', mod: 'Source Patch Mod', enabled: true }])).toMatchObject({ wrote: false });
 
       expect(await text(root, DEFAULT_MODLIST)).toBe(before);
       expect((await stat(join(root, DEFAULT_MODLIST))).mtimeMs).toBe(mtime);
@@ -2576,7 +2576,7 @@ describe('the MO2 Instance adapter', () => {
       const before = await snapshotTree(root);
 
       const written = await change([
-        { kind: 'enable', plugin: 'Tracked Patch Mod.esp', enabled: false },
+        { kind: 'enable', plugin: 'Source Patch Mod.esp', enabled: false },
         { kind: 'drop', plugin: 'NonAsciiRetexture.esp' },
         { kind: 'add', plugin: 'New.esp' },
         { kind: 'move', plugins: ['ccSBJFO4003-Grenade.esl'], toIndex: 0 },
@@ -2586,7 +2586,7 @@ describe('the MO2 Instance adapter', () => {
       assertOnlyChanged(before, await snapshotTree(root), new Set([DEFAULT_PLUGINS]));
       expect(await source.pluginOrder('Default')).toEqual([
         { name: 'ccSBJFO4003-Grenade.esl', enabled: true },
-        { name: 'Tracked Patch Mod.esp', enabled: false },
+        { name: 'Source Patch Mod.esp', enabled: false },
         { name: 'Unofficial Fallout 4 Patch.esp', enabled: true },
         { name: 'New.esp', enabled: false },
       ]);
@@ -2606,14 +2606,14 @@ describe('the MO2 Instance adapter', () => {
 
     it('finds each plugin a change names in any case, and writes it as plugin order lists it, a filename comparing as the game compares it, ignoring case', async () => {
       await change([
-        { kind: 'enable', plugin: 'tracked patch mod.esp', enabled: false },
+        { kind: 'enable', plugin: 'source patch mod.esp', enabled: false },
         { kind: 'move', plugins: ['CCSBJFO4003-GRENADE.ESL'], toIndex: 0 },
         { kind: 'drop', plugin: 'nonasciiretexture.ESP' },
       ]);
 
       expect(await source.pluginOrder('Default')).toEqual([
         { name: 'ccSBJFO4003-Grenade.esl', enabled: true },
-        { name: 'Tracked Patch Mod.esp', enabled: false },
+        { name: 'Source Patch Mod.esp', enabled: false },
         { name: 'Unofficial Fallout 4 Patch.esp', enabled: true },
       ]);
     });
@@ -2621,12 +2621,12 @@ describe('the MO2 Instance adapter', () => {
     it('writes nothing to add a plugin plugin order already lists in another case, doing nothing not being an error so a gesture that raced plugin sync to the same line does not fail', async () => {
       const before = await source.pluginOrder('Default');
 
-      expect(await change([{ kind: 'add', plugin: 'TRACKED PATCH MOD.ESP' }])).toEqual({ wrote: false });
+      expect(await change([{ kind: 'add', plugin: 'SOURCE PATCH MOD.ESP' }])).toEqual({ wrote: false });
       expect(await source.pluginOrder('Default')).toEqual(before);
     });
 
     it('writes nothing when the changes are already true of plugin order', async () => {
-      expect(await change([{ kind: 'enable', plugin: 'Tracked Patch Mod.esp', enabled: true }])).toEqual({ wrote: false });
+      expect(await change([{ kind: 'enable', plugin: 'Source Patch Mod.esp', enabled: true }])).toEqual({ wrote: false });
     });
 
     it.each<[string, PluginOrderChange]>([
@@ -2636,7 +2636,7 @@ describe('the MO2 Instance adapter', () => {
     ])('rejects %s naming a plugin that is not there, and writes nothing, not leaving the text as it was and dropping the change in silence', async (_, bad) => {
       const before = await text(root, DEFAULT_PLUGINS);
 
-      await expect(change([{ kind: 'enable', plugin: 'Tracked Patch Mod.esp', enabled: false }, bad]))
+      await expect(change([{ kind: 'enable', plugin: 'Source Patch Mod.esp', enabled: false }, bad]))
         .rejects.toThrow(/plugins\.txt/);
 
       expect(await text(root, DEFAULT_PLUGINS)).toBe(before);

@@ -35,7 +35,7 @@ public sealed class ValidateByStampsTests : IDisposable
             }, origin: "FixtureMod")
             .WithPlugin("Partner.esp", mod => mod.Npcs.AddNew("PartnerNpc"), origin: "PartnerMod")
             .BuildScattered()
-            .Tracked();
+            .SourcePlugin();
         _mod = _fixture.Plugins.Single(p => p.Name == "Fixture.esp");
         _partner = _fixture.Plugins.Single(p => p.Name == "Partner.esp");
         _npc = npc.ToString();
@@ -66,7 +66,7 @@ public sealed class ValidateByStampsTests : IDisposable
     private void ValidateUntilSourceUnreadable() =>
         _index.NextSnapshotUntil(() => SourceUnreadable, "the plugin file read in place of its source");
 
-    private bool SourceUnreadable => _index.PluginRowOf(_mod.KeyOf()) is { IsTracked: true, PluginSourceUnreadable: not null };
+    private bool SourceUnreadable => _index.PluginRowOf(_mod.KeyOf()) is { IsSourcePlugin: true, PluginSourceUnreadable: not null };
 
     private string NpcFile => _mod.SourceFileOf(Npc);
 
@@ -235,11 +235,11 @@ public sealed class ValidateByStampsTests : IDisposable
     public void ValidatingEveryPlugin_WhenOnePluginsTreeCannotBeRead_StillValidatesTheOthers()
     {
         FormKey other = default;
-        using var fixture = new PluginFixtureBuilder("validate-two-tracked")
+        using var fixture = new PluginFixtureBuilder("validate-two-sourcePlugin")
             .WithPlugin("Broken.esp", mod => mod.Npcs.AddNew("BrokenNpc"), origin: "BrokenMod")
             .WithPlugin("Sound.esp", mod => other = mod.Npcs.AddNew("SoundNpc").FormKey, origin: "SoundMod")
             .BuildScattered()
-            .Tracked();
+            .SourcePlugin();
         using var index = Indexes.Reconciled(fixture);
         var broken = fixture.Plugins.Single(p => p.Name == "Broken.esp");
         var sound = fixture.Plugins.Single(p => p.Name == "Sound.esp");
@@ -249,7 +249,7 @@ public sealed class ValidateByStampsTests : IDisposable
         sound.HandEdit(index.DocumentOf(other.ToString(), sound.KeyOf()), "\"SoundNpc\"", "\"EditedSoundNpc\"");
 
         index.NextSnapshotUntil(
-            () => index.PluginRowOf(broken.KeyOf()) is { IsTracked: true, PluginSourceUnreadable: not null },
+            () => index.PluginRowOf(broken.KeyOf()) is { IsSourcePlugin: true, PluginSourceUnreadable: not null },
             "the broken plugin's file read in place of its source");
 
         Assert.Equal("EditedSoundNpc", index.DocumentOf(other.ToString(), sound.KeyOf()).EditorId);

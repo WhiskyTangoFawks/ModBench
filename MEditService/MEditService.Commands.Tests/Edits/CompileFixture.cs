@@ -10,9 +10,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A real tracked mod folder and the load order value over it, and nothing else: compile
+/// <summary>A real source mod folder and the load order value over it, and nothing else: compile
 /// reads only those (ADR-0015).</summary>
-public sealed class CompileFixture : TestInstance, ITrackedPlugin
+public sealed class CompileFixture : TestInstance, ISourcePlugin
 {
     public const string Origin = "CompileMod";
     public const string PluginName = "Compile.esp";

@@ -51,10 +51,10 @@ export interface PluginsKeyContext {
   readonly holdsPluginLine: boolean;
   readonly holdsEnabledPlugin: boolean;
   readonly holdsDisabledPlugin: boolean;
-  readonly allInUntrackedMod: boolean;
-  readonly allInTrackedMod: boolean;
+  readonly allInNonSourceMod: boolean;
+  readonly allInSourceMod: boolean;
   readonly singleCreatable: boolean;
-  readonly singleTracked: boolean;
+  readonly singleSourcePlugin: boolean;
   readonly allDeletableRecords: boolean;
   readonly allRecords: boolean;
   readonly selectionToggle?: 'enable' | 'disable';
@@ -72,15 +72,15 @@ export function pluginsKeyContext(
     holdsPluginLine: firstPlugin !== undefined,
     holdsEnabledPlugin: plugins.some(isEnabled),
     holdsDisabledPlugin: plugins.some((row) => !isEnabled(row)),
-    allInUntrackedMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'inUntrackedMod')),
-    allInTrackedMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'inTrackedMod')),
+    allInNonSourceMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'inNonSourceMod')),
+    allInSourceMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'inSourceMod')),
     // A plugin row carries no creatable fact and needs none: its own pick lists only creatable
     // types (plugins.md, Create record, story 1; "No dead entries").
     singleCreatable: creatableCandidate !== undefined
-      && hasFlags(creatableCandidate, 'tracked', 'editable')
+      && hasFlags(creatableCandidate, 'editable')
       && (creatableCandidate.kind === 'plugin' || hasFlags(creatableCandidate, 'creatable') || isContainerRow(creatableCandidate)),
-    singleTracked: hasFlags(onlySelected(selection, 'plugin'), 'tracked'),
-    allDeletableRecords: every(selection, (row) => isOf(RECORD_ROW_KINDS)(row) && hasFlags(row, 'tracked', 'editable')),
+    singleSourcePlugin: hasFlags(onlySelected(selection, 'plugin'), 'sourcePlugin'),
+    allDeletableRecords: every(selection, (row) => isOf(RECORD_ROW_KINDS)(row) && hasFlags(row, 'editable')),
     allRecords: every(selection, isOf(RECORD_ROW_KINDS)),
     selectionToggle: firstPlugin && (isEnabled(firstPlugin) ? 'disable' : 'enable'),
   };

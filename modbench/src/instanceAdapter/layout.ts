@@ -160,7 +160,7 @@ export const BUILD_OUTPUT_KEY = 'output';
 /** The file in a source folder that says what its build makes (ADR-0007). */
 export const buildConfigurationFile = (sourceFolder: string): string => join(sourceFolder, BUILD_CONFIGURATION_FILE);
 
-/** The git directory whose presence is what "tracked" means (ADR-0007). */
+/** The git directory whose presence is what "source mod" means (ADR-0007). */
 export const repositoryGitDir = (sourceFolder: string): string => join(sourceFolder, GIT_DIR);
 
 /** A repository appearing at, or vanishing from, the instance root. */

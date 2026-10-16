@@ -167,14 +167,14 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task AfterInit_TheNextSnapshotReportsThePluginTracked()
+    public async Task AfterInit_TheNextSnapshotReportsThePluginSourcePlugin()
     {
         await Loaded();
-        Assert.False((await Client.Plugin(Plugin)).GetProperty("isTracked").GetBoolean());
+        Assert.False((await Client.Plugin(Plugin)).GetProperty("isSourcePlugin").GetBoolean());
 
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(_instance);
 
-        await Client.PluginReportsTracked(Plugin);
+        await Client.PluginReportsSourcePlugin(Plugin);
     }
 }

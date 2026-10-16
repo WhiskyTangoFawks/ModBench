@@ -23,16 +23,16 @@ public sealed class EditRecordTraceTests : HostedTests
             .WithPlugin(OtherPlugin, mod => mod.Npcs.AddNew("DestinationNpc"), origin: OtherOrigin)
             .BuildScattered();
 
-    private async Task<ScatteredFixtureData> Loaded(params string[] tracked)
+    private async Task<ScatteredFixtureData> Loaded(params string[] sourcePlugin)
     {
         var fx = TwoMods();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        foreach (var origin in tracked)
+        foreach (var origin in sourcePlugin)
             (await Client.Init(origin)).EnsureSuccessStatusCode();
-        if (tracked.Length == 0) return fx;
+        if (sourcePlugin.Length == 0) return fx;
 
         await Client.NextSnapshot(fx);
-        foreach (var plugin in fx.Plugins.Where(p => tracked.Contains(p.Origin))) await Client.PluginReportsTracked(plugin.Name);
+        foreach (var plugin in fx.Plugins.Where(p => sourcePlugin.Contains(p.Origin))) await Client.PluginReportsSourcePlugin(plugin.Name);
         return fx;
     }
 
@@ -124,11 +124,11 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.Equal(formKey, (await Client.Record(formKey)).GetProperty("formKey").GetString());
     }
 
-    private const string UntrackedPlugin = "Untracked.esp";
-    private const string UntrackedOrigin = "NonSourceMod";
+    private const string NonSourcePlugin = "NonSourcePlugin.esp";
+    private const string NonSourcePluginOrigin = "NonSourceMod";
 
     [Fact]
-    public async Task EditingAnUntrackedPlugin_IsRefusedWithATypedRefusal()
+    public async Task EditingANonSourcePlugin_IsRefusedWithATypedRefusal()
     {
         using var fx = await Loaded();
 
@@ -136,7 +136,7 @@ public sealed class EditRecordTraceTests : HostedTests
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await Body(response);
-        Assert.Equal("PluginNotTracked", problem.GetProperty("refusal").GetString());
+        Assert.Equal("PluginNotSourcePlugin", problem.GetProperty("refusal").GetString());
         Assert.Contains("Decompile and commit", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
     }
 
@@ -177,7 +177,7 @@ public sealed class EditRecordTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task CopyingTwoRecordsAsOverrides_IntoTwoDestinations_WhereOneIsUntracked_LandsBothInTheTrackedOne_AndAnswersPerItem()
+    public async Task CopyingTwoRecordsAsOverrides_IntoTwoDestinations_WhereOneIsNonSourcePlugin_LandsBothInTheSourcePluginOne_AndAnswersPerItem()
     {
         using var fx = await TwoRecordsAndTwoDestinations();
         var records = await NpcFormKeys(Plugin, Origin);
@@ -188,13 +188,13 @@ public sealed class EditRecordTraceTests : HostedTests
             [(records[0], OtherPlugin), (records[1], OtherPlugin)],
             answer.GetProperty("applied").EnumerateArray().Select(CopiedInto).ToArray());
         Assert.Equal(
-            [(records[0], UntrackedPlugin, "PluginNotTracked"), (records[1], UntrackedPlugin, "PluginNotTracked")],
+            [(records[0], NonSourcePlugin, "PluginNotSourcePlugin"), (records[1], NonSourcePlugin, "PluginNotSourcePlugin")],
             answer.GetProperty("refused").EnumerateArray().Select(RefusedFrom).ToArray());
         await Client.NextSnapshot(fx);
         await Wire.Eventually(
             async () => (await NpcFormKeys(OtherPlugin, OtherOrigin)).Intersect(records).Count() == records.Length,
-            "the tracked destination to answer both copied records");
-        Assert.Empty((await NpcFormKeys(UntrackedPlugin, UntrackedOrigin)).Intersect(records));
+            "the source plugin destination to answer both copied records");
+        Assert.Empty((await NpcFormKeys(NonSourcePlugin, NonSourcePluginOrigin)).Intersect(records));
     }
 
     private async Task<ScatteredFixtureData> TwoRecordsAndTwoDestinations()
@@ -202,7 +202,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var fx = new PluginFixtureBuilder("trace-copy-several")
             .WithPlugin(Plugin, mod => { mod.Npcs.AddNew(Npc); mod.Npcs.AddNew("SecondEditableNpc"); }, origin: Origin)
             .WithPlugin(OtherPlugin, mod => mod.Npcs.AddNew("DestinationNpc"), origin: OtherOrigin)
-            .WithPlugin(UntrackedPlugin, mod => mod.Npcs.AddNew("UntrackedNpc"), origin: UntrackedOrigin)
+            .WithPlugin(NonSourcePlugin, mod => mod.Npcs.AddNew("NonSourcePluginNpc"), origin: NonSourcePluginOrigin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(OtherOrigin)).EnsureSuccessStatusCode();
@@ -213,7 +213,7 @@ public sealed class EditRecordTraceTests : HostedTests
     {
         var response = await Client.Copy(
             [(records[0], Plugin, Origin), (records[1], Plugin, Origin)], mode,
-            [(OtherPlugin, OtherOrigin), (UntrackedPlugin, UntrackedOrigin)]);
+            [(OtherPlugin, OtherOrigin), (NonSourcePlugin, NonSourcePluginOrigin)]);
         response.EnsureSuccessStatusCode();
         return response;
     }

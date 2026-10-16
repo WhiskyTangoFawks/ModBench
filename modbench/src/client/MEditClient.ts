@@ -138,7 +138,7 @@ export const UNLIMITED_RECORDS = 2147483647;
 /** The plugins that list a plugin's file name as a master, and the plugins whose masters mEdit could
  *  not read. */
 export type PluginDependants = components['schemas']['PluginDependantsResponse'];
-/** What is wrong in a tracked active plugin's source, per plugin: each problem names the referring
+/** What is wrong in a source plugin active plugin's source, per plugin: each problem names the referring
  *  record and its source file relative to the mod's source folder. */
 export type PluginProblems = components['schemas']['PluginProblems'];
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
@@ -243,6 +243,7 @@ export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestReques
 
 /** A mod's folder against its manifest (modlist-source.md, Status), or why it could not be read. */
 export type ModStatus = components['schemas']['ModStatus'];
+export type ReadModStatus = (mods: readonly string[]) => Promise<readonly ModStatus[] | ReadFailed>;
 
 /** A mod restore would destroy files in: each file whose bytes differ from what its provider fixes, and each file no line
  *  names, by its path in the mod folder, or a version or source in its metadata. */
@@ -388,8 +389,8 @@ export interface MEditClient {
   /** The rows one SQL SELECT over the index selects. A statement that is not a SELECT, or cannot run, fails with the database's reason. */
   selectRows(sql: string): Promise<unknown[] | ReadFailed>;
   getReferences(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
-  /** The referrers of the active plugins and of the inactive tracked ones. */
-  getReferencesInActiveOrTrackedPlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
+  /** The referrers of the active plugins and of the inactive source plugin ones. */
+  getReferencesInActiveOrSourcePlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
   /** Null: the plugin holds no such record. */
   getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed>;
   /** Null: the plugin holds no such record. `location` is the path of the copy's own file, of the file of the

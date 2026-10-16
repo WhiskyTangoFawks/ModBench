@@ -14,10 +14,10 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
 {
     private const string Resident = "Resident.esp";
     private const string Arriving = "Arriving.esp";
-    private const string Tracked = "Tracked.esp";
+    private const string SourcePlugin = "SourcePlugin.esp";
 
     private readonly ScatteredFixtureData _fixture;
-    private readonly string _trackedNpc;
+    private readonly string _sourcePluginNpc;
     private readonly LoadOrderHolder _holder = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly ConcurrentQueue<int> _listed = new();
@@ -28,14 +28,14 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
 
     public FilterBeforeAnnouncementTests()
     {
-        var trackedNpc = "";
+        var sourcePluginNpc = "";
         _fixture = new PluginFixtureBuilder("filter-before-announcement")
             .WithPlugin(Resident, mod => mod.Npcs.AddNew("ResidentNpc"))
-            .WithPlugin(Tracked, mod => trackedNpc = mod.Npcs.AddNew("TrackedNpc").FormKey.ToString(), origin: "SourceMod")
+            .WithPlugin(SourcePlugin, mod => sourcePluginNpc = mod.Npcs.AddNew("SourcePluginNpc").FormKey.ToString(), origin: "SourceMod")
             .WithPlugin(Arriving, mod => mod.Npcs.AddNew("ArrivingNpc"))
             .BuildScattered();
-        _trackedNpc = trackedNpc;
-        SourceMods.Track(Entry(Tracked));
+        _sourcePluginNpc = sourcePluginNpc;
+        SourceMods.Track(Entry(SourcePlugin));
         _loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider([], entry =>
         {
             if (_failingAt is { } logged && entry.Message.StartsWith(logged, StringComparison.Ordinal))
@@ -63,14 +63,14 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
     private void Reconcile(params string[] names) =>
         _index.Reconcile(_holder, _fixture.GameDirectory, [.. _fixture.Plugins.Where(p => names.Contains(p.Name))], GameRelease.Fallout4);
 
-    private void TrackedNpcEditedWhileOutOfTheLoadOrder_ToMatchTheFilter()
+    private void SourcePluginNpcEditedWhileOutOfTheLoadOrder_ToMatchTheFilter()
     {
-        Reconcile(Resident, Tracked);
-        var document = _index.DocumentOf(_trackedNpc, Entry(Tracked).KeyOf());
+        Reconcile(Resident, SourcePlugin);
+        var document = _index.DocumentOf(_sourcePluginNpc, Entry(SourcePlugin).KeyOf());
         _index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'EditedWhileAway'", "filter.sql");
         Reconcile(Resident);
-        Entry(Tracked).HandEdit(document, "\"TrackedNpc\"", "\"EditedWhileAway\"");
-        _announces = n => n is RowsChangedNotification rows && rows.Keys.Contains(_trackedNpc);
+        Entry(SourcePlugin).HandEdit(document, "\"SourcePluginNpc\"", "\"EditedWhileAway\"");
+        _announces = n => n is RowsChangedNotification rows && rows.Keys.Contains(_sourcePluginNpc);
     }
 
     private void AssertEveryAnnouncementFoundTheOneMatch()
@@ -94,11 +94,11 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
     }
 
     [Fact]
-    public void ATrackedPluginEditedWhileOutOfTheLoadOrder_AnnouncesItsRowsOnReturn_OnlyOnceTheRecordFilterHoldsThem()
+    public void ASourcePluginEditedWhileOutOfTheLoadOrder_AnnouncesItsRowsOnReturn_OnlyOnceTheRecordFilterHoldsThem()
     {
-        TrackedNpcEditedWhileOutOfTheLoadOrder_ToMatchTheFilter();
+        SourcePluginNpcEditedWhileOutOfTheLoadOrder_ToMatchTheFilter();
 
-        Reconcile(Resident, Tracked);
+        Reconcile(Resident, SourcePlugin);
 
         AssertEveryAnnouncementFoundTheOneMatch();
     }
@@ -106,10 +106,10 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
     [Fact]
     public void ARefreshThatLandsBeforeItsPluginsReadFails_IsAnnouncedOnlyOnceTheRecordFilterHoldsIt()
     {
-        TrackedNpcEditedWhileOutOfTheLoadOrder_ToMatchTheFilter();
-        _failingAt = $"Registering {Tracked}";
+        SourcePluginNpcEditedWhileOutOfTheLoadOrder_ToMatchTheFilter();
+        _failingAt = $"Registering {SourcePlugin}";
 
-        Reconcile(Resident, Tracked);
+        Reconcile(Resident, SourcePlugin);
 
         AssertEveryAnnouncementFoundTheOneMatch();
     }
@@ -117,7 +117,7 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
     [Fact]
     public void AWinnerSweepThatFails_StillLeavesTheRecordFilterHoldingThePluginItAnnounces()
     {
-        Reconcile(Resident, Tracked);
+        Reconcile(Resident, SourcePlugin);
         _index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'RenamedOnDisk'", "filter.sql");
         var resident = Entry(Resident);
         var renamed = new Fallout4Mod(ModKey.FromFileName(Resident), Fallout4Release.Fallout4);

@@ -15,7 +15,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { FileRead, FileStamp } from './instanceAdapter';
 
 /** ADR-0007, answered without the backend. */
-export function isTracked(sourceFolder: string): Promise<boolean> {
+export function isRepository(sourceFolder: string): Promise<boolean> {
   return exists(repositoryGitDir(sourceFolder));
 }
 

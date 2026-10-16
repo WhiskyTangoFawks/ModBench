@@ -19,7 +19,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void EditField_OnANeverCommittedRecord_LandsInTheTree()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var created = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
         Assert.True(created.Applied, created.Message);
         Assert.NotNull(created.NewFormKey);
@@ -37,7 +37,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_WritesNothing_AndAnswersTheNewDocumentAndTheHeaderThatMovesTheNextObjectId()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var (outcome, changes) = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
@@ -55,7 +55,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_OverAnUnsavedHeader_TakesTheNextObjectIdItHolds()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var headerFile = Path.Combine(mod.ModFolder, SourceModTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin));
         var unsavedHeader = Encoding.UTF8.GetString(
             HeaderDocument.WithNextObjectId(File.ReadAllBytes(headerFile), GameRelease.Fallout4, 0x900));
@@ -70,7 +70,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_WhenTheFileSystemRefusesTheWrite_RefusesWithItsWords_AndLeavesTheTreeAsItWas()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         const string newFormKey = "000807:Fixture.esp";
         TreeTampering.BlockWrite(mod.ModFolder, mod.Plugin, new RecordIdentity(newFormKey, "npc_", null));
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
@@ -84,7 +84,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_LandsEveryTypeTheCreatableListNames()
     {
-        using var mod = SourceModFixture.Tracked("Creatable.esp", "CreatableMod", _ => { });
+        using var mod = SourceModFixture.SourcePlugin("Creatable.esp", "CreatableMod", _ => { });
         var creatable = RecordTypes.For(GameRelease.Fallout4).Creatable;
 
         var refused = creatable
@@ -100,7 +100,7 @@ public sealed class CreateRecordChangesHandlerTests
     [InlineData("navm")]
     public void CreateRecord_RefusesATypeTheCreatableListLeavesOut(string recordType)
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         Assert.DoesNotContain(recordType, RecordTypes.For(GameRelease.Fallout4).Creatable);
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, recordType);
@@ -111,7 +111,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_OfACell_CarriesTheIsInteriorCellFlag()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "cell");
 
@@ -123,7 +123,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_NamingAContainerThePluginLacks_RefusesRecordNotFound_NamingIt()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         const string gone = "000FFF:" + SourceEditFixture.PluginName;
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "refr", gone);
@@ -137,7 +137,7 @@ public sealed class CreateRecordChangesHandlerTests
     [InlineData(true)]
     public void CreateRecord_WithAGridPositionAndNoWorldspace_RefusesAsAMalformedEnvelope(bool inACell)
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var container = inACell ? mod.Cell.ToString() : null;
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "cell", container, new GridPosition(0, 0));
@@ -148,7 +148,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_AllocatesAFormKey_WritesAMinimalSourceFile_RecordBecomesReadable()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
 
@@ -165,7 +165,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_AfterAnEarlierSiblingWasDeleted_LandsContiguously_NoGapSurvivesToLandPast()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var deleted = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
         Assert.Empty(deleted.Refused);
@@ -183,7 +183,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_IsChangedSinceTheLastCommit_UntilCommitted()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
 
@@ -196,7 +196,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_TakesTheNextObjectId_ThoughAFormKeyBelowItIsFree()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         Assert.Empty(mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.OtherNpc.ToString())]).Refused);
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
@@ -207,7 +207,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_SkipsAFormKeyAtTheNextObjectIdThatARecordUses()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         SourceModTree.Seed(mod.ModFolder, mod.Plugin, FixtureNextObjectId);
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
@@ -218,7 +218,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_NeverTakesTheFormKeyOfARecordDeletedAndCommitted()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         Assert.Empty(mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Quest.ToString())]).Refused);
         Commit(mod);
 
@@ -230,7 +230,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_MovesTheNextObjectIdPastTheFormKeyItTakes()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         var first = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_").NewFormKey.Require();
         Assert.Empty(mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, first)]).Refused);
         Commit(mod);
@@ -244,7 +244,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_AllocatesNoHigherBecauseOfAnOverrideOfAMastersRecord()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         const string masterKey = "F00000:Master.esm";
         SourceModTree.Repository(mod.ModFolder, mod.Plugin).Put(
             mod.Plugin,
@@ -268,21 +268,21 @@ public sealed class CreateRecordChangesHandlerTests
         uint.Parse(formKey[..formKey.IndexOf(':', StringComparison.Ordinal)], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
     [Fact]
-    public void CreateRecord_Refuses_WhenPluginIsUntracked_NamingTheInitCommand()
+    public void CreateRecord_Refuses_WhenPluginIsNonSourcePlugin_NamingTheInitCommand()
     {
-        using var mod = SourceEditFixture.Untracked();
+        using var mod = SourceEditFixture.NonSourcePlugin();
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotSourcePlugin, result.Refusal);
         Assert.Contains("Decompile and commit its mod", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void CreateRecord_Refuses_ForAnUnknownRecordType()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "not-a-real-type");
 
@@ -293,7 +293,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_Refuses_ForTheHeaderPseudoType()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "header");
 
@@ -304,7 +304,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_OnATreeWithNoHeaderDocument_RefusesAsUnreadable_AndWritesNothing()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         File.Delete(Path.Combine(mod.ModFolder, TreeTampering.HeaderDocumentOf(mod.Plugin.Name)));
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
@@ -317,7 +317,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_OnAFullPlugin_WithNoFormKeyFreeAtOrAboveTheNextObjectId_RefusesSayingSo_NamingNoRemedy()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.SourcePlugin();
         TakeTheNextObjectId(mod, "FFFFFF:Fixture.esp");
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
@@ -336,7 +336,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_OnALightEspPlugin_Refuses_WhenTheEslRangeIsExhausted()
     {
-        using var mod = SourceEditFixture.TrackedLight();
+        using var mod = SourceEditFixture.SourcePluginLight();
         TakeTheNextObjectId(mod, "000FFF:Fixture.esp");
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
@@ -348,7 +348,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_OnALightPlugin_WithNoFormKeyFreeAtOrAboveTheNextObjectId_NamesClearingTheLightFlag()
     {
-        using var mod = SourceEditFixture.TrackedLight();
+        using var mod = SourceEditFixture.SourcePluginLight();
         TakeTheNextObjectId(mod, "000FFF:Fixture.esp");
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
@@ -362,7 +362,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_OnALightEspPlugin_AllocatesUpToTheEslCap()
     {
-        using var mod = SourceEditFixture.TrackedLight();
+        using var mod = SourceEditFixture.SourcePluginLight();
         TakeTheNextObjectId(mod, "000FFE:Fixture.esp");
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
@@ -374,7 +374,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_OnALightFlaggedEsl_WithNoFormKeyFreeAtOrAboveTheNextObjectId_NamesClearingTheFlagAndRenamingOffEsl()
     {
-        using var mod = SourceEditFixture.TrackedLight("Fixture.esl");
+        using var mod = SourceEditFixture.SourcePluginLight("Fixture.esl");
         TakeTheNextObjectId(mod, "000FFF:Fixture.esl");
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
@@ -389,7 +389,7 @@ public sealed class CreateRecordChangesHandlerTests
     [Fact]
     public void CreateRecord_OnAPlainEslPlugin_AllocatesUpToTheEslCap()
     {
-        using var mod = SourceEditFixture.TrackedLight("Fixture.esl");
+        using var mod = SourceEditFixture.SourcePluginLight("Fixture.esl");
         TakeTheNextObjectId(mod, "000FFE:Fixture.esl");
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");

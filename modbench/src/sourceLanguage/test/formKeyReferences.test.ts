@@ -39,7 +39,7 @@ type ReferencesClient = Parameters<typeof referencesOf<{ getText(): string }>>[0
 function references(rows: ReferenceResult[], copies: Record<string, Copy>, answering: Partial<ReferencesClient> = {}) {
   const firstOnFile = (path: string) => Object.entries(copies).find(([, copy]) => copy.file === path);
   const client: ReferencesClient = {
-    getReferencesInActiveOrTrackedPlugins: () => Promise.resolve(rows),
+    getReferencesInActiveOrSourcePlugins: () => Promise.resolve(rows),
     getRecordOwner: () => Promise.reject(new Error('A referrer\'s copy names its plugin.')),
     getCopyDocument: (plugin, formKey) => {
       const copyKey = key(formKey, plugin);
@@ -67,15 +67,15 @@ const listed = (found: Awaited<ReturnType<ReturnType<typeof references>['referen
 
 describe('Find All References on a FormKey (plugin-source.md, In the text editor, story 2)', () => {
   it('lists one entry for each plugin\'s copy of a referrer, however many of its fields hold the reference', async () => {
-    const tracked = `{ "FormKey": "${STAND}", "Model": "${GUN}", "Keywords": ["${GUN}"] }`;
+    const sourcePlugin = `{ "FormKey": "${STAND}", "Model": "${GUN}", "Keywords": ["${GUN}"] }`;
     const rendered = `{\n  "FormKey": "${STAND}",\n  "Model": "${GUN}"\n}`;
     const { referencesAt } = references(
       [row(STAND, modA, 'Model'), row(STAND, modA, 'Keywords[0]'), row(STAND, modB, 'Model')],
-      { [key(STAND, modA)]: { file: STAND_FILE, text: tracked }, [key(STAND, modB)]: { rendered: STAND_RENDERED, text: rendered } },
+      { [key(STAND, modA)]: { file: STAND_FILE, text: sourcePlugin }, [key(STAND, modB)]: { rendered: STAND_RENDERED, text: rendered } },
     );
 
     expect(listed(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([
-      { uri: `file:${STAND_FILE}`, text: `"${GUN}"`, start: tracked.indexOf(GUN) - 1 },
+      { uri: `file:${STAND_FILE}`, text: `"${GUN}"`, start: sourcePlugin.indexOf(GUN) - 1 },
       { uri: `modbench-rendered:/ModB/B.esp/${STAND_RENDERED}`, text: `"${GUN}"`, start: rendered.indexOf(GUN) - 1 },
     ]);
   });
@@ -141,11 +141,11 @@ describe('Find All References on a FormKey (plugin-source.md, In the text editor
 
   describe('when a copy cannot be listed', () => {
     const LEFT_OUT = `Find All References on ${GUN} left out a copy it could not open.`;
-    const tracked = { [key(STAND, modA)]: { file: STAND_FILE, text: `{ "FormKey": "${STAND}", "Model": "${GUN}" }` } };
+    const sourcePlugin = { [key(STAND, modA)]: { file: STAND_FILE, text: `{ "FormKey": "${STAND}", "Model": "${GUN}" }` } };
     const uris = (found: Parameters<typeof listed>[0]) => listed(found).map(({ uri }) => uri);
 
     it('writes nothing when every copy is listed', async () => {
-      const { reporter, referencesAt } = references([row(STAND, modA, 'Model')], tracked);
+      const { reporter, referencesAt } = references([row(STAND, modA, 'Model')], sourcePlugin);
 
       await referencesAt(ASKING, AT_GUN(ASKING));
 
@@ -153,7 +153,7 @@ describe('Find All References on a FormKey (plugin-source.md, In the text editor
     });
 
     it('lists the copies it can, and writes the copy left out, when a plugin holds no copy mEdit counted', async () => {
-      const { reporter, referencesAt } = references([row(STAND, modA, 'Model'), row(STAND, modB, 'Model')], tracked);
+      const { reporter, referencesAt } = references([row(STAND, modA, 'Model'), row(STAND, modB, 'Model')], sourcePlugin);
 
       expect(uris(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([`file:${STAND_FILE}`]);
       expect(reporter.shownFailures).toEqual([{ severity: 'warning', message: LEFT_OUT, detail: `B.esp (ModB) holds no ${STAND}.` }]);
@@ -161,7 +161,7 @@ describe('Find All References on a FormKey (plugin-source.md, In the text editor
 
     it('lists the copies it can, and writes the copy left out and why, when a copy\'s document fails to open', async () => {
       const { reporter, referencesAt } = references(
-        [row(STAND, modA, 'Model'), row(STAND, modB, 'Model')], { ...tracked, [key(STAND, modB)]: { rendered: STAND_RENDERED } },
+        [row(STAND, modA, 'Model'), row(STAND, modB, 'Model')], { ...sourcePlugin, [key(STAND, modB)]: { rendered: STAND_RENDERED } },
       );
 
       expect(uris(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([`file:${STAND_FILE}`]);
@@ -169,7 +169,7 @@ describe('Find All References on a FormKey (plugin-source.md, In the text editor
     });
 
     it('lists nothing, and writes to the Output why, when mEdit cannot answer what references it', async () => {
-      const { reporter, referencesAt } = references([], {}, { getReferencesInActiveOrTrackedPlugins: () => Promise.reject(new Error('mEdit is gone.')) });
+      const { reporter, referencesAt } = references([], {}, { getReferencesInActiveOrSourcePlugins: () => Promise.reject(new Error('mEdit is gone.')) });
 
       expect(await referencesAt(ASKING, AT_GUN(ASKING))).toEqual([]);
       expect(reporter.shownFailures).toEqual([{ severity: 'error', message: `Find All References cannot list what references ${GUN}.`, detail: 'mEdit is gone.' }]);
@@ -187,11 +187,11 @@ describe('Find All References on a FormKey (plugin-source.md, In the text editor
   });
 
   it('asks nothing for a string that is not a FormKey', async () => {
-    const getReferencesInActiveOrTrackedPlugins = vi.fn(() => Promise.resolve([]));
-    const { referencesAt } = references([], {}, { getReferencesInActiveOrTrackedPlugins });
+    const getReferencesInActiveOrSourcePlugins = vi.fn(() => Promise.resolve([]));
+    const { referencesAt } = references([], {}, { getReferencesInActiveOrSourcePlugins });
     const text = '{ "Name": "Rusty Gun" }';
 
     expect(await referencesAt(text, text.indexOf('Rusty'))).toEqual([]);
-    expect(getReferencesInActiveOrTrackedPlugins).not.toHaveBeenCalled();
+    expect(getReferencesInActiveOrSourcePlugins).not.toHaveBeenCalled();
   });
 });

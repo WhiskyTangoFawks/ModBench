@@ -25,7 +25,7 @@ interface RenderCellExtras {
   checkError?: string | null;
   resolution?: FormKeyResolution;
   // Where an edited value goes. Absent means this cell has nowhere to write — an immutable
-  // or untracked column, or a caller outside the field grid — and the leaf renders read-only.
+  // or non-source plugin column, or a caller outside the field grid — and the leaf renders read-only.
   onCommit?: (v: unknown) => void;
   // The row's own collapse state, threaded to the one leaf that renders differently for it
   // (FlagCell's compact summary) — a row collapses as a row, all columns together.

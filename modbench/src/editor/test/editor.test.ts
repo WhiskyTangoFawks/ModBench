@@ -159,7 +159,7 @@ const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =
   typeof value === 'object' && value !== null && 'resolveCustomTextEditor' in value;
 
 const NO_MODS: ModFacts = {
-  trackedMods: () => new Set<string>(), modOfOrigin: () => undefined, standingOf: () => ({ kind: 'enabled' }),
+  listedSourceMods: () => new Set<string>(), modOfOrigin: () => undefined, standingOf: () => ({ kind: 'enabled' }),
   onChange: () => ({ dispose: () => undefined }),
 };
 
@@ -168,7 +168,7 @@ const inItsDocument = () => new vscode.Location(vscode.Uri.file('/its/document.j
 function makeEditor(
   client = new InMemoryMEditClient(), recordViewIds = [] as readonly string[], modFacts = NO_MODS,
   locateRecord = vi.fn((_record: object) => Promise.resolve<vscode.Location | { refused: string } | undefined>(inItsDocument())),
-  conditionsOf: ConditionsOf = () => ({ tracked: false, editable: false }),
+  conditionsOf: ConditionsOf = () => ({ editable: false }),
 ) {
   const focusedView = createFocusedView();
   const outputChannel = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -369,13 +369,13 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
     client.setQueryAnswer('getReferences', [{
       formKey: '000900:A.esp', plugin: 'A.esp', origin: 'ModA', fieldPath: 'Keywords[0]', recordType: 'weap', recordTypeName: 'Weapon', editorId: 'Rifle',
     }]);
-    makeEditor(client, [], NO_MODS, undefined, ({ origin }) => ({ tracked: origin === 'ModA', editable: origin === 'ModA' }));
+    makeEditor(client, [], NO_MODS, undefined, ({ origin }) => ({ editable: origin === 'ModA' }));
 
     const { provider } = await present(await askReferencedBy(recordRow), 'the list shown').resolve();
     const [referrer] = provider.getChildren();
 
     expect(provider.getChildren(present(referrer, 'the referrer')).map((holder) => holder.contextValue))
-      .toEqual(['referencedByHolder tracked editable']);
+      .toEqual(['referencedByHolder editable']);
   });
 
   it('titles the list by the FormKey of a record with no EditorID', async () => {
@@ -1236,18 +1236,18 @@ describe('what a record tab\'s webview posts', () => {
     });
 
     it.each([
-      ['an active plugin in a tracked mod', activeA, 'ModA', { ModA: 'tracked' }],
-      ['a disabled plugin in a tracked mod', inactiveA, 'ModA', { ModA: 'tracked' }],
-      ['an active plugin in an untracked mod', activeA, 'ModB', { ModB: 'untracked' }],
-      ['a disabled plugin in an untracked mod', inactiveA, 'ModB', { ModB: 'untracked' }],
-      ['a plugin in a mod whose folder spells the origin in another case', activeA, 'modb', { modb: 'untracked' }],
+      ['an active plugin in a source mod', activeA, 'ModA', { ModA: 'sourceMod' }],
+      ['a disabled plugin in a source mod', inactiveA, 'ModA', { ModA: 'sourceMod' }],
+      ['an active plugin in a non-source mod', activeA, 'ModB', { ModB: 'nonSourceMod' }],
+      ['a disabled plugin in a non-source mod', inactiveA, 'ModB', { ModB: 'nonSourceMod' }],
+      ['a plugin in a mod whose folder spells the origin in another case', activeA, 'modb', { modb: 'nonSourceMod' }],
       ['a plugin in the game folder', activeA, DATA_DIRECTORY_ORIGIN, {}],
       ['a plugin in Overwrite', activeA, 'Overwrite', {}],
     ])('is answered with the repository state of the mod each origin names, for %s', async (_what, plugins, origin, modsByOrigin) => {
       const mEdit = client();
       mEdit.setQueryAnswer('getPlugins', plugins);
       mEdit.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin, isWinner: true, editorId: 'Gun' }]));
-      const modFacts = { ...NO_MODS, trackedMods: () => new Set(['ModA']), modOfOrigin: modOfOriginIn('ModA', 'ModB') };
+      const modFacts = { ...NO_MODS, listedSourceMods: () => new Set(['ModA']), modOfOrigin: modOfOriginIn('ModA', 'ModB') };
       const { openDocument } = makeEditor(mEdit, undefined, modFacts);
       const tab = await openDocument(renderedUri(GUN, 'Gun.json'), { getText: () => '{}' });
 
@@ -1261,10 +1261,10 @@ describe('what a record tab\'s webview posts', () => {
       const mEdit = client();
       mEdit.setQueryAnswer('getPlugins', activeA);
       mEdit.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModB', isWinner: true, editorId: 'Gun' }]));
-      let tracked = new Set<string>();
+      let sourcePlugin = new Set<string>();
       const changed: (() => void)[] = [];
       const modFacts = {
-        ...NO_MODS, trackedMods: () => tracked, modOfOrigin: modOfOriginIn('ModB'),
+        ...NO_MODS, listedSourceMods: () => sourcePlugin, modOfOrigin: modOfOriginIn('ModB'),
         onChange: (listener: () => void) => { changed.push(listener); return { dispose: () => undefined }; },
       };
       const { openDocument } = makeEditor(mEdit, undefined, modFacts);
@@ -1273,10 +1273,10 @@ describe('what a record tab\'s webview posts', () => {
       await settle();
       const told = () => answered(tab).filter((message) => typeof message === 'object' && message !== null && Reflect.get(message, 'type') === 'modsChanged');
 
-      tracked = new Set(['ModB']);
+      sourcePlugin = new Set(['ModB']);
       changed.forEach((listener) => { listener(); });
 
-      expect(told()).toEqual([{ type: 'modsChanged', modsByOrigin: { ModB: 'tracked' } }]);
+      expect(told()).toEqual([{ type: 'modsChanged', modsByOrigin: { ModB: 'sourceMod' } }]);
     });
 
     it('is failed, naming the record in the Output and leaving the tab\'s title, when the comparison fails', async () => {
@@ -1311,7 +1311,7 @@ describe('a click on a column\'s header', () => {
   });
 });
 
-describe('an untracked copy\'s tab', () => {
+describe('a non-source plugin copy\'s tab', () => {
   const GUN = '000801:A.esp';
   const RENDERED = renderedUri(GUN, 'Gun.json');
 

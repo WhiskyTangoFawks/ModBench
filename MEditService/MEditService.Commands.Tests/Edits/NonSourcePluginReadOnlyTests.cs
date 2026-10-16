@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class UntrackedReadOnlyTests
+public sealed class NonSourcePluginReadOnlyTests
 {
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -53,11 +53,11 @@ public sealed class UntrackedReadOnlyTests
     [Fact]
     public void TheTwoRefusalsAreDistinct_AndNeitherMessageOffersTheOthersWayOut()
     {
-        using var untracked = SourceEditFixture.Untracked();
+        using var nonSourcePlugin = SourceEditFixture.NonSourcePlugin();
         using var vanilla = SourceModFixture.VanillaMaster(out var vanillaNpc);
 
-        var trackable = untracked.EditHandler
-            .Set(untracked.Plugin, untracked.Npc.ToString(), "HeightMax", Json("0.75"));
+        var trackable = nonSourcePlugin.EditHandler
+            .Set(nonSourcePlugin.Plugin, nonSourcePlugin.Npc.ToString(), "HeightMax", Json("0.75"));
         var notTrackable = vanilla.EditHandler
             .Set(vanilla.Plugin, vanillaNpc.ToString(), "HeightMax", Json("0.75"));
 
@@ -70,9 +70,9 @@ public sealed class UntrackedReadOnlyTests
     [Fact]
     public async Task TrackingTheSameModFolder_TurnsTheRefusalIntoAnAcceptedEdit()
     {
-        using var mod = SourceEditFixture.Untracked();
-        var tracked = await InitEveryPluginOf.ModAsync(mod.LoadOrder, SourceEditFixture.ModFolderOrigin);
-        Assert.Empty(tracked.RefusalMessages());
+        using var mod = SourceEditFixture.NonSourcePlugin();
+        var sourcePlugin = await InitEveryPluginOf.ModAsync(mod.LoadOrder, SourceEditFixture.ModFolderOrigin);
+        Assert.Empty(sourcePlugin.RefusalMessages());
 
         var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 

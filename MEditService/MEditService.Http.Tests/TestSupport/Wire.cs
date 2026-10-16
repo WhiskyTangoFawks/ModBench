@@ -248,12 +248,12 @@ internal static class Wire
         (await client.Plugins()).Single(p => p.GetProperty("name").GetString() == name);
 
     /// <summary>Init's write reaches the answers at the next snapshot (ADR-0015), whose reconcile
-    /// reports the plugin tracked before it validates every plugin, so its end is awaited too.</summary>
-    internal static async Task PluginReportsTracked(this HttpClient client, string name)
+    /// reports the source plugin before it validates every plugin, so its end is awaited too.</summary>
+    internal static async Task PluginReportsSourcePlugin(this HttpClient client, string name)
     {
         await Eventually(
-            async () => (await client.Plugin(name)).GetProperty("isTracked").GetBoolean(),
-            $"{name} reported tracked after init");
+            async () => (await client.Plugin(name)).GetProperty("isSourcePlugin").GetBoolean(),
+            $"{name} reported source plugin after init");
         var status = await client.GetFromJsonAsync<JsonElement>("/load-order/status");
         await client.AwaitTerminalLoadOrderStatus(status.GetProperty("version").GetInt64());
     }

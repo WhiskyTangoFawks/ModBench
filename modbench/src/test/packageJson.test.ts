@@ -311,7 +311,7 @@ describe('package.json outside an instance', () => {
 
     it('needs every conjunct of an &&', () => {
       expect(holds(String.raw`view == modbench.pluginListTree && viewItem =~ /\bcompilable\b/`, on)).toBe(true);
-      expect(holds(String.raw`view == modbench.pluginListTree && viewItem =~ /\buntrackedInMod\b/`, on)).toBe(false);
+      expect(holds(String.raw`view == modbench.pluginListTree && viewItem =~ /\bnonSourcePluginInMod\b/`, on)).toBe(false);
     });
 
     it('takes any alternative of an ||', () => {
@@ -321,7 +321,7 @@ describe('package.json outside an instance', () => {
 
     it('inverts what follows a !, a parenthesised group included', () => {
       expect(holds(String.raw`view == modbench.pluginListTree && !(viewItem =~ /\bcompilable\b/)`, on)).toBe(false);
-      expect(holds(String.raw`view == modbench.pluginListTree && !(viewItem =~ /\buntrackedInMod\b/)`, on)).toBe(true);
+      expect(holds(String.raw`view == modbench.pluginListTree && !(viewItem =~ /\bnonSourcePluginInMod\b/)`, on)).toBe(true);
       expect(holds('!compilable', {})).toBe(true);
       expect(holds('!compilable', { compilable: true })).toBe(false);
     });
@@ -705,25 +705,22 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   const containerKinds = ['record', 'worldspace', 'cell'];
 
   const menus: [contextValue: string, entries: [string, string][]][] = [
-    ['plugin disabled inUntrackedMod untracked editable', [REVEAL_ENTRY, ENABLE_ENTRY, DECOMPILE_AND_COMMIT_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inTrackedMod tracked editable', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, CREATE_RECORD_ENTRY, DECOMPILE_ENTRY, BUILD_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin disabled inTrackedMod tracked', [REVEAL_ENTRY, ENABLE_ENTRY, RENAME_ENTRY, DECOMPILE_ENTRY, BUILD_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inTrackedMod tracked', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, DECOMPILE_ENTRY, BUILD_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inTrackedMod untracked editable', [REVEAL_ENTRY, DISABLE_ENTRY, DECOMPILE_ENTRY, BUILD_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inUntrackedMod', [REVEAL_ENTRY, DISABLE_ENTRY, DECOMPILE_AND_COMMIT_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inOverwrite untracked editable', [REVEAL_ENTRY, DISABLE_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled untracked editable', [REVEAL_ENTRY, DISABLE_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin disabled inNonSourceMod nonSourcePlugin', [REVEAL_ENTRY, ENABLE_ENTRY, DECOMPILE_AND_COMMIT_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inSourceMod sourcePlugin editable', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, CREATE_RECORD_ENTRY, DECOMPILE_ENTRY, BUILD_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin disabled inSourceMod sourcePlugin', [REVEAL_ENTRY, ENABLE_ENTRY, RENAME_ENTRY, DECOMPILE_ENTRY, BUILD_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inSourceMod sourcePlugin', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, DECOMPILE_ENTRY, BUILD_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inSourceMod nonSourcePlugin', [REVEAL_ENTRY, DISABLE_ENTRY, DECOMPILE_ENTRY, BUILD_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inNonSourceMod', [REVEAL_ENTRY, DISABLE_ENTRY, DECOMPILE_AND_COMMIT_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inOverwrite nonSourcePlugin', [REVEAL_ENTRY, DISABLE_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled nonSourcePlugin', [REVEAL_ENTRY, DISABLE_ENTRY, COPY_VALUE_ENTRY]],
     ['pluginImplicit', [REVEAL_ENTRY, COPY_VALUE_ENTRY]],
-    ['recordType tracked editable creatable', [CREATE_RECORD_ENTRY]],
-    ['recordType untracked editable creatable', []],
-    ['recordType tracked creatable', []],
-    ['recordType tracked editable', []],
-    ...recordKinds.map((kind): [string, [string, string][]] => [`${kind} tracked editable`, [OPEN_ENTRY, REFERENCES_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY, DELETE_RECORD_ENTRY]]),
-    ...containerKinds.map((kind): [string, [string, string][]] => [`${kind} tracked editable container`, [OPEN_ENTRY, REFERENCES_ENTRY, CREATE_RECORD_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY, DELETE_RECORD_ENTRY]]),
-    ...['untracked editable', 'tracked'].flatMap((conditions): [string, [string, string][]][] => [
-      [`record ${conditions}`, [OPEN_ENTRY, REFERENCES_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY]],
-      [`record ${conditions} container`, [OPEN_ENTRY, REFERENCES_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY]],
-    ]),
+    ['recordType editable creatable', [CREATE_RECORD_ENTRY]],
+    ['recordType creatable', []],
+    ['recordType editable', []],
+    ...recordKinds.map((kind): [string, [string, string][]] => [`${kind} editable`, [OPEN_ENTRY, REFERENCES_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY, DELETE_RECORD_ENTRY]]),
+    ...containerKinds.map((kind): [string, [string, string][]] => [`${kind} editable container`, [OPEN_ENTRY, REFERENCES_ENTRY, CREATE_RECORD_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY, DELETE_RECORD_ENTRY]]),
+    ['record', [OPEN_ENTRY, REFERENCES_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY]],
+    ['record container', [OPEN_ENTRY, REFERENCES_ENTRY, COPY_RECORD_ENTRY, COPY_VALUE_ENTRY]],
     ...['block', 'subBlock', 'placedGroup-persistent', 'indexing', 'error'].map((kind): [string, [string, string][]] => [kind, []]),
   ];
 
@@ -743,7 +740,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     [{}, []],
     [{ 'modbench.plugin.selectionToggle': 'enable' }, [{ key: 'space', command: 'modbench.plugin.enable' }]],
     [{ 'modbench.plugin.selectionToggle': 'disable' }, [{ key: 'space', command: 'modbench.plugin.disable' }]],
-    [{ 'modbench.plugin.singleTracked': true }, [{ key: 'f2', command: 'modbench.plugin.rename' }]],
+    [{ 'modbench.plugin.singleSourcePlugin': true }, [{ key: 'f2', command: 'modbench.plugin.rename' }]],
     [{ 'modbench.plugin.allDeletableRecords': true }, [{ key: 'Delete', mac: 'cmd+backspace', command: 'modbench.record.delete' }]],
   ])('on the focused Plugins tree with %j, the keys that fire are those of the commands the selection allows, and copy value', (facts, keys) => {
     expectKeysFiring({ focusedView: 'modbench.pluginListTree', listFocus: true, ...inInstance, ...facts }, [...keys, COPY]);
@@ -903,8 +900,8 @@ describe('package.json record grid keys, as editor.md\'s Menus and keys and its 
 });
 
 describe('package.json decompile and commit\'s palette entry', () => {
-  const MODS = { focusedView: 'modbench.modList', ...inInstance, 'modbench.mod.holdsUntrackedModWithPlugin': true, 'modbench.mod.sourceGestureRowsIn': 'modbench.modList' };
-  const PLUGINS = { focusedView: 'modbench.pluginListTree', ...inInstance, 'modbench.plugin.allInUntrackedMod': true, 'modbench.mod.sourceGestureRowsIn': 'modbench.pluginListTree' };
+  const MODS = { focusedView: 'modbench.modList', ...inInstance, 'modbench.mod.holdsNonSourceModWithPlugin': true, 'modbench.mod.sourceGestureRowsIn': 'modbench.modList' };
+  const PLUGINS = { focusedView: 'modbench.pluginListTree', ...inInstance, 'modbench.plugin.allInNonSourceMod': true, 'modbench.mod.sourceGestureRowsIn': 'modbench.pluginListTree' };
 
   it('is in the palette while Mods or Plugins has focus, was last selected in, and holds what decompile and commit acts on', () => {
     expect(paletteOffers('modbench.mod.decompileAndCommit', MODS)).toBe(true);
@@ -917,8 +914,8 @@ describe('package.json decompile and commit\'s palette entry', () => {
   });
 
   it('is not in the palette when the focused view holds nothing to decompile and commit', () => {
-    expect(paletteOffers('modbench.mod.decompileAndCommit', without(MODS, 'modbench.mod.holdsUntrackedModWithPlugin'))).toBe(false);
-    expect(paletteOffers('modbench.mod.decompileAndCommit', without(PLUGINS, 'modbench.plugin.allInUntrackedMod'))).toBe(false);
+    expect(paletteOffers('modbench.mod.decompileAndCommit', without(MODS, 'modbench.mod.holdsNonSourceModWithPlugin'))).toBe(false);
+    expect(paletteOffers('modbench.mod.decompileAndCommit', without(PLUGINS, 'modbench.plugin.allInNonSourceMod'))).toBe(false);
   });
 });
 
@@ -980,11 +977,11 @@ describe('package.json record tab menus', () => {
       ]],
     ['a cell with something to copy', { webviewSection: 'cell', copyText: 'x' }, ['modbench.copyValue']],
     ['a cell with nothing to copy', { webviewSection: 'cell' }, []],
-    ['the column of a plugin in an untracked mod', { webviewSection: 'recordHeader', inMod: 'untracked', editable: false },
+    ['the column of a plugin in a non-source mod', { webviewSection: 'recordHeader', inMod: 'nonSourceMod', editable: false },
       [REFERENCED_BY, 'modbench.mod.decompileAndCommit', RECORD_COPY]],
-    ['the column of a plugin in a tracked mod that is not editable', { webviewSection: 'recordHeader', inMod: 'tracked', editable: false },
+    ['the column of a plugin in a source mod that is not editable', { webviewSection: 'recordHeader', inMod: 'sourceMod', editable: false },
       [REFERENCED_BY, DECOMPILE, BUILD, RECORD_COPY]],
-    ['the column of an editable plugin', { webviewSection: 'recordHeader', inMod: 'tracked', editable: true },
+    ['the column of an editable plugin', { webviewSection: 'recordHeader', inMod: 'sourceMod', editable: true },
       [REFERENCED_BY, DECOMPILE, BUILD, RECORD_COPY, 'modbench.record.delete']],
     ['the column of a plugin of the game or Overwrite, in no mod', { webviewSection: 'recordHeader', inMod: 'none', editable: false },
       [REFERENCED_BY, RECORD_COPY]],
@@ -1090,11 +1087,11 @@ describe('package.json Plugins palette entries', () => {
   const IN_PLUGINS = { 'modbench.record.selectionIn': 'modbench.pluginListTree' };
   describePaletteGate('modbench.pluginListTree', [
     ['modbench.plugin.reveal', { 'modbench.plugin.singlePlugin': true }],
-    ['modbench.plugin.rename', { 'modbench.plugin.singleTracked': true }],
+    ['modbench.plugin.rename', { 'modbench.plugin.singleSourcePlugin': true }],
     ['modbench.plugin.enable', { 'modbench.plugin.holdsDisabledPlugin': true }],
     ['modbench.plugin.disable', { 'modbench.plugin.holdsEnabledPlugin': true }],
     ['modbench.plugin.move', { 'modbench.plugin.holdsPluginLine': true }],
-    ['modbench.plugin.decompile', { 'modbench.plugin.allInTrackedMod': true }],
+    ['modbench.plugin.decompile', { 'modbench.plugin.allInSourceMod': true }],
     ['modbench.record.create', { 'modbench.plugin.singleCreatable': true }],
     ['modbench.record.delete', { 'modbench.plugin.allDeletableRecords': true, ...IN_PLUGINS }],
     ['modbench.record.copy', { 'modbench.plugin.allRecords': true, ...IN_PLUGINS }],
@@ -1199,11 +1196,11 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   const menus: [contextValue: string, entries: [string, string][]][] = [
     [contextOf(new ModNode({ kind: 'mod', name: 'X', enabled: true })), [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     [contextOf(new ModNode({ kind: 'mod', name: 'X', enabled: false, nexusId: '1' })), [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, VIEW_ON_NEXUS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod enabled holdsPlugin untracked', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, DECOMPILE_AND_COMMIT_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod enabled holdsPlugin tracked', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, BUILD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod disabled tracked', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, OPEN_CONFLICTS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, BUILD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod enabled holdsPlugin nonSourceMod', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, DECOMPILE_AND_COMMIT_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod enabled holdsPlugin sourceMod', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, BUILD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod disabled sourceMod', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, OPEN_CONFLICTS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, BUILD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod enabled holdsPlugin', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod enabled untracked', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod enabled nonSourceMod', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     [contextOf(new SeparatorNode({ kind: 'separator', name: 'S', enabled: true }, [])), [MOVE_ENTRY, ADD_SEPARATOR_ENTRY, ['modbench.separator.rename', '3_create'], COPY_VALUE_ENTRY, ['modbench.separator.delete', '6_destroy']]],
     [contextOf(new OverwriteNode([], 'MO2')), [OPEN_FOLDER_ENTRY]],
     ['file', [OPEN_FOLDER_ENTRY, COPY_VALUE_ENTRY]],
@@ -1369,25 +1366,25 @@ describe('package.json Referenced By menus', () => {
   });
 
   it.each([
-    ['an editable tracked container', 'referencedByHolder tracked editable container', [
+    ['an editable source plugin container', 'referencedByHolder sourcePlugin editable container', [
       [OPEN_PINNED, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.create', '3_create@1'],
       ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'], ['modbench.record.delete', '6_destroy@1'],
     ]],
-    ['an editable tracked record', 'referencedByHolder tracked editable', [
+    ['an editable source plugin record', 'referencedByHolder sourcePlugin editable', [
       [OPEN_PINNED, '1_open@1'], [REFERENCED_BY, '1_open@2'],
       ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'], ['modbench.record.delete', '6_destroy@1'],
     ]],
-    ['a record in a tracked plugin that is not editable', 'referencedByHolder tracked', [
+    ['a record in a source plugin that is not editable', 'referencedByHolder sourcePlugin', [
       [OPEN_PINNED, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'],
     ]],
-    ['a record in an untracked plugin', 'referencedByHolder untracked', [
+    ['a record in a non-source plugin', 'referencedByHolder nonSourcePlugin', [
       [OPEN_PINNED, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'],
     ]],
   ])('offers a plugin copy that is %s what a Plugins record row offers', (_, viewItem, expected) => {
     expect(menuOf(viewItem)).toEqual(expected);
   });
 
-  it.each(['referencedByReferrer', 'referencedByHolder tracked editable container'])('offers a %s row nothing in a list another extension filled', (viewItem) => {
+  it.each(['referencedByReferrer', 'referencedByHolder sourcePlugin editable container'])('offers a %s row nothing in a list another extension filled', (viewItem) => {
     expect(menuOf(viewItem, { 'reference-list.source': 'typescript' })).toEqual([]);
   });
 

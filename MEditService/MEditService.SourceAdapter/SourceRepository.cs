@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>Documents by identity over one tracked source folder (ADR-0014), and ADR-0007's
+/// <summary>Documents by identity over one source mod folder (ADR-0014), and ADR-0007's
 /// git verbs beneath them. Every verb tolerates the folder having vanished since last observed:
 /// another tool can delete it.</summary>
 public sealed class SourceRepository : ISourceRepository
@@ -40,7 +40,7 @@ public sealed class SourceRepository : ISourceRepository
     internal SourceRepository Over(ISourceFiles files) => new(_sourceFolder, _release, _modName, files);
 
     /// <summary>The repository over <paramref name="mod"/>'s source folder, or null when the folder is not
-    /// tracked and so has no source tree to answer from.</summary>
+    /// a source mod and so has no source tree to answer from.</summary>
     internal static SourceRepository? Open(PluginProvider.FromMod mod, GameRelease release) =>
         IsSourceMod(mod) ? Over(mod, release) : null;
 
@@ -62,7 +62,7 @@ public sealed class SourceRepository : ISourceRepository
     public static string? InstanceRootNotFound(string? instanceRoot) =>
         Directory.Exists(instanceRoot) ? null : $"Instance root not found: {instanceRoot}";
 
-    /// <summary>Whether the plugin's source reads: its mod is tracked and holds one tree for it. A tracked mod
+    /// <summary>Whether the plugin's source reads: its mod is a source mod and holds one tree for it. A source mod
     /// holds none for a plugin another tool put there or whose source was deleted.</summary>
     internal static bool SourceReads(RegisteredPlugin plugin) =>
         plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && HoldsTreeFor(sourceFolder, plugin.Name);
@@ -70,8 +70,8 @@ public sealed class SourceRepository : ISourceRepository
     private static bool HoldsTreeFor(string sourceFolder, string pluginFileName) =>
         IsSourceMod(sourceFolder) && SourceRepositoryLayout.TreeNameIn(sourceFolder, pluginFileName).Holds(out _, out _);
 
-    /// <summary>Why the plugin's source does not read though its mod is tracked: no folder, twin folders, or a plugin
-    /// source that cannot be listed. Null when it reads, and when its mod is not tracked.</summary>
+    /// <summary>Why the plugin's source does not read though its mod is a source mod: no folder, twin folders, or a plugin
+    /// source that cannot be listed. Null when it reads, and when its mod is not a source mod.</summary>
     internal static SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) =>
         plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && IsSourceMod(sourceFolder)
         && !SourceRepositoryLayout.TreeNameIn(sourceFolder, plugin.Name).Holds(out _, out var why)
@@ -183,7 +183,7 @@ public sealed class SourceRepository : ISourceRepository
             if (plugin.Provider is PluginProvider.FromMod mod && TreeFolderHolding(plugin, fullPath) is { } tree)
                 return Over(mod, loadOrder.GameRelease).Over(files).Locator.RecordOfFile(plugin.Key, tree, fullPath);
         }
-        return new RecordOfFileAnswer.Refused($"{fullPath} is under no tracked plugin's source.");
+        return new RecordOfFileAnswer.Refused($"{fullPath} is under no source plugin's source.");
     }
 
     internal static bool TreeHolds(RegisteredPlugin plugin, string fullPath) => TreeFolderHolding(plugin, fullPath) is not null;

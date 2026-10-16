@@ -1,9 +1,7 @@
 import type { InstanceValue } from '../instanceLoader/instance';
 import { Refusal } from '../drivingLib/refusal';
-import type { ModStatus } from '../client';
-import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
-
-export type ReadModStatus = (mods: readonly string[]) => Promise<readonly ModStatus[] | ReadFailed>;
+import type { ReadModStatus } from '../client';
+import { failureReason, isReadFailed } from '../wire/readFailed';
 
 export const LIST_MOD_STATUSES = {
   name: 'list_mod_statuses',

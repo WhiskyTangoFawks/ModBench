@@ -5,7 +5,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class CorruptLinkTargetEditTests : IDisposable
 {
-    private readonly ContainerCopyFixture _mod = ContainerCopyFixture.CreateWithTrackedSource();
+    private readonly ContainerCopyFixture _mod = ContainerCopyFixture.CreateWithSourcePluginSource();
 
     public void Dispose() => _mod.Dispose();
 

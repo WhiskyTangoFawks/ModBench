@@ -5,7 +5,7 @@
 import { join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
-import { get, isTracked, listFolders } from './files';
+import { get, isRepository, listFolders } from './files';
 import type { SourceMods } from './instanceAdapter';
 import { BUILD_OUTPUT_KEY, buildConfigurationFile, modFolderName, sourceRootDir } from './layout';
 import { modNameKey } from './codecs/modlistText';
@@ -37,7 +37,7 @@ export async function sourceModsIn(instanceRoot: string): Promise<SourceMods> {
   const notes: string[] = [];
   for (const name of (await readOrAbsent(() => listFolders(root), [])).sort()) {
     const folder = join(root, name);
-    if (!(await isTracked(folder))) continue;
+    if (!(await isRepository(folder))) continue;
     const built = await outputOf(folder);
     if ('reason' in built) {
       notes.push(`${folder} is not a source mod: ${built.reason}.`);

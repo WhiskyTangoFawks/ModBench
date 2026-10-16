@@ -4,7 +4,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { write, putIfChanged, isTracked, makeDir } from '../files';
+import { write, putIfChanged, isRepository, makeDir } from '../files';
 
 let crashBeforeTheNextRenameLands = false;
 
@@ -149,11 +149,11 @@ describe('putIfChanged', () => {
   });
 });
 
-describe('isTracked', () => {
+describe('isRepository', () => {
   let folder: string;
 
   beforeEach(async () => {
-    folder = await mkdtemp(join(tmpdir(), 'files-tracked-'));
+    folder = await mkdtemp(join(tmpdir(), 'files-sourcePlugin-'));
   });
 
   afterEach(async () => {
@@ -162,11 +162,11 @@ describe('isTracked', () => {
 
   it('is true for a folder holding a .git', async () => {
     await mkdir(join(folder, '.git'));
-    expect(await isTracked(folder)).toBe(true);
+    expect(await isRepository(folder)).toBe(true);
   });
 
   it('is false for a folder with no .git', async () => {
-    expect(await isTracked(folder)).toBe(false);
+    expect(await isRepository(folder)).toBe(false);
   });
 });
 

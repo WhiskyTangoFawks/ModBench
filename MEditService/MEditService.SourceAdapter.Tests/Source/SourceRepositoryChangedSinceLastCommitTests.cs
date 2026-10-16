@@ -29,13 +29,13 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    private ISourceRepository Tracked(params TreeFile[] extraFiles)
+    private ISourceRepository SourceMod(params TreeFile[] extraFiles)
     {
         var files = new[] { new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody)) }.Concat(extraFiles).ToArray();
         PluginBaselines.Init(
             _modFolder, files);
         return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
     }
 
     private static IReadOnlyDictionary<string, RecordChange> ChangesIn(ISourceRepository repository) =>
@@ -44,7 +44,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     [Fact]
     public void AnUnstagedEditNeverGitAdded_ToAFileTrackAlreadyCommitted_IsModified()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
 
         File.WriteAllText(Path.Combine(_modFolder, NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk), EditedBody);
 
@@ -63,7 +63,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         File.WriteAllText(Path.Combine(oldFolder, "notes.txt"), "notes");
         PluginBaselines.Init(_modFolder, [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
         var repository = TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
         var gitDir = Path.Combine(_modFolder, ".git");
         GitProbe.Run(gitDir, _modFolder, "add", "-f", $"{lookalikeFolderName}/{PluginName}/notes.txt");
         GitProbe.Run(gitDir, _modFolder, "commit", "-q", "-m", "Their own file");
@@ -75,7 +75,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     [Fact]
     public void ADocumentRenamedWithItsTextKept_ChangesNoRecord()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
         var renamed = Path.Combine("plugin-source", PluginName, "Npcs", $"Renamed - 000800_{PluginName}.json");
         GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, "mv",
             NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk.Replace('\\', '/'), renamed.Replace('\\', '/'));
@@ -86,7 +86,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     [Fact]
     public void ADocumentRenamedAndEdited_IsModifiedNotDeletedAndAdded()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
         var renamed = Path.Combine("plugin-source", PluginName, "Npcs", $"Edited - 000800_{PluginName}.json");
         GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, "mv",
             NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk.Replace('\\', '/'), renamed.Replace('\\', '/'));
@@ -101,7 +101,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     public void AnEditToADocumentSortedBelowItsGroup_IsModified()
     {
         var sortedPath = Path.Combine("plugin-source", PluginName, "Npcs", "SortedByHand", $"Sorted - 000900_{PluginName}.json");
-        var repository = Tracked(new TreeFile(sortedPath, Encoding.UTF8.GetBytes($"{{\"FormKey\":\"000900:{PluginName}\"}}")));
+        var repository = SourceMod(new TreeFile(sortedPath, Encoding.UTF8.GetBytes($"{{\"FormKey\":\"000900:{PluginName}\"}}")));
 
         File.WriteAllText(Path.Combine(_modFolder, sortedPath), $"{{\"FormKey\":\"000900:{PluginName}\",\"EditorID\":\"Edited\"}}");
 
@@ -113,13 +113,13 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     [Fact]
     public void ACleanTree_ChangesNoRecord()
     {
-        Assert.Empty(ChangesIn(Tracked()));
+        Assert.Empty(ChangesIn(SourceMod()));
     }
 
     [Fact]
     public void ADocumentTakenOutOfTheWorkingTree_ChangesNoRecordTheTreeHolds()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
 
         File.Delete(Path.Combine(_modFolder, NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk));
 
@@ -129,7 +129,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     [Fact]
     public void AChangedFileAnotherProcessHolds_AnswersTheHold_NeverReadsAsADeletionOrAnUnreadableDocument()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
         var path = Path.Combine(_modFolder, NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk);
         File.WriteAllText(path, EditedBody);
         using var held = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
@@ -140,7 +140,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     [Fact]
     public void ASourceModTreeWhoseStatusGitCannotReport_AnswersGitsRefusal_NeverReadsAsEveryRecordAdded()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
         File.WriteAllText(Path.Combine(_modFolder, ".git", "index"), "not an index");
 
         Assert.IsType<SourceFailure.GitFailed>(repository.ChangedSinceLastCommit(Plugin).Stopped());
@@ -161,7 +161,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     [Fact]
     public void AnUntrackedDocument_IsAdded()
     {
-        var repository = Tracked();
+        var repository = SourceMod();
         var untrackedFileStandingInForAPutWhichNeverRunsGitAdd = Path.Combine("plugin-source", PluginName, "Npcs", $"Created - 000900_{PluginName}.json");
         File.WriteAllText(
             Path.Combine(_modFolder, untrackedFileStandingInForAPutWhichNeverRunsGitAdd), $"{{\"FormKey\":\"000900:{PluginName}\",\"EditorID\":\"Created\"}}");
@@ -175,7 +175,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     public void AnEditToTheHeadersRecordDataJson_NamesItsComputedFormKey_ThoughTheDocumentCarriesNoFormKey()
     {
         var headerPath = PluginSourceRoot.HeaderDocument(PluginName);
-        var repository = Tracked(new TreeFile(headerPath, "{\"MasterReferences\": []}"u8.ToArray()));
+        var repository = SourceMod(new TreeFile(headerPath, "{\"MasterReferences\": []}"u8.ToArray()));
 
         File.WriteAllText(Path.Combine(_modFolder, headerPath), "{\"MasterReferences\": [], \"Changed\": true}");
 
@@ -195,7 +195,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     public void AChangedFileThatIsNoRecordsDocument_ChangesNoRecord(string relativePath)
     {
         var normalized = relativePath.Replace('/', Path.DirectorySeparatorChar);
-        var repository = Tracked(new TreeFile(normalized, "{}"u8.ToArray()));
+        var repository = SourceMod(new TreeFile(normalized, "{}"u8.ToArray()));
 
         File.WriteAllText(Path.Combine(_modFolder, normalized), "{\"changed\":true}");
 
@@ -208,7 +208,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     public void AChangedFileOutsideThePluginsSourceRoot_ChangesNoRecord(string relativePath)
     {
         var normalized = relativePath.Replace('/', Path.DirectorySeparatorChar);
-        var repository = Tracked();
+        var repository = SourceMod();
 
         Directory.CreateDirectory(Path.Combine(_modFolder, Path.GetDirectoryName(normalized) ?? ""));
         File.WriteAllText(Path.Combine(_modFolder, normalized), "{\"FormKey\":\"000900:Test.esp\"}");
@@ -229,7 +229,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         var worldspacePath = PluginSourceRoot.ContainerDocument(Path.Combine(
             PluginSourceRoot.For(PluginName), "Worldspaces",
             $"{worldspace.EditorID} - {worldspace.FormKey.ID:X6}_{worldspace.FormKey.ModKey.FileName}"));
-        var repository = Tracked(new TreeFile(worldspacePath, Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(worldspace, Release))));
+        var repository = SourceMod(new TreeFile(worldspacePath, Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(worldspace, Release))));
 
         var file = Path.Combine(_modFolder, worldspacePath);
         File.WriteAllText(file, File.ReadAllText(file).Replace("EditedRef", "Renamed", StringComparison.Ordinal));

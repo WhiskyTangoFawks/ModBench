@@ -36,7 +36,7 @@ import type { RecordBrowserNode } from '../RecordBrowser';
 import { cellRow, recordGroupRow, recordRow, worldspaceRow } from './browserRows';
 
 const PLUGIN_ROW = new PluginNode({ name: 'MyPatch.esp', enabled: true }, 'ModA');
-const EDITABLE = { tracked: true, editable: true };
+const EDITABLE = { editable: true };
 const MY_PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
 const NPC = { type: 'npc_', count: 3, displayName: 'Non-Player Character' };
 let NPC_GROUP: RecordBrowserNode;

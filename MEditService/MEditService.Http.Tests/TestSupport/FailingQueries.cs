@@ -33,7 +33,7 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IQueries
     public Answer<IReadOnlyList<RecordTypeChoice>?, IndexRefused> GetChildRecordTypes(PluginAddress plugin, string formKey) => throw Failed();
 
     public Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferences(string targetFormKey) => throw Failed();
-    public Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferencesInActiveOrTrackedPlugins(string targetFormKey) => throw Failed();
+    public Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferencesInActiveOrSourcePlugins(string targetFormKey) => throw Failed();
 
     public Answer<RenderedDocument?, IndexRefused> GetRenderedDocument(PluginAddress plugin, string formKey) => throw Failed();
 

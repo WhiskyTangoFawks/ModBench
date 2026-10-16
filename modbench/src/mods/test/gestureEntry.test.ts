@@ -78,12 +78,12 @@ describe('what the Mods keys read off the selection', () => {
   });
 
   it('the palette\'s decompile and commit sees a selection that holds a mod with no repository providing a plugin', () => {
-    const withPlugin = new ModNode({ kind: 'mod', name: 'Patch', enabled: true }, { holdsPlugin: true, tracked: false });
-    const trackedWithPlugin = new ModNode({ kind: 'mod', name: 'Tracked', enabled: true }, { holdsPlugin: true, tracked: true });
-    expect(modsKeyContext([enabledMod, withPlugin], byRow).holdsUntrackedModWithPlugin).toBe(true);
-    expect(modsKeyContext([enabledMod, trackedWithPlugin], byRow).holdsUntrackedModWithPlugin).toBe(false);
-    expect(modsKeyContext([enabledMod, group], byRow).holdsUntrackedModWithPlugin).toBe(false);
-    expect(modsKeyContext([], byRow).holdsUntrackedModWithPlugin).toBe(false);
+    const withPlugin = new ModNode({ kind: 'mod', name: 'Patch', enabled: true }, { holdsPlugin: true, sourceMod: false });
+    const sourceModWithPlugin = new ModNode({ kind: 'mod', name: 'SourceMod', enabled: true }, { holdsPlugin: true, sourceMod: true });
+    expect(modsKeyContext([enabledMod, withPlugin], byRow).holdsNonSourceModWithPlugin).toBe(true);
+    expect(modsKeyContext([enabledMod, sourceModWithPlugin], byRow).holdsNonSourceModWithPlugin).toBe(false);
+    expect(modsKeyContext([enabledMod, group], byRow).holdsNonSourceModWithPlugin).toBe(false);
+    expect(modsKeyContext([], byRow).holdsNonSourceModWithPlugin).toBe(false);
   });
 
   it('Space does nothing over a selection with no mod', () => {
@@ -140,7 +140,7 @@ describe('what the Mods keys read off the selection', () => {
   });
 
   it('open source sees exactly one selected mod that holds a repository', () => {
-    const facts = (tracked: boolean) => ({ holdsPlugin: false, tracked });
+    const facts = (sourceMod: boolean) => ({ holdsPlugin: false, sourceMod });
     const source = new ModNode({ kind: 'mod', name: 'Source', enabled: true }, facts(true));
     const plain = new ModNode({ kind: 'mod', name: 'Plain', enabled: true }, facts(false));
     expect(modsKeyContext([source], byRow).singleOpenSourceRow).toBe(true);

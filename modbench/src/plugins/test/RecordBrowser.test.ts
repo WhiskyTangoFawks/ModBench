@@ -104,7 +104,7 @@ async function rowsBeneath(
   const states: RecordBrowserNode[] = [];
   const walk = async (nodes: readonly RecordBrowserNode[]): Promise<void> => {
     for (const node of nodes) {
-      if (/^(recordType|record|worldspace|cell|placed) /.test(String(node.contextValue))) states.push(node);
+      if (/^(recordType|record|worldspace|cell|placed)( |$)/.test(String(node.contextValue))) states.push(node);
       if (node.collapsibleState !== vscode.TreeItemCollapsibleState.None) await walk(await provider.getChildren(node));
     }
   };
@@ -153,11 +153,11 @@ describe('RecordBrowser.getPluginChildren (record types)', () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }, { type: 'cell', count: 2 }] });
     const provider = new RecordBrowser(repo);
 
-    const groups = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, { tracked: true, editable: true });
+    const groups = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, { editable: true });
 
     expect(groups.map(g => [g.label, g.contextValue])).toEqual([
-      ['wrld', 'recordType tracked editable creatable'],
-      ['cell', 'recordType tracked editable creatable'],
+      ['wrld', 'recordType editable creatable'],
+      ['cell', 'recordType editable creatable'],
     ]);
   });
 });
@@ -246,11 +246,11 @@ describe('a record-type group row', () => {
   });
 
   it('states no record edit when no one has described its plugin', async () => {
-    expect((await groupOf({ type: 'weap', count: 10 })).contextValue).toBe('recordType untracked creatable');
+    expect((await groupOf({ type: 'weap', count: 10 })).contextValue).toBe('recordType creatable');
   });
 
   it('states no create on a container type\'s group (a quest, say)', async () => {
-    expect((await groupOf({ type: 'qust', count: 3, displayName: 'Quest', isCreatable: false })).contextValue).toBe('recordType untracked');
+    expect((await groupOf({ type: 'qust', count: 3, displayName: 'Quest', isCreatable: false })).contextValue).toBe('recordType');
   });
 });
 
@@ -280,29 +280,21 @@ describe('a record row', () => {
     });
   });
 
-  it('states a record of a tracked plugin', async () => {
-    expect((await rowOf(makeRecord(0), 'Data/', { tracked: true, editable: true })).contextValue).toBe('record tracked editable');
-  });
-
-  it('states a record of an untracked plugin', async () => {
-    expect((await rowOf(makeRecord(0), 'Data/', { tracked: false, editable: true })).contextValue).toBe('record untracked editable');
+  it('states an editable record', async () => {
+    expect((await rowOf(makeRecord(0), 'Data/', { editable: true })).contextValue).toBe('record editable');
   });
 
   it('states an override as it states the plugin\'s own records', async () => {
     const record: RecordSummary = { ...makeRecord(0), plugin: 'PatchMod.esp' };
-    expect((await rowOf(record, 'Data/', { tracked: true, editable: true })).contextValue).toBe('record tracked editable');
-  });
-
-  it('states a record of a tracked plugin whose plugin source is unreadable tracked and read-only', async () => {
-    expect((await rowOf(makeRecord(0), 'Data/', { tracked: true, editable: false })).contextValue).toBe('record tracked');
+    expect((await rowOf(record, 'Data/', { editable: true })).contextValue).toBe('record editable');
   });
 
   it('states a record of an immutable plugin read-only', async () => {
-    expect((await rowOf(makeRecord(0), 'Data/', { tracked: false, editable: false })).contextValue).toBe('record untracked');
+    expect((await rowOf(makeRecord(0), 'Data/', { editable: false })).contextValue).toBe('record');
   });
 
   it('offers no record edit on a row whose plugin no caller has described', async () => {
-    expect((await rowOf(makeRecord(0))).contextValue).toBe('record untracked');
+    expect((await rowOf(makeRecord(0))).contextValue).toBe('record');
   });
 
   it('carries a medit-record: resourceUri identifying (plugin, origin, formKey)', async () => {
@@ -517,7 +509,7 @@ describe('worldspace, cell and placed rows state their record', () => {
 });
 
 describe('a plugin\'s conditions reach every row beneath it', () => {
-  const TRACKED: PluginConditions = { tracked: true, editable: true };
+  const EDITABLE_PLUGIN: PluginConditions = { editable: true };
   const cell = {
     formKey: '000002:Plugin0.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: true, fullName: null, hasParseFailure: false, workingTreeState: 'None' as const,
   };
@@ -539,28 +531,28 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
     return repo;
   }
 
-  it('states a tracked, editable plugin on its groups, records, a container\'s children, worldspace, cells and placed references', async () => {
-    const states = (await rowsBeneath(new RecordBrowser(spatialClient()), { name: 'Plugin0.esp', origin: 'Data/' }, TRACKED))
+  it('states a source plugin, editable plugin on its groups, records, a container\'s children, worldspace, cells and placed references', async () => {
+    const states = (await rowsBeneath(new RecordBrowser(spatialClient()), { name: 'Plugin0.esp', origin: 'Data/' }, EDITABLE_PLUGIN))
       .map((n) => String(n.contextValue));
 
     expect(states).toEqual([
-      'recordType tracked editable creatable', 'record tracked editable',
-      'recordType tracked editable creatable', 'record tracked editable container', 'record tracked editable container',
-      'recordType tracked editable creatable', 'worldspace tracked editable container',
-      'cell tracked editable container', 'placed tracked editable', 'placed tracked editable',
-      'cell tracked editable container', 'placed tracked editable', 'placed tracked editable',
-      'recordType tracked editable creatable',
-      'cell tracked editable container', 'placed tracked editable', 'placed tracked editable',
+      'recordType editable creatable', 'record editable',
+      'recordType editable creatable', 'record editable container', 'record editable container',
+      'recordType editable creatable', 'worldspace editable container',
+      'cell editable container', 'placed editable', 'placed editable',
+      'cell editable container', 'placed editable', 'placed editable',
+      'recordType editable creatable',
+      'cell editable container', 'placed editable', 'placed editable',
     ]);
   });
 
-  it('states an untracked plugin untracked on every row beneath it', async () => {
-    const states = (await rowsBeneath(new RecordBrowser(spatialClient()), { name: 'Plugin0.esp', origin: 'Data/' }, { tracked: false, editable: true }))
+  it('states an editable plugin\'s editability on every row beneath it', async () => {
+    const states = (await rowsBeneath(new RecordBrowser(spatialClient()), { name: 'Plugin0.esp', origin: 'Data/' }, { editable: true }))
       .map((n) => String(n.contextValue));
 
-    const CONDITION_WORDS = new Set(['tracked', 'untracked', 'editable']);
+    const CONDITION_WORDS = new Set(['editable']);
     const conditionsOf = (state: string) => state.split(' ').filter((w) => CONDITION_WORDS.has(w)).join(' ');
-    expect(new Set(states.map(conditionsOf))).toEqual(new Set(['untracked editable']));
+    expect(new Set(states.map(conditionsOf))).toEqual(new Set(['editable']));
   });
 });
 
@@ -871,7 +863,7 @@ describe('RecordBrowser spatial origin threading', () => {
     expect(repo.calls.filter(c => c.method === 'getInteriorCells')).toHaveLength(2);
   });
 
-  it('a cell row and a placed-reference row of a shared filename, expanded concurrently, read their own plugin\'s tracked/read-only facts, not the other plugin\'s', async () => {
+  it('a cell row and a placed-reference row of a shared filename, expanded concurrently, read their own plugin\'s editable/read-only facts, not the other plugin\'s', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }] });
     repo.setQueryAnswer('getWorldspaces', [WORLDSPACE_OF_M]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
@@ -883,15 +875,15 @@ describe('RecordBrowser spatial origin threading', () => {
       temporary: [],
     });
     const provider = new RecordBrowser(repo);
-    const TRACKED_EDITABLE: PluginConditions = { tracked: true, editable: true };
-    const READ_ONLY: PluginConditions = { tracked: false, editable: false };
+    const EDITABLE: PluginConditions = { editable: true };
+    const READ_ONLY: PluginConditions = { editable: false };
 
     const [fromA, fromB] = await Promise.all([
-      rowsBeneath(provider, { name: 'Shared.esp', origin: 'ModA' }, TRACKED_EDITABLE),
+      rowsBeneath(provider, { name: 'Shared.esp', origin: 'ModA' }, EDITABLE),
       rowsBeneath(provider, { name: 'Shared.esp', origin: 'ModB' }, READ_ONLY),
     ]);
     const rowOf = (nodes: RecordBrowserNode[], kind: string) =>
-      present(nodes.find((n) => String(n.contextValue).startsWith(`${kind} `)), `the ${kind} row`);
+      present(nodes.find((n) => String(n.contextValue).split(' ')[0] === kind), `the ${kind} row`);
     const cellOf = (nodes: RecordBrowserNode[]) => rowOf(nodes, 'cell');
     const placedOf = (nodes: RecordBrowserNode[]) => rowOf(nodes, 'placed');
     const cellA = cellOf(fromA);
@@ -899,13 +891,13 @@ describe('RecordBrowser spatial origin threading', () => {
     const cellB = cellOf(fromB);
     const placedB = placedOf(fromB);
 
-    expect(cellA.contextValue).toBe('cell tracked editable container');
+    expect(cellA.contextValue).toBe('cell editable container');
     expect(openedArguments(cellA)).toMatchObject([{ argument: { plugin: { origin: 'ModA' } } }]);
-    expect(placedA.contextValue).toBe('placed tracked editable');
+    expect(placedA.contextValue).toBe('placed editable');
     expect(openedArguments(placedA)).toMatchObject([{ argument: { plugin: { origin: 'ModA' } } }]);
-    expect(cellB.contextValue).toBe('cell untracked container');
+    expect(cellB.contextValue).toBe('cell container');
     expect(openedArguments(cellB)).toMatchObject([{ argument: { plugin: { origin: 'ModB' } } }]);
-    expect(placedB.contextValue).toBe('placed untracked');
+    expect(placedB.contextValue).toBe('placed');
     expect(openedArguments(placedB)).toMatchObject([{ argument: { plugin: { origin: 'ModB' } } }]);
   });
 
@@ -978,7 +970,7 @@ describe('which record rows are containers is mEdit\'s answer', () => {
 
     const children = await provider.getChildren(present(row, 'the sole record row'));
 
-    expect(present(row, 'the sole record row').contextValue).toBe('record untracked container');
+    expect(present(row, 'the sole record row').contextValue).toBe('record container');
     expect(children.map((c) => c.description)).toEqual(['child1:Fallout4.esm']);
   });
 
@@ -989,7 +981,7 @@ describe('which record rows are containers is mEdit\'s answer', () => {
 
     const [row] = await provider.getChildren(present(typeNode, 'the sole group'));
 
-    expect(present(row, 'the sole record row').contextValue).toBe('record untracked');
+    expect(present(row, 'the sole record row').contextValue).toBe('record');
     expect(present(row, 'the sole record row').collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
 
@@ -1004,8 +996,8 @@ describe('which record rows are containers is mEdit\'s answer', () => {
     const children = await provider.getChildren(row);
 
     expect(children.map((c) => [c.contextValue, c.collapsibleState])).toEqual([
-      ['record untracked container', TreeItemCollapsibleState.Collapsed],
-      ['record untracked', TreeItemCollapsibleState.None],
+      ['record container', TreeItemCollapsibleState.Collapsed],
+      ['record', TreeItemCollapsibleState.None],
     ]);
   });
 });

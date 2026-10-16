@@ -31,25 +31,25 @@ import { readPluginLines } from '../../test/mo2/adapterOver';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 import { NO_DETECTORS } from '../../test/noDetectors';
 
-const MOD = 'mods/Tracked Patch Mod';
-const ORIGIN: FileOrigin = { kind: 'mod', name: 'Tracked Patch Mod' };
+const MOD = 'mods/Source Patch Mod';
+const ORIGIN: FileOrigin = { kind: 'mod', name: 'Source Patch Mod' };
 const DEFAULT_PLUGINS = 'profiles/Default/plugins.txt';
 const SECONDARY_PLUGINS = 'profiles/Secondary/plugins.txt';
 
 const NAMED_FOR_IT: ReadonlyArray<readonly [before: string, after: string]> = [
-  ['Tracked Patch Mod.esp', 'Renamed Patch.esp'],
-  ['Tracked Patch Mod.ini', 'Renamed Patch.ini'],
-  ['Tracked Patch Mod - Main.ba2', 'Renamed Patch - Main.ba2'],
-  ['Tracked Patch Mod - Textures.ba2', 'Renamed Patch - Textures.ba2'],
-  ['Strings/Tracked Patch Mod_en.STRINGS', 'Strings/Renamed Patch_en.STRINGS'],
-  ['Strings/Tracked Patch Mod_en.DLSTRINGS', 'Strings/Renamed Patch_en.DLSTRINGS'],
+  ['Source Patch Mod.esp', 'Renamed Patch.esp'],
+  ['Source Patch Mod.ini', 'Renamed Patch.ini'],
+  ['Source Patch Mod - Main.ba2', 'Renamed Patch - Main.ba2'],
+  ['Source Patch Mod - Textures.ba2', 'Renamed Patch - Textures.ba2'],
+  ['Strings/Source Patch Mod_en.STRINGS', 'Strings/Renamed Patch_en.STRINGS'],
+  ['Strings/Source Patch Mod_en.DLSTRINGS', 'Strings/Renamed Patch_en.DLSTRINGS'],
 ].map(([before, after]) => [`${MOD}/${before}`, `${MOD}/${after}`] as const);
 
 const NOT_NAMED_FOR_IT = [
-  `${MOD}/Tracked Patch Mod_Extra.esp`,
-  `${MOD}/Strings/Tracked Patch Mod_Extra_en.STRINGS`,
-  `${MOD}/Strings/Tracked Patch Mod_xx.STRINGS`,
-  `${MOD}/plugin-source/Tracked Patch Mod.esp/record.json`,
+  `${MOD}/Source Patch Mod_Extra.esp`,
+  `${MOD}/Strings/Source Patch Mod_Extra_en.STRINGS`,
+  `${MOD}/Strings/Source Patch Mod_xx.STRINGS`,
+  `${MOD}/plugin-source/Source Patch Mod.esp/record.json`,
   `${MOD}/Other Archive - Main.ba2`,
 ];
 
@@ -59,7 +59,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
   const at = (relative: string): string => join(root, relative);
   const text = (relative: string): Promise<string> => readFile(at(relative), 'utf8');
   const rename = (to = 'Renamed Patch.esp'): Promise<void> =>
-    adapter.renamePlugin(ORIGIN, 'Tracked Patch Mod.esp', to, 'Fallout4');
+    adapter.renamePlugin(ORIGIN, 'Source Patch Mod.esp', to, 'Fallout4');
 
   async function put(relative: string, contents = relative): Promise<void> {
     await mkdir(join(at(relative), '..'), { recursive: true });
@@ -77,7 +77,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     });
     for (const [before] of NAMED_FOR_IT.slice(1)) await put(before);
     for (const path of NOT_NAMED_FOR_IT) await put(path);
-    await put(SECONDARY_PLUGINS, '*Unofficial Fallout 4 Patch.esp\r\nTracked Patch Mod.esp\r\n*Last.esp\r\n');
+    await put(SECONDARY_PLUGINS, '*Unofficial Fallout 4 Patch.esp\r\nSource Patch Mod.esp\r\n*Last.esp\r\n');
   });
   afterEach(async () => {
     vi.mocked(fsRename).mockImplementation(actualRename);
@@ -87,7 +87,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
 
   describe('originHoldsPlugin', () => {
     it('answers whether the origin\'s folder holds a plugin file of the name, compared without case', async () => {
-      expect(await adapter.originHoldsPlugin(ORIGIN, 'tracked patch mod.ESP')).toBe(true);
+      expect(await adapter.originHoldsPlugin(ORIGIN, 'source patch mod.ESP')).toBe(true);
       expect(await adapter.originHoldsPlugin(ORIGIN, 'Renamed Patch.esp')).toBe(false);
     });
 
@@ -95,14 +95,14 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
       await mkdir(at(`${MOD}/Folder.esp`));
 
       expect(await adapter.originHoldsPlugin(ORIGIN, 'Folder.esp')).toBe(false);
-      expect(await adapter.originHoldsPlugin({ kind: 'mod', name: 'Gone' }, 'Tracked Patch Mod.esp')).toBe(false);
+      expect(await adapter.originHoldsPlugin({ kind: 'mod', name: 'Gone' }, 'Source Patch Mod.esp')).toBe(false);
     });
 
     it('answers for Overwrite as the run-time output', async () => {
       await put('overwrite/Ran.esp');
 
       expect(await adapter.originHoldsPlugin({ kind: 'runtimeOutput' }, 'Ran.esp')).toBe(true);
-      expect(await adapter.originHoldsPlugin({ kind: 'runtimeOutput' }, 'Tracked Patch Mod.esp')).toBe(false);
+      expect(await adapter.originHoldsPlugin({ kind: 'runtimeOutput' }, 'Source Patch Mod.esp')).toBe(false);
     });
   });
 
@@ -135,36 +135,36 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
   });
 
   it('leaves an archive that belongs to a plugin whose name starts with this one, as the archive\'s name cut at its last " - " is that plugin\'s', async () => {
-    await put(`${MOD}/Tracked Patch Mod - Bar.esp`);
-    await put(`${MOD}/Tracked Patch Mod - Bar - Main.ba2`);
+    await put(`${MOD}/Source Patch Mod - Bar.esp`);
+    await put(`${MOD}/Source Patch Mod - Bar - Main.ba2`);
 
     await rename();
 
     const after = await snapshotTree(root);
-    expect(after.has(`${MOD}/Tracked Patch Mod - Bar - Main.ba2`)).toBe(true);
+    expect(after.has(`${MOD}/Source Patch Mod - Bar - Main.ba2`)).toBe(true);
     expect(after.has(`${MOD}/Renamed Patch - Bar - Main.ba2`)).toBe(false);
   });
 
   it('renames the files a release of another game names for a plugin, by that release\'s archive extension and language spellings', async () => {
-    await put(`${MOD}/Tracked Patch Mod - Main.bsa`);
-    await put(`${MOD}/Strings/Tracked Patch Mod_English.STRINGS`);
+    await put(`${MOD}/Source Patch Mod - Main.bsa`);
+    await put(`${MOD}/Strings/Source Patch Mod_English.STRINGS`);
 
-    await adapter.renamePlugin(ORIGIN, 'Tracked Patch Mod.esp', 'Renamed Patch.esp', 'SkyrimSE');
+    await adapter.renamePlugin(ORIGIN, 'Source Patch Mod.esp', 'Renamed Patch.esp', 'SkyrimSE');
 
     const after = await snapshotTree(root);
     expect(after.has(`${MOD}/Renamed Patch - Main.bsa`)).toBe(true);
     expect(after.has(`${MOD}/Strings/Renamed Patch_English.STRINGS`)).toBe(true);
-    expect(after.has(`${MOD}/Tracked Patch Mod - Main.ba2`)).toBe(true);
-    expect(after.has(`${MOD}/Strings/Tracked Patch Mod_en.STRINGS`)).toBe(true);
+    expect(after.has(`${MOD}/Source Patch Mod - Main.ba2`)).toBe(true);
+    expect(after.has(`${MOD}/Strings/Source Patch Mod_en.STRINGS`)).toBe(true);
   });
 
   it('renames a plugin whose name changes only its case, and its files and line with it', async () => {
-    await rename('TRACKED PATCH MOD.esp');
+    await rename('SOURCE PATCH MOD.esp');
 
     const after = await snapshotTree(root);
-    expect(after.has(`${MOD}/TRACKED PATCH MOD.esp`)).toBe(true);
-    expect(after.has(`${MOD}/TRACKED PATCH MOD - Main.ba2`)).toBe(true);
-    expect((await readPluginLines(root)).map((p) => p.name)).toContain('TRACKED PATCH MOD.esp');
+    expect(after.has(`${MOD}/SOURCE PATCH MOD.esp`)).toBe(true);
+    expect(after.has(`${MOD}/SOURCE PATCH MOD - Main.ba2`)).toBe(true);
+    expect((await readPluginLines(root)).map((p) => p.name)).toContain('SOURCE PATCH MOD.esp');
   });
 
   it('renames a plugin of Overwrite, which holds files as a mod does', async () => {
@@ -208,13 +208,13 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     });
 
     it('refuses a name a profile already lists for another plugin', async () => {
-      await put(SECONDARY_PLUGINS, 'Tracked Patch Mod.esp\r\n*renamed patch.ESP\r\n');
+      await put(SECONDARY_PLUGINS, 'Source Patch Mod.esp\r\n*renamed patch.ESP\r\n');
       await refused(() => rename(), /renamed patch\.ESP/);
     });
 
     it('refuses two files that the rename would put on one name, which on a file system that tells case apart would overwrite one with the other', async () => {
       class TwinIni extends Dirent {
-        override name = 'tracked patch mod.ini';
+        override name = 'source patch mod.ini';
       }
       vi.mocked(listDir).mockImplementation(async (path) => [...await actualListDir(path), ...(path === at(MOD) ? [new TwinIni()] : [])]);
       await refused(() => rename().finally(() => vi.mocked(listDir).mockImplementation(actualListDir)), /is in the way/);
@@ -224,7 +224,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
       refused(() => rename(name), /not a valid/i));
 
     it('refuses a release the tables hold no row for, as it cannot say which files are named for the plugin', () =>
-      refused(() => adapter.renamePlugin(ORIGIN, 'Tracked Patch Mod.esp', 'Renamed Patch.esp', undefined), /release/i));
+      refused(() => adapter.renamePlugin(ORIGIN, 'Source Patch Mod.esp', 'Renamed Patch.esp', undefined), /release/i));
   });
 
   describe('a failed write leaves every file under its old name', () => {

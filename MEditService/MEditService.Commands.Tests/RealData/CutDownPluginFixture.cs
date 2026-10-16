@@ -23,11 +23,11 @@ public static class CutDownPluginFixture
     public static readonly PluginAddress Plugin = new(PluginFileName, PluginOrigin.DataDirectory);
 
     /// <summary>The plugin and the tree init makes of it, in <paramref name="modFolder"/>.</summary>
-    internal static void TrackedInto(string modFolder) =>
-        TrackedTemplates.CopyInto(modFolder, PluginFileName, template =>
+    internal static void SourcePluginInto(string modFolder) =>
+        SourcePluginTemplates.CopyInto(modFolder, PluginFileName, template =>
         {
             File.Copy(PluginPath, Path.Combine(template, PluginFileName));
-            TrackedTemplates.TrackAlone(template, PluginFileName);
+            SourcePluginTemplates.TrackAlone(template, PluginFileName);
         });
 
     /// <summary>Every document of the plugin's tree, keyed by FormKey.</summary>
@@ -42,7 +42,7 @@ public static class CutDownPluginFixture
     public static Dictionary<string, byte[]> DeriveSourceTreeFromBinary(string pluginPath)
     {
         // ImportSetter, not ImportGetter: a binary overlay reports some derived fields differently from a
-        // fully materialized parse, so deriving through one would compare the tracked tree against a
+        // fully materialized parse, so deriving through one would compare the source plugin tree against a
         // differently parsed mod and call the difference a compile failure.
         var mod = ModFactory.ImportSetter(new ModPath(ModKey.FromFileName(PluginFileName), pluginPath), GameRelease.Fallout4);
 

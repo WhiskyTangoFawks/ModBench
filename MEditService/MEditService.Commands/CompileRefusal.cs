@@ -12,7 +12,7 @@ public enum CompileRefusal
     PluginNotInLoadOrder,
 
     /// <summary>The plugin is in no source mod, so it has no source; the way out is init.</summary>
-    PluginNotTracked,
+    PluginNotSourcePlugin,
 
     /// <summary>The way out is Decompile.</summary>
     PluginSourceUnreadable,

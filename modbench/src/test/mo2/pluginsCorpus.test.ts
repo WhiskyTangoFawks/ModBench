@@ -47,16 +47,16 @@ describe('plugins.txt corpus', () => {
   it('setPluginsEnabled(false) flips several lines in one write, touching only the active profile\'s plugins.txt', async () => {
     const before = await snapshotTree(dir);
     const orderBefore = await pluginOrder(dir);
-    const result = await pluginsCommandsOver(dir).setPluginsEnabled(PROFILE, ['Tracked Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], false);
+    const result = await pluginsCommandsOver(dir).setPluginsEnabled(PROFILE, ['Source Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], false);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
     expect(result).toEqual({
       applied: true,
-      outcome: { landed: ['Tracked Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], refused: [] },
+      outcome: { landed: ['Source Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], refused: [] },
     });
     const enabled = await enabledPlugins(dir);
-    expect(enabled).not.toContain('Tracked Patch Mod.esp');
+    expect(enabled).not.toContain('Source Patch Mod.esp');
     expect(enabled).not.toContain('Unofficial Fallout 4 Patch.esp');
     expect(await pluginOrder(dir)).toEqual(orderBefore);
   });
@@ -64,7 +64,7 @@ describe('plugins.txt corpus', () => {
   it('setPluginsParticipation flips a mixed selection in one write, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
     const result = await pluginsCommandsOver(dir).setPluginsParticipation(PROFILE, [
-      { name: 'Tracked Patch Mod.esp', enabled: false },
+      { name: 'Source Patch Mod.esp', enabled: false },
       { name: 'NonAsciiRetexture.esp', enabled: true },
     ]);
     const after = await snapshotTree(dir);
@@ -72,10 +72,10 @@ describe('plugins.txt corpus', () => {
 
     expect(result).toEqual({
       applied: true,
-      outcome: { landed: ['Tracked Patch Mod.esp', 'NonAsciiRetexture.esp'], refused: [] },
+      outcome: { landed: ['Source Patch Mod.esp', 'NonAsciiRetexture.esp'], refused: [] },
     });
     const enabled = await enabledPlugins(dir);
-    expect(enabled).not.toContain('Tracked Patch Mod.esp');
+    expect(enabled).not.toContain('Source Patch Mod.esp');
     expect(enabled).toContain('NonAsciiRetexture.esp');
   });
 
@@ -109,7 +109,7 @@ describe('plugins.txt corpus', () => {
     await new Promise((resolve) => setTimeout(resolve, WAITING_ON_THE_LOCK_MS));
     const modlist = join(dir, DEFAULT_MODLIST);
     await writeFile(modlist, (await readFile(modlist, 'utf8')).replace('-Harder VATS', '+Harder VATS'));
-    await writeFile(join(dir, DEFAULT_PLUGINS), (await readFile(join(dir, DEFAULT_PLUGINS), 'utf8')).replace('*Tracked Patch Mod.esp', '*Harder VATS.esp\r\n*Tracked Patch Mod.esp'));
+    await writeFile(join(dir, DEFAULT_PLUGINS), (await readFile(join(dir, DEFAULT_PLUGINS), 'utf8')).replace('*Source Patch Mod.esp', '*Harder VATS.esp\r\n*Source Patch Mod.esp'));
     held.release();
     await held.done;
 

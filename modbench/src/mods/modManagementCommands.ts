@@ -253,7 +253,7 @@ export function registerModContextCommands(
       const rows = pluralArgument(entry, 'mod');
       const mods = rows.map((n) => ({ name: n.mod.name, archiveFilename: n.mod.archiveFilename }));
       if (mods.length === 0) return undefined;
-      const sourceMods = rows.filter((n) => n.facts?.tracked === true).map((n) => n.mod.name);
+      const sourceMods = rows.filter((n) => n.facts?.sourceMod === true).map((n) => n.mod.name);
       return (await confirmUninstall(mods.map((m) => m.name), sourceMods, ask)) ? mods : undefined;
     },
     fromAgent: ({ argument }) => argument.map(modNameOf).map((name) => ({

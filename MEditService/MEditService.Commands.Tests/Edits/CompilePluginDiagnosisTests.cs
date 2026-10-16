@@ -10,7 +10,7 @@ public sealed class CompilePluginDiagnosisTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     [Fact]
-    public async Task Compile_WhenTheTrackedSourceHoldsAMalformedFormKey_NamesTheFileAndTheField()
+    public async Task Compile_WhenTheSourcePluginSourceHoldsAMalformedFormKey_NamesTheFileAndTheField()
     {
         var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
         Corrupt();

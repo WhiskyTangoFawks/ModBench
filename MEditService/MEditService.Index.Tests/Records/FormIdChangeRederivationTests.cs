@@ -184,7 +184,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
                     (worldspace, exteriorCell) = (world.FormKey, ext.FormKey);
                 }, origin: OriginNamingItsOwnModFolderBecauseTrackAppliesToNothingElse)
                 .BuildScattered()
-                .Tracked();
+                .SourcePlugin();
             Entry = _fixture.Plugins.Single();
             (Worldspace, ExteriorCell) = (worldspace.ToString(), exteriorCell.ToString());
             Index = Indexes.Reconciled(_fixture);

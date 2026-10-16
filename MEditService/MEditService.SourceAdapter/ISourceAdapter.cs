@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>What the record index reads of tracked plugins' source trees, and the writes the commands make to them. Each
+/// <summary>What the record index reads of source plugins' source trees, and the writes the commands make to them. Each
 /// answers the folder as it stands now: another tool can change it.</summary>
 public interface ISourceAdapter
 {
@@ -16,8 +16,8 @@ public interface ISourceAdapter
     /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c> exists.</summary>
     bool IsSourceMod(string sourceFolder);
 
-    /// <summary>Why the plugin's source does not read though its mod is tracked: no folder, twin folders, or a plugin
-    /// source that cannot be listed. Null when it reads, and when its mod is not tracked.</summary>
+    /// <summary>Why the plugin's source does not read though its mod is a source mod: no folder, twin folders, or a plugin
+    /// source that cannot be listed. Null when it reads, and when its mod is not a source mod.</summary>
     SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin);
 
     /// <summary>The reads over the source folder of the mod providing <paramref name="plugin"/>, tree or not; null
@@ -27,11 +27,11 @@ public interface ISourceAdapter
     /// <summary>The reads over <paramref name="plugin"/>'s source tree; null when it has none that reads.</summary>
     ISourceRepositoryReads? TreeOf(RegisteredPlugin plugin, GameRelease release);
 
-    /// <summary>The repository over <paramref name="provider"/>'s source folder, or null when the folder is not tracked and so
+    /// <summary>The repository over <paramref name="provider"/>'s source folder, or null when the folder is not a source mod and so
     /// has no source tree to answer from.</summary>
     ISourceRepository? Open(PluginProvider.FromMod provider, GameRelease release);
 
-    /// <summary>The repository over <paramref name="provider"/>'s source folder, tracked or not. It refuses the last-written
+    /// <summary>The repository over <paramref name="provider"/>'s source folder, source mod or not. It refuses the last-written
     /// record of a plugin another mod provides (ADR-0012): a repository knows only its folder.</summary>
     ISourceRepository OverFolder(PluginProvider.FromMod provider, GameRelease release);
 

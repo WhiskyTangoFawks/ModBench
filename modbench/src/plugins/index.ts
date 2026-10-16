@@ -22,7 +22,7 @@ export interface PluginsDeps {
   facts: Pick<Instance, 'refresh'>;
   channel: Pick<vscode.LogOutputChannel, 'error' | 'info' | 'warn' | 'show'>;
   reporterFor: (tag: string) => Reporter;
-  /** Registers the tracked mods' repositories: a reconcile reached Ready, or a decompile and commit landed. */
+  /** Registers the source mods' repositories: a reconcile reached Ready, or a decompile and commit landed. */
   registerRepositories: () => Promise<void>;
   ask: AskQuestion;
   sourceEditing: PluginsViewDeps['sourceEditing'];
@@ -59,7 +59,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
   let shown: PluginsView | undefined;
   return {
     recordWrite,
-    conditionsOf: (plugin) => shown?.conditionsOf(plugin) ?? { tracked: false, editable: false },
+    conditionsOf: (plugin) => shown?.conditionsOf(plugin) ?? { editable: false },
     onInstance: ({ instanceRoot, ...instanceDeps }) => {
       const view = createPluginsView({
         ...instanceDeps, recordBrowser, client, statusBar, channel, registerRepositories: deps.registerRepositories, reporterFor,

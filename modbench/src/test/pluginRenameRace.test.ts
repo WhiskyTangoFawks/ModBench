@@ -33,7 +33,7 @@ import { recordingReporter, scriptedDialog } from './surfacingDoubles';
 import { present } from '../ports/present';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 
-const PLUGIN = { name: 'Tracked Patch Mod.esp', origin: 'Tracked Patch Mod' };
+const PLUGIN = { name: 'Source Patch Mod.esp', origin: 'Source Patch Mod' };
 const RENAMED = 'Renamed Patch.esp';
 
 let root: string | undefined;

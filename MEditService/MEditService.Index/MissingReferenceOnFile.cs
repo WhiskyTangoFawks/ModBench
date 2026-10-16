@@ -24,7 +24,7 @@ internal static class SourceFilePlacement
     }
 
     internal static MissingReferenceOnFile Unprovided(MissingReference reference) =>
-        Failed(reference, $"{reference.Plugin.Name} is tracked but no mod folder provides it.");
+        Failed(reference, $"{reference.Plugin.Name} is a source plugin but no mod folder provides it.");
 
     private static MissingReferenceOnFile Failed(MissingReference reference, string failure) => new(reference, null, failure);
 }

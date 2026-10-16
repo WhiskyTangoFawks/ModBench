@@ -16,7 +16,7 @@ public sealed class PluginProblemsApiTests : HostedTests
 
     private static readonly FormKey AbsentRecord = FormKey.Factory("000ABC:Absent.esp");
 
-    private async Task<ScatteredFixtureData> TrackedLoad()
+    private async Task<ScatteredFixtureData> SourcePluginLoad()
     {
         var fx = Owned(new PluginFixtureBuilder("api-plugin-problems")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc).Race.SetTo(AbsentRecord), origin: Origin)
@@ -25,14 +25,14 @@ public sealed class PluginProblemsApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Init(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        await Client.PluginReportsTracked(Plugin);
+        await Client.PluginReportsSourcePlugin(Plugin);
         return fx;
     }
 
     [Fact]
-    public async Task GetProblems_ATrackedPluginReferringToAMissingRecord_NamesTheReferrersFileInTheModFolder_WhichSpellsTheTargetAsAnswered()
+    public async Task GetProblems_ASourcePluginReferringToAMissingRecord_NamesTheReferrersFileInTheModFolder_WhichSpellsTheTargetAsAnswered()
     {
-        var fx = await TrackedLoad();
+        var fx = await SourcePluginLoad();
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Name == Plugin).Path).Require();
 
         var answer = await Client.GetFromJsonAsync<JsonElement>("/plugins/problems");
@@ -68,7 +68,7 @@ public sealed class PluginProblemsApiTests : HostedTests
     [Fact]
     public async Task GetProblems_AFileSavedThatCompileCannotRead_IsTheProblemOnItsPluginsSource_UntilItIsMended()
     {
-        var fx = await TrackedLoad();
+        var fx = await SourcePluginLoad();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var stray = OtherTool.Beside(OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc), "Stray.json");
 

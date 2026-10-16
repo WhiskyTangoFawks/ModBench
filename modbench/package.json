@@ -827,7 +827,7 @@
         },
         {
           "command": "modbench.plugin.rename",
-          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleTracked"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleSourcePlugin"
         },
         {
           "command": "modbench.plugin.move",
@@ -843,11 +843,11 @@
         },
         {
           "command": "modbench.mod.decompileAndCommit",
-          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsUntrackedModWithPlugin && modbench.mod.sourceGestureRowsIn == modbench.modList || focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allInUntrackedMod && modbench.mod.sourceGestureRowsIn == modbench.pluginListTree"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsNonSourceModWithPlugin && modbench.mod.sourceGestureRowsIn == modbench.modList || focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allInNonSourceMod && modbench.mod.sourceGestureRowsIn == modbench.pluginListTree"
         },
         {
           "command": "modbench.plugin.decompile",
-          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allInTrackedMod"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allInSourceMod"
         },
         {
           "command": "modbench.mod.build",
@@ -1186,7 +1186,7 @@
         },
         {
           "command": "modbench.record.create",
-          "when": "view == references-view.tree && reference-list.source == modbench.referencedBy && viewItem =~ /^referencedByHolder\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/ && viewItem =~ /\\bcontainer\\b/",
+          "when": "view == references-view.tree && reference-list.source == modbench.referencedBy && viewItem =~ /^referencedByHolder\\b/ && viewItem =~ /\\beditable\\b/ && viewItem =~ /\\bcontainer\\b/",
           "group": "3_create@1"
         },
         {
@@ -1201,7 +1201,7 @@
         },
         {
           "command": "modbench.record.delete",
-          "when": "view == references-view.tree && reference-list.source == modbench.referencedBy && viewItem =~ /^referencedByHolder\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
+          "when": "view == references-view.tree && reference-list.source == modbench.referencedBy && viewItem =~ /^referencedByHolder\\b/ && viewItem =~ /\\beditable\\b/",
           "group": "6_destroy@1"
         },
         {
@@ -1211,7 +1211,7 @@
         },
         {
           "command": "modbench.mod.openSource",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\btracked\\b/",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bsourceMod\\b/",
           "group": "1_open@2"
         },
         {
@@ -1266,12 +1266,12 @@
         },
         {
           "command": "modbench.mod.decompileAndCommit",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bholdsPlugin\\b/ && viewItem =~ /\\buntracked\\b/",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bholdsPlugin\\b/ && viewItem =~ /\\bnonSourceMod\\b/",
           "group": "4_sourceControl@1"
         },
         {
           "command": "modbench.mod.build",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\btracked\\b/",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bsourceMod\\b/",
           "group": "4_sourceControl@2"
         },
         {
@@ -1416,27 +1416,27 @@
         },
         {
           "command": "modbench.plugin.rename",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\btracked\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\bsourcePlugin\\b/",
           "group": "2_change@2"
         },
         {
           "command": "modbench.record.create",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\beditable\\b/",
           "group": "3_create@1"
         },
         {
           "command": "modbench.mod.decompileAndCommit",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\binUntrackedMod\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\binNonSourceMod\\b/",
           "group": "4_sourceControl@1"
         },
         {
           "command": "modbench.plugin.decompile",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\binTrackedMod\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\binSourceMod\\b/",
           "group": "4_sourceControl@2"
         },
         {
           "command": "modbench.mod.build",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\binTrackedMod\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\binSourceMod\\b/",
           "group": "4_sourceControl@3"
         },
         {
@@ -1456,7 +1456,7 @@
         },
         {
           "command": "modbench.record.create",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\brecordType\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/ && viewItem =~ /\\bcreatable\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\brecordType\\b/ && viewItem =~ /\\beditable\\b/ && viewItem =~ /\\bcreatable\\b/",
           "group": "3_create@1"
         },
         {
@@ -1471,7 +1471,7 @@
         },
         {
           "command": "modbench.record.create",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bcontainer\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bcontainer\\b/ && viewItem =~ /\\beditable\\b/",
           "group": "3_create@1"
         },
         {
@@ -1486,7 +1486,7 @@
         },
         {
           "command": "modbench.record.delete",
-          "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/ && viewItem =~ /\\beditable\\b/",
           "group": "6_destroy@1"
         }
       ],
@@ -1538,17 +1538,17 @@
         },
         {
           "command": "modbench.mod.decompileAndCommit",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && inMod == untracked",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && inMod == nonSourceMod",
           "group": "4_sourceControl@1"
         },
         {
           "command": "modbench.plugin.decompile",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && inMod == tracked",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && inMod == sourceMod",
           "group": "4_sourceControl@2"
         },
         {
           "command": "modbench.mod.build",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && inMod == tracked",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && inMod == sourceMod",
           "group": "4_sourceControl@3"
         },
         {
@@ -1640,7 +1640,7 @@
       {
         "command": "modbench.plugin.rename",
         "key": "f2",
-        "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance && modbench.plugin.singleTracked"
+        "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance && modbench.plugin.singleSourcePlugin"
       },
       {
         "command": "modbench.record.delete",

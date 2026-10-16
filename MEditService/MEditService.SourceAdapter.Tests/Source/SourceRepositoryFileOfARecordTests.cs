@@ -55,7 +55,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
 
     private ISourceRepository Repository =>
         TestAdapters.Source().Open(new PluginProvider.FromMod(Origin, _modFolder, _modFolder), Release)
-        ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+        ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
 
     private static LoadOrderEntry Entry(string modFolder, string origin) =>
         new(PluginName, Path.Combine(modFolder, PluginName), origin, Line: 0, Enabled: true, Winning: true);
@@ -184,7 +184,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     {
         var document = Path.Combine(_modFolder, "Loose.json");
 
-        Assert.Equal($"{document} is under no tracked plugin's source.", WhyRefused(document));
+        Assert.Equal($"{document} is under no source plugin's source.", WhyRefused(document));
     }
 
     [Fact]
@@ -194,20 +194,20 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         TrackFiledIn(other);
         var npcFile = Path.Combine(other, NpcDocument);
 
-        Assert.Equal($"{npcFile} is under no tracked plugin's source.", WhyRefused(npcFile));
+        Assert.Equal($"{npcFile} is under no source plugin's source.", WhyRefused(npcFile));
     }
 
     [Fact]
     public void ASourceInAModWithNoRepository_IsRefused()
     {
-        using var untracked = new ScratchDirectory("medit-file-of-a-record-untracked-");
-        var npcFile = Path.Combine(untracked, NpcDocument);
+        using var nonSourceMod = new ScratchDirectory("medit-file-of-a-record-nonSourceMod-");
+        var npcFile = Path.Combine(nonSourceMod, NpcDocument);
         Directory.CreateDirectory(Path.GetDirectoryName(npcFile).Require());
         File.WriteAllText(npcFile, "{\"FormKey\": \"000800:Filed.esp\", \"EditorID\": \"FiledNpc\"}");
 
         Assert.Equal(
-            $"{npcFile} is under no tracked plugin's source.",
-            WhyRefused(npcFile, LoadOrder(Entry(_modFolder, Origin) with { Winning = false }, Entry(untracked, "NonSourceMod"))));
+            $"{npcFile} is under no source plugin's source.",
+            WhyRefused(npcFile, LoadOrder(Entry(_modFolder, Origin) with { Winning = false }, Entry(nonSourceMod, "NonSourceMod"))));
     }
 
     [Fact]

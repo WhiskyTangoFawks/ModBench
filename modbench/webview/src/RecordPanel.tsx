@@ -51,7 +51,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [immutableSet, setImmutableSet] = useState<Set<ColumnKey>>(new Set());
   // Null until /plugins answers, and null again when it fails: fail-closed, so a panel that has
   // not heard from /plugins offers no editing, build or decompile and commit (commands.md, No dead entries).
-  const [trackedSet, setTrackedSet] = useState<Set<ColumnKey> | null>(null);
+  const [sourcePluginSet, setSourcePluginSet] = useState<Set<ColumnKey> | null>(null);
   const [editableSet, setEditableSet] = useState<Set<ColumnKey> | null>(null);
   const [sourceUnreadableReasons, setSourceUnreadableReasons] = useState<Map<ColumnKey, UnreadableSource> | null>(null);
   const [modsByOrigin, setModsByOrigin] = useState<Record<string, ModRepository>>({});
@@ -144,8 +144,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       setGone(loaded.result === null ? { records: loaded.gone, copiesLacking: loaded.copiesLacking } : null);
       if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
       // Unguarded, unlike the two above: a null must replace a previous record's answer, so an
-      // unknown state reads as neither tracked nor untracked.
-      setTrackedSet(loaded.trackedSet);
+      // unknown state reads as neither source plugin nor non-source plugin.
+      setSourcePluginSet(loaded.sourcePluginSet);
       setEditableSet(loaded.editableSet);
       setSourceUnreadableReasons(loaded.sourceUnreadableReasons);
       setModsByOrigin(loaded.modsByOrigin);
@@ -357,7 +357,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                 // Keyed by col.key (ADR-0012), so two columns that share a file name collapse and
                 // resize apart; a status is the plugin's, by its compound key.
                 const isImmutable = immutableSet.has(pluginKeyOf(col.override));
-                const tracked = trackedSet?.has(pluginKeyOf(col.override)) === true;
+                const sourcePlugin = sourcePluginSet?.has(pluginKeyOf(col.override)) === true;
                 const sourceUnreadable = sourceUnreadableReasons?.get(pluginKeyOf(col.override));
                 return (
                   <PluginHeader
@@ -366,7 +366,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                     overriddenBy={col.key === fileColumn ? fileOverriddenBy : null}
                     notActive={fileCopyAlone && col.key === fileColumn}
                     isImmutable={isImmutable}
-                    isTracked={tracked}
+                    isSourcePlugin={sourcePlugin}
                     sourceUnreadable={sourceUnreadable}
                     isFile={col.key === fileColumn}
                     onOpen={() => openColumn(col.override)}

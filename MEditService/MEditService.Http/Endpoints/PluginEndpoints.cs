@@ -35,7 +35,7 @@ internal static class PluginEndpoints
             .WithName("GetPluginProblems")
             .WithTags(Tag)
             .WithDescription(
-                "What is wrong in each tracked plugin's source, on the file that holds the " +
+                "What is wrong in each source plugin's source, on the file that holds the " +
                 "record: a reference to a record neither it nor an active plugin holds. Answers only once the index is ready.")
             .Produces<IReadOnlyList<PluginProblems>>()
             .ProducesProblem(503);
@@ -102,7 +102,7 @@ internal static class PluginEndpoints
             .WithName("GetRenderedDocument")
             .WithTags(Tag)
             .WithDescription(
-                "The plugin's copy of a record as its own document and the name of its file in plugin source. An untracked " +
+                "The plugin's copy of a record as its own document and the name of its file in plugin source. A non-source " +
                 "plugin's is the text init writes for it, under the name init gives its file. A copy mEdit could not parse " +
                 "is what could be stored. Two documents claiming the copy refuse, naming them.")
             .Produces<RenderedDocument>()
@@ -118,7 +118,7 @@ internal static class PluginEndpoints
             .WithTags(Tag)
             .WithDescription(
                 "Where the plugin's copy of a record is a document: its own file in plugin source, the file of the record carrying " +
-                "it (a child record), or, for an untracked plugin's copy, the name of its rendered document. " +
+                "it (a child record), or, for a non-source plugin's copy, the name of its rendered document. " +
                 "Two documents claiming the copy refuse, naming them.")
             .Produces<CopyDocument>()
             .ProducesProblem(400)
@@ -174,7 +174,7 @@ internal static class PluginEndpoints
 
         app.MapPost("/plugins/rename-source-changes", RenameSourceChanges)
             .WithName("RenameSourceChanges")
-            .WithSummary("The changes renaming a tracked plugin's source makes, writing nothing.")
+            .WithSummary("The changes renaming a source plugin's source makes, writing nothing.")
             .WithDescription(
                 "Over the unsaved documents mEdit holds, the files and folders renaming the plugin's source " +
                 "moves and the text each document it changes holds afterwards: every FormKey of the plugin follows. " +

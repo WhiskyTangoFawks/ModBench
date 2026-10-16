@@ -9,7 +9,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Two mod folders, because the interesting question — does a FormID edit rewrite a FormLink
 /// in a different mod folder's own repo — cannot be asked of one. No index anywhere in it.</summary>
-public sealed class TwoModReferenceFixture : TestInstance, ITrackedPlugins
+public sealed class TwoModReferenceFixture : TestInstance, ISourcePlugins
 {
     public const string ReferencerPluginName = "Winner.esp";
     public const string TargetPluginName = "Base.esm";

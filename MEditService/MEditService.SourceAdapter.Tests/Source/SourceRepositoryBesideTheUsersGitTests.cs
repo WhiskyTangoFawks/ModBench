@@ -28,7 +28,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
         var before = File.ReadAllBytes(IndexOf(modFolder));
 
         var repository = TestAdapters.Source().Open(TestMod.In(modFolder), GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{modFolder}' to be tracked.");
+            ?? throw new InvalidOperationException($"Expected '{modFolder}' to be a source mod.");
         Assert.Empty(repository.ChangedSinceLastCommit(
             new PluginAddress(Plugin, "TestMod")).Value());
 
