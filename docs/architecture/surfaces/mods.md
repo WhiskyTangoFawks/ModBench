@@ -47,7 +47,7 @@ As a user, I want:
 |---|---|---|
 | Label | the separator's name, without MO2's `_separator` suffix | MO2 |
 | Check box, icon | none | MO2 draws a separator as a heading |
-| Description | no manifest, when it has none ([modlist-source.md](modlist-source.md), Status, story 7) | |
+| Description | its status against its manifest ([modlist-source.md](modlist-source.md), Status, story 7) | |
 | Identity | the row's kind and the separator's name | |
 
 ### Overwrite
@@ -181,7 +181,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. Build to write the mod folder from the source, without asking: the base is what the installation files provide, the source's assets override it, each plugin compiles from its plugin source, and the manifest is written last. A source plugin's source is the truth, and build makes the folder from it. Source: catalog `build`; ADR-0006; ADR-0007
+1. Build to write the mod folder from its repository alone, without asking: the source's assets copied, each plugin compiled from its plugin source, and the manifest written last. A source plugin's source is the truth, and build makes the folder from it. Source: catalog `build`; ADR-0006; ADR-0007; ADR-0023
 2. The build configuration in the source to name the output folder and, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
 3. A file in the folder the build did not make left where it is, and the mod shown as differing from its manifest. Restore from manifest removes it. Source: ADR-0022
 4. A build whose configuration names an output folder that is not this mod's folder refused, naming both, so a folder renamed outside Modbench is never overwritten. Source: ADR-0003

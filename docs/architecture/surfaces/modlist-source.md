@@ -2,7 +2,7 @@
 
 The modlist source is what git holds of an instance: each mod's manifest, the profiles and the mod manager's configuration. Update manifest writes a mod's manifest from its folder, and restore from manifest makes the folder what the manifest says ([ADR-0022](../../adr/0022-a-mod-is-restored-from-its-manifest.md)). I commit, diff, branch and merge the source in Source Control as I would any source. Its gestures are in [commands.md](../commands.md): git init under Modlist, update manifest and restore from manifest under Mod. What every view shares is in [common.md](common.md).
 
-Each story cites its source. A story with no provider is owned here.
+Each story cites its source. A story with no source is owned here.
 
 ## The repository
 
@@ -16,19 +16,22 @@ As a user, I want:
 
 ## The manifest
 
-A mod's installation files are the downloaded files the mod's metadata names as what the mod was installed from. As a user, I want:
+A mod folder has one source: an installation file, the game folder or a source mod's repository ([ADR-0023](../../adr/0023-a-mod-folder-has-only-one-source.md)). A mod's installation file is the downloaded file the mod's metadata names as what the mod was installed from. As a user, I want:
 
 1. One manifest in each mod folder, named for the mod, so a mod installed, uninstalled or renamed reads as a file added, removed or renamed in a diff, and two branches that change two mods merge. Source: ADR-0022
-2. The manifest to name the mod's installation files and the game files its files come from, each with its size, its hash and where the mod's metadata says it comes from, and then one line for each file in the mod folder the repository does not commit, naming its provider: an installation file, the game folder or the mod's source. Source: ADR-0022
-3. A file's line to say nothing when the first installation file holds it at the same path, so the ordinary case is the short one. Otherwise it names the path inside an installation file, or that it has no provider.
-4. A file to come only from the mod's installation files or from the game folder, with the bytes they hold, so the mod's metadata says why a file has no provider. A file none of them yields with its bytes has no provider. Source: ADR-0022
+2. The manifest to name the mod's installation file with its size and its hash, so a download that is corrupt or another version reads as one, and then each of the mod's own files with where it comes from in the source, or that nothing provides it. Source: ADR-0023
+3. A file's line to name its path in the source only when that path differs from its path in the mod, as a FOMOD install moves files, so the ordinary line is the short one.
+4. A file to come only from the mod's source, with the bytes the source holds. A file the source does not yield with its bytes has no provider. Source: ADR-0023
 5. A file's line to carry no hash, because its provider fixes its bytes, so an upgrade reads in the diff as the installation file's line and the lines of the files it added, moved or dropped.
 6. An excluded file to come back excluded: its line carries its name as the mod manager marks it, as MO2's `.mohidden` suffix. Source: MO2
-7. A source mod's manifest to be what its last build wrote. With a remote, each file the source provides names the remote and the commit. With none, the manifest reads as any other mod's, and a file the installation files do not yield has no provider. Source: ADR-0022
+7. A source mod's manifest to be what its last build wrote: it names the mod's repository and lists each file the build writes. With no remote, each file has no provider, because a clone cannot fetch the source. Source: ADR-0023
 8. The manifest to hold no path from this machine, so a clone rebuilds anywhere.
 9. Each separator to have a manifest that names nothing, so a clone has the separator. Source: Never break the instance for its owner
-10. The manifest to hold the mod's version beside where each installation file comes from, so it holds all that restore writes into the mod's metadata. Source: Never break the instance for its owner
+10. The manifest to hold the mod's version beside where its installation file comes from, so it holds all that restore writes into the mod's metadata. Source: Never break the instance for its owner
 11. The mod's metadata, where the mod manager keeps it in the mod folder, to be no file of the mod: no line names it, status never says it differs, and restore never sends it to the trash. Source: Orthogonality
+12. The manifest to be a JSON file and my review surface in git: one line for the source and one for each file, the files in alphabetical order, so a diff shows what changed and nothing else. Source: Existing tools
+13. Where the installation file comes from to read as the page I download it from, such as the file's page on Nexus, so I can read it in a diff and open it.
+14. A mod from the game folder to be pinned by the files it takes, so a file the game folder holds that the mod does not take never makes the mod differ. Source: ADR-0023
 
 ## Status
 
@@ -40,7 +43,7 @@ As a user, I want:
 4. Each file row in a mod to say differs when its bytes differ from the manifest's or no line names it, and the mod's tooltip to say how many files its manifest names and its folder lacks.
 5. The Mods view's badge to count the mods that differ or have no manifest. Source: VS Code's view badge
 6. A mod to say differs when its metadata differs from its manifest in the version or where an installation file comes from, so a change I make in the mod manager reaches the commit. Source: Never silently wrong
-7. A separator with no manifest to say no manifest while the instance has a repository, and to count in the badge, because a clone lacks it. Source: Never silently wrong
+7. A separator to say differs or no manifest as a mod does, and to count in the badge. Source: Never silently wrong
 
 ## Git init
 
@@ -66,7 +69,7 @@ As a user, I want:
 
 1. Update manifest to write only what changed, so an unchanged mod changes nothing and Source Control holds only what I did. Source: plugin-source.md, The tree, story 2
 2. No confirmation. The manifests are derived from the mods, and git holds what update manifest replaces. This is an exception to Confirm what destroys.
-3. A mod refused when one of its installation files is not in the downloads folder, naming the mod and the file, and its manifest left as it was. The other mods land. Source: Never silently wrong
+3. A mod refused when its installation file is not in the downloads folder, naming the mod and the file, and its manifest left as it was. The other mods land. Source: Never silently wrong
 4. A file with no provider written as such and reported, so the gap is in the diff and the rest of the modlist commits. Source: Never silently wrong
 5. A source mod's manifest left to its build, and the mod reported when its folder differs from what the build wrote. Source: ADR-0022
 6. It stages nothing and commits nothing. Source: Existing tools
@@ -79,12 +82,12 @@ As a user, I want:
 
 1. Each mod's folder to become what its manifest says: every file whose bytes differ written, and every file no line names sent to the trash. A file whose bytes already match is left alone, so a restore after a checkout costs only what the checkout changed. Source: ADR-0022
 2. One confirmation, only when the restore destroys something: a file whose bytes differ from the manifest's, a file no line names, or metadata whose version or where an installation file comes from differs from the manifest's. It names the mods, or says every mod, and says that a change no manifest holds is lost. A restore after a fresh clone asks nothing. Source: Confirm what destroys
-3. A source mod with a remote rebuilt from its source at the commit the manifest names, and the source cloned when it is absent. One at another commit is skipped and named with the commit, because Modbench never moves my repository. Source: ADR-0022; ADR-0003
-4. A mod skipped, and named with what it lacks, when a downloaded file or a game file its manifest names is missing or has other bytes, or when a file has no provider. Every other mod lands. Nothing is downloaded. Source: A selection is one gesture, and each item lands on its own
+3. A source mod with a remote rebuilt from its submodule at the commit the repository pins, and the submodule cloned when it is absent. One at another commit is skipped and named with the commit, because Modbench never moves my repository. Source: ADR-0023; ADR-0003
+4. A mod skipped, and named with what it lacks, when its installation file or a game file its manifest names is missing or has other bytes, or when a file has no provider. Every other mod lands. Nothing is downloaded. Source: A selection is one gesture, and each item lands on its own
 5. A file the build makes, a compiled plugin or a packed archive, to come back as the build makes it, which can differ in bytes. Only what comes from a downloaded file is byte-checked. Source: ADR-0006
 6. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. This is an exception to A failed gesture writes nothing. Source: mods.md, What install does, story 5
 7. A mod folder with no manifest left as it is and named in the report, because it can be a mod I have not recorded yet. Uninstall removes it. Source: Never silently wrong
-8. Restore to find each mod's files from its manifest alone, never from the mod's metadata, so a clone restores under a mod manager whose metadata git does not hold. Restore finds each downloaded file the manifest names by its name in the downloads folder. Source: Orthogonality; ADR-0022
+8. Restore to find each mod's files from its manifest alone, never from the mod's metadata, so a clone restores under a mod manager whose metadata git does not hold. Restore finds the installation file the manifest names by its name in the downloads folder. Source: Orthogonality; ADR-0022
 9. Restore to write each mod's metadata from its manifest, and to keep what the metadata holds that the manifest does not. Notes, colour and category stay on the machine that set them: they are Metadata chrome. Source: Never break the instance for its owner; commands.md, Metadata chrome
 
 ## Menus and keys
@@ -116,10 +119,11 @@ What I expect to need and choose not to build yet, each with why.
 4. Update manifest run by the gestures that change a mod: install, upgrade and uninstall. Minimal by default: I chain the gestures, then commit.
 5. Which side changed: a mark of the manifest each folder was last restored from, so a mod reads as changed by a checkout or by me, and a checkout restores in one click. I know whether I pulled or edited.
 6. A gesture that validates the modlist and writes nothing, for a CI job. Update manifest's report is the validation.
+7. An archive built in a mod from its installation file's files, each entry with a line of its own naming its path in the installation file, so a change to one entry is one line in a diff.
 
 ## Test seam
 
-- The manifest, given a mod folder's files, its installation files and the game folder: the lines, with no git and no VS Code.
+- The manifest, given a mod folder's files and its source: the lines, with no git and no VS Code.
 - Restore from manifest, given manifests and the downloaded files: the files written, the files sent to the trash, each mod's metadata written, and the mods skipped with their reasons.
 - Status, given manifests, a folder and what Modbench last read: each mod's state, with no hash computed for a file whose size and time match.
 - The round trip: update manifest then restore from manifest on a fixture instance changes no file.
