@@ -12,6 +12,7 @@ export function pluginsCommandsWith(adapter: InstanceAdapter, client: Partial<Pl
       getPlugins: client.getPlugins?.bind(client) ?? unanswered,
       getRenameSourceChanges: client.getRenameSourceChanges?.bind(client) ?? unanswered,
       moveLastWritten: client.moveLastWritten?.bind(client) ?? unanswered,
+      getCreatablePluginExtensions: client.getCreatablePluginExtensions?.bind(client) ?? unanswered,
       getPluginDependants: client.getPluginDependants?.bind(client) ?? unanswered,
     },
   });
