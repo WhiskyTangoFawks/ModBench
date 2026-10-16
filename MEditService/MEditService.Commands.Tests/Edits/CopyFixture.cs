@@ -6,8 +6,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Two mod folders and one load order, since a copy across plugins is unaskable of one.
-/// <see cref="CompiledPlugin"/> defaults non-compiled plugin: a Data-directory master's own file is its only
+/// <summary>Two mod folders and one load order, as a copy across plugins needs two.
+/// <see cref="SourcePlugin"/> defaults to no compiled plugin: a Data-directory master's own file is its only
 /// representation. No index anywhere in it.</summary>
 public sealed class CopyFixture : TestInstance, ICompiledPlugins
 {

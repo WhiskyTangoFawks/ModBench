@@ -80,8 +80,8 @@ public abstract class TestInstance : IDisposable
 
     public string ModFolderOf(PluginAddress plugin) => FolderOf(plugin.Origin);
 
-    /// <summary>The next plugin in load order. A compiled plugin one is a mod's plugin, made so as it is added;
-    /// one that masters another is a compiled plugin over the load order so far, which holds its masters.</summary>
+    /// <summary>The next plugin in load order. A compiled one is a mod's plugin, made so as it is added;
+    /// one that masters another is built over the load order so far, which holds its masters.</summary>
     protected PluginAddress Add(IMod mod, string origin, bool compiledPlugin = true, Listing listing = Listing.Winning)
     {
         if (_loadOrder is not null) throw new InvalidOperationException("The load order is sealed.");

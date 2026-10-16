@@ -70,8 +70,8 @@ public sealed class SourceRepository : ISourceRepository
     private static bool HoldsTreeFor(string sourceFolder, string pluginFileName) =>
         IsSourceMod(sourceFolder) && SourceRepositoryLayout.TreeNameIn(sourceFolder, pluginFileName).Holds(out _, out _);
 
-    /// <summary>Why the plugin's source does not read though its mod is a source mod: no folder, twin folders, or a plugin
-    /// source that cannot be listed. Null when it reads, and when its mod is not a source mod.</summary>
+    /// <summary>Why the plugin's source does not read though its mod is a source mod: no folder, twin folders, or an unlistable plugin
+    /// source. Null when it reads, and when its mod is not a source mod.</summary>
     internal static SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) =>
         plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && IsSourceMod(sourceFolder)
         && !SourceRepositoryLayout.TreeNameIn(sourceFolder, plugin.Name).Holds(out _, out var why)

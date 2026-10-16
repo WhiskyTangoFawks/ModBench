@@ -44,8 +44,8 @@ public sealed class CopyAsOverrideTests
         using var nonCompiledPlugin = CopyFixture.Create();
         using var compiledPlugin = CopyFixture.Create(trackSource: true);
 
-        nonCompiledPlugin.CopyHandler.CopySync([new RecordAt(nonCompiledPlugin.CompiledPlugin, nonCompiledPlugin.SourceNpc.ToString())], CopyMode.Override, [nonCompiledPlugin.DestinationPlugin], replace: false).OnlyLanded();
-        compiledPlugin.CopyHandler.CopySync([new RecordAt(compiledPlugin.CompiledPlugin, compiledPlugin.SourceNpc.ToString())], CopyMode.Override, [compiledPlugin.DestinationPlugin], replace: false).OnlyLanded();
+        nonCompiledPlugin.CopyHandler.CopySync([new RecordAt(nonCompiledPlugin.SourcePlugin, nonCompiledPlugin.SourceNpc.ToString())], CopyMode.Override, [nonCompiledPlugin.DestinationPlugin], replace: false).OnlyLanded();
+        compiledPlugin.CopyHandler.CopySync([new RecordAt(compiledPlugin.SourcePlugin, compiledPlugin.SourceNpc.ToString())], CopyMode.Override, [compiledPlugin.DestinationPlugin], replace: false).OnlyLanded();
 
         Assert.Equal(
             compiledPlugin.Document(compiledPlugin.DestinationPlugin, compiledPlugin.SourceNpc.ToString()).Require().Body,

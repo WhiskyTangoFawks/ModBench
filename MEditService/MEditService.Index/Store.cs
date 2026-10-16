@@ -337,7 +337,7 @@ internal sealed class Store : IDisposable
     }
 
     /// <summary>The disk claim <paramref name="key"/>'s rows carry, or null when nothing backs them.
-    /// Validate's non-compiled plugin half asks for both halves at once: the path to re-hash and the hash the
+    /// Validate's non-compiled half asks for both at once: the path to re-hash and the hash the
     /// rows were built under.</summary>
     public (string FilePath, string ContentHash)? IndexedFile(PluginAddress key)
     {

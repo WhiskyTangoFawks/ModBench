@@ -49,7 +49,7 @@ public sealed class CompiledPluginReadTests : IDisposable
     [Fact]
     public void ALoadOrderNamingACompiledPluginInAnotherCase_StillReadsItAsDerivedFromItsTree()
     {
-        var recased = new PluginAddress("SOURCEPLUGIN.ESP", "sourcemod");
+        var recased = new PluginAddress("COMPILEDPLUGIN.ESP", "sourcemod");
         _index.Reconcile(_holder, _fixture.GameDirectory,
             [.. _fixture.Plugins.Select(p => p.Name == CompiledPlugin.Name ? p with { Name = recased.Name, Origin = recased.Origin } : p)],
             GameRelease.Fallout4);

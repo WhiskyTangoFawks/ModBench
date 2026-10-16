@@ -16,8 +16,8 @@ public interface ISourceAdapter
     /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c> exists.</summary>
     bool IsSourceMod(string sourceFolder);
 
-    /// <summary>Why the plugin's source does not read though its mod is a source mod: no folder, twin folders, or a plugin
-    /// source that cannot be listed. Null when it reads, and when its mod is not a source mod.</summary>
+    /// <summary>Why the plugin's source does not read though its mod is a source mod: no folder, twin folders, or an unlistable plugin
+    /// source. Null when it reads, and when its mod is not a source mod.</summary>
     SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin);
 
     /// <summary>The reads over the source folder of the mod providing <paramref name="plugin"/>, tree or not; null

@@ -31,6 +31,6 @@ public sealed class LateChildFixture : TestInstance, ICompiledPlugins
         Add(new Fallout4Mod(early, Fallout4Release.Fallout4), "EarlyMod", compiledPlugin: false);
         DestinationPlugin = Add(new Fallout4Mod(ModKey.FromFileName("Destination.esp"), Fallout4Release.Fallout4), "DestinationMod");
         Add(new Fallout4Mod(late, Fallout4Release.Fallout4), "LateMod", compiledPlugin: false);
-        CompiledPlugin = Add(source, "SourceMod", compiledPlugin: false);
+        SourcePlugin = Add(source, "SourceMod", compiledPlugin: false);
     }
 }

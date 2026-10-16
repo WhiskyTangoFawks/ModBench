@@ -6,8 +6,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
-/// <summary>Init is the slow step of a compiled plugin fixture, and the mod folder it leaves names no
-/// absolute path, so each distinct mod folder is made a compiled plugin once per run and copied into every test's
+/// <summary>Init is the slow step of a compiled plugin fixture and leaves a mod folder naming no
+/// absolute path, so each distinct mod folder is initialised once per run and copied into every test's
 /// own.</summary>
 internal static class CompiledPluginTemplates
 {
