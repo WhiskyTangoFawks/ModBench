@@ -1,3 +1,4 @@
+import { unreadStatus } from '../unreadStatus';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { fakeVscodeModule } from './fakeVscodeWatcher';
 
@@ -31,7 +32,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('setModsEnabled on a selection already in that state is a byte-identical no-op over the whole instance', async () => {
     const before = await snapshotTree(dir);
-    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).setModsEnabled(PROFILE, ['Unofficial Fallout 4 Patch'], true);
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).setModsEnabled(PROFILE, ['Unofficial Fallout 4 Patch'], true);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set());
     expect(outcome).toEqual({ applied: true, outcome: { landed: ['Unofficial Fallout 4 Patch'], refused: [] } });
@@ -39,7 +40,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('setModsEnabled flips only the mods asked for that are not already in that state, refuses a mod not in the modlist by name, and touches only modlist.txt, in one write', async () => {
     const before = await snapshotTree(dir);
-    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).setModsEnabled(PROFILE, ["Ñoño's Retexture", 'Unofficial Fallout 4 Patch', 'No Such Mod'], false);
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).setModsEnabled(PROFILE, ["Ñoño's Retexture", 'Unofficial Fallout 4 Patch', 'No Such Mod'], false);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -57,14 +58,14 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('moveMods moves a mod to the winning end of mod order, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir), unscriptedMEdit).moveMods(PROFILE, ['ENBoost - 12k'], { kind: 'modOrder' }, 'winning');
+    await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).moveMods(PROFILE, ['ENBoost - 12k'], { kind: 'modOrder' }, 'winning');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
   });
 
   it('insertSeparator adds a separator line and its empty mods/ folder, touching no other file', async () => {
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir), unscriptedMEdit).insertSeparator(PROFILE, 'QA Corpus Marker', { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
+    await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).insertSeparator(PROFILE, 'QA Corpus Marker', { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -73,14 +74,14 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
   });
 
   it('insertSeparator answers the name the separator was written under, folded as MO2 folds a folder name', async () => {
-    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).insertSeparator(PROFILE, '  QA  Marker. ', { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).insertSeparator(PROFILE, '  QA  Marker. ', { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
 
     expect(outcome).toEqual({ applied: true, wrote: true, name: 'QA Marker' });
     expect(await separatorNames(dir)).toContain('QA Marker');
   });
 
   it('renameSeparator answers the name the separator was written under, folded as MO2 folds a folder name', async () => {
-    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).renameSeparator(PROFILE, 'Unassigned (Modlist Development)', 'Renamed  QA Group.');
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).renameSeparator(PROFILE, 'Unassigned (Modlist Development)', 'Renamed  QA Group.');
 
     expect(outcome).toEqual({ applied: true, wrote: true, name: 'Renamed QA Group' });
     expect(await separatorNames(dir)).toContain('Renamed QA Group');
@@ -88,14 +89,14 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('renameSeparator to the separator\'s own name writes nothing', async () => {
     const before = await snapshotTree(dir);
-    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).renameSeparator(PROFILE, 'Unassigned (Modlist Development)', 'Unassigned (Modlist Development)');
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).renameSeparator(PROFILE, 'Unassigned (Modlist Development)', 'Unassigned (Modlist Development)');
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
 
     expect(outcome).toMatchObject({ applied: true, wrote: false });
   });
 
   it.each(['', '   ', '...'])('insertSeparator and renameSeparator refuse the name %j the adapter folds to nothing, writing nothing', async (name) => {
-    const commands = modlistCommands(adapterOver(dir), unscriptedMEdit);
+    const commands = modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus);
     const before = await snapshotTree(dir);
     const added = await commands.insertSeparator(PROFILE, name, { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
     const renamed = await commands.renameSeparator(PROFILE, 'Unassigned (Modlist Development)', name);
@@ -109,7 +110,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     const OLD_META = 'mods/Unassigned (Modlist Development)_separator/meta.ini';
     const NEW_META = 'mods/Renamed QA Group_separator/meta.ini';
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir), unscriptedMEdit).renameSeparator(PROFILE, 'Unassigned (Modlist Development)', 'Renamed QA Group');
+    await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).renameSeparator(PROFILE, 'Unassigned (Modlist Development)', 'Renamed QA Group');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST, OLD_META, NEW_META]));
 
@@ -120,7 +121,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('renameSeparator of a separator with no folder renames its line alone, and makes no folder', async () => {
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir), unscriptedMEdit).renameSeparator(PROFILE, 'Radfall - All-In-One Survival Overhaul', 'Renamed QA Group');
+    await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).renameSeparator(PROFILE, 'Radfall - All-In-One Survival Overhaul', 'Renamed QA Group');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -131,7 +132,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
   it('deleteSeparators of a separator with no folder removes its line alone, and trashes nothing', async () => {
     const trashed: string[] = [];
     const before = await snapshotTree(dir);
-    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).deleteSeparators(PROFILE, await readModlistEntries(dir), ['Radfall - All-In-One Survival Overhaul'], (path) => {
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).deleteSeparators(PROFILE, await readModlistEntries(dir), ['Radfall - All-In-One Survival Overhaul'], (path) => {
       trashed.push(path);
       return Promise.resolve();
     });
@@ -150,7 +151,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     const trashed: string[] = [];
     const modsBefore = (await readModlistEntries(dir)).filter((e) => e.kind === 'mod');
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir), unscriptedMEdit).deleteSeparators(PROFILE, await readModlistEntries(dir), ['Unassigned (Modlist Development)'], async (path) => {
+    await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).deleteSeparators(PROFILE, await readModlistEntries(dir), ['Unassigned (Modlist Development)'], async (path) => {
       trashed.push(path);
       await rm(path, { recursive: true });
     });
@@ -164,14 +165,14 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('moveSeparators touches only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir), unscriptedMEdit).moveSeparators(PROFILE, ['Unassigned (Modlist Development)'], { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
+    await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).moveSeparators(PROFILE, ['Unassigned (Modlist Development)'], { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
   });
 
   it('createEmptyMod adds one empty mods/ folder and one disabled modlist line, and nothing else', async () => {
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir), unscriptedMEdit).createEmptyMod(PROFILE, 'QA Empty Mod');
+    await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).createEmptyMod(PROFILE, 'QA Empty Mod');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -207,7 +208,7 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
   it('excludes a mod\'s file and an Overwrite file, then includes them back byte-identical', async () => {
     const before = await snapshotTree(dir);
 
-    const excluded = await modlistCommands(adapterOver(dir), unscriptedMEdit).markFiles([inMod, inOverwrite], 'Excluded', new Map());
+    const excluded = await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).markFiles([inMod, inOverwrite], 'Excluded', new Map());
 
     expect(excluded).toEqual({ applied: true, outcome: { landed: [inMod, inOverwrite], refused: [] } });
     const after = await snapshotTree(dir);
@@ -218,7 +219,7 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
     expect(after.get('mods/DragIn Manual Extract/textures/dummy.dds.mohidden')).toEqual(before.get('mods/DragIn Manual Extract/textures/dummy.dds'));
     expect(after.get('overwrite/F4SE/Plugins/SomePlugin.log.mohidden')).toEqual(before.get('overwrite/F4SE/Plugins/SomePlugin.log'));
 
-    await modlistCommands(adapterOver(dir), unscriptedMEdit).markFiles([
+    await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).markFiles([
       { ...inMod, relativePath: 'textures/dummy.dds.mohidden' }, { ...inOverwrite, relativePath: 'F4SE/Plugins/SomePlugin.log.mohidden' },
     ], 'Included', new Map());
 
@@ -229,12 +230,12 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
     const own = { ...inMod, relativePath: 'textures/dummy.dds.mohidden' };
     const gone = { ...inMod, relativePath: 'Missing.esp' };
     const byFolder = { ...inMod, relativePath: 'meshes.mohidden/a.nif' };
-    await modlistCommands(adapterOver(dir), unscriptedMEdit).markFiles([inMod], 'Excluded', new Map());
+    await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).markFiles([inMod], 'Excluded', new Map());
     await mkdir(join(dir, 'mods', 'DragIn Manual Extract', 'meshes.mohidden'));
     await writeFile(join(dir, 'mods', 'DragIn Manual Extract', 'meshes.mohidden', 'a.nif'), '');
     const before = await snapshotTree(dir);
 
-    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit).markFiles([gone, byFolder, own], 'Included', new Map());
+    const outcome = await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).markFiles([gone, byFolder, own], 'Included', new Map());
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [own], refused: [
       { item: gone, reason: '"Missing.esp" is gone from disk.' },
