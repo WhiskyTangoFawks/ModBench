@@ -1008,6 +1008,20 @@ describe('the MO2 Instance adapter', () => {
         expect(signalled).toBe(true);
       });
 
+      it('signals a change inside a folder heard changed, as VS Code reports one deleted and made again in one burst', async () => {
+        let signals = 0;
+        const subscription = adapterAt(root).subscribe(() => { signals++; });
+        const file = join(mod(), 'plugin-source', 'Harder VATS.esp', 'Gun.json');
+        await mkdir(dirname(file), { recursive: true });
+        watchOf('source')?.fireChange(join(root, 'source'));
+        signals = 0;
+
+        const signalled = await eventually(() => signals > 0, () => writeFile(file, `${Date.now()}`));
+        subscription.dispose();
+
+        expect(signalled).toBe(true);
+      });
+
       it('signals a change inside one once armed again after a disarm', async () => {
         const watched = adapterAt(root);
         const file = join(mod(), 'plugin-source', 'Harder VATS.esp', 'Gun.json');

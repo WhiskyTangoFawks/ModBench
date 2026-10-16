@@ -25,11 +25,13 @@ function watchFiles(base: string, glob: string, onChange: (path: string) => void
   const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(base), glob));
   void held?.open();
   const heard = (uri: vscode.Uri): void => onChange(uri.fsPath);
-  watcher.onDidCreate((uri) => {
+  const madeAnew = (uri: vscode.Uri): void => {
     heard(uri);
     void held?.created(uri.fsPath);
-  });
-  watcher.onDidChange(heard);
+  };
+  watcher.onDidCreate(madeAnew);
+  // VS Code reports a folder deleted and made again in one burst as changed.
+  watcher.onDidChange(madeAnew);
   watcher.onDidDelete((uri) => {
     heard(uri);
     held?.removed(uri.fsPath);
