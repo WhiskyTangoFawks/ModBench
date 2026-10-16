@@ -17,11 +17,7 @@ export function pluginOrderOf<R extends Placed>(
   const fromLines = value.plugins
     .filter((p): p is R & { line: number } => p.line !== null && p.winning)
     .sort((a, b) => a.line - b.line)
-    .filter((p) => {
-      const key = pluginAddressKey(p);
-      if (placed.has(key)) return false;
-      placed.add(key);
-      return true;
-    });
+    .filter((p) => !placed.has(pluginAddressKey(p)));
+  fromLines.forEach((p) => placed.add(pluginAddressKey(p)));
   return { loadedWithNoLine, fromLines, others: value.plugins.filter((p) => !placed.has(pluginAddressKey(p))) };
 }

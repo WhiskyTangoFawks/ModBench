@@ -574,6 +574,16 @@ describe('Instance — game folder and the archives the game loads', () => {
     expect(logs).toEqual([]);
   });
 
+  it('tells once, until it changes, each line the reading left out as a repeat', async () => {
+    const note = 'plugins.txt lists the plugin A.esp on more than one line; the first line holds';
+    const { instance, warnings } = loader({ ...GAME_FOUND, orderNotes: [note] });
+
+    await instance.refresh();
+    await instance.refresh();
+
+    expect(warnings).toEqual([`[instance] ${note}`]);
+  });
+
   it('tells once, until it changes, each archive the INIs list that nothing holds', async () => {
     const { instance, logs } = loader({
       ...GAME_FOUND,
