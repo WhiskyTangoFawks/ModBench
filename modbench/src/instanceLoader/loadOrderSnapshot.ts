@@ -272,7 +272,8 @@ export function loadOrderSnapshotOf(value: {
   readonly modFolders: ModFolders | undefined;
   /** Each source mod's source folder, by mod name. */
   readonly sourceDirs: ReadonlyMap<string, string>;
-  readonly overwriteDir: string | undefined;
+  /** Where a new plugin can live (`pluginPlacesOf`). */
+  readonly places: readonly PluginPlace[];
   readonly archives: ArchiveSources;
   readonly modlist: SnapshotModlist;
 }): LoadOrderSnapshotValue<string> | LoadOrderSnapshotRefusal | undefined {
@@ -284,20 +285,14 @@ export function loadOrderSnapshotOf(value: {
   const { dataFolder } = value.gameFolder;
   // The filter states a found game folder's own guarantee, never an unchecked cast.
   const rows = value.plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined);
-  const modPlace = (name: string): { name: string; folder: string; sourceFolder?: string } | undefined => {
-    const folder = value.modFolders?.holding({ kind: 'mod', name });
-    if (folder === undefined) return undefined;
-    const sourceFolder = value.sourceDirs.get(name);
-    return sourceFolder === undefined ? { name, folder: folder.path } : { name, folder: folder.path, sourceFolder };
-  };
   const whatProvides = (origin: string) => byOrigin<SnapshotProvider | undefined>(origin, {
     overwrite: { kind: 'None' },
     data: { kind: 'Game' },
     mod: (name) => {
-      const place = modPlace(name);
-      if (place === undefined) return undefined;
-      const { name: mod, ...where } = place;
-      return { kind: 'Mod', mod, ...where };
+      const folder = value.modFolders?.holding({ kind: 'mod', name });
+      if (folder === undefined) return undefined;
+      const sourceFolder = value.sourceDirs.get(name);
+      return sourceFolder === undefined ? { kind: 'Mod', mod: name, folder: folder.path } : { kind: 'Mod', mod: name, folder: folder.path, sourceFolder };
     },
   });
   const order = pluginOrderOf(
@@ -327,10 +322,7 @@ export function loadOrderSnapshotOf(value: {
     active,
     loadedWithNoLine: loadedWithNoLine.map(({ name, origin }) => ({ name, origin })),
     ...archivesAndStringsOf(value.archives, dataFolder, active),
-    places: [
-      ...value.modlist.mods.flatMap((entry) => (entry.kind === 'mod' && entry.enabled ? modPlace(entry.name) ?? [] : [])),
-      ...(value.overwriteDir === undefined ? [] : [{ name: OVERWRITE_ORIGIN, folder: value.overwriteDir }]),
-    ],
+    places: [...value.places],
     mods: snapshotModsOf(value.modlist, value.modFolders),
     statCache: value.modlist.statCache,
   };

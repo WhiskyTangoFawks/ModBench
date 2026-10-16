@@ -17,6 +17,7 @@ import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ManagerNames, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
+import { pluginPlacesOf } from './pluginPlacesOf';
 import { sameCopies, type FileCopies } from './sameCopies';
 import { errorMessage } from '../ports/errorMessage';
 import { modSyncArgumentsOf, pluginSyncArgumentsOf, type ModSyncArguments, type PluginSyncArguments } from './syncArguments';
@@ -417,7 +418,7 @@ export class Instance implements Subscription {
     };
     this.tellArchivesNothingHolds(archiveSources);
     const loadOrderSnapshot = loadOrderSnapshotOf({
-      plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs, overwriteDir: paths.overwriteDir, archives: archiveSources,
+      plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs, places: pluginPlacesOf({ mods: entries, paths }), archives: archiveSources,
       modlist: { mods: entries, metadataFiles: adapter.metadataFilesInModFolder, statCache: adapter.statCacheFolder },
     });
     return {
