@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  archiveListsOf, ba2VersionsOf, creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusDomainForMetaGame, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
+  archiveListsOf, ba2VersionsOf, creationClubListFile, dataFolderFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainForMetaGame, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
 describe('gameReleaseForGame', () => {
@@ -105,24 +105,28 @@ describe('dataFolderFile', () => {
   });
 });
 
-describe('gameMastersOf', () => {
+describe('loadedWithNoLineOf', () => {
   it('answers the game\'s masters, as Mutagen\'s Implicits.Listings, in the order the game loads them', () => {
-    expect(gameMastersOf('Fallout4')).toEqual([
+    expect(loadedWithNoLineOf('Fallout4', [])).toEqual([
       'Fallout4.esm', 'DLCRobot.esm', 'DLCworkshop01.esm', 'DLCCoast.esm', 'DLCworkshop02.esm', 'DLCworkshop03.esm',
       'DLCNukaWorld.esm',
     ]);
-    expect(gameMastersOf('SkyrimSE')).toEqual(['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm']);
-    expect(gameMastersOf('Oblivion')).toEqual(['Oblivion.esm']);
-    expect(gameMastersOf('Starfield')).toEqual([
+    expect(loadedWithNoLineOf('SkyrimSE', [])).toEqual(['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm']);
+    expect(loadedWithNoLineOf('Oblivion', [])).toEqual(['Oblivion.esm']);
+    expect(loadedWithNoLineOf('Starfield', [])).toEqual([
       'Starfield.esm', 'Constellation.esm', 'OldMars.esm', 'BlueprintShips-Starfield.esm', 'ShatteredSpace.esm',
       'SFBGS006.esm', 'SFBGS007.esm', 'SFBGS003.esm', 'SFBGS008.esm', 'SFBGS004.esm', 'SFBGS00D.esm', 'SFBGS047.esm',
       'SFBGS050.esm', 'BlueprintShips-SFBGS050.esm',
     ]);
   });
 
-  it('answers none for a release the table holds no row for', () => {
-    expect(gameMastersOf(undefined)).toEqual([]);
-    expect(gameMastersOf('SomeRelease')).toEqual([]);
+  it('answers no master for a release the table holds no row for', () => {
+    expect(loadedWithNoLineOf(undefined, [])).toEqual([]);
+    expect(loadedWithNoLineOf('SomeRelease', [])).toEqual([]);
+  });
+
+  it('answers the game\'s masters, then the Creation Club plugins, in that order', () => {
+    expect(loadedWithNoLineOf('Oblivion', ['ccA.esl', 'ccB.esl'])).toEqual(['Oblivion.esm', 'ccA.esl', 'ccB.esl']);
   });
 });
 

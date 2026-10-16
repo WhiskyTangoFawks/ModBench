@@ -180,9 +180,9 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     expect(entry?.enabled).toBe(false);
   });
 
-  it('syncMods adds and drops lines against the folders it is handed, touching only modlist.txt', async () => {
+  it('syncMods adds and drops lines against the folders on disk, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    const outcome = await modSyncOver(adapterOver(dir))({ profile: PROFILE, modFolders: (await adapterOver(dir).reading()).modFolders?.all ?? [] });
+    const outcome = await modSyncOver(adapterOver(dir))();
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -196,7 +196,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('syncMods reports a missing mod its file repeats once', async () => {
     await appendFile(join(dir, MODLIST), '+[NODELETE] Radfall\r\n');
-    const outcome = await modSyncOver(adapterOver(dir))({ profile: PROFILE, modFolders: (await adapterOver(dir).reading()).modFolders?.all ?? [] });
+    const outcome = await modSyncOver(adapterOver(dir))();
 
     expect(outcome).toMatchObject({ applied: true, dropped: ['[NODELETE] Radfall', 'Radfall - All-In-One Survival Overhaul (separator)'] });
   });

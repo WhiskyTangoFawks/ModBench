@@ -18,7 +18,7 @@ function syncAnswering(...outcomes: (() => Promise<Outcome>)[]) {
   const sync = createSync(() => present(outcomes[calls++], 'an outcome for this run')(), channel, LABELS);
   sync.onMessageChanged(messageChanged);
   const run = async (): Promise<void> => {
-    expect(() => { void sync.run({}); }).not.toThrow();
+    expect(() => { void sync.run(); }).not.toThrow();
     await sync.settled();
   };
   return { channel, messageChanged, sync, run };
@@ -35,7 +35,7 @@ describe('createSync: settled', () => {
     const answered = new Promise<Outcome>((resolve) => { answer = () => resolve({ applied: true, added: ['New'], dropped: [] }); });
     const sync = createSync(() => answered, channel, LABELS);
 
-    void sync.run({});
+    void sync.run();
     const settled = sync.settled();
     answer();
     await settled;
@@ -47,7 +47,7 @@ describe('createSync: settled', () => {
     const channel = { error: vi.fn(), info: vi.fn(() => { throw new Error('the Output is gone'); }) };
     const sync = createSync(() => Promise.resolve<Outcome>({ applied: true, added: ['New'], dropped: [] }), channel, LABELS);
 
-    const run = sync.run({});
+    const run = sync.run();
 
     await expect(sync.settled()).resolves.toBeUndefined();
     await expect(run).rejects.toThrow('the Output is gone');

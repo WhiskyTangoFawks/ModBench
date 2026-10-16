@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { Instance, InstanceValue, InstanceView, ModSyncArguments } from '../instanceLoader/instance';
+import type { Instance, InstanceView } from '../instanceLoader/instance';
 import type { ModlistCommands } from '../modOrderCommands/modOrderCommands';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -40,7 +40,7 @@ interface ModsViewDeps {
   /** The one selected mod row with a Nexus id in the focused Mods or Downloads view, for the palette. */
   nexusRow: () => NexusModRow | undefined;
   /** Mod sync, whose failure the view's message line says. */
-  modSync: Sync<ModSyncArguments>;
+  modSync: Sync;
   /** Each mod's status: mEdit pushes the mods whose status changed, and the view reads them. */
   modStatus: { push: Pick<MEditClient, 'onNotification' | 'onReconnected'>; read: ReadStatus };
 }
@@ -117,7 +117,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     }),
     registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
     ...registerConflictTable(instance, deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
-    vscode.commands.registerCommand('modbench.mod.sync', (value: InstanceValue) => modSync.run(value.modSyncArguments)),
+    vscode.commands.registerCommand('modbench.mod.sync', () => modSync.run()),
     ...registerModInstallCommands({
       commands, instance, reporterFor, warnIfFomod: deps.warnIfFomod, downloadInstall: deps.downloadInstall,
     }),

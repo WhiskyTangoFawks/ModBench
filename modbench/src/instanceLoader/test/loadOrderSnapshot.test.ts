@@ -4,7 +4,7 @@ import type { DataFolderPlugins, FileRead, FileStamp, GameFolder, ModFolders, Or
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { buildFileConflictIndex, FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
 import {
-  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, providedPluginsOf, sourceFiles, stampedSnapshot,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, sourceFiles, stampedSnapshot,
   type ArchiveSources,
   type LoadOrderPlugin, type LoadOrderPluginLine,
 } from '../loadOrderSnapshot';
@@ -252,17 +252,17 @@ describe('pluginsLoadedWithNoLineOf', () => {
   it('names a game master a line names in the game folder at that line\'s plugin\'s spelling', () => {
     const lined = { name: 'master.esm', path: join(DATA_FOLDER, 'master.esm'), origin: 'Data/', line: 0, enabled: true, winning: true };
 
-    expect(pluginsLoadedWithNoLineOf(['Master.esm'], [], inDataFolder('master.esm'), [lined]))
+    expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('master.esm'), [lined]))
       .toEqual([{ name: 'master.esm', origin: 'Data/' }]);
   });
 
   it('names a game master the Data folder spells otherwise by the folder\'s spelling', () => {
-    expect(pluginsLoadedWithNoLineOf(['Master.esm'], [], inDataFolder('MASTER.ESM'), []))
+    expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('MASTER.ESM'), []))
       .toEqual([{ name: 'MASTER.ESM', origin: 'Data/' }]);
   });
 
   it('names each of two Data folder files that differ only in case', () => {
-    expect(pluginsLoadedWithNoLineOf(['Master.esm'], [], inDataFolder('Master.esm', 'master.esm'), []))
+    expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('Master.esm', 'master.esm'), []))
       .toEqual([{ name: 'Master.esm', origin: 'Data/' }, { name: 'master.esm', origin: 'Data/' }]);
   });
 });
@@ -298,33 +298,6 @@ describe('sourceFiles', () => {
     expect(sourceFiles(value, 'Other Mod')).toBeUndefined();
     expect(sourceFiles(value, 'overwrite/')).toBeUndefined();
     expect(sourceFiles(value, 'Data/')).toBeUndefined();
-  });
-});
-
-describe('providedPluginsOf, what plugin sync is handed instead of walking mods/ a second time', () => {
-  it('keys each provided plugin by its folded name, at its own on-disk name rather than the name of the file a link points at', () => {
-    const files = index({ 'Zeta.esp': { winner: join('/store', 'abc123.esp'), winnerMod: 'TS Mod' } }).files;
-
-    expect(providedPluginsOf(files)).toEqual(new Map([['zeta.esp', 'Zeta.esp']]));
-  });
-
-  it('answers a name Overwrite provides at Overwrite\u2019s casing, over the mod\u2019s', () => {
-    const overwrite = runtimeOutput('A.esp');
-    const modCopy = { ...runtimeOutput('a.esp'), path: join('/instance', 'mods', 'TS Mod', 'a.esp') };
-    const modFiles = new Map([['TS Mod', { origin: 'TS Mod', folder: undefined, files: [modCopy], folders: [], notes: [] }]]);
-
-    const { files } = buildFileConflictIndex([{ kind: 'mod', name: 'TS Mod', enabled: true }], [overwrite], modFiles, () => undefined);
-
-    expect(providedPluginsOf(files)).toEqual(new Map([['a.esp', 'A.esp']]));
-  });
-
-  it('leaves out a file that is not a plugin, and a plugin below an origin\u2019s root', () => {
-    const files = index({
-      'readme.txt': { winner: join('/instance', 'mods', 'TS Mod', 'readme.txt'), winnerMod: 'TS Mod' },
-      'Optional/B.esp': { winner: join('/instance', 'mods', 'TS Mod', 'Optional', 'B.esp'), winnerMod: 'TS Mod' },
-    }).files;
-
-    expect(providedPluginsOf(files)).toEqual(new Map());
   });
 });
 

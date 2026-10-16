@@ -1,9 +1,8 @@
 // The plugin files the effective load order does not point at: an overridden plugin, a plugin in a
 // disabled mod, or one no line names. The snapshot names them too (ADR-0013).
 
-import { isRootLevel } from './fileConflictIndex';
 import { exactPluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
-import { isPluginFile, type OriginFile } from '../instanceAdapter/instanceAdapter';
+import { isPluginFile, isRootLevel, type OriginFile } from '../instanceAdapter/instanceAdapter';
 
 interface PluginOutsideLoadOrder {
   name: string;

@@ -9,7 +9,7 @@ import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { SourceEditing } from '../drivingLib/sourceEditing';
 import { sourceFiles } from '../instanceLoader/loadOrderSnapshot';
-import type { Instance, InstanceValue, PluginSyncArguments } from '../instanceLoader/instance';
+import type { Instance } from '../instanceLoader/instance';
 import { reportSyncFailures, type Sync, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
 import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider';
 import { type PluginsTreeNode } from './pluginRows';
@@ -66,7 +66,7 @@ export interface PluginsViewDeps {
   /** The Mods view's id, whose bar a decompile and commit or a build from a Mods row runs under. */
   modsView: string;
   /** Plugin sync, whose failure the view's message line says. */
-  pluginSync: Sync<PluginSyncArguments>;
+  pluginSync: Sync;
   channel: SyncChannel;
   /** The path of a file at the root of the Data folder, answered by a box this view does not
    *  reference. */
@@ -202,7 +202,7 @@ function registerPluginGestures(
     }, selection),
     registerRenamePluginCommand({ client, commands, ask, instance, reporter: reporterFor('plugin.rename'), source: sourceEditing }, selection),
     registerCreatePluginCommand(client, instance, reporterFor('newPlugin')),
-    vscode.commands.registerCommand('modbench.plugin.sync', (value: InstanceValue) => pluginSync.run(value.pluginSyncArguments)),
+    vscode.commands.registerCommand('modbench.plugin.sync', () => pluginSync.run()),
   ];
 }
 

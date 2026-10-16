@@ -1,6 +1,6 @@
 // The effective merged mod view — the merge a VFS performs over the Mod override order.
 
-import type { FileOrigin, ModlistEntry, OriginFile, OriginFiles, OriginFolder } from '../instanceAdapter/instanceAdapter';
+import { filesWinningFirst, type FileOrigin, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder } from '../instanceAdapter/instanceAdapter';
 
 export const modOrigin = (name: string): FileOrigin => ({ kind: 'mod', name });
 
@@ -106,12 +106,6 @@ export interface FileConflictIndex {
   foldersByMod: Map<string, readonly OriginFolder[]>;
 }
 
-/** Whether a path sits at its origin's root, where plugins live, so a nested file sharing a
- *  plugin's name never matches one. */
-export function isRootLevel(relativePath: string): boolean {
-  return !relativePath.includes('/');
-}
-
 // A mod's own files and folders as the reading lists them; each entry the listing skipped is one
 // Output line.
 function modListing(
@@ -123,9 +117,9 @@ function modListing(
   return listing;
 }
 
-// A later provider loses to the earlier, winning one. A case variant of a path its mod already
-// provides is one more name for that mod's copy, never a second provider.
-function provideAsMod(files: FileConflictLookup, file: OriginFile, origin: FileOrigin): void {
+// A later provider loses to the earlier, winning one. A case variant of a path its origin already
+// provides is one more name for that origin's copy, never a second provider.
+function provide(files: FileConflictLookup, file: OriginFile, origin: FileOrigin): void {
   const existing = files.get(file.relativePath);
   if (!existing) {
     files.set({ relativePath: file.relativePath, winner: file.sourcePath, winnerOrigin: origin, providers: [origin] });
@@ -144,30 +138,14 @@ export function buildFileConflictIndex(
   const filesByMod = new Map<string, readonly OriginFile[]>();
   const foldersByMod = new Map<string, readonly OriginFolder[]>();
 
-  const mods = entries.filter((e): e is Extract<ModlistEntry, { kind: 'mod' }> => e.kind === 'mod');
-
-  const listed = mods.map((mod) => ({ mod, ...modListing(modFiles, mod.name, log) }));
-
-  // Mod order is winning-first, so the FIRST enabled provider wins and later ones only
-  // register as contenders (CONTEXT.md, "Override order").
-  for (const { mod, files: ownFiles, folders } of listed) {
-    filesByMod.set(mod.name, ownFiles);
-    foldersByMod.set(mod.name, folders);
-    if (!mod.enabled) continue;
-
-    for (const file of ownFiles.filter((own) => !own.excluded)) provideAsMod(files, file, modOrigin(mod.name));
+  for (const mod of entries.filter((entry) => entry.kind === 'mod')) {
+    const listing = modListing(modFiles, mod.name, log);
+    filesByMod.set(mod.name, listing.files);
+    foldersByMod.set(mod.name, listing.folders);
   }
 
-  // The run-time output wins over every mod.
-  for (const file of overwriteFiles.filter((own) => !own.excluded)) {
-    const existing = files.get(file.relativePath);
-    if (existing && sameOrigin(existing.winnerOrigin, RUNTIME_OUTPUT)) continue;
-    files.set({
-      relativePath: file.relativePath,
-      winner: file.sourcePath,
-      winnerOrigin: RUNTIME_OUTPUT,
-      providers: [RUNTIME_OUTPUT, ...(existing?.providers ?? [])],
-    });
+  for (const { origin, files: provided } of filesWinningFirst(entries, overwriteFiles, (mod) => filesByMod.get(mod) ?? [])) {
+    for (const file of provided) provide(files, file, origin);
   }
 
   return { files, filesByMod, foldersByMod };

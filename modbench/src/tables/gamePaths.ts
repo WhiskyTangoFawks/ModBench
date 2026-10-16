@@ -193,10 +193,11 @@ export function gamePathInfoForRelease(release: string): GamePathInfo | undefine
   return GAME_PATHS[release];
 }
 
-/** The game's masters for a release, in the order the game loads them; none for a release the
- *  table holds no row for. */
-export function gameMastersOf(release: string | undefined): readonly string[] {
-  return (release === undefined ? undefined : GAME_PATHS[release])?.masters ?? [];
+/** The plugins the game loads with no line (ADR-0013): its masters in the order the game loads
+ *  them, none for a release the table holds no row for, then those its Creation Club list names. */
+export function loadedWithNoLineOf(release: string | undefined, creationClubList: readonly string[]): readonly string[] {
+  const masters = (release === undefined ? undefined : GAME_PATHS[release])?.masters ?? [];
+  return [...masters, ...creationClubList];
 }
 
 /** The release's Creation Club list in the game folder at `root`; undefined for a release with no
