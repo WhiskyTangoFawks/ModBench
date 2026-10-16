@@ -56,7 +56,7 @@ Avoid: inject, inject-to-master
 # Mod
 A folder of files, installed as one unit, that overlays the game folder. A mod holds zero or more plugins.
 
-Avoid: plugin, package
+Avoid: plugin, package (that is what a mod is made from)
 
 ## Mod separator
 A mod entry that groups other mods in the list and holds no files. A mod belongs to its separator whichever way the list is displayed. A separator is not a priority position.
@@ -64,14 +64,14 @@ A mod entry that groups other mods in the list and holds no files. A mod belongs
 Avoid: group, category
 
 ## Source mod
-A mod built from a repository of its own in the source folder beside `mods/`: the plugin source of every plugin it provides, each a source plugin, the mod's own assets, and its build configuration. It follows one git workflow.
+A mod whose folder is a build artifact: the build writes it from the mod's repository in the source folder. With a remote, the repository is a submodule of the instance's repository. It follows one git workflow.
 
 Avoid: tracked mod (git's tracked is a file in the index)
 
-## Source plugin
-A plugin whose truth is its plugin source, in a source mod.
+## Compiled plugin
+A plugin that a build compiles from its plugin source, in a source mod.
 
-Avoid: tracked plugin (git's tracked is a file in the index)
+Avoid: source plugin (that reads as plugin source), tracked plugin (git's tracked is a file in the index)
 
 # Git workflow
 How a source mod uses its `main` branch. The user chooses. Two kinds exist: authored and vendored.
@@ -82,9 +82,9 @@ A git workflow where `main` is the work itself.
 Avoid: custom mod, personal mod
 
 ## Vendored workflow
-A git workflow where `main` holds the upstream mod's releases. Edits live on the `edit` branch. Upstream is the author's releases, not a git remote: the repository holds no link to it.
+A git workflow where `main` holds the author's releases of the mod. Edits live on the `edit` branch. The repository holds no link to the author's releases, so they are not a git remote.
 
-Avoid: modified mod (a vendored workflow describes where `main` points)
+Avoid: modified mod (a vendored workflow describes where `main` points), upstream (git's word for a branch's remote counterpart)
 
 # Plugin
 An `.esp`, `.esm` or `.esl` file. It holds records. A plugin is not a mod, it is a component of a mod.
@@ -116,8 +116,11 @@ A plugin that another plugin lists as a dependency. A master loads earlier.
 
 Avoid: parent plugin (an override's plugin is not its child)
 
-# Plugin source
-The deserialized form of a plugin, held in a source mod's repository.
+# Source
+Source code: what a build compiles a mod from, in a source mod's repository. The word means nothing else.
+
+## Plugin source
+Source that holds a plugin in its deserialized form.
 
 Avoid: source (alone), text mirror, Spriggit tree
 
@@ -172,12 +175,7 @@ Avoid: session, loadout
 # Downloaded file
 A mod file the instance keeps with its metadata. Installing it creates a mod, and the file stays.
 
-Avoid: download (as a noun; to download is to fetch a file), archive (that is a BA2 or BSA), package
-
-# Manifest
-The one file in a mod folder that names where each of the mod's files comes from. For a source mod the build writes it.
-
-Avoid: record (a plugin's unit of data), recipe, directives
+Avoid: download (as a noun; to download is to fetch a file), archive (that is a BA2 or BSA)
 
 # Game folder
 The game installation: the Steam install or a stock game folder.
@@ -188,3 +186,18 @@ Avoid: game directory, data folder (that is a subpath), install path
 A game folder that is Wabbajack's Stock Game: a copy of the vanilla game files outside Steam's management.
 
 Avoid: game copy, vanilla folder
+
+# Package
+What a mod folder is made from: an installation file, the game folder, or a source mod's repository at a commit.
+
+Avoid: source (that is source code), archive (that is a BA2 or BSA), provider
+
+# Host
+Where a package is fetched from: a site such as Nexus, a store such as Steam, or a git remote's server.
+
+Avoid: repository (MO2's word for a host), source
+
+# Manifest
+The one file in a mod folder that names its package and where each of the mod's files comes from in it. For a source mod the build writes it.
+
+Avoid: record (a plugin's unit of data), recipe, directives

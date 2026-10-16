@@ -11,13 +11,13 @@ Every other plugin editor writes the binary in place and leaves you with `.bak` 
 - Decompile and commit a mod, and it becomes a source mod: every record in its plugins is serialized to plugin source, one JSON file for each record and its child records, committed to a git repo of its own in the `source/` folder beside `mods/`. The serialization is lossless. A build gives back a plugin that means the same, record for record, though its bytes can differ. Decompile verifies this round trip and refuses a plugin it cannot reproduce, rather than mangle it in silence.
 - Edit in the record panel and the change lands as an ordinary working-tree edit. VS Code's own Source Control panel is the review surface: diff it, discard it, commit it, branch it, rebase it.
 - Build writes the binary from its plugin source when you say so. The build refuses what it can't emit and reports the rest as Problems.
-- The plugin stays what every tool sees. The game, MO2 and xEdit load the plugin binary. Build writes it from its plugin source, which is the truth. Modbench never assumes exclusive ownership of any file. When a source plugin changes outside Modbench, Modbench tells you, and you decide what to do next.
+- The plugin stays what every tool sees. The game, MO2 and xEdit load the plugin binary. Build writes it from its plugin source, which is the truth. Modbench never assumes exclusive ownership of any file. When a compiled plugin changes outside Modbench, Modbench tells you, and you decide what to do next.
 
 The UX is borrowed, not invented: mod management follows MO2, record editing follows xEdit, and every interaction uses the VS Code surface that already does the job. [docs/principles.md](docs/principles.md) and [docs/adr/](docs/adr/) hold the reasons.
 
 ## What works today
 
-- Mods: install from an archive or a folder, separators, drag to order, enable.
+- Mods: install from a file or a folder, separators, drag to order, enable.
 - Plugins: `plugins.txt` order and checkboxes. Each active plugin expands into its record types, records and worldspace and cell tree.
 - Record editor: an xEdit-style record panel across the active plugins, with conflict colours, in-place editing, copy as override and new record.
 - Version control: Git Init Modlist, Decompile and Commit Mod, Decompile Plugin, Build Mod, VS Code's Source Control panel, and external-change handling.
@@ -38,7 +38,7 @@ Download the `.vsix` for your platform from the latest [GitHub Release](https://
 code --install-extension modbench-<platform>-<version>.vsix
 ```
 
-You need git, and 7-Zip on `PATH` as `7z`, `7za` or `7zz` to install a mod from an archive. Scripts need `python3` (`python` on Windows).
+You need git, and 7-Zip on `PATH` as `7z`, `7za` or `7zz` to install a mod from a compressed file. Scripts need `python3` (`python` on Windows).
 
 Open an MO2 instance directory as the folder: the directory that holds `ModOrganizer.ini`, `mods/` and `profiles/`. Trust the folder when VS Code asks. Modbench does not run in Restricted Mode, and its views then say "There is no data provider registered".
 
@@ -62,14 +62,14 @@ The server tells the agent the rest: how to name objects, which job is a file ed
 
 ## Scripts
 
-A script is a Python file that reads and writes records, as an xEdit script does. In a terminal of a Modbench window, `import medit` reaches that window's instance with nothing to install. `help(medit)` lists its functions. Each write is a working-tree change in a source plugin, which you review in Source Control.
+A script is a Python file that reads and writes records, as an xEdit script does. In a terminal of a Modbench window, `import medit` reaches that window's instance with nothing to install. `help(medit)` lists its functions. Each write is a working-tree change in a compiled plugin, which you review in Source Control.
 
 ## Build from source
 
 ### Prerequisites
 
 - .NET SDK 10.x, Node.js 20 or later, VS Code and git.
-- 7-Zip on `PATH` as `7z`, `7za` or `7zz`. Installing a mod from an archive needs it.
+- 7-Zip on `PATH` as `7z`, `7za` or `7zz`. Installing a mod from a compressed file needs it.
 - `python3` (`python` on Windows) on `PATH`. The two-windows backend tests need it, and skip without it.
 
 On Ubuntu or Debian:
