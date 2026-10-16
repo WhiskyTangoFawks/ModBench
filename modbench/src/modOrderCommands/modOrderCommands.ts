@@ -207,24 +207,11 @@ const separatorNameRefusal = (key: EntryKey, taken: TakenNames, requested: strin
 const renameModNameRefusal = (key: EntryKey, taken: TakenNames, requested: string, own: string): string | undefined =>
   (/[\\/]/.test(requested) ? MOD_NAME_WITH_PATH_SEPARATOR : entryNameRefusal(key, taken, 'mod', requested, MOD_NAME_CLASH, own));
 
-// The first index of the run of mods directly on the winning side of the separator at `at`.
-function groupStartOf(order: readonly ModlistEntry[], at: number): number {
-  let start = at;
-  while (start > 0 && order[start - 1]?.kind === 'mod') start--;
-  return start;
-}
-
-// Insert a new enabled separator next to the anchor (mods.md, Add separator): on a mod, directly
-// after it; on a separator, before its own group's winning-most member.
+// Insert a new enabled separator next to the anchor (mods.md, Add separator); the adapter places it.
 function insertSeparator(
   adapter: InstanceAdapter, profile: string, requested: string, anchor: EntryRef,
 ): Promise<SeparatorResult> {
-  return changeSeparator(adapter, profile, (order) => {
-    const at = order.findIndex((e) => e.kind === anchor.kind && e.name === anchor.name);
-    if (at === -1) throw new Error(`Entry not found in modlist: ${anchor.name}`);
-    const afterIndex = anchor.kind === 'separator' ? groupStartOf(order, at) - 1 : at;
-    return [{ kind: 'addSeparator', separator: requested, afterIndex }];
-  });
+  return changeSeparator(adapter, profile, () => [{ kind: 'addSeparator', separator: requested, anchor }]);
 }
 
 // Rename a separator in place, and its folder with it.

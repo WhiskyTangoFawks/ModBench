@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { modsMovePick, separatorsMovePick } from '../movePick';
 import type { ModlistEntry } from '../../instanceLoader/instance';
+import { groupModOrder } from '../../instanceAdapter/modGroups';
 
 const mod = (name: string): ModlistEntry => ({ kind: 'mod', name, enabled: true });
 const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, enabled: true });
 
-const ENTRIES_IN_MODLIST_ORDER_WINNING_FIRST: readonly ModlistEntry[] = [
+const ENTRIES_IN_MODLIST_ORDER_WINNING_FIRST = groupModOrder([
   mod('Alpha'), separator('Early'), mod('Beta'), separator('Middle'), separator('Late'), mod('Gamma'),
-];
+]);
 
 describe('the move pick for mods', () => {
   it('offers Ungrouped, then each separator as the view shows them with losing at the top', () => {

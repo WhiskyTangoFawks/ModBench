@@ -1,5 +1,6 @@
 import { FileConflictLookup } from '../../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../../instanceLoader/instance';
+import { groupModOrder } from '../../instanceAdapter/modGroups';
 import { modSyncArgumentsOf, pluginSyncArgumentsOf } from '../../instanceLoader/syncArguments';
 import { nexusDomainForMetaGame } from '../../tables/gamePaths';
 import { GAME_FOLDER_NOT_FOUND } from './gameFolderNotFound';
@@ -7,7 +8,7 @@ import { GAME_FOLDER_NOT_FOUND } from './gameFolderNotFound';
 /** A whole `InstanceValue` at its neutral value, every field overridable — so a test caring
  *  about one field (`.plugins`, `.downloads`, …) states only that one, typed, with no cast. */
 export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): InstanceValue {
-  const base: Omit<InstanceValue, 'modNames' | 'modSyncArguments' | 'pluginSyncArguments'> = {
+  const base: Omit<InstanceValue, 'modGroups' | 'modNames' | 'modSyncArguments' | 'pluginSyncArguments'> = {
     mods: [],
     modFolders: [],
     trackedMods: new Set(),
@@ -33,6 +34,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map(), sourceDirs: new Map() },
   };
   const value = { ...base, ...overrides };
+  const modGroups = groupModOrder(value.mods);
   const modNames = overrides.modNames ?? new Map(value.mods.flatMap((entry) => {
     const folder = value.modFolders?.find(({ kind, name }) => kind === entry.kind && name === entry.name);
     const modName = folder?.modName ?? (entry.kind === 'mod' ? entry.name : undefined);
@@ -42,6 +44,6 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     .sort((a, b) => (a.line ?? 0) - (b.line ?? 0))
     .map(({ name, enabled }) => ({ name, enabled }));
   return {
-    ...value, modNames, modSyncArguments: modSyncArgumentsOf(value), pluginSyncArguments: pluginSyncArgumentsOf({ ...value, pluginOrder }), ...overrides,
+    ...value, modGroups, modNames, modSyncArguments: modSyncArgumentsOf(value), pluginSyncArguments: pluginSyncArgumentsOf({ ...value, pluginOrder }), ...overrides,
   };
 }

@@ -4,6 +4,7 @@ import type {
   InstallOutcome, InstallSource, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
   ModFolder, ModFolders, ModMetadata, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription,
 } from '../instanceAdapter/instanceAdapter';
+import { groupModOrder } from '../instanceAdapter/modGroups';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
 function noFilesFor(mods: readonly ModlistEntry[]): ReadonlyMap<string, OriginFiles> {
@@ -18,6 +19,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     gameName: 'Fallout 4',
     gameRelease: 'Fallout4',
     mods: [],
+    modGroups: groupModOrder(overrides.mods ?? []),
     pluginOrder: [],
     orderNotes: [],
     downloadedFiles: { kind: 'listed', downloadsDir: '/downloads', files: [] },
@@ -223,7 +225,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     adapter, hashed,
     get calls() { return calls; },
     forgetCalls: () => { calls = []; },
-    read: (next) => { current = { ...current, ...(next.mods !== undefined && next.modFiles === undefined ? { modFiles: noFilesFor(next.mods) } : {}), ...next }; },
+    read: (next) => { current = { ...current, ...(next.mods !== undefined && next.modFiles === undefined ? { modFiles: noFilesFor(next.mods) } : {}), ...(next.mods !== undefined && next.modGroups === undefined ? { modGroups: groupModOrder(next.mods) } : {}), ...next }; },
     changed: () => { for (const listener of [...listeners]) listener(); },
     failReading: (message) => { readingFailure = message; },
     get readings() { return readings; },

@@ -2,8 +2,7 @@ import * as vscode from 'vscode';
 import type { EntryRef, FileOrigin, Mod, OriginFile, OriginFolder, Separator } from '../instanceLoader/instance';
 import { modNameOf } from '../instanceLoader/modName';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
-import { groupModlist, type ModlistGroup, type ModlistTree } from '../drivingLib/modlistTree';
-import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
+import { lastGoodReadMessage, type InstanceValue, type InstanceView, type ModGroup, type ModGroups } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { dropMove, type DraggedRows } from './moveDrop';
@@ -161,7 +160,7 @@ export class ModListProvider
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<ModlistNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private tree?: ModlistTree;
+  private tree?: ModGroups;
   private modsHoldingPlugin = new Set<string>();
   private filterText = '';
   private filterLower = '';
@@ -217,8 +216,8 @@ export class ModListProvider
   /** The enabled mods over the listed mods, whatever the filter shows. */
   description(): string | undefined {
     if (this.instance.sequence === 0) return undefined;
-    const { activeCount, installedCount } = this.ensureLoaded();
-    return `${activeCount} / ${installedCount}`;
+    const mods = this.instanceValue.mods.filter((entry) => entry.kind === 'mod');
+    return `${mods.filter((mod) => mod.enabled).length} / ${mods.length}`;
   }
 
   /** A row the view still holds may predate the value, so its mod's state is read from the value. */
@@ -306,9 +305,9 @@ export class ModListProvider
       : [...ungrouped, ...separators, overwrite];
   }
 
-  private ensureLoaded(): ModlistTree {
+  private ensureLoaded(): ModGroups {
     if (!this.tree) {
-      this.tree = groupModlist([...this.instanceValue.mods]);
+      this.tree = this.instanceValue.modGroups;
       this.modsHoldingPlugin = new Set(this.instanceValue.plugins.map((p) => p.origin));
     }
     return this.tree;
@@ -316,7 +315,7 @@ export class ModListProvider
 
   // The roots other than Overwrite, losing end first: the ungrouped mods, which sit below every
   // separator in mod order, and then the separators. The flat list is all ungrouped.
-  private entryRoots(tree: ModlistTree): { ungrouped: ModlistNode[]; separators: ModlistNode[] } {
+  private entryRoots(tree: ModGroups): { ungrouped: ModlistNode[]; separators: ModlistNode[] } {
     const ungrouped = this.losingFirst(tree.ungrouped);
     const groups = [...tree.groups].reverse();
     if (this.filterText && !this.groupingOn) {
@@ -329,7 +328,7 @@ export class ModListProvider
     };
   }
 
-  private groupRow(group: ModlistGroup): SeparatorNode | undefined {
+  private groupRow(group: ModGroup): SeparatorNode | undefined {
     if (!this.filterText) return this.separatorNode(group.separator, this.inViewOrder(group.mods));
     const shown = shownUnder('matching', this.matches, group.separator.name);
     const mods = shown === 'all' ? group.mods : group.mods.filter(this.isFound);
@@ -390,7 +389,7 @@ export class ModListProvider
     return mod && this.showsMod(mod) ? this.modNode(mod) : undefined;
   }
 
-  private groupHolding(modName: string): ModlistGroup | undefined {
+  private groupHolding(modName: string): ModGroup | undefined {
     if (this.filterText && !this.groupingOn) return undefined;
     return this.ensureLoaded().groups.find((g) => g.mods.some((m) => m.name === modName));
   }

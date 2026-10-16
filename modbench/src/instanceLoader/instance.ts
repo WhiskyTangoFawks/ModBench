@@ -15,7 +15,7 @@ import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './d
 import { gameMastersOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type ManagerNames, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
+  type ManagerNames, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
 import { sameCopies, type FileCopies } from './sameCopies';
@@ -24,7 +24,7 @@ import { modSyncArgumentsOf, pluginSyncArgumentsOf, type ModSyncArguments, type 
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
-export type { EntryRef, FileOrigin, Mod, ModlistEntry, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
+export type { EntryRef, FileOrigin, Mod, ModGroup, ModGroups, ModlistEntry, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow, UpgradeCandidate, UpgradeTier } from './downloadRows';
 export type { Copy, FileCopies } from './sameCopies';
 export type { ModSyncArguments, PluginSyncArguments } from './syncArguments';
@@ -57,6 +57,8 @@ interface InstancePaths {
 export interface InstanceValue {
   /** Mods and separators in Mod override order, winning-first, with `enabled`. */
   readonly mods: readonly ModlistEntry[];
+  /** The same mod order grouped by separator, as the adapter groups it. */
+  readonly modGroups: ModGroups;
   /** Every mod folder as the entry it holds, listed or not: what mod sync compares mod order
    *  with, and the new-empty-mod refusal's own input. Undefined when there is none to list. */
   readonly modFolders: readonly ModFolder[] | undefined;
@@ -175,6 +177,7 @@ function pathsOf(
 
 const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   mods: [],
+  modGroups: { ungrouped: [], groups: [] },
   modFolders: [],
   modNames: new Map(),
   trackedMods: new Set(),
@@ -424,6 +427,7 @@ export class Instance implements Subscription {
     });
     return {
       mods: entries,
+      modGroups: reading.modGroups,
       modFolders: modFolderList,
       modNames,
       trackedMods: new Set(entries.flatMap((entry) => (entry.kind === 'mod' && paths.sourceDirs.has(entry.name) ? [entry.name] : []))),

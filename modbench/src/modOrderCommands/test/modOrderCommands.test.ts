@@ -109,43 +109,14 @@ describe('moveMods and moveSeparators', () => {
 });
 
 describe('insertSeparator', () => {
-  it.each([
-    ['a mod inside a separator: directly after the mod', { kind: 'mod', name: '[NODELETE] Radfall' }, 2],
-    ['an ungrouped mod: directly after the mod', { kind: 'mod', name: 'Harder VATS' }, 6],
-    ['a separator: before the winning-most mod of its own group, taking none', { kind: 'separator', name: RADFALL }, 1],
-    ['the winning-most separator: before every mod', { kind: 'separator', name: UNASSIGNED }, -1],
-  ] as const)('anchored on %s', async (_, anchor, afterIndex) => {
+  it('hands the adapter one change, beside the anchor it was given', async () => {
     const { fake, commands } = over();
+    const anchor = { kind: 'separator', name: RADFALL } as const;
 
     const outcome = await commands.insertSeparator('Default', 'New Section', anchor);
 
     expect(outcome).toEqual({ applied: true, wrote: true, name: 'New Section' });
-    expect(fake.calls).toEqual([orderWrite([{ kind: 'addSeparator', separator: 'New Section', afterIndex }])]);
-  });
-
-  it('anchored on a separator with no mods of its own, adds an equally empty one before it', async () => {
-    const { fake, commands } = over([separator('FirstGroup'), separator('SecondGroup'), mod('SKK Fast Start')]);
-
-    await commands.insertSeparator('Default', 'New Section', { kind: 'separator', name: 'SecondGroup' });
-
-    expect(fake.calls).toEqual([orderWrite([{ kind: 'addSeparator', separator: 'New Section', afterIndex: 0 }])]);
-  });
-
-  it('anchors on the entry of the kind it is handed, when a mod and a separator share its name', async () => {
-    const { fake, commands } = over([mod('Armor'), separator('Gear'), mod('Gear')]);
-
-    await commands.insertSeparator('Default', 'New Section', { kind: 'mod', name: 'Gear' });
-
-    expect(fake.calls).toEqual([orderWrite([{ kind: 'addSeparator', separator: 'New Section', afterIndex: 2 }])]);
-  });
-
-  it('refuses when the anchor entry is absent, writing nothing', async () => {
-    const { fake, commands } = over();
-
-    const outcome = await commands.insertSeparator('Default', 'New Section', { kind: 'mod', name: 'No Such Entry' });
-
-    expect(outcome).toEqual({ applied: false, refusal: 'Entry not found in modlist: No Such Entry' });
-    expect(fake.calls).toEqual([]);
+    expect(fake.calls).toEqual([orderWrite([{ kind: 'addSeparator', separator: 'New Section', anchor }])]);
   });
 });
 

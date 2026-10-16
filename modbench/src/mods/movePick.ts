@@ -1,8 +1,7 @@
 // mods.md, Pickers, Move: the places a move offers.
 
-import type { ModlistEntry } from '../instanceLoader/instance';
+import type { ModGroup, ModGroups } from '../instanceLoader/instance';
 import type { MovePlace, OrderEnd, SeparatorsPlace } from '../modOrderCommands/modOrderCommands';
-import { groupModlist, type ModlistGroup } from '../drivingLib/modlistTree';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 
 export interface MovePickItem<T> {
@@ -12,8 +11,7 @@ export interface MovePickItem<T> {
 }
 
 // Mod order is winning-first, so the view with losing at the top shows the groups reversed.
-function groupsInViewOrder(entries: readonly ModlistEntry[], direction: SortDirection): ModlistGroup[] {
-  const { groups } = groupModlist([...entries]);
+function groupsInViewOrder({ groups }: ModGroups, direction: SortDirection): readonly ModGroup[] {
   return direction === 'winningAtTop' ? groups : [...groups].reverse();
 }
 
@@ -38,13 +36,12 @@ export function onlyCurrent<T>(items: readonly MovePickItem<T>[]): MovePickItem<
 /** "Ungrouped", then each separator as the view shows them. A place that holds a selected mod is
  *  marked current. */
 export function modsMovePick(
-  entries: readonly ModlistEntry[], direction: SortDirection, modNames: readonly string[],
+  modGroups: ModGroups, direction: SortDirection, modNames: readonly string[],
 ): MovePickItem<MovePlace>[] {
   const holdsSelected = (mods: readonly { name: string }[]) => mods.some((m) => modNames.includes(m.name));
-  const { ungrouped } = groupModlist([...entries]);
   return [
-    { label: 'Ungrouped', target: { kind: 'ungrouped' }, ...(holdsSelected(ungrouped) && CURRENT) },
-    ...groupsInViewOrder(entries, direction).map((g) => ({
+    { label: 'Ungrouped', target: { kind: 'ungrouped' }, ...(holdsSelected(modGroups.ungrouped) && CURRENT) },
+    ...groupsInViewOrder(modGroups, direction).map((g) => ({
       label: g.separator.name,
       target: { kind: 'separator', name: g.separator.name } as const,
       ...(holdsSelected(g.mods) && CURRENT),
@@ -54,9 +51,9 @@ export function modsMovePick(
 
 /** The separators other than the selected ones, as the view shows them. */
 export function separatorsMovePick(
-  entries: readonly ModlistEntry[], direction: SortDirection, separatorNames: readonly string[],
+  modGroups: ModGroups, direction: SortDirection, separatorNames: readonly string[],
 ): MovePickItem<SeparatorsPlace>[] {
-  return groupsInViewOrder(entries, direction)
+  return groupsInViewOrder(modGroups, direction)
     .filter((g) => !separatorNames.includes(g.separator.name))
     .map((g) => ({ label: g.separator.name, target: { kind: 'separator', name: g.separator.name } }));
 }

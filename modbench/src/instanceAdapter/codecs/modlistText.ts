@@ -3,7 +3,7 @@
 // The top of the file is the winning end. Mutations edit the lines.
 
 import type { EntryRef, ModlistEntry, MovePlace, OrderEnd, SeparatorsPlace } from '../instanceAdapter';
-import { firstLines, modLineKey } from '../../loadOrderFileCodec/firstLines';
+import { firstLines } from '../../loadOrderFileCodec/firstLines';
 import { editLines, entryLineIndices, stripBom } from '../../loadOrderFileCodec/lineScan';
 
 /** The per-profile mod list, one line per mod in Mod override order. */
@@ -61,13 +61,20 @@ export function setEnabledInText(text: string, modName: string, enabled: boolean
   });
 }
 
-/** `afterIndex` is 0-based among entry lines, and clamps to the last one. `-1` inserts before the
- *  first entry line, the one position "after index i" cannot reach. */
-export function insertSeparatorAtIndexInText(text: string, name: string, afterIndex: number): string {
+/** How mod order matches a line against another: the kind and the name without case. */
+export const modLineKey = ({ kind, name }: EntryRef): string => `${kind}:${modNameKey(name)}`;
+
+/** The new separator goes directly after a mod anchor, and before the first mod of a separator
+ *  anchor's own group, taking none. */
+export function insertSeparatorBesideInText(text: string, name: string, anchor: EntryRef): string {
   return editLines(text, (lines) => {
-    const entryLineIdx = firstLines(entryLineIndices(lines, isEntryLine), (at) => modLineKey(entryNamed((lines[at] ?? '').slice(1)))).kept;
-    const anchor = entryLineIdx[Math.max(0, Math.min(afterIndex, entryLineIdx.length - 1))];
-    const insertAt = anchor === undefined ? lines.length : afterIndex < 0 ? anchor : anchor + 1;
+    const lineAt = firstLines(entryLineIndices(lines, isEntryLine), (at) => modLineKey(entryNamed((lines[at] ?? '').slice(1)))).kept;
+    const entries = lineAt.map((at) => entryNamed((lines[at] ?? '').slice(1)));
+    const at = entries.findIndex((entry) => modLineKey(entry) === modLineKey(anchor));
+    if (at === -1) throw new Error(`${anchor.name} is not in the modlist`);
+    let start = at;
+    while (anchor.kind === 'separator' && start > 0 && entries[start - 1]?.kind === 'mod') start--;
+    const insertAt = anchor.kind === 'mod' ? (lineAt[at] ?? 0) + 1 : (lineAt[start] ?? 0);
     lines.splice(insertAt, 0, `+${separatorModName(name)}`);
     return lines;
   });

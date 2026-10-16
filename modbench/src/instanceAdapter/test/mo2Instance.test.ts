@@ -193,6 +193,17 @@ describe('the MO2 Instance adapter', () => {
         });
       });
 
+      it('answers the mod order grouped by separator: each separator holds the mods before it, the mods after the last are ungrouped', async () => {
+        const { modGroups } = await adapter.reading();
+
+        expect(modGroups.groups.map(({ separator, mods }) => [separator.name, mods.map((m) => m.name)])).toEqual([
+          ['Unassigned (Modlist Development)', ['Ñoño\'s Retexture', 'Tracked Patch Mod', 'SKK Fast Start new game (Fallout 4)']],
+          ['Radfall - All-In-One Survival Overhaul', ['[NODELETE] Radfall', 'Unofficial Fallout 4 Patch']],
+        ]);
+        expect(modGroups.ungrouped.map((m) => m.name)).toEqual(['ENBoost - 12k', 'Harder VATS', 'Cracked and Smudged Pip-Boy Screen']);
+        expect(modGroups.groups[0]?.mods[0]).toMatchObject({ version: '1.0.0', nexusId: '99001' });
+      });
+
       it('never carries meta fields on a separator entry, even when a same-named mod folder exists', async () => {
         const folder = join(root, 'mods', 'Unassigned (Modlist Development)');
         await mkdir(folder, { recursive: true });
@@ -1998,10 +2009,19 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('adds a separator with its folder', async () => {
-      await change([{ kind: 'addSeparator', separator: 'New Separator', afterIndex: -1 }]);
+      await change([{ kind: 'addSeparator', separator: 'New Separator', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }]);
 
       expect(modNames(await source.modOrder('Default'))[0]).toBe('separator:New Separator:true');
       expect(await isThere(separatorFolder('New Separator'))).toBe(true);
+    });
+
+    it.each([
+      ['a mod, directly after it', { kind: 'mod', name: 'skk fast start NEW GAME (fallout 4)' }, 3],
+      ['a separator, before the first mod of its own group', { kind: 'separator', name: 'RADFALL - all-in-one survival overhaul' }, 4],
+    ] as const)('adds a separator beside %s, the anchor named in another case', async (_, anchor, at) => {
+      await change([{ kind: 'addSeparator', separator: 'New Separator', anchor }]);
+
+      expect(modNames(await source.modOrder('Default')).indexOf('separator:New Separator:true')).toBe(at);
     });
 
     it('renames a separator\'s line and its folder as one change', async () => {
@@ -2081,7 +2101,8 @@ describe('the MO2 Instance adapter', () => {
         kind: 'moveSeparators', separators: ['Unassigned (Modlist Development)'], place: { kind: 'separator', name: 'Gone Separator' }, end: 'losing',
       }],
       ['renameSeparator', { kind: 'renameSeparator', from: 'No Such Sep', to: 'Anything' }],
-      ['addSeparator a listed separator', { kind: 'addSeparator', separator: 'Unassigned (Modlist Development)', afterIndex: 0 }],
+      ['addSeparator beside an anchor', { kind: 'addSeparator', separator: 'Anything', anchor: { kind: 'mod', name: 'No Such Mod' } }],
+      ['addSeparator a listed separator', { kind: 'addSeparator', separator: 'Unassigned (Modlist Development)', anchor: { kind: 'mod', name: 'SKK Fast Start new game (Fallout 4)' } }],
       ['renameSeparator onto a listed separator', {
         kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Radfall - All-In-One Survival Overhaul',
       }],
@@ -2160,7 +2181,7 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(separatorFolder('Orphan'));
         await writeFile(join(separatorFolder('Orphan'), 'kept.txt'), '');
 
-        await expect(change([{ kind: 'addSeparator', separator: 'Orphan', afterIndex: -1 }])).rejects.toThrow(/is in the way/);
+        await expect(change([{ kind: 'addSeparator', separator: 'Orphan', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }])).rejects.toThrow(/is in the way/);
 
         expect(await text(root, DEFAULT_MODLIST)).toBe(before);
         expect(await isThere(join(separatorFolder('Orphan'), 'kept.txt'))).toBe(true);
@@ -2184,7 +2205,7 @@ describe('the MO2 Instance adapter', () => {
       it('takes a new separator\'s folder away when its line cannot be written', async () => {
         await chmod(modlist(), 0o444);
         try {
-          await expect(change([{ kind: 'addSeparator', separator: 'New Separator', afterIndex: -1 }])).rejects.toThrow();
+          await expect(change([{ kind: 'addSeparator', separator: 'New Separator', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }])).rejects.toThrow();
         } finally {
           await chmod(modlist(), 0o644);
         }
@@ -2196,7 +2217,7 @@ describe('the MO2 Instance adapter', () => {
         await chmod(modlist(), 0o444);
         try {
           await expect(change([
-            { kind: 'addSeparator', separator: 'Brief', afterIndex: -1 },
+            { kind: 'addSeparator', separator: 'Brief', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } },
             { kind: 'renameSeparator', from: 'Brief', to: 'Briefer' },
           ])).rejects.toThrow();
         } finally {
@@ -2268,22 +2289,22 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it.each<[string, ModOrderChange]>([
-        ['a separator', { kind: 'addSeparator', separator: 'unassigned (modlist development)', afterIndex: 0 }],
+        ['a separator', { kind: 'addSeparator', separator: 'unassigned (modlist development)', anchor: { kind: 'mod', name: 'SKK Fast Start new game (Fallout 4)' } }],
         ['a rename', { kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'radfall - all-in-one survival overhaul' }],
       ])('rejects adding %s mod order already lists in another case', async (_, bad) => {
         await expect(change([bad])).rejects.toThrow(/already in modlist/);
       });
 
       it('names a separator as MO2 names its folder, and refuses a name with nothing of it left', async () => {
-        await change([{ kind: 'addSeparator', separator: '  Core:  Mods.  ', afterIndex: -1 }]);
+        await change([{ kind: 'addSeparator', separator: '  Core:  Mods.  ', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }]);
 
         expect(modNames(await source.modOrder('Default'))[0]).toBe('separator:Core Mods:true');
         expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
-        await expect(change([{ kind: 'addSeparator', separator: 'CON', afterIndex: -1 }])).rejects.toThrow(/Not a valid separator name/);
+        await expect(change([{ kind: 'addSeparator', separator: 'CON', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }])).rejects.toThrow(/Not a valid separator name/);
       });
 
       it('drops path separators from a separator\'s name, so its folder stays inside mods/, on adding and on renaming', async () => {
-        await change([{ kind: 'addSeparator', separator: '../Escape', afterIndex: -1 }]);
+        await change([{ kind: 'addSeparator', separator: '../Escape', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }]);
         await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'A/B' }]);
 
         const names = modNames(await source.modOrder('Default'));
@@ -2295,7 +2316,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('takes a separator\'s name a mod has, on adding and on renaming: a mod is no clash', async () => {
-        await change([{ kind: 'addSeparator', separator: 'Harder VATS', afterIndex: -1 }]);
+        await change([{ kind: 'addSeparator', separator: 'Harder VATS', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }]);
         await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'ENBoost - 12k' }]);
 
         const names = modNames(await source.modOrder('Default'));
