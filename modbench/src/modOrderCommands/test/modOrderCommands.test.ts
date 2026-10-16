@@ -1,5 +1,5 @@
-import { unreadStatus } from '../../test/unreadStatus';
 import { describe, it, expect } from 'vitest';
+import { unreadStatus } from '../../test/unreadStatus';
 import { modSyncOver, modlistCommands } from '../modOrderCommands';
 import type {
   EntryRef, ModlistEntry, ModOrderChange, MovePlace, OriginFileMark, SeparatorsPlace,

@@ -51,13 +51,18 @@ const upgradeLoss = (status: ModStatus): string | undefined => {
 export type ReadStatus = (mods: readonly string[]) => Promise<readonly ModStatus[] | ReadFailed>;
 
 // What an upgrade over the mod would lose, or why mEdit could not say (agent.md, Any agent, story 7).
-async function upgradeRefusal(readStatus: ReadStatus, target: InstallTarget, force: boolean): Promise<string | undefined> {
+async function upgradeRefusal(
+  { adapter, readStatus }: { adapter: InstanceAdapter; readStatus: ReadStatus }, target: InstallTarget, force: boolean,
+): Promise<string | undefined> {
   if (force || target.kind !== 'upgrade') return undefined;
   const mod = target.name;
   const answer = await readStatus([mod]);
   if (isReadFailed(answer)) return `"${mod}" status could not be read: ${failureReason(answer)}`;
   const status = answer.find((read) => read.mod === mod);
-  if (status === undefined) return undefined;
+  if (status === undefined) {
+    return await adapter.modFolderPath(mod) === undefined ? undefined
+      : `"${mod}" has no status in the answer. Request it again with force to replace its files.`;
+  }
   if (status.unreadable) return `"${mod}" status could not be read: ${status.unreadable.why}`;
   const loss = upgradeLoss(status);
   return loss === undefined ? undefined : `The upgrade would lose, in "${mod}": ${loss}. Request it again with force to replace them.`;
@@ -75,22 +80,22 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
 /** `modbench.mod.install`, then a downloaded file marked installed. `downloadRefusal` says why the
  *  mark failed, so a landed install is not reported as failed (downloads.md, Reporting, story 1). */
 export async function installMod(
-  { adapter, readStatus }: { adapter: InstanceAdapter; readStatus: ReadStatus },
+  deps: { adapter: InstanceAdapter; readStatus: ReadStatus },
   source: ModSource, target: InstallTarget, gameName: string, force: boolean,
 ): Promise<CommandResult<{ isFomod: boolean; downloadRefusal?: string }>> {
   if (target.kind === 'new' && target.name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
-  const refusal = await upgradeRefusal(readStatus, target, force);
+  const refusal = await upgradeRefusal(deps, target, force);
   if (refusal !== undefined) return { applied: false, refusal };
   let outcome: InstallOutcome;
   try {
     const extracted = source.kind === 'downloadedFile' ? { kind: 'archive' as const, path: source.path } : source;
-    outcome = await adapter.install(extracted, target, keysFor(source, gameName));
+    outcome = await deps.adapter.install(extracted, target, keysFor(source, gameName));
   } catch (err) {
     return refuse(err);
   }
   if (!outcome.landed) return { applied: false, refusal: claimRefusal(target) };
   const landed = { applied: true as const, isFomod: outcome.isFomod };
   if (source.kind !== 'downloadedFile') return landed;
-  const downloadRefusal = await markInstalled(adapter, source.name);
+  const downloadRefusal = await markInstalled(deps.adapter, source.name);
   return downloadRefusal === undefined ? landed : { ...landed, downloadRefusal };
 }

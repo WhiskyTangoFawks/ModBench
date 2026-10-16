@@ -4,9 +4,8 @@
 import * as vscode from 'vscode';
 import type { MEditClient, ModStatus } from '../client';
 import { messageLine, type SyncMessage } from '../drivingLib/nameFilter';
-import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
-
-export type ReadStatus = (mods: readonly string[]) => Promise<readonly ModStatus[] | ReadFailed>;
+import { failureReason, isReadFailed } from '../wire/readFailed';
+import type { ReadStatus } from '../modOrderCommands/modOrderCommands';
 
 /** Each mod's status as mEdit last answered it. A read that fails keeps the last good one, and says so on the view's
  *  message line and once in the Output (common.md, Reporting). */

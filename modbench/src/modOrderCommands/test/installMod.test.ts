@@ -62,8 +62,17 @@ describe('installMod', () => {
       expect(readStatus.mock.calls).toEqual([[['Harder VATS']]]);
     });
 
-    it('leaves a mod with no status to the adapter, whose claim refuses a mod no folder holds', async () => {
-      const { result } = await install(ARCHIVE, { kind: 'upgrade', name: 'Vanished Mod' }, { installed: { landed: false } }, false, reading([]));
+    it('refuses a mod with a folder that the status answer leaves out, naming force, and installs nothing', async () => {
+      const { result, calls } = await install(ARCHIVE, UPGRADED, {}, false, reading([]));
+
+      expect(result).toEqual({ applied: false, refusal: '"Harder VATS" has no status in the answer. Request it again with force to replace its files.' });
+      expect(calls).toEqual([]);
+    });
+
+    it('leaves a mod no folder holds to the adapter, whose claim refuses it', async () => {
+      const answers = { installed: { landed: false }, foldersAbsent: new Set(['Vanished Mod']) } as const;
+
+      const { result } = await install(ARCHIVE, { kind: 'upgrade', name: 'Vanished Mod' }, answers, false, reading([]));
 
       expect(result).toEqual({ applied: false, refusal: 'Cannot upgrade "Vanished Mod": there is no folder by that name under mods/.' });
     });
