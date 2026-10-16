@@ -24,9 +24,9 @@ public sealed class UpdateManifestHandlerTests
     private Manifest BuiltSourceMod()
     {
         _folders.WithFile(Mod, "a.esp", "built").WithFile(Mod, "z.txt", "edited");
-        var built = new Manifest([], [], [
-            new ManifestFile("a.esp", new FileProvider.Source("https://example.com/mod.git", "0123abc")),
-            new ManifestFile("z.txt", new FileProvider.NoProvider()),
+        var built = new Manifest(new ManifestPackage.SourceMod("https://example.com/mod.git", "0123abc"), [
+            new ManifestFile("a.esp", new PackageEntry.Held()),
+            new ManifestFile("z.txt", new PackageEntry.NotHeld()),
         ]);
         _folders.Manifests[Mod] = built;
         _folders.KeptProviderHashes[Mod] = new Dictionary<string, string> { ["a.esp"] = "built" };
@@ -38,7 +38,7 @@ public sealed class UpdateManifestHandlerTests
     private InstallationFile Downloaded(string path, params (string Path, string Hash)[] entries)
     {
         _folders.WithBytes(string.Empty, path, Zip(entries));
-        return new InstallationFile(path, Source: null, Size: 7, Hash: $"#{path}", [.. entries.Select(e => new HashedEntry(e.Path, e.Hash))]);
+        return new InstallationFile(path, Page: null, Size: 7, Hash: $"#{path}", [.. entries.Select(e => new HashedEntry(e.Path, e.Hash))]);
     }
 
     private IEnumerable<ModlistProgress> Progress =>
@@ -47,14 +47,12 @@ public sealed class UpdateManifestHandlerTests
     private ManifestFile FileOf(string folder, string path) => _folders.Manifests[folder].Files.Single(f => f.Path == path);
 
     private Task<SelectionResult<string, UpdateManifestRefusal, UpdatedMod>> Update(
-        IReadOnlyList<ModToUpdate> mods, IReadOnlyList<OverriddenGameFile> gameFiles, string? gesture = null, CancellationToken cancel = default) =>
-        Handler.UpdateManifestAsync(mods, new InstanceToUpdate(gameFiles, "stat-cache"), gesture, cancel);
+        IReadOnlyList<ModToUpdate> mods, string? gesture = null, CancellationToken cancel = default) =>
+        Handler.UpdateManifestAsync(mods, new InstanceToUpdate("stat-cache"), gesture, cancel);
 
-    private Task<UpdatedMod> Landed(params ModToUpdate[] mods) => Landed(mods, []);
-
-    private async Task<UpdatedMod> Landed(IReadOnlyList<ModToUpdate> mods, IReadOnlyList<OverriddenGameFile> gameFiles)
+    private async Task<UpdatedMod> Landed(params ModToUpdate[] mods)
     {
-        var result = await Update(mods, gameFiles);
+        var result = await Update(mods);
         Assert.Empty(result.Refused);
         return result.Landed.Single().Outcome;
     }
@@ -74,14 +72,14 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public async Task AFileWhoseBytesDifferFromAnInstallationFilesCopy_HasNoProvider_IsReported_AndNoInstallationFileIsOpened()
+    public async Task AFileWhoseBytesDifferFromItsPackagesCopy_IsNotInThePackage_IsReported_AndNoInstallationFileIsOpened()
     {
         _folders.WithFile(Mod, "meshes/a.nif", "edited");
 
-        var updated = await Landed(ModFrom("Mod", Downloaded("dl/Base.zip", ("readme.txt", "")), Downloaded("dl/Patch.zip", ("Meshes/A.nif", "original"))));
+        var updated = await Landed(ModFrom("Mod", Downloaded("dl/Base.zip", ("Meshes/A.nif", "original"))));
 
-        Assert.IsType<FileProvider.NoProvider>(FileOf(Mod, "meshes/a.nif").Provider);
-        Assert.Equal(["meshes/a.nif"], updated.NoProvider);
+        Assert.IsType<PackageEntry.NotHeld>(FileOf(Mod, "meshes/a.nif").Entry);
+        Assert.Equal(["meshes/a.nif"], updated.NotInPackage);
         Assert.Equal(0, _folders.Opens);
     }
 
@@ -93,34 +91,23 @@ public sealed class UpdateManifestHandlerTests
         var updated = await Landed(new ModToUpdate("Mod", Mod, [], ["meta.ini"], IsSourceMod: false, Version: null));
 
         var manifest = _folders.Manifests[Mod];
-        Assert.Empty(manifest.InstallationFiles.Concat<object>(manifest.GameFiles).Concat(manifest.Files));
-        Assert.Empty(updated.NoProvider);
+        Assert.Null(manifest.Package);
+        Assert.Empty(manifest.Files);
+        Assert.Empty(updated.NotInPackage);
     }
 
     [Fact]
-    public async Task APluginCleanedFromTheGamesOwn_HasNoProvider_AndTheManifestNamesNoGameFile()
-    {
-        _folders.WithFile(Mod, "game.esm", "cleaned");
-
-        var updated = await Landed([ModFrom("Mod")], [new OverriddenGameFile("Game.esm", 7, "vanilla")]);
-
-        Assert.IsType<FileProvider.NoProvider>(FileOf(Mod, "game.esm").Provider);
-        Assert.Equal(["game.esm"], updated.NoProvider);
-        Assert.Empty(_folders.Manifests[Mod].GameFiles);
-    }
-
-    [Fact]
-    public async Task AFileTheFirstInstallationFileHoldsAtItsPath_IsTheShortLine_AndTheInstallationFileIsAsTheRequestSays()
+    public async Task AFileTheInstallationFileHoldsAtItsPath_IsTheShortLine_AndThePackageIsAsTheRequestSaysIt()
     {
         _folders.WithFile(Mod, "meshes/a.nif", "hello");
-        var download = Downloaded("dl/Mod.zip", ("meshes/a.nif", "hello")) with { Source = "nexus:fallout4:1" };
+        var download = Downloaded("dl/Mod.zip", ("meshes/a.nif", "hello")) with { Page = "https://www.nexusmods.com/fallout4/mods/1" };
 
         await Landed(new ModToUpdate("Mod", Mod, [download], [], IsSourceMod: false, Version: null));
 
-        var line = FileOf(Mod, "meshes/a.nif");
-        Assert.IsType<FileProvider.FirstInstallationFile>(line.Provider);
-        var installationFile = Assert.Single(_folders.Manifests[Mod].InstallationFiles);
-        Assert.Equal(("Mod.zip", 7L, "#dl/Mod.zip", "nexus:fallout4:1"), (installationFile.Name, installationFile.Size, installationFile.Hash, installationFile.Source));
+        Assert.IsType<PackageEntry.Held>(FileOf(Mod, "meshes/a.nif").Entry);
+        Assert.Equal(
+            new ManifestPackage.InstallationFile("Mod.zip", 7L, "#dl/Mod.zip", "https://www.nexusmods.com/fallout4/mods/1"),
+            _folders.Manifests[Mod].Package);
     }
 
     [Fact]
@@ -134,13 +121,13 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public async Task AFileAnotherInstallationFileHoldsUnderAnotherPath_NamesThatFileAndPath()
+    public async Task AFileTheInstallationFileHoldsUnderAnotherPath_NamesThatPath()
     {
         _folders.WithFile(Mod, "a.nif", "hello");
 
-        await Landed(ModFrom("Mod", Downloaded("dl/Base.zip", ("readme.txt", "")), Downloaded("dl/Patch.zip", ("Data/a.nif", "hello"))));
+        await Landed(ModFrom("Mod", Downloaded("dl/Patch.zip", ("Data/a.nif", "hello"))));
 
-        Assert.Equal(new FileProvider.InstallationFileEntry("Patch.zip", "Data/a.nif"), FileOf(Mod, "a.nif").Provider);
+        Assert.Equal(new PackageEntry.HeldAt("Data/a.nif"), FileOf(Mod, "a.nif").Entry);
     }
 
     [Fact]
@@ -148,20 +135,42 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "b/same.txt", "hello");
 
-        await Landed(ModFrom(
-            "Mod", Downloaded("dl/First.zip", ("elsewhere.txt", "")), Downloaded("dl/Mod.zip", ("a/same.txt", "hello"), ("b/same.txt", "hello"))));
+        await Landed(ModFrom("Mod", Downloaded("dl/Mod.zip", ("a/same.txt", "hello"), ("b/same.txt", "hello"))));
 
-        Assert.Equal(new FileProvider.InstallationFileEntry("Mod.zip", "b/same.txt"), FileOf(Mod, "b/same.txt").Provider);
+        Assert.IsType<PackageEntry.Held>(FileOf(Mod, "b/same.txt").Entry);
     }
 
     [Fact]
-    public async Task AFilePathedInADifferentCaseThanItsEntry_IsStillTheFirstFilesShortLine()
+    public async Task AFilePathedInADifferentCaseThanItsEntry_IsStillTheShortLine()
     {
         _folders.WithFile(Mod, "Textures/A.dds", "hello");
 
         await Landed(ModFrom("Mod", Downloaded("dl/Mod.zip", ("textures/a.dds", "hello"))));
 
-        Assert.IsType<FileProvider.FirstInstallationFile>(FileOf(Mod, "Textures/A.dds").Provider);
+        Assert.IsType<PackageEntry.Held>(FileOf(Mod, "Textures/A.dds").Entry);
+    }
+
+    [Fact]
+    public async Task OnlyTheFirstInstallationFileIsThePackage_AndAFileOnlyAnotherHoldsIsNotInIt()
+    {
+        _folders.WithFile(Mod, "a.nif", "hello").WithFile(Mod, "b.nif", "world");
+
+        var updated = await Landed(ModFrom(
+            "Mod", Downloaded("dl/Base.zip", ("a.nif", "hello")), Downloaded("dl/Patch.zip", ("b.nif", "world"))));
+
+        Assert.Equal("Base.zip", Assert.IsType<ManifestPackage.InstallationFile>(_folders.Manifests[Mod].Package).Name);
+        Assert.Equal(["b.nif"], updated.NotInPackage);
+    }
+
+    [Fact]
+    public async Task AModWhoseFirstInstallationFileIsMissing_IsRefused_ThoughALaterOneIsThere()
+    {
+        _folders.WithFile(Mod, "a.nif", "hello");
+        var lost = new InstallationFile("dl/Lost.zip", null, 7, "#lost", []);
+
+        var result = await Update([ModFrom("Mod", lost, Downloaded("dl/Patch.zip", ("a.nif", "hello")))]);
+
+        Assert.Equal(UpdateManifestRefusal.InstallationFileMissing, Assert.Single(result.Refused).Refusal);
     }
 
     [Fact]
@@ -187,26 +196,14 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public async Task AFileNothingHolds_WithNoCopyAtItsPath_HasNoProvider_AndIsReported()
+    public async Task AFileNothingHolds_WithNoCopyAtItsPath_IsNotInThePackage_AndIsReported()
     {
         _folders.WithFile(Mod, "a.txt", "hellO").WithFile(Mod, "b.txt", "hello");
 
         var updated = await Landed(ModFrom("Mod", Downloaded("dl/Mod.zip", ("other/a.txt", "hello"), ("b.txt", "hello"))));
 
-        Assert.IsType<FileProvider.NoProvider>(FileOf(Mod, "a.txt").Provider);
-        Assert.Equal(["a.txt"], updated.NoProvider);
-    }
-
-    [Fact]
-    public async Task AFileAGameFileHolds_NamesTheGameFile_AsTheRequestSaysIt()
-    {
-        _folders.WithFile(Mod, "game.esm", "hello");
-
-        await Landed([ModFrom("Mod")], [new OverriddenGameFile("Game.esm", 5, "hello")]);
-
-        Assert.Equal(new FileProvider.GameFile("Game.esm"), FileOf(Mod, "game.esm").Provider);
-        var gameFile = Assert.Single(_folders.Manifests[Mod].GameFiles);
-        Assert.Equal(("Game.esm", 5L, "hello"), (gameFile.Name, gameFile.Size, gameFile.Hash));
+        Assert.IsType<PackageEntry.NotHeld>(FileOf(Mod, "a.txt").Entry);
+        Assert.Equal(["a.txt"], updated.NotInPackage);
     }
 
     [Fact]
@@ -215,7 +212,7 @@ public sealed class UpdateManifestHandlerTests
         _folders.WithFile("mods/Lost", "a.txt", "hello").WithFile("mods/Found", "a.txt", "hello");
         var lost = new InstallationFile("dl/Lost.zip", null, 7, "#lost", [new HashedEntry("a.txt", "hello")]);
 
-        var result = await Update([ModFrom("Lost", lost), ModFrom("Found", Downloaded("dl/Found.zip", ("a.txt", "hello")))], []);
+        var result = await Update([ModFrom("Lost", lost), ModFrom("Found", Downloaded("dl/Found.zip", ("a.txt", "hello")))]);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Lost", UpdateManifestRefusal.InstallationFileMissing), (refused.Item, refused.Refusal));
@@ -227,7 +224,7 @@ public sealed class UpdateManifestHandlerTests
     [Fact]
     public async Task AModWhoseFolderIsGone_IsRefused()
     {
-        var refused = Assert.Single((await Update([ModFrom("Gone")], [])).Refused);
+        var refused = Assert.Single((await Update([ModFrom("Gone")])).Refused);
 
         Assert.Equal(UpdateManifestRefusal.ModFolderMissing, refused.Refusal);
     }
@@ -250,7 +247,7 @@ public sealed class UpdateManifestHandlerTests
         _folders.WithFile("mods/Held", "held.txt", "hello").WithFile("mods/Fine", "a.txt", "hello");
         _folders.Unreadable.Add(("mods/Held", "held.txt"));
 
-        var result = await Update([ModFrom("Held"), ModFrom("Fine")], []);
+        var result = await Update([ModFrom("Held"), ModFrom("Fine")]);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Held", UpdateManifestRefusal.ModFilesUnreadable), (refused.Item, refused.Refusal));
@@ -264,7 +261,7 @@ public sealed class UpdateManifestHandlerTests
         _folders.WithFile("mods/Locked", "a.txt", "hello").WithFile("mods/Fine", "a.txt", "hello");
         _folders.UnwritableManifests.Add("mods/Locked");
 
-        var result = await Update([ModFrom("Locked"), ModFrom("Fine")], []);
+        var result = await Update([ModFrom("Locked"), ModFrom("Fine")]);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Locked", UpdateManifestRefusal.NotWritten), (refused.Item, refused.Refusal));
@@ -279,7 +276,7 @@ public sealed class UpdateManifestHandlerTests
         var updated = await Landed(ModFrom("Mod") with { MetadataFiles = ["meta.ini"] });
 
         Assert.Equal(["a.txt"], _folders.Manifests[Mod].Files.Select(f => f.Path));
-        Assert.Equal(["a.txt"], updated.NoProvider);
+        Assert.Equal(["a.txt"], updated.NotInPackage);
     }
 
     [Fact]
@@ -287,7 +284,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "a.txt", "hello");
 
-        var result = await Update([ModFrom("Mod"), ModFrom("MOD")], []);
+        var result = await Update([ModFrom("Mod"), ModFrom("MOD")]);
 
         Assert.Single(result.Landed);
     }
@@ -297,7 +294,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile("mods/A", "a.txt", "hello").WithFile("mods/B", "a.txt", "hello");
 
-        await Update([ModFrom("A"), ModFrom("B")], [], "g");
+        await Update([ModFrom("A"), ModFrom("B")], "g");
 
         Assert.Equal(
             [new ModlistProgress("g", "A", 0, 2), new ModlistProgress("g", "B", 1, 2), new ModlistProgress("g", null, 0, 0)],
@@ -311,7 +308,7 @@ public sealed class UpdateManifestHandlerTests
         using var cancel = new CancellationTokenSource();
         _notifications.OnPublish = _ => cancel.Cancel();
 
-        var result = await Update([ModFrom("A"), ModFrom("B")], [], cancel: cancel.Token);
+        var result = await Update([ModFrom("A"), ModFrom("B")], cancel: cancel.Token);
 
         Assert.Equal(["A"], result.Landed.Select(landed => landed.Item));
         Assert.Empty(result.Refused);
@@ -319,7 +316,7 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public async Task ASourceModAsItsBuildWroteIt_Lands_LeavingItsManifest_AndReportsEachFileWithNoProvider()
+    public async Task ASourceModAsItsBuildWroteIt_Lands_LeavingItsManifest_AndReportsEachFileNotInItsPackage()
     {
         var built = BuiltSourceMod();
 
@@ -327,7 +324,7 @@ public sealed class UpdateManifestHandlerTests
 
         Assert.Same(built, _folders.Manifests[Mod]);
         Assert.False(updated.ManifestWritten);
-        Assert.Equal(["z.txt"], updated.NoProvider);
+        Assert.Equal(["z.txt"], updated.NotInPackage);
     }
 
     [Fact]
@@ -348,7 +345,7 @@ public sealed class UpdateManifestHandlerTests
         var built = BuiltSourceMod();
         _folders.WithFile(Mod, path, text);
 
-        var refused = Assert.Single((await Update([SourceMod], [])).Refused);
+        var refused = Assert.Single((await Update([SourceMod])).Refused);
 
         Assert.Equal(
             (UpdateManifestRefusal.LeftToItsBuild, "was not updated: its build writes its manifest, and its folder differs from what the build wrote."),
@@ -361,7 +358,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "a.esp", "built");
 
-        var refused = Assert.Single((await Update([SourceMod], [])).Refused);
+        var refused = Assert.Single((await Update([SourceMod])).Refused);
 
         Assert.Equal(
             (UpdateManifestRefusal.LeftToItsBuild, "was not updated: its build writes its manifest, and it has not written one."),
@@ -373,10 +370,10 @@ public sealed class UpdateManifestHandlerTests
     public async Task AFileDeletedFromTheModFolder_LeavesTheManifest()
     {
         _folders.WithFile(Mod, "a.txt", "hello").WithFile(Mod, "b.txt", "hello");
-        await Update([ModFrom("Mod")], []);
+        await Update([ModFrom("Mod")]);
 
         _folders.Without(Mod, "b.txt");
-        await Update([ModFrom("Mod")], []);
+        await Update([ModFrom("Mod")]);
 
         Assert.Equal(["a.txt"], _folders.Manifests[Mod].Files.Select(f => f.Path));
     }

@@ -1,6 +1,6 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type {
-  DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, GameFile, HashedFile, InstallationFile,
+  DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, HashedFile, InstallationFile,
   InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
   ModFolder, ModFolders, ModMetadata, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription } from '../instanceAdapter/instanceAdapter';
 import { groupModOrder } from '../instanceAdapter/modGroups';
@@ -89,7 +89,6 @@ export interface InstanceAnswers {
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
   /** The game's files, which a mod's files of the same path, whatever the case, override. */
-  gameFiles?: readonly GameFile[];
   installed?: InstallOutcome;
   /** Whether the instance folder holds a repository on disk now, whatever its reading said. */
   repositoryOnDisk?: boolean;
@@ -155,11 +154,6 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   const answer = <T>(found: T | undefined, path: string): Promise<FileRead<T>> =>
     Promise.resolve(found === undefined ? { kind: 'unreadable', reason: `no answer fixed for ${path}` } : { kind: 'read', answer: found });
 
-  const overridden = (modFilePaths: readonly string[]): Promise<FileRead<readonly GameFile[]>> => {
-    const paths = new Set(modFilePaths.map((path) => path.toLowerCase()));
-    return Promise.resolve({ kind: 'read', answer: (answers.gameFiles ?? []).filter((file) => paths.has(file.path.toLowerCase())) });
-  };
-
   const adapter: InstanceAdapter = {
     reading: () => {
       readings++;
@@ -181,12 +175,6 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     writeModMetadata: (mod, metadata) => record({ verb: 'writeModMetadata', mod, metadata }, undefined),
     metadataFilesInModFolder: ['meta.ini'],
     statCacheFolder: '/instance/stat-cache',
-    overriddenGameFiles: (_dataFolder, modFilePaths) => overridden(modFilePaths),
-    gameFilesOverriddenBy: async (_dataFolder, mod) => {
-      const listing = current.modFiles.get(mod);
-      const found = await overridden((listing?.files ?? []).map((file) => file.relativePath));
-      return found.kind === 'read' ? { kind: 'read', answer: { gameFiles: found.answer, notes: listing?.notes ?? [] } } : found;
-    },
     writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, undefined),
     removeIgnoreList: () => record({ verb: 'removeIgnoreList' }, undefined),
     repositoryOnDisk: () => Promise.resolve(answers.repositoryOnDisk ?? false),

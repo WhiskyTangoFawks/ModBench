@@ -4,7 +4,7 @@ import type { components } from './generated/api';
 export type ModByFolder = components['schemas']['ModByFolder'];
 
 type HeldMetadata =
-  | { readonly kind: 'read'; readonly answer: { readonly version?: string; readonly installationFiles: readonly { readonly name: string; readonly source?: string }[] } }
+  | { readonly kind: 'read'; readonly answer: { readonly version?: string; readonly installationFiles: readonly { readonly name: string; readonly page?: string }[] } }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
 export function modWithMetadata(mod: ModByFolder, held: HeldMetadata): ModByFolder {

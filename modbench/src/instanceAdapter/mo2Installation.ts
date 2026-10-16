@@ -24,13 +24,13 @@ const installedFileOf = ({ nexusId, installedFiles = [] }: ModMeta): InstalledFi
   installedFiles.find((file) => file.nexusId === nexusId) ?? installedFiles[0];
 
 // A mod with no game of its own is the instance's game's.
-async function nexusPageOf(meta: ModMeta, { instanceRoot }: Mo2Context): Promise<Pick<InstallationFile, 'source' | 'unpagedGame'>> {
+async function nexusPageOf(meta: ModMeta, { instanceRoot }: Mo2Context): Promise<Pick<InstallationFile, 'page' | 'unpagedGame'>> {
   const file = installedFileOf(meta);
   const modId = file?.nexusId || meta.nexusId;
   if (!modId) return {};
   const game = meta.gameName ?? readGameName(await get(settingsFile(instanceRoot)));
   const domain = nexusDomainForMetaGame(game);
-  return domain === undefined ? { unpagedGame: game } : { source: formatNexusPage({ game: domain, modId, fileId: file?.fileId }) };
+  return domain === undefined ? { unpagedGame: game } : { page: formatNexusPage({ game: domain, modId, fileId: file?.fileId }) };
 }
 
 async function metaGameFor(domain: string, { instanceRoot }: Mo2Context): Promise<string | undefined> {
@@ -66,8 +66,8 @@ async function planMetadata(context: Mo2Context, mod: string, { version, install
   const changes: Partial<OwnedMetaKeys> = version === undefined || version === carried.version ? {} : { version };
   if (chosen === undefined) return { file, held, changes };
   if (chosen.name !== heldName) Object.assign(changes, { archiveFilename: chosen.name });
-  if (chosen.source !== undefined) {
-    const fromPage = await pageChanges(carried, chosen.source, context);
+  if (chosen.page !== undefined) {
+    const fromPage = await pageChanges(carried, chosen.page, context);
     if ('unwritable' in fromPage) return fromPage;
     Object.assign(changes, fromPage);
   } else if (chosen.name !== heldName) {
@@ -81,8 +81,8 @@ async function planMetadata(context: Mo2Context, mod: string, { version, install
 
 async function metadataOf(meta: ModMeta, context: Mo2Context): Promise<ModMetadata> {
   const { archiveFilename } = meta;
-  const { source } = await nexusPageOf(meta, context);
-  return { version: meta.version, installationFiles: archiveFilename === undefined ? [] : [{ name: basename(archiveFilename), source }] };
+  const { page } = await nexusPageOf(meta, context);
+  return { version: meta.version, installationFiles: archiveFilename === undefined ? [] : [{ name: basename(archiveFilename), page }] };
 }
 
 export function mo2Installation(

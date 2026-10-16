@@ -3,102 +3,68 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>Each manifest line's provider among what a request hands, with the hash that fixes the file's bytes, and the
-/// source that builds the rest. A source missing or holding other bytes is a lack.</summary>
-internal sealed class ManifestSources(
-    IModFolderRepository repository, Manifest manifest, IReadOnlyList<InstallationFile> installationFiles, IReadOnlyList<OverriddenGameFile> gameFiles)
+/// <summary>Each manifest line's entry in the mod's one package, with the hash that fixes its bytes, and what the package lacks.</summary>
+internal sealed class ManifestSources(IModFolderRepository repository, Manifest manifest, IReadOnlyList<InstallationFile> installationFiles)
 {
     internal record Lack(string Text)
     {
-        internal abstract record NotHanded(string Text) : Lack(Text);
-
-        internal sealed record InstallationFileMissing(string Name) : NotHanded($"installation file '{Name}' is missing");
-
-        internal sealed record GameFileMissing(string Path) : NotHanded($"game file '{Path}' is missing");
+        internal sealed record InstallationFileMissing(string Name) : Lack($"installation file '{Name}' is missing");
     }
 
-    internal abstract record Source(string Hash);
+    /// <summary>A file of the mod folder, by its path, and the entry of the installation file that holds its bytes.</summary>
+    internal sealed record SourcedFile(string Path, InstallationFile File, string EntryPath, string Hash);
 
-    internal sealed record EntrySource(InstallationFile File, string Path, string Hash) : Source(Hash);
-
-    internal sealed record GameSource(string Path, string Hash) : Source(Hash);
-
-    /// <summary>A file of the mod folder, by its path, and where its line says it comes from.</summary>
-    internal sealed record SourcedFile(string Path, Source Source);
-
-    /// <summary>Built is the source and commit that build the files no request hands, none when no line names one.</summary>
+    /// <summary>Built is the source and commit that build the mod's files, none when its package is no source mod.</summary>
     internal sealed record Resolved(
         IReadOnlyList<SourcedFile> Files, IReadOnlyList<Lack> Lacks, SharedSource? Built);
 
     private sealed record Handed(InstallationFile File, Dictionary<string, HashedEntry> Entries);
 
-    private readonly Dictionary<string, (Handed? Handed, Lack? Lack)> _installationFiles = new(StringComparer.Ordinal);
+    private (Handed? Handed, Lack? Lack)? _package;
 
-    /// <summary>Each line's source, and each lack once: of the sources the manifest names, then of its lines.</summary>
     public Resolved Resolve()
     {
         List<SourcedFile> sourced = [];
-        List<Lack> lacks =
-        [
-            .. manifest.InstallationFiles.Select(source => InstallationFileNamed(source.Name).Lack).OfType<Lack>(),
-            .. manifest.GameFiles.Select(source => GameFileOf(source.Name).Lack).OfType<Lack>(),
-        ];
+        List<Lack> lacks = [];
+        if (manifest.Package is ManifestPackage.InstallationFile named && Package(named).Lack is { } missing) lacks.Add(missing);
         foreach (var file in manifest.Files)
         {
-            var (source, lack) = SourceOf(file);
-            if (source is not null) sourced.Add(new SourcedFile(file.Path, source));
+            var (entry, lack) = EntryOf(file);
+            if (entry is not null) sourced.Add(entry);
             if (lack is not null) lacks.Add(lack);
         }
-        List<SharedSource> built = [.. manifest.Files.Select(file => file.Provider).OfType<FileProvider.Source>()
-            .Select(source => new SharedSource(source.Remote, source.Commit)).Distinct()];
-        if (built.Count > 1) lacks.Add(new Lack("its manifest names its source at more than one commit"));
-        return new Resolved(sourced, [.. lacks.Distinct()], built.Count == 1 ? built[0] : null);
+        var built = manifest.Package is ManifestPackage.SourceMod sourceMod ? new SharedSource(sourceMod.Remote, sourceMod.Commit) : null;
+        return new Resolved(sourced, [.. lacks.Distinct()], built);
     }
 
-    private (Source?, Lack?) SourceOf(ManifestFile file) => manifest.BytesOf(file) switch
+    private (SourcedFile?, Lack?) EntryOf(ManifestFile file) => manifest.BytesOf(file) switch
     {
-        FileBytes.Unnamed => (null, new Lack($"'{file.Path}' has no provider")),
+        FileBytes.NotHeld => (null, new Lack($"its package does not hold '{file.Path}'")),
         FileBytes.NoInstallationFile => (null, new Lack($"'{file.Path}' names no installation file")),
-        FileBytes.InInstallationFile held => EntryOf(held.Name, held.Path),
-        FileBytes.InGameFile game => GameFileOf(game.Path),
+        FileBytes.InInstallationFile held when manifest.Package is ManifestPackage.InstallationFile named => EntryOf(file.Path, named, held),
         FileBytes.AtCommit => (null, null),
         var other => throw new ArgumentOutOfRangeException(nameof(file), other, null),
     };
 
-    private (Source?, Lack?) EntryOf(string name, string entryPath)
+    private (SourcedFile?, Lack?) EntryOf(string path, ManifestPackage.InstallationFile named, FileBytes.InInstallationFile held)
     {
-        var (handed, lack) = InstallationFileNamed(name);
+        var (handed, lack) = Package(named);
         if (handed is null) return (null, lack);
-        return handed.Entries.TryGetValue(entryPath, out var entry)
-            ? (new EntrySource(handed.File, entry.Path, entry.Hash), null)
-            : (null, new Lack($"installation file '{name}' holds no '{entryPath}'"));
+        return handed.Entries.TryGetValue(held.Path, out var entry)
+            ? (new SourcedFile(path, handed.File, entry.Path, entry.Hash), null)
+            : (null, new Lack($"installation file '{held.Name}' holds no '{held.Path}'"));
     }
 
-    private (Handed? Handed, Lack? Lack) InstallationFileNamed(string name)
-    {
-        if (_installationFiles.TryGetValue(name, out var found)) return found;
-        return _installationFiles[name] = Find();
+    private (Handed? Handed, Lack? Lack) Package(ManifestPackage.InstallationFile named) => _package ??= Find(named);
 
-        (Handed?, Lack?) Find()
-        {
-            var handed = installationFiles.FirstOrDefault(file => repository.InstallationFileName(file.Path) == name);
-            if (handed is null) return (null, new Lack.InstallationFileMissing(name));
-            if (!repository.InstallationFileExists(handed.Path)) return (null, new Lack($"installation file '{name}' is not in the downloads folder"));
-            if (manifest.InstallationFiles.FirstOrDefault(source => source.Name == name)?.Hash != handed.Hash)
-                return (null, new Lack($"installation file '{name}' has other bytes"));
-            Dictionary<string, HashedEntry> entries = new(StringComparer.OrdinalIgnoreCase);
-            foreach (var entry in handed.Entries) entries.TryAdd(entry.Path, entry);
-            return (new Handed(handed, entries), null);
-        }
-    }
-
-    private (Source? Source, Lack? Lack) GameFileOf(string path)
+    private (Handed?, Lack?) Find(ManifestPackage.InstallationFile named)
     {
-        var handed = gameFiles.FirstOrDefault(game => string.Equals(game.Path, path, StringComparison.OrdinalIgnoreCase));
-        if (handed is null) return (null, new Lack.GameFileMissing(path));
-        var named = manifest.GameFiles.FirstOrDefault(source => string.Equals(source.Name, path, StringComparison.OrdinalIgnoreCase));
-        return named?.Hash == handed.Hash
-            ? (new GameSource(handed.Path, handed.Hash), null)
-            : (null, new Lack($"game file '{path}' has other bytes"));
+        var handed = installationFiles.FirstOrDefault(file => repository.InstallationFileName(file.Path) == named.Name);
+        if (handed is null) return (null, new Lack.InstallationFileMissing(named.Name));
+        if (!repository.InstallationFileExists(handed.Path)) return (null, new Lack($"installation file '{named.Name}' is not in the downloads folder"));
+        if (named.Hash != handed.Hash) return (null, new Lack($"installation file '{named.Name}' has other bytes"));
+        Dictionary<string, HashedEntry> entries = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in handed.Entries) entries.TryAdd(entry.Path, entry);
+        return (new Handed(handed, entries), null);
     }
 }

@@ -171,11 +171,11 @@ async function updateManifestForAgent(
   const result = await runWritingGesture(modsView, instance, () => commands.updateManifest(mods, instance.value));
   if (!result.applied) return { applied: false, refusal: result.refusal };
   const outcome = named(label, result);
-  const unprovided = outcome.landed.flatMap(({ mod, noProvider }) => noProvider.map((path) => `${mod}: ${path} has no provider`));
+  const notHeld = outcome.landed.flatMap(({ mod, notInPackage }) => notInPackage.map((path) => `${mod}: its package does not hold ${path}`));
   return {
     applied: true,
     outcome: { landed: outcome.landed, refused: outcome.refused },
-    partial: warned('Update manifest:', [...unprovided, ...notesOf(label, result.notes), ...result.submoduleNotes, ...statCacheNotWritten(outcome.landed)]),
+    partial: warned('Update manifest:', [...notHeld, ...notesOf(label, result.notes), ...result.submoduleNotes, ...statCacheNotWritten(outcome.landed)]),
   };
 }
 
@@ -196,14 +196,14 @@ const statCacheNotWritten = (landed: readonly { mod: string; statCacheNotWritten
   landed.flatMap(({ mod, statCacheNotWritten: why }) => (why ? [`${mod}: the stat cache could not be written: ${why}`] : []));
 
 // modlist-repository.md, Update manifest, story 8: one line, the modlist's validation, with each refused mod and each
-// file with no provider in the Output.
+// file its package does not hold in the Output.
 function reportUpdated(reporter: Reporter, label: Label, outcome: Omit<Extract<UpdateManifestResult, { applied: true }>, 'applied'>): void {
-  const unprovided = outcome.landed.flatMap(({ mod, noProvider }) => noProvider.map((path) => `${mod}: ${path}`));
+  const notHeld = outcome.landed.flatMap(({ mod, notInPackage }) => notInPackage.map((path) => `${mod}: ${path}`));
   const updated = outcome.landed.filter(({ manifestWritten }) => manifestWritten).length;
   const unchanged = outcome.landed.length - updated;
   const line = `Update manifest: ${unchanged} mod${unchanged === 1 ? '' : 's'} unchanged, ${updated} updated, `
-    + `${outcome.refused.length} refused; ${counted(unprovided.length, 'file has', 'files have')} no provider.`;
-  const warnings = [...unprovided, ...notesOf(label, outcome.notes), ...outcome.submoduleNotes, ...statCacheNotWritten(outcome.landed)];
+    + `${outcome.refused.length} refused; their packages do not hold ${counted(notHeld.length, 'file', 'files')}.`;
+  const warnings = [...notHeld, ...notesOf(label, outcome.notes), ...outcome.submoduleNotes, ...statCacheNotWritten(outcome.landed)];
   const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...warnings].join('\n');
   if (outcome.refused.length > 0) reporter.report('error', line, detail);
   else if (warnings.length > 0) reporter.report('warning', line, detail);

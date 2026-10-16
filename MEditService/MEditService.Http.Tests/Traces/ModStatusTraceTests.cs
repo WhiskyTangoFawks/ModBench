@@ -45,7 +45,6 @@ public sealed class ModStatusTraceTests : HostedTests
                 ["installationFiles"] = new JsonArray(),
                 ["metadataFiles"] = new JsonArray("meta.ini"),
             }),
-            ["gameFiles"] = new JsonArray(),
             ["statCache"] = StatCache,
         })).EnsureSuccessStatusCode();
 

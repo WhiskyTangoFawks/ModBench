@@ -160,7 +160,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description What restore from manifest would destroy in each mod, from its manifest, its files' stamps and the stat cache, before anything is written: each file whose bytes the stat cache cannot vouch are its provider's, and each file no line names. A mod with no manifest destroys nothing, and a mod whose manifest or a file cannot be read is skipped. */
+        /** @description What restore from manifest would destroy in each mod, from its manifest, its files' stamps and the stat cache, before anything is written: each file whose bytes the stat cache cannot vouch are its package's, and each file no line names. A mod with no manifest destroys nothing, and a mod whose manifest or a file cannot be read is skipped. */
         post: operations["WhatRestoreDestroys"];
         delete?: never;
         options?: never;
@@ -177,7 +177,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Each mod's folder against its manifest (modlist-repository.md, Status), from its manifest, a stat of each file and the stat cache, which keeps what the read found: each file whose bytes differ, each file no line names, each file a line names that is gone and each file with no provider, or that it has no manifest or why it cannot be read. */
+        /** @description Each mod's folder against its manifest (modlist-repository.md, Status), from its manifest, a stat of each file and the stat cache, which keeps what the read found: each file whose bytes differ, each file no line names, each file a line names that is gone and each file its package does not hold, or that it has no manifest or why it cannot be read. */
         post: operations["ModStatus"];
         delete?: never;
         options?: never;
@@ -1303,7 +1303,7 @@ export interface components {
         };
         InstallationFileRequest: {
             path: string;
-            source?: string | null;
+            page?: string | null;
             /** Format: int64 */
             size?: number | null;
             hash: string;
@@ -1372,7 +1372,7 @@ export interface components {
         };
         MetadataInstallationFile: {
             name: string;
-            source?: string | null;
+            page?: string | null;
         };
         ModBuildRefusal: {
             item: string;
@@ -1409,7 +1409,6 @@ export interface components {
             item: string;
             refusal: components["schemas"]["RestoreRefusal"];
             message: string;
-            gameFilesNotFound: string[];
             installationFilesNotFound: string[];
             buildRefusal: components["schemas"]["BuildRefusal"];
         };
@@ -1419,7 +1418,7 @@ export interface components {
             differing: string[];
             namedByNoLine: string[];
             gone: string[];
-            noProvider: string[];
+            notInPackage: string[];
             unreadable?: components["schemas"]["ModUnreadable"] | null;
             statCacheNotWritten?: string | null;
             metadataDiffers: boolean;
@@ -1474,12 +1473,6 @@ export interface components {
             recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;
             modlistProgress?: components["schemas"]["ModlistProgress"] | null;
             mods?: string[] | null;
-        };
-        OverriddenGameFileRequest: {
-            path: string;
-            /** Format: int64 */
-            size?: number | null;
-            hash: string;
         };
         PathHop: {
             kind: string;
@@ -1759,8 +1752,6 @@ export interface components {
         };
         RestoreFromManifestRequest: {
             mods: components["schemas"]["RestoreFromManifestModRequest"][];
-            gameFiles: components["schemas"]["OverriddenGameFileRequest"][];
-            dataFolder: string;
             statCache: string;
             excludedSuffix: string;
             archives?: components["schemas"]["ArchiveVariantsRequest"] | null;
@@ -1831,7 +1822,6 @@ export interface components {
         UpdateManifestRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "NotWritten" | "LeftToItsBuild";
         UpdateManifestRequest: {
             mods: components["schemas"]["UpdateManifestModRequest"][];
-            gameFiles: components["schemas"]["OverriddenGameFileRequest"][];
             statCache: string;
             gesture?: string | null;
         };
@@ -1842,7 +1832,7 @@ export interface components {
         UpdatedModResponse: {
             mod: string;
             manifestWritten: boolean;
-            noProvider: string[];
+            notInPackage: string[];
             statCacheNotWritten?: string | null;
         };
         WhatRestoreDestroysResponse: {

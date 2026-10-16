@@ -4,82 +4,95 @@ using System.Text.Json;
 
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>A manifest as lines of JSON, one per source and one per file in path order, so a change to one file
-/// is one line in a diff.</summary>
+/// <summary>A manifest as a JSON file with a line for its version, its package and each file, the files in path order,
+/// so a change to one file is one line in a diff.</summary>
 internal static class ManifestText
 {
     private static readonly JsonWriterOptions Compact = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public static string Of(Manifest manifest)
     {
-        var text = new StringBuilder();
-        if (manifest.Version is { } version) Line(text, writer => { writer.WriteStartObject(); writer.WriteString("version", version); writer.WriteEndObject(); });
-        foreach (var source in manifest.InstallationFiles) Line(text, writer => Source(writer, "installationFile", source));
-        foreach (var source in manifest.GameFiles.OrderBy(s => s.Name, StringComparer.Ordinal))
-            Line(text, writer => Source(writer, "gameFile", source));
-        foreach (var file in manifest.Files.OrderBy(f => f.Path, StringComparer.Ordinal)) Line(text, writer => FileLine(writer, file));
-        return text.ToString();
+        List<string> members = [];
+        if (manifest.Version is { } version) members.Add("\"version\": " + Value(writer => writer.WriteStringValue(version)));
+        if (manifest.Package is { } package) members.Add("\"package\": " + Value(writer => PackageLine(writer, package)));
+        var files = manifest.Files.OrderBy(file => file.Path, StringComparer.Ordinal).Select(file => Value(writer => FileLine(writer, file))).ToList();
+        members.Add(files.Count == 0 ? "\"files\": []" : "\"files\": [\n" + string.Join(",\n", files) + "\n]");
+        return "{\n" + string.Join(",\n", members) + "\n}\n";
     }
 
-    /// <summary>The manifest Of wrote. Throws <see cref="InvalidDataException"/> naming the
-    /// first line it cannot read.</summary>
+    /// <summary>The manifest Of wrote. Throws <see cref="InvalidDataException"/> naming where it cannot read it.</summary>
     public static Manifest Parse(string text)
     {
-        List<ManifestSource> installationFiles = [], gameFiles = [];
-        List<ManifestFile> files = [];
-        string? version = null;
-        foreach (var (at, line) in text.Split('\n').Index())
+        try
         {
-            if (line.Length == 0) continue;
-            try
-            {
-                using var parsed = JsonDocument.Parse(line);
-                var root = parsed.RootElement;
-                if (root.TryGetProperty("path", out var path)) files.Add(FileOf(Text(path), root));
-                else if (root.TryGetProperty("version", out var held)) version = Text(held);
-                else if (root.TryGetProperty("installationFile", out var name)) installationFiles.Add(SourceOf(name, root));
-                else if (root.TryGetProperty("gameFile", out var game)) gameFiles.Add(SourceOf(game, root));
-                else throw new FormatException();
-            }
-            catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException or KeyNotFoundException)
-            {
-                throw new InvalidDataException($"its manifest cannot be read at line {at + 1}", e);
-            }
+            using var parsed = JsonDocument.Parse(text);
+            var root = parsed.RootElement;
+            var files = root.GetProperty("files").EnumerateArray().Index().Select(entry => FileOf(entry.Index, entry.Item)).ToList();
+            return new Manifest(
+                root.TryGetProperty("package", out var package) ? PackageOf(package) : null,
+                files,
+                root.TryGetProperty("version", out var version) ? Text(version) : null);
         }
-        return new Manifest(installationFiles, gameFiles, files, version);
+        catch (JsonException e)
+        {
+            throw new InvalidDataException($"its manifest cannot be read{(e.LineNumber is { } line ? $" at line {line + 1}" : "")}", e);
+        }
+        catch (Exception e) when (e is InvalidOperationException or FormatException or KeyNotFoundException)
+        {
+            throw new InvalidDataException("its manifest cannot be read", e);
+        }
     }
 
     private static string Text(JsonElement value) => value.GetString() ?? throw new FormatException();
 
-    private static ManifestSource SourceOf(JsonElement name, JsonElement root) => new(
-        Text(name), root.GetProperty("size").GetInt64(), Text(root.GetProperty("hash")),
-        root.TryGetProperty("source", out var source) ? Text(source) : null);
-
-    private static ManifestFile FileOf(string path, JsonElement root) =>
-        new(path, root.TryGetProperty("from", out var from) ? ProviderOf(from) : new FileProvider.FirstInstallationFile());
-
-    private static FileProvider ProviderOf(JsonElement from)
+    private static ManifestPackage PackageOf(JsonElement package)
     {
-        if (from.ValueKind == JsonValueKind.Null) return new FileProvider.NoProvider();
-        if (from.TryGetProperty("gameFile", out var game)) return new FileProvider.GameFile(Text(game));
-        if (from.TryGetProperty("remote", out var remote)) return new FileProvider.Source(Text(remote), Text(from.GetProperty("commit")));
-        return new FileProvider.InstallationFileEntry(Text(from.GetProperty("installationFile")), Text(from.GetProperty("path")));
+        if (package.TryGetProperty("installationFile", out var name))
+        {
+            return new ManifestPackage.InstallationFile(
+                Text(name), package.GetProperty("size").GetInt64(), Text(package.GetProperty("hash")),
+                package.TryGetProperty("page", out var page) ? Text(page) : null);
+        }
+        return new ManifestPackage.SourceMod(Text(package.GetProperty("remote")), Text(package.GetProperty("commit")));
     }
 
-    private static void Line(StringBuilder text, Action<Utf8JsonWriter> write)
+    private static ManifestFile FileOf(int index, JsonElement line)
+    {
+        try
+        {
+            var path = Text(line.GetProperty("path"));
+            if (line.TryGetProperty("inPackage", out var held) && !held.GetBoolean()) return new ManifestFile(path, new PackageEntry.NotHeld());
+            return new ManifestFile(path, line.TryGetProperty("packagePath", out var packagePath) ? new PackageEntry.HeldAt(Text(packagePath)) : new PackageEntry.Held());
+        }
+        catch (Exception e) when (e is InvalidOperationException or FormatException or KeyNotFoundException)
+        {
+            throw new InvalidDataException($"its manifest cannot be read at its file {index + 1}", e);
+        }
+    }
+
+    private static string Value(Action<Utf8JsonWriter> write)
     {
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer, Compact)) write(writer);
-        text.Append(Encoding.UTF8.GetString(buffer.ToArray())).Append('\n');
+        return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
-    private static void Source(Utf8JsonWriter writer, string kind, ManifestSource source)
+    private static void PackageLine(Utf8JsonWriter writer, ManifestPackage package)
     {
         writer.WriteStartObject();
-        writer.WriteString(kind, source.Name);
-        writer.WriteNumber("size", source.Size);
-        writer.WriteString("hash", source.Hash);
-        if (source.Source is { } origin) writer.WriteString("source", origin);
+        switch (package)
+        {
+            case ManifestPackage.InstallationFile installationFile:
+                writer.WriteString("installationFile", installationFile.Name);
+                writer.WriteNumber("size", installationFile.Size);
+                writer.WriteString("hash", installationFile.Hash);
+                if (installationFile.Page is { } page) writer.WriteString("page", page);
+                break;
+            case ManifestPackage.SourceMod sourceMod:
+                writer.WriteString("remote", sourceMod.Remote);
+                writer.WriteString("commit", sourceMod.Commit);
+                break;
+        }
         writer.WriteEndObject();
     }
 
@@ -87,27 +100,13 @@ internal static class ManifestText
     {
         writer.WriteStartObject();
         writer.WriteString("path", file.Path);
-        switch (file.Provider)
+        switch (file.Entry)
         {
-            case FileProvider.InstallationFileEntry entry:
-                writer.WriteStartObject("from");
-                writer.WriteString("installationFile", entry.InstallationFile);
-                writer.WriteString("path", entry.Path);
-                writer.WriteEndObject();
+            case PackageEntry.HeldAt moved:
+                writer.WriteString("packagePath", moved.Path);
                 break;
-            case FileProvider.GameFile game:
-                writer.WriteStartObject("from");
-                writer.WriteString("gameFile", game.Path);
-                writer.WriteEndObject();
-                break;
-            case FileProvider.Source source:
-                writer.WriteStartObject("from");
-                writer.WriteString("remote", source.Remote);
-                writer.WriteString("commit", source.Commit);
-                writer.WriteEndObject();
-                break;
-            case FileProvider.NoProvider:
-                writer.WriteNull("from");
+            case PackageEntry.NotHeld:
+                writer.WriteBoolean("inPackage", false);
                 break;
         }
         writer.WriteEndObject();

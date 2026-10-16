@@ -32,8 +32,6 @@ public sealed class ModlistGestureCancelApiTests : HostedTests
         return new
         {
             mods,
-            gameFiles = Array.Empty<object>(),
-            dataFolder = Path.Combine(_instance, "game", "Data"),
             statCache = Path.Combine(_instance, "stat-cache"),
             excludedSuffix = ".mohidden",
             gesture,

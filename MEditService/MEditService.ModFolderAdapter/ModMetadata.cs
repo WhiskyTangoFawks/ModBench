@@ -5,10 +5,10 @@ namespace MEditService.ModFolderAdapter;
 public sealed record ModMetadata(string? Version, IReadOnlyList<MetadataInstallationFile> InstallationFiles)
 {
     public static ModMetadata Of(Manifest manifest) =>
-        new(manifest.Version, [.. manifest.InstallationFiles.Select(file => new MetadataInstallationFile(file.Name, file.Source))]);
+        new(manifest.Version, manifest.Package is ManifestPackage.InstallationFile file ? [new MetadataInstallationFile(file.Name, file.Page)] : []);
 
     /// <summary>Whether restoring <paramref name="manifest"/>'s metadata replaces a value this one holds: another version,
-    /// another source for a file both name, or files none of which the manifest names. A value either side lacks replaces
+    /// another page for a file both name, or files none of which the manifest names. A value either side lacks replaces
     /// nothing.</summary>
     public bool IsOverwrittenBy(ModMetadata manifest) =>
         (manifest.Version is { } version && Version is { } held && held != version) || InstallationFilesDifferFrom(manifest.InstallationFiles);
@@ -23,8 +23,8 @@ public sealed record ModMetadata(string? Version, IReadOnlyList<MetadataInstalla
         if (InstallationFiles.Count == 0 || manifestFiles.Count == 0) return false;
         var named = InstallationFiles.Select(file => (Held: file, Manifest: manifestFiles.FirstOrDefault(other => other.Name == file.Name))).ToList();
         return named.All(pair => pair.Manifest is null)
-            || named.Any(pair => pair.Manifest is { } other && pair.Held.Source is { } heldSource && other.Source is { } source && heldSource != source);
+            || named.Any(pair => pair.Manifest is { } other && pair.Held.Page is { } heldPage && other.Page is { } page && heldPage != page);
     }
 }
 
-public sealed record MetadataInstallationFile(string Name, string? Source);
+public sealed record MetadataInstallationFile(string Name, string? Page);

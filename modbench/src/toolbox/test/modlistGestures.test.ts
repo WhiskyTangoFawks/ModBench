@@ -197,7 +197,7 @@ describe('Every mod (update manifest and restore from manifest)', () => {
 
     expect(sentMods(updateManifest)).toEqual([['ModA']]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Update manifest: 0 mods unchanged, 0 updated, 1 refused; 0 files have no provider.',
+      severity: 'error', message: 'Update manifest: 0 mods unchanged, 0 updated, 1 refused; their packages do not hold 0 files.',
       detail: '"meshes" (it is not a mod or a separator)',
     }]);
   });
@@ -231,13 +231,13 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     updateManifest.mockImplementationOnce((_mods, _instance, options) => {
       notification.cancel();
       signal = options?.signal;
-      return Promise.resolve({ applied: true, notes: [], submoduleNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, noProvider: [] }], refused: [] });
+      return Promise.resolve({ applied: true, notes: [], submoduleNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [] }], refused: [] });
     });
     const { reporter, run } = register();
 
     await run(UPDATE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
 
-    expect([signal?.aborted, reporter.landings]).toEqual([true, ['Update manifest: 0 mods unchanged, 1 updated, 0 refused; 0 files have no provider.']]);
+    expect([signal?.aborted, reporter.landings]).toEqual([true, ['Update manifest: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 0 files.']]);
   });
 
   it('restore from manifest, cancelled, aborts the signal it handed the command, and reports what mEdit answered', async () => {
@@ -302,33 +302,33 @@ describe('Update manifest', () => {
     expect(ask.asked).toEqual([]);
   });
 
-  it('says in one line how many mods were unchanged, updated and refused, and that no file lacks a provider', async () => {
+  it('says in one line how many mods were unchanged, updated and refused, and that no file is outside its package', async () => {
     updateManifest.mockResolvedValueOnce({
       applied: true, notes: [], submoduleNotes: [], refused: [],
-      landed: [{ mod: 'ModA', manifestWritten: true, noProvider: [] }, { mod: 'ModB', manifestWritten: false, noProvider: [] }, { mod: 'C', manifestWritten: false, noProvider: [] }],
+      landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [] }, { mod: 'ModB', manifestWritten: false, notInPackage: [] }, { mod: 'C', manifestWritten: false, notInPackage: [] }],
     });
     const { reporter, run } = register();
 
     await run(UPDATE);
 
-    expect([reporter.landings, reporter.reports]).toEqual([['Update manifest: 2 mods unchanged, 1 updated, 0 refused; 0 files have no provider.'], []]);
+    expect([reporter.landings, reporter.reports]).toEqual([['Update manifest: 2 mods unchanged, 1 updated, 0 refused; their packages do not hold 0 files.'], []]);
   });
 
-  it('warns in that line when a file has no provider, naming each by mod in the Output', async () => {
-    updateManifest.mockResolvedValueOnce({ applied: true, notes: [], submoduleNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif', 'b/c.dds'] }], refused: [] });
+  it('warns in that line when a package does not hold a file, naming each by mod in the Output', async () => {
+    updateManifest.mockResolvedValueOnce({ applied: true, notes: [], submoduleNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif', 'b/c.dds'] }], refused: [] });
     const { reporter, run } = register();
 
     await run(UPDATE, modRow('ModA'));
 
     expect([reporter.landings, reporter.reports]).toEqual([[], [{
-      severity: 'warning', message: 'Update manifest: 0 mods unchanged, 1 updated, 0 refused; 2 files have no provider.', detail: 'ModA: a.nif\nModA: b/c.dds',
+      severity: 'warning', message: 'Update manifest: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 2 files.', detail: 'ModA: a.nif\nModA: b/c.dds',
     }]]);
   });
 
-  it('errs in that line when a mod is refused, naming each refused mod with why, then each file with no provider', async () => {
+  it('errs in that line when a mod is refused, naming each refused mod with why, then each file its package does not hold', async () => {
     updateManifest.mockResolvedValueOnce({
       applied: true, notes: [], submoduleNotes: [],
-      landed: [{ mod: 'ModA', manifestWritten: false, noProvider: ['a.nif'] }],
+      landed: [{ mod: 'ModA', manifestWritten: false, notInPackage: ['a.nif'] }],
       refused: [{ item: 'ModB', reason: "was not updated: 'B.zip' not in the downloads folder." }],
     });
     const { reporter, run } = register();
@@ -336,32 +336,32 @@ describe('Update manifest', () => {
     await run(UPDATE);
 
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Update manifest: 1 mod unchanged, 0 updated, 1 refused; 1 file has no provider.',
+      severity: 'error', message: 'Update manifest: 1 mod unchanged, 0 updated, 1 refused; their packages do not hold 1 file.',
       detail: `"ModB" (was not updated: 'B.zip' not in the downloads folder.)\nModA: a.nif`,
     }]);
   });
 
   it('warns in that line when a mod folder\'s listing skipped an entry, naming each in the Output', async () => {
-    updateManifest.mockResolvedValueOnce({ applied: true, notes: [{ mod: 'ModA', note: 'broken link "a.nif", skipped' }], submoduleNotes: ['source/Odd is not a source mod'], landed: [{ mod: 'ModA', manifestWritten: false, noProvider: [] }], refused: [] });
+    updateManifest.mockResolvedValueOnce({ applied: true, notes: [{ mod: 'ModA', note: 'broken link "a.nif", skipped' }], submoduleNotes: ['source/Odd is not a source mod'], landed: [{ mod: 'ModA', manifestWritten: false, notInPackage: [] }], refused: [] });
     const { reporter, run } = register();
 
     await run(UPDATE, modRow('ModA'));
 
     expect([reporter.landings, reporter.reports]).toEqual([[], [{
-      severity: 'warning', message: 'Update manifest: 1 mod unchanged, 0 updated, 0 refused; 0 files have no provider.', detail: 'ModA: broken link "a.nif", skipped\nsource/Odd is not a source mod',
+      severity: 'warning', message: 'Update manifest: 1 mod unchanged, 0 updated, 0 refused; their packages do not hold 0 files.', detail: 'ModA: broken link "a.nif", skipped\nsource/Odd is not a source mod',
     }]]);
   });
 
   it('warns in that line when the stat cache could not be written for a mod, naming why in the Output', async () => {
     updateManifest.mockResolvedValueOnce({
-      applied: true, notes: [], submoduleNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, noProvider: [], statCacheNotWritten: '/i/stat-cache is read-only' }], refused: [],
+      applied: true, notes: [], submoduleNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [], statCacheNotWritten: '/i/stat-cache is read-only' }], refused: [],
     });
     const { reporter, run } = register();
 
     await run(UPDATE, modRow('ModA'));
 
     expect([reporter.landings, reporter.reports]).toEqual([[], [{
-      severity: 'warning', message: 'Update manifest: 0 mods unchanged, 1 updated, 0 refused; 0 files have no provider.',
+      severity: 'warning', message: 'Update manifest: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 0 files.',
       detail: 'ModA: the stat cache could not be written: /i/stat-cache is read-only',
     }]]);
   });
@@ -526,14 +526,14 @@ describe('Restore from manifest', () => {
 
   it('names each skipped mod with what it lacks, and does not call the mods that landed failed', async () => {
     restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [{ item: 'ModB', reason: "was skipped: 'b.nif' has no provider." }],
+      applied: true, landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [{ item: 'ModB', reason: "was skipped: its package does not hold 'b.nif'." }],
     });
     const { reporter, run } = register();
 
     await run(RESTORE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
 
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"ModB" (was skipped: 'b.nif' has no provider.)`,
+      severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"ModB" (was skipped: its package does not hold 'b.nif'.)`,
     }]);
     expect(reporter.landings).toEqual([]);
   });
@@ -598,7 +598,7 @@ describe('A separator in a report or an outcome', () => {
   it('update manifest keeps it apart from a mod of the same name', async () => {
     updateManifest.mockResolvedValueOnce({
       applied: true, notes: [], submoduleNotes: [],
-      landed: [{ mod: 'Weapons', manifestWritten: true, noProvider: ['b.nif'] }, { mod: WIRE, manifestWritten: true, noProvider: ['a.nif'] }],
+      landed: [{ mod: 'Weapons', manifestWritten: true, notInPackage: ['b.nif'] }, { mod: WIRE, manifestWritten: true, notInPackage: ['a.nif'] }],
       refused: [{ item: WIRE, reason: 'was not updated: its folder does not exist.' }, { item: 'Weapons', reason: 'was not updated: its folder does not exist.' }],
     });
     const sharing = instanceValueFixture({
@@ -609,7 +609,7 @@ describe('A separator in a report or an outcome', () => {
     await run(UPDATE);
 
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Update manifest: 0 mods unchanged, 2 updated, 2 refused; 2 files have no provider.',
+      severity: 'error', message: 'Update manifest: 0 mods unchanged, 2 updated, 2 refused; their packages do not hold 2 files.',
       detail: `"${NAMED}" (was not updated: its folder does not exist.)\n"Weapons" (was not updated: its folder does not exist.)\nWeapons: b.nif\n${NAMED}: a.nif`,
     }]);
   });
@@ -640,7 +640,7 @@ describe('A separator in a report or an outcome', () => {
 
   it('an agent reads it as a separator in what landed and what was refused', async () => {
     updateManifest.mockResolvedValueOnce({
-      applied: true, notes: [], submoduleNotes: [], landed: [{ mod: WIRE, manifestWritten: true, noProvider: ['a.nif'] }],
+      applied: true, notes: [], submoduleNotes: [], landed: [{ mod: WIRE, manifestWritten: true, notInPackage: ['a.nif'] }],
       refused: [{ item: 'ModB', reason: 'was not updated.' }],
     });
     const { run } = register();
@@ -649,8 +649,8 @@ describe('A separator in a report or an outcome', () => {
 
     expect(answer).toEqual({
       applied: true,
-      outcome: { landed: [{ mod: NAMED, manifestWritten: true, noProvider: ['a.nif'] }], refused: [{ item: 'ModB', reason: 'was not updated.' }] },
-      partial: [{ message: 'Update manifest:', detail: `${NAMED}: a.nif has no provider`, severity: 'warning' }],
+      outcome: { landed: [{ mod: NAMED, manifestWritten: true, notInPackage: ['a.nif'] }], refused: [{ item: 'ModB', reason: 'was not updated.' }] },
+      partial: [{ message: 'Update manifest:', detail: `${NAMED}: its package does not hold a.nif`, severity: 'warning' }],
     });
   });
 
@@ -701,10 +701,10 @@ describe('An agent call', () => {
     expect(sentMods(updateManifest)).toEqual([EVERY_MOD]);
   });
 
-  it('update manifest answers what landed and what was refused, each file with no provider and each note as a part that failed, and reports nothing', async () => {
+  it('update manifest answers what landed and what was refused, each file its package does not hold and each note as a part that failed, and reports nothing', async () => {
     updateManifest.mockResolvedValueOnce({
       applied: true, notes: [{ mod: 'ModA', note: 'a game file was unreadable' }], submoduleNotes: ['source/Odd is not a source mod'],
-      landed: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif'] }],
+      landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'] }],
       refused: [{ item: 'ModB', reason: "was not updated." }],
     });
     const { reporter, run } = register();
@@ -713,9 +713,9 @@ describe('An agent call', () => {
 
     expect(answer).toEqual({
       applied: true,
-      outcome: { landed: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif'] }], refused: [{ item: 'ModB', reason: "was not updated." }] },
+      outcome: { landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'] }], refused: [{ item: 'ModB', reason: "was not updated." }] },
       partial: [
-        { message: 'Update manifest:', detail: 'ModA: a.nif has no provider', severity: 'warning' },
+        { message: 'Update manifest:', detail: 'ModA: its package does not hold a.nif', severity: 'warning' },
         { message: 'Update manifest:', detail: 'ModA: a game file was unreadable', severity: 'warning' },
         { message: 'Update manifest:', detail: 'source/Odd is not a source mod', severity: 'warning' },
       ],
