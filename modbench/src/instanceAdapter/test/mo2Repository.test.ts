@@ -270,6 +270,39 @@ describe('the MO2 adapter\'s repository', () => {
       ]);
     });
 
+    it('rewrites its block where it stands, with the lines after it left after it, and changes nothing when nothing changed', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
+      await adapter.writeSubmodules();
+      await put('.gitignore', `${await readFile(join(root, '.gitignore'), 'utf8')}after/\n`);
+      const before = await readFile(join(root, '.gitignore'), 'utf8');
+      await adapter.writeSubmodules();
+      await sourceMod('Mod B', 'Mod B', 'https://example.test/b.git');
+
+      await adapter.writeSubmodules();
+      const lines = (await readFile(join(root, '.gitignore'), 'utf8')).split('\n');
+
+      expect([before, lines.indexOf('!/source/Mod B') < lines.indexOf('after/'), lines.at(-2)]).toEqual([before, true, 'after/']);
+    });
+
+    it.each([
+      ['begin', '# Source mods with a remote\n!/source/\n'],
+      ['end', '!/source/\n# End of source mods with a remote\n'],
+    ])('leaves the ignore list as it is when its block has only an %s marker, and names it', async (_marker, block) => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await put('.gitignore', `${await readFile(join(root, '.gitignore'), 'utf8')}${block}mine/\n`);
+      const before = await readFile(join(root, '.gitignore'), 'utf8');
+      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
+
+      const report = await adapter.writeSubmodules();
+
+      expect([await readFile(join(root, '.gitignore'), 'utf8'), report.other]).toEqual([before, [expect.stringContaining(join(root, '.gitignore')) as unknown]]);
+    });
+
     it('keeps the lines of the ignore list it did not write, including blank lines and its own let-in of a source folder', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
@@ -293,17 +326,38 @@ describe('the MO2 adapter\'s repository', () => {
       await expect(adapter.checkPushRefusalFree()).rejects.toThrow(join(root, '.git', 'hooks', 'pre-push'));
     });
 
-    it('says before the repository exists that a pre-push hook is already where the global core.hooksPath points', async () => {
+    it('refuses before the repository exists when the global core.hooksPath points outside the instance, naming it and where', async () => {
       const adapter = await instance();
       await put('global.config', `[core]\n\thooksPath = ${join(root, 'global-hooks')}\n`);
-      await put('global-hooks/pre-push', 'mine\n');
       vi.stubEnv('GIT_CONFIG_GLOBAL', join(root, 'global.config'));
 
       try {
-        await expect(adapter.checkPushRefusalFree()).rejects.toThrow(join(root, 'global-hooks', 'pre-push'));
+        await expect(adapter.checkPushRefusalFree()).rejects.toThrow(new RegExp(`core\\.hooksPath.*${join(root, 'global-hooks').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
       } finally {
         vi.unstubAllEnvs();
       }
+    });
+
+    it('reads a ~ in core.hooksPath as git does, so the refusal names where it points', async () => {
+      const adapter = await instance();
+      await put('global.config', '[core]\n\thooksPath = ~/.githooks\n');
+      vi.stubEnv('GIT_CONFIG_GLOBAL', join(root, 'global.config'));
+      vi.stubEnv('HOME', root);
+
+      try {
+        await expect(adapter.checkPushRefusalFree()).rejects.toThrow(join(root, '.githooks'));
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+
+    it('takes the repository it made back, leaving nothing of it', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+
+      await adapter.removeRepository();
+
+      expect(existsSync(join(root, '.git'))).toBe(false);
     });
 
     it('finds the place free when no hook is there', async () => {
@@ -380,14 +434,14 @@ describe('the MO2 adapter\'s repository', () => {
         expect([first, pushed()]).toEqual(['allowed', 'refused']);
       });
 
-      it('installs its hook where git looks for hooks, whatever core.hooksPath says', async () => {
+      it('writes no hook outside the repository, whatever core.hooksPath points at, and says so', async () => {
         const adapter = await instance();
         runGit('init', '--quiet');
         runGit('config', 'core.hooksPath', join(root, 'my-hooks'));
 
-        await adapter.refuseUnpublishedPins();
+        await expect(adapter.refuseUnpublishedPins()).rejects.toThrow(/core\.hooksPath.*my-hooks/);
 
-        expect([existsSync(join(root, 'my-hooks', 'pre-push')), existsSync(join(root, '.git', 'hooks', 'pre-push'))]).toEqual([true, false]);
+        expect(existsSync(join(root, 'my-hooks'))).toBe(false);
       });
 
       it('installs its hook in the git directory a .git file names', async () => {

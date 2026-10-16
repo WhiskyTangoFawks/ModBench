@@ -217,17 +217,19 @@ const escapedForIgnoreList = (name: string): string => name.replace(/[\\*?[]/g, 
 const SOURCE_MODS_BEGIN = '# Source mods with a remote';
 const SOURCE_MODS_END = '# End of source mods with a remote';
 
-/** An ignore list with the block that lets in the folders of `folderNames`, the source mods with a remote, made to
- *  hold them. Every line outside the block is kept. */
-export function withSourceModLines(ignoreList: string, folderNames: readonly string[]): string {
+/** An ignore list with the block that lets in the folders of `folderNames`, the source mods with a remote, made to hold
+ *  them, in place. Every line outside the block is kept. Undefined when the block's markers do not pair. */
+export function withSourceModLines(ignoreList: string, folderNames: readonly string[]): string | undefined {
   const lines = ignoreList.split('\n');
   if (lines.at(-1) === '') lines.pop();
   const begin = lines.indexOf(SOURCE_MODS_BEGIN);
-  const end = lines.indexOf(SOURCE_MODS_END, begin);
-  if (begin !== -1 && end !== -1) lines.splice(begin, end - begin + 1);
-  if (folderNames.length > 0) {
-    lines.push(SOURCE_MODS_BEGIN, `!/${SOURCE}/`, `/${SOURCE}/*`, ...folderNames.map((name) => `!/${SOURCE}/${escapedForIgnoreList(name)}`), SOURCE_MODS_END);
-  }
+  const end = lines.indexOf(SOURCE_MODS_END);
+  if ((begin === -1) !== (end === -1) || end < begin) return undefined;
+  const block = folderNames.length === 0 ? [] : [
+    SOURCE_MODS_BEGIN, `!/${SOURCE}/`, `/${SOURCE}/*`, ...folderNames.map((name) => `!/${SOURCE}/${escapedForIgnoreList(name)}`), SOURCE_MODS_END,
+  ];
+  if (begin === -1) lines.push(...block);
+  else lines.splice(begin, end - begin + 1, ...block);
   return `${lines.join('\n')}\n`;
 }
 

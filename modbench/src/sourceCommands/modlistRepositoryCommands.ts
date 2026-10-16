@@ -13,7 +13,7 @@ import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
-  'installationFiles' | 'downloadedFile' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree'
+  'installationFiles' | 'downloadedFile' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository'
   | 'statCacheFolder' | 'trashModFile' | 'sourceFolder' | 'excludedSuffix'>;
 
 interface ModlistRepositoryCommandsDeps {
@@ -266,13 +266,17 @@ async function restoreFolders(
   };
 }
 
-async function pinsRefusedOrWhy(adapter: Adapter): Promise<string | undefined> {
-  try {
-    await adapter.refuseUnpublishedPins();
-    return undefined;
-  } catch (err) {
-    return `The repository was made, but it does not refuse a push of a commit a submodule's remote lacks: ${errorMessage(err)}`;
+// A failed init leaves nothing behind: what it wrote goes, and what stays is named.
+async function refusalTakenBack(failure: unknown, undone: readonly { what: string; undo: () => Promise<void> }[]): Promise<string> {
+  let refusal = errorMessage(failure);
+  for (const { what, undo } of undone) {
+    try {
+      await undo();
+    } catch (err) {
+      refusal += `; ${what} remains: ${errorMessage(err)}`;
+    }
   }
+  return refusal;
 }
 
 async function submodulesWritten(adapter: Adapter): Promise<{ notes: readonly ModNote[]; submoduleNotes: readonly string[] }> {
@@ -287,15 +291,8 @@ async function submodulesWritten(adapter: Adapter): Promise<{ notes: readonly Mo
 /** The modlist gestures, bound to the mEdit client and handing it the instance's facts. */
 export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
   const { client, adapter, instanceRoot, makeRepository } = deps;
-  // A failed init leaves nothing behind: the ignore list it wrote goes, and what stays is named.
-  async function refusalWithIgnoreListTakenBack(failure: unknown): Promise<string> {
-    try {
-      await adapter.removeIgnoreList();
-      return errorMessage(failure);
-    } catch (err) {
-      return `${errorMessage(failure)}; the ignore list it wrote remains: ${errorMessage(err)}`;
-    }
-  }
+  const ignoreList = { what: 'the ignore list it wrote', undo: () => adapter.removeIgnoreList() };
+  const repository = { what: 'the repository it made', undo: () => adapter.removeRepository() };
 
   return {
     /** Makes the repository and its ignore list, and writes no manifest. Refused when the instance folder holds one already. */
@@ -310,10 +307,14 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       try {
         await makeRepository();
       } catch (err) {
-        return { applied: false, refusal: await refusalWithIgnoreListTakenBack(err) };
+        return { applied: false, refusal: await refusalTakenBack(err, [ignoreList]) };
       }
-      const unrefused = await pinsRefusedOrWhy(adapter);
-      return unrefused === undefined ? { applied: true } : { applied: false, refusal: unrefused };
+      try {
+        await adapter.refuseUnpublishedPins();
+      } catch (err) {
+        return { applied: false, refusal: await refusalTakenBack(err, [repository, ignoreList]) };
+      }
+      return { applied: true };
     },
 
     /** A mod whose folder, installation files or overridden game files the Instance adapter cannot answer is refused

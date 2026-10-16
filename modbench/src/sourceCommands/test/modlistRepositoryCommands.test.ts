@@ -58,13 +58,23 @@ describe('modlistRepositoryCommands git init', () => {
     ]);
   });
 
-  it('says the repository was made without its refusal of an unpublished pin, when that could not be written', async () => {
-    const { commands, adapter, repositories } = commandsOver({ refusals: refusing('refuseUnpublishedPins', 'config is read-only') });
+  it('takes back the repository and the ignore list it made when the push refusal could not be written, naming why', async () => {
+    const { commands, adapter, repositories } = commandsOver({ refusals: refusing('refuseUnpublishedPins', '/instance/.git/hooks/pre-push already exists') });
 
     expect([await commands.gitInit({ holdsRepository: false }), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
-      { applied: false, refusal: 'The repository was made, but it does not refuse a push of a commit a submodule\'s remote lacks: config is read-only' },
-      ['made'], ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins'],
+      { applied: false, refusal: '/instance/.git/hooks/pre-push already exists' },
+      ['made'], ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'removeRepository', 'removeIgnoreList'],
     ]);
+  });
+
+  it('names the repository that remains when it could not be taken back', async () => {
+    const { commands } = commandsOver({
+      refusals: (call) => ({ refuseUnpublishedPins: 'a hook is there', removeRepository: 'read-only folder' })[call.verb as string],
+    });
+
+    expect(await commands.gitInit({ holdsRepository: false })).toEqual({
+      applied: false, refusal: 'a hook is there; the repository it made remains: read-only folder',
+    });
   });
 
   it('takes back the ignore list it wrote when the repository could not be made, leaving nothing behind', async () => {

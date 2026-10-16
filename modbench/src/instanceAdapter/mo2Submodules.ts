@@ -2,18 +2,18 @@
 
 import { execFile } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
-import { exists, get, isRepository, write } from './files';
+import { exists, get, isRepository, remove, write } from './files';
 import type { InstanceAdapter, SubmoduleNote } from './instanceAdapter';
 import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, withSourceModLines } from './layout';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from './prePushHook';
 import { sourceModsIn } from './sourceMods';
 
-type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree'>;
+type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository'>;
 
 const execFileAsync = promisify(execFile);
 
@@ -59,10 +59,17 @@ async function entryWritten(instanceRoot: string, file: string, { name, url, bra
   await git(instanceRoot, 'config', '-f', file, `submodule.${name}.branch`, branch);
 }
 
+// A hook outside the repository's own git directory would run in every repository that reads it.
 async function hooksFolder(instanceRoot: string): Promise<string> {
-  if (await isRepository(instanceRoot)) return resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-path', 'hooks')).trim());
-  const configured = (await git(instanceRoot, 'config', '--get', 'core.hooksPath').catch(() => '')).trim();
-  return configured === '' ? join(instanceRoot, '.git', 'hooks') : resolve(instanceRoot, configured);
+  const repository = await isRepository(instanceRoot);
+  const gitDir = repository ? resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-common-dir')).trim()) : join(instanceRoot, '.git');
+  const configured = (await git(instanceRoot, 'config', '--type=path', '--get', 'core.hooksPath').catch(() => '')).trim();
+  const hooks = configured !== '' ? resolve(instanceRoot, configured)
+    : repository ? resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-path', 'hooks')).trim()) : join(gitDir, 'hooks');
+  if (relative(gitDir, hooks).startsWith('..') || isAbsolute(relative(gitDir, hooks))) {
+    throw new Error(`core.hooksPath points to ${hooks}, outside ${gitDir}, where a hook would run in every repository that reads it; git init writes no hook there.`);
+  }
+  return hooks;
 }
 
 const hookExists = (hook: string): Error => new Error(`${hook} already exists; git init does not write over it.`);
@@ -115,13 +122,16 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
         try {
           const before = await get(ignoreFile);
           const after = withSourceModLines(before, [...kept]);
-          if (after !== before) await write(ignoreFile, after);
+          if (after === undefined) other.push(`${ignoreFile} has a source mods marker with no match, so its source mod lines are left as they are`);
+          else if (after !== before) await write(ignoreFile, after);
         } catch (err) {
           other.push(`${ignoreFile} could not be written: ${errorMessage(err)}`);
         }
       }
       return { notes, other };
     },
+
+    removeRepository: () => remove(join(instanceRoot, '.git')),
 
     async checkPushRefusalFree() {
       const hook = join(await hooksFolder(instanceRoot), PRE_PUSH_HOOK_NAME);

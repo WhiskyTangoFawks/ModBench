@@ -59,6 +59,7 @@ export type AdapterCall =
   | { readonly verb: 'writeModMetadata'; readonly mod: string; readonly metadata: ModMetadata }
   | { readonly verb: 'writeIgnoreList' }
   | { readonly verb: 'removeIgnoreList' }
+  | { readonly verb: 'removeRepository' }
   | { readonly verb: 'checkPushRefusalFree' }
   | { readonly verb: 'writeSubmodules' }
   | { readonly verb: 'refuseUnpublishedPins' }
@@ -186,6 +187,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, undefined),
     removeIgnoreList: () => record({ verb: 'removeIgnoreList' }, undefined),
+    removeRepository: () => record({ verb: 'removeRepository' }, undefined),
     checkPushRefusalFree: () => record({ verb: 'checkPushRefusalFree' }, undefined),
     writeSubmodules: () => record({ verb: 'writeSubmodules' }, answers.submodules ?? { notes: [], other: [] }),
     refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, undefined),
