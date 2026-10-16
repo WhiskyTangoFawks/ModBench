@@ -189,4 +189,18 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
 
         Assert.NotNull(found);
     }
+
+    [Fact]
+    public void TwoDocumentsDeclaringOneFormKey_WithThePluginInDifferentCase_AreRefusedAsAClaimOfBoth()
+    {
+        var repository = Tracked();
+        var npcsFolder = Path.Combine(PluginSourceRoot.In(_modFolder, PluginName), "Npcs");
+        File.WriteAllText(Path.Combine(npcsFolder, "Twin.json"), NpcBody.Replace(NpcFormKey, "000800:fixture.esp"));
+
+        var refused = Assert.IsType<SourceFailure.Ambiguous>(
+            repository.ReadDocuments(Plugin, documents => documents.Records.ToList()).Stopped());
+
+        Assert.Equal(2, refused.Claim?.Documents.Count);
+        Assert.StartsWith("More than one document in this plugin's source tree holds", refused.Reason, StringComparison.Ordinal);
+    }
 }

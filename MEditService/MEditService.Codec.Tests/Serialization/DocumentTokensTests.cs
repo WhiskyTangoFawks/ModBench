@@ -114,4 +114,11 @@ public sealed class DocumentTokensTests
     {
         Assert.Equal(expected, DocumentTokens.MayCarry(Bytes(text), Bytes("000800:Some.esp")));
     }
+
+    [Fact]
+    public void MayCarry_MatchesAPluginNameBeyondAsciiWithoutCase()
+    {
+        Assert.True(DocumentTokens.MayCarry(Bytes("""{ "FormKey": "000800:ÜNI.ESP" }"""), Bytes("000800:Üni.esp")));
+        Assert.False(DocumentTokens.MayCarry(Bytes("""{ "FormKey": "000800:Other.esp" }"""), Bytes("000800:Üni.esp")));
+    }
 }

@@ -145,8 +145,26 @@ public static class DocumentTokens
     /// Mutagen reads: each holds the plugin file name, in any case, unless a \u escape spells it.</summary>
     public static bool MayCarry(byte[] document, byte[] formKeyUtf8)
     {
-        var name = Encoding.UTF8.GetString(formKeyUtf8.AsSpan(formKeyUtf8.AsSpan().IndexOf((byte)':') + 1));
-        return Encoding.UTF8.GetString(document).Contains(name, StringComparison.OrdinalIgnoreCase)
+        var name = formKeyUtf8.AsSpan(formKeyUtf8.AsSpan().IndexOf((byte)':') + 1);
+        return (Ascii.IsValid(name) ? ContainsIgnoringAsciiCase(document, name) : DecodedContains(document, name))
             || document.AsSpan().IndexOf(@"\u"u8) >= 0;
     }
+
+    private static bool ContainsIgnoringAsciiCase(ReadOnlySpan<byte> document, ReadOnlySpan<byte> asciiName)
+    {
+        var lower = (byte)char.ToLowerInvariant((char)asciiName[0]);
+        var upper = (byte)char.ToUpperInvariant((char)asciiName[0]);
+        var rest = document;
+        while (rest.Length >= asciiName.Length)
+        {
+            var at = rest.IndexOfAny(lower, upper);
+            if (at < 0) return false;
+            if (at + asciiName.Length <= rest.Length && Ascii.EqualsIgnoreCase(rest.Slice(at, asciiName.Length), asciiName)) return true;
+            rest = rest[(at + 1)..];
+        }
+        return false;
+    }
+
+    private static bool DecodedContains(byte[] document, ReadOnlySpan<byte> name) =>
+        Encoding.UTF8.GetString(document).Contains(Encoding.UTF8.GetString(name), StringComparison.OrdinalIgnoreCase);
 }
