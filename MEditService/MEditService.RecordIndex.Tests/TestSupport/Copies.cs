@@ -18,7 +18,7 @@ internal static class Copies
         index.CopyIn(formKey, plugin)
             ?? throw new InvalidOperationException($"Expected a document for '{formKey}' in {plugin.Name} ({plugin.Origin}).");
 
-    /// <summary>The document the index holds for the copy, as the editor opens it.</summary>
+    /// <summary>The document the record index holds for the copy, as the editor opens it.</summary>
     internal static string BodyOf(this OpenedIndex index, string formKey, PluginAddress plugin) =>
         index.Queries.GetRenderedDocument(plugin, formKey).Value()?.Text
             ?? throw new InvalidOperationException($"Expected a body for '{formKey}' in {plugin.Name} ({plugin.Origin}).");

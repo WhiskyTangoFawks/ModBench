@@ -13,7 +13,7 @@ function indexAfterRemoval(order: readonly string[], movedNames: readonly string
   return targetIndex - order.slice(0, targetIndex).filter((name) => moved.has(pluginKey(name))).length;
 }
 
-/** The index a splice writes the block at, in `plugins.txt`, whose last line wins. The losing end
+/** The record index a splice writes the block at, in `plugins.txt`, whose last line wins. The losing end
  *  is index 0. Throws for a row the order does not list: the block has no place beside it. */
 export function dropIndexIn(order: readonly string[], movedNames: readonly string[], drop: Drop): number {
   if (drop.kind === 'losingEnd') return 0;

@@ -11,7 +11,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex;
 
-/// <summary>Every read the index answers, over the Store's relations (ADR-0010). A record read sees
+/// <summary>Every read the record index answers, over the Store's relations (ADR-0010). A record read sees
 /// only the active plugins (ADR-0012), unless it names one plugin and returns that plugin's copy.</summary>
 internal sealed class RelationReads(
     Store store, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed)
@@ -54,7 +54,7 @@ internal sealed class RelationReads(
     }
 
     /// <summary>What <paramref name="plugin"/> holds <paramref name="formKey"/> as, and its document as
-    /// the index stores it, active or not. Null if that plugin never indexed it.</summary>
+    /// the record index stores it, active or not. Null if that plugin never indexed it.</summary>
     public (RecordIdentity Identity, string Body)? GetCopyText(string formKey, PluginAddress plugin)
     {
         using var connection = store.OpenReadConnection();
@@ -174,7 +174,7 @@ internal sealed class RelationReads(
         return conditions.Count == 0 ? "" : "WHERE " + string.Join(" AND ", conditions);
     }
 
-    /// <summary>The rows of one SELECT over the views of every plugin the index holds, each a JSON object of its
+    /// <summary>The rows of one SELECT over the views of every plugin the record index holds, each a JSON object of its
     /// columns; or why the SQL cannot be one. The filter in force does not narrow it.</summary>
     public Answer<JsonElement[], string> Select(string statement)
     {

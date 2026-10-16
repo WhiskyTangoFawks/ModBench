@@ -72,9 +72,9 @@ function refuseCaseCollisions(entries: readonly string[]): void {
 /** The adapter's hashes, its index in `folder`, which it alone writes; a downloaded file's entries are hashed from
  *  its extraction there. */
 export interface HashIndex extends Pick<InstanceAdapter, 'originFileHash'> {
-  /** A game file's size and hash, the hash as mEdit's manifest carries it, kept in the index (ADR-0013). */
+  /** A game file's size and hash, the hash as mEdit's manifest carries it, kept in the record index (ADR-0013). */
   gameFileHash(path: string): Promise<FileRead<HashedFile>>;
-  /** The size and hash of the downloaded file at `path`, and of each of its entries, kept in the index. */
+  /** The size and hash of the downloaded file at `path`, and of each of its entries, kept in the hash index. */
   downloadedFileHash(path: string): Promise<FileRead<HashedDownload>>;
 }
 
@@ -83,7 +83,7 @@ export function hashIndex(folder: string, archives: ArchiveReader): HashIndex {
   const kept: Record<Kind, Map<string, Kept>> = { origin: new Map(), game: new Map(), download: new Map() };
   let loaded: Promise<void> | undefined;
 
-  // The index only spares a read: one that cannot be read or written costs a read again, never a wrong hash.
+  // The record index only spares a read: one that cannot be read or written costs a read again, never a wrong hash.
   const load = (): Promise<void> => (loaded ??= removeLeftoverExtractions(folder).then(() => get(indexFile, '')).then((text) => {
     for (const line of text.split('\n')) {
       const known = keptAt(line);

@@ -16,7 +16,7 @@ type Adapter = Pick<InstanceAdapter,
   'installationFiles' | 'downloadedFile' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'
   | 'statCacheFolder' | 'trashModFile' | 'sourceFolder' | 'excludedSuffix'>;
 
-interface ModlistSourceCommandsDeps {
+interface ModlistRepositoryCommandsDeps {
   client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'getWhatRestoreDestroys' | 'getModStatus'>;
   adapter: Adapter;
   instanceRoot: string;
@@ -121,7 +121,7 @@ const noneBeforeTheManifestNamesThem: InstallationFilesOf = () => Promise.resolv
 
 // A call that fails part way answers no mod, so none had its files no line names trashed: each is not finished.
 async function restoreOnce(
-  client: ModlistSourceCommandsDeps['client'], mods: readonly RestoreMod[], facts: RestoreFacts, options: ModlistCallOptions,
+  client: ModlistRepositoryCommandsDeps['client'], mods: readonly RestoreMod[], facts: RestoreFacts, options: ModlistCallOptions,
 ): Promise<({ applied: true } & RestoreOutcome) | Extract<RestoreResult, { applied: false }>> {
   const outcome = await client.restoreFromManifest(mods, facts, options);
   return isRefused(outcome) ? { applied: false, refusal: outcome.message, unfinished: mods.map((mod) => mod.name) } : { applied: true, ...outcome };
@@ -164,7 +164,7 @@ type Restored = Extract<RestoreResult, { applied: true }>['landed'];
 type FoldersNotFinished = Extract<RestoreResult, { applied: false }> & { readonly landed: Restored };
 
 async function restoreFromManifest(
-  deps: ModlistSourceCommandsDeps, mods: readonly string[], instance: ModlistInstance, options: ModlistCallOptions<RestoreStatus>,
+  deps: ModlistRepositoryCommandsDeps, mods: readonly string[], instance: ModlistInstance, options: ModlistCallOptions<RestoreStatus>,
 ): Promise<RestoreResult> {
   const restored = await restoreFolders(deps, mods, instance, options);
   const { finished, unfinished } = await withFilesNoLineNamesTrashed(deps, restored.landed);
@@ -183,7 +183,7 @@ function cancelledBefore(mods: readonly string[], { landed, refused }: Extract<R
 }
 
 async function withFilesNoLineNamesTrashed(
-  { adapter, trash }: ModlistSourceCommandsDeps, landed: Restored,
+  { adapter, trash }: ModlistRepositoryCommandsDeps, landed: Restored,
 ): Promise<{ finished: Restored; unfinished: readonly ItemRefusal<string>[] }> {
   const finished: Restored[number][] = [];
   const unfinished: ItemRefusal<string>[] = [];
@@ -220,7 +220,7 @@ async function trashedOrWhy(adapter: Adapter, trash: MoveToTrash, mod: string, p
 }
 
 async function restoreFolders(
-  { client, adapter }: ModlistSourceCommandsDeps, mods: readonly string[], instance: ModlistInstance,
+  { client, adapter }: ModlistRepositoryCommandsDeps, mods: readonly string[], instance: ModlistInstance,
   { onProgress, signal }: ModlistCallOptions<RestoreStatus>,
 ): Promise<Extract<RestoreResult, { applied: true }> | FoldersNotFinished> {
   const { gameFolder, gameRelease, paths } = instance;
@@ -267,7 +267,7 @@ async function restoreFolders(
 }
 
 /** The modlist gestures, bound to the mEdit client and handing it the instance's facts. */
-export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
+export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
   const { client, adapter, instanceRoot, makeRepository } = deps;
   // A failed init leaves nothing behind: the ignore list it wrote goes, and what stays is named.
   async function refusalWithIgnoreListTakenBack(failure: unknown): Promise<string> {
@@ -353,4 +353,4 @@ export function modlistSourceCommands(deps: ModlistSourceCommandsDeps) {
   };
 }
 
-export type ModlistSourceCommands = ReturnType<typeof modlistSourceCommands>;
+export type ModlistRepositoryCommands = ReturnType<typeof modlistRepositoryCommands>;

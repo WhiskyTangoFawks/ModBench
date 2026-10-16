@@ -56,7 +56,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
         await _client.NextSnapshot(fx, Origin);
         await Wire.Eventually(
             async () => (await _client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(oldFormKey)}", UriKind.Relative))).IsSuccessStatusCode,
-            "the created record reached the index");
+            "the created record reached the record index");
 
         const string newFormKey = "000F00:Editable.esp";
         var beforeEdit = await _client.GetFromJsonAsync<long>("/load-order/sequence");
@@ -70,7 +70,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
             .SelectMany(KeysOf).ToHashSet(StringComparer.Ordinal);
         Assert.Contains(oldFormKey, named);
 
-        Assert.True(await ProjectionLanded(beforeEdit), "the record under its new FormKey never reached the index");
+        Assert.True(await ProjectionLanded(beforeEdit), "the record under its new FormKey never reached the record index");
 
         var stale = await _client.GetAsync($"/records/{Uri.EscapeDataString(oldFormKey)}");
         Assert.Equal(HttpStatusCode.NotFound, stale.StatusCode);

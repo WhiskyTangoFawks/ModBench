@@ -46,7 +46,7 @@ internal static class NavigatorSql
         """;
 
     // Joined rather than a correlated NOT EXISTS, which DuckDB answers by materializing the records
-    // beside it, bodies and all: a plugin's bodies outgrow the memory the index is held to.
+    // beside it, bodies and all: a plugin's bodies outgrow the memory the record index is held to.
     internal static string Unheld(string alias) =>
         $" ANTI JOIN ({Held}) holding ON holding.child = {alias}.form_key AND holding.plugin = {alias}.plugin AND holding.origin = {alias}.origin";
 

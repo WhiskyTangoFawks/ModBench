@@ -43,12 +43,12 @@ import { recordingReporter, scriptedDialog, type ScriptedDialog } from '../../te
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 import { AgentCall } from '../../drivingLib/agentGesture';
-import type { ModlistSourceCommands } from '../../sourceCommands/modlistSourceCommands';
+import type { ModlistRepositoryCommands } from '../../sourceCommands/modlistRepositoryCommands';
 
-const gitInit = vi.fn<ModlistSourceCommands['gitInit']>();
-const updateManifest = vi.fn<ModlistSourceCommands['updateManifest']>();
-const restoreFromManifest = vi.fn<ModlistSourceCommands['restoreFromManifest']>();
-const whatRestoreDestroys = vi.fn<ModlistSourceCommands['whatRestoreDestroys']>();
+const gitInit = vi.fn<ModlistRepositoryCommands['gitInit']>();
+const updateManifest = vi.fn<ModlistRepositoryCommands['updateManifest']>();
+const restoreFromManifest = vi.fn<ModlistRepositoryCommands['restoreFromManifest']>();
+const whatRestoreDestroys = vi.fn<ModlistRepositoryCommands['whatRestoreDestroys']>();
 
 const UPDATE = 'modbench.mod.updateManifest';
 const RESTORE = 'modbench.mod.restoreFromManifest';

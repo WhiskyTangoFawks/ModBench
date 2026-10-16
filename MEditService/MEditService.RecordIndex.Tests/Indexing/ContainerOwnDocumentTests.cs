@@ -49,7 +49,7 @@ public sealed class ContainerOwnDocumentTests
 
         public JsonElement Stored(string formKey) =>
             JsonDocument.Parse(Index.Queries.GetRenderedDocument(Plugin, formKey).Value()?.Text
-                ?? throw new InvalidOperationException($"Expected the index to store {formKey}.")).RootElement;
+                ?? throw new InvalidOperationException($"Expected the record index to store {formKey}.")).RootElement;
 
         public List<string> Children(string formKey) =>
             [.. Index.Queries.GetContainerChildren(Plugin, formKey).Value().Select(c => c.FormKey)];

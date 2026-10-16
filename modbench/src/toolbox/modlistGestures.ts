@@ -11,15 +11,15 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Argument } from '../wire/argument';
 import type { Reporter } from '../ports/reporter';
 import type {
-  ModlistSourceCommands, ModNote, RestoreResult, RestoreStatus, UpdateManifestResult, UpdateManifestStatus,
-} from '../sourceCommands/modlistSourceCommands';
+  ModlistRepositoryCommands, ModNote, RestoreResult, RestoreStatus, UpdateManifestResult, UpdateManifestStatus,
+} from '../sourceCommands/modlistRepositoryCommands';
 
 const TOOLBOX_VIEW = 'modbench.toolbox';
 const NEITHER = 'it is not a mod or a separator';
 const RESTORE = 'Restore';
 
 interface ModlistGestureDeps {
-  commands: Pick<ModlistSourceCommands, 'gitInit' | 'updateManifest' | 'restoreFromManifest' | 'whatRestoreDestroys'>;
+  commands: Pick<ModlistRepositoryCommands, 'gitInit' | 'updateManifest' | 'restoreFromManifest' | 'whatRestoreDestroys'>;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporter: Reporter;
   ask: AskQuestion;

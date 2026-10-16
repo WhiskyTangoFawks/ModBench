@@ -60,7 +60,7 @@ internal sealed class Indexer : IDisposable
     }
 
     // Lock order: _lock, then the Store's projection lock, which a projection's announcements run
-    // under. An announcement reads the index's own Sequence, never this class's Sequence, Status or
+    // under. An announcement reads the record index's own Sequence, never this class's Sequence, Status or
     // RequireReads, which take _lock.
     private readonly Lock _lock = new();
     private OpenScope? _scope;
@@ -167,7 +167,7 @@ internal sealed class Indexer : IDisposable
         lock (_lock) return _scope ?? throw new NoLoadOrderException();
     }
 
-    // Runs the action under the lock that disposing the scope takes, so the index cannot be closed
+    // Runs the action under the lock that disposing the scope takes, so the record index cannot be closed
     // beneath it. False, having run nothing, with no scope held.
     private bool UnderScope<T>(Func<Store, IndexScope, T> action, [MaybeNullWhen(false)] out T result)
     {
@@ -356,7 +356,7 @@ internal sealed class Indexer : IDisposable
         lock (_reconciled) Monitor.PulseAll(_reconciled);
     }
 
-    // ADR-0015, read-your-writes: a source write reaches the index through the next snapshot, so a read after one waits
+    // ADR-0015, read-your-writes: a source write reaches the record index through the next snapshot, so a read after one waits
     // for that snapshot's reconcile, and refuses rather than answer the rows from before it.
     private void AwaitTheReconcileAfterTheLastSourceWrite()
     {
@@ -762,13 +762,13 @@ internal sealed class Indexer : IDisposable
             _ => " Still showing what was last read from its compiled binary.",
         };
 
-    // Registers first: the index's reads are scoped by registration, so validate would otherwise
+    // Registers first: the record index's reads are scoped by registration, so validate would otherwise
     // compare an empty row set against a full tree. False falls through to a full index.
     private bool WarmRegister(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
     {
         scope.Store.Register(plugin);
 
-        // A binary was already hashed against its stored claim when the index file opened
+        // A binary was already hashed against its stored claim when the record index file opened
         // (Store.ValidateAgainstDisk), so a second hash of every binary here would pay that whole cost
         // twice for no new answer.
         var truth = scope.Projector.TruthOf(plugin.Registered);
@@ -881,7 +881,7 @@ internal sealed class Indexer : IDisposable
         store.DerivationOf(key) == DerivedFrom.BinaryForUnreadableSource
         && state.Binary is { } binary && store.IndexedContentHash(key) == binary;
 
-    // ADR-0005: the binary reaches the index as documents, through the adapter's own door,
+    // ADR-0005: the binary reaches the record index as documents, through the adapter's own door,
     // never as a mod this side holds.
     private ReadOutcome IndexFromBinary(OpenScope scope, PluginMetadata plugin, DerivedFrom derivedFrom)
     {
@@ -1048,7 +1048,7 @@ internal sealed class Indexer : IDisposable
         catch (IndexWriteGateTimeoutException ex)
         {
             // Busy, not broken: validation is idempotent, and the next snapshot validates again.
-            _logger.LogWarning(ex, "Could not validate the index while another write held it; it is re-checked at the next snapshot");
+            _logger.LogWarning(ex, "Could not validate the record index while another write held it; it is re-checked at the next snapshot");
             busy = true;
             return null;
         }
@@ -1056,7 +1056,7 @@ internal sealed class Indexer : IDisposable
         {
             // Every type, out of memory included: the failure becomes status data (plugins.md,
             // States, story 6), and the next snapshot tries again.
-            _logger.LogError(ex, "Validating the index failed unexpectedly");
+            _logger.LogError(ex, "Validating the record index failed unexpectedly");
             return ex.Message;
         }
     }
@@ -1103,7 +1103,7 @@ internal sealed class Indexer : IDisposable
 
     public void ClearFilter() => ApplyFilter(null);
 
-    /// <summary>The rows of one SELECT over the views of every plugin the index holds, once the whole set is read.</summary>
+    /// <summary>The rows of one SELECT over the views of every plugin the record index holds, once the whole set is read.</summary>
     public Answer<JsonElement[], string> Select(string sql)
     {
         var reads = RequireWholeSetReads();
@@ -1126,7 +1126,7 @@ internal sealed class Indexer : IDisposable
         return null;
     }
 
-    /// <summary>ADR-0010: drops the index file, floors its sequence at what this process
+    /// <summary>ADR-0010: drops the record index file, floors its sequence at what this process
     /// handed out, and refills it off the caller's thread. A file another window holds, or a read
     /// that never ended, is refused.</summary>
     public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot)

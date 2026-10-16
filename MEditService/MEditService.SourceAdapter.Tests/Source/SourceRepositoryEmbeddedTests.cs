@@ -624,7 +624,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     {
         Assert.Contains("its own text does not carry it", refused.Reason, StringComparison.Ordinal);
         Assert.EndsWith(
-            "If nothing outside Modbench changed that file, this is a defect — please report it; otherwise relaunch mEdit so the index re-reads the tree.",
+            "If nothing outside Modbench changed that file, this is a defect — please report it; otherwise relaunch mEdit so the record index re-reads the tree.",
             refused.Reason, StringComparison.Ordinal);
     }
 

@@ -647,7 +647,7 @@ describe('the record filter, from the commands that set and clear it', () => {
     });
   });
 
-  describe('a record filter the index could not apply again', () => {
+  describe('a record filter the record index could not apply again', () => {
     const cleared = (source: string) => ({
       kind: 'record-filter-cleared', plugin: '', origin: '', keys: [], sequence: 0,
       recordFilterCleared: { source, reason: 'Conversion Error' },

@@ -64,7 +64,7 @@ public sealed record RecordStamps(
     public override int GetHashCode() => ByFormKey.Count;
 }
 
-/// <summary>A record's content stamp: what the index remembers of a document, and what the tree is
+/// <summary>A record's content stamp: what the record index remembers of a document, and what the tree is
 /// asked against (ADR-0003).</summary>
 internal static class TreeStamps
 {

@@ -14,7 +14,7 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.RecordIndex;
 
-/// <summary>The connection, DDL, validate and rebuild of the index file, every read over it, and
+/// <summary>The connection, DDL, validate and rebuild of the record index file, every read over it, and
 /// every write verb: each transaction boundary, registration and the winner sweep.</summary>
 internal sealed class Store : IDisposable
 {
@@ -44,7 +44,7 @@ internal sealed class Store : IDisposable
     public DuckDBConnection Connection =>
         _connection ?? throw new InvalidOperationException("The store is not open.");
 
-    /// <summary>Every read the index answers.</summary>
+    /// <summary>Every read the record index answers.</summary>
     public RelationReads Reads { get; }
 
     public RecordFilter Filter { get; }
@@ -103,14 +103,14 @@ internal sealed class Store : IDisposable
         }
         catch (Exception ex) when (IsAnotherWriter(ex))
         {
-            _logger.LogWarning(ex, "The index at {Path} is held by another window", _databasePath);
+            _logger.LogWarning(ex, "The record index at {Path} is held by another window", _databasePath);
             return $"This instance's record index is open in another Modbench window ({_databasePath}). Close mEdit there first, or open a different instance here.";
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // Every other exception, not DuckDBException alone: what an unreadable file throws has
             // changed between DuckDB versions, and the answer is the same for all of them.
-            _logger.LogWarning(ex, "Could not open the index at {Path}; rebuilding it from scratch", _databasePath);
+            _logger.LogWarning(ex, "Could not open the record index at {Path}; rebuilding it from scratch", _databasePath);
             File.Delete(_databasePath);
             _connection = OpenFile(_databasePath);
             return null;
@@ -173,7 +173,7 @@ internal sealed class Store : IDisposable
         if (!closedToReads && !EndReads())
         {
             _logger.LogError(
-                "The index at {Path} closes under a read still open after {Seconds}s; the next index opened on it may answer its old rows",
+                "The record index at {Path} closes under a read still open after {Seconds}s; the next index opened on it may answer its old rows",
                 _databasePath, IndexWriteGate.HoldLimit.TotalSeconds);
         }
         _connection?.Dispose();
@@ -230,7 +230,7 @@ internal sealed class Store : IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex,
-                "Could not read the index version at {Path}; rebuilding it from scratch", _databasePath);
+                "Could not read the record index version at {Path}; rebuilding it from scratch", _databasePath);
             RebuildFile();
             return;
         }
@@ -240,7 +240,7 @@ internal sealed class Store : IDisposable
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation(
-                "The index at {Path} was written under a different codec/schema version; rebuilding it from scratch",
+                "The record index at {Path} was written under a different codec/schema version; rebuilding it from scratch",
                 _databasePath);
         }
         RebuildFile();
@@ -333,7 +333,7 @@ internal sealed class Store : IDisposable
     private void LogUnreadable(string filePath)
     {
         if (_logger.IsEnabled(LogLevel.Warning))
-            _logger.LogWarning("Could not read {Path} to hash it; treating the index's rows for it as stale", filePath);
+            _logger.LogWarning("Could not read {Path} to hash it; treating the record index's rows for it as stale", filePath);
     }
 
     /// <summary>The disk claim <paramref name="key"/>'s rows carry, or null when nothing backs them.
@@ -608,7 +608,7 @@ internal sealed class Store : IDisposable
         first?.Throw();
     }
 
-    // An ingest's rows bypass the WAL, so DuckDB's own checkpoint never comes due, and the index
+    // An ingest's rows bypass the WAL, so DuckDB's own checkpoint never comes due, and the record index
     // nodes they built stay in memory it cannot evict. FORCE: a plain CHECKPOINT refuses, rather
     // than waits, while a read ends.
     private void Checkpoint()
@@ -616,7 +616,7 @@ internal sealed class Store : IDisposable
         var timer = Stopwatch.StartNew();
         DuckDbSql.Execute(Connection, "FORCE CHECKPOINT");
         if (_logger.IsEnabled(LogLevel.Debug))
-            _logger.LogDebug("Checkpointed the index in {ElapsedMs} ms", timer.ElapsedMilliseconds);
+            _logger.LogDebug("Checkpointed the record index in {ElapsedMs} ms", timer.ElapsedMilliseconds);
     }
 
     /// <summary>What one commit owes beyond its rows.</summary>
@@ -721,7 +721,7 @@ internal sealed class Store : IDisposable
 
         Ingest.DeleteAllRowsFor(plugin, origin);
         // The plugin's facts go with the rows they describe — Unindex is the file-gone verb, so
-        // leaving them behind would leave the files table asserting rows the index does not hold.
+        // leaving them behind would leave the files table asserting rows the record index does not hold.
         DeletePluginFacts(plugin, origin);
         DeleteRegistration(plugin, origin);
         BumpSequence();
@@ -783,7 +783,7 @@ internal sealed class Store : IDisposable
         tx.Commit();
     }
 
-    /// <summary>ADR-0013: every plugin the index currently registers: what a reconcile diffs the
+    /// <summary>ADR-0013: every plugin the record index currently registers: what a reconcile diffs the
     /// incoming snapshot against, since a freshly opened file still carries the last run's
     /// registrations.</summary>
     public IReadOnlyList<PluginAddress> RegisteredPlugins()

@@ -209,7 +209,7 @@ describe('Refresh', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('keeps the Toolbox\'s progress open until mEdit\'s refill ends, not only until the rebuild answers with the index still empty', async () => {
+  it('keeps the Toolbox\'s progress open until mEdit\'s refill ends, not only until the rebuild answers with the record index still empty', async () => {
     let refillEnds!: () => void;
     const { run } = registerRefresh({ applied: true }, '/instance', new Promise<void>((resolve) => { refillEnds = resolve; }));
 

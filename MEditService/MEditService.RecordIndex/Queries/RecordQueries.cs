@@ -315,7 +315,7 @@ internal sealed class RecordQueries(
                 r.FormKey, r.Plugin, r.Origin, r.FieldPath, r.RecordType, schemas.DisplayNameFor(r.RecordType), r.EditorId))];
     }
 
-    // The index stores each copy's document as the codec writes it, or a stub (ADR-0005).
+    // The record index stores each copy's document as the codec writes it, or a stub (ADR-0005).
     public Answer<RenderedDocument?, IndexRefused> GetRenderedDocument(PluginAddress plugin, string formKey) =>
         IndexAnswer.Sourced(() => RenderedDocumentOf(plugin, formKey));
 
@@ -379,11 +379,11 @@ internal sealed class RecordQueries(
     public Answer<IReadOnlyList<ContainerChildSummary>, IndexRefused> GetContainerChildren(PluginAddress plugin, string parentFormKey) =>
         IndexAnswer.Of(() => ContainerChildren.Of(RequireReads(), plugin, parentFormKey, _loadOrder.Require().GameRelease));
 
-    // A plugin the index has not reached holds no rows yet and would read clean.
+    // A plugin the record index has not reached holds no rows yet and would read clean.
     public Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses() =>
         IndexAnswer.Of(() => LoadOrderDiagnoses.Of(_index.RequireWholeSetReads(), _loadOrder.Require()));
 
-    // A plugin the index has not opened would read as no dependant.
+    // A plugin the record index has not opened would read as no dependant.
     public Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin) =>
         IndexAnswer.Of(() =>
         {
@@ -391,7 +391,7 @@ internal sealed class RecordQueries(
             return Dependants.Of(plugin, _loadOrder.Require(), opened);
         });
 
-    // A plugin the index has not reached holds no record yet, so every link into it would read as a
+    // A plugin the record index has not reached holds no record yet, so every link into it would read as a
     // missing record.
     public Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems() =>
         IndexAnswer.Of(() => ProblemsPanel.Of(_index, _index.RequireWholeSetReads(), _loadOrder.Require(), source));

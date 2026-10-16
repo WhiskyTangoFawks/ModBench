@@ -10,6 +10,6 @@ Software compiles source into a binary. Modding runs the other way: the plugin i
 ## Alternatives rejected
 
 - Spriggit's format as the truth. Lossy on purpose, so it cannot be tested for losing by accident; not a library; pins Mutagen versions we cannot use. It has no role, not even as an import format; interop is export through the real tool.
-- The index as the truth. A cache rebuilt from the plugins in seconds; making it authoritative inverts the dependency.
+- The record index as the truth. A cache rebuilt from the plugins in seconds; making it authoritative inverts the dependency.
 - Binary as truth, text as a regenerated read-only view. Discards git-native merge of content; a verified lossless text is trustworthy input, which gets the safety without the loss.
 - A committed binary plus a compile-on-commit hook. A second copy confuses which is real, and the hook reverses the ungated commit.

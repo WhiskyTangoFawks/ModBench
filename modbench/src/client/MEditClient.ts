@@ -386,7 +386,7 @@ export interface MEditClient {
   getWhatRestoreDestroys(mods: readonly ModByFolder[], statCache: string): Promise<WhatRestoreDestroys | ReadFailed>;
   /** Each mod's folder against its manifest, from the stat cache in `statCache`, which keeps what the read found. */
   getModStatus(mods: readonly ModByFolder[], statCache: string): Promise<ModStatus[] | ReadFailed>;
-  /** The rows one SQL SELECT over the index selects. A statement that is not a SELECT, or cannot run, fails with the database's reason. */
+  /** The rows one SQL SELECT over the record index selects. A statement that is not a SELECT, or cannot run, fails with the database's reason. */
   selectRows(sql: string): Promise<unknown[] | ReadFailed>;
   getReferences(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
   /** The referrers of the active plugins and of the inactive compiled ones. */

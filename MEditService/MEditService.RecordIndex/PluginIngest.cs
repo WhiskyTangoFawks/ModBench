@@ -33,7 +33,7 @@ internal sealed class PluginIngest
 
     internal readonly record struct Ingested(int Records, long IngestMs, long PrepareMs, long AppendMs);
 
-    // Everything the index derives from one document, computed off the appender thread; only writing
+    // Everything the record index derives from one document, computed off the appender thread; only writing
     // it is sequential. ParseDiagnosis is null for a record whose document was produced.
     internal sealed record PreparedRecord(
         string RecordType, string FormKey, string Body, string ContentHash, List<FormReferenceRow> Refs,

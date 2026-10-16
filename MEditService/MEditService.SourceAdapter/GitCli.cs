@@ -87,7 +87,7 @@ internal static class GitCli
         var psi = StartInfo(args, workTree);
         psi.Environment["GIT_DIR"] = gitDir;
         psi.Environment["GIT_WORK_TREE"] = workTree;
-        // A read that refreshes the index takes index.lock, which fails the commit or rebase the
+        // A read that refreshes git's index takes index.lock, which fails the commit or rebase the
         // user is running in the same repository at that moment (ADR-0003).
         psi.Environment["GIT_OPTIONAL_LOCKS"] = "0";
         return psi;

@@ -54,7 +54,7 @@ public enum RecordEditRefusal
     /// document.</summary>
     HeldInAnotherRecordNotYetSupported,
 
-    /// <summary>The index and the working tree disagree (a file moved outside Modbench). Not recreated at
+    /// <summary>The record index and the working tree disagree (a file moved outside Modbench). Not recreated at
     /// a computed path: a container's path lives in the tree, not in a formula.</summary>
     SourceUnitNotFound,
 

@@ -47,7 +47,7 @@ public abstract record SourceFailure
         // problem that is not there, so this blames neither.
         public const string DefectOrOutsideChange =
             "If nothing outside Modbench changed that file, this is a defect — please report it; otherwise relaunch mEdit " +
-            "so the index re-reads the tree.";
+            "so the record index re-reads the tree.";
 
         internal const string MovedOrRemovedOutside = "It was moved or removed outside Modbench. Check the Source Control panel.";
 

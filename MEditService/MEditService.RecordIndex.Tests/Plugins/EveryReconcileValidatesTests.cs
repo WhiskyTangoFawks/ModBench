@@ -232,7 +232,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     public async Task AnEqualSnapshot_TriesAFailedReconcileAgain()
     {
         var blocker = Path.GetDirectoryName(IndexFiles.In(_fixture.InstanceRoot))
-            ?? throw new InvalidOperationException("The index file sits in a folder.");
+            ?? throw new InvalidOperationException("The record index file sits in a folder.");
         _index.Dispose();
         Directory.Delete(blocker, recursive: true);
         File.WriteAllText(blocker, "not a folder");

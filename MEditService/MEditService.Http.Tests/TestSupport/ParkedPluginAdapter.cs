@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Http.Tests.TestSupport;
 
-/// <summary>Parks the index's read of every plugin's documents until released, so the index is
+/// <summary>Parks the record index's read of every plugin's documents until released, so the record index is
 /// still reconciling.</summary>
 internal sealed class ParkedPluginAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
 {

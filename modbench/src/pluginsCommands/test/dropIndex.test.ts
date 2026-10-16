@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { dropIndexIn } from '../dropIndex';
 
-describe('dropIndexIn — a drop in a tree\'s terms → the index a splice writes at, counted among the entries that remain once the block leaves the order', () => {
+describe('dropIndexIn — a drop in a tree\'s terms → the record index a splice writes at, counted among the entries that remain once the block leaves the order', () => {
   const order = ['A', 'B', 'C', 'D', 'E'];
 
   it('the losing end is index 0, whatever else the list holds', () => {

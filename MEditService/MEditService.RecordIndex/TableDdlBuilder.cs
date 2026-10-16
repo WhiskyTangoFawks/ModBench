@@ -17,7 +17,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
     internal const string ActiveSchema = "main";
 
-    /// <summary>The views a SELECT reads: the records of every plugin the index holds, each row saying whether
+    /// <summary>The views a SELECT reads: the records of every plugin the record index holds, each row saying whether
     /// its plugin is active. A connection that reads them takes this schema as its search path.</summary>
     internal const string IndexedSchema = "indexed";
 
@@ -261,7 +261,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             )
             """);
 
-    /// <summary>ADR-0003: what the index believes is on disk. Apart from
+    /// <summary>ADR-0003: what the record index believes is on disk. Apart from
     /// <c>registrations</c>, whose rows come and go with every reconcile, so the first unregister (a
     /// profile switch) keeps the hash.</summary>
     internal static void CreateFilesTable(DuckDBConnection connection) =>

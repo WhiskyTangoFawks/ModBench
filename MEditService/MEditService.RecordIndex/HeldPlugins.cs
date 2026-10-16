@@ -129,7 +129,7 @@ internal sealed class HeldPlugins
         Volatile.Write(ref _openedSnapshot, _plugins.ToDictionary(p => p.Key, p => p.Content, PluginAddress.Comparer));
     }
 
-    /// <summary>The load order's half of a plugin leaving the snapshot. The index side is
+    /// <summary>The load order's half of a plugin leaving the snapshot. The record index side is
     /// the Index's own unregister: the rows stay for the next snapshot that wants them.</summary>
     public bool Remove(PluginAddress key)
     {

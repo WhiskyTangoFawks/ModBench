@@ -14,7 +14,7 @@ namespace MEditService.RecordIndex.Tests.TestSupport;
 /// subscribed to its holder and reconciled over a fixture's plugins.</summary>
 internal static class Indexes
 {
-    /// <summary>The registration over the real adapter, before anything has resolved the index. The
+    /// <summary>The registration over the real adapter, before anything has resolved the record index. The
     /// fixtures' schema is discovered first, as the put-load-order handler does, so no reconcile a
     /// test waits on pays the discovery.</summary>
     internal static ServiceProvider Container(

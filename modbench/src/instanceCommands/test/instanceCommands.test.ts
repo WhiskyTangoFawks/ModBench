@@ -9,7 +9,7 @@ describe('refresh', () => {
   const refreshOver = (client: InMemoryMEditClient) =>
     instanceCommands({ adapter: fakeInstanceAdapter().adapter, client, instanceRoot: '/instance' }).refresh;
 
-  it('rebuilds the index for the instance, so mEdit reads every plugin again against the load order it holds, and sends nothing', async () => {
+  it('rebuilds the record index for the instance, so mEdit reads every plugin again against the load order it holds, and sends nothing', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('rebuildIndex', { rebuilt: true });
 

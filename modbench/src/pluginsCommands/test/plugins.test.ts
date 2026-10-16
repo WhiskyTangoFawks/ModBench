@@ -25,7 +25,7 @@ const handed = (changes: readonly PluginOrderChange[], profile = PROFILE) => [{ 
 const synced = (changes: readonly PluginOrderChange[], profile = PROFILE) => [{ verb: 'changePluginOrderOverProvided', profile, changes }];
 
 describe('reorderPlugins hands the adapter a move decided against the order it holds', () => {
-  it('a move is its plugins and the index the drop settles to', async () => {
+  it('a move is its plugins and the record index the drop settles to', async () => {
     const fake = fakeOver('Base.esp', 'Gone.esp');
 
     await pluginsCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(PROFILE, moving('Base.esp'), { kind: 'after', name: 'Gone.esp' }, []);

@@ -46,7 +46,7 @@ interface RefreshGestureDeps {
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporter: Reporter;
   /** Names this instance in toolbox.md's Reporting story 1 — Modbench cannot name the other
-   *  window that holds the index, only the one refused here. */
+   *  window that holds the record index, only the one refused here. */
   instanceRoot: string;
 }
 

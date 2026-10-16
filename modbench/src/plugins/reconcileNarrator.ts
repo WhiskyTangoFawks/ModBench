@@ -26,7 +26,7 @@ export interface ReconcileNarrator {
   /** Resolves once a reconcile answering at least `version` has been handed to the views. */
   settled(version: number): Promise<void>;
   /** Armed before a rebuild is asked for: resolves once the refill that follows ends, and at once
-   *  when the index held nothing to refill. */
+   *  when the record index held nothing to refill. */
   nextRefill(): RefillWait;
   /** mEdit went away: the progress closes, every wait ends, and the next process's versions
    *  start over. */
@@ -41,7 +41,7 @@ interface Span {
 const terminal = (status: LoadOrderProgress): boolean =>
   status.conflictsComputed || status.refusal !== undefined;
 
-// plugins.md, States 2: the index status says what the Plugins view shows, whoever started the
+// plugins.md, States 2: the record index status says what the Plugins view shows, whoever started the
 // reconcile — a put, a rebuild's refill or the watcher.
 export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileNarrator {
   let last: LoadOrderProgress | undefined;
@@ -136,7 +136,7 @@ function versionWaits() {
 }
 
 // A wait ends at the first terminal status after its refill started: a Ready heard before the
-// rebuild dropped the index is the load order before, not the refill.
+// rebuild dropped the record index is the load order before, not the refill.
 function refillWaitList() {
   let waits: { refillStarted: boolean; resolve: () => void }[] = [];
   return {

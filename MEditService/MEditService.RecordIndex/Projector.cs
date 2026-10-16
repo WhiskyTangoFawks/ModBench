@@ -86,7 +86,7 @@ internal sealed class Projector(
                 before.GetValueOrDefault(formKey), after.GetValueOrDefault(formKey)));
 
     /// <summary>ADR-0015: re-derives <paramref name="formKeys"/>' rows from the Source repository,
-    /// idempotent by content, the whole plugin for a key the index does not hold. Answers what stopped
+    /// idempotent by content, the whole plugin for a key the record index does not hold. Answers what stopped
     /// the tree.</summary>
     internal SourceFailure? RefreshByKeys(RegisteredPlugin plugin, IReadOnlyList<string> formKeys) => index.Commit(projection =>
     {
@@ -98,7 +98,7 @@ internal sealed class Projector(
         if (source.SourceReads(plugin))
             index.RestampDerivation(key, DerivedFrom.SourceTree);
 
-        // A key the index does not hold is a record the tree has gained or got back, and no document
+        // A key the record index does not hold is a record the tree has gained or got back, and no document
         // says where the tree puts it: a new exterior cell's block is a directory, not a field.
         if (formKeys.Any(formKey => index.StoredRow(key, formKey) == null))
             return RederiveWholePluginFromSource(projection, plugin, formKeys);
@@ -223,7 +223,7 @@ internal sealed class Projector(
         RegisteredPlugin plugin, IReadOnlyDictionary<string, string> onDisk, Dictionary<string, string> heldStamps)
     {
         var key = plugin.Key;
-        // A document the index never saw moves which records the plugin has, which only a rebuild
+        // A document the record index never saw moves which records the plugin has, which only a rebuild
         // expresses; the report names the records gained.
         var gained = onDisk.Keys.Except(heldStamps.Keys, StringComparer.Ordinal).ToList();
         if (gained.Count > 0) return new ValidationReport(gained, NeedsRebuild: true, []);
@@ -238,7 +238,7 @@ internal sealed class Projector(
         if (drifted.Count > 0 && logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
-                "Validate found {Count} source document(s) of {Plugin} ({Origin}) disagreeing with the index; refreshing",
+                "Validate found {Count} source document(s) of {Plugin} ({Origin}) disagreeing with the record index; refreshing",
                 drifted.Count, key.Name, key.Origin);
         }
 

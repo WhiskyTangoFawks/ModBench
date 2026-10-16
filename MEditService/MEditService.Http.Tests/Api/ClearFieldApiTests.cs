@@ -45,19 +45,19 @@ public sealed class ClearFieldApiTests(LoadedApiFixture<TestPluginFixture> loade
         await _client.NextSnapshot(fx, Origin);
         await Wire.Eventually(
             async () => (await _client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(formKey)}", UriKind.Relative))).IsSuccessStatusCode,
-            "the created record reached the index");
+            "the created record reached the record index");
 
         var url = new Uri($"/records/{Uri.EscapeDataString(formKey)}", UriKind.Relative);
         async Task<bool> HoldsHeight() => (await _client.GetStringAsync(url)).Contains("0.75", StringComparison.Ordinal);
 
         (await _client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
         await _client.NextSnapshot(fx, Origin);
-        await Wire.Eventually(HoldsHeight, "the set reached the index");
+        await Wire.Eventually(HoldsHeight, "the set reached the record index");
 
         var cleared = await _client.Edit(formKey, Plugin, Origin, "HeightMax", JsonDocument.Parse("null").RootElement);
         Assert.True(cleared.IsSuccessStatusCode, await cleared.Content.ReadAsStringAsync());
         await _client.NextSnapshot(fx, Origin);
 
-        await Wire.Eventually(async () => !await HoldsHeight(), "the clear reached the index");
+        await Wire.Eventually(async () => !await HoldsHeight(), "the clear reached the record index");
     }
 }

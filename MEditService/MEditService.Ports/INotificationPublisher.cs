@@ -52,7 +52,7 @@ public sealed record PluginWithUnreadableSource(string Name, UnreadableSource So
 /// <summary>Why a compiled plugin's source does not read, and whether decompile gets past it.</summary>
 public sealed record UnreadableSource(string Reason, bool DecompileRepairs);
 
-/// <summary>The record filter could not apply again after a change to the index, so the Index
+/// <summary>The record filter could not apply again after a change to the record index, so the Index
 /// cleared it. Source names the filter's source; Reason is the database's.</summary>
 public sealed record RecordFilterClearedNotification(string Source, string Reason) : INotification;
 

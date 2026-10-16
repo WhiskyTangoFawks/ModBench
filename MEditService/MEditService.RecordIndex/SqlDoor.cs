@@ -5,7 +5,7 @@ using DuckDB.NET.Data;
 namespace MEditService.RecordIndex;
 
 /// <summary>A filter or a read is one SELECT over the views of one schema: <c>main</c>, which sees the
-/// active plugins (ADR-0012), or <c>indexed</c>, which sees every plugin the index holds.</summary>
+/// active plugins (ADR-0012), or <c>indexed</c>, which sees every plugin the record index holds.</summary>
 internal static class SqlDoor
 {
     private static readonly char[] FileNameCharacters = ['/', '\\', '.', ':'];

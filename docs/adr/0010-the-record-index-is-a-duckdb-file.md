@@ -4,7 +4,7 @@ The record index is a DuckDB file that persists across launches. The vanilla mas
 
 ## Consequences
 
-- The index is derived state. A file that cannot be opened is rebuilt from the files, at the cost of one cold load. Nothing in it is migrated or repaired.
+- The record index is derived state. A file that cannot be opened is rebuilt from the files, at the cost of one cold load. Nothing in it is migrated or repaired.
 
 ## Alternatives rejected
 

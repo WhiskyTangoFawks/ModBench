@@ -98,7 +98,7 @@ internal sealed class WorkingTreeOverlay
             "SELECT record_type FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
 
-    // A record the index does not hold, materialized: the shape an embedded child re-derived out of a
+    // A record the record index does not hold, materialized: the shape an embedded child re-derived out of a
     // container's document arrives in.
     private void MaterializeRecord(
         PluginAddress key, string formKey, string recordType, string body, ICollection<string> touched)

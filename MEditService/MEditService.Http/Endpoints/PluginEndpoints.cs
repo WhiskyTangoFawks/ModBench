@@ -36,7 +36,7 @@ internal static class PluginEndpoints
             .WithTags(Tag)
             .WithDescription(
                 "What is wrong in each compiled plugin's source, on the file that holds the " +
-                "record: a reference to a record neither it nor an active plugin holds. Answers only once the index is ready.")
+                "record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready.")
             .Produces<IReadOnlyList<PluginProblems>>()
             .ProducesProblem(503);
 
@@ -51,7 +51,7 @@ internal static class PluginEndpoints
             .WithTags(Tag)
             .WithDescription(
                 "The plugins that list the plugin's file name as a master, and the plugins whose masters " +
-                "mEdit could not read. Answers only once the index is ready.")
+                "mEdit could not read. Answers only once the record index is ready.")
             .Produces<PluginDependantsResponse>()
             .ProducesProblem(400)
             .ProducesProblem(503);

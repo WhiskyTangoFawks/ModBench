@@ -307,7 +307,7 @@ describe('PluginFacts — which plugins mEdit holds and the record filter', () =
 });
 
 const heldElsewhere = { kind: 'heldElsewhere', message: 'another window holds this instance' } as const;
-const failedIndex = { kind: 'failed', message: 'the index threw' } as const;
+const failedIndex = { kind: 'failed', message: 'the record index threw' } as const;
 const B = { name: 'B.esp', origin: 'SomeMod' };
 const RECORDS = { kind: 'records' } as const;
 const INDEXING = { kind: 'indexing' } as const;
@@ -323,7 +323,7 @@ describe('PluginFacts — what a row expands into (plugins.md, States, stories 2
     ['a tick that failed B', (facts: PluginFacts) => facts.indexed([A], [failure('Malformed record', B)]),
       RECORDS, errorOf('Malformed record')],
     ['mEdit unreachable', scenes(heldAOnly, (facts) => facts.unreachable('mEdit is down')), RECORDS, errorOf('mEdit is down')],
-    ['another window holds the index', scenes(heldAOnly, (facts) => facts.refused(heldElsewhere)),
+    ['another window holds the record index', scenes(heldAOnly, (facts) => facts.refused(heldElsewhere)),
       errorOf(heldElsewhere.message), errorOf(heldElsewhere.message)],
     ['the snapshot failed', scenes(heldAOnly, (facts) => facts.refused(failedIndex)), RECORDS, errorOf(failedIndex.message)],
     ['a failure of B over mEdit unreachable',
@@ -390,11 +390,11 @@ describe('PluginFacts — a name under two origins reads its own plugin', () => 
   });
 });
 
-describe('PluginFacts — the index failure message (plugins.md, States, story 6)', () => {
+describe('PluginFacts — the record index failure message (plugins.md, States, story 6)', () => {
   it.each([
     ['nothing holds', scenes(), undefined],
-    ['the snapshot failed', (facts: PluginFacts) => facts.refused(failedIndex), 'Indexing failed: the index threw'],
-    ['another window holds the index', (facts: PluginFacts) => facts.refused(heldElsewhere), undefined],
+    ['the snapshot failed', (facts: PluginFacts) => facts.refused(failedIndex), 'Indexing failed: the record index threw'],
+    ['another window holds the record index', (facts: PluginFacts) => facts.refused(heldElsewhere), undefined],
     ['another window after the failure', scenes((facts) => facts.refused(failedIndex), (facts) => facts.refused(heldElsewhere)), undefined],
     ['a tick after the failure', scenes((facts) => facts.refused(failedIndex), heldAOnly), undefined],
     ['the hand-off after the failure', scenes((facts) => facts.refused(failedIndex), (facts) => facts.reconciled([held()], [])), undefined],

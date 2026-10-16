@@ -145,7 +145,7 @@ public sealed class ReconcileDoorTests
         using (var earlier = Indexes.Open(earlierHolder))
             earlier.Reconcile(earlierHolder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         var blocker = Path.GetDirectoryName(IndexFiles.In(data.InstanceRoot))
-            ?? throw new InvalidOperationException("The index file sits in a folder.");
+            ?? throw new InvalidOperationException("The record index file sits in a folder.");
         Directory.Delete(blocker, recursive: true);
         File.WriteAllText(blocker, "not a folder");
         var holder = new LoadOrderHolder();

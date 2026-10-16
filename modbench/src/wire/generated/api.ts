@@ -328,7 +328,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description What is wrong in each compiled plugin's source, on the file that holds the record: a reference to a record neither it nor an active plugin holds. Answers only once the index is ready. */
+        /** @description What is wrong in each compiled plugin's source, on the file that holds the record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready. */
         get: operations["GetPluginProblems"];
         put?: never;
         post?: never;
@@ -345,7 +345,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The plugins that list the plugin's file name as a master, and the plugins whose masters mEdit could not read. Answers only once the index is ready. */
+        /** @description The plugins that list the plugin's file name as a master, and the plugins whose masters mEdit could not read. Answers only once the record index is ready. */
         get: operations["GetPluginDependants"];
         put?: never;
         post?: never;

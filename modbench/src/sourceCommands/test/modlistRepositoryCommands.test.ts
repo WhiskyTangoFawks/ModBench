@@ -3,7 +3,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { FileRead, GameFile, GameFolder, InstallationFile, InstanceAdapter, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { fakeInstanceAdapter, fileIn, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { modlistSourceCommands } from '../modlistSourceCommands';
+import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
 
 const INSTALLED: InstallationFile = { path: '/downloads/ModA-1.0.7z', size: 10, hash: 'H', entries: [{ path: 'textures/a.dds', hash: 'E' }] };
 const VANILLA: GameFile = { path: 'Game.esm', size: 7, hash: 'V' };
@@ -20,14 +20,14 @@ const sentNamesOf = (mods: unknown): string[] => (Array.isArray(mods) ? mods.map
 function commandsOver(answers: InstanceAnswers = {}, client = new InMemoryMEditClient(), filesByMod: Record<string, readonly OriginFile[]> = {}) {
   const adapter = fakeInstanceAdapter(readingFixture({ modFiles: filesIn(filesByMod) }), answers);
   const repositories: string[] = [];
-  const commands = modlistSourceCommands({
+  const commands = modlistRepositoryCommands({
     client, adapter: adapter.adapter, instanceRoot: '/instance',
     makeRepository: () => { repositories.push('made'); return Promise.resolve(); }, trash: () => Promise.resolve(),
   });
   return { commands, client, adapter, repositories };
 }
 
-describe('modlistSourceCommands git init', () => {
+describe('modlistRepositoryCommands git init', () => {
   it('writes the ignore list, then makes the instance folder a repository', async () => {
     const { commands, adapter, repositories } = commandsOver();
 
@@ -52,7 +52,7 @@ describe('modlistSourceCommands git init', () => {
 
   it('takes back the ignore list it wrote when the repository could not be made, leaving nothing behind', async () => {
     const adapter = fakeInstanceAdapter();
-    const commands = modlistSourceCommands({
+    const commands = modlistRepositoryCommands({
       client: new InMemoryMEditClient(), adapter: adapter.adapter, instanceRoot: '/instance',
       makeRepository: () => Promise.reject(new Error('git is not available')), trash: () => Promise.resolve(),
     });
@@ -66,7 +66,7 @@ describe('modlistSourceCommands git init', () => {
 
   it('names the ignore list that remains when it could not be taken back', async () => {
     const adapter = fakeInstanceAdapter(readingFixture(), { refusals: refusing('removeIgnoreList', 'read-only folder') });
-    const commands = modlistSourceCommands({
+    const commands = modlistRepositoryCommands({
       client: new InMemoryMEditClient(), adapter: adapter.adapter, instanceRoot: '/instance',
       makeRepository: () => Promise.reject(new Error('git is not available')), trash: () => Promise.resolve(),
     });
@@ -77,7 +77,7 @@ describe('modlistSourceCommands git init', () => {
   });
 });
 
-describe('modlistSourceCommands update manifest', () => {
+describe('modlistRepositoryCommands update manifest', () => {
   const UPDATED = { landed: [{ mod: 'ModA', manifestWritten: true, noProvider: [] }], refused: [] };
 
   it('hands mEdit each mod with its folder, its installation files, its metadata files and whether it is a source mod, the game files its files override, and the stat cache\'s folder', async () => {
@@ -154,7 +154,7 @@ describe('modlistSourceCommands update manifest', () => {
     it.each(refusedFor)('when %s', async (_cause, override, reason) => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('updateManifest', UPDATED);
-      const commands = modlistSourceCommands({
+      const commands = modlistRepositoryCommands({
         client, adapter: { ...adapterOf, ...override }, instanceRoot: '/instance', makeRepository: () => Promise.resolve(), trash: () => Promise.resolve(),
       });
 
@@ -168,7 +168,7 @@ describe('modlistSourceCommands update manifest', () => {
   it('hashes no game file for a mod refused for its folder or its installation files', async () => {
     const adapter = fakeInstanceAdapter(readingFixture(), { installations: new Map([['ModA', { kind: 'unreadable', reason: 'not indexed' }]]) });
     const hashed: string[] = [];
-    const commands = modlistSourceCommands({
+    const commands = modlistRepositoryCommands({
       client: new InMemoryMEditClient(),
       adapter: { ...adapter.adapter, gameFilesOverriddenBy: (...args) => { hashed.push(args[1]); return adapter.adapter.gameFilesOverriddenBy(...args); } },
       instanceRoot: '/instance', makeRepository: () => Promise.resolve(), trash: () => Promise.resolve(),
@@ -191,7 +191,7 @@ describe('modlistSourceCommands update manifest', () => {
     const modFiles = new Map([['ModA', { origin: 'ModA', folder: '/mods/ModA', files: [], folders: [], notes: ['broken link "a.nif", skipped'] }]]);
     const client = new InMemoryMEditClient();
     client.setCommandResult('updateManifest', UPDATED);
-    const commands = modlistSourceCommands({
+    const commands = modlistRepositoryCommands({
       client, adapter: fakeInstanceAdapter(readingFixture({ modFiles })).adapter, instanceRoot: '/instance', makeRepository: () => Promise.resolve(), trash: () => Promise.resolve(),
     });
 
@@ -244,7 +244,7 @@ describe('modlistSourceCommands update manifest', () => {
   });
 });
 
-describe('modlistSourceCommands restore from manifest', () => {
+describe('modlistRepositoryCommands restore from manifest', () => {
   const RESTORED = { landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [], notFound: [] };
   const INSTALLATION_FILE_MISSING = "was skipped: installation file 'ModA-1.0.7z' is missing.";
   const sentNames = (client: InMemoryMEditClient): string[][] => client.calls.map((call) => sentNamesOf(call.args[0]));
@@ -331,7 +331,7 @@ describe('modlistSourceCommands restore from manifest', () => {
   it('says why beside a mod still skipped for a game file the Instance adapter could not read', async () => {
     const adapter = fakeInstanceAdapter().adapter;
     const client = new InMemoryMEditClient();
-    const commands = modlistSourceCommands({
+    const commands = modlistRepositoryCommands({
       client, adapter: { ...adapter, overriddenGameFiles: (dataFolder, paths) => (paths.includes('Game.esm')
         ? Promise.resolve({ kind: 'unreadable', reason: 'Game.esm is locked' })
         : adapter.overriddenGameFiles(dataFolder, paths)) },
@@ -409,7 +409,7 @@ describe('modlistSourceCommands restore from manifest', () => {
   it('refuses a mod the Instance adapter cannot answer, naming why, and restores the rest', async () => {
     const adapter = fakeInstanceAdapter().adapter;
     const client = new InMemoryMEditClient();
-    const commands = modlistSourceCommands({
+    const commands = modlistRepositoryCommands({
       client, adapter: { ...adapter, gameFilesOverriddenBy: (dataFolder, mod) => (mod === 'ModA'
         ? Promise.resolve({ kind: 'unreadable', reason: 'Game.esm is locked' })
         : adapter.gameFilesOverriddenBy(dataFolder, mod)) },
@@ -529,7 +529,7 @@ describe('modlistSourceCommands restore from manifest', () => {
   });
 });
 
-describe('modlistSourceCommands what restore destroys', () => {
+describe('modlistRepositoryCommands what restore destroys', () => {
   const DESTROYS = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'], metadataDiffers: false }];
 
   it('asks mEdit with each mod\'s folder, its metadata files and the metadata the mod manager holds of it, and the stat cache\'s folder, and answers its listing', async () => {
@@ -547,7 +547,7 @@ describe('modlistSourceCommands what restore destroys', () => {
 
   it('asks nothing of a mod whose name gives it no folder, which restore refuses', async () => {
     const client = new InMemoryMEditClient();
-    const commands = modlistSourceCommands({
+    const commands = modlistRepositoryCommands({
       client, adapter: { ...fakeInstanceAdapter().adapter, modFolderPath: () => Promise.resolve(undefined) }, instanceRoot: '/instance',
       makeRepository: () => Promise.resolve(), trash: () => Promise.resolve(),
     });
@@ -589,7 +589,7 @@ describe('modlistSourceCommands what restore destroys', () => {
   });
 });
 
-describe('modlistSourceCommands mod status', () => {
+describe('modlistRepositoryCommands mod status', () => {
   const STATUS = [{ mod: 'ModA', noManifest: true, differing: [], namedByNoLine: [], gone: [], noProvider: [], metadataDiffers: false }];
 
   it('asks mEdit for each mod\'s status by its folder, with its metadata files, the metadata the mod manager holds and the stat cache', async () => {

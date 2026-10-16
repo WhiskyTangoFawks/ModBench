@@ -35,7 +35,7 @@ public static class RecordIndexServices
         return services;
     }
 
-    // A load order can arrive before the first query resolves the index.
+    // A load order can arrive before the first query resolves the record index.
     private sealed class IndexAtStartup(IServiceProvider services) : IHostedService
     {
         public Task StartAsync(CancellationToken cancellationToken)

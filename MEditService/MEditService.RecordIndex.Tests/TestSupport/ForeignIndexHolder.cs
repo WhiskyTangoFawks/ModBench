@@ -87,6 +87,6 @@ public sealed class ForeignIndexHolderFactAttribute : FactAttribute
 {
     public ForeignIndexHolderFactAttribute()
     {
-        if (!ForeignIndexHolder.Available) Skip = "python3 not on PATH: cannot hold the index from a second process.";
+        if (!ForeignIndexHolder.Available) Skip = "python3 not on PATH: cannot hold the record index from a second process.";
     }
 }
