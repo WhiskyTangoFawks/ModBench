@@ -110,7 +110,7 @@ export function statusDescription(status: ModStatus): string | undefined {
 }
 
 /** What a separator row's description says of its status (mods.md, A row, Separator). */
-export const separatorDescription = ({ noManifest }: ModStatus): string | undefined => (noManifest ? 'no manifest' : undefined);
+export const separatorDescription = stateOf;
 
 /** What a mod row's tooltip says of the files its folder lacks (modlist-repository.md, Status, story 4). */
 export const lackedLine = ({ gone }: ModStatus): string | undefined =>
