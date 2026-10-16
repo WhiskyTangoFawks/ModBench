@@ -5,7 +5,7 @@ import { PluginFacts, placeOf, type PluginPlace } from '../pluginFacts';
 
 const A = { name: 'A.esp', origin: 'SomeMod' };
 
-const held = (overrides: Partial<PluginMetadata> = {}): PluginMetadata => pluginMetadataFixture({ name: 'A.esp', ...overrides });
+const held = (overrides: Partial<PluginMetadata> = {}): PluginMetadata => pluginMetadataFixture({ name: 'A.esp', isTracked: true, ...overrides });
 const failure = (reason: string, address = A): PluginLoadFailure => ({ ...address, reason });
 const diagnosis = (text: string, address = A): PluginDiagnosisReport => (
   { plugin: address.name, origin: address.origin, defectClass: 'fixed-size-subrecord-short', message: text, text }
@@ -75,6 +75,13 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     facts.reconciled([held({ hasParseFailure: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true }, masterIssues: ['Ghost.esm'] })], [failure('Malformed record')]);
 
     expect(facts.description(A)).toBe('failed to read, 1 master issue, unreadable records, plugin source unreadable, changed outside Modbench, malformed');
+  });
+
+  it('carries the read-only line on a plugin with no source', () => {
+    const facts = new PluginFacts();
+    facts.reconciled([held({ isTracked: false })], []);
+
+    expect(facts.tooltipLines(A)).toEqual(['A.esp', 'SomeMod', 'read-only']);
   });
 
   it('carries the read-only line between the origin and the status lines', () => {
@@ -250,10 +257,10 @@ describe('PluginFacts — the Problems panel reads the answers the rows read', (
 describe('PluginFacts — what a row states about its plugin', () => {
   it.each([
     ['nothing before mEdit answers', undefined, [], { tracked: false, editable: false }],
-    ['an untracked, editable plugin', { isTracked: false }, ['untracked', 'editable'], { tracked: false, editable: true }],
+    ['a plugin with no source', { isTracked: false }, ['untracked'], { tracked: false, editable: false }],
     ['a tracked, editable plugin', { isTracked: true }, ['tracked', 'editable'], { tracked: true, editable: true }],
     ['a tracked, read-only plugin', { isTracked: true, isImmutable: true }, ['tracked'], { tracked: true, editable: false }],
-    ['an untracked, read-only plugin', { isImmutable: true }, ['untracked'], { tracked: false, editable: false }],
+    ['an untracked, read-only plugin', { isTracked: false, isImmutable: true }, ['untracked'], { tracked: false, editable: false }],
     ['a tracked plugin whose plugin source is unreadable', { isTracked: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }, ['tracked'], { tracked: true, editable: false }],
   ] as const)('%s', (_label, overrides, flags, conditions) => {
     const facts = new PluginFacts();
@@ -358,7 +365,7 @@ describe('PluginFacts — what a row expands into (plugins.md, States, stories 2
 describe('PluginFacts — a name under two origins reads its own plugin', () => {
   const MOD_A = { name: 'Shared.esp', origin: 'ModA' };
   const MOD_B = { name: 'Shared.esp', origin: 'ModB' };
-  const sharedAt = (origin: string, overrides: Partial<PluginMetadata> = {}) => pluginMetadataFixture({ name: 'Shared.esp', origin, ...overrides });
+  const sharedAt = (origin: string, overrides: Partial<PluginMetadata> = {}) => pluginMetadataFixture({ name: 'Shared.esp', origin, isTracked: true, ...overrides });
   const bothHeld = (modB: Partial<PluginMetadata>): Scene => (facts) => facts.reconciled([sharedAt('ModA'), sharedAt('ModB', modB)], []);
   const CLEAN = {
     description: undefined, icon: undefined, tooltipLines: ['Shared.esp', 'ModA'], editable: true, hiddenByRecordFilter: false, expansion: RECORDS,
