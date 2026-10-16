@@ -77,6 +77,24 @@ public sealed class BuildConfigurationChangeTests : IDisposable
         Assert.Equal(before, BuildJson());
     }
 
+    [Theory]
+    [InlineData("Sub/Name", null, null)]
+    [InlineData("..", null, null)]
+    [InlineData(null, "../outside.dds", null)]
+    [InlineData(null, "textures\\a.dds", null)]
+    [InlineData(null, null, "/rooted.esp")]
+    public void AChangeOutsideTheMod_RefusesAsOutsideTheMod_AndLeavesTheConfigurationAsItWas(string? output, string? exclude, string? include)
+    {
+        const string before = "{\"output\": \"Mod\"}";
+        WriteBuildJson(before);
+
+        var failure = TestAdapters.Source().ChangeBuildConfiguration(
+            _sourceFolder, new BuildConfigurationChange(output, exclude is null ? [] : [exclude], include is null ? [] : [include]));
+
+        Assert.IsType<SourceFailure.OutsideTheMod>(failure);
+        Assert.Equal(before, BuildJson());
+    }
+
     [PosixFact]
     public void AConfigurationTheDiskWillNotLetBeWritten_IsInaccessible_AndIsLeftAsItWas()
     {

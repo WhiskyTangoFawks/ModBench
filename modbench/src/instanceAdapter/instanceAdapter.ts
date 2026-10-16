@@ -362,6 +362,8 @@ export interface InstanceReading extends InstanceGame {
   readonly profile: string;
   /** Mod order, a mod's meta folded into its entry. */
   readonly mods: readonly ModlistEntry[];
+  /** Each line of mod order or plugin order the reading left out because an earlier line names the same entry. */
+  readonly orderNotes: readonly string[];
   readonly pluginOrder: readonly PluginEntry[];
   readonly downloadedFiles: DownloadedFiles;
   readonly gameFolder: GameFolder;

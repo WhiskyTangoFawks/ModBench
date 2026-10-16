@@ -40,10 +40,4 @@ describe('pluginOrderOf', () => {
 
     expect({ loadedWithNoLine: loadedWithNoLine.map((p) => p.name), fromLines }).toEqual({ loadedWithNoLine: ['Fallout4.esm'], fromLines: [] });
   });
-
-  it('keeps the first of two lines that name one plugin', () => {
-    const { fromLines } = orderOf([row('A.esp', 'Mod', 0), row('a.esp', 'Mod', 1)], []);
-
-    expect(fromLines.map((p) => p.line)).toEqual([0]);
-  });
 });

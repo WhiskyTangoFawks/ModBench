@@ -34,7 +34,7 @@ export type { GameFolder } from '../instanceAdapter/instanceAdapter';
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.
 const SETTLE_MS = 200;
 
-type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'dataFolder' | 'gameArchives' | 'archives';
+type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'gameArchives' | 'archives';
 
 type DownloadsResult =
   | { readonly kind: 'listed'; readonly rows: readonly DownloadFile[] }
@@ -320,10 +320,11 @@ export class Instance implements Subscription {
     this.failureListeners = [];
   }
 
-  private tellReading({ skippedLinks, archiveListNotes, sourceMods, runtimeOutput, dataFolderPlugins, dataFolderArchives }: InstanceReading): void {
+  private tellReading({ skippedLinks, archiveListNotes, orderNotes, sourceMods, runtimeOutput, dataFolderPlugins, dataFolderArchives }: InstanceReading): void {
     const notes = [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes];
     this.tellOnce('notes', notes.map((note) => `[instance] ${note}`), 'info');
     this.tellOnce('links', [...skippedLinks].map(([name, reason]) => `[instance] mods/${name} is a link Modbench cannot follow, so it is not a mod folder: ${reason}`), 'info');
+    this.tellOnce('orderNotes', orderNotes.map((note) => `[instance] ${note}`), 'warn');
     this.tellOnce('archiveListNotes', archiveListNotes.map((note) => `[instance] ${note}`), 'warn');
     // An unreadable Data folder or its archives is an answer, never a failed read: the whole value
     // would otherwise go stale over a folder outside the instance.
