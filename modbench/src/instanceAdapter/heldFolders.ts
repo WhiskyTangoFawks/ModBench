@@ -1,5 +1,5 @@
 // VS Code's recursive watcher on Linux (@parcel/watcher's inotify backend) watches a folder it hears created, but can
-// miss each folder that one already held, as when a tree moves in whole, and then hears no change inside it.
+// miss each folder already inside it, as when a tree moves in whole, and then hears no change there.
 
 import { existsSync, watch, type FSWatcher } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
