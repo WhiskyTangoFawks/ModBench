@@ -132,10 +132,10 @@ try
     app.MapIndexEndpoints();
     app.MapUnsavedDocumentEndpoints();
 
-    // The extension holds our stdin open and never writes to it. The OS closes it when the extension
-    // host dies, however it dies, so the end of stdin is the end of the window that owns this backend.
+    // The extension holds this process's stdin open and never writes to it. The OS closes it when the
+    // extension host dies, however it dies, so the end of stdin is the end of the window that owns this backend.
     if (app.Configuration.GetValue<bool>("ExitWhenStdinCloses"))
-        _ = StopWhenStdinCloses(app.Lifetime);
+        app.Lifetime.ApplicationStarted.Register(() => _ = StopWhenStdinCloses(app.Lifetime));
 
     await app.RunAsync();
 }
@@ -151,10 +151,7 @@ finally
 static async Task StopWhenStdinCloses(IHostApplicationLifetime lifetime)
 {
     await using var stdin = Console.OpenStandardInput();
-    var buffer = new byte[256];
-    int read;
-    do read = await stdin.ReadAsync(buffer);
-    while (read > 0);
+    await stdin.CopyToAsync(Stream.Null);
     lifetime.StopApplication();
 }
 

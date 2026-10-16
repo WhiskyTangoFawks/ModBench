@@ -138,36 +138,72 @@ public sealed class BackendContentRootTests
         }
     }
 
-    [Theory]
-    [InlineData(true, true, true)]
-    [InlineData(true, false, false)]
-    [InlineData(false, true, false)]
-    public async Task SpawnedWithStdinPiped_ExitsWhenStdinCloses_OnlyWhenAskedTo(bool asked, bool stdinCloses, bool exits)
+    private static readonly string[] AskedToExitWithItsStdin =
+        ["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost, "--ExitWhenStdinCloses", "true"];
+
+    [Fact]
+    public async Task AskedToExitWithItsStdin_ExitsOnceItCloses()
     {
         using var workingDirectory = new ScratchDirectory("medit-contentroot-");
-        var lines = new List<string>();
-        string[] args = asked
-            ? ["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost, "--ExitWhenStdinCloses", "true"]
-            : ["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost];
-        using var process = SpawnThroughTheDotnetMuxer(args, workingDirectory, lines, pipeStdin: true);
+        using var process = await StartedWithPipedStdinAsync(AskedToExitWithItsStdin, workingDirectory);
         try
         {
-            var started = await WaitForLineAsync(lines,
-                l => l.Contains("Application started", StringComparison.Ordinal),
-                TimeSpan.FromSeconds(15));
-            Assert.True(started,
-                $"backend never reported starting; captured output:\n{string.Join('\n', Snapshot(lines))}");
+            process.StandardInput.Close();
 
-            if (stdinCloses) process.StandardInput.Close();
-            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(exits ? 15 : 3));
-            var exited = await process.WaitForExitAsync(deadline.Token).ContinueWith(t => t.IsCompletedSuccessfully, TaskScheduler.Default);
-
-            Assert.Equal(exits, exited);
+            Assert.True(await ExitsWithinAsync(process, TimeSpan.FromSeconds(15)));
         }
         finally
         {
             KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
         }
+    }
+
+    [Fact]
+    public async Task AskedToExitWithItsStdin_KeepsRunningWhileItIsOpen()
+    {
+        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
+        using var process = await StartedWithPipedStdinAsync(AskedToExitWithItsStdin, workingDirectory);
+        try
+        {
+            Assert.False(await ExitsWithinAsync(process, TimeSpan.FromSeconds(3)));
+        }
+        finally
+        {
+            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
+        }
+    }
+
+    [Fact]
+    public async Task NotAsked_KeepsRunningWhenItsStdinCloses()
+    {
+        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
+        using var process = await StartedWithPipedStdinAsync(
+            ["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost], workingDirectory);
+        try
+        {
+            process.StandardInput.Close();
+
+            Assert.False(await ExitsWithinAsync(process, TimeSpan.FromSeconds(3)));
+        }
+        finally
+        {
+            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
+        }
+    }
+
+    private static async Task<Process> StartedWithPipedStdinAsync(IReadOnlyList<string> args, string workingDirectory)
+    {
+        var lines = new List<string>();
+        var process = SpawnThroughTheDotnetMuxer(args, workingDirectory, lines, pipeStdin: true);
+        var started = await WaitForLineAsync(lines, l => l.Contains("Application started", StringComparison.Ordinal), TimeSpan.FromSeconds(15));
+        Assert.True(started, $"backend never reported starting; captured output:\n{string.Join('\n', Snapshot(lines))}");
+        return process;
+    }
+
+    private static async Task<bool> ExitsWithinAsync(Process process, TimeSpan timeout)
+    {
+        using var deadline = new CancellationTokenSource(timeout);
+        return await process.WaitForExitAsync(deadline.Token).ContinueWith(t => t.IsCompletedSuccessfully, TaskScheduler.Default);
     }
 
     private static Process SpawnThroughTheDotnetMuxer(IReadOnlyList<string> extraArgs, string workingDirectory, List<string> capturedLines, bool pipeStdin = false)
