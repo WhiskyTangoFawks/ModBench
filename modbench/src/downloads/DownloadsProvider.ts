@@ -3,7 +3,7 @@
 
 import * as vscode from 'vscode';
 import {
-  downloadContextValue, filterArchiveRows, filterExcludedRows, sortDownloadRows, type DownloadSortColumn,
+  downloadContextValue, filterExcludedRows, sortDownloadRows, type DownloadSortColumn,
 } from './downloadRows';
 import {
   lastGoodReadMessage, type DownloadFile, type DownloadRow, type DownloadStatus, type InstanceValue, type InstanceView,
@@ -149,8 +149,8 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
    *  filter's own no-match state. */
   allExcluded(): boolean {
     if (this.showExcluded || this.instanceValue.downloads.kind !== 'listed') return false;
-    const archives = filterArchiveRows(this.instanceValue.downloads.rows);
-    return archives.length > 0 && archives.every((row) => row.excluded);
+    const { rows } = this.instanceValue.downloads;
+    return rows.length > 0 && rows.every((row) => row.excluded);
   }
 
   /** Render-only: a filter keystroke narrows already-built rows and never re-pulls the Instance
@@ -184,10 +184,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   }
 
   private build(downloads: readonly DownloadFile[]): DownloadNode[] {
-    // Archive-filtering applies first — a non-archive is never a row, toggle or not — then
-    // excluded-filtering, then sort — the acceptance criterion the three compose by.
-    const archives = filterArchiveRows(downloads);
-    const rows = sortDownloadRows(filterExcludedRows(archives, this.showExcluded), this.sortColumn, this.sortDescending);
+    const rows = sortDownloadRows(filterExcludedRows(downloads, this.showExcluded), this.sortColumn, this.sortDescending);
     return rows.map((row) => new DownloadNode(row));
   }
 }

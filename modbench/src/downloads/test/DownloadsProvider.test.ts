@@ -203,31 +203,6 @@ describe('DownloadsProvider — rows come from the Instance value', () => {
   });
 });
 
-describe('DownloadsProvider — only the files install can take are rows', () => {
-  it('keeps the archive and drops a listed readme, subfolder, .unfinished file and stray .meta', async () => {
-    const provider = makeProviderOverRowsNeverOnDisk([
-      row({ name: 'ArmorPack-1-0.zip' }),
-      row({ name: 'ReadMe.txt' }),
-      row({ name: 'Textures' }),
-      row({ name: 'ArmorPack-1-0.rar.unfinished' }),
-      row({ name: 'ArmorPack-1-0.zip.meta' }),
-    ]);
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['ArmorPack-1-0.zip']);
-  });
-
-  it('compares the extension case-insensitively', async () => {
-    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'ArmorPack-1-0.ZIP' })]);
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['ArmorPack-1-0.ZIP']);
-  });
-
-  it('keeps every extension install can extract', async () => {
-    const provider = makeProviderOverRowsNeverOnDisk([
-      row({ name: 'a.zip' }), row({ name: 'b.7z' }), row({ name: 'c.rar' }),
-    ]);
-    expect(rowNamesOfDownloadNodes(await provider.getChildren()).sort()).toEqual(['a.zip', 'b.7z', 'c.rar'].sort());
-  });
-});
-
 describe('setShowExcluded', () => {
   it('includes excluded rows alongside visible ones when turned on', async () => {
     const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
@@ -305,11 +280,6 @@ describe('allExcluded, distinct from no downloads: files exist but every one is 
   it('is false once Show excluded is turned on, even with every row excluded', () => {
     const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'a.zip', excluded: true }), row({ name: 'b.zip', excluded: true })]);
     provider.setShowExcluded(true);
-    expect(provider.allExcluded()).toBe(false);
-  });
-
-  it('ignores a non-archive file when deciding whether every archive is excluded', () => {
-    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'readme.txt', excluded: false })]);
     expect(provider.allExcluded()).toBe(false);
   });
 });
