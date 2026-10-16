@@ -113,7 +113,7 @@ describe('modlistRepositoryCommands update manifest', () => {
   });
 
   it('names a mod whose installation file comes from a game without a Nexus domain, and sends the file without that fact', async () => {
-    const { commands, client } = commandsOver({ installations: new Map([['ModA', recording([{ ...INSTALLED, unsourcedGame: 'EnderalSE' }])]]) });
+    const { commands, client } = commandsOver({ installations: new Map([['ModA', recording([{ ...INSTALLED, unpagedGame: 'EnderalSE' }])]]) });
     client.setCommandResult('updateManifest', UPDATED);
 
     const outcome = await commands.updateManifest(['ModA'], instanceOf());
@@ -474,7 +474,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
   it('writes each landed mod\'s metadata as its manifest says, through the Instance adapter, after its files no line names went to the trash', async () => {
     const { commands, client, adapter } = commandsOver();
-    const metadata = { version: '1.0', installationFiles: [{ name: 'ModA-1.0.7z', source: 'nexus:fallout4:1' }] };
+    const metadata = { version: '1.0', installationFiles: [{ name: 'ModA-1.0.7z', source: 'https://www.nexusmods.com/fallout4/mods/1' }] };
     client.setCommandResult('restoreFromManifest', { landed: [{ mod: 'ModA', written: [], namedByNoLine: ['mine.txt'], metadata }], refused: [], notFound: [] });
 
     await commands.restoreFromManifest(['ModA'], instanceOf());
@@ -510,7 +510,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
   it('finds no file by the metadata it writes', async () => {
     const { commands, client } = commandsOver({
-      metadata: new Map([['ModA', { version: '1.0', installationFiles: [{ name: 'ModA-1.0.7z', source: 'nexus:fallout4:1' }] }]]),
+      metadata: new Map([['ModA', { version: '1.0', installationFiles: [{ name: 'ModA-1.0.7z', source: 'https://www.nexusmods.com/fallout4/mods/1' }] }]]),
       downloads: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]),
     });
     client.setCommandResult('restoreFromManifest', RESTORED);
@@ -533,7 +533,7 @@ describe('modlistRepositoryCommands what restore destroys', () => {
   const DESTROYS = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'], metadataDiffers: false }];
 
   it('asks mEdit with each mod\'s folder, its metadata files and the metadata the mod manager holds of it, and the stat cache\'s folder, and answers its listing', async () => {
-    const metadata = { version: '1.0', installationFiles: [{ name: 'ModA-1.0.7z', source: 'nexus:fallout4:1' }] };
+    const metadata = { version: '1.0', installationFiles: [{ name: 'ModA-1.0.7z', source: 'https://www.nexusmods.com/fallout4/mods/1' }] };
     const { commands, client } = commandsOver({ metadata: new Map([['ModA', metadata]]) });
     client.setQueryAnswer('getWhatRestoreDestroys', { destroys: DESTROYS, refused: [{ item: 'ModB', reason: "was skipped: a file could not be read" }], manifests: [] });
 
@@ -567,7 +567,7 @@ describe('modlistRepositoryCommands what restore destroys', () => {
 
   it('skips a mod whose manifest says metadata the mod manager cannot hold, naming why, and does not list it as destroying', async () => {
     const { commands, client } = commandsOver({ unwritableMetadata: new Map([['ModA', "its source names the Nexus game 'x', which Modbench has no game for"]]) });
-    const manifest = { version: '1', installationFiles: [{ name: 'A.7z', source: 'nexus:x:1' }] };
+    const manifest = { version: '1', installationFiles: [{ name: 'A.7z', source: 'https://www.nexusmods.com/x/mods/1' }] };
     client.setQueryAnswer('getWhatRestoreDestroys', {
       destroys: [{ mod: 'ModA', differing: [], namedByNoLine: [], metadataDiffers: true }, { mod: 'ModB', differing: ['b.nif'], namedByNoLine: [], metadataDiffers: false }],
       refused: [], manifests: [{ mod: 'ModA', metadata: manifest }, { mod: 'ModB', metadata: { installationFiles: [] } }],
@@ -593,7 +593,7 @@ describe('modlistRepositoryCommands mod status', () => {
   const STATUS = [{ mod: 'ModA', noManifest: true, differing: [], namedByNoLine: [], gone: [], noProvider: [], metadataDiffers: false }];
 
   it('asks mEdit for each mod\'s status by its folder, with its metadata files, the metadata the mod manager holds and the stat cache', async () => {
-    const { commands, client } = commandsOver({ metadata: new Map([['ModA', { version: '1.2.3', installationFiles: [{ name: 'A.7z', source: 'nexus:fallout4:1' }] }]]) });
+    const { commands, client } = commandsOver({ metadata: new Map([['ModA', { version: '1.2.3', installationFiles: [{ name: 'A.7z', source: 'https://www.nexusmods.com/fallout4/mods/1' }] }]]) });
     client.setQueryAnswer('getModStatus', STATUS);
 
     const answer = await commands.modStatus(['ModA']);
@@ -603,7 +603,7 @@ describe('modlistRepositoryCommands mod status', () => {
         method: 'getModStatus',
         args: [[{
           name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'],
-          metadata: { version: '1.2.3', installationFiles: [{ name: 'A.7z', source: 'nexus:fallout4:1' }] },
+          metadata: { version: '1.2.3', installationFiles: [{ name: 'A.7z', source: 'https://www.nexusmods.com/fallout4/mods/1' }] },
         }], '/instance/stat-cache'],
       }], STATUS,
     ]);

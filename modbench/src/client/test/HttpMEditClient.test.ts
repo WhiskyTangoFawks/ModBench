@@ -378,7 +378,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'] }];
     const destroys = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'] }];
     const skipped = "'ModB' was skipped: a file could not be read: denied";
-    const manifests = [{ mod: 'ModA', metadata: { version: '1.0', installationFiles: [{ name: 'A.7z', source: 'nexus:fallout4:1' }] } }];
+    const manifests = [{ mod: 'ModA', metadata: { version: '1.0', installationFiles: [{ name: 'A.7z', source: 'https://www.nexusmods.com/fallout4/mods/1' }] } }];
     const { result, request } = await exchange(
       (c) => c.getWhatRestoreDestroys(mods, '/instance/stat-cache'),
       answers(200, { mods: destroys, refused: [{ item: 'ModB', refusal: 'Unreadable', message: skipped, gameFilesNotFound: [], installationFilesNotFound: [] }], manifests }),

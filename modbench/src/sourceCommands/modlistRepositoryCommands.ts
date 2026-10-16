@@ -90,8 +90,8 @@ async function readMod(
     gameFiles: overridden.answer.gameFiles,
     notes: [
       ...overridden.answer.notes,
-      ...installed.answer.flatMap(({ unsourcedGame }) =>
-        unsourcedGame === undefined ? [] : [`its installation file comes from '${unsourcedGame}', which has no Nexus domain here, so its manifest names no source`]),
+      ...installed.answer.flatMap(({ unpagedGame }) =>
+        unpagedGame === undefined ? [] : [`its installation file comes from '${unpagedGame}', which has no Nexus domain here, so its manifest names no page`]),
     ],
   };
 }
