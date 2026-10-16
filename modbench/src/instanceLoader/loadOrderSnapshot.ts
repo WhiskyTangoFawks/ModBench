@@ -4,7 +4,7 @@ import {
   foldPath, isRootLevel, type FileConflictIndex, type FileWinners,
 } from './fileConflictIndex';
 import {
-  fileInFolder, isPluginFile, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
+  fileInFolder, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
   type ModFolders, type ModlistEntry, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
 import { pluginOrderOf } from './pluginOrder';
@@ -120,24 +120,16 @@ function byOrigin<T>(origin: string, answers: { overwrite: T; data: T; mod: (nam
   return answers.mod(origin);
 }
 
-/** The plugin files the mods and overwrite/ provide, keyed case-folded to the winning file's own
- *  name: the Mod override order's answer. A Data-folder plugin is presence, not provision. */
-export function providedPluginsOf(files: FileWinners): Map<string, string> {
-  const names = [...files].map((file) => file.relativePath).filter((name) => isRootLevel(name) && isPluginFile(name));
-  return new Map(names.map((name) => [foldPath(name), name]));
-}
-
-/** The plugins the game loads with no line (ADR-0013), in load order: its masters,
- *  then its Creation Club plugins, each from the mod providing it, else the game folder, at its
- *  file's own spelling. */
+/** The plugins the game loads with no line (ADR-0013), in load order, each from the mod providing
+ *  it, else the game folder, at its file's own spelling. */
 export function pluginsLoadedWithNoLineOf(
-  gameMasters: readonly string[], creationClub: readonly string[], inData: DataFolderPlugins,
+  loadedWithNoLine: readonly string[], inData: DataFolderPlugins,
   plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[],
 ): PluginAddress[] | undefined {
   if (inData.kind !== 'listed') return undefined;
   const providedBy = new Map(plugins.filter((p) => p.path !== undefined && p.winning && p.origin !== DATA_DIRECTORY_ORIGIN).map((p) => [foldPath(p.name), p] as const));
   const seen = new Set<string>();
-  return [...gameMasters, ...creationClub].flatMap((name) => {
+  return loadedWithNoLine.flatMap((name) => {
     const provided = providedBy.get(foldPath(name));
     const found = provided === undefined ? dataSpellings(inData, name).map((spelled) => ({ name: spelled, origin: DATA_DIRECTORY_ORIGIN })) : [provided];
     return found.flatMap(({ name: spelled, origin }) => {

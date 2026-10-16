@@ -32,7 +32,7 @@ import type { Mo2Context } from '../mo2Context';
 import { readingSource, readInstance, type ReadingSource } from '../mo2Reads';
 import { OVERWRITE_ORIGIN, type Subscription } from '../instanceAdapter';
 import type {
-  ArchiveReader, GameFolder, InstallTarget, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
+  ArchiveReader, GameFolder, InstallTarget, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
 } from '../instanceAdapter';
 import { tempWritePath } from '../layout';
 import { fakeArchiveReader } from '../../test/fakeArchiveReader';
@@ -132,23 +132,90 @@ describe('the MO2 Instance adapter', () => {
         expect(await adapter.activeProfile()).toBe('Default');
       });
 
-      it('answers every profile folder', async () => {
-        expect((await adapter.profiles()).toSorted()).toEqual(['Default', 'Secondary']);
-      });
-
-      it('answers the game the settings name and its release', async () => {
-        expect(await adapter.game()).toEqual({ gameName: 'Fallout 4', gameRelease: 'Fallout4' });
-      });
-
-      it('answers the folder of a mod the instance holds', async () => {
-        expect((await adapter.modFolders())?.holding({ kind: 'mod', name: 'Harder VATS' })).toMatchObject({ path: join(root, 'mods', 'Harder VATS') });
-      });
-
       it('answers the profile the settings select now, not the one a read before did', async () => {
         const before = await adapter.activeProfile();
         await writeFile(join(root, INI), (await text(root, INI)).replace('selected_profile=@ByteArray(Default)', 'selected_profile=@ByteArray(Other)'));
 
         expect([before, await adapter.activeProfile()]).toEqual(['Default', 'Other']);
+      });
+    });
+
+    describe('the plugins provided, as a change to the plugin order over them reads them', () => {
+      let game: string;
+      let withGame: InstanceAdapter;
+      beforeEach(async () => {
+        game = await mkdtemp(join(tmpdir(), 'mo2-instance-provided-'));
+        await mkdir(join(game, 'Data'));
+        await writeFile(join(game, 'Data', 'Fallout4.esm'), '');
+        await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\r\n');
+        withGame = adapterAt(root, game);
+      });
+      afterEach(() => rm(game, { recursive: true, force: true }));
+
+      const providedOver = async (over: InstanceAdapter, profile = 'Default'): Promise<PluginsProvided> => {
+        let answer: PluginsProvided | undefined;
+        await over.changePluginOrderOverProvided(profile, (_order, provided) => {
+          answer = provided;
+          return [];
+        });
+        return present(answer, 'the plugins provided');
+      };
+      const pluginsOver = async (over: InstanceAdapter, profile?: string): Promise<ReadonlyMap<string, string>> => {
+        const provided = await providedOver(over, profile);
+        if (provided.kind !== 'listed') throw new Error(`expected listed, got ${provided.kind}`);
+        return provided.plugins;
+      };
+
+      it('answers each plugin at the root of an enabled mod or Overwrite at the spelling of the copy that wins, then the Data folder\'s', async () => {
+        await writeFile(join(root, 'overwrite', 'TRACKED PATCH MOD.ESP'), '');
+        await writeFile(join(root, 'mods', 'Harder VATS', 'Disabled.esp'), '');
+        await mkdir(join(root, 'mods', 'Tracked Patch Mod', 'Optional'));
+        await writeFile(join(root, 'mods', 'Tracked Patch Mod', 'Optional', 'Nested.esp'), '');
+
+        expect(await pluginsOver(withGame)).toEqual(new Map([
+          ['tracked patch mod.esp', 'TRACKED PATCH MOD.ESP'],
+          ['nonasciiretexture.esp', 'NonAsciiRetexture.esp'],
+          ['nonasciiretexture - addon.esl', 'NonAsciiRetexture - Addon.esl'],
+          ['fallout4.esm', 'Fallout4.esm'],
+        ]));
+      });
+
+      it('answers by the mod order of the profile it changes', async () => {
+        await writeFile(join(root, 'mods', 'Unofficial Fallout 4 Patch', 'Unofficial Fallout 4 Patch.esp'), '');
+
+        expect(await pluginsOver(withGame, 'Secondary')).toEqual(new Map([
+          ['unofficial fallout 4 patch.esp', 'Unofficial Fallout 4 Patch.esp'], ['fallout4.esm', 'Fallout4.esm'],
+        ]));
+      });
+
+      it('answers the game\'s masters, then its Creation Club plugins, as the plugins it loads with no line', async () => {
+        expect(await providedOver(withGame)).toMatchObject({
+          loadedWithNoLine: [
+            'Fallout4.esm', 'DLCRobot.esm', 'DLCworkshop01.esm', 'DLCCoast.esm', 'DLCworkshop02.esm', 'DLCworkshop03.esm',
+            'DLCNukaWorld.esm', 'ccBGSFO4044-HellfirePowerArmor.esl',
+          ],
+        });
+      });
+
+      it('answers no plugins while the game folder is not found', async () => {
+        expect(await providedOver(adapter)).toEqual({ kind: 'unresolved' });
+      });
+
+      it('reads a mod order that parses to no entries again after a settle, as the reading does, rather than answer no mod plugins', async () => {
+        const path = join(root, DEFAULT_MODLIST);
+        const complete = await text(root, DEFAULT_MODLIST);
+        await writeFile(path, '');
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        try {
+          const plugins = pluginsOver(withGame);
+          await settleWaitArmed();
+          await writeFile(path, complete);
+          await vi.advanceTimersByTimeAsync(1000);
+
+          expect((await plugins).has('tracked patch mod.esp')).toBe(true);
+        } finally {
+          vi.useRealTimers();
+        }
       });
     });
 
@@ -1125,6 +1192,20 @@ describe('the MO2 Instance adapter', () => {
           { relativePath: 'Textures', path: join(folder, 'Textures'), excluded: false },
           { relativePath: 'Textures/Source', path: join(folder, 'Textures', 'Source'), excluded: false },
         ]);
+      });
+
+      it.each([
+        ['a mod', mod('Harder VATS'), join('mods', 'Harder VATS')],
+        ['Overwrite', { kind: 'runtimeOutput' as const }, 'overwrite'],
+      ])('lists the files at the root of %s alone when asked for its root', async (_, origin, folder) => {
+        await mkdir(join(root, folder, 'Optional'), { recursive: true });
+        await writeFile(join(root, folder, 'Optional', 'Nested.esp'), '');
+        await symlink(join(root, folder, 'Optional'), join(root, folder, 'Linked'));
+        await writeFile(join(root, folder, 'Root.esp'), '');
+
+        const { files, folders } = await source.originRootFiles(origin);
+
+        expect([relativePaths(files), folders]).toEqual([['Root.esp'], []]);
       });
 
       it('reads a linked file from where the link points, and places it where the link sits, and notes a broken link rather than failing', async () => {

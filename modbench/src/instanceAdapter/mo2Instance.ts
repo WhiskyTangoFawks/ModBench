@@ -57,13 +57,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter
     names,
     reading: () => readInstance(source),
     activeProfile: async () => (await source.settings()).profile,
-    profiles: () => source.profiles(),
-    game: async () => {
-      const { gameName, gameRelease } = await source.settings();
-      return { gameName, gameRelease };
-    },
-    modFolders: () => source.modFolders(),
-    ...mo2Reads(context), ...mo2Installation(context, hashes, source), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives), ...mo2Repository(context, hashes),
+    ...mo2Reads(context), ...mo2Installation(context, hashes, source), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives), ...mo2Repository(context, hashes),
     originFileHash: hashes.originFileHash,
     statCacheFolder: statCacheDir(instanceRoot),
     subscribe: (listener) => context.watch.subscribe(listener),

@@ -5,7 +5,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { pluginSyncOver, type PluginsDrop } from '../plugins';
 import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
-import { fakeInstanceAdapter, refusing, readingFixture } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, fileIn, refusing, readingFixture } from '../../test/fakeInstanceAdapter';
 import type { PluginMetadata } from '../../client';
 import type { DataFolderPlugins, PluginOrderChange } from '../../instanceAdapter/instanceAdapter';
 
@@ -154,14 +154,20 @@ describe('plugin participation is a change for each plugin the order lists', () 
   });
 });
 
-describe('syncPlugins decides the lines plugins.txt converges on, from what disk provides', () => {
-  const provides = (...names: string[]) => new Map(names.map((name) => [name.toLowerCase(), name]));
+describe('syncPlugins decides the lines plugins.txt converges on, from what the Instance adapter says is provided', () => {
   const inData = (...names: string[]): DataFolderPlugins => ({ kind: 'listed', names: new Set(names) });
 
-  interface Run { order?: readonly string[]; read?: readonly string[]; provided?: readonly string[]; inData?: DataFolderPlugins; loadedWithNoLine?: readonly string[] | undefined; profile?: string }
-  const sync = async ({ order = [], read = order, provided = [], inData: data = inData(), loadedWithNoLine = [], profile = PROFILE }: Run) => {
-    const fake = fakeOver(...order);
-    const result = await pluginSyncOver(fake.adapter)({ profile, pluginOrder: lines(...read), provided: provides(...provided), inData: data, loadedWithNoLine });
+  interface Run {
+    order?: readonly string[]; provided?: readonly string[]; inData?: DataFolderPlugins; gameRelease?: string; creationClubList?: readonly string[];
+    profile?: string;
+  }
+  const sync = async ({ order = [], provided = [], inData: data = inData(), gameRelease = 'Fallout4', creationClubList = [], profile = PROFILE }: Run) => {
+    const fake = fakeInstanceAdapter(readingFixture({
+      profile, gameRelease, creationClubList, pluginOrder: lines(...order), dataFolderPlugins: data,
+      mods: [{ kind: 'mod', name: 'Provider', enabled: true }],
+      modFiles: new Map([['Provider', { origin: 'Provider', folder: '/mods/Provider', files: provided.map((name) => fileIn('/mods/Provider', name)), folders: [], notes: [] }]]),
+    }));
+    const result = await pluginSyncOver(fake.adapter)();
     return { fake, result };
   };
 
@@ -179,16 +185,25 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what disk
     expect(fake.calls).toEqual(handed([{ kind: 'drop', plugin: 'Gone.esp' }]));
   });
 
-  it('hands the adapter the profile it is given', async () => {
+  it('writes the profile the mod manager selects', async () => {
     const { fake } = await sync({ order: ['Gone.esp'], profile: 'Other' });
 
     expect(fake.calls).toEqual(handed([{ kind: 'drop', plugin: 'Gone.esp' }], 'Other'));
   });
 
+  it('appends a line for a plugin in the game\'s Data folder with none, as for a mod\'s', async () => {
+    const { fake, result } = await sync({ order: ['Base.esp'], provided: ['Base.esp'], inData: inData('Loose.esp') });
+
+    expect(result).toEqual({ applied: true, wrote: true, added: ['Loose.esp'], dropped: [] });
+    expect(fake.calls).toEqual(handed([{ kind: 'add', plugin: 'Loose.esp' }]));
+  });
+
   it.each<[string, Run]>([
-    ['a Data-folder plugin with no line stays unlisted', { order: ['Base.esp'], provided: ['Base.esp'], inData: inData('DLCCoast.esm') }],
+    ['a plugin the game loads with no line is in the Data folder', {
+      order: ['Base.esp'], provided: ['Base.esp'], inData: inData('DLCCoast.esm', 'ccBGSFO4044-HellfirePowerArmor.esl'),
+      creationClubList: ['ccBGSFO4044-HellfirePowerArmor.esl'],
+    }],
     ['a line differing only in case from the provided name is the same plugin', { order: ['BASE.esp'], provided: ['Base.esp'] }],
-    ['the order changed since it was read: the next run decides', { order: ['Base.esp', 'Other.esp'], read: ['Base.esp'], provided: ['Base.esp'] }],
   ])('hands over no change when %s', async (_, run) => {
     const { fake, result } = await sync(run);
 
@@ -196,12 +211,12 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what disk
     expect(fake.calls).toEqual(handed([]));
   });
 
-  it.each<[string, string[], string[]]>([
-    ['is never appended when an enabled mod also ships it', ['Fallout4.esm'], []],
-    ['is matched to a mod\'s plugin of that name ignoring case', ['FALLOUT4.ESM'], []],
-    ['is appended as an ordinary plugin when the game does not load it with no line', [], ['Fallout4.esm']],
-  ])('a mod-shipped vanilla plugin %s', async (_, loadedWithNoLine, added) => {
-    const { result } = await sync({ order: ['Base.esp'], provided: ['Base.esp', 'Fallout4.esm'], inData: inData('Fallout4.esm'), loadedWithNoLine });
+  it.each<[string, string, string, string[]]>([
+    ['is never appended when an enabled mod also ships it', 'Fallout4.esm', 'Fallout4', []],
+    ['is matched to a mod\'s plugin of that name ignoring case', 'FALLOUT4.ESM', 'Fallout4', []],
+    ['is appended as an ordinary plugin when the game does not load it with no line', 'Fallout4.esm', 'Oblivion', ['Fallout4.esm']],
+  ])('a mod-shipped vanilla plugin %s', async (_, shipped, gameRelease, added) => {
+    const { result } = await sync({ order: ['Base.esp'], provided: ['Base.esp', shipped], inData: inData('Fallout4.esm'), gameRelease });
 
     expect(result).toMatchObject({ applied: true, added });
   });
@@ -214,9 +229,9 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what disk
   });
 
   it('hands over no change when the game folder is not found, leaving the telling to the instance\'s state', async () => {
-    const { fake, result } = await sync({ order: ['Base.esp', 'Gone.esp'], provided: ['Base.esp', 'New.esp'], inData: { kind: 'unresolved' }, loadedWithNoLine: undefined });
+    const { fake, result } = await sync({ order: ['Base.esp', 'Gone.esp'], provided: ['Base.esp', 'New.esp'], inData: { kind: 'unresolved' } });
 
     expect(result).toEqual({ applied: false, toldAsInstanceState: true });
-    expect(fake.calls).toEqual([]);
+    expect(fake.calls).toEqual(handed([]));
   });
 });

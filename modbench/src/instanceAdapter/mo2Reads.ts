@@ -9,11 +9,11 @@ import { parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
-import { creationClubListFile, dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
+import { creationClubListFile, dataFolderOf, gameReleaseForGame, loadedWithNoLineOf } from '../tables/gamePaths';
 import { factsOf, get, isTracked, listDir, readOrReason, stampOf } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileOrigin, type GameFolder, type InstanceAdapter, type InstanceReading,
-  type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type SourceMods,
+  type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided, type SourceMods,
 } from './instanceAdapter';
 import {
   DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, entryDir, downloadSidecarFile, isTempWrite, modlistFile,
@@ -25,6 +25,7 @@ import { entryKey, folderHolding, listModFolders, modFoldersOf, readOrAbsent, ty
 import { originFilesIn } from './mo2Files';
 import { sourceModsIn } from './sourceMods';
 import { isPluginFile } from './pluginFile';
+import { filesWinningFirst, pluginsProvidedOf } from './pluginsProvided';
 
 interface InstanceSettings {
   readonly profile: string;
@@ -54,6 +55,8 @@ export interface ReadingSource extends ArchiveReads {
   modFolders(skippedLink?: (name: string, reason: string) => void): Promise<ModFolders | undefined>;
   /** An origin's files, none when its folder is not there. */
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
+  /** The files at an origin's root, as `originFiles` lists them. */
+  originRootFiles(origin: FileOrigin): Promise<OriginFiles>;
   sourceMods(): Promise<SourceMods>;
   holdsRepository(): Promise<boolean>;
 }
@@ -155,6 +158,8 @@ export function readingSource(context: Mo2Context): ReadingSource {
 
     originFiles: (origin) => originFilesIn(instanceRoot, origin),
 
+    originRootFiles: (origin) => originFilesIn(instanceRoot, origin, true),
+
     sourceMods: () => sourceModsIn(instanceRoot),
 
     holdsRepository: () => isTracked(instanceRoot),
@@ -183,11 +188,11 @@ const withNotes = <T>(lines: readonly T[], keyOf: (line: T) => string, describe:
   return { kept, notes: repeats.map((line) => `${describe(line)} on more than one line; the first line holds`) };
 };
 
-async function settledMods(source: ReadingSource, profile: string): Promise<ModlistEntry[]> {
-  const mods = await modsWithMeta(source, profile);
+async function settled(readModOrder: () => Promise<ModlistEntry[]>): Promise<ModlistEntry[]> {
+  const mods = await readModOrder();
   if (mods.length > 0) return mods;
   await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-  return modsWithMeta(source, profile);
+  return readModOrder();
 }
 
 const metaOf = ({ version, nexusId, archiveFilename, installedFiles }: ModMeta): ModMeta =>
@@ -212,7 +217,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
   const settings = await source.settings();
   const { profile, gameName, gameRelease } = settings;
   const skippedLinks = new Map<string, string>();
-  const modsRead = settledMods(source, profile).then((listed) =>
+  const modsRead = settled(() => modsWithMeta(source, profile)).then((listed) =>
     withNotes(listed, modLineKey, ({ kind, name }) => `${MODLIST_FILE_NAME} lists the ${kind} ${name}`));
   const modsKept = modsRead.then(({ kept }) => kept);
   const modFoldersRead = source.modFolders((name, reason) => skippedLinks.set(name, reason));
@@ -247,4 +252,24 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
     profiles, modFolders, skippedLinks, runtimeOutput, modFiles, folderMeta,
     sourceMods, holdsRepository,
   };
+}
+
+/** The plugins `profile`'s mod order provides, every fact against one read of the settings. */
+export async function readPluginsProvided(source: ReadingSource, profile: string): Promise<PluginsProvided> {
+  const settings = await source.settings();
+  const [mods, runtimeOutput, gameFolder] = await Promise.all([
+    settled(() => source.modOrder(profile)).then((listed) => firstLines(listed, modLineKey).kept),
+    source.originRootFiles({ kind: 'runtimeOutput' }),
+    settings.gameFolder(),
+  ]);
+  const [modFiles, dataFolderPlugins, creationClubList] = await Promise.all([
+    Promise.all(mods.filter((entry) => entry.kind === 'mod' && entry.enabled)
+      .map(async ({ name }) => [name, (await source.originRootFiles({ kind: 'mod', name })).files] as const)).then((listed) => new Map(listed)),
+    source.gameFolderPlugins(gameFolder),
+    source.creationClubList(gameFolder, settings.gameRelease),
+  ]);
+  return pluginsProvidedOf(
+    filesWinningFirst(mods, runtimeOutput.files, (mod) => modFiles.get(mod) ?? []), dataFolderPlugins,
+    loadedWithNoLineOf(settings.gameRelease, creationClubList),
+  );
 }

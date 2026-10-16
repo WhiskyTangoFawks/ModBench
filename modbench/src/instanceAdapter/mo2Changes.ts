@@ -14,9 +14,10 @@ import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderCha
 import { downloadFile, pluginsFile, settingsFile } from './layout';
 import { sourceModsIn } from './sourceMods';
 import { currentDownloadsDir, entryKey, folderHolding, newModFolder, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
+import { readPluginsProvided, type ReadingSource } from './mo2Reads';
 
 type Mo2Changes = Pick<InstanceAdapter,
-  | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
+  | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
   | 'trashDownloadedFileMeta' | 'selectProfile'>;
 
 function listedPlugin(order: readonly PluginEntry[], plugin: string): string {
@@ -51,13 +52,21 @@ function markIn(text: string, mark: DownloadedFileMark): string {
   }
 }
 
-export function mo2Changes(context: Mo2Context): Mo2Changes {
+const pluginOrderIn = (text: string): PluginEntry[] => firstLines(parsePlugins(text), ({ name }) => pluginKey(name)).kept;
+
+export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Changes {
   const { instanceRoot } = context;
 
   return {
     changePluginOrder(profile, decide) {
-      return putIfChanged(pluginsFile(instanceRoot, profile), (text) =>
-        decide(firstLines(parsePlugins(text), ({ name }) => pluginKey(name)).kept).reduce(splicePluginOrderChange, text));
+      return putIfChanged(pluginsFile(instanceRoot, profile), (text) => decide(pluginOrderIn(text)).reduce(splicePluginOrderChange, text));
+    },
+
+    changePluginOrderOverProvided(profile, decide) {
+      return putIfChanged(pluginsFile(instanceRoot, profile), async (text) => {
+        const order = pluginOrderIn(text);
+        return decide(order, await readPluginsProvided(source, profile)).reduce(splicePluginOrderChange, text);
+      });
     },
 
     async createModFolder(mod) {

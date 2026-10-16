@@ -10,9 +10,7 @@ import type { TailOf } from '../coreLib/boundCommand';
 import { pluginRenameCommands, type PluginRenameClient } from './renamePlugin';
 import { moveOrderRefusal, type PluginOrderFactsOf } from './pluginOrder';
 import type { ItemRefusal } from '../ports/selectionOutcome';
-import type {
-  DataFolderPlugins, DecidePluginOrder, InstanceAdapter, PluginEntry, PluginOrderChange,
-} from '../instanceAdapter/instanceAdapter';
+import type { DecidePluginOrder, InstanceAdapter, PluginOrderChange, PluginsProvided } from '../instanceAdapter/instanceAdapter';
 import { isReadFailed } from '../wire/readFailed';
 
 async function changePluginOrder(
@@ -105,70 +103,55 @@ interface PluginLinesDelta {
   dropped: string[];
 }
 
-export type PluginSyncResult =
+type PluginSyncResult =
   | { applied: true; wrote: boolean; added: string[]; dropped: string[] }
   | { applied: false; refusal: string }
   | { applied: false; toldAsInstanceState: true };
 
-// `inData` is presence only, never a source of added lines.
-function pluginLinesDelta(
-  listed: readonly string[],
-  provided: ReadonlyMap<string, string>,
-  inData: ReadonlySet<string>,
-): PluginLinesDelta {
+// The tree gives a plugin the game loads with no line a row of its own (plugins.md, The tree,
+// story 2), so it earns no line, wherever it is provided from.
+function pluginLinesDelta(listed: readonly string[], { plugins, loadedWithNoLine }: Extract<PluginsProvided, { kind: 'listed' }>): PluginLinesDelta {
   const listedKeys = new Set(listed.map(pluginKey));
-  const added = [...provided]
-    .filter(([key]) => !listedKeys.has(key))
+  const noLine = new Set(loadedWithNoLine.map(pluginKey));
+  const added = [...plugins]
+    .filter(([key]) => !listedKeys.has(key) && !noLine.has(key))
     .map(([, real]) => real)
     .sort((a, b) => pluginKey(a).localeCompare(pluginKey(b)));
-  const dropped = listed.filter((name) => !provided.has(pluginKey(name)) && !inData.has(pluginKey(name)));
+  const dropped = listed.filter((name) => !plugins.has(pluginKey(name)));
   return { added, dropped };
 }
 
-const changedSinceRead = (order: readonly PluginEntry[], read: readonly PluginEntry[]): boolean =>
-  order.length !== read.length || order.some((line, i) => line.name !== read[i]?.name);
-
-async function syncPlugins(
-  adapter: InstanceAdapter, { profile, pluginOrder, provided, inData, loadedWithNoLine }: PluginSyncInputs,
-): Promise<PluginSyncResult> {
-  // Without the Data folder's listing, a line for a Data plugin would be dropped. A game folder
-  // not found is told once, as the instance's state (common.md, States, story 5).
-  if (inData.kind === 'unresolved') return { applied: false, toldAsInstanceState: true };
-  if (inData.kind === 'unreadable') {
-    return { applied: false, refusal: `the game's Data folder cannot be listed: ${inData.reason}` };
-  }
-  // The tree gives a plugin the game loads with no line a row of its own (plugins.md, The tree,
-  // story 2), so a mod's plugin of that name earns no line.
-  const noLine = new Set((loadedWithNoLine ?? []).map(pluginKey));
-  const addable = new Map([...provided].filter(([key]) => !noLine.has(key)));
-  const inDataNames = new Set([...inData.names].map(pluginKey));
-
+async function syncPlugins(adapter: InstanceAdapter): Promise<PluginSyncResult> {
+  const profile = await adapter.activeProfile();
+  const decided = { gameFolderNotFound: false };
   let delta: PluginLinesDelta = { added: [], dropped: [] };
-  const result = await changePluginOrder(adapter, profile, (order) => {
-    if (changedSinceRead(order, pluginOrder)) return [];
-    delta = pluginLinesDelta(order.map((e) => e.name), addable, inDataNames);
-    return [
-      ...delta.dropped.map((plugin): PluginOrderChange => ({ kind: 'drop', plugin })),
-      ...delta.added.map((plugin): PluginOrderChange => ({ kind: 'add', plugin })),
-    ];
-  });
-  return result.applied ? { ...result, ...delta } : result;
+  try {
+    const { wrote } = await adapter.changePluginOrderOverProvided(profile, (order, provided) => {
+      // Without the Data folder's listing, a line for a Data plugin would be dropped. A game folder
+      // not found is told once, as the instance's state (common.md, States, story 5).
+      if (provided.kind === 'unresolved') {
+        decided.gameFolderNotFound = true;
+        return [];
+      }
+      if (provided.kind === 'unreadable') throw new Error(`the game's Data folder cannot be listed: ${provided.reason}`);
+      delta = pluginLinesDelta(order.map((e) => e.name), provided);
+      return [
+        ...delta.dropped.map((plugin): PluginOrderChange => ({ kind: 'drop', plugin })),
+        ...delta.added.map((plugin): PluginOrderChange => ({ kind: 'add', plugin })),
+      ];
+    });
+    return decided.gameFolderNotFound ? { applied: false, toldAsInstanceState: true } : { applied: true, wrote, ...delta };
+  } catch (err) {
+    return refuse(err);
+  }
 }
 
-interface PluginSyncInputs {
-  readonly profile: string;
-  readonly pluginOrder: readonly PluginEntry[];
-  readonly provided: ReadonlyMap<string, string>;
-  readonly inData: DataFolderPlugins;
-  readonly loadedWithNoLine: readonly string[] | undefined;
-}
-
-/** Plugin sync on one run's inputs. */
-export type PluginSyncRun = (inputs: PluginSyncInputs) => Promise<PluginSyncResult>;
+/** Plugin sync over the active profile. */
+export type PluginSyncRun = () => Promise<PluginSyncResult>;
 
 /** `syncPlugins` bound to one instance. */
 export function pluginSyncOver(adapter: InstanceAdapter): PluginSyncRun {
-  return (inputs) => syncPlugins(adapter, inputs);
+  return () => syncPlugins(adapter);
 }
 
 /** The Plugins commands, bound to one instance and one mEdit client: each takes the gesture's arguments only. */

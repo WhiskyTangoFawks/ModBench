@@ -15,6 +15,8 @@ const NOT_CONTENT = new Set([MOD_META_FILE_NAME]);
 
 interface Walk {
   readonly root: string;
+  /** Lists the origin's root alone, never a folder below it. */
+  readonly rootOnly: boolean;
   readonly files: OriginFile[];
   readonly folders: OriginFolder[];
   readonly notes: string[];
@@ -76,7 +78,9 @@ async function walkLink(walk: Walk, path: string, ancestors: ReadonlySet<string>
     walk.notes.push(`broken link "${path}", skipped (${errorMessage(err)})`);
     return;
   }
-  if (facts.kind === 'directory') await descend(walk, path, ancestors);
+  if (facts.kind === 'directory') {
+    if (!walk.rootOnly) await descend(walk, path, ancestors);
+  }
   else if (facts.kind === 'file') keep(walk, path, facts.realPath);
   else walk.notes.push(`link "${path}" names no file or folder, skipped`);
 }
@@ -86,7 +90,7 @@ async function walkDir(walk: Walk, dir: string, ancestors: ReadonlySet<string>):
     if (isTempWrite(dirent.name) || (dir === walk.root && isExtraction(dirent.name))) continue;
     const path = childOf(dir, dirent.name);
     if (dirent.isDirectory()) {
-      await descend(walk, path, ancestors);
+      if (!walk.rootOnly) await descend(walk, path, ancestors);
     } else if (dirent.isFile()) {
       keep(walk, path);
     } else if (dirent.isSymbolicLink()) {
@@ -97,13 +101,13 @@ async function walkDir(walk: Walk, dir: string, ancestors: ReadonlySet<string>):
   }
 }
 
-async function walkMod(folder: string): Promise<Walk> {
-  const walk: Walk = { root: folder, files: [], folders: [], notes: [] };
+async function walkMod(folder: string, rootOnly: boolean): Promise<Walk> {
+  const walk: Walk = { root: folder, rootOnly, files: [], folders: [], notes: [] };
   try {
     await walkDir(walk, folder, new Set([(await factsOf(folder)).realPath]));
   } catch (err) {
     if (errnoCode(err) !== 'ENOENT') throw err;
-    return { root: folder, files: [], folders: [], notes: [] };
+    return { ...walk, files: [], folders: [], notes: [] };
   }
   return walk;
 }
@@ -113,6 +117,7 @@ async function listWhole(walk: Walk, dir: string): Promise<void> {
     if (isTempWrite(dirent.name)) continue;
     const path = childOf(dir, dirent.name);
     if (dirent.isDirectory()) {
+      if (walk.rootOnly) continue;
       await inSubfolder(walk, path, () => {
         keepFolder(walk, path);
         return listWhole(walk, path);
@@ -124,24 +129,24 @@ async function listWhole(walk: Walk, dir: string): Promise<void> {
   }
 }
 
-async function listOverwrite(folder: string): Promise<Walk> {
-  const walk: Walk = { root: folder, files: [], folders: [], notes: [] };
+async function listOverwrite(folder: string, rootOnly: boolean): Promise<Walk> {
+  const walk: Walk = { root: folder, rootOnly, files: [], folders: [], notes: [] };
   try {
     await listWhole(walk, folder);
   } catch (err) {
     if (errnoCode(err) !== 'ENOENT') throw err;
-    return { root: folder, files: [], folders: [], notes: [] };
+    return { ...walk, files: [], folders: [], notes: [] };
   }
   return walk;
 }
 
-export async function originFilesIn(instanceRoot: string, origin: FileOrigin): Promise<OriginFiles> {
+export async function originFilesIn(instanceRoot: string, origin: FileOrigin, rootOnly = false): Promise<OriginFiles> {
   if (origin.kind === 'runtimeOutput') {
-    const { root, files, folders, notes } = await listOverwrite(overwriteDir(instanceRoot));
+    const { root, files, folders, notes } = await listOverwrite(overwriteDir(instanceRoot), rootOnly);
     return { origin: OVERWRITE_ORIGIN, folder: root, files, folders, notes };
   }
   const folder = originDir(instanceRoot, origin);
   if (folder === undefined) return { origin: origin.name, folder: undefined, files: [], folders: [], notes: [] };
-  const { files, folders, notes } = await walkMod(folder);
+  const { files, folders, notes } = await walkMod(folder, rootOnly);
   return { origin: origin.name, folder, files, folders, notes };
 }

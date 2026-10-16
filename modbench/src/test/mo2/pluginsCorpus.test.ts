@@ -3,19 +3,27 @@ import { fakeVscodeModule } from './fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { appendFile, rm } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { pluginSyncOver } from '../../pluginsCommands/plugins';
-import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
+import { pluginSyncOver, type PluginSyncRun } from '../../pluginsCommands/plugins';
+import { withLock } from '../../instanceAdapter/files';
+import { pluginsFile } from '../../instanceAdapter/layout';
 import {
-  assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, snapshotTree,
+  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
 } from './corpusFixture';
-import { adapterOver, pluginsCommandsOver, providedPluginsIn, readInstanceOf, readPluginLines } from './adapterOver';
+import { adapterOver, pluginsCommandsOver, readPluginLines } from './adapterOver';
 
 const NOT_INDEXED = { getPlugins: () => Promise.reject(new Error('mEdit is indexing')) };
 const moving = (...names: string[]) => names.map((name) => ({ name, origin: 'SomeMod' }));
 const PROFILE = 'Default';
-const GAME_DATA_FOLDER: DataFolderPlugins = { kind: 'listed', names: new Set(['ccsbjfo4003-grenade.esl']) };
+const WAITING_ON_THE_LOCK_MS = 200;
+
+async function syncWithGameFolderHolding(dir: string, plugin: string): Promise<PluginSyncRun> {
+  const game = join(dir, 'Game');
+  await mkdir(join(game, 'Data'), { recursive: true });
+  await writeFile(join(game, 'Data', plugin), '');
+  return pluginSyncOver(adapterOver(dir, { gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') } }));
+}
 
 const pluginOrder = async (dir: string): Promise<string[]> =>
   (await readPluginLines(dir)).map((p) => p.name);
@@ -66,10 +74,9 @@ describe('plugins.txt corpus', () => {
   });
 
   it('syncPlugins converges the fixture on disk, touching only plugins.txt', async () => {
+    const sync = await syncWithGameFolderHolding(dir, 'ccsbjfo4003-grenade.esl');
     const before = await snapshotTree(dir);
-    const result = await pluginSyncOver(adapterOver(dir))({
-      profile: PROFILE, pluginOrder: await readPluginLines(dir), provided: await providedPluginsIn(dir), inData: GAME_DATA_FOLDER, loadedWithNoLine: [],
-    });
+    const result = await sync();
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
@@ -82,11 +89,28 @@ describe('plugins.txt corpus', () => {
 
   it('syncPlugins over a plugin the file repeats syncs on the first line and drops it', async () => {
     await appendFile(join(dir, DEFAULT_PLUGINS), 'Unofficial Fallout 4 Patch.esp\r\n');
-    const result = await pluginSyncOver(adapterOver(dir))({
-      profile: PROFILE, pluginOrder: (await readInstanceOf(dir)).pluginOrder, provided: await providedPluginsIn(dir), inData: GAME_DATA_FOLDER, loadedWithNoLine: [],
-    });
+    const result = await (await syncWithGameFolderHolding(dir, 'ccsbjfo4003-grenade.esl'))();
 
     expect(result).toMatchObject({ applied: true, wrote: true, dropped: ['Unofficial Fallout 4 Patch.esp'] });
+  });
+
+  it('syncPlugins keeps, in its place and state, the line of a plugin the mod manager provides and lists while the sync waits on plugins.txt', async () => {
+    const sync = await syncWithGameFolderHolding(dir, 'ccsbjfo4003-grenade.esl');
+    await writeFile(join(dir, 'mods', 'Harder VATS', 'Harder VATS.esp'), '');
+    let release!: () => void;
+    const held = withLock(pluginsFile(dir, PROFILE), () => new Promise<void>((resolve) => { release = resolve; }));
+
+    const syncing = sync();
+    await new Promise((resolve) => setTimeout(resolve, WAITING_ON_THE_LOCK_MS));
+    const modlist = join(dir, DEFAULT_MODLIST);
+    await writeFile(modlist, (await readFile(modlist, 'utf8')).replace('-Harder VATS', '+Harder VATS'));
+    await writeFile(join(dir, DEFAULT_PLUGINS), (await readFile(join(dir, DEFAULT_PLUGINS), 'utf8')).replace('*Tracked Patch Mod.esp', '*Harder VATS.esp\r\n*Tracked Patch Mod.esp'));
+    release();
+    await held;
+
+    expect(await syncing).toMatchObject({ applied: true, dropped: ['Unofficial Fallout 4 Patch.esp'] });
+    expect(await readPluginLines(dir)).toContainEqual({ name: 'Harder VATS.esp', enabled: true });
+    expect((await pluginOrder(dir)).indexOf('Harder VATS.esp')).toBe(1);
   });
 
   it('reorderPlugins moves a plugin within load order, touching only plugins.txt', async () => {

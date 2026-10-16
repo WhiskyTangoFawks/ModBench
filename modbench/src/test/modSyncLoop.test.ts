@@ -10,13 +10,16 @@ import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { FakeInstance } from './mo2/fakeInstance';
 import { pastSequence, watcherFor } from './mo2/instanceLoop';
 import { instanceSyncs } from '../syncWiring';
-import { modSyncOver, type ModSyncResult } from '../modOrderCommands/modOrderCommands';
-import { type PluginSyncResult } from '../pluginsCommands/plugins';
-import type { InstanceReading, Mod, ModFolder } from '../instanceAdapter/instanceAdapter';
+import { modSyncOver, type ModSyncRun } from '../modOrderCommands/modOrderCommands';
+import type { PluginSyncRun } from '../pluginsCommands/plugins';
+import type { InstanceReading, Mod } from '../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, modFoldersOf, readingFixture } from './fakeInstanceAdapter';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './mo2/corpusFixture';
 import { adapterOver } from './mo2/adapterOver';
 import { STEADY_WINDOW } from './steadyWindow';
+
+type ModSyncResult = Awaited<ReturnType<ModSyncRun>>;
+type PluginSyncResult = Awaited<ReturnType<PluginSyncRun>>;
 
 const noPluginSync = () => Promise.resolve<PluginSyncResult>({ applied: true, wrote: false, added: [], dropped: [] });
 
@@ -42,7 +45,6 @@ async function settledWiredInstance(): Promise<{
   instance: Instance;
   channel: ReturnType<typeof channelDouble>;
   syncs: Promise<ModSyncResult>[];
-  handed: (readonly ModFolder[] | undefined)[];
 }> {
   const root = cloneCorpusFixture();
   roots.push(root);
@@ -54,12 +56,10 @@ async function settledWiredInstance(): Promise<{
   instances.push(instance);
   const channel = channelDouble();
   const syncs: Promise<ModSyncResult>[] = [];
-  const handed: (readonly ModFolder[] | undefined)[] = [];
   const { modSync } = instanceSyncs({
     instance, channel, syncPlugins: noPluginSync,
-    syncMods: (args) => {
-      handed.push(args.modFolders);
-      const run = modSyncOver(adapterOver(root))(args);
+    syncMods: () => {
+      const run = modSyncOver(adapterOver(root))();
       syncs.push(run);
       return run;
     },
@@ -67,11 +67,11 @@ async function settledWiredInstance(): Promise<{
   await instance.refresh();
   await modSync.settled();
   channel.info.mockClear();
-  return { root, instance, channel, syncs, handed };
+  return { root, instance, channel, syncs };
 }
 
 describe('mod sync and the Instance, over a real mods/ folder', () => {
-  it('adds a line for a mod folder dropped in, off the Instance value alone', async () => {
+  it('adds a line for a mod folder dropped in, once the next value lands', async () => {
     const { root, instance, syncs } = await settledWiredInstance();
     const before = instance.sequence;
     await mkdir(join(root, 'mods', MOD));
@@ -94,12 +94,11 @@ async function settledFakeInstance(overrides: Partial<InstanceReading>) {
   instances.push(instance);
   const channel = channelDouble();
   const syncs: Promise<ModSyncResult>[] = [];
-  const handed: (readonly ModFolder[] | undefined)[] = [];
+  const syncMods = modSyncOver(fake.adapter);
   const { modSync } = instanceSyncs({
     instance, channel, syncPlugins: noPluginSync,
-    syncMods: (args) => {
-      handed.push(args.modFolders);
-      const run = modSyncOver(fake.adapter)(args);
+    syncMods: () => {
+      const run = syncMods();
       syncs.push(run);
       return run;
     },
@@ -108,7 +107,7 @@ async function settledFakeInstance(overrides: Partial<InstanceReading>) {
   await modSync.settled();
   channel.info.mockClear();
   fake.forgetCalls();
-  return { fake, instance, channel, syncs, handed };
+  return { fake, instance, channel, syncs, modSync };
 }
 
 const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true });
@@ -116,7 +115,7 @@ const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true });
 describe('mod sync, as the Instance value drives it', () => {
   const listed = { mods: [mod('Harder VATS')], modFolders: modFoldersOf('Harder VATS') };
 
-  it('drops the line of a folder deleted by hand, off the Instance value alone', async () => {
+  it('drops the line of a folder deleted by hand, once the next value lands', async () => {
     const { fake, instance, syncs } = await settledFakeInstance(listed);
 
     fake.read({ modFolders: modFoldersOf() });
@@ -138,14 +137,13 @@ describe('mod sync, as the Instance value drives it', () => {
     expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('there is no folder for mods'));
   });
 
-  it('hands the command the value\'s own mod folders, not a listing of its own', async () => {
-    const { fake, instance, handed, syncs } = await settledFakeInstance(listed);
+  it('decides on the mod folders the Instance adapter answers when it runs, not on the value that landed before them', async () => {
+    const { fake, instance, modSync } = await settledFakeInstance(listed);
 
     fake.read({ modFolders: modFoldersOf('Harder VATS', 'Hand Extracted Mod') });
-    await instance.refresh();
-    await syncs[syncs.length - 1];
+    await modSync.run();
 
-    expect(handed[handed.length - 1]).toBe(instance.value.modFolders);
+    expect(instance.value.modFolders?.map((folder) => folder.name)).toEqual(['Harder VATS']);
     expect(fake.calls).toEqual([{
       verb: 'changeModOrder', profile: 'Default', changes: [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'Hand Extracted Mod' } }],
     }]);
@@ -167,18 +165,15 @@ describe('mod sync, as the Instance value drives it', () => {
 
 describe('mod sync, as each landed value drives it', () => {
   it('runs on every value that lands, from the first', async () => {
-    const profiles: string[] = [];
+    const syncMods = vi.fn(() => Promise.resolve<ModSyncResult>({ applied: true, added: [], dropped: [] }));
     const instance = new FakeInstance(instanceValueFixture());
-    const { modSync } = instanceSyncs({
-      instance, syncPlugins: noPluginSync, channel: channelDouble(),
-      syncMods: ({ profile }) => { profiles.push(profile); return Promise.resolve({ applied: true, added: [], dropped: [] }); },
-    });
+    const { modSync } = instanceSyncs({ instance, syncPlugins: noPluginSync, channel: channelDouble(), syncMods });
 
-    instance.publish(instanceValueFixture({ activeProfile: 'First' }));
-    instance.publish(instanceValueFixture({ activeProfile: 'Second' }));
+    instance.publish(instanceValueFixture());
+    instance.publish(instanceValueFixture());
     await modSync.settled();
 
-    expect(profiles).toEqual(['First', 'Second']);
+    expect(syncMods).toHaveBeenCalledTimes(2);
   });
 
   it('names the file mod order is kept in as the value names it', async () => {

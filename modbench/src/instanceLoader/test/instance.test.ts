@@ -729,21 +729,7 @@ describe('Instance — Overwrite\'s files', () => {
   });
 });
 
-describe('Instance — what a command is handed instead of probing for it', () => {
-  it('carries what mod sync and plugin sync are handed, read with the rest of the value', async () => {
-    const { instance } = loader({
-      mods: [mod('Consumer')], modFolders: modFoldersOf('Consumer'), modFiles: new Map([['Consumer', filesOfMod('Consumer', 'Mine.esp')]]),
-    });
-
-    await instance.refresh();
-
-    const { value } = instance;
-    expect(value.modSyncArguments).toEqual({ profile: 'Default', modFolders: value.modFolders });
-    expect(value.pluginSyncArguments.profile).toBe('Default');
-    expect(value.pluginSyncArguments.provided).toEqual(new Map([['mine.esp', 'Mine.esp']]));
-    expect(value.pluginSyncArguments.inData).toBe(value.dataFolderPlugins);
-  });
-
+describe('Instance — the mod folders, the game folder\'s plugins and the load order snapshot the value carries', () => {
   it('carries mod folders unknown, rather than a failure, when there is no folder for mods at all, absent not being empty', async () => {
     const { instance, fake } = loader({ modFolders: modFoldersOf('A') });
     await instance.refresh();
@@ -754,7 +740,6 @@ describe('Instance — what a command is handed instead of probing for it', () =
 
     expect(instance.sequence).toBe(before + 1);
     expect(instance.value.modFolders).toBeUndefined();
-    expect(instance.value.modSyncArguments.modFolders).toBeUndefined();
   });
 
   it('tells once while it stands that the Data folder could not be listed', async () => {

@@ -8,6 +8,7 @@ import type { MoveToTrash } from '../ports/trash';
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { fileExtension, isPluginFile } from './pluginFile';
 export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
+export { filesWinningFirst } from './pluginsProvided';
 
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
 export { OVERWRITE_ORIGIN } from './codecs/modlistText';
@@ -170,6 +171,12 @@ export type DataFolderPlugins =
   | { readonly kind: 'listed'; readonly names: ReadonlySet<string> }
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'unreadable'; readonly reason: string };
+
+/** Each plugin the game can load, keyed as it compares names, spelled as the copy it loads: an
+ *  enabled mod's or Overwrite's at their root, else the Data folder's. */
+export type PluginsProvided =
+  | { readonly kind: 'listed'; readonly plugins: ReadonlyMap<string, string>; readonly loadedWithNoLine: readonly string[] }
+  | Exclude<DataFolderPlugins, { readonly kind: 'listed' }>;
 
 /** The release's archives at the Data folder's root, and the strings files in its strings folder by
  *  their paths in it, as the folder spells them; or why there is no answer, as for its plugins. */
@@ -411,9 +418,6 @@ export interface InstanceAdapter {
   reading(): Promise<InstanceReading>;
   /** The profile the mod manager's configuration selects now. */
   activeProfile(): Promise<string>;
-  profiles(): Promise<readonly string[]>;
-  game(): Promise<InstanceGame>;
-  modFolders(): Promise<ModFolders | undefined>;
   readonly names: ManagerNames;
 
   // Answers about a mod or a file.
@@ -465,6 +469,12 @@ export interface InstanceAdapter {
   /** Every change lands in one write. A change naming a plugin that is not there rejects, and
    *  nothing is written. Adding a plugin that is there changes nothing. */
   changePluginOrder(profile: string, decide: DecidePluginOrder): Promise<Written>;
+  /** As `changePluginOrder`, with the plugins `profile`'s mod order provides read after the order,
+   *  under its lock, against one read of the settings. An empty mod order is read again after a
+   *  settle, as `reading` reads it. */
+  changePluginOrderOverProvided(
+    profile: string, decide: (order: readonly PluginEntry[], provided: PluginsProvided) => readonly PluginOrderChange[],
+  ): Promise<Written>;
   /** A downloaded file that is gone gets no mark. Rejects when the downloads folder cannot be
    *  resolved. */
   markDownloadedFile(name: string, mark: DownloadedFileMark): Promise<Marked>;

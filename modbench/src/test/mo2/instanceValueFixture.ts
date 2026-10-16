@@ -1,14 +1,13 @@
 import { FileConflictLookup } from '../../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { groupModOrder } from '../../instanceAdapter/modGroups';
-import { modSyncArgumentsOf, pluginSyncArgumentsOf } from '../../instanceLoader/syncArguments';
 import { nexusDomainForMetaGame } from '../../tables/gamePaths';
 import { GAME_FOLDER_NOT_FOUND } from './gameFolderNotFound';
 
 /** A whole `InstanceValue` at its neutral value, every field overridable — so a test caring
  *  about one field (`.plugins`, `.downloads`, …) states only that one, typed, with no cast. */
 export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): InstanceValue {
-  const base: Omit<InstanceValue, 'modGroups' | 'modNames' | 'modSyncArguments' | 'pluginSyncArguments'> = {
+  const base: Omit<InstanceValue, 'modGroups' | 'modNames'> = {
     mods: [],
     modFolders: [],
     trackedMods: new Set(),
@@ -40,10 +39,5 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     const modName = folder?.modName ?? (entry.kind === 'mod' ? entry.name : undefined);
     return modName === undefined ? [] : [[`${entry.kind}:${entry.name}`, modName] as const];
   }));
-  const pluginOrder = value.plugins.filter((plugin) => plugin.line !== null && plugin.winning)
-    .sort((a, b) => (a.line ?? 0) - (b.line ?? 0))
-    .map(({ name, enabled }) => ({ name, enabled }));
-  return {
-    ...value, modGroups, modNames, modSyncArguments: modSyncArgumentsOf(value), pluginSyncArguments: pluginSyncArgumentsOf({ ...value, pluginOrder }), ...overrides,
-  };
+  return { ...value, modGroups, modNames, ...overrides };
 }

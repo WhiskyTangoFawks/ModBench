@@ -16,12 +16,15 @@ import type { InstanceReading, Mod } from '../instanceAdapter/instanceAdapter';
 import { instanceSyncs } from '../syncWiring';
 import { FakeInstance } from './mo2/fakeInstance';
 import { pastSequence, watcherFor } from './mo2/instanceLoop';
-import { pluginSyncOver, type PluginSyncResult } from '../pluginsCommands/plugins';
+import { pluginSyncOver, type PluginSyncRun } from '../pluginsCommands/plugins';
 import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
 import { ToolboxProvider } from '../toolbox/ToolboxProvider';
-import { modSyncOver, type ModSyncResult } from '../modOrderCommands/modOrderCommands';
+import { modSyncOver, type ModSyncRun } from '../modOrderCommands/modOrderCommands';
+
+type ModSyncResult = Awaited<ReturnType<ModSyncRun>>;
+type PluginSyncResult = Awaited<ReturnType<PluginSyncRun>>;
 
 const noModSync = () => Promise.resolve<ModSyncResult>({ applied: true, added: [], dropped: [] });
 
@@ -64,18 +67,15 @@ async function wiredInstance(): Promise<{
   await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n');
   await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
 
-  const instance = new Instance({
-    window: STEADY_WINDOW,
-    adapter: adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } }),
-    log: { info: () => {}, warn: () => {}, error: () => {} },
-  });
+  const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
+  const instance = new Instance({ window: STEADY_WINDOW, adapter, log: { info: () => {}, warn: () => {}, error: () => {} } });
   instances.push(instance);
 
   const syncs: Promise<PluginSyncResult>[] = [];
   instanceSyncs({
     instance, channel: { error: () => {}, info: () => {} }, syncMods: noModSync,
-    syncPlugins: (args) => {
-      const run = pluginSyncOver(adapterOver(root))(args);
+    syncPlugins: () => {
+      const run = pluginSyncOver(adapter)();
       syncs.push(run);
       return run;
     },
@@ -143,12 +143,11 @@ async function settledFakeInstance(overrides: Partial<InstanceReading> = withPro
   });
   instances.push(instance);
   const syncs: Promise<PluginSyncResult>[] = [];
-  const loadedWithNoLine: (readonly string[] | undefined)[] = [];
-  instanceSyncs({
+  const syncPlugins = pluginSyncOver(fake.adapter);
+  const { pluginSync } = instanceSyncs({
     instance, channel: { error: () => {}, info: () => {} }, syncMods: noModSync,
-    syncPlugins: (args) => {
-      loadedWithNoLine.push(args.loadedWithNoLine);
-      const run = pluginSyncOver(fake.adapter)(args);
+    syncPlugins: () => {
+      const run = syncPlugins();
       syncs.push(run);
       return run;
     },
@@ -156,7 +155,7 @@ async function settledFakeInstance(overrides: Partial<InstanceReading> = withPro
   await instance.refresh();
   await syncs[syncs.length - 1];
   fake.forgetCalls();
-  return { fake, instance, syncs, loadedWithNoLine };
+  return { fake, instance, syncs, pluginSync };
 }
 
 describe('plugin sync, as the Instance value drives it', () => {
@@ -171,7 +170,7 @@ describe('plugin sync, as the Instance value drives it', () => {
     expect(pluginChanges(fake)).toEqual([]);
   });
 
-  it('prunes against the Data-folder presence the value carries, keeping what Data provides', async () => {
+  it('prunes against the Data folder\'s plugins, keeping what Data provides', async () => {
     const { fake, instance, syncs } = await settledFakeInstance();
 
     fake.read({
@@ -184,17 +183,8 @@ describe('plugin sync, as the Instance value drives it', () => {
     expect(pluginChanges(fake)).toEqual([{ kind: 'drop', plugin: 'Gone.esp' }]);
   });
 
-  it('hands each run the no-line plugins of the game the Instance read', async () => {
-    const { loadedWithNoLine } = await settledFakeInstance(withProvider({
-      gameRelease: 'SkyrimSE', dataFolderPlugins: { kind: 'listed', names: new Set(['Skyrim.esm']) },
-    }));
-
-    expect(loadedWithNoLine.at(-1)).toEqual(['Skyrim.esm']);
-  });
-
-  it('keeps the line the mod manager wrote after the value was read, in its place and state, through the next value\'s sync', async () => {
-    const { fake, instance, syncs } = await settledFakeInstance();
-    const readBefore = instance.value;
+  it('decides on what the Instance adapter answers when it runs, keeping the line the mod manager wrote after the last value landed', async () => {
+    const { fake, instance, pluginSync } = await settledFakeInstance();
     fake.read({
       mods: [mod('Extra'), mod('Provider')],
       modFiles: new Map([
@@ -204,10 +194,9 @@ describe('plugin sync, as the Instance value drives it', () => {
       pluginOrder: [{ name: 'Extra.esp', enabled: true }, { name: 'Base.esp', enabled: true }],
     });
 
-    await pluginSyncOver(fake.adapter)(readBefore.pluginSyncArguments);
-    await instance.refresh();
-    await syncs[syncs.length - 1];
+    await pluginSync.run();
 
+    expect(instance.value.plugins.map((plugin) => plugin.name)).not.toContain('Extra.esp');
     expect(pluginChanges(fake)).toEqual([]);
   });
 });
@@ -258,21 +247,15 @@ describe('a gesture writes the profile the Instance last landed', () => {
 
 describe('plugin sync, as each landed value drives it', () => {
   it('runs on every value that lands, from the first', async () => {
-    const profiles: string[] = [];
+    const syncPlugins = vi.fn(() => Promise.resolve<PluginSyncResult>({ applied: true, wrote: false, added: [], dropped: [] }));
     const instance = new FakeInstance(instanceValueFixture());
-    const { pluginSync } = instanceSyncs({
-      instance, syncMods: noModSync, channel: { error: vi.fn(), info: vi.fn() },
-      syncPlugins: ({ profile }) => {
-        profiles.push(profile);
-        return Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] });
-      },
-    });
+    const { pluginSync } = instanceSyncs({ instance, syncMods: noModSync, channel: { error: vi.fn(), info: vi.fn() }, syncPlugins });
 
-    instance.publish(instanceValueFixture({ activeProfile: 'First' }));
-    instance.publish(instanceValueFixture({ activeProfile: 'Second' }));
+    instance.publish(instanceValueFixture());
+    instance.publish(instanceValueFixture());
     await pluginSync.settled();
 
-    expect(profiles).toEqual(['First', 'Second']);
+    expect(syncPlugins).toHaveBeenCalledTimes(2);
   });
 
   it('says a refusal on the Plugins view\'s message line as plugins.txt not synced', async () => {

@@ -12,7 +12,7 @@ import { modNameOf, modNamesOf } from './modName';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { present } from '../ports/present';
 import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './downloadRows';
-import { gameMastersOf, nexusDomainForMetaGame } from '../tables/gamePaths';
+import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ManagerNames, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
@@ -20,14 +20,12 @@ import {
 import { pluginPlacesOf } from './pluginPlacesOf';
 import { sameCopies, type FileCopies } from './sameCopies';
 import { errorMessage } from '../ports/errorMessage';
-import { modSyncArgumentsOf, pluginSyncArgumentsOf, type ModSyncArguments, type PluginSyncArguments } from './syncArguments';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
 export type { EntryRef, FileOrigin, Mod, ModGroup, ModGroups, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow, UpgradeCandidate, UpgradeTier } from './downloadRows';
 export type { Copy, FileCopies } from './sameCopies';
-export type { ModSyncArguments, PluginSyncArguments } from './syncArguments';
 export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder } from '../instanceAdapter/instanceAdapter';
 
@@ -115,10 +113,6 @@ export interface InstanceValue {
   readonly overwriteFolders: readonly OriginFolder[];
   /** The paths this generation's rows name. */
   readonly paths: InstancePaths;
-  /** What mod sync is handed, derived once with the rest of the value. */
-  readonly modSyncArguments: ModSyncArguments;
-  /** What plugin sync is handed, derived once with the rest of the value. */
-  readonly pluginSyncArguments: PluginSyncArguments;
 }
 
 export type InstanceSubscriber = (value: InstanceValue, sequence: number) => void;
@@ -202,8 +196,6 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   overwriteFiles: [],
   overwriteFolders: [],
   paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map(), sourceDirs: new Map() },
-  modSyncArguments: { profile: '', modFolders: [] },
-  pluginSyncArguments: { profile: '', pluginOrder: [], provided: new Map(), inData: { kind: 'unresolved' }, loadedWithNoLine: undefined },
 });
 
 export class Instance implements Subscription {
@@ -402,7 +394,7 @@ export class Instance implements Subscription {
     this.tellReading(reading);
     const index = buildFileConflictIndex(entries, runtimeOutput.files, reading.modFiles, (line) => log.info(line));
     const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);
-    const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins);
+    const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(loadedWithNoLineOf(gameRelease, creationClub), dataFolderPlugins, plugins);
     // Installed reads every mod folder, not one profile's mod order: a folder no profile has synced
     // into its mod order yet still owns its meta's claim. A separator is never installed from a
     // downloaded file.
@@ -412,10 +404,6 @@ export class Instance implements Subscription {
     const modFolderList = modFolders?.all;
     const modNames = modNamesOf(entries, modFolders);
     const paths = pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders, sourceMods);
-    const syncSource = {
-      activeProfile: profile, modFolders: modFolderList, files: index.files, dataFolderPlugins, pluginsLoadedWithNoLine,
-      pluginOrder,
-    };
     const archiveSources: ArchiveSources = {
       gameRelease, listed: reading.archiveList, inData: dataFolderArchives, files: index.files,
       filesByOrigin: new Map([...index.filesByMod, [OVERWRITE_ORIGIN, runtimeOutput.files]]),
@@ -458,8 +446,6 @@ export class Instance implements Subscription {
       overwriteFiles: runtimeOutput.files,
       overwriteFolders: runtimeOutput.folders,
       paths,
-      modSyncArguments: modSyncArgumentsOf(syncSource),
-      pluginSyncArguments: pluginSyncArgumentsOf(syncSource),
     };
   }
 }

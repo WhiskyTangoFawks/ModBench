@@ -4,7 +4,7 @@ import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import {
   entryNotFound, type DecideModOrder, type EntryRef, type FileOrigin, type InstanceAdapter,
-  type ModFolder, type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace,
+  type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
 import { EMPTY_MOD_NAME, entryNameRefusal, goneFromDisk, newModNameRefusal, type EntryKey, type TakenNames } from '../coreLib/commandRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
@@ -378,7 +378,7 @@ async function renameMod(
   return { applied: true, lineRefusals };
 }
 
-export type ModSyncResult =
+type ModSyncResult =
   | { applied: true; added: string[]; dropped: string[] }
   | { applied: false; refusal: string };
 
@@ -386,15 +386,15 @@ const NO_MOD_FOLDERS = 'there is no folder for mods';
 
 const describeEntry = (entry: EntryRef): string => (entry.kind === 'mod' ? entry.name : `${entry.name} (separator)`);
 
-async function syncMods(adapter: InstanceAdapter, profile: string, modFolders: readonly ModFolder[]): Promise<ModSyncResult> {
-  const toSync = new Set(modFolders.map((folder) => folder.path));
+async function syncMods(adapter: InstanceAdapter): Promise<ModSyncResult> {
+  const profile = await adapter.activeProfile();
   let added: string[] = [];
   let dropped: string[] = [];
   const outcome = await changeModOrder(adapter, profile, (order, folders) => {
     if (folders === undefined) throw new Error(NO_MOD_FOLDERS);
     const gone = order.filter((entry) => folders.holding(entry) === undefined);
     const held = new Set(order.flatMap((entry) => folders.holding(entry)?.path ?? []));
-    const unlisted = folders.all.filter((folder) => toSync.has(folder.path) && !held.has(folder.path))
+    const unlisted = folders.all.filter((folder) => !held.has(folder.path))
       .sort((a, b) => a.name.localeCompare(b.name));
     added = unlisted.map(describeEntry);
     dropped = gone.map(describeEntry);
@@ -408,12 +408,12 @@ async function syncMods(adapter: InstanceAdapter, profile: string, modFolders: r
   return outcome.applied ? { applied: true, added, dropped } : outcome;
 }
 
-/** Mod sync on a landed value's own profile and mod folders. */
-export type ModSyncRun = (inputs: { readonly profile: string; readonly modFolders: readonly ModFolder[] | undefined }) => Promise<ModSyncResult>;
+/** Mod sync over the active profile. */
+export type ModSyncRun = () => Promise<ModSyncResult>;
 
 /** `syncMods` bound to one instance. */
 export function modSyncOver(adapter: InstanceAdapter): ModSyncRun {
-  return ({ profile, modFolders }) => syncMods(adapter, profile, modFolders ?? []);
+  return () => syncMods(adapter);
 }
 
 /** The modlist's commands, bound to one instance: each takes the gesture's arguments only. */

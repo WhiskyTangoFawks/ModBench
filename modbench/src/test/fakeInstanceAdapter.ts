@@ -5,6 +5,8 @@ import type {
   ModFolder, ModFolders, ModMetadata, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { groupModOrder } from '../instanceAdapter/modGroups';
+import { filesWinningFirst, pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
+import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
 function noFilesFor(mods: readonly ModlistEntry[]): ReadonlyMap<string, OriginFiles> {
@@ -156,9 +158,6 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return readingFailure === undefined ? Promise.resolve(current) : Promise.reject(new Error(readingFailure));
     },
     activeProfile: () => Promise.resolve(current.profile),
-    profiles: () => Promise.resolve(current.profiles),
-    game: () => Promise.resolve({ gameName: current.gameName, gameRelease: current.gameRelease }),
-    modFolders: () => Promise.resolve(current.modFolders),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
     modFolderPath: (mod) => Promise.resolve(answers.foldersAbsent?.has(mod) ? undefined : `/mods/${mod}`),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
@@ -193,6 +192,13 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     changePluginOrder: (profile, decide: DecidePluginOrder) => {
       const changes = decide(current.pluginOrder);
+      return record({ verb: 'changePluginOrder', profile, changes }, { wrote: changes.length > 0 });
+    },
+    changePluginOrderOverProvided: (profile, decide) => {
+      const changes = decide(current.pluginOrder, pluginsProvidedOf(
+        filesWinningFirst(current.mods, current.runtimeOutput.files, (mod) => current.modFiles.get(mod)?.files ?? []),
+        current.dataFolderPlugins, loadedWithNoLineOf(current.gameRelease, current.creationClubList),
+      ));
       return record({ verb: 'changePluginOrder', profile, changes }, { wrote: changes.length > 0 });
     },
     markDownloadedFile: (name, mark) =>
