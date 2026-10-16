@@ -1,12 +1,24 @@
 #!/usr/bin/env bash
-# A throwaway Modbench instance, headless: up [instance] | call <dir> <tool> [json] | tools <dir> | down <dir> | seed
+# A throwaway Modbench instance, headless: up <game|folder> | call <dir> <tool> [json] | tools <dir> | down <dir> | seed <game>
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel)"
 state="${MODBENCH_ACCEPT_HOME:-$HOME/.local/share/modbench-accept}"
-seed="$state/seed"
 mkdir -p "$state"
+
+games="fallout skyrim starfield"
+
+game_of() { case " $games " in *" $1 "*) echo "$1";; esac; }
+
+steam_folder_of() {
+  case "$1" in fallout) echo "Fallout 4";; skyrim) echo "Skyrim Special Edition";; starfield) echo "Starfield";; esac
+}
+
+usage() {
+  echo "usage: accept.sh up <fallout|skyrim|starfield|instance folder> | call <dir> <tool> [json] | tools <dir> | down <dir> | seed <fallout|skyrim|starfield>" >&2
+  exit 2
+}
 
 live_runs() {
   for d in /tmp/modbench-accept.*; do
@@ -26,23 +38,40 @@ free_display() {
 ready() { python3 -I "$here/mcp.py" "$1" call select_rows '{"sql":"SELECT 1 AS one"}' >/dev/null 2>&1; }
 
 up() {
+  local target="${1:-}" dir port display instance game
+  [ -n "$target" ] || usage
+  game="$(game_of "$target")"
+  [ -n "$game" ] || [ -d "$target" ] || { echo "refused: not a game ($games) or an instance folder: $target" >&2; exit 1; }
   local others; others="$(live_runs)"
   [ -n "$others" ] && { echo "refused: a run is already up: $others" >&2; exit 1; }
   [ -f "$root/modbench/out/extension.js" ] && [ -x "$root/modbench/backend/MEditService.Http" ] || {
     echo "refused: build first, in modbench/ through slot-run: npm run build, npm run build:backend" >&2; exit 1; }
 
-  local source="${1:-}" dir port display instance
+  # Modbench finds only Fallout 4's install in Steam, so a Skyrim or Starfield run names the game folder itself.
+  local game_folder=""
+  if [ -n "$game" ] && [ "$game" != fallout ]; then
+    game_folder="$(readlink -f "$HOME/.steam/steam")/steamapps/common/$(steam_folder_of "$game")"
+    [ -d "$game_folder/Data" ] || { echo "refused: no installed $game at $game_folder" >&2; exit 1; }
+  fi
+
   dir="$(mktemp -d /tmp/modbench-accept.XXXX)"
   instance="$dir/instance"
-  if [ -n "$source" ]; then cp -a "$source" "$instance"
-  else mkdir -p "$instance" && (cd "$root/DevListFallout" && git ls-files -z | xargs -0 cp --parents -t "$instance")
+  if [ -n "$game" ]; then
+    local fixture; fixture="DevList$(tr '[:lower:]' '[:upper:]' <<< "${game:0:1}")${game:1}"
+    mkdir -p "$instance" && (cd "$root/$fixture" && git ls-files -z | xargs -0 cp --parents -t "$instance")
+  else cp -a "$target" "$instance"
   fi
   mkdir -p "$instance/.vscode" "$instance/modbench" "$dir/user/User" "$dir/ext"
-  if [ ! -f "$instance/modbench/index.duckdb" ] && [ -f "$seed/index.duckdb" ]; then cp "$seed"/index.duckdb* "$instance/modbench/"; fi
+  if [ ! -f "$instance/modbench/index.duckdb" ] && [ -n "$game" ] && [ -f "$state/seed/$game/index.duckdb" ]; then
+    cp "$state/seed/$game"/index.duckdb* "$instance/modbench/"
+  fi
 
   port="$(free_port)"
   echo "$port" > "$dir/port"
-  printf '{"modbench.agent.port": %s}\n' "$port" > "$instance/.vscode/settings.json"
+  python3 -I -c 'import json, sys
+settings = {"modbench.agent.port": int(sys.argv[1])}
+if sys.argv[2]: settings["modbench.mods.gameDirectory"] = sys.argv[2]
+print(json.dumps(settings))' "$port" "$game_folder" > "$instance/.vscode/settings.json"
   # Modbench loads nothing in Restricted Mode, and a headless window cannot answer the trust prompt.
   printf '{"security.workspace.trust.enabled": false, "telemetry.telemetryLevel": "off", "update.mode": "none"}\n' \
     > "$dir/user/User/settings.json"
@@ -70,7 +99,7 @@ up() {
 }
 
 down() {
-  local dir="$1" keep="${2:-}"
+  local dir="$1" keep="${2:-}" seed="$state/seed/${3:-}"
   case "$dir" in /tmp/modbench-accept.*) ;; *) echo "refused: not a run folder: $dir" >&2; exit 1;; esac
   # The backend's command line does not name the folder; its open files do.
   local pids="" self=" $$ $PPID "
@@ -95,13 +124,14 @@ port_of() { cat "$1/port"; }
 
 case "${1:-}" in
   up) up "${2:-}" ;;
-  down) down "$2" "${3:-}" ;;
+  down) down "$2" ;;
   tools) python3 -I "$here/mcp.py" "$(port_of "$2")" tools ;;
   call) python3 -I "$here/mcp.py" "$(port_of "$2")" call "$3" "${4:-{\}}" ;;
   seed)
-    rm -rf "$seed"
-    line="$(up | tail -1)"; dir="${line#DIR=}"; dir="${dir%% *}"
-    down "$dir" --keep-seed
-    echo "seeded: $seed" ;;
-  *) echo "usage: accept.sh up [instance] | call <dir> <tool> [json] | tools <dir> | down <dir> | seed" >&2; exit 2 ;;
+    [ -n "$(game_of "${2:-}")" ] || usage
+    rm -rf "$state/seed/$2"
+    line="$(up "$2" | tail -1)"; dir="${line#DIR=}"; dir="${dir%% *}"
+    down "$dir" --keep-seed "$2"
+    echo "seeded: $state/seed/$2" ;;
+  *) usage ;;
 esac
