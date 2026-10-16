@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { modlistCommands, type ModPackage } from '../modOrderCommands';
-import type { InstallSource, InstallTarget } from '../../instanceAdapter/instanceAdapter';
+import type { InstallPackage, InstallTarget } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { ModStatus } from '../../client';
 import type { ReadModStatus } from '../../client';
@@ -10,7 +10,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const MOD = 'Freshly Installed Mod';
 const GAME_NAME = 'Fallout 4';
-const ARCHIVE: InstallSource = { kind: 'archive', path: '/elsewhere/Freshly-1-0.7z' };
+const ARCHIVE: InstallPackage = { kind: 'archive', path: '/elsewhere/Freshly-1-0.7z' };
 const NEW_MOD: InstallTarget = { kind: 'new', name: MOD };
 const UPGRADED = { kind: 'upgrade', name: 'Harder VATS' } as const;
 const DOWNLOADED = { kind: 'downloadedFile', name: 'Freshly-1-0.7z', path: '/downloads/Freshly-1-0.7z' } as const;
@@ -135,7 +135,7 @@ describe('installMod', () => {
   ] as const)('hands the adapter %s with the keys its meta is to hold', async (_, source, handed, keys) => {
     const { calls } = await install(source);
 
-    expect(calls[0]).toEqual({ verb: 'install', source: handed, target: NEW_MOD, keys });
+    expect(calls[0]).toEqual({ verb: 'install', package: handed, target: NEW_MOD, keys });
   });
 
   it('marks a downloaded file installed once it landed, and marks no file for an archive, though a downloaded file bears its name', async () => {

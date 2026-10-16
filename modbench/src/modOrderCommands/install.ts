@@ -2,7 +2,7 @@ import { basename } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import type {
-  InstallOutcome, InstallSource, InstallTarget, InstanceAdapter, OwnedMetaKeys,
+  InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, OwnedMetaKeys,
 } from '../instanceAdapter/instanceAdapter';
 import { EMPTY_MOD_NAME, goneFromDisk, modNameTakenRefusal } from '../coreLib/commandRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
@@ -11,7 +11,7 @@ import { failureReason, isReadFailed } from '../wire/readFailed';
 
 /** What a mod is installed from: an archive or a folder the user picked, or a downloaded file by
  *  its name and path in the instance value, with the Nexus ids and version its metadata holds. */
-export type ModPackage = InstallSource | {
+export type ModPackage = InstallPackage | {
   readonly kind: 'downloadedFile';
   readonly name: string;
   readonly path: string;

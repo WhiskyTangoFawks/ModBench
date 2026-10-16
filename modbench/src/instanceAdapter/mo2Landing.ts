@@ -4,7 +4,7 @@
 import { parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
 import type { ArchiveReader } from './archiveReader';
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, withLock, write } from './files';
-import type { InstallSource, InstanceAdapter, ModMeta, OwnedMetaKeys } from './instanceAdapter';
+import type { InstallPackage, InstanceAdapter, ModMeta, OwnedMetaKeys } from './instanceAdapter';
 import { fileInFolder, modMetaFileIn, modsDir, newModExtractionPrefix, upgradeExtractionPrefix } from './layout';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
@@ -87,17 +87,17 @@ async function abandonAfter(extraction: Extraction, failure: unknown): Promise<n
 }
 
 export function mo2Landing(context: Mo2Context, archives: ArchiveReader): Pick<InstanceAdapter, 'install'> {
-  const fill = (source: InstallSource, path: string): Promise<void> =>
-    (source.kind === 'archive' ? archives.extract(source.path, path) : copyTree(source.path, path));
+  const fill = (installed: InstallPackage, path: string): Promise<void> =>
+    (installed.kind === 'archive' ? archives.extract(installed.path, path) : copyTree(installed.path, path));
 
   return {
     // One lock per instance: two installs of one name must not both pass the name check.
-    install: (source, target, keys) => withLock(context.instanceRoot, async () => {
+    install: (installed, target, keys) => withLock(context.instanceRoot, async () => {
       const holding = await folderHolding(context, { kind: 'mod', name: target.name });
       if ((target.kind === 'new') !== (holding === undefined)) return { landed: false };
       const extraction = holding === undefined ? await extractNewMod(context, target.name) : await extractUpgrade(target.name, holding.path);
       try {
-        await fill(source, extraction.path);
+        await fill(installed, extraction.path);
         const { root, isFomod } = await releaseRoot(extraction.path);
         await extraction.land(root, keys);
         return { landed: true, isFomod };

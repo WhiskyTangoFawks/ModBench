@@ -190,7 +190,7 @@ export type DataFolderArchives =
   | { readonly kind: 'unreadable'; readonly reason: string };
 
 /** Where a mod's files come from: an archive, extracted, or a folder, copied and left as it was. */
-export type InstallSource = { readonly kind: 'archive'; readonly path: string } | { readonly kind: 'folder'; readonly path: string };
+export type InstallPackage = { readonly kind: 'archive'; readonly path: string } | { readonly kind: 'folder'; readonly path: string };
 
 /** Which mod an install fills, settled by the caller: the folder on disk is checked against the
  *  claim, never consulted to decide it. */
@@ -519,9 +519,9 @@ export interface InstanceAdapter {
   trashModFile(mod: string, relativePath: string, trash: MoveToTrash): Promise<void>;
   /** Moves the source folder that builds the mod into the trash; false when none does. */
   trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
-  /** Puts the source's files in a new folder, or in place of the mod's own. Rejects with why; a
+  /** Puts the package's files in a new folder, or in place of the mod's own. Rejects with why; a
    *  new mod's folder goes, and an upgrade that failed part way is not rolled back. */
-  install(source: InstallSource, target: InstallTarget, keys: OwnedMetaKeys): Promise<InstallOutcome>;
+  install(installed: InstallPackage, target: InstallTarget, keys: OwnedMetaKeys): Promise<InstallOutcome>;
 
   // Subscribe: the instance changed.
   /** Hears that the instance changed: any of its files, the downloads folder and the game folder's
