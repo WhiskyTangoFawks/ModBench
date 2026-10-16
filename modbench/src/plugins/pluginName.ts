@@ -1,18 +1,7 @@
 import type { MEditClient } from '../client';
-import { fileExtension } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { answerOf } from '../wire/readFailed';
-
-const listed = new Intl.ListFormat('en-US', { type: 'disjunction' });
-
-/** Why a plugin name is refused whatever place holds it, or undefined (plugins.md, Create plugin,
- *  story 1). */
-export function pluginNameRefusal(name: string, creatableExtensions: readonly string[]): string | undefined {
-  if (!name) return 'Name is required';
-  if (!creatableExtensions.includes(fileExtension(name))) return `Extension must be ${listed.format(creatableExtensions)}`;
-  return undefined;
-}
 
 /** What `pluginNameRefusal` needs of the game, told as a failure when mEdit cannot say. */
 export async function creatablePluginExtensionsOf(

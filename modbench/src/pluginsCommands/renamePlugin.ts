@@ -6,10 +6,11 @@ import { OVERWRITE_ORIGIN, type FileOrigin, type InstanceAdapter } from '../inst
 import { isRefused, type MEditClient, type SourceChanges } from '../client';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
+import { pluginNameRefusal } from './pluginName';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { answerOf } from '../wire/readFailed';
 
-export type PluginRenameClient = Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants'>;
+export type PluginRenameClient = Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'getCreatablePluginExtensions'>;
 
 interface PluginRenameAccess {
   readonly adapter: InstanceAdapter;
@@ -54,9 +55,28 @@ async function confirmRename(access: PluginRenameAccess, ask: AskQuestion, plugi
   return answer === CONFIRM ? { confirmed: true } : { confirmed: false };
 }
 
+/** Why `newName` is refused for `plugin`, or undefined: a name the game does not take, or one the plugin's origin holds now on disk. */
+async function renameRefusal(
+  access: PluginRenameAccess, plugin: PluginAddress, newName: string, creatableExtensions: readonly string[],
+): Promise<string | undefined> {
+  const refusal = pluginNameRefusal(newName, creatableExtensions);
+  if (refusal !== undefined) return refusal;
+  return await access.adapter.originHoldsPlugin(fileOriginOf(plugin.origin), newName) ? `"${plugin.origin}" already holds "${newName}".` : undefined;
+}
+
+async function refusalBeforeWrite(access: PluginRenameAccess, plugin: PluginAddress, newName: string): Promise<string | undefined> {
+  try {
+    return await renameRefusal(access, plugin, newName, answerOf(await access.client.getCreatablePluginExtensions()));
+  } catch (err) {
+    return errorMessage(err);
+  }
+}
+
 async function renamePlugin(
   access: PluginRenameAccess, source: { apply(changes: SourceChanges): Promise<string | undefined> }, plugin: PluginAddress, newName: string, gameRelease: string | undefined,
 ): Promise<PluginRenameResult> {
+  const refusal = await refusalBeforeWrite(access, plugin, newName);
+  if (refusal !== undefined) return { applied: false, sourceRenamed: false, refusal };
   const changes = await access.client.getRenameSourceChanges(plugin, newName);
   if (isRefused(changes)) return { applied: false, sourceRenamed: false, refusal: changes.message };
   const unapplied = await source.apply(changes);
@@ -74,6 +94,7 @@ async function renamePlugin(
 
 export function pluginRenameCommands(access: PluginRenameAccess) {
   return {
+    renameRefusal: (...args: TailOf<typeof renameRefusal>) => renameRefusal(access, ...args),
     confirmRename: (...args: TailOf<typeof confirmRename>) => confirmRename(access, ...args),
     renamePlugin: (...args: TailOf<typeof renamePlugin>) => renamePlugin(access, ...args),
   };

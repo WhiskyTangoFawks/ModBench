@@ -13,12 +13,11 @@ import { answerOf } from '../wire/readFailed';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { Refusal } from '../drivingLib/refusal';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
-import { creatablePluginExtensionsOf, pluginNameRefusal } from './pluginName';
-import { holdsPlugin } from './pluginPlaces';
+import { creatablePluginExtensionsOf } from './pluginName';
 import type { PluginsTreeNode } from './pluginRows';
 
 export interface RenamePluginDeps {
-  commands: Pick<PluginsCommands, 'confirmRename' | 'renamePlugin'>;
+  commands: Pick<PluginsCommands, 'confirmRename' | 'renameRefusal' | 'renamePlugin'>;
   ask: AskQuestion;
   client: Pick<MEditClient, 'getCreatablePluginExtensions'>;
   source: SourceEditing;
@@ -49,10 +48,6 @@ async function renamed({ commands, source, instance }: RenameDeps, plugin: Plugi
 export function registerRenamePluginCommand(
   { client, commands, ask, instance, reporter, source }: RenamePluginDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  const refusalOf = (plugin: PluginAddress, newName: string, creatableExtensions: readonly string[]): string | undefined =>
-    pluginNameRefusal(newName, creatableExtensions)
-      ?? (holdsPlugin(instance.value, { name: newName, origin: plugin.origin }) ? `"${plugin.origin}" already holds "${newName}".` : undefined);
-
   const gesture: AgentGesture<PluginsTreeNode, Rename, GestureResult<PluginAddress>, { name: string }> = {
     fromView: async (entry) => {
       const row = singularArgument(entry, 'plugin');
@@ -61,8 +56,8 @@ export function registerRenamePluginCommand(
       const creatableExtensions = await creatablePluginExtensionsOf(client, reporter);
       if (creatableExtensions === undefined) return undefined;
 
-      const refusal = (value: string): string | undefined =>
-        value === '' || value === plugin.name ? undefined : refusalOf(plugin, value, creatableExtensions);
+      const refusal = (value: string): Promise<string | undefined> | undefined =>
+        value === '' || value === plugin.name ? undefined : commands.renameRefusal(plugin, value, creatableExtensions);
       const newName = await promptRename('Rename plugin', plugin.name, refusal);
       if (newName === undefined) return undefined;
 
@@ -77,7 +72,7 @@ export function registerRenamePluginCommand(
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a plugin carries one plugin.');
       const plugin = pluginOf(only);
-      const refusal = refusalOf(plugin, name, answerOf(await client.getCreatablePluginExtensions()));
+      const refusal = await commands.renameRefusal(plugin, name, answerOf(await client.getCreatablePluginExtensions()));
       if (refusal !== undefined) throw new Refusal(refusal);
       return { plugin, newName: name };
     },

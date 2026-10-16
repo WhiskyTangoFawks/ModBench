@@ -87,6 +87,8 @@ export interface InstanceAnswers {
   refusals?: (call: AdapterCall) => string | undefined;
   /** Origin files that are gone: they get no mark. */
   goneOriginFiles?: readonly { readonly origin: FileOrigin; readonly relativePath: string }[];
+  /** The plugin files the origins hold on disk. */
+  heldPlugins?: readonly { readonly origin: FileOrigin; readonly name: string }[];
   /** Entries with no folder to trash, by name. */
   foldersAbsent?: ReadonlySet<string>;
 }
@@ -202,6 +204,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     entryKey,
     includedPath: (relativePath) => relativePath.split('/').map((segment) => segment.replace(EXCLUDED_SUFFIX, '')).join('/'),
     excludedSuffix: EXCLUDED_SUFFIX,
+    originHoldsPlugin: (origin, name) => Promise.resolve((answers.heldPlugins ?? []).some((held) =>
+      originKey(held.origin) === originKey(origin) && held.name.toLowerCase() === name.toLowerCase())),
     renamePlugin: (origin, from, to, gameRelease) => record({ verb: 'renamePlugin', origin, from, to, gameRelease }, undefined),
     trashEntryFolder: (entry) => record({ verb: 'trashEntryFolder', entry }, !answers.foldersAbsent?.has(entry.name)),
     trashModFile: (mod, relativePath) => record({ verb: 'trashModFile', mod, relativePath }, undefined),
