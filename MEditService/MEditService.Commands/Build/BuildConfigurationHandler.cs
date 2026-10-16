@@ -16,6 +16,7 @@ public sealed class BuildConfigurationHandler
         {
             null => new BuildConfigurationResult(),
             SourceFailure.Unreadable unreadable => new BuildConfigurationResult(BuildConfigurationRefusal.Unreadable, unreadable.Reason),
+            SourceFailure.OutsideTheMod outside => new BuildConfigurationResult(BuildConfigurationRefusal.OutsideTheMod, outside.Reason),
             { } failure => new BuildConfigurationResult(
                 BuildConfigurationRefusal.WriteFailed, $"The build configuration in '{sourceFolder}' could not be written: {failure.Reason}"),
         };
@@ -29,6 +30,9 @@ public enum BuildConfigurationRefusal
 {
     /// <summary>The source folder holds no build configuration, or one that cannot be read.</summary>
     Unreadable,
+
+    /// <summary>The change names an output that is no folder name, or a path outside the mod folder.</summary>
+    OutsideTheMod,
 
     /// <summary>The file system refused the write.</summary>
     WriteFailed,
