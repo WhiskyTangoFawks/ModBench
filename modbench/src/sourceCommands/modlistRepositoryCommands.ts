@@ -13,7 +13,7 @@ import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
-  'installationFiles' | 'downloadedFile' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList' | 'writeSubmodules' | 'refuseUnpublishedPins'
+  'installationFiles' | 'downloadedFile' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree'
   | 'statCacheFolder' | 'trashModFile' | 'sourceFolder' | 'excludedSuffix'>;
 
 interface ModlistRepositoryCommandsDeps {
@@ -38,7 +38,7 @@ export interface ModNote { readonly mod: string; readonly note: string }
 
 /** What update manifest answers: each mod updated or refused, and each entry a mod folder's listing skipped, or the
  *  whole gesture refused, as a message to show. */
-export type UpdateManifestResult = ({ applied: true; notes: readonly ModNote[] } & UpdateManifestOutcome) | { applied: false; refusal: string };
+export type UpdateManifestResult = ({ applied: true; notes: readonly ModNote[]; submoduleNotes: readonly string[] } & UpdateManifestOutcome) | { applied: false; refusal: string };
 
 /** Where update manifest is: the Instance adapter reading a mod's files, or mEdit updating manifests. */
 export type UpdateManifestStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Updating' } & ModlistProgress);
@@ -275,11 +275,12 @@ async function pinsRefusedOrWhy(adapter: Adapter): Promise<string | undefined> {
   }
 }
 
-async function submodulesWritten(adapter: Adapter): Promise<ModNote[]> {
+async function submodulesWritten(adapter: Adapter): Promise<{ notes: readonly ModNote[]; submoduleNotes: readonly string[] }> {
   try {
-    return (await adapter.writeSubmodules()).map(({ mod, note }) => ({ mod, note }));
+    const { notes, other } = await adapter.writeSubmodules();
+    return { notes, submoduleNotes: other };
   } catch (err) {
-    return [{ mod: '.gitmodules', note: `the source mods are not submodules: ${errorMessage(err)}` }];
+    return { notes: [], submoduleNotes: [errorMessage(err)] };
   }
 }
 
@@ -301,6 +302,7 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
     gitInit: async ({ holdsRepository }: { readonly holdsRepository: boolean }): Promise<CommandResult<object>> => {
       if (holdsRepository) return { applied: false, refusal: `${instanceRoot} already holds a repository.` };
       try {
+        await adapter.checkPushRefusalFree();
         await adapter.writeIgnoreList();
       } catch (err) {
         return refuse(err);
@@ -324,18 +326,19 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       const { sent, gameFiles, refused: unread, notes } = await readMods(
         adapter, mods, gameFolder.dataFolder, (mod) => adapter.installationFiles(mod), { onProgress, signal });
       const refused = [...unread];
-      if (sent.length === 0) return { applied: true, landed: [], refused, notes };
+      if (sent.length === 0) return { applied: true, landed: [], refused, notes, submoduleNotes: [] };
       const versioned: UpdateManifestMod[] = [];
       for (const mod of sent) {
         const metadata = await adapter.modMetadata(mod.name);
         if (metadata.kind === 'unreadable') refused.push({ item: mod.name, reason: metadataUnreadable(metadata.reason) });
         else versioned.push({ ...mod, isSourceMod: instance.paths.sourceDirs.has(mod.name), version: metadata.answer.version });
       }
-      if (versioned.length === 0) return { applied: true, landed: [], refused, notes };
+      if (versioned.length === 0) return { applied: true, landed: [], refused, notes, submoduleNotes: [] };
       const outcome = await client.updateManifest(
         versioned, { gameFiles: [...gameFiles], statCache: adapter.statCacheFolder }, { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
       if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
-      return { applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...await submodulesWritten(adapter)] };
+      const submodules = await submodulesWritten(adapter);
+      return { applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes], submoduleNotes: submodules.submoduleNotes };
     },
 
     /** Asks before anything is written, so a mod the Instance adapter gives no folder, which restore refuses, is not asked. */

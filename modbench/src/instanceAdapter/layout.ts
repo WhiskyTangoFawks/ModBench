@@ -214,13 +214,21 @@ const heldInEachFolderOf = (folder: string, files: readonly string[]): string[] 
 
 const escapedForIgnoreList = (name: string): string => name.replace(/[\\*?[]/g, String.raw`\$&`);
 
-const isSourceModLine = (line: string): boolean => line === `/${SOURCE}/*` || line.startsWith(`!/${SOURCE}/`);
+const SOURCE_MODS_BEGIN = '# Source mods with a remote';
+const SOURCE_MODS_END = '# End of source mods with a remote';
 
-/** An ignore list's lines with the source mods' lines made to let in the folders of `folderNames`, the mods with a remote. */
+/** An ignore list with the block that lets in the folders of `folderNames`, the source mods with a remote, made to
+ *  hold them. Every line outside the block is kept. */
 export function withSourceModLines(ignoreList: string, folderNames: readonly string[]): string {
-  const others = ignoreList.split('\n').filter((line) => line !== '' && !isSourceModLine(line));
-  const lines = folderNames.length === 0 ? [] : [`!/${SOURCE}/`, `/${SOURCE}/*`, ...folderNames.map((name) => `!/${SOURCE}/${escapedForIgnoreList(name)}`)];
-  return `${[...others, ...lines].join('\n')}\n`;
+  const lines = ignoreList.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  const begin = lines.indexOf(SOURCE_MODS_BEGIN);
+  const end = lines.indexOf(SOURCE_MODS_END, begin);
+  if (begin !== -1 && end !== -1) lines.splice(begin, end - begin + 1);
+  if (folderNames.length > 0) {
+    lines.push(SOURCE_MODS_BEGIN, `!/${SOURCE}/`, `/${SOURCE}/*`, ...folderNames.map((name) => `!/${SOURCE}/${escapedForIgnoreList(name)}`), SOURCE_MODS_END);
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 /** The whitelist: the ignore list itself, the mod manager's configuration, each profile's mod order, plugin order
