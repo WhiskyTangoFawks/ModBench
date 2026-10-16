@@ -8,7 +8,8 @@ import {
 } from './gestureEntry';
 import type { RowOf } from '../drivingLib/gestureEntry';
 import { viewCopyValueText } from '../drivingLib/copyValue';
-import { placeFolder, pluginPlaces, type PluginPlace } from './pluginPlaces';
+import { placeFolder, pluginPlaces } from './pluginPlaces';
+import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { PluginAddress } from '../wire/pluginAddress';
@@ -95,10 +96,11 @@ interface NewPlugin {
   readonly sourceFolder?: string;
 }
 
-function placed(value: Pick<InstanceValue, 'mods' | 'paths'>, name: string, { origin, label }: PluginPlace): NewPlugin | string {
+function placed(value: Pick<InstanceValue, 'mods' | 'paths'>, name: string, { origin, label }: { origin: string; label: string }): NewPlugin | string {
   const where = placeFolder(value, origin);
   if ('lost' in where) return `${lostPlace(origin, where.lost)}, so "${name}" was not created.`;
-  return { plugin: { name, origin }, label, ...where };
+  const { folder, sourceFolder } = where;
+  return { plugin: { name, origin }, label, folder, ...(sourceFolder == null ? {} : { sourceFolder }) };
 }
 
 interface CreateOptions {
@@ -123,7 +125,8 @@ export function registerCreatePluginCommand(
         reporter.report('error', `Overwrite and every enabled mod already hold "${name}".`);
         return undefined;
       }
-      const picked = await vscode.window.showQuickPick(places, { placeHolder: 'Where should the new plugin live?' });
+      const items = places.map(({ name: origin }) => ({ label: origin === OVERWRITE_ORIGIN ? 'Overwrite' : origin, origin }));
+      const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Where should the new plugin live?' });
       if (!picked) return undefined;
 
       const made = placed(instance.value, name, picked);
@@ -136,9 +139,9 @@ export function registerCreatePluginCommand(
     fromAgent: async ({ options: { name, place } }) => {
       const refusal = pluginNameRefusal(name, answerOf(await client.getCreatablePluginExtensions()));
       if (refusal !== undefined) throw new Refusal(refusal);
-      const chosen = pluginPlaces(instance.value, name).find(({ origin }) => origin.toLowerCase() === place.toLowerCase());
+      const chosen = pluginPlaces(instance.value, name).find(({ name: origin }) => origin.toLowerCase() === place.toLowerCase());
       if (chosen === undefined) throw new Refusal(`"${place}" is not an enabled mod or Overwrite that lacks "${name}".`);
-      const made = placed(instance.value, name, chosen);
+      const made = placed(instance.value, name, { origin: chosen.name, label: chosen.name === OVERWRITE_ORIGIN ? 'Overwrite' : chosen.name });
       if (typeof made === 'string') throw new Refusal(made);
       return made;
     },

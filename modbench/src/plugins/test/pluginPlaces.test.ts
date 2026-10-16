@@ -32,21 +32,21 @@ const value = instanceValueFixture({
 
 describe('pluginPlaces', () => {
   it('lists the enabled mods first, then Overwrite, and no separator or disabled mod', () => {
-    expect(pluginPlaces(value, 'New.esp').map((p) => p.origin)).toEqual(['Winning Mod', 'Losing Mod', 'overwrite/']);
+    expect(pluginPlaces(value, 'New.esp').map((p) => p.name)).toEqual(['Winning Mod', 'Losing Mod', 'overwrite/']);
   });
 
   it('leaves out only a place that already holds a plugin of that name, whatever its case', () => {
-    expect(pluginPlaces(value, 'held.ESP').map((p) => p.origin)).toEqual(['Winning Mod', 'overwrite/']);
-    expect(pluginPlaces(value, 'Other.esp').map((p) => p.origin)).toEqual(['Winning Mod', 'Losing Mod']);
+    expect(pluginPlaces(value, 'held.ESP').map((p) => p.name)).toEqual(['Winning Mod', 'overwrite/']);
+    expect(pluginPlaces(value, 'Other.esp').map((p) => p.name)).toEqual(['Winning Mod', 'Losing Mod']);
   });
 });
 
 describe('placeFolder', () => {
   it("answers Overwrite's folder, an enabled mod's folder, and a source mod's source folder, as the value names them", () => {
-    expect(placeFolder(value, 'overwrite/')).toEqual({ folder: join('/instance', 'overwrite') });
+    expect(placeFolder(value, 'overwrite/')).toEqual({ name: 'overwrite/', folder: join('/instance', 'overwrite') });
     expect(placeFolder(value, 'Winning Mod'))
-      .toEqual({ folder: join('/instance', 'mods', 'Winning Mod'), sourceFolder: join('/instance', 'source', 'Winning Mod') });
-    expect(placeFolder(value, 'Losing Mod')).toEqual({ folder: join('/instance', 'mods', 'Losing Mod') });
+      .toEqual({ name: 'Winning Mod', folder: join('/instance', 'mods', 'Winning Mod'), sourceFolder: join('/instance', 'source', 'Winning Mod') });
+    expect(placeFolder(value, 'Losing Mod')).toEqual({ name: 'Losing Mod', folder: join('/instance', 'mods', 'Losing Mod') });
   });
 
   it('answers a mod the value does not list as gone', () => {

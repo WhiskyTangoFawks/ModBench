@@ -242,20 +242,18 @@ describe('registerCreatePluginCommand', () => {
     ]);
   });
 
-  it('refuses Overwrite while the value names no folder for it, and creates nothing', async () => {
+  it('offers no Overwrite while the value names no folder for it', async () => {
     const client = new InMemoryMEditClient();
     const mo2 = makeMo2();
     mo2.instance.value = { ...mo2.instance.value, paths: { ...mo2.instance.value.paths, overwriteDir: undefined } };
     showInputBox.mockResolvedValue('New.esp');
-    showQuickPick.mockImplementation((places: Place[]) => Promise.resolve(places.find((p) => p.label === 'Overwrite')));
+    showQuickPick.mockResolvedValue(undefined);
 
-    const { run, reporter } = invoke(client, mo2);
+    const { run } = invoke(client, mo2);
     await run();
 
-    expect(client.calls).toEqual([extensionsQuery]);
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Overwrite has no folder yet, so "New.esp" was not created.', detail: undefined },
-    ]);
+    const offered = showQuickPick.mock.calls.flatMap((call) => (call[0] as Place[]).map((place) => place.label));
+    expect(offered).not.toContain('Overwrite');
   });
 
   it('reports the refusal mEdit answered with at error, and lands no toast', async () => {
