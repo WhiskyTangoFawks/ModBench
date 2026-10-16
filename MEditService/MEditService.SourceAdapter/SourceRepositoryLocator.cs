@@ -152,6 +152,8 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
         var relativePath = Path.GetRelativePath(_sourceFolder, documentPath);
         if (DocumentTokens.WhyNotADocument(text) is { } why)
             throw SourceStopException.Unreadable($"The text given for {relativePath} is not a readable document: {why}");
+        if (DocumentText.UnparsedFormKeyIn(text) is { } spelled)
+            throw SourceStopException.Unreadable($"The text given for {relativePath} declares {spelled}, which is no FormKey.");
         var document = ReadableDocumentAt(relativePath, text, pluginFileName)
             ?? throw SourceStopException.Unreadable($"The text given for {relativePath} names no record.");
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
@@ -183,9 +185,9 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
         var text = DocumentText.ReadOrNull(_files, fullPath);
         if (text is null) return new RecordOfFileAnswer.Refused($"{fullPath} could not be read.");
         if (DocumentTokens.WhyNotADocument(text) is { } why) return new RecordOfFileAnswer.Refused($"{fullPath} is no record document: {why}");
-        return FormKey.TryFactory(DocumentText.FormKeyDeclaredIn(text, relativePath, treeName), out var declared)
-            ? new RecordOfFileAnswer.Holds(new RecordAt(plugin, declared.ToString()))
-            : new RecordOfFileAnswer.Refused($"{fullPath} declares no FormKey, so it is no record's document.");
+        return DocumentText.FormKeyDeclaredIn(text, relativePath, treeName) is { } declared
+            ? new RecordOfFileAnswer.Holds(new RecordAt(plugin, declared))
+            : new RecordOfFileAnswer.Refused($"{fullPath} {DocumentText.WhyNoFormKey(text)}, so it is no record's document.");
     }
 
     // Every entry whose leaf name carries the FormKey, as the path of the document it stands for.
@@ -310,7 +312,7 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
         _foundByText.TryGetValue((plugin, Canonical(formKey)), out var found) && _files.FileExists(found) ? found : null;
 
     private static string Canonical(string formKey) =>
-        FormKey.TryFactory(formKey, out var parsed) ? parsed.ToString() : formKey;
+        CanonicalFormKey.Of(formKey) ?? throw new ArgumentException($"{formKey} is no FormKey.", nameof(formKey));
 
     // Windows names a file without regard to case, and VS Code spells a drive letter in lower case.
     internal static StringComparison PathComparison =>
@@ -337,7 +339,8 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
         var worldspaceDocument = SourceRepositoryLayout.ContainerDocumentHeldBy(_files, Path.Combine(_sourceFolder, path.WorldspaceDirectory));
         var worldspace = DocumentText.FormKeyDeclaredBy(_files, worldspaceDocument, plugin.Name)
             ?? throw SourceStopException.UnreadableIn(
-                _sourceFolder, worldspaceDocument, "it declares no FormKey, so the worldspace its exterior cells sit in is unknown");
+                _sourceFolder, worldspaceDocument,
+                $"it {DocumentText.WhyNoFormKey(DocumentText.ReadOrNull(_files, worldspaceDocument) ?? "")}, so the worldspace its exterior cells sit in is unknown");
 
         var (blockX, blockY) = Coordinates(path.BlockFolderName);
         var (subX, subY) = Coordinates(path.SubBlockFolderName);

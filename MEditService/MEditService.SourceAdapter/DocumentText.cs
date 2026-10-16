@@ -46,6 +46,13 @@ internal static class DocumentText
         return DocumentTokens.RootStringIn(text, RecordMembers.FormKey) is { } spelled ? CanonicalFormKey.Of(spelled) : null;
     }
 
+    /// <summary>The spelling a document declares as its FormKey when Mutagen reads no FormKey there.</summary>
+    internal static string? UnparsedFormKeyIn(string text) =>
+        DocumentTokens.RootStringIn(text, RecordMembers.FormKey) is { } spelled && CanonicalFormKey.Of(spelled) is null ? spelled : null;
+
+    internal static string WhyNoFormKey(string text) =>
+        UnparsedFormKeyIn(text) is { } spelled ? $"declares {spelled}, which is no FormKey" : "declares no FormKey";
+
     /// <summary>The record's own text out of the bytes <paramref name="unit"/>'s file holds: itself for
     /// a flat record, or spliced back out of its owner's text for an embedded child.</summary>
     internal static string? RecordBodyFromOwnerBytes(

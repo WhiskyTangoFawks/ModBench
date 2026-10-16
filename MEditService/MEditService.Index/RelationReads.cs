@@ -78,7 +78,7 @@ internal sealed class RelationReads(
     public IReadOnlyList<(string FormKey, string? EditorId)> RecordsNamed(string name)
     {
         using var connection = store.OpenReadConnection();
-        var formKey = Mutagen.Bethesda.Plugins.FormKey.TryFactory(name, out var parsed) ? parsed.ToString() : null;
+        var formKey = CanonicalFormKey.Of(name);
         return DuckDbSql.Rows(
             connection,
             $"""

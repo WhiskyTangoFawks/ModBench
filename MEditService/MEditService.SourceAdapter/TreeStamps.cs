@@ -171,7 +171,7 @@ internal static class TreeStamps
                 relativePath,
                 DocumentTokens.WhyNotADocument(text) is { } error
                     ? $"'{relativePath}' is no record document: {error}"
-                    : $"'{relativePath}' declares no FormKey, so the records it holds could not be validated."));
+                    : $"'{relativePath}' {DocumentText.WhyNoFormKey(text)}, so the records it holds could not be validated."));
             return null;
         }
 
