@@ -1,6 +1,5 @@
 // Every change to a profile's plugin order (ADR-0014; ADR-0015).
 
-import { firstLines } from '../loadOrderFileCodec/firstLines';
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { dropIndexIn, type Drop } from './dropIndex';
 import type { CommandResult, SelectionResult } from '../coreLib/commandResult';
@@ -129,8 +128,6 @@ function pluginLinesDelta(
 const changedSinceRead = (order: readonly PluginEntry[], read: readonly PluginEntry[]): boolean =>
   order.length !== read.length || order.some((line, i) => line.name !== read[i]?.name);
 
-const firstOfEach = (order: readonly PluginEntry[]): PluginEntry[] => firstLines(order, ({ name }) => pluginKey(name)).kept;
-
 async function syncPlugins(
   adapter: InstanceAdapter, { profile, pluginOrder, provided, inData, loadedWithNoLine }: PluginSyncInputs,
 ): Promise<PluginSyncResult> {
@@ -147,8 +144,7 @@ async function syncPlugins(
   const inDataNames = new Set([...inData.names].map(pluginKey));
 
   let delta: PluginLinesDelta = { added: [], dropped: [] };
-  const result = await changePluginOrder(adapter, profile, (lines) => {
-    const order = firstOfEach(lines);
+  const result = await changePluginOrder(adapter, profile, (order) => {
     if (changedSinceRead(order, pluginOrder)) return [];
     delta = pluginLinesDelta(order.map((e) => e.name), addable, inDataNames);
     return [

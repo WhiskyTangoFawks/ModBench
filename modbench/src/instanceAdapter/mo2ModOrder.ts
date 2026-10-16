@@ -1,6 +1,7 @@
 // MO2's changes to mod order: the file spliced through its codec under its lock and written
 // whole; a separator's folder moves with its line, under the same lock.
 
+import { firstLines, modLineKey } from '../loadOrderFileCodec/firstLines';
 import {
   deleteSeparatorInText, insertModAtWinningEnd, insertSeparatorAtIndexInText, moveModsInText, moveSeparatorsInText,
   parseModlist, removeModFromText, renameModLineInText, renameSeparatorInText, separatorModName, setEnabledInText,
@@ -158,7 +159,7 @@ export function mo2ModOrder(context: Mo2Context): Mo2ModOrder {
       return withLock(file, async () => {
         const before = await get(file);
         const folders = await listModFolders(context);
-        const changes = decide(parseModlist(before), folders && modFoldersOf(folders));
+        const changes = decide(firstLines(parseModlist(before), modLineKey).kept, folders && modFoldersOf(folders));
         let after = before;
         const resolved: ModOrderChange[] = [];
         for (const change of changes) {
