@@ -12,7 +12,7 @@ def gates(path):
         return []
     if path.startswith('MEditService/'):
         return ['--backend', '--api-drift', '--scripts']
-    if path.startswith(('scripts/', 'DevList/')):
+    if path.startswith(('scripts/', 'DevListFallout/')):
         return ['--scripts']
     if path.startswith('modbench/'):
         return ['--frontend']
