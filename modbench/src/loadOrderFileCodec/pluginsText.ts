@@ -99,9 +99,8 @@ export function renamePluginInText(text: string, pluginName: string, newName: st
 }
 
 /** `toIndex` counts entries with the moved lines already removed, and clamps to
- *  the last slot. The block keeps its source order, whatever order the names came
- *  in; comment and blank lines keep their positions. A plugin's repeated lines move
- *  with it, so the line moved is still the one the game reads. */
+ *  the last slot. The block keeps its source order; comment and blank lines keep their
+ *  positions. A plugin's repeated lines move with it, so its first line stays the one read. */
 export function movePluginsInText(text: string, pluginNames: string[], toIndex: number): string {
   return editLines(text, (lines) => {
     for (const name of pluginNames) if (entryLineAt(lines, name) < 0) throw notFound(name);

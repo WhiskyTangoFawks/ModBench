@@ -7,12 +7,11 @@ import {
   fileInFolder, isRootLevel, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
   type ModFolders, type ModlistEntry, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
-import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { pluginOrderOf } from './pluginOrder';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile, pluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
-import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress, type PluginPlace, type StampedFile } from '../wire/pluginAddress';
+import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, pluginNameKey, type PluginAddress, type PluginPlace, type StampedFile } from '../wire/pluginAddress';
 import type { ModByFolder } from '../wire/modByFolder';
 
 export { OVERWRITE_ORIGIN };
@@ -173,8 +172,8 @@ export function buildLoadOrderRows(
   const winners = winningPlugins(index.files);
   // The adapter hands each name once, and the game matches a line to a file without case, so a case
   // difference must not read as "disabled".
-  const lineByName = new Map(pluginOrder.map(({ name }, line) => [pluginKey(name), line] as const));
-  const isEnabled = (name: string): boolean => pluginOrder[lineByName.get(pluginKey(name)) ?? -1]?.enabled ?? false;
+  const lineByName = new Map(pluginOrder.map(({ name }, line) => [pluginNameKey(name), line] as const));
+  const isEnabled = (name: string): boolean => pluginOrder[lineByName.get(pluginNameKey(name)) ?? -1]?.enabled ?? false;
 
   const listed = pluginOrder.flatMap(({ name }, line) => {
     const folded = foldPath(name);
@@ -196,7 +195,7 @@ export function buildLoadOrderRows(
   const outside = findPluginsOutsideLoadOrder([...index.filesByMod, [OVERWRITE_ORIGIN, overwriteFiles]], listed)
     .map((plugin) => ({
       ...plugin,
-      line: lineByName.get(pluginKey(plugin.name)) ?? null,
+      line: lineByName.get(pluginNameKey(plugin.name)) ?? null,
       enabled: isEnabled(plugin.name),
       winning: isWinning(plugin),
     }));

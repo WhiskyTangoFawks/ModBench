@@ -1,8 +1,7 @@
 import { foldPath } from '../instanceLoader/fileConflictIndex';
-import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { OriginFile } from '../instanceAdapter/instanceAdapter';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
+import { pluginNameKey, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import { Refusal } from '../drivingLib/refusal';
 
 export interface ModName {
@@ -87,7 +86,7 @@ function pluginRefusal({ name, origin }: PluginName, matches: readonly PluginAdd
 export function pluginsNamed(plugins: InstanceValue['plugins'], given: readonly PluginName[]): PluginAddress[] {
   const resolved = given.map((one) => ({
     one,
-    matches: plugins.filter(({ name, origin }) => pluginKey(name) === pluginKey(one.name)
+    matches: plugins.filter(({ name, origin }) => pluginNameKey(name) === pluginNameKey(one.name)
       && (one.origin === undefined || origin.toLowerCase() === one.origin.toLowerCase())).map(({ name, origin }) => ({ name, origin })),
   }));
   const refusals = resolved.flatMap(({ one, matches }) => pluginRefusal(one, matches) ?? []);
@@ -99,7 +98,7 @@ export function pluginsNamed(plugins: InstanceValue['plugins'], given: readonly 
 export function linesNamed(plugins: InstanceValue['plugins'], given: readonly PluginName[]): PluginAddress[] {
   const named = pluginsNamed(plugins, given);
   const refusals = named.flatMap((address) => {
-    const governing = plugins.find(({ name, winning }) => winning && pluginKey(name) === pluginKey(address.name));
+    const governing = plugins.find(({ name, winning }) => winning && pluginNameKey(name) === pluginNameKey(address.name));
     return governing === undefined || samePluginAddress(governing, address)
       ? []
       : `${asPlugin(address)} is overridden, and the line for "${address.name}" is ${asPlugin(governing)}'s. Name that one.`;
