@@ -20,16 +20,17 @@ public static class SnapshotPlugins
         [.. entries.Where(entry => entry.LoadedWithNoLine).Select(entry => entry.Key)];
 
     public static LoadOrderSnapshot Snapshot(
-        string dataFolder, string? instanceRoot, GameRelease gameRelease, IEnumerable<LoadOrderEntry> entries)
+        string dataFolder, string? instanceRoot, GameRelease gameRelease, IEnumerable<LoadOrderEntry> entries,
+        IReadOnlyList<PluginPlace>? places = null)
     {
         var list = entries.ToList();
-        return new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, Of(list), Active(list), LoadedWithNoLine(list), [], []);
+        return new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, Of(list), Active(list), LoadedWithNoLine(list), [], [], places ?? []);
     }
 
     /// <summary>The PUT /load-order body.</summary>
     public static object Body(
         string gameDirectory, string instanceRoot, IEnumerable<LoadOrderEntry> entries, string gameRelease = "Fallout4",
-        object? mods = null, string statCache = "stat-cache")
+        object? mods = null, object? places = null, string statCache = "stat-cache")
     {
         var list = entries.ToList();
         return new
@@ -41,6 +42,7 @@ public static class SnapshotPlugins
             loadedWithNoLine = LoadedWithNoLine(list),
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
+            places = places ?? Array.Empty<object>(),
             mods = mods ?? Array.Empty<object>(),
             statCache,
             gameRelease,

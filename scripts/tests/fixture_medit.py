@@ -24,6 +24,8 @@ CONDITIONS = Plugin('MBDevConditions.esp', 'MB-DEV Conditions')
 LIGHT = Plugin('MBDevLight.esl', 'MB-DEV Light')
 CONFLICT_A = Plugin('MBDevConflictA.esp', 'MB-DEV Conflict A')
 CONFLICT_B = Plugin('MBDevConflictB.esp', 'MB-DEV Conflict B')
+EMPTY_MOD = 'MB-DEV Scratch'
+OVERWRITE = 'overwrite/'
 # DevList's plugins.txt in its order, each enabled.
 PLUGINS = [CONFLICT_B, CONFLICT_A, LIGHT, CONDITIONS, Plugin('MBDevMissingMaster.esp', 'MB-DEV Missing Master')]
 RECIPE = '000800:MBDevConditions.esp'
@@ -50,6 +52,7 @@ def fixture_medit() -> Generator[Fixture]:
         scratch = pathlib.Path(temporary)
         instance = scratch / 'instance'
         shutil.copytree(INSTANCE, instance)
+        (instance / 'overwrite').mkdir()
         # DevList has no game folder; an empty one stands in, so the game loads no plugin of its own.
         game = scratch / 'game'
         game.mkdir()
@@ -112,12 +115,20 @@ def snapshot(instance: pathlib.Path, game: pathlib.Path) -> JsonRecord:
         'loadedWithNoLine': [],
         'archives': [],
         'stringsFiles': [],
+        'places': places(instance),
         'mods': [],
         'statCache': str(instance / 'stat-cache'),
         'gameDirectory': str(game),
         'instanceRoot': str(instance),
         'gameRelease': 'Fallout4',
     }
+
+
+def places(instance: pathlib.Path) -> list[JsonRecord]:
+    mods = [*dict.fromkeys(plugin.origin for plugin in PLUGINS), EMPTY_MOD]
+    return [
+        *({'name': mod, 'folder': str(instance / 'mods' / mod), 'sourceFolder': str(source_folder(instance, mod))} for mod in mods),
+        {'name': OVERWRITE, 'folder': str(instance / 'overwrite')}]
 
 
 def plugin_entry(instance: pathlib.Path, plugin: Plugin, line: int | None) -> JsonRecord:

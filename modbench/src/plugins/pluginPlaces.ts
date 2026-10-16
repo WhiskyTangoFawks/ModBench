@@ -2,45 +2,27 @@
 // call, and no path joined here.
 
 import type { InstanceValue } from '../instanceLoader/instance';
-import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
+import { pluginPlacesOf } from '../instanceLoader/pluginPlacesOf';
+import { samePluginAddress, type PluginAddress, type PluginPlace } from '../wire/pluginAddress';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
-
-export interface PluginPlace {
-  readonly label: string;
-  readonly origin: string;
-}
-
-const enabledModNames = (value: Pick<InstanceValue, 'mods'>): string[] =>
-  value.mods.filter((entry) => entry.kind === 'mod' && entry.enabled).map((entry) => entry.name);
 
 function holdsPlugin(value: Pick<InstanceValue, 'plugins'>, plugin: PluginAddress): boolean {
   return value.plugins.some((p) => p.path !== undefined && samePluginAddress(p, plugin));
 }
 
-/** The enabled mods first, then Overwrite, each left out when it already holds a plugin named
- *  `name`. */
-export function pluginPlaces(value: Pick<InstanceValue, 'mods' | 'plugins'>, name: string): PluginPlace[] {
-  return [
-    ...enabledModNames(value).map((mod) => ({ label: mod, origin: mod })),
-    { label: 'Overwrite', origin: OVERWRITE_ORIGIN },
-  ].filter((place) => !holdsPlugin(value, { name, origin: place.origin }));
+/** The places the snapshot offers, each left out when it already holds a plugin named `name`. */
+export function pluginPlaces(value: Pick<InstanceValue, 'mods' | 'paths' | 'plugins'>, name: string): PluginPlace[] {
+  return pluginPlacesOf(value).filter((place) => !holdsPlugin(value, { name, origin: place.name }));
 }
 
-/** The place's folder, and a source mod's source folder; or what became of a mod between the pick and the
- *  answer, or that the value names no folder for Overwrite yet. */
-export type PlaceFolder =
-  | { readonly folder: string; readonly sourceFolder?: string }
-  | { readonly lost: 'gone' | 'disabled' | 'unread' };
+/** The place, with a source mod's source folder; or what became of a mod between the pick and the answer, or that the
+ *  value names no folder for Overwrite yet. */
+export type PlaceFolder = PluginPlace | { readonly lost: 'gone' | 'disabled' | 'unread' };
 
 export function placeFolder(value: Pick<InstanceValue, 'mods' | 'paths'>, origin: string): PlaceFolder {
-  if (origin === OVERWRITE_ORIGIN) {
-    const folder = value.paths.overwriteDir;
-    return folder === undefined ? { lost: 'unread' } : { folder };
-  }
-  const mod = value.mods.find((entry) => entry.kind === 'mod' && entry.name === origin);
-  const folder = value.paths.modDirs.get(origin);
-  if (mod === undefined || folder === undefined) return { lost: 'gone' };
-  if (!mod.enabled) return { lost: 'disabled' };
-  const sourceFolder = value.paths.sourceDirs.get(origin);
-  return sourceFolder === undefined ? { folder } : { folder, sourceFolder };
+  const place = pluginPlacesOf(value).find((held) => held.name === origin);
+  if (place !== undefined) return place;
+  if (origin === OVERWRITE_ORIGIN) return { lost: 'unread' };
+  const listed = value.mods.some((entry) => entry.kind === 'mod' && entry.name === origin) && value.paths.modDirs.has(origin);
+  return { lost: listed ? 'disabled' : 'gone' };
 }

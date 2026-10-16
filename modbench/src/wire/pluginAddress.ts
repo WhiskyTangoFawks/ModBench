@@ -2,6 +2,9 @@ import type { components } from './generated/api';
 
 export type PluginAddress = components['schemas']['PluginAddress'];
 
+/** Where a new plugin can live: an enabled mod or Overwrite, with its folder and, for a source mod, its source folder. */
+export type PluginPlace = components['schemas']['PluginPlace'];
+
 /** A strings file or archive, with the stamp Mod Management read of it. */
 export type StampedFile = components['schemas']['StampedFile'];
 

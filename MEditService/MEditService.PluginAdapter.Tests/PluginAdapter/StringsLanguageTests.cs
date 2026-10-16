@@ -37,7 +37,7 @@ public sealed class StringsLanguageTests : IDisposable
         {
             var plugin = new RegisteredPlugin(
                 PluginName, PluginOrigin.DataDirectory, _pluginPath, PluginProvider.Game, Line: null, HandedStrings.Of(_pluginPath));
-            return new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], []);
+            return new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], [], []);
         }
     }
 
@@ -75,7 +75,7 @@ public sealed class StringsLanguageTests : IDisposable
         LocalizedDoorPlugin.WriteNamedIn(germanOnly, (Language.German, "Das Grosse Tor"));
         var plugin = new RegisteredPlugin(
             PluginName, PluginOrigin.DataDirectory, germanOnly, PluginProvider.Game, Line: null, HandedStrings.Of(germanOnly));
-        var loadOrder = new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], []);
+        var loadOrder = new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], [], []);
         var adapter = AdapterIn(Language.German);
         var source = (await adapter.ReadSourceOfAsync(plugin, loadOrder)).Answered();
         var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();

@@ -17,7 +17,7 @@ function snapshot(name: string): LoadOrderSnapshot {
     loadedWithNoLine: [],
     archives: [],
     stringsFiles: [],
-    mods: [],
+    places: [], mods: [],
     statCache: '/instance/stat-cache',
     gameDirectory: '/game/Data',
     instanceRoot: '/instance',

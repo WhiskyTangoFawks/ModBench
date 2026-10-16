@@ -497,7 +497,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes an empty plugin into the folder, and the source folder, of a mod the held load order holds a plugin of, named by its origin. Refuses an origin that is no such mod. */
+        /** @description Writes an empty plugin into the folder, and the source folder, of an enabled mod or Overwrite the held load order names as a place, by its origin. Refuses any other origin. */
         post: operations["CreatePluginInMod"];
         delete?: never;
         options?: never;
@@ -1357,6 +1357,7 @@ export interface components {
             loadedWithNoLine: components["schemas"]["PluginAddress"][];
             archives: components["schemas"]["StampedFile"][];
             stringsFiles: components["schemas"]["StampedFile"][];
+            places: components["schemas"]["PluginPlace"][];
             gameDirectory: string;
             instanceRoot: string;
             gameRelease: string;
@@ -1540,6 +1541,11 @@ export interface components {
             origin: string;
             reason: string;
             diagnosis?: string | null;
+        };
+        PluginPlace: {
+            name: string;
+            folder: string;
+            sourceFolder?: string | null;
         };
         PluginProblems: {
             plugin: components["schemas"]["PluginAddress"];

@@ -25,7 +25,14 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
         [
             .. _data.Plugins,
             new LoadOrderEntry("First.esp", Path.Combine(_folder, "First.esp"), Mod, Line: 1, Enabled: true, Winning: true),
-        ]));
+        ], [new PluginPlace(Mod, _folder, _folder)]));
+    }
+
+    private void Place(PluginPlace place)
+    {
+        var held = _holder.Current;
+        _holder.Apply(new LoadOrderSnapshot(
+            held.DataFolderPath, held.InstanceRoot, held.GameRelease, held.Plugins, [], [], [], [], [.. held.Places, place]));
     }
 
     public void Dispose() => _data.Dispose();
@@ -46,6 +53,31 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task CreatePluginIn_APlaceTheLoadOrderHoldsNoPluginOf_WritesItInThatPlacesFolder()
+    {
+        var emptyFolder = Directory.CreateDirectory(Path.Combine(_data.DataFolder, "EmptyMod")).FullName;
+        Place(new PluginPlace("EmptyMod", emptyFolder, null));
+
+        var result = await Handler.CreatePluginIn("EmptyMod", "Patch.esp");
+
+        Assert.Null(result.Refusal);
+        Assert.True(File.Exists(Path.Combine(emptyFolder, "Patch.esp")));
+    }
+
+    [Fact]
+    public async Task CreatePluginIn_Overwrite_WritesItInOverwritesFolder()
+    {
+        var overwrite = Directory.CreateDirectory(Path.Combine(_data.DataFolder, "overwrite")).FullName;
+        Place(new PluginPlace(PluginOrigin.Overwrite, overwrite, null));
+
+        var result = await Handler.CreatePluginIn(PluginOrigin.Overwrite, "Patch.esp");
+
+        Assert.Null(result.Refusal);
+        Assert.Equal(new PluginAddress("Patch.esp", PluginOrigin.Overwrite), result.Created);
+        Assert.True(File.Exists(Path.Combine(overwrite, "Patch.esp")));
+    }
+
+    [Fact]
     public async Task CreatePluginIn_ThatRefuses_MarksNothing()
     {
         var awaited = _holder.ArrivalAwaited;
@@ -58,9 +90,8 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
 
     [Theory]
     [InlineData("NoSuchMod")]
-    [InlineData(PluginOrigin.Overwrite)]
     [InlineData(PluginOrigin.DataDirectory)]
-    public async Task CreatePluginIn_AnOriginThatIsNotAModTheLoadOrderHoldsAPluginOf_RefusesNamingItAndWritesNothing(string origin)
+    public async Task CreatePluginIn_AnOriginThatIsNoPlaceOfTheLoadOrder_RefusesNamingItAndWritesNothing(string origin)
     {
         var awaited = _holder.ArrivalAwaited;
 
