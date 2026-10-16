@@ -102,6 +102,7 @@ public sealed class CompareGoldenApiFixture : IDisposable
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
             mods = Array.Empty<object>(),
+            places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
         }).GetAwaiter().GetResult();

@@ -11,7 +11,7 @@ import { pluginOrderOf } from './pluginOrder';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile, pluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
-import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress, type StampedFile } from '../wire/pluginAddress';
+import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress, type PluginPlace, type StampedFile } from '../wire/pluginAddress';
 import type { ModByFolder } from '../wire/modByFolder';
 
 export { OVERWRITE_ORIGIN };
@@ -71,6 +71,8 @@ export interface LoadOrderSnapshotValue<F = StampedFile> {
   readonly archives: F[];
   /** The loose strings files the game reads, each at the path that wins. */
   readonly stringsFiles: F[];
+  /** Each enabled mod that has a mod folder, then Overwrite: where the plugin create gesture offers to put a plugin. */
+  readonly places: PluginPlace[];
   /** Each mod of the mod order that has a mod folder. */
   readonly mods: ModByFolder[];
   readonly statCache: string;
@@ -270,6 +272,8 @@ export function loadOrderSnapshotOf(value: {
   readonly modFolders: ModFolders | undefined;
   /** Each source mod's source folder, by mod name. */
   readonly sourceDirs: ReadonlyMap<string, string>;
+  /** Where a new plugin can live (`pluginPlacesOf`). */
+  readonly places: readonly PluginPlace[];
   readonly archives: ArchiveSources;
   readonly modlist: SnapshotModlist;
 }): LoadOrderSnapshotValue<string> | LoadOrderSnapshotRefusal | undefined {
@@ -318,6 +322,7 @@ export function loadOrderSnapshotOf(value: {
     active,
     loadedWithNoLine: loadedWithNoLine.map(({ name, origin }) => ({ name, origin })),
     ...archivesAndStringsOf(value.archives, dataFolder, active),
+    places: [...value.places],
     mods: snapshotModsOf(value.modlist, value.modFolders),
     statCache: value.modlist.statCache,
   };

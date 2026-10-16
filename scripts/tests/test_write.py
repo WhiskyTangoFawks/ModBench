@@ -5,8 +5,10 @@ import unittest
 import medit
 from tests.fixture_medit import (
     CONDITIONS,
+    EMPTY_MOD,
     LIGHT,
     LIGHT_RECORD,
+    OVERWRITE,
     RECIPE,
     RECIPE_FILE,
     changed,
@@ -113,10 +115,19 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
         self.addCleanup(watcher.join)
         self.assertTrue(medit.create_record(created, 'npc_').endswith(f':{NEW_PLUGIN}'))
 
-    def test_raises_for_a_create_of_a_plugin_in_overwrite_and_writes_nothing(self) -> None:
+    def test_creates_a_plugin_in_a_mod_that_holds_no_plugin(self) -> None:
+        medit.create_plugin(NEW_PLUGIN, EMPTY_MOD)
+        self.assertTrue((self.fixture.instance / 'mods' / EMPTY_MOD / NEW_PLUGIN).exists())
+
+    def test_creates_a_plugin_in_overwrite_with_no_source(self) -> None:
+        medit.create_plugin(NEW_PLUGIN, OVERWRITE)
+        self.assertTrue((self.fixture.instance / 'overwrite' / NEW_PLUGIN).exists())
+        self.assertEqual(changed(self.source), [])
+
+    def test_raises_for_a_create_of_a_plugin_in_a_place_the_load_order_does_not_offer_and_writes_nothing(self) -> None:
         with self.assertRaises(medit.MEditError) as raised:
-            medit.create_plugin(NEW_PLUGIN, 'overwrite/')
-        self.assertIn('overwrite/', str(raised.exception))
+            medit.create_plugin(NEW_PLUGIN, 'No Such Mod')
+        self.assertIn('No Such Mod', str(raised.exception))
         self.assertEqual(changed(self.source), [])
 
     def test_raises_for_a_create_of_a_plugin_the_mod_already_holds(self) -> None:

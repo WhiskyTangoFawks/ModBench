@@ -31,6 +31,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
             mods = Array.Empty<object>(),
+            places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
         });
@@ -57,6 +58,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             archives,
             stringsFiles,
             mods = Array.Empty<object>(),
+            places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
         });
@@ -86,6 +88,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
             mods = Array.Empty<object>(),
+            places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
         });
@@ -99,6 +102,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     [InlineData("loadedWithNoLine")]
     [InlineData("archives")]
     [InlineData("stringsFiles")]
+    [InlineData("places")]
     [InlineData("mods")]
     [InlineData("statCache")]
     public async Task PutLoadOrder_WithAListItNeverDefaultsLeftOut_Returns400(string omitted)
@@ -112,6 +116,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             ["loadedWithNoLine"] = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
             ["archives"] = Array.Empty<string>(),
             ["stringsFiles"] = Array.Empty<string>(),
+            ["places"] = Array.Empty<object>(),
             ["mods"] = Array.Empty<object>(),
             ["statCache"] = "stat-cache",
             ["gameRelease"] = "Fallout4",
@@ -150,6 +155,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
             mods = Array.Empty<object>(),
+            places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
         });
@@ -178,6 +184,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
             mods = Array.Empty<object>(),
+            places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
         });
@@ -198,6 +205,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
             mods = Array.Empty<object>(),
+            places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
         });
@@ -230,6 +238,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
             mods = Array.Empty<object>(),
+            places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
         });
@@ -258,6 +267,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
             mods = Array.Empty<object>(),
+            places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
         });
@@ -278,6 +288,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
             mods = Array.Empty<object>(),
+            places = Array.Empty<object>(),
             statCache = "stat-cache",
         });
 
@@ -298,6 +309,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             archives = Array.Empty<string>(),
             stringsFiles = Array.Empty<string>(),
             mods = Array.Empty<object>(),
+            places = Array.Empty<object>(),
             statCache = "stat-cache",
             gameRelease = "Fallout4",
         });
