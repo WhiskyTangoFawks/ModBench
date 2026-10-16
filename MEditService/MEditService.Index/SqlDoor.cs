@@ -3,9 +3,8 @@ using DuckDB.NET.Data;
 
 namespace MEditService.Index;
 
-/// <summary>A filter or a read is one SELECT over the views of one schema: the views of <c>main</c>, which
-/// see only the active plugins (ADR-0012), or the views of <c>indexed</c>, which see every registered
-/// plugin. DuckDB's own parse says what else it would read.</summary>
+/// <summary>A filter or a read is one SELECT over the views of one schema: <c>main</c>, which sees the
+/// active plugins (ADR-0012), or <c>indexed</c>, which sees every registered plugin.</summary>
 internal static class SqlDoor
 {
     private static readonly char[] FileNameCharacters = ['/', '\\', '.', ':'];
