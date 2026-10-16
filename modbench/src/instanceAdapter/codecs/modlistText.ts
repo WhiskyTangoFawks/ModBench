@@ -61,20 +61,13 @@ export function setEnabledInText(text: string, modName: string, enabled: boolean
   });
 }
 
-/** How mod order matches a line against another: the kind and the name without case. */
 export const modLineKey = ({ kind, name }: EntryRef): string => `${kind}:${modNameKey(name)}`;
 
-/** The new separator goes directly after a mod anchor, and before the first mod of a separator
- *  anchor's own group, taking none. */
+/** Directly after a mod anchor, and before the first mod of a separator anchor's own group, taking none.
+ *  Throws if the anchor is absent. */
 export function insertSeparatorBesideInText(text: string, name: string, anchor: EntryRef): string {
   return editLines(text, (lines) => {
-    const lineAt = firstLines(entryLineIndices(lines, isEntryLine), (at) => modLineKey(entryNamed((lines[at] ?? '').slice(1)))).kept;
-    const entries = lineAt.map((at) => entryNamed((lines[at] ?? '').slice(1)));
-    const at = entries.findIndex((entry) => modLineKey(entry) === modLineKey(anchor));
-    if (at === -1) throw new Error(`${anchor.name} is not in the modlist`);
-    let start = at;
-    while (anchor.kind === 'separator' && start > 0 && entries[start - 1]?.kind === 'mod') start--;
-    const insertAt = anchor.kind === 'mod' ? (lineAt[at] ?? 0) + 1 : (lineAt[start] ?? 0);
+    const insertAt = anchor.kind === 'mod' ? modLineAt(lines, anchor.name) + 1 : separatorBlockStartAt(lines, anchor.name);
     lines.splice(insertAt, 0, `+${separatorModName(name)}`);
     return lines;
   });

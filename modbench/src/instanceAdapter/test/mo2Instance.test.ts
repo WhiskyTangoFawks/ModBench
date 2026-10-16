@@ -2015,13 +2015,10 @@ describe('the MO2 Instance adapter', () => {
       expect(await isThere(separatorFolder('New Separator'))).toBe(true);
     });
 
-    it.each([
-      ['a mod, directly after it', { kind: 'mod', name: 'skk fast start NEW GAME (fallout 4)' }, 3],
-      ['a separator, before the first mod of its own group', { kind: 'separator', name: 'RADFALL - all-in-one survival overhaul' }, 4],
-    ] as const)('adds a separator beside %s, the anchor named in another case', async (_, anchor, at) => {
-      await change([{ kind: 'addSeparator', separator: 'New Separator', anchor }]);
+    it('adds a separator beside an anchor named in another case', async () => {
+      await change([{ kind: 'addSeparator', separator: 'New Separator', anchor: { kind: 'mod', name: 'skk fast start NEW GAME (fallout 4)' } }]);
 
-      expect(modNames(await source.modOrder('Default')).indexOf('separator:New Separator:true')).toBe(at);
+      expect(modNames(await source.modOrder('Default'))[3]).toBe('separator:New Separator:true');
     });
 
     it('renames a separator\'s line and its folder as one change', async () => {

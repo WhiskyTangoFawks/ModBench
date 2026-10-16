@@ -160,7 +160,7 @@ export class ModListProvider
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<ModlistNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private tree?: ModGroups;
+  private modGroups?: ModGroups;
   private modsHoldingPlugin = new Set<string>();
   private filterText = '';
   private filterLower = '';
@@ -197,7 +197,7 @@ export class ModListProvider
   /** Re-pulls `instance.value` rather than trusting the copy the last subscriber callback left. */
   invalidate(): void {
     this.instanceValue = this.instance.value;
-    this.tree = undefined;
+    this.modGroups = undefined;
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -297,20 +297,19 @@ export class ModListProvider
     await this.firstRead.settled; // never render before the Instance has actually read once
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
 
-    const tree = this.ensureLoaded();
-    const { ungrouped, separators } = this.entryRoots(tree);
+    const { ungrouped, separators } = this.entryRoots(this.loadedModGroups());
     const overwrite = this.overwriteNode();
     return this.direction === 'winningAtTop'
       ? [overwrite, ...[...separators].reverse(), ...[...ungrouped].reverse()]
       : [...ungrouped, ...separators, overwrite];
   }
 
-  private ensureLoaded(): ModGroups {
-    if (!this.tree) {
-      this.tree = this.instanceValue.modGroups;
+  private loadedModGroups(): ModGroups {
+    if (!this.modGroups) {
+      this.modGroups = this.instanceValue.modGroups;
       this.modsHoldingPlugin = new Set(this.instanceValue.plugins.map((p) => p.origin));
     }
-    return this.tree;
+    return this.modGroups;
   }
 
   // The roots other than Overwrite, losing end first: the ungrouped mods, which sit below every
@@ -391,7 +390,7 @@ export class ModListProvider
 
   private groupHolding(modName: string): ModGroup | undefined {
     if (this.filterText && !this.groupingOn) return undefined;
-    return this.ensureLoaded().groups.find((g) => g.mods.some((m) => m.name === modName));
+    return this.loadedModGroups().groups.find((g) => g.mods.some((m) => m.name === modName));
   }
 
   private showsMod(mod: Mod): boolean {
