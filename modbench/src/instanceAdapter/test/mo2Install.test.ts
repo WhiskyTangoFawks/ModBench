@@ -15,7 +15,7 @@ const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(re
 import { mkdir, mkdtemp, readdir, readFile, rename as fsRename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ArchiveReader, InstanceAdapter, InstallSource } from '../instanceAdapter';
+import type { ArchiveReader, InstanceAdapter, InstallPackage } from '../instanceAdapter';
 import { SCRIPT_EXTENDER_FOLDERS } from '../../tables/gamePaths';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
@@ -25,7 +25,7 @@ const MOD = 'New Mod';
 const UPGRADED = 'Unofficial Fallout 4 Patch';
 const DOWNLOAD = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 const PAYLOAD = ['Installed.esp', 'textures/added.dds', 'meshes/deep/nested.nif'];
-const ARCHIVE: InstallSource = { kind: 'archive', path: '/elsewhere/Release-1-0.7z' };
+const ARCHIVE: InstallPackage = { kind: 'archive', path: '/elsewhere/Release-1-0.7z' };
 const KEYS = { gameName: 'Fallout 4' };
 
 const errnoError = (code: string, message: string): NodeJS.ErrnoException =>
