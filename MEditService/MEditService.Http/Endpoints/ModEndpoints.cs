@@ -80,11 +80,11 @@ internal static class ModEndpoints
         BuildConfigurationRequest req, BuildConfigurationHandler handler, ILoggerFactory loggerFactory)
     {
         IReadOnlyList<string> exclude = req.Exclude ?? [], include = req.Include ?? [];
-        if (string.IsNullOrWhiteSpace(req.SourceFolder) || (req.Output is { } output && !IsFolderName(output))
-            || !exclude.Concat(include).All(IsPathInTheMod) || (req.Output is null && exclude.Count + include.Count == 0))
+        if (string.IsNullOrWhiteSpace(req.SourceFolder) || (req.Output is null && exclude.Count + include.Count == 0)
+            || exclude.Concat(include).Any(path => path is null))
         {
             return Results.Problem(
-                "A source folder is required, with an output that is a folder name, or paths in the mod folder to exclude or include.",
+                "A source folder is required, with an output, or paths to exclude or include.",
                 statusCode: 400);
         }
 
@@ -93,12 +93,6 @@ internal static class ModEndpoints
         EndpointMapping.LogRefusal(loggerFactory.CreateLogger(nameof(ModEndpoints)), "Change build configuration", refusal, result.Message, req.SourceFolder);
         return EndpointMapping.Refusal(refusal, result.Message);
     }
-
-    private static bool IsFolderName(string name) => IsPathInTheMod(name) && !name.Contains('/', StringComparison.Ordinal);
-
-    private static bool IsPathInTheMod(string? path) =>
-        path is not null && !path.Contains('\\', StringComparison.Ordinal) && !Path.IsPathRooted(path)
-        && path.Split('/').All(segment => !string.IsNullOrWhiteSpace(segment) && segment is not ("." or ".."));
 
     // build-mod: the selection (commands.md, A selection is one gesture).
     internal static async Task<IResult> Build(BuildRequest req, BuildHandler buildHandler, ILoggerFactory loggerFactory)
