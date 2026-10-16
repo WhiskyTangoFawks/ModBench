@@ -7,7 +7,7 @@ using static MEditService.Http.Tests.Api.QueriedPluginsFixture;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class QueryIndexApiTests(LoadedApiFixture<QueriedPluginsFixture> loaded)
+public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixture> loaded)
     : IClassFixture<LoadedApiFixture<QueriedPluginsFixture>>
 {
     private HttpClient Client => loaded.Client;

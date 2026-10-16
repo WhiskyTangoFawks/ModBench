@@ -13,7 +13,7 @@ using static MEditService.Http.Tests.Api.QueriedPluginsFixture;
 
 namespace MEditService.Http.Tests.Traces;
 
-public sealed class QueryIndexTraceTests : HostedTests
+public sealed class QueryRecordIndexTraceTests : HostedTests
 {
     private async Task LoadedQueriedPlugins() =>
         (await Client.PutLoadOrder(Owned(new QueriedPluginsFixture()).Data)).EnsureSuccessStatusCode();

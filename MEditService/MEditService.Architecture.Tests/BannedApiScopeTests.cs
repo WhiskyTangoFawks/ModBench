@@ -10,10 +10,10 @@ public sealed class BannedApiScopeTests
     [
         "MEditService.Commands",
         "MEditService.Http",
-        "MEditService.RecordIndex",
         "MEditService.LoadOrder",
         "MEditService.ModFolderAdapter",
         "MEditService.Ports",
+        "MEditService.RecordIndex",
         "MEditService.SourceAdapter",
     ];
 
