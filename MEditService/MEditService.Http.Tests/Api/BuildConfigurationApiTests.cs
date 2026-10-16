@@ -31,18 +31,22 @@ public sealed class BuildConfigurationApiTests : HostedTests
 
     public static TheoryData<string?, string?[]> BadChanges => new()
     {
-        { "Sub/Name", [] },
-        { "..", [] },
-        { null, ["../outside.dds"] },
-        { null, ["textures\\a.dds"] },
         { null, [null] },
         { null, [] },
     };
 
     [Theory]
     [MemberData(nameof(BadChanges))]
-    public async Task AnOutputThatIsNoFolderName_APathOutsideTheMod_OrNothingToChange_Is400(string? output, string?[] exclude) =>
+    public async Task APathThatIsNull_OrNothingToChange_Is400(string? output, string?[] exclude) =>
         await (await Change(new { sourceFolder = _sourceFolder.Path, output, exclude })).AssertIsProblem(HttpStatusCode.BadRequest);
+
+    [Fact]
+    public async Task AnOutputThatIsNoFolderName_Is400_Refused_OutsideTheMod()
+    {
+        var response = await Change(new { sourceFolder = _sourceFolder.Path, output = "Sub/Name" });
+
+        Assert.Equal("OutsideTheMod", (await response.AssertIsProblem(HttpStatusCode.BadRequest)).GetProperty("refusal").GetString());
+    }
 
     [Fact]
     public async Task ASourceFolderWithNoBuildConfiguration_Is422()

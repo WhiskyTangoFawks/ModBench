@@ -148,6 +148,7 @@ internal static class EndpointMapping
         detail: message,
         statusCode: refusal switch
         {
+            BuildConfigurationRefusal.OutsideTheMod => 400,
             // The request is sound; the disk refused the write.
             BuildConfigurationRefusal.WriteFailed => 500,
             _ => 422,

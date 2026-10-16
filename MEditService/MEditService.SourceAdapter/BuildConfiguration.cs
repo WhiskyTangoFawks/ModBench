@@ -43,7 +43,7 @@ internal static class BuildConfiguration
         var configuration = Read(sourceFolder, File.ReadAllBytes(PathIn(sourceFolder)));
         if (configuration[OutputKey] is not JsonValue named || !named.TryGetValue<string>(out var output))
             throw Unreadable(sourceFolder, "it names no output");
-        if (!IsPathInTheMod(output) || output.Contains('/', StringComparison.Ordinal))
+        if (!IsFolderName(output))
             throw Unreadable(sourceFolder, $"its output '{output}' is not a folder name");
 
         var sharing = SharedSources.SharingOf(sourceFolder);
@@ -75,6 +75,11 @@ internal static class BuildConfiguration
     /// committed (ADR-0007).</summary>
     internal static void Change(string sourceFolder, BuildConfigurationChange change)
     {
+        if (change.Output is { } named && !IsFolderName(named))
+            throw SourceStopException.OutsideTheMod($"The output '{named}' is not a folder name.");
+        if (change.Exclude.Concat(change.Include).FirstOrDefault(path => !IsPathInTheMod(path)) is { } outside)
+            throw SourceStopException.OutsideTheMod($"'{outside}' is not a path in the mod folder.");
+
         var path = PathIn(sourceFolder);
         var configuration = Read(sourceFolder, File.ReadAllBytes(path));
         var excluded = ExclusionsIn(sourceFolder, configuration);
@@ -90,6 +95,8 @@ internal static class BuildConfiguration
 
         new WriteJournal(sourceFolder).Write(path, Spelled(configuration));
     }
+
+    private static bool IsFolderName(string name) => IsPathInTheMod(name) && !name.Contains('/', StringComparison.Ordinal);
 
     /// <summary>A forward-slash path that stays inside the mod folder.</summary>
     internal static bool IsPathInTheMod(string path) =>

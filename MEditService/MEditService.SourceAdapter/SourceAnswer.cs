@@ -112,6 +112,15 @@ public abstract record SourceFailure
         public override bool DecompileRepairs => false;
     }
 
+    public sealed record OutsideTheMod : SourceFailure
+    {
+        internal OutsideTheMod(string reason) : base(reason)
+        {
+        }
+
+        public override bool DecompileRepairs => false;
+    }
+
     /// <summary>The file system would not give a read or write what it needs: a file or folder is gone,
     /// another program holds it, or access is denied.</summary>
     public sealed record Inaccessible : SourceFailure
@@ -194,6 +203,8 @@ internal sealed class SourceStopException : InvalidOperationException
             Path.GetRelativePath(sourceFolder, file),
             $"'{file}' is filed as a record in this plugin's source tree, but {because}.",
             formKey));
+
+    internal static SourceStopException OutsideTheMod(string reason) => new(new SourceFailure.OutsideTheMod(reason));
 
     internal static SourceStopException Ambiguous(string reason) => new(new SourceFailure.Ambiguous(reason, null));
 
