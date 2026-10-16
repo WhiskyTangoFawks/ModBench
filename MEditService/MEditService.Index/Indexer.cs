@@ -1102,7 +1102,7 @@ internal sealed class Indexer : IDisposable
 
     public void ClearFilter() => ApplyFilter(null);
 
-    /// <summary>The rows of one SELECT over the record views, once the whole set is read.</summary>
+    /// <summary>The rows of one SELECT over the views of every plugin the index holds, once the whole set is read.</summary>
     public Answer<JsonElement[], string> Select(string sql)
     {
         var reads = RequireWholeSetReads();

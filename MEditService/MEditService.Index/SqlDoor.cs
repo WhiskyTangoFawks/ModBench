@@ -1,10 +1,11 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 using DuckDB.NET.Data;
 
 namespace MEditService.Index;
 
-/// <summary>A filter or a read is one SELECT over the public relations of <c>main</c>, which see only the
-/// active plugins (ADR-0012). DuckDB's own parse says what else it would read.</summary>
+/// <summary>A filter or a read is one SELECT over the views of one schema: <c>main</c>, which sees the
+/// active plugins (ADR-0012), or <c>indexed</c>, which sees every plugin the index holds.</summary>
 internal static class SqlDoor
 {
     private static readonly char[] FileNameCharacters = ['/', '\\', '.', ':'];
@@ -13,7 +14,7 @@ internal static class SqlDoor
     private static readonly HashSet<string> RowSources = new(StringComparer.OrdinalIgnoreCase) { "unnest", "range", "generate_series" };
 
     /// <summary>Why <paramref name="sql"/> may not pass the door, or null when it may.</summary>
-    internal static string? RefusalOf(DuckDBConnection connection, string sql)
+    internal static string? RefusalOf(DuckDBConnection connection, string sql, string schema)
     {
         using var parsed = JsonDocument.Parse(
             DuckDbSql.ScalarString(connection, "SELECT json_serialize_sql($1::VARCHAR)", sql) ?? "{}");
@@ -23,38 +24,77 @@ internal static class SqlDoor
             return root.GetProperty("error_message").GetString();
         if (root.GetProperty("statements").GetArrayLength() != 1)
             return "Only one SELECT statement is read.";
-        return RefusalIn(root);
+
+        var views = DuckDbSql.Rows(
+            connection,
+            "SELECT table_name FROM information_schema.tables WHERE table_catalog = current_database() AND table_schema = $1 AND table_type = 'VIEW' AND table_name <> $2",
+            reader => reader.GetString(0), schema, TableDdlBuilder.PluginRecordsView);
+        return new SchemaViews(schema, views).RefusalIn(root, ImmutableHashSet<string>.Empty.WithComparer(StringComparer.OrdinalIgnoreCase));
     }
 
-    private static string? RefusalIn(JsonElement node) => node.ValueKind switch
+    private sealed class SchemaViews(string schema, IEnumerable<string> views)
     {
-        JsonValueKind.Object => RefusalOfRef(node) ?? FirstRefusal(node.EnumerateObject().Select(p => p.Value)),
-        JsonValueKind.Array => FirstRefusal(node.EnumerateArray()),
-        _ => null,
-    };
+        private readonly HashSet<string> _views = new(views, StringComparer.OrdinalIgnoreCase);
 
-    private static string? FirstRefusal(IEnumerable<JsonElement> nodes) =>
-        nodes.Select(RefusalIn).FirstOrDefault(refusal => refusal is not null);
-
-    private static string? RefusalOfRef(JsonElement node)
-    {
-        if (!node.TryGetProperty("type", out var type) || type.ValueKind != JsonValueKind.String) return null;
-        switch (type.GetString())
+        // A WITH's name covers its own query node, the later entries of its list and, if recursive, its
+        // right side. Elsewhere the name is the real relation's.
+        internal string? RefusalIn(JsonElement node, ImmutableHashSet<string> commonTableExpressions) => node.ValueKind switch
         {
-            case "BASE_TABLE":
-                var catalog = node.GetProperty("catalog_name").GetString();
-                var schema = node.GetProperty("schema_name").GetString();
-                var table = node.GetProperty("table_name").GetString();
-                if (table is not null && table.IndexOfAny(FileNameCharacters) >= 0)
-                    return $"Only the record views are read, and {table} is a file.";
-                if (string.IsNullOrEmpty(catalog) && schema is "" or "main") return null;
-                var name = string.Join('.', new[] { catalog, schema, table }.Where(part => !string.IsNullOrEmpty(part)));
-                return $"Only the record views are read, and {name} is not one.";
-            case "TABLE_FUNCTION":
-                var function = node.GetProperty("function").GetProperty("function_name").GetString() ?? "";
-                return RowSources.Contains(function) ? null : $"Only the record views are read, and the table function {function} is not one.";
-            default:
-                return null;
+            JsonValueKind.Object => RefusalInObject(node, commonTableExpressions),
+            JsonValueKind.Array => FirstRefusal(node.EnumerateArray(), commonTableExpressions),
+            _ => null,
+        };
+
+        private string? RefusalInObject(JsonElement node, ImmutableHashSet<string> commonTableExpressions)
+        {
+            if (RefusalOfRef(node, commonTableExpressions) is { } refusal) return refusal;
+
+            var covered = commonTableExpressions;
+            if (node.TryGetProperty("cte_map", out var list))
+            {
+                foreach (var entry in list.GetProperty("map").EnumerateArray())
+                {
+                    if (RefusalIn(entry.GetProperty("value"), covered) is { } inEntry) return inEntry;
+                    covered = covered.Add(entry.GetProperty("key").GetString() ?? "");
+                }
+            }
+            var recursiveName = node.TryGetProperty("cte_name", out var recursive) ? recursive.GetString() : null;
+            return node.EnumerateObject().Where(p => p.Name != "cte_map")
+                .Select(p => RefusalIn(p.Value, p.Name == "right" && recursiveName is not null ? covered.Add(recursiveName) : covered))
+                .FirstOrDefault(refusal => refusal is not null);
+        }
+
+        private string? FirstRefusal(IEnumerable<JsonElement> nodes, ImmutableHashSet<string> commonTableExpressions) =>
+            nodes.Select(node => RefusalIn(node, commonTableExpressions)).FirstOrDefault(refusal => refusal is not null);
+
+        private string? RefusalOfRef(JsonElement node, ImmutableHashSet<string> commonTableExpressions)
+        {
+            if (!node.TryGetProperty("type", out var type) || type.ValueKind != JsonValueKind.String) return null;
+            switch (type.GetString())
+            {
+                case "BASE_TABLE":
+                    var catalog = node.GetProperty("catalog_name").GetString();
+                    var tableSchema = node.GetProperty("schema_name").GetString();
+                    var table = node.GetProperty("table_name").GetString();
+                    if (table is not null && table.IndexOfAny(FileNameCharacters) >= 0)
+                        return $"Only the views are read, and {table} is a file.";
+                    var unqualified = string.IsNullOrEmpty(catalog) && string.IsNullOrEmpty(tableSchema);
+                    if (unqualified && table is not null && (_views.Contains(table) || commonTableExpressions.Contains(table))) return null;
+                    var name = string.Join('.', new[] { catalog, tableSchema, table }.Where(part => !string.IsNullOrEmpty(part)));
+                    return NotAView($"{name} is not one");
+                case "TABLE_FUNCTION":
+                    var function = node.GetProperty("function").GetProperty("function_name").GetString() ?? "";
+                    return RowSources.Contains(function) ? null : NotAView($"the table function {function} is not one");
+                default:
+                    return null;
+            }
+        }
+
+        private string NotAView(string reason)
+        {
+            var named = TableDdlBuilder.FixedViews.Concat(schema == TableDdlBuilder.IndexedSchema ? [TableDdlBuilder.ViewColumnsView] : []);
+            var columns = schema == TableDdlBuilder.IndexedSchema ? $" {TableDdlBuilder.ViewColumnsView} lists the columns of each." : "";
+            return $"Only the views are read: {string.Join(", ", named)}, and one view per record type. {reason}.{columns}";
         }
     }
 }

@@ -82,6 +82,8 @@ const INSTRUCTIONS = `Name objects as Modbench's views do: a plugin by its file 
 
 A plugin with source is a text file in a repository: edit it with your file tools, and the user reviews the change in Source Control. A plugin with no source is a binary: never edit it. Mod manager files change only through the gesture tools. A gesture runs on the argument and options given, never on the selection, with no picker, prompt or confirmation, and answers once Modbench's views show its change: with its outcome, or with what landed and each item refused and why. A change to many records by a rule is a script: write a Python file with import medit and run it in your shell with the variables script_environment returns. help(medit) lists its functions.
 
+A SELECT reads only the views: select_rows says which.
+
 Ask Modbench what the files cannot answer.`;
 
 function mcpServerOf({ instance, mEdit, terminalEnvironment, modStatus, log }: AgentServerOptions): McpServer {

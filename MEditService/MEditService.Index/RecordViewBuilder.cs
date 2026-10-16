@@ -15,20 +15,23 @@ internal static class RecordViewBuilder
         // is in the column's own PropertyName, so Projection needs nothing special.
         foreach (var (tableName, schema) in schemas)
         {
-            DuckDbSql.Execute(connection, BuildViewSql(tableName, schema));
+            DuckDbSql.Execute(connection, BuildViewSql(tableName, schema, TableDdlBuilder.ActiveSchema));
+            DuckDbSql.Execute(connection, BuildViewSql(tableName, schema, TableDdlBuilder.IndexedSchema));
         }
     }
 
-    internal static string BuildViewSql(string tableName, RecordTableSchema schema)
+    internal static string BuildViewSql(string tableName, RecordTableSchema schema, string viewSchema)
     {
         var sb = new StringBuilder();
-        sb.Append(CultureInfo.InvariantCulture, $"CREATE OR REPLACE VIEW \"{tableName}\" AS SELECT ");
-        sb.Append("form_key, plugin, origin, load_order_idx, is_winner, editor_id");
+        sb.Append(CultureInfo.InvariantCulture, $"CREATE OR REPLACE VIEW {viewSchema}.\"{tableName}\" AS SELECT ");
+        sb.Append("form_key, plugin, origin, load_order_idx, is_winner, ");
+        if (viewSchema == TableDdlBuilder.IndexedSchema) sb.Append("is_active, ");
+        sb.Append("editor_id");
 
         foreach (var col in schema.RecordColumns.Where(c => IsViewable(c) && !c.Field.IsEditorId))
             sb.Append(CultureInfo.InvariantCulture, $", {Projection(col)} AS \"{col.Name}\"");
 
-        sb.Append(CultureInfo.InvariantCulture, $" FROM records WHERE record_type = '{tableName}'");
+        sb.Append(CultureInfo.InvariantCulture, $" FROM {viewSchema}.records WHERE record_type = '{tableName}'");
         return sb.ToString();
     }
 
