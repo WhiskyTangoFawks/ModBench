@@ -14,4 +14,5 @@ A mod folder is one source unpacked through a selection: one installation file, 
 
 - A source for each file, as Wabbajack records it. It records any folder, a merged install included, but every line repeats its source, and where a folder comes from is many facts, not one.
 - The manifest pins a source mod by its remote and commit. Each commit then rewrites every line the source provides, and Modbench maintains what git's submodules already do.
+- A source mod built over an installation file, its source overriding what the download provides. The download stays a mod of its own, and a source mod after it in the mod order holds only the change, so mod order layers the two as it layers any mods, and git never holds the download's assets.
 - The manifest pins a source mod by a branch. A branch moves, so two clones of one commit build two different mods.
