@@ -138,11 +138,44 @@ public sealed class BackendContentRootTests
         }
     }
 
-    private static Process SpawnThroughTheDotnetMuxer(IReadOnlyList<string> extraArgs, string workingDirectory, List<string> capturedLines)
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    public async Task SpawnedWithStdinPiped_ExitsWhenStdinCloses_OnlyWhenAskedTo(bool asked, bool stdinCloses, bool exits)
+    {
+        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
+        var lines = new List<string>();
+        string[] args = asked
+            ? ["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost, "--ExitWhenStdinCloses", "true"]
+            : ["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost];
+        using var process = SpawnThroughTheDotnetMuxer(args, workingDirectory, lines, pipeStdin: true);
+        try
+        {
+            var started = await WaitForLineAsync(lines,
+                l => l.Contains("Application started", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(15));
+            Assert.True(started,
+                $"backend never reported starting; captured output:\n{string.Join('\n', Snapshot(lines))}");
+
+            if (stdinCloses) process.StandardInput.Close();
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(exits ? 15 : 3));
+            var exited = await process.WaitForExitAsync(deadline.Token).ContinueWith(t => t.IsCompletedSuccessfully, TaskScheduler.Default);
+
+            Assert.Equal(exits, exited);
+        }
+        finally
+        {
+            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
+        }
+    }
+
+    private static Process SpawnThroughTheDotnetMuxer(IReadOnlyList<string> extraArgs, string workingDirectory, List<string> capturedLines, bool pipeStdin = false)
     {
         var psi = new ProcessStartInfo("dotnet")
         {
             WorkingDirectory = workingDirectory,
+            RedirectStandardInput = pipeStdin,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,

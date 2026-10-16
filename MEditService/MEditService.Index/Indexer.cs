@@ -635,7 +635,7 @@ internal sealed class Indexer : IDisposable
             token.ThrowIfCancellationRequested();
             ReadOne(scope, plugin, state =>
                 held.Open(plugin, Registration.In(snapshot, plugin.Key), snapshot).Holds(out var metadata, out var failure)
-                    ? ReadWhole(scope, metadata, state)
+                    ? ReadWhole(scope, metadata, state, token)
                     : ReadOutcome.Failed(failure), token);
         }
 
@@ -846,7 +846,7 @@ internal sealed class Indexer : IDisposable
     private ReadOutcome IndexOnePluginRows(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
     {
         var truth = scope.Projector.TruthOf(plugin.Registered);
-        if (truth != DerivedFrom.SourceTree) return IndexFromBinary(scope, plugin, truth);
+        if (truth != DerivedFrom.SourceTree) return IndexFromBinary(scope, plugin, truth, token);
 
         ReadOutcome stoppedAt;
         try
@@ -868,7 +868,7 @@ internal sealed class Indexer : IDisposable
 
         var binary = BinaryStandsIn(scope.Store, plugin.Key, state)
             ? ReadOutcome.Read
-            : IndexFromBinary(scope, plugin, DerivedFrom.BinaryForUnreadableSource);
+            : IndexFromBinary(scope, plugin, DerivedFrom.BinaryForUnreadableSource, token);
         return binary.Failure is null ? stoppedAt : binary;
     }
 
@@ -879,7 +879,7 @@ internal sealed class Indexer : IDisposable
 
     // ADR-0005: the binary reaches the index as documents, through the adapter's own door,
     // never as a mod this side holds.
-    private ReadOutcome IndexFromBinary(OpenScope scope, PluginMetadata plugin, DerivedFrom derivedFrom)
+    private ReadOutcome IndexFromBinary(OpenScope scope, PluginMetadata plugin, DerivedFrom derivedFrom, CancellationToken token)
     {
         var modPath = ModPathOf(plugin.Path);
         // Taken before the read, as the binary's hash is: strings changed during it are then read again.
@@ -891,7 +891,7 @@ internal sealed class Indexer : IDisposable
         }
 
         using var documents = opened;
-        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom, stringsRead) is not { } refused) return ReadOutcome.Read;
+        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom, stringsRead, token) is not { } refused) return ReadOutcome.Read;
         _logger.LogWarning("Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, refused.Reason);
         return ReadOutcome.Failed(refused);
     }
@@ -971,7 +971,7 @@ internal sealed class Indexer : IDisposable
             // Rows a failed read left say nothing of what the plugin now reads from.
             if (held.IsHeldWithAFailure(key) || scope.Failed.Holds(key))
             {
-                return !scope.Failed.StillFailing(plugin.Registered) && ReindexHeldPlugin(scope, plugin);
+                return !scope.Failed.StillFailing(plugin.Registered) && ReindexHeldPlugin(scope, plugin, token);
             }
 
             var readWhole = false;
@@ -980,7 +980,7 @@ internal sealed class Indexer : IDisposable
                 readWhole = MustReadWhole(scope, plugin, holdsTree, state, token);
                 return ReadOutcome.Read;
             });
-            return readWhole && ReindexHeldPlugin(scope, plugin);
+            return readWhole && ReindexHeldPlugin(scope, plugin, token);
         }
         catch (Exception ex) when (FailsOnePlugin(ex, token))
         {
@@ -1060,15 +1060,15 @@ internal sealed class Indexer : IDisposable
     // ADR-0007: the read a first index runs, so a re-read produces the same rows by construction. A
     // failed read is recorded with what it read from and rethrown, so it is not read again until that
     // changes.
-    private bool ReindexHeldPlugin(OpenScope scope, PluginMetadata plugin)
+    private bool ReindexHeldPlugin(OpenScope scope, PluginMetadata plugin, CancellationToken token)
     {
         var key = plugin.Key;
         ReadOutcome outcome;
         try
         {
-            outcome = scope.Store.Commit(_ => scope.Failed.Read(plugin.Registered, state => ReadWhole(scope, plugin, state)));
+            outcome = scope.Store.Commit(_ => scope.Failed.Read(plugin.Registered, state => ReadWhole(scope, plugin, state, token)));
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (FailsOnePlugin(ex, token))
         {
             FailRead(scope, key, ReadFailure(PluginLoadFailure.ReasonFor(ex), scope.Store.DerivationOf(key)));
             throw;
@@ -1082,9 +1082,9 @@ internal sealed class Indexer : IDisposable
         return true;
     }
 
-    private ReadOutcome ReadWhole(OpenScope scope, PluginMetadata plugin, ReadState state) => scope.Store.Commit(projection =>
+    private ReadOutcome ReadWhole(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token) => scope.Store.Commit(projection =>
     {
-        var read = IndexOnePlugin(scope, plugin, state, CancellationToken.None);
+        var read = IndexOnePlugin(scope, plugin, state, token);
         if (read.Failure is null) projection.PluginChanged(plugin.Key);
         return read;
     });
