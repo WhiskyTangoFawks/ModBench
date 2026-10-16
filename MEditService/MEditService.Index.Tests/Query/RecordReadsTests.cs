@@ -124,6 +124,27 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
+    public void AListing_OrdersARecordWhoseFormKeyIsSpelledWithMutagensOtherDelimiter_ByItsMastersPosition()
+    {
+        using var fixture = new PluginFixtureBuilder("medit-sort-underscore-master")
+            .WithPlugin("Master.esm", mod => mod.Npcs.AddNew("Mastered"), origin: "MasterMod")
+            .WithPlugin("Later.esp", (mod, masters) =>
+            {
+                mod.Npcs.AddNew("Own");
+                mod.Npcs.GetOrAddAsOverride(masters[0].Npcs.Single());
+            }, origin: "LaterMod")
+            .BuildScattered()
+            .Tracked();
+        using var index = Indexes.Reconciled(fixture);
+        var later = fixture.Plugins.Single(p => p.Name == "Later.esp");
+        var overridden = index.DocumentOf(index.ListedIn(later.KeyOf()).Single(d => d.EditorId == "Mastered").FormKey, later.KeyOf());
+
+        index.Edit(later, overridden, later.SourceTextOf(overridden).Replace("000800:Master.esm", "000800_Master.esm", StringComparison.Ordinal));
+
+        Assert.Equal(["Mastered", "Own"], index.ListedIn(later.KeyOf()).Select(r => r.EditorId));
+    }
+
+    [Fact]
     public void ASearchTermsMatches_AreInEditorIdOrder()
     {
         using var fixture = ZebraBeforeApple();

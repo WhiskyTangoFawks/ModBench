@@ -22,7 +22,7 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IQueries
 
     public Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text = null) => throw Failed();
 
-    public Answer<CopiesCompared, IndexRefused> GetCompareRecords(IReadOnlyList<RecordCopy> copies) => throw Failed();
+    public Answer<CompareRecordsAnswer, IndexRefused> GetCompareRecords(IReadOnlyList<RecordCopy> copies) => throw Failed();
 
     public Answer<IReadOnlyList<PluginRecordTypeCount>, IndexRefused> GetPluginRecordTypes(PluginAddress plugin) => throw Failed();
 

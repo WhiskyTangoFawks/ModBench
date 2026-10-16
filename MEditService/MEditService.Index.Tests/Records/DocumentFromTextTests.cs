@@ -46,7 +46,9 @@ public sealed class DocumentFromTextTests
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
 
-        index.Queries.GetCompareRecords([new RecordCopy("00DEAD:Nowhere.esp", Elsewhere, "{}")]).Missing();
+        var answer = index.Queries.GetCompareRecords([new RecordCopy("00DEAD:Nowhere.esp", Elsewhere, "{}")]).Value();
+
+        Assert.IsType<CompareRecordsAnswer.Missing>(answer);
     }
 
     [Theory]

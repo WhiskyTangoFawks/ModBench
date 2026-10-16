@@ -49,9 +49,9 @@ public sealed class ArchitectureTests
         foreach (var record in ReadModelAndWireRecordNamespaces.SelectMany(box => box.Assembly.GetTypes()
             .Where(t => t.Namespace == box.Namespace && t.GetMethod("<Clone>$") != null)))
         {
-            var primary = record.GetConstructors().MaxBy(c => c.GetParameters().Length)
-                ?? throw new InvalidOperationException($"Expected '{record.Name}' to declare a constructor.");
-            offenders.AddRange(PluginStringsWithoutOrigin(primary.GetParameters())
+            offenders.AddRange(record.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .SelectMany(constructor => PluginStringsWithoutOrigin(constructor.GetParameters()))
+                .Distinct()
                 .Select(p => $"{record.Name}({p})"));
         }
         Assert.True(offenders.Count == 0, "A plugin travels as a string where its address or its origin belongs:\n" + string.Join("\n", offenders));

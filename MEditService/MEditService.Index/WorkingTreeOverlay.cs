@@ -115,9 +115,10 @@ internal sealed class WorkingTreeOverlay
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
 
         DuckDbSql.Execute(_connection, """
-            INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, body, content_hash)
-            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $5, $6)
-            """, formKey, key.Name, key.Origin, recordType, Stored(recordType, body), SourceRepository.ContentStamp(body));
+            INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, body, content_hash, form_key_plugin)
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $5, $6, $7)
+            """, formKey, key.Name, key.Origin, recordType, Stored(recordType, body), SourceRepository.ContentStamp(body),
+            RecordMasters.PluginNamedBy(formKey));
     }
 
     private bool IsRegisteredPlugin(PluginAddress key) =>
@@ -155,7 +156,9 @@ internal sealed class WorkingTreeOverlay
         }
 
         List<ContainerDocuments.ChildDocument> children = [];
-        var prepared = _ingest.PrepareRecord(new PluginDocument(recordType, formKey, body), schema, children);
+        var prepared = _ingest.PrepareRecord(new PluginDocument(recordType, formKey, body), key.Name, schema, children);
+        DuckDbSql.Execute(_connection, "UPDATE mirror.records SET masters = $4 WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin, prepared.Masters);
 
         DeleteFormReferencesForRecord(key, formKey);
         if (prepared.Refs.Count > 0)

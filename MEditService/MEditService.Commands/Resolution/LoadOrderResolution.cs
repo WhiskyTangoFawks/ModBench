@@ -36,7 +36,7 @@ internal sealed class LoadOrderResolution(
         var current = loadOrder.Current;
         var required = new RequiredMasters(destination);
         required.Add(new PluginDocument(identity.RecordType, identity.FormKey, body), schemaReflector.GetSchemas(current.GameRelease)[identity.RecordType]);
-        var originName = RequiredMasters.PluginNameIn(identity.FormKey);
+        var originName = RecordMasters.PluginNamedBy(identity.FormKey);
         return required.Masters
             .OrderBy(master => !master.Equals(originName, StringComparison.OrdinalIgnoreCase))
             .FirstOrDefault(master => LoadsBeforeThePluginNamed(current, destination, master));
