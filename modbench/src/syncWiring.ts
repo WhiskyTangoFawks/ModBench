@@ -1,18 +1,18 @@
 import { createSync, type Sync, type SyncChannel } from './drivingLib/syncFailureReport';
-import type { Instance, InstanceValue, ModSyncArguments, PluginSyncArguments } from './instanceLoader/instance';
-import type { ModSyncResult } from './modOrderCommands/modOrderCommands';
-import type { PluginSyncResult } from './pluginsCommands/plugins';
+import type { Instance, InstanceValue } from './instanceLoader/instance';
+import type { ModSyncRun } from './modOrderCommands/modOrderCommands';
+import type { PluginSyncRun } from './pluginsCommands/plugins';
 
 export interface InstanceSyncs {
   dispose(): void;
-  modSync: Sync<ModSyncArguments>;
-  pluginSync: Sync<PluginSyncArguments>;
+  modSync: Sync;
+  pluginSync: Sync;
 }
 
 interface InstanceSyncsDeps {
   instance: Pick<Instance, 'subscribe' | 'value'>;
-  syncMods: (args: ModSyncArguments) => Promise<ModSyncResult>;
-  syncPlugins: (args: PluginSyncArguments) => Promise<PluginSyncResult>;
+  syncMods: ModSyncRun;
+  syncPlugins: PluginSyncRun;
   channel: SyncChannel;
 }
 
@@ -34,9 +34,9 @@ export function instanceSyncs({ instance, syncMods, syncPlugins, channel }: Inst
     added: 'disabled plugins.txt line(s) for plugin(s) on disk with no line',
     dropped: 'plugins.txt line(s) with no plugin on disk',
   });
-  const subscription = instance.subscribe((value) => {
-    void modSync.run(value.modSyncArguments);
-    void pluginSync.run(value.pluginSyncArguments);
+  const subscription = instance.subscribe(() => {
+    void modSync.run();
+    void pluginSync.run();
   });
   return { modSync, pluginSync, dispose: () => { subscription.dispose(); } };
 }

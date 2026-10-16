@@ -17,8 +17,6 @@ export const CORPUS_FIXTURE = join(__dirname, 'fixtures', 'mo2-instance-corpus')
 export const DEFAULT_MODLIST = 'profiles/Default/modlist.txt';
 export const DEFAULT_PLUGINS = 'profiles/Default/plugins.txt';
 
-/** The `mods/` folders the Instance's value carries, for a test handing a command the argument
- *  it takes instead of probing. */
 export const modFolderNames = async (root: string): Promise<string[]> =>
   (await readdir(join(root, 'mods'), { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
 

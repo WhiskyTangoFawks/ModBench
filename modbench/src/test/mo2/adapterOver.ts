@@ -9,8 +9,6 @@ import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
 import { mo2Watch } from '../../instanceAdapter/mo2Watch';
 import { myGamesResolver } from '../../instanceAdapter/myGames';
 import { readingSource, type ReadingSource } from '../../instanceAdapter/mo2Reads';
-import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
-import { providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
 import type { PluginsCommands, pluginsCommands } from '../../pluginsCommands/plugins';
 import { pluginsCommandsWith } from '../pluginsCommandsWith';
 import { fakeArchiveReader } from '../fakeArchiveReader';
@@ -72,14 +70,6 @@ export async function readDownloadedFileMeta(root: string, name: string): Promis
 export async function modFilesOf(source: ReadingSource, entries: readonly ModlistEntry[]): Promise<Map<string, OriginFiles>> {
   const mods = entries.filter((entry) => entry.kind === 'mod');
   return new Map(await Promise.all(mods.map(async ({ name }) => [name, await source.originFiles({ kind: 'mod', name })] as const)));
-}
-
-/** The winners the Instance's value carries for a tree on disk, through the value's own builders. */
-export async function providedPluginsIn(root: string, profile = 'Default'): Promise<ReadonlyMap<string, string>> {
-  const source = sourceOver(root);
-  const entries = await source.modOrder(profile);
-  const runtimeOutput = await source.originFiles({ kind: 'runtimeOutput' });
-  return providedPluginsOf(buildFileConflictIndex(entries, runtimeOutput.files, await modFilesOf(source, entries), () => {}).files);
 }
 
 type PluginsCommandsClient = Parameters<typeof pluginsCommands>[0]['client'];

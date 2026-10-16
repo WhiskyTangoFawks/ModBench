@@ -92,8 +92,7 @@ import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
 import { Uri } from 'vscode';
 import { createSync } from '../../drivingLib/syncFailureReport';
-import type { ModSyncArguments } from '../../instanceLoader/instance';
-import type { ModSyncResult } from '../../modOrderCommands/modOrderCommands';
+import type { ModSyncRun } from '../../modOrderCommands/modOrderCommands';
 import { rowLabelOf } from '../../drivingLib/argument';
 import { present } from '../../ports/present';
 import { modlistCommands } from '../../modOrderCommands/modOrderCommands';
@@ -117,7 +116,7 @@ const otherDeps = () => ({
 });
 
 const silentChannel = { error: () => undefined, info: () => undefined };
-const modSyncAnswering = (sync: (args: ModSyncArguments) => Promise<ModSyncResult>) => ({
+const modSyncAnswering = (sync: ModSyncRun) => ({
   modSync: createSync(sync, silentChannel, {
     command: 'mod sync', prefix: '[modlist]', unsynced: 'modlist.txt is not synced', added: 'modlist.txt lines added', dropped: 'modlist.txt lines dropped',
   }),
@@ -204,14 +203,13 @@ describe('the Mods view registers its own gestures', () => {
     expect(h.state.commands.has(command)).toBe(true);
   });
 
-  it('runs mod sync with the instance\'s sync arguments', async () => {
+  it('runs mod sync when modbench.mod.sync fires', async () => {
     const sync = vi.fn(() => Promise.resolve({ applied: true as const, added: [], dropped: [] }));
-    const value = listing(LISTED_MODS);
-    createModsView({ ...otherDeps(), instance: new FakeInstance(value), log: () => undefined, ...modSyncAnswering(sync) });
+    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...modSyncAnswering(sync) });
 
-    await present(h.state.commands.get('modbench.mod.sync'), 'the modbench.mod.sync handler')(value);
+    await present(h.state.commands.get('modbench.mod.sync'), 'the modbench.mod.sync handler')();
 
-    expect(sync).toHaveBeenCalledWith(value.modSyncArguments);
+    expect(sync).toHaveBeenCalledOnce();
   });
 
   it('hears its copy value in the Mods view\'s key, and defers for any other', () => {
@@ -351,10 +349,10 @@ describe('the Mods view says when the list is empty', () => {
     instance.publish(listing([]));
     await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
 
-    await modSync.run(instance.value.modSyncArguments);
+    await modSync.run();
     await waitForMessage(modListView, (m) => m === `${NO_MODS} modlist.txt is not synced: /instance/mods does not exist.`, 'both messages');
 
-    await modSync.run(instance.value.modSyncArguments);
+    await modSync.run();
     await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message alone');
   });
 });

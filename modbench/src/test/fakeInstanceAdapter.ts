@@ -5,6 +5,8 @@ import type {
   ModFolder, ModFolders, ModMetadata, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { groupModOrder } from '../instanceAdapter/modGroups';
+import { filesWinningFirst, pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
+import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
 function noFilesFor(mods: readonly ModlistEntry[]): ReadonlyMap<string, OriginFiles> {
@@ -43,7 +45,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
 
 export type AdapterCall =
   | { readonly verb: 'changeModOrder'; readonly profile: string; readonly changes: readonly ModOrderChange[] }
-  | { readonly verb: 'changePluginOrder'; readonly profile: string; readonly changes: readonly PluginOrderChange[] }
+  | { readonly verb: 'changePluginOrder' | 'changePluginOrderOverProvided'; readonly profile: string; readonly changes: readonly PluginOrderChange[] }
   | { readonly verb: 'markDownloadedFile'; readonly name: string; readonly mark: DownloadedFileMark }
   | { readonly verb: 'trashDownloadedFileMeta'; readonly name: string }
   | { readonly verb: 'selectProfile'; readonly profile: string }
@@ -156,9 +158,6 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return readingFailure === undefined ? Promise.resolve(current) : Promise.reject(new Error(readingFailure));
     },
     activeProfile: () => Promise.resolve(current.profile),
-    profiles: () => Promise.resolve(current.profiles),
-    game: () => Promise.resolve({ gameName: current.gameName, gameRelease: current.gameRelease }),
-    modFolders: () => Promise.resolve(current.modFolders),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
     modFolderPath: (mod) => Promise.resolve(answers.foldersAbsent?.has(mod) ? undefined : `/mods/${mod}`),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
@@ -194,6 +193,13 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     changePluginOrder: (profile, decide: DecidePluginOrder) => {
       const changes = decide(current.pluginOrder);
       return record({ verb: 'changePluginOrder', profile, changes }, { wrote: changes.length > 0 });
+    },
+    changePluginOrderOverProvided: (profile, decide) => {
+      const changes = decide(current.pluginOrder, pluginsProvidedOf(
+        filesWinningFirst(current.mods, current.runtimeOutput.files, (mod) => current.modFiles.get(mod)?.files ?? []),
+        current.dataFolderPlugins, loadedWithNoLineOf(current.gameRelease, current.creationClubList),
+      ));
+      return record({ verb: 'changePluginOrderOverProvided', profile, changes }, { wrote: changes.length > 0 });
     },
     markDownloadedFile: (name, mark) =>
       record({ verb: 'markDownloadedFile', name, mark }, answers.goneDownloads?.has(name) ? { gone: true } as const : { gone: false, wrote: true } as const),

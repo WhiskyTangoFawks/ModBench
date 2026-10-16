@@ -574,17 +574,16 @@ describe('createEmptyMod', () => {
 });
 
 describe('syncMods', () => {
-  const syncing = (order: readonly ModlistEntry[], onDisk: readonly EntryRef[], answers: InstanceAnswers = {}) =>
-    ({ fake: fakeInstanceAdapter(readingFixture({ mods: order, modFolders: modFoldersOf(...onDisk) }), answers) });
-  const sync = ({ fake }: ReturnType<typeof syncing>, handed: readonly EntryRef[], profile = 'Default') =>
-    modSyncOver(fake.adapter)({ profile, modFolders: modFoldersOf(...handed).all });
+  const syncing = (order: readonly ModlistEntry[], onDisk: readonly EntryRef[], answers: InstanceAnswers = {}, profile = 'Default') =>
+    ({ fake: fakeInstanceAdapter(readingFixture({ profile, mods: order, modFolders: modFoldersOf(...onDisk) }), answers) });
+  const sync = ({ fake }: ReturnType<typeof syncing>) => modSyncOver(fake.adapter)();
   const folder = (name: string): EntryRef => ({ kind: 'mod', name });
   const sepFolder = (name: string): EntryRef => ({ kind: 'separator', name });
 
   it('adds a line for a folder with none and drops each line whose folder is gone, in one write', async () => {
     const run = syncing([mod('Kept'), mod('Gone Mod'), separator('Gone Sep')], [folder('Kept'), folder('Hand Extracted Mod')]);
 
-    const outcome = await sync(run, [folder('Kept'), folder('Hand Extracted Mod')]);
+    const outcome = await sync(run);
 
     expect(outcome).toEqual({ applied: true, added: ['Hand Extracted Mod'], dropped: ['Gone Mod', 'Gone Sep (separator)'] });
     expect(run.fake.calls).toEqual([orderWrite([
@@ -593,10 +592,10 @@ describe('syncMods', () => {
     ])]);
   });
 
-  it('writes the profile it is handed', async () => {
-    const run = syncing([mod('Gone Mod')], []);
+  it('writes the profile the mod manager selects', async () => {
+    const run = syncing([mod('Gone Mod')], [], {}, 'Other');
 
-    await sync(run, [], 'Other');
+    await sync(run);
 
     expect(run.fake.calls).toEqual([orderWrite([{ kind: 'dropMod', mod: 'Gone Mod' }], 'Other')]);
   });
@@ -604,31 +603,14 @@ describe('syncMods', () => {
   it('hands no change when every folder has a line and every mod line has a folder', async () => {
     const run = syncing([mod('A'), separator('B')], [folder('A'), sepFolder('B')]);
 
-    expect(await sync(run, [folder('A'), sepFolder('B')])).toEqual({ applied: true, added: [], dropped: [] });
+    expect(await sync(run)).toEqual({ applied: true, added: [], dropped: [] });
     expect(run.fake.calls).toEqual([orderWrite([])]);
-  });
-
-  it('keeps a line whose folder the handed list misses but that is on disk at write time, and adds no line for a folder it does not hand', async () => {
-    const run = syncing([mod('Lagging')], [folder('Lagging'), folder('Landed Since')]);
-
-    const outcome = await sync(run, []);
-
-    expect(outcome).toEqual({ applied: true, added: [], dropped: [] });
-    expect(run.fake.calls).toEqual([orderWrite([])]);
-  });
-
-  it('adds no line for a folder it is handed that is gone from disk at write time', async () => {
-    const run = syncing([], []);
-
-    const outcome = await sync(run, [folder('Ghost Mod')]);
-
-    expect(outcome).toEqual({ applied: true, added: [], dropped: [] });
   });
 
   it('adds a batch ascending by name, each at the winning end, so the batch reads in order from the winning end, a separator folder as a separator', async () => {
     const run = syncing([], [folder('Zeta Mod'), folder('Alpha Mod'), sepFolder('Orphan')]);
 
-    const outcome = await sync(run, [folder('Zeta Mod'), folder('Alpha Mod'), sepFolder('Orphan')]);
+    const outcome = await sync(run);
 
     expect(outcome).toEqual({ applied: true, added: ['Alpha Mod', 'Orphan (separator)', 'Zeta Mod'], dropped: [] });
     expect(run.fake.calls).toEqual([orderWrite([
@@ -641,7 +623,7 @@ describe('syncMods', () => {
   it('refuses, writing nothing, when there is no folder for mods at all, rather than dropping every line', async () => {
     const fake = fakeInstanceAdapter(readingFixture({ mods: [mod('A')], modFolders: undefined }));
 
-    const outcome = await modSyncOver(fake.adapter)({ profile: 'Default', modFolders: undefined });
+    const outcome = await modSyncOver(fake.adapter)();
 
     expect(outcome).toEqual({ applied: false, refusal: 'there is no folder for mods' });
     expect(fake.calls).toEqual([]);
@@ -650,7 +632,7 @@ describe('syncMods', () => {
   it('refuses with the adapter\'s reason when the write is refused', async () => {
     const run = syncing([mod('Gone Mod')], [], { refusals: refusing('changeModOrder', 'ENOENT: no such file') });
 
-    expect(await sync(run, [])).toEqual({ applied: false, refusal: 'ENOENT: no such file' });
+    expect(await sync(run)).toEqual({ applied: false, refusal: 'ENOENT: no such file' });
   });
 });
 

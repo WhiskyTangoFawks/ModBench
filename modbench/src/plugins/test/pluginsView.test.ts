@@ -112,8 +112,7 @@ import { createFocusedView } from '../../drivingLib/focusedView';
 import { createPluginsView } from '../pluginsView';
 import { createPlugins } from '../index';
 import { createSync, type Sync } from '../../drivingLib/syncFailureReport';
-import type { PluginSyncArguments } from '../../instanceLoader/instance';
-import type { PluginSyncResult } from '../../pluginsCommands/plugins';
+import type { PluginSyncRun } from '../../pluginsCommands/plugins';
 import { NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
 import { PluginNode } from '../pluginRows';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
@@ -152,7 +151,7 @@ const tick = (over: Partial<NonNullable<NotificationEvent['loadOrderStatus']>> =
 
 const silentChannel = { error: vi.fn(), info: vi.fn() };
 
-const createPluginSync = (sync: (args: PluginSyncArguments) => Promise<PluginSyncResult>, channel: typeof silentChannel) =>
+const createPluginSync = (sync: PluginSyncRun, channel: typeof silentChannel) =>
   createSync(sync, channel, {
     command: 'plugin sync', prefix: '[pluginsCommands]', unsynced: 'plugins.txt is not synced', added: 'plugins.txt lines added', dropped: 'plugins.txt lines dropped',
   });
@@ -164,7 +163,7 @@ function syncRefusing() {
       ? { applied: true, wrote: false, added: [], dropped: [] }
       : { applied: false, refusal }),
     silentChannel);
-  const run = () => pluginSync.run(instanceValueFixture().pluginSyncArguments);
+  const run = () => pluginSync.run();
   return {
     pluginSync,
     refuse: async (reason: string) => { refusal = reason; await run(); },
@@ -175,7 +174,7 @@ function syncRefusing() {
 function pluginsView(
   value = instanceValueFixture(),
   { instance = new FakeInstance(value), client = new InMemoryMEditClient(), pluginSync = syncRefusing().pluginSync }:
-    { instance?: FakeInstance; client?: InMemoryMEditClient; pluginSync?: Sync<PluginSyncArguments> } = {},
+    { instance?: FakeInstance; client?: InMemoryMEditClient; pluginSync?: Sync } = {},
 ) {
   const recordBrowser = new RecordBrowser(client);
   const reporters = new Map<string, RecordingReporter>();
@@ -229,14 +228,13 @@ describe('the Plugins view registers its own gestures', () => {
     expect(h.picked).toEqual([['Cloned And Unlisted']]);
   });
 
-  it('runs plugin sync with the instance\'s sync arguments', async () => {
+  it('runs plugin sync when modbench.plugin.sync fires', async () => {
     const sync = vi.fn(() => Promise.resolve({ applied: true as const, wrote: false, added: [], dropped: [] }));
     pluginsView(instanceValueFixture(), { pluginSync: createPluginSync(sync, silentChannel) });
-    const value = instanceValueFixture();
 
-    await present(h.commands.get('modbench.plugin.sync'), 'the modbench.plugin.sync handler')(value);
+    await present(h.commands.get('modbench.plugin.sync'), 'the modbench.plugin.sync handler')();
 
-    expect(sync).toHaveBeenCalledWith(value.pluginSyncArguments);
+    expect(sync).toHaveBeenCalledOnce();
   });
 
   it('runs modbench.plugin.create under its own reporter', async () => {

@@ -87,23 +87,21 @@ interface SyncLabels {
 }
 
 /** A system command: its runs, its failure message and its Output lines. */
-export interface Sync<Args> extends SyncMessage, SyncRuns {
+export interface Sync extends SyncMessage, SyncRuns {
   /** Resolves once this run has told what it did. */
-  run(args: Args): Promise<void>;
+  run(): Promise<void>;
 }
 
-export function createSync<Args, T extends SyncOutcome>(
-  sync: (args: Args) => Promise<T>, channel: SyncChannel, labels: SyncLabels,
-): Sync<Args> {
+export function createSync<T extends SyncOutcome>(sync: () => Promise<T>, channel: SyncChannel, labels: SyncLabels): Sync {
   const failures = reportSyncFailures(labels.command, labels.unsynced, (line) => channel.error(`${labels.prefix} ${line}`));
   const runs = trackSyncRuns();
   const tell = (verb: string, what: string, names: readonly string[]): void => {
     if (names.length > 0) channel.info(`${labels.prefix} ${labels.command} ${verb} ${names.length} ${what}: ${names.join(', ')}`);
   };
   return {
-    run: (args) => {
+    run: () => {
       const run = (async () => {
-        const outcome = await failures.run(() => sync(args));
+        const outcome = await failures.run(sync);
         if (outcome === undefined) return;
         tell('added', labels.added, outcome.added);
         tell('dropped', labels.dropped, outcome.dropped);
