@@ -38,7 +38,7 @@ internal sealed class Projector(
         var timer = Stopwatch.StartNew();
         if (!repository.ReadDocuments(plugin.Key, documents =>
             {
-                index.IndexTree(documents, plugin, plugin.Path);
+                index.IndexTree(documents, plugin, plugin.Path, cancel);
                 return true;
             }).Holds(out _, out var stopped))
         {

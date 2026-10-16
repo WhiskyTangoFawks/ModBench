@@ -132,6 +132,11 @@ try
     app.MapIndexEndpoints();
     app.MapUnsavedDocumentEndpoints();
 
+    // The extension holds this process's stdin open and never writes to it. The OS closes it when the
+    // extension host dies, however it dies, so the end of stdin is the end of the window that owns this backend.
+    if (app.Configuration.GetValue<bool>("ExitWhenStdinCloses"))
+        app.Lifetime.ApplicationStarted.Register(() => _ = StopWhenStdinCloses(app.Lifetime));
+
     await app.RunAsync();
 }
 catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -141,6 +146,13 @@ catch (Exception ex) when (ex is not OutOfMemoryException)
 finally
 {
     await Log.CloseAndFlushAsync();
+}
+
+static async Task StopWhenStdinCloses(IHostApplicationLifetime lifetime)
+{
+    await using var stdin = Console.OpenStandardInput();
+    await stdin.CopyToAsync(Stream.Null);
+    lifetime.StopApplication();
 }
 
 /// <summary>The entry point a test host names to find this assembly's host builder; top-level

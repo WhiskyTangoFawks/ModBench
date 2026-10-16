@@ -94,6 +94,10 @@ internal sealed class Indexer : IDisposable
     // holding it could never be signalled.
     private readonly Lock _exclusive = new();
     private CancellationTokenSource? _reconcileCancellation;
+    // Only disposal stops a plugin read partway, inside the one transaction its rows land in. A newer
+    // snapshot waits for the plugin in hand: snapshots come with every source write (ADR-0015), and each
+    // reconcile must make progress.
+    private readonly CancellationTokenSource _disposal = new();
     private bool _disposed;
 
     private readonly List<string> _handed = [];
@@ -438,10 +442,10 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    private static bool CancelledBy(Exception ex, CancellationToken token) =>
-        ex is OperationCanceledException && token.IsCancellationRequested;
+    private bool CancelledBy(Exception ex, CancellationToken token) =>
+        ex is OperationCanceledException && (token.IsCancellationRequested || _disposal.IsCancellationRequested);
 
-    private static bool FailsOnePlugin(Exception ex, CancellationToken token) =>
+    private bool FailsOnePlugin(Exception ex, CancellationToken token) =>
         ex is not OutOfMemoryException && !CancelledBy(ex, token);
 
     // Called with the exclusive right held, so no other reconcile can be in flight.
@@ -649,8 +653,8 @@ internal sealed class Indexer : IDisposable
         // plugin wait on the slowest before any could be indexed, and bury each open failure.
         foreach (var plugin in arriving)
         {
-            // At the top of each plugin rather than mid-plugin: a plugin's ingest is several
-            // transactions, so abandoning it partway would leave some committed and others not.
+            // At the top of each plugin rather than mid-plugin: a newer snapshot waits for the plugin in
+            // hand (see _disposal).
             token.ThrowIfCancellationRequested();
 
             PluginMetadata? metadata = null;
@@ -855,7 +859,7 @@ internal sealed class Indexer : IDisposable
             {
                 _logger.LogInformation("Ingesting {Plugin} from its source tree", plugin.Name);
             }
-            if (scope.Projector.Ingest(plugin, token) is not { } stopped) return ReadOutcome.Read;
+            if (scope.Projector.Ingest(plugin, _disposal.Token) is not { } stopped) return ReadOutcome.Read;
             _logger.LogWarning("Could not ingest {Plugin} from its source tree; reading its binary: {Reason}", plugin.Name, stopped.Reason);
             stoppedAt = ReadOutcome.StoppedAt(stopped);
         }
@@ -891,7 +895,7 @@ internal sealed class Indexer : IDisposable
         }
 
         using var documents = opened;
-        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom, stringsRead) is not { } refused) return ReadOutcome.Read;
+        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom, stringsRead, _disposal.Token) is not { } refused) return ReadOutcome.Read;
         _logger.LogWarning("Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, refused.Reason);
         return ReadOutcome.Failed(refused);
     }
@@ -1188,6 +1192,7 @@ internal sealed class Indexer : IDisposable
             _disposed = true;
         }
 
+        _disposal.Cancel();
         EnterExclusive();
         try
         {
@@ -1204,6 +1209,7 @@ internal sealed class Indexer : IDisposable
             _undrained?.Store.Dispose();
         }
         finally { ExitExclusive(); }
+        _disposal.Dispose();
     }
 
     // Disposing the scope waits out its reads, so its caller does that outside _lock, which every
