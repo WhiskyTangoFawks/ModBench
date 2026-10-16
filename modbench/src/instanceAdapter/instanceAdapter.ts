@@ -193,8 +193,8 @@ export interface InstallTarget {
 export type InstallOutcome = { readonly landed: true; readonly isFomod: boolean } | { readonly landed: false };
 
 /** Names match as the manager matches them. An entry added at the winning end is disabled. A
- *  separator takes its folder's name; one added is enabled, gets its folder, and lands beside its
- *  `anchor`: directly after a mod, and before the first mod of a separator's own group, taking none. */
+ *  separator added is enabled, takes its folder's name and gets the folder. It lands directly after
+ *  its `anchor` mod, or before the first mod of its `anchor` separator's group. */
 export type ModOrderChange =
   | { readonly kind: 'enable'; readonly mod: string; readonly enabled: boolean }
   | { readonly kind: 'moveMods'; readonly mods: readonly string[]; readonly place: MovePlace; readonly end: OrderEnd }

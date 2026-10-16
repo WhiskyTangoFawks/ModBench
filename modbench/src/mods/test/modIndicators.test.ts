@@ -12,7 +12,8 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import type { InstanceValue, ModlistEntry } from '../../instanceLoader/instance';
+import type { InstanceValue } from '../../instanceLoader/instance';
+import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { present } from '../../ports/present';
 import { ModListProvider, ModNode, SeparatorNode } from '../ModListProvider';

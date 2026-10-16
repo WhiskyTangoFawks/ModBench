@@ -86,7 +86,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import type { ModlistEntry } from '../../instanceLoader/instance';
+import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { mod } from './indexedValue';
 import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';

@@ -1,4 +1,5 @@
-import type { InstanceValue, Mod, ModlistEntry, OriginFile, OriginFolder } from '../../instanceLoader/instance';
+import type { InstanceValue, Mod, OriginFile, OriginFolder } from '../../instanceLoader/instance';
+import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 

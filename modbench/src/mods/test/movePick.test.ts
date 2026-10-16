@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { modsMovePick, separatorsMovePick } from '../movePick';
-import type { ModlistEntry } from '../../instanceLoader/instance';
+import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { groupModOrder } from '../../instanceAdapter/modGroups';
 
 const mod = (name: string): ModlistEntry => ({ kind: 'mod', name, enabled: true });
