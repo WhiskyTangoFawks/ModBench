@@ -74,7 +74,7 @@ export function registerRenamePluginCommand(
       }
       return { plugin, newName };
     },
-    fromAgent: async ({ argument, options: { name } }) => {
+    fromAgent: ({ argument, options: { name } }) => {
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a plugin carries one plugin.');
       const plugin = pluginOf(only);
