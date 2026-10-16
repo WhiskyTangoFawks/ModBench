@@ -52,3 +52,9 @@ export function loadOrderPutHandler(
 export function loadOrderPutOnEachValue(instance: Pick<Instance, 'subscribe'>, put: LoadOrderPut) {
   return instance.subscribe(put);
 }
+
+export function loadOrderPutOnEachLanguageChange<S>(
+  onLanguageChange: (listener: () => void) => S, instance: Pick<Instance, 'value'>, put: LoadOrderPut,
+): S {
+  return onLanguageChange(() => { put(instance.value); });
+}

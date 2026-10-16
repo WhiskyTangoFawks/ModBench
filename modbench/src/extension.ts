@@ -47,7 +47,7 @@ import { downloadsCommands } from './downloadsCommands/downloads';
 import { instanceCommands } from './instanceCommands/instanceCommands';
 import { reachMEditFromTerminals } from './terminalEnvironment';
 import { openWalkthroughOnce } from './walkthrough';
-import { instanceSyncs, loadOrderPutHandler, loadOrderPutOnEachValue } from './syncWiring';
+import { instanceSyncs, loadOrderPutHandler, loadOrderPutOnEachLanguageChange, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
@@ -160,7 +160,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   void client.start();
   const putLoadOrder = loadOrderPutHandler(editing, stringsLanguage);
   own(loadOrderPutOnEachValue(instance, putLoadOrder));
-  own(onStringsLanguageChange(() => { putLoadOrder(instance.value); }));
+  own(loadOrderPutOnEachLanguageChange(onStringsLanguageChange, instance, putLoadOrder));
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putLoadOrder));
   const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
   ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));

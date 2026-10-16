@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { loadOrderPutHandler } from '../syncWiring';
+import { loadOrderPutHandler, loadOrderPutOnEachLanguageChange } from '../syncWiring';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 
 describe('the load order put handler', () => {
@@ -14,5 +14,19 @@ describe('the load order put handler', () => {
     put(value);
 
     expect(puts).toEqual(['English', 'French']);
+  });
+});
+
+describe('the load order put on a strings language change', () => {
+  it('puts the current value once for each change, and none before one', () => {
+    const value = instanceValueFixture();
+    const puts: unknown[] = [];
+    let change = (): void => undefined;
+
+    loadOrderPutOnEachLanguageChange((listener) => { change = listener; }, { value }, (put) => { puts.push(put); });
+
+    expect(puts).toEqual([]);
+    change();
+    expect(puts).toEqual([value]);
   });
 });

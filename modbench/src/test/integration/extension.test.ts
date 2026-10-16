@@ -97,7 +97,6 @@ const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
 const requestLog: string[] = [];
 const putLoadOrders: string[][] = [];
-const putStringsLanguages: string[] = [];
 const handedUnsaved: unknown[][] = [];
 const comparedTexts: unknown[] = [];
 const comparedSideBySide: unknown[] = [];
@@ -132,12 +131,6 @@ function pluginNamesOf(body: string): string[] {
   const plugins = typeof parsed === 'object' && parsed !== null && 'plugins' in parsed ? parsed.plugins : undefined;
   if (!Array.isArray(plugins)) throw new Error(`expected a PUT /load-order body with a plugins array, got: ${body}`);
   return plugins.map((p: unknown) => (typeof p === 'object' && p !== null && 'name' in p ? String(p.name) : '?'));
-}
-function stringsLanguageOf(body: string): string {
-  const parsed: unknown = JSON.parse(body);
-  const language = typeof parsed === 'object' && parsed !== null && 'stringsLanguage' in parsed ? parsed.stringsLanguage : undefined;
-  if (typeof language !== 'string') throw new Error(`expected a PUT /load-order body with a stringsLanguage, got: ${body}`);
-  return language;
 }
 let rebuildIndexShouldFail = false;
 const RAW_INDEX_LOCKED_DETAIL = 'raw backend detail: index lock held by pid 4242';
@@ -203,7 +196,6 @@ function createMockBackend(): http.Server {
       req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
       req.on('end', () => {
         putLoadOrders.push(pluginNamesOf(body));
-        putStringsLanguages.push(stringsLanguageOf(body));
         loadOrderVersion += 1;
         const version = loadOrderVersion;
         loadOrderStatus = { ...loadOrderStatus, version };
@@ -1765,24 +1757,6 @@ describe('Modbench, launching mEdit with the extension, puts the load order befo
 
     const load = requestLog.indexOf('PUT /load-order');
     assert.ok(!requestLog.slice(0, load).includes('GET /plugins'), 'GET /plugins must not fire before PUT /load-order');
-  });
-});
-
-describe('The strings language setting is put again with the load order', () => {
-  after(async () => {
-    await vscode.workspace.getConfiguration('modbench').update('stringsLanguage', undefined, vscode.ConfigurationTarget.Global);
-  });
-
-  it('PUTs /load-order naming the language a change of the setting chose', async () => {
-    let settled = putLoadOrders.length;
-    do {
-      settled = putLoadOrders.length;
-      await new Promise((resolve) => setTimeout(resolve, 1_500));
-    } while (putLoadOrders.length !== settled);
-
-    await vscode.workspace.getConfiguration('modbench').update('stringsLanguage', 'French', vscode.ConfigurationTarget.Global);
-
-    await waitFor('a PUT /load-order naming French', () => putStringsLanguages.at(-1) === 'French' ? true : undefined);
   });
 });
 
