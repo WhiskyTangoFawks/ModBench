@@ -254,4 +254,24 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         _index.NextSnapshotUntil(
             () => _index.ReadFromItsPluginSource(_nonCompiledPlugin.KeyOf()), "the arrival's re-derivation of the plugin from its tree");
     }
+
+    [Fact]
+    public void ASnapshotThatFirstNamesAPluginsSourceFolder_ReadsThePluginFromItsTree()
+    {
+        var folder = _nonCompiledPlugin.ModFolderOf();
+        IReadOnlyList<LoadOrderEntry> NamingSourceFolder(string? sourceFolder) =>
+        [
+            .. _fixture.Plugins.Select(p => p == _nonCompiledPlugin
+                ? p with { NamedProvider = new PluginProvider.FromMod(p.Origin, folder, sourceFolder) }
+                : p),
+        ];
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        index.Reconcile(holder, _fixture.GameDirectory, NamingSourceFolder(null), GameRelease.Fallout4);
+        SourceMods.Init(_nonCompiledPlugin);
+
+        index.Reconcile(holder, _fixture.GameDirectory, NamingSourceFolder(folder), GameRelease.Fallout4);
+
+        Assert.True(index.ReadFromItsPluginSource(_nonCompiledPlugin.KeyOf()));
+    }
 }

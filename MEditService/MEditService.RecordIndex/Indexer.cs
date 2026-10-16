@@ -564,7 +564,7 @@ internal sealed class Indexer : IDisposable
             .ToList();
         var moved = resolved
             .Select(r => r.Key)
-            .Where(key => open.TryGetValue(key, out var h) && (h.Key != key || h.Path != wanted[key].Path || h.Registration != Registration.In(snapshot, key)))
+            .Where(key => open.TryGetValue(key, out var h) && (h.Key != key || h.Path != wanted[key].Path || h.Provider != wanted[key].Provider || h.Registration != Registration.In(snapshot, key)))
             .ToList();
         var respelled = resolved.Select(r => r.Key).Where(key => held.IsSpelledOtherwise(key)).ToList();
         var derivations = store.Reads.GetDerivations();
