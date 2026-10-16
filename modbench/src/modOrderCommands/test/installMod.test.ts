@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { modlistCommands, type ModSource } from '../modOrderCommands';
+import { modlistCommands, type ModPackage } from '../modOrderCommands';
 import type { InstallSource, InstallTarget } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { ModStatus } from '../../client';
@@ -15,7 +15,7 @@ const NEW_MOD: InstallTarget = { kind: 'new', name: MOD };
 const UPGRADED = { kind: 'upgrade', name: 'Harder VATS' } as const;
 const DOWNLOADED = { kind: 'downloadedFile', name: 'Freshly-1-0.7z', path: '/downloads/Freshly-1-0.7z' } as const;
 
-function install(source: ModSource, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, readStatus: ReadModStatus = unreadStatus) {
+function install(source: ModPackage, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, readStatus: ReadModStatus = unreadStatus) {
   const fake = fakeInstanceAdapter(undefined, answers);
   const outcome = modlistCommands(fake.adapter, new InMemoryMEditClient(), readStatus).installMod(source, target, GAME_NAME, force);
   return outcome.then((result) => ({ result, calls: fake.calls }));
