@@ -150,7 +150,7 @@ internal sealed class HeldPlugins
     /// content, and re-deriving anything else would let a reconcile silently re-read.</summary>
     public PluginMetadata Update(PluginMetadata previous, RegisteredPlugin now, Registration registration)
     {
-        var metadata = previous with { Name = now.Name, Origin = now.Origin, Path = now.Path, LoadOrderIndex = registration.LoadOrderIndex };
+        var metadata = previous with { Name = now.Name, Origin = now.Origin, Path = now.Path, Provider = now.Provider, LoadOrderIndex = registration.LoadOrderIndex };
 
         lock (_mutation)
         {
