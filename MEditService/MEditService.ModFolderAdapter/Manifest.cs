@@ -8,19 +8,58 @@ public sealed record Manifest(
     IReadOnlyList<ManifestFile> Files,
     string? Version = null)
 {
+    /// <summary>The bytes <paramref name="file"/>'s line names: where they are, before any file is looked at.</summary>
+    public FileBytes BytesOf(ManifestFile file) => file.Provider switch
+    {
+        FileProvider.FirstInstallationFile => InstallationFiles is [var first, ..]
+            ? new FileBytes.InInstallationFile(first.Name, file.Path)
+            : new FileBytes.NoInstallationFile(),
+        FileProvider.InstallationFileEntry entry => new FileBytes.InInstallationFile(entry.InstallationFile, entry.Path),
+        FileProvider.GameFile game => new FileBytes.InGameFile(game.Path),
+        FileProvider.Source source => new FileBytes.AtCommit(source.Remote, source.Commit, file.Path),
+        FileProvider.NoProvider => new FileBytes.Unnamed(),
+        _ => throw new ArgumentOutOfRangeException(nameof(file), file.Provider, null),
+    };
+
     /// <summary>The provider of <paramref name="file"/>, by its source's hash, or the commit its source builds at, and the
     /// path in it: what fixes the file's bytes. Null when the line names none.</summary>
-    internal (string Source, string Path)? ProviderOf(ManifestFile file) => file.Provider switch
+    internal (string Source, string Path)? ProviderOf(ManifestFile file) => BytesOf(file) switch
     {
-        FileProvider.FirstInstallationFile when InstallationFiles is [var first, ..] => (first.Hash, file.Path),
-        FileProvider.InstallationFileEntry entry when InstallationFiles.FirstOrDefault(source => source.Name == entry.InstallationFile) is { } named =>
-            (named.Hash, entry.Path),
-        FileProvider.GameFile game
+        FileBytes.InInstallationFile held when InstallationFiles.FirstOrDefault(source => source.Name == held.Name) is { } named =>
+            (named.Hash, held.Path),
+        FileBytes.InGameFile game
             when GameFiles.FirstOrDefault(source => string.Equals(source.Name, game.Path, StringComparison.OrdinalIgnoreCase)) is { } named =>
             (named.Hash, game.Path),
-        FileProvider.Source source => (source.Commit, file.Path),
+        FileBytes.AtCommit built => (built.Commit, built.Path),
         _ => null,
     };
+}
+
+/// <summary>Where a manifest line's bytes are.</summary>
+public abstract record FileBytes
+{
+    private FileBytes() { }
+
+    public sealed record InInstallationFile(string Name, string Path) : FileBytes
+    {
+        /// <summary>Whether the line at <paramref name="linePath"/> names these bytes as <see cref="FileProvider.FirstInstallationFile"/>.</summary>
+        public bool IsWhatFirstInstallationFileNamesAt(string firstInstallationFile, string linePath) =>
+            Name == firstInstallationFile && string.Equals(Path, linePath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public sealed record InGameFile(string Path) : FileBytes;
+
+    public sealed record AtCommit(string Remote, string Commit, string Path) : FileBytes;
+
+    public sealed record Unnamed : FileBytes
+    {
+        internal Unnamed() { }
+    }
+
+    public sealed record NoInstallationFile : FileBytes
+    {
+        internal NoInstallationFile() { }
+    }
 }
 
 /// <summary>An installation file by its name, or a game file by its path under the game folder. Source is
