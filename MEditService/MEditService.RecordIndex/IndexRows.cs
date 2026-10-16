@@ -1,6 +1,6 @@
 using MEditService.Codec.Serialization;
-using MEditService.RecordIndex.Queries;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 
 namespace MEditService.RecordIndex;
 

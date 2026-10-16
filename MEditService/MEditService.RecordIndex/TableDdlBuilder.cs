@@ -1,7 +1,7 @@
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
-using MEditService.RecordIndex.Queries;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Strings;
 

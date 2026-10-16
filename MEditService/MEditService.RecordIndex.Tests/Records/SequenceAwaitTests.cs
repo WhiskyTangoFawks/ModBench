@@ -1,5 +1,5 @@
-using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;

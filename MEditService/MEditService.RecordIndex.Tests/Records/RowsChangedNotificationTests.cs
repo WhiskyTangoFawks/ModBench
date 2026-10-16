@@ -1,5 +1,5 @@
-using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.Ports;
+using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;

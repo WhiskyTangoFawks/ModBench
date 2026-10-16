@@ -1,7 +1,7 @@
 using MEditService.Codec.Schema;
-using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 

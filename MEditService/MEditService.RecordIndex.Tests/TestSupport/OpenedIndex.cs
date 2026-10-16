@@ -1,6 +1,6 @@
-using MEditService.RecordIndex.Queries;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;
 

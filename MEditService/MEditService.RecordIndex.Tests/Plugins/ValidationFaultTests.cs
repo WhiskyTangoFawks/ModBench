@@ -1,6 +1,6 @@
-using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;

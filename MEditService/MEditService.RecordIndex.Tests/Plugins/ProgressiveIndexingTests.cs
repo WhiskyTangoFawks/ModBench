@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
-using MEditService.RecordIndex.Queries;
-using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
+using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 

@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
-using MEditService.RecordIndex.Queries;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 

@@ -2,8 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using MEditService.Commands.Build;
 using MEditService.Commands.Edits;
-using MEditService.RecordIndex.Queries;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Http;

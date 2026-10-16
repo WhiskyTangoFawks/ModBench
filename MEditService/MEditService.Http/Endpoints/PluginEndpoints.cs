@@ -1,8 +1,8 @@
 using MEditService.Codec.Schema;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
-using MEditService.RecordIndex.Queries;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 
 namespace MEditService.Http.Endpoints;

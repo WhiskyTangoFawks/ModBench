@@ -1,7 +1,7 @@
 using System.Text.Json;
-using MEditService.RecordIndex.Queries;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;

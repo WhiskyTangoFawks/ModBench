@@ -1,6 +1,6 @@
 using MEditService.Codec.Schema;
-using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;

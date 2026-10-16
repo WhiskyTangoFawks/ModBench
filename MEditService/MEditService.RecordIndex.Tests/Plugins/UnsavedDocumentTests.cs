@@ -1,7 +1,7 @@
-using MEditService.RecordIndex.Queries;
-using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
+using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
