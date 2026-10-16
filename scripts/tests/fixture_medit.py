@@ -19,14 +19,14 @@ from medit import JsonRecord, Plugin
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 HTTP_PROJECT = REPO / 'MEditService' / 'MEditService.Http'
-INSTANCE = REPO / 'DevList'
+INSTANCE = REPO / 'DevListFallout'
 CONDITIONS = Plugin('MBDevConditions.esp', 'MB-DEV Conditions')
 LIGHT = Plugin('MBDevLight.esl', 'MB-DEV Light')
 CONFLICT_A = Plugin('MBDevConflictA.esp', 'MB-DEV Conflict A')
 CONFLICT_B = Plugin('MBDevConflictB.esp', 'MB-DEV Conflict B')
 EMPTY_MOD = 'MB-DEV Scratch'
 OVERWRITE = 'overwrite/'
-# DevList's plugins.txt in its order, each enabled.
+# DevListFallout's plugins.txt in its order, each enabled.
 PLUGINS = [
     Plugin('MBDevFixes.esm', 'MB-DEV Fixes'), Plugin('MBDevFixesAddon.esp', 'MB-DEV Fixes Addon'), CONFLICT_A, CONFLICT_B,
     LIGHT, CONDITIONS, Plugin('MBDevMissingMaster.esp', 'MB-DEV Missing Master'), Plugin('MBDevPatchAB.esp', 'MB-DEV Patch A+B')]
@@ -55,7 +55,7 @@ def fixture_medit() -> Generator[Fixture]:
         instance = scratch / 'instance'
         shutil.copytree(INSTANCE, instance)
         (instance / 'overwrite').mkdir()
-        # DevList has no game folder; an empty one stands in, so the game loads no plugin of its own.
+        # DevListFallout has no game folder; an empty one stands in, so the game loads no plugin of its own.
         game = scratch / 'game'
         game.mkdir()
         url = f'http://127.0.0.1:{free_port()}'
