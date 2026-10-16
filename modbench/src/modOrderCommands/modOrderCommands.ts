@@ -13,7 +13,7 @@ import { isRefused, type MEditClient, type ReadModStatus } from '../client';
 import { installMod } from './install';
 export type { SelectionResult };
 export type { InstallTarget } from '../instanceAdapter/instanceAdapter';
-export type { ModSource } from './install';
+export type { ModPackage } from './install';
 
 async function changeModOrderLanding(
   adapter: InstanceAdapter, profile: string, decide: DecideModOrder,

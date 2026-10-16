@@ -78,14 +78,14 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
   });
 
   it('asks archive or folder before either OS picker opens', async () => {
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
+    showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce(undefined);
 
     registerModInstallCommands(deps());
     await invoke('modbench.mod.install');
 
     expect(showQuickPick).toHaveBeenCalledWith(
-      [expect.objectContaining({ sourceKind: 'archive' }), expect.objectContaining({ sourceKind: 'folder' })],
+      [expect.objectContaining({ packageKind: 'archive' }), expect.objectContaining({ packageKind: 'folder' })],
       expect.anything(),
     );
     const quickPickOrder = present(showQuickPick.mock.invocationCallOrder[0], 'the showQuickPick call order');
@@ -94,7 +94,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
   });
 
   it('archive: Esc at the OS picker installs nothing', async () => {
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
+    showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce(undefined);
 
     registerModInstallCommands(deps());
@@ -105,7 +105,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
 
   it('archive: the OS picker offers install\'s own archive extensions rather than a list of its own that would drift', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
+    showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([{ fsPath: '/somewhere/foo.zip' }]);
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
@@ -120,7 +120,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
   it('archive: one of the instance\'s downloaded files installs as that downloaded file, so it is marked installed', async () => {
     const row = downloadRowFixture('foo.7z', { modID: '111', fileID: '222', version: '2.0' });
     showInputBox.mockResolvedValueOnce('New Mod');
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
+    showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([{ fsPath: row.path }]);
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
@@ -140,7 +140,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     const log = vi.fn();
     const reporter = recordingReporter();
     showInputBox.mockResolvedValueOnce('New Mod');
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
+    showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([{ fsPath: row.path }]);
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false, downloadRefusal: 'locked' });
 
@@ -157,7 +157,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
 
   it('archive: one outside the downloads folder, though it shares a downloaded file\'s name, installs as an archive under the name prompted, prefilled from it', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
+    showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([{ fsPath: '/archive/foo.7z' }]);
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
@@ -172,7 +172,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
 
   it('archive: a cancelled name prompt installs nothing', async () => {
     showInputBox.mockResolvedValueOnce(undefined);
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
+    showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([{ fsPath: '/archive/foo.7z' }]);
 
     registerModInstallCommands(deps());
@@ -182,7 +182,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
   });
 
   it('folder: Esc at the OS picker installs nothing', async () => {
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'folder' });
+    showQuickPick.mockResolvedValueOnce({ packageKind: 'folder' });
     showOpenDialog.mockResolvedValueOnce(undefined);
 
     registerModInstallCommands(deps());
@@ -193,7 +193,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
 
   it('folder: installs as a new mod under the name prompted, prefilled from the folder', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'folder' });
+    showQuickPick.mockResolvedValueOnce({ packageKind: 'folder' });
     showOpenDialog.mockResolvedValueOnce([{ fsPath: '/somewhere/Loose Files' }]);
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
@@ -216,11 +216,11 @@ describe('modbench.mod.install: a failed install', () => {
   it.each([
     ['archive', { fsPath: '/somewhere/foo.zip' }, 'installFromArchive'],
     ['folder', { fsPath: '/somewhere/foo' }, 'installFromFolder'],
-  ] as const)('from a %s is reported under the gesture, naming the mod', async (sourceKind, picked, tag) => {
+  ] as const)('from a %s is reported under the gesture, naming the mod', async (packageKind, picked, tag) => {
     const reporter = recordingReporter();
     const tags: string[] = [];
     installMod.mockRejectedValueOnce(new Error('disk full'));
-    showQuickPick.mockResolvedValueOnce({ sourceKind });
+    showQuickPick.mockResolvedValueOnce({ packageKind });
     showOpenDialog.mockResolvedValueOnce([picked]);
     showInputBox.mockResolvedValueOnce('New Mod');
 
@@ -232,10 +232,10 @@ describe('modbench.mod.install: a failed install', () => {
   });
 });
 
-describe('modbench.mod.install: a downloaded file is its source', () => {
+describe('modbench.mod.install: a downloaded file is its package', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('installs the downloaded file the Argument carries, and asks no source', async () => {
+  it('installs the downloaded file the Argument carries, and asks no package', async () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
     showInputBox.mockResolvedValueOnce('Foo');
     const row = downloadRowFixture('foo.7z');
@@ -265,7 +265,7 @@ describe('modbench.mod.install: a downloaded file is its source', () => {
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'disk full' }]);
   });
 
-  it('a mod row as Argument is no source, so it asks archive or folder', async () => {
+  it('a mod row as Argument is no package, so it asks archive or folder', async () => {
     showQuickPick.mockResolvedValueOnce(undefined);
 
     registerModInstallCommands(deps());
@@ -409,8 +409,8 @@ describe('modbench.mod.install called by the agent', () => {
   });
 
   it.each([
-    ['no source', []],
-    ['two sources', [outsideArchive, { kind: 'folder', path: '/elsewhere/Loose' }]],
+    ['no package', []],
+    ['two packages', [outsideArchive, { kind: 'folder', path: '/elsewhere/Loose' }]],
     ['a mod', [{ kind: 'mod', name: 'Some Mod' }]],
     ['a downloaded file the Downloads view lacks', [{ kind: 'downloadedFile', name: 'gone.7z' }]],
   ] as const)('refuses %s, installing nothing', async (_, argument) => {
@@ -419,6 +419,13 @@ describe('modbench.mod.install called by the agent', () => {
     await expect(install(argument, { name: 'Bar' })).rejects.toBeInstanceOf(Refusal);
 
     expect(installMod).not.toHaveBeenCalled();
+  });
+
+  it('names what it installs as a package when it refuses two', async () => {
+    registerModInstallCommands(deps());
+
+    await expect(install([outsideArchive, { kind: 'folder', path: '/elsewhere/Loose' }], { name: 'Bar' }))
+      .rejects.toThrow(/carries one package/);
   });
 });
 
@@ -434,9 +441,9 @@ describe('an install ends on the Instance loader\'s read, with the Mods progress
   it.each([
     ['archive', { fsPath: '/somewhere/foo.zip' }],
     ['folder', { fsPath: '/somewhere/foo' }],
-  ] as const)('from a %s', async (sourceKind, picked) => {
+  ] as const)('from a %s', async (packageKind, picked) => {
     installMod.mockImplementationOnce(() => { progressSteps.push('install'); return Promise.resolve({ applied: true, isFomod: false }); });
-    showQuickPick.mockResolvedValueOnce({ sourceKind });
+    showQuickPick.mockResolvedValueOnce({ packageKind });
     showOpenDialog.mockResolvedValueOnce([picked]);
     showInputBox.mockResolvedValueOnce('New Mod');
 
