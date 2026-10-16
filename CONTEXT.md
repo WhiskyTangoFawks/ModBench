@@ -68,11 +68,6 @@ A mod whose folder is a build artifact: the build writes it from the mod's repos
 
 Avoid: tracked mod (git's tracked is a file in the index)
 
-## Compiled plugin
-A plugin that a build compiles from its plugin source, in a source mod.
-
-Avoid: source plugin (that reads as plugin source), tracked plugin (git's tracked is a file in the index)
-
 # Git workflow
 How a source mod uses its `main` branch. The user chooses. Two kinds exist: authored and vendored.
 
@@ -85,6 +80,16 @@ Avoid: custom mod, personal mod
 A git workflow where `main` holds the author's releases of the mod. Edits live on the `edit` branch. The repository holds no link to the author's releases, so they are not a git remote.
 
 Avoid: modified mod (a vendored workflow describes where `main` points), upstream (git's word for a branch's remote counterpart)
+
+# Source
+Source code: what a build compiles a mod from, in a source mod's repository.
+
+Avoid: source (for a package, a host, or where a file comes from: each has its own word)
+
+## Plugin source
+Source that holds a plugin in its deserialized form.
+
+Avoid: source (alone), text mirror, Spriggit tree
 
 # Plugin
 An `.esp`, `.esm` or `.esl` file. It holds records. A plugin is not a mod, it is a component of a mod.
@@ -116,15 +121,10 @@ A plugin that another plugin lists as a dependency. A master loads earlier.
 
 Avoid: parent plugin (an override's plugin is not its child)
 
-# Source
-Source code: what a build compiles a mod from, in a source mod's repository.
+## Compiled plugin
+A plugin in a source mod that a build compiles from its plugin source, which is its truth.
 
-Avoid: source (for a package, a host, or where a file comes from: each has its own word)
-
-## Plugin source
-Source that holds a plugin in its deserialized form.
-
-Avoid: source (alone), text mirror, Spriggit tree
+Avoid: source plugin (that reads as plugin source), tracked plugin (git's tracked is a file in the index)
 
 # Vanilla
 The base game's own plugins and files.

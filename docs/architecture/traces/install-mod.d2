@@ -16,13 +16,13 @@ views: "every view" {class: driving}
 
 instanceloader -> downloads: "value: mods with this Nexus id, their installed files" {class: loadorder}
 downloads."the target pick"
-downloads -> modordercommands: "the source, and the target" {class: loadorder}
+downloads -> modordercommands: "the downloaded file, and the target" {class: loadorder}
 upgrade: "an upgrade" {
   modordercommands -> client: "the mod's status" {class: query}
   client -> modordercommands: "the mod's status: differs, no manifest, a file with no provider, or none" {class: query}
   modordercommands."refused on any of the three, unless the target pick forces it"
 }
-modordercommands -> instanceadapter: "install: the source, the target, the mod's metadata" {class: loadorder}
+modordercommands -> instanceadapter: "install: the file, folder or downloaded file, the target, the mod's metadata" {class: loadorder}
 instanceadapter."a new folder, or the release into the mod's own; the root chosen inside"
 from download: "from a downloaded file" {
   modordercommands -> instanceadapter: "the downloaded file: installed" {class: loadorder}

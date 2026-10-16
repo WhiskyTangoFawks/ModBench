@@ -28,10 +28,10 @@ A mod folder has one package ([ADR-0023](../../adr/0023-a-mod-folder-has-only-on
 7. A source mod's manifest to be what its last build wrote: it names the mod's submodule and lists each file the build writes. With no remote, each file has no package. Source: ADR-0023
 8. The manifest to hold no path from this machine, so a clone rebuilds anywhere.
 9. Each separator to have a manifest that names nothing, so a clone has the separator. Source: Never break the instance for its owner
-10. The manifest to hold the mod's version beside where its installation file comes from, so it holds all that restore writes into the mod's metadata. Source: Never break the instance for its owner
+10. The manifest to hold the mod's version beside its installation file's page on its host, so it holds all that restore writes into the mod's metadata. Source: Never break the instance for its owner
 11. The mod's metadata, where the mod manager keeps it in the mod folder, to be no file of the mod: no line names it, status never says it differs, and restore never sends it to the trash. Source: Orthogonality
 12. The manifest to be a JSON file that I review in git. It has one line for the package and one for each file, the files in alphabetical order, so a diff shows what changed and nothing else. Source: Existing tools
-13. Where the installation file comes from to read as its page on its host, such as the file's page on Nexus, so I can read it in a diff and open it.
+13. The manifest to name the installation file by its page on its host, such as the file's page on Nexus, so I can read it in a diff and open it.
 14. A mod from the game folder to differ only when a file it takes changes, never when the game folder gains or changes a file the mod does not take. Source: ADR-0023
 
 ## Status
@@ -43,7 +43,7 @@ As a user, I want:
 3. Status to cost a stat of each file, and a hash only of a file whose size, modified time or change time differs from Modbench's last read. A tool can keep a file's modified time, and a write always moves its change time. Modbench keeps what it last read on this machine and never commits it, as git keeps its index, so a clone on another machine reads a file as differing only when its bytes do. Source: Existing tools; ADR-0003
 4. Each file row in a mod to say differs when its bytes differ from the manifest's or no line names it, and the mod's tooltip to say how many files its manifest names and its folder lacks.
 5. The Mods view's badge to count the mods that differ or have no manifest. Source: VS Code's view badge
-6. A mod to say differs when its metadata differs from its manifest in the version or where its installation file comes from, so a change I make in the mod manager reaches the commit. Source: Never silently wrong
+6. A mod to say differs when its metadata differs from its manifest in the version or its installation file's page on its host, so a change I make in the mod manager reaches the commit. Source: Never silently wrong
 7. A separator to say differs or no manifest as a mod does, and to count in the badge. Source: Never silently wrong
 
 ## Git init
@@ -83,7 +83,7 @@ As a user, I want:
 As a user, I want:
 
 1. Each mod's folder to become what its manifest says: every file whose bytes differ written, and every file no line names sent to the trash. A file whose bytes already match is left alone, so a restore after a checkout costs only what the checkout changed. Source: ADR-0022
-2. One confirmation, only when the restore destroys something: a file whose bytes differ from the manifest's, a file no line names, or metadata whose version or where its installation file comes from differs from the manifest's. It names the mods, or says every mod, and says that a change no manifest holds is lost. A restore after a fresh clone asks nothing. Source: Confirm what destroys
+2. One confirmation, only when the restore destroys something: a file whose bytes differ from the manifest's, a file no line names, or metadata whose version or installation file's page on its host differs from the manifest's. It names the mods, or says every mod, and says that a change no manifest holds is lost. A restore after a fresh clone asks nothing. Source: Confirm what destroys
 3. A source mod with a remote rebuilt from its submodule at the commit the repository pins, and the submodule cloned when it is absent. When the branch the submodule follows is at that commit, restore checks out the branch, so I land on a branch. One at another commit is skipped and named with the commit, because Modbench never moves my repository. Source: ADR-0023; ADR-0003
 4. A mod skipped, and named with what it lacks, when its installation file or a game file its manifest names is missing or has other bytes, or when a file has no package. Every other mod lands. Nothing is downloaded. Source: A selection is one gesture, and each item lands on its own
 5. A file the build makes, a compiled plugin or a packed archive, to come back as the build makes it, which can differ in bytes. Only what comes from the installation file or the game folder is byte-checked. Source: ADR-0006
