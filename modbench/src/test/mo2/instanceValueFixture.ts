@@ -1,6 +1,8 @@
 import { FileConflictLookup } from '../../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { groupModOrder } from '../../instanceAdapter/modGroups';
+import { modOfOrigin } from '../../instanceLoader/modOfOrigin';
+import { entryKey } from '../../instanceAdapter/mo2Context';
 import { nexusDomainForMetaGame } from '../../tables/gamePaths';
 import { GAME_FOLDER_NOT_FOUND } from './gameFolderNotFound';
 
@@ -24,7 +26,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     gameName: 'Fallout 4',
     gameRelease: 'Fallout4',
     nexusDomainOf: nexusDomainForMetaGame,
-    entryKey: ({ kind, name }) => (kind === 'separator' ? `${name}_separator` : name).toLowerCase(),
+    entryKey,
     gameFolder: GAME_FOLDER_NOT_FOUND,
     dataFolderPlugins: { kind: 'unresolved' },
     pluginsLoadedWithNoLine: undefined,
@@ -42,3 +44,9 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
   }));
   return { ...value, modGroups, modNames, ...overrides };
 }
+
+/** `modOfOrigin` over a mod order of the named mods, as the instance value answers it. */
+export const modOfOriginIn = (...mods: readonly string[]): ((origin: string) => string | undefined) => {
+  const value = instanceValueFixture({ mods: mods.map((name) => ({ kind: 'mod' as const, name, enabled: true })) });
+  return (origin) => modOfOrigin(value, origin)?.name;
+};

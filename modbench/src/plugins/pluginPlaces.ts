@@ -21,7 +21,7 @@ export function pluginPlaces(value: Pick<InstanceValue, 'mods' | 'paths' | 'plug
 export type PlaceFolder = PluginPlace | { readonly lost: 'gone' | 'disabled' | 'unread' };
 
 export function placeFolder(value: Pick<InstanceValue, 'mods' | 'paths' | 'entryKey'>, origin: string): PlaceFolder {
-  const mod = modOfOrigin(value, origin) ?? origin;
+  const mod = modOfOrigin(value, origin)?.name ?? origin;
   const place = pluginPlacesOf(value).find((held) => held.name === mod);
   if (place !== undefined) return place;
   if (origin === OVERWRITE_ORIGIN) return { lost: 'unread' };

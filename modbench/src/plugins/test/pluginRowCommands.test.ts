@@ -46,7 +46,7 @@ import {
   registerDecompileAndCommitCommand, registerBuildCommand, registerDecompileCommand, BuildProblems,
 } from '../pluginRowCommands';
 import { sourceFiles } from '../../instanceLoader/loadOrderSnapshot';
-import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { instanceValueFixture, modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type InitOutcome, type InitStatus, type PluginAddress, type WriteRefused } from '../../client';
 import { PluginNode } from '../pluginRows';
@@ -98,7 +98,7 @@ describe('modbench.mod.decompileAndCommit', () => {
     const progress = { say: (message: string | undefined) => said.push(message) };
     const reporter = recordingReporter();
     registerDecompileAndCommitCommand({
-      progress, instance: instanceThatReads, commands, reporter, onCommitted, modsView: 'modbench.modList', modOfOrigin: (origin) => [...MOD_DIRS.keys()].find((mod) => mod.toLowerCase() === origin.toLowerCase()),
+      progress, instance: instanceThatReads, commands, reporter, onCommitted, modsView: 'modbench.modList', modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()),
     }, paletteSelection);
     return {
       handler: present(handlers.get('modbench.mod.decompileAndCommit'), 'the decompile and commit command registerDecompileAndCommitCommand registers'),
@@ -362,7 +362,7 @@ describe('modbench.mod.build', () => {
       },
       instance: instanceThatReads, gameRelease: () => 'Fallout4',
       reporter, problems: new BuildProblems(diagnostics),
-      modOfOrigin: (origin) => [...MOD_DIRS.keys()].find((mod) => mod.toLowerCase() === origin.toLowerCase()), sourceDirs: () => SOURCE_DIRS, modsView: 'modbench.modList',
+      modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()), sourceDirs: () => SOURCE_DIRS, modsView: 'modbench.modList',
       sourceFiles: (origin) => sourceFiles(FILES, origin),
       saveUnsaved: (mod) => {
         const files = sourceFiles(FILES, mod);

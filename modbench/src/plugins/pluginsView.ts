@@ -189,12 +189,12 @@ function registerPluginGestures(
   return [
     registerDecompileAndCommitCommand({
       progress, instance, commands: sourceCommands, reporter: reporterFor('mod.decompileAndCommit'), onCommitted: registerRepositories,
-      modOfOrigin: (origin) => modOfOrigin(instance.value, origin), modsView,
+      modOfOrigin: (origin) => modOfOrigin(instance.value, origin)?.name, modsView,
     }, sourceGestureRows),
     registerBuildCommand({
       commands: sourceCommands, instance, gameRelease: () => instance.value.gameRelease, reporter: reporterFor('mod.build'), problems: buildProblems,
       sourceFiles: (origin) => sourceFiles(instance.value, origin), saveUnsaved: saveUnsavedPluginSource,
-      modOfOrigin: (origin) => modOfOrigin(instance.value, origin), sourceDirs: () => instance.value.paths.sourceDirs, modsView,
+      modOfOrigin: (origin) => modOfOrigin(instance.value, origin)?.name, sourceDirs: () => instance.value.paths.sourceDirs, modsView,
     }, sourceGestureRows),
     registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
     registerRecordCreateCommand({

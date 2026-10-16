@@ -3,7 +3,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import {
-  entryNotFound, type DecideModOrder, type EntryRef, type FileOrigin, type InstanceAdapter,
+  entryNotFound, sameEntry, type DecideModOrder, type EntryRef, type FileOrigin, type InstanceAdapter,
   type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
 import { EMPTY_MOD_NAME, entryNameRefusal, goneFromDisk, newModNameRefusal, type EntryKey, type TakenNames } from '../coreLib/commandRefusals';
@@ -45,7 +45,7 @@ type EntryKind = EntryRef['kind'];
 
 // A command names an entry as the mod manager matches names.
 const isListed = (adapter: InstanceAdapter, order: readonly ModlistEntry[], entry: EntryRef): boolean =>
-  order.some((e) => e.kind === entry.kind && adapter.entryKey(e) === adapter.entryKey(entry));
+  order.some((e) => sameEntry(adapter, e, entry));
 
 // Decided from mod order as it stands when the changes land, so an item gone since the view last
 // rendered is refused by name while the rest land in the same write.

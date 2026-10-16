@@ -40,7 +40,6 @@ export interface DecompileAndCommitDeps {
   commands: Pick<SourceCommands, 'decompileAndCommit'>;
   reporter: Reporter;
   onCommitted: () => Promise<void>;
-  /** The mod an origin names; none for an origin no mod is. */
   modOfOrigin: (origin: string) => string | undefined;
   /** The Mods view's id, whose bar a gesture from a Mods row runs under. */
   modsView: string;
@@ -233,7 +232,6 @@ export interface BuildDeps {
   sourceFiles: SourceFilesOf;
   /** Saves the mod's unsaved plugin source; answers the paths VS Code left unsaved, or undefined when the mod has no source folder. */
   saveUnsaved: (mod: string) => Promise<string[] | undefined>;
-  /** The mod an origin names; none for an origin no mod is. */
   modOfOrigin: (origin: string) => string | undefined;
   /** The source folder of each mod that holds a repository, by mod name. */
   sourceDirs: () => ReadonlyMap<string, string>;

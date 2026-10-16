@@ -95,6 +95,10 @@ export interface ModGroups {
 /** A mod or a separator, by its kind and name. */
 export type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
 
+/** Whether two entries are one to the mod manager: the same kind, and the same key. */
+export const sameEntry = (manager: Pick<InstanceAdapter, 'entryKey'>, a: EntryRef, b: EntryRef): boolean =>
+  a.kind === b.kind && manager.entryKey(a) === manager.entryKey(b);
+
 /** Why a change naming an entry mod order does not list is refused. */
 export const entryNotFound = (entry: EntryRef): string =>
   `${entry.kind === 'mod' ? 'Mod' : 'Separator'} not found in modlist: ${entry.name}`;

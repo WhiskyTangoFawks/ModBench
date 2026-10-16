@@ -152,7 +152,7 @@ const PLUGIN_TAKES = 'each { name, origin? } as list_plugins shows it';
 
 const pluginArguments = (named: typeof pluginsNamed) =>
   (value: InstanceValue, argument: readonly z.infer<typeof PLUGIN_NAME>[]) =>
-    named(value.plugins, argument).map((plugin) => ({ kind: 'plugin' as const, plugin }));
+    named(value, argument).map((plugin) => ({ kind: 'plugin' as const, plugin }));
 
 const pluginsCall = pluginArguments(pluginsNamed);
 const linesCall = pluginArguments(linesNamed);
@@ -202,7 +202,7 @@ const OPEN_RECORD = gestureInput(
     const formKeys = await formKeysNamed(mEdit, argument.map(({ name }) => name));
     return new AgentCall(
       formKeys.map((formKey, at) => ({
-        kind: 'record' as const, formKey, ...(argument[at]?.plugin && { plugin: pluginsNamed(value.plugins, [argument[at].plugin])[0] }),
+        kind: 'record' as const, formKey, ...(argument[at]?.plugin && { plugin: pluginsNamed(value, [argument[at].plugin])[0] }),
       })),
       { pinned: options?.pinned },
     );

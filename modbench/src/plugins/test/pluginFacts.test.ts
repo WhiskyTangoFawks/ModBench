@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import type { PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { PluginFacts, placeOf, type PluginPlace } from '../pluginFacts';
@@ -429,8 +430,7 @@ describe('PluginFacts — a later read that failed (common.md, States, story 6)'
 });
 
 describe('placeOf — where a plugin lives, from the instance value', () => {
-  const mods = ['SomeMod', 'TrackedMod'];
-  const modOfOrigin = (origin: string) => mods.find((mod) => mod.toLowerCase() === origin.toLowerCase());
+  const modOfOrigin = modOfOriginIn('SomeMod', 'TrackedMod');
   const trackedMods = new Set(['TrackedMod']);
 
   it.each<[string, string, PluginPlace | undefined]>([

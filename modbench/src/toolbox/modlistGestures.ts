@@ -4,7 +4,7 @@ import { carriedArgument, rowNameOf } from '../drivingLib/argument';
 import { gestureEntry, isClickedRow } from '../drivingLib/gestureEntry';
 import type { FocusedView } from '../drivingLib/focusedView';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import type { EntryRef, Instance, InstanceValue } from '../instanceLoader/instance';
+import { sameEntry, type EntryRef, type Instance, type InstanceValue } from '../instanceLoader/instance';
 import { modLabelsOf, modNameOf } from '../instanceLoader/modName';
 import type { AskQuestion } from '../ports/dialog';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -97,7 +97,7 @@ const everyMod = (value: InstanceValue): string[] => (value.modFolders ?? []).ma
 function modsHeldBy(kind: unknown, name: string, value: InstanceValue): string[] | undefined {
   if (kind !== 'mod' && kind !== 'separator') return undefined;
   const asked: EntryRef = { kind, name };
-  const entry = value.mods.find((listed) => listed.kind === kind && value.entryKey(listed) === value.entryKey(asked)) ?? asked;
+  const entry = value.mods.find((listed) => sameEntry(value, listed, asked)) ?? asked;
   const modName = (held: EntryRef): string => modNameOf(value.modNames, held) ?? held.name;
   if (kind === 'mod') return [modName(entry)];
   const group = value.modGroups.groups.find(({ separator }) => separator.name === entry.name);

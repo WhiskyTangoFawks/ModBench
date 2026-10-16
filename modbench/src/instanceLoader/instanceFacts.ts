@@ -17,7 +17,7 @@ export interface InstanceFacts {
 export const factsOf = (instance: Instance): InstanceFacts => ({
   trackedMods: () => instance.value.trackedMods,
   sourceMods: () => instance.value.sourceMods,
-  modOfOrigin: (origin) => modOfOrigin(instance.value, origin),
+  modOfOrigin: (origin) => modOfOrigin(instance.value, origin)?.name,
   sourceDirs: () => instance.value.paths.sourceDirs,
   standingOf: (plugin) => pluginStanding(instance.value, plugin),
   onChange: (listener) => instance.subscribe(() => { listener(); }),

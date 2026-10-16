@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 
 const { getExtension, openRepository } = vi.hoisted(() => ({
   getExtension: vi.fn(),
@@ -33,7 +34,7 @@ describe('trackedRepositoriesOver', () => {
     const outputChannel = { warn: vi.fn(), error: vi.fn() };
     const tracked = trackedRepositoriesOver({
       client, outputChannel,
-      modOfOrigin: (origin) => Object.keys(sourceDirs).concat(trackedMods).find((mod) => mod.toLowerCase() === origin.toLowerCase()),
+      modOfOrigin: modOfOriginIn(...Object.keys(sourceDirs), ...trackedMods),
       trackedMods: () => new Set(trackedMods), sourceDirs: () => new Map(Object.entries(sourceDirs)),
     });
     return { tracked, outputChannel };

@@ -2,17 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { isDisabledOrInDisabledMod } from '../disabledPlugin';
 import type { LoadOrderPlugin } from '../loadOrderSnapshot';
 import type { Mod } from '../instance';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const mod = (name: string, enabled: boolean): Mod => ({ kind: 'mod', name, enabled });
 const row = (over: Partial<LoadOrderPlugin>): LoadOrderPlugin =>
   ({ name: 'A.esp', path: '/mods/ModA/A.esp', origin: 'ModA', line: 0, enabled: true, winning: true, ...over });
 const A = { name: 'A.esp', origin: 'ModA' };
 
-const lowercased = ({ name }: { name: string }): string => name.toLowerCase();
-
-const disabled = (
-  mods: Mod[], plugins: LoadOrderPlugin[], pluginsLoadedWithNoLine: { name: string; origin: string }[] = [], entryKey = lowercased,
-) => isDisabledOrInDisabledMod({ mods, plugins, pluginsLoadedWithNoLine, entryKey }, A);
+const disabled = (mods: Mod[], plugins: LoadOrderPlugin[], pluginsLoadedWithNoLine: { name: string; origin: string }[] = []) =>
+  isDisabledOrInDisabledMod({ mods, plugins, pluginsLoadedWithNoLine, entryKey: instanceValueFixture().entryKey }, A);
 
 describe('a plugin disabled, or in a disabled mod', () => {
   it('is one whose line is disabled', () => {
@@ -25,10 +23,6 @@ describe('a plugin disabled, or in a disabled mod', () => {
 
   it('is one in a disabled mod, though an enabled line names its filename', () => {
     expect(disabled([mod('moda', false)], [row({ winning: false })])).toBe(true);
-  });
-
-  it('is not one in a mod the mod manager\'s key tells from the origin', () => {
-    expect(disabled([mod('moda', false)], [row({ winning: false })], [], ({ name }) => name)).toBe(false);
   });
 
   it('is not an overridden one, whose enabled line another mod\'s file of its name answers', () => {

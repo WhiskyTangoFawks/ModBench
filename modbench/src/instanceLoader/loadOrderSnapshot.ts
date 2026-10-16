@@ -7,6 +7,7 @@ import {
   fileInFolder, isRootLevel, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
   type ModFolders, type ModlistEntry, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
+import { modOfOrigin } from './modOfOrigin';
 import { pluginOrderOf } from './pluginOrder';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile, pluginCompanionRule } from '../tables/gamePaths';
@@ -108,8 +109,8 @@ export const NO_SOURCE_FILES: SourceFilesOf = () => undefined;
 
 /** The files of the source folder the Instance adapter answered for the origin's mod (ADR-0007).
  *  `undefined` for Overwrite and the game folder, which are no mod (ADR-0012). */
-export function sourceFiles(value: Pick<InstanceValue, 'paths'>, origin: string): SourceFiles | undefined {
-  const folder = byOrigin(origin, { overwrite: undefined, data: undefined, mod: (name) => value.paths.sourceDirs.get(name) });
+export function sourceFiles(value: Pick<InstanceValue, 'mods' | 'entryKey' | 'paths'>, origin: string): SourceFiles | undefined {
+  const folder = byOrigin(origin, { overwrite: undefined, data: undefined, mod: (name) => value.paths.sourceDirs.get(modOfOrigin(value, name)?.name ?? name) });
   return folder === undefined ? undefined : { file: (relativePath) => fileInFolder(folder, relativePath) };
 }
 
@@ -282,7 +283,7 @@ export function loadOrderSnapshotOf(value: {
     mod: (name) => {
       const folder = value.modFolders?.holding({ kind: 'mod', name });
       if (folder === undefined) return undefined;
-      const sourceFolder = value.sourceDirs.get(name);
+      const sourceFolder = value.sourceDirs.get(folder.name);
       return sourceFolder === undefined ? { kind: 'Mod', mod: name, folder: folder.path } : { kind: 'Mod', mod: name, folder: folder.path, sourceFolder };
     },
   });

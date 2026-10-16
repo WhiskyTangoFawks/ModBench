@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
 import type { Instance } from '../instanceLoader/instance';
+import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { PluginsTreeProvider } from './PluginsTreeProvider';
 import { type PluginListNode, type PluginsTreeNode } from './pluginRows';
 import {
@@ -139,7 +140,7 @@ export function registerCreatePluginCommand(
       return made;
     },
     fromAgent: ({ options: { name, place } }) => {
-      const chosen = pluginPlaces(instance.value, name).find(({ name: origin }) => origin.toLowerCase() === place.toLowerCase());
+      const chosen = pluginPlaces(instance.value, name).find(({ name: origin }) => origin === (modOfOrigin(instance.value, place)?.name ?? place));
       if (chosen === undefined) {
         if (place.toLowerCase() === OVERWRITE_ORIGIN) {
           const unread = placed(instance.value, name, { origin: OVERWRITE_ORIGIN, label: OVERWRITE_LABEL });

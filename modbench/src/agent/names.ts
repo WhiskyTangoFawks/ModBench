@@ -1,5 +1,6 @@
 import { foldPath } from '../instanceLoader/fileConflictIndex';
-import type { OriginFile } from '../instanceAdapter/instanceAdapter';
+import { modOfOrigin } from '../instanceLoader/modOfOrigin';
+import { sameEntry, type OriginFile } from '../instanceAdapter/instanceAdapter';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { pluginNameKey, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import { Refusal } from '../drivingLib/refusal';
@@ -24,9 +25,10 @@ type Entry = InstanceValue['mods'][number];
 const asNamed = ({ kind, name }: Entry): string => `${kind} ${name}`;
 
 type EntryKeys = Pick<InstanceValue, 'mods' | 'entryKey'>;
+type PluginKeys = EntryKeys & Pick<InstanceValue, 'plugins'>;
 
-function matchesOf({ mods, entryKey }: EntryKeys, { name, kind }: ModName): readonly Entry[] {
-  return mods.filter((entry) => (kind === undefined || entry.kind === kind) && entryKey(entry) === entryKey({ kind: entry.kind, name }));
+function matchesOf(value: EntryKeys, { name, kind }: ModName): readonly Entry[] {
+  return value.mods.filter((entry) => sameEntry(value, entry, { kind: kind ?? entry.kind, name }));
 }
 
 function refusalFor(given: ModName, matches: readonly Entry[]): string | undefined {
@@ -83,11 +85,12 @@ function pluginRefusal({ name, origin }: PluginName, matches: readonly PluginAdd
 }
 
 /** Each plugin as the load order holds it. */
-export function pluginsNamed(plugins: InstanceValue['plugins'], given: readonly PluginName[]): PluginAddress[] {
+export function pluginsNamed(value: PluginKeys, given: readonly PluginName[]): PluginAddress[] {
+  const originOf = (origin: string): string => modOfOrigin(value, origin)?.name ?? origin;
   const resolved = given.map((one) => ({
     one,
-    matches: plugins.filter(({ name, origin }) => pluginNameKey(name) === pluginNameKey(one.name)
-      && (one.origin === undefined || origin.toLowerCase() === one.origin.toLowerCase())).map(({ name, origin }) => ({ name, origin })),
+    matches: value.plugins.filter(({ name, origin }) => pluginNameKey(name) === pluginNameKey(one.name)
+      && (one.origin === undefined || origin === originOf(one.origin))).map(({ name, origin }) => ({ name, origin })),
   }));
   const refusals = resolved.flatMap(({ one, matches }) => pluginRefusal(one, matches) ?? []);
   if (refusals.length > 0) throw new Refusal(refusals.join(' '));
@@ -95,10 +98,10 @@ export function pluginsNamed(plugins: InstanceValue['plugins'], given: readonly 
 }
 
 /** Each plugin whose line in plugins.txt the gesture changes: the copy that line governs, as the Plugins view's rows are. */
-export function linesNamed(plugins: InstanceValue['plugins'], given: readonly PluginName[]): PluginAddress[] {
-  const named = pluginsNamed(plugins, given);
+export function linesNamed(value: PluginKeys, given: readonly PluginName[]): PluginAddress[] {
+  const named = pluginsNamed(value, given);
   const refusals = named.flatMap((address) => {
-    const governing = plugins.find(({ name, winning }) => winning && pluginNameKey(name) === pluginNameKey(address.name));
+    const governing = value.plugins.find(({ name, winning }) => winning && pluginNameKey(name) === pluginNameKey(address.name));
     return governing === undefined || samePluginAddress(governing, address)
       ? []
       : `${asPlugin(address)} is overridden, and the line for "${address.name}" is ${asPlugin(governing)}'s. Name that one.`;
