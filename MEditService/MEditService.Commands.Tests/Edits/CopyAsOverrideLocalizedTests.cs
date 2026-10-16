@@ -9,45 +9,55 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class CopyAsOverrideLocalizedTests : IDisposable
+public abstract class LocalizedSourceCopyScenario : IDisposable
 {
-    private const string SourcePluginName = "Localized.esm";
-    private const string SourceOrigin = "LocalizedMod";
-    private const string DestinationPluginName = "Destination.esp";
-    private const string DestinationOrigin = "DestinationMod";
-    private const string DoorName = "The Big Door";
+    protected const string SourcePluginName = "Localized.esm";
+    protected const string SourceOrigin = "LocalizedMod";
+    protected const string DestinationPluginName = "Destination.esp";
+    protected const string DestinationOrigin = "DestinationMod";
+    protected const string EnglishName = "The Big Door";
+    protected const string FrenchName = "La Grande Porte";
 
     private readonly ScratchDirectory _sourceModFolder = new("medit-copy-localized-source-");
     private readonly ScratchDirectory _destinationModFolder = new("medit-copy-localized-dest-");
     private readonly ScratchDirectory _gameDir = new("medit-copy-localized-game-");
     private readonly FormKey _door;
+    private readonly LoadOrderSnapshot _loadOrder;
     private readonly CopyRecordChangesHandler _handler;
 
-    public CopyAsOverrideLocalizedTests()
+    protected LocalizedSourceCopyScenario(bool destinationLocalized)
     {
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
         var door = sourceMod.Doors.AddNew("MainDoor");
-        door.Name = new TranslatedString(Language.English, DoorName);
+        door.Name = new TranslatedString(Language.English, [
+            new KeyValuePair<Language, string>(Language.English, EnglishName),
+            new KeyValuePair<Language, string>(Language.French, FrenchName),
+        ]);
         sourceMod.UsingLocalization = true;
         var sourcePath = Path.Combine(_sourceModFolder, SourcePluginName);
         sourceMod.WriteToBinary(sourcePath);
         _door = door.FormKey;
 
-        var destinationMod = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4);
+        var destinationMod = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4)
+        {
+            UsingLocalization = destinationLocalized,
+        };
+        if (destinationLocalized) destinationMod.Doors.AddNew("OtherDoor").Name = new TranslatedString(Language.French, "Une Autre Porte");
         var destinationPath = Path.Combine(_destinationModFolder, DestinationPluginName);
         destinationMod.WriteToBinary(destinationPath);
 
-        var loadOrder = SnapshotPlugins.Snapshot(
+        _loadOrder = SnapshotPlugins.Snapshot(
             _gameDir, _gameDir, GameRelease.Fallout4,
 
             [
                 new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Line: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Line: 1, Enabled: true, Winning: true),
-            ]);
-        InitEveryPluginOf.ModAsync(loadOrder, DestinationOrigin).GetAwaiter().GetResult();
+            ],
+            stringsLanguage: Language.French);
+        InitEveryPluginOf.ModAsync(_loadOrder, DestinationOrigin).GetAwaiter().GetResult();
 
         var holder = new LoadOrderHolder();
-        holder.Apply(loadOrder);
+        holder.Apply(_loadOrder);
         _handler = TestEditService.CopyHandler(holder);
     }
 
@@ -58,8 +68,7 @@ public sealed class CopyAsOverrideLocalizedTests : IDisposable
         _gameDir.Dispose();
     }
 
-    [Fact]
-    public void CopyRecordAsOverride_FromANonCompiledPluginLocalizedSource_CarriesItsTranslatedStrings()
+    protected async Task<string> CopiedDoorBody()
     {
         var destination = new PluginAddress(DestinationPluginName, DestinationOrigin);
 
@@ -68,6 +77,32 @@ public sealed class CopyAsOverrideLocalizedTests : IDisposable
         result.OnlyLanded();
         var document = SourceModTree.Document(_destinationModFolder, destination, _door.ToString());
         Assert.NotNull(document);
-        Assert.Contains(DoorName, document.Body, StringComparison.Ordinal);
+        await CompileServices.Over(_loadOrder).CompileLandedAsync(destination);
+        return document.Body;
+    }
+}
+
+public sealed class CopyAsOverrideLocalizedTests() : LocalizedSourceCopyScenario(destinationLocalized: false)
+{
+    [Fact]
+    public async Task CopyRecordAsOverride_FromALocalizedSourceIntoAPluginThatIsNot_WritesTheStringsLanguageValueAndCompiles()
+    {
+        var body = await CopiedDoorBody();
+
+        Assert.Contains(FrenchName, body, StringComparison.Ordinal);
+        Assert.DoesNotContain(EnglishName, body, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Values\"", body, StringComparison.Ordinal);
+    }
+}
+
+public sealed class CopyAsOverrideIntoLocalizedTests() : LocalizedSourceCopyScenario(destinationLocalized: true)
+{
+    [Fact]
+    public async Task CopyRecordAsOverride_FromALocalizedSourceIntoALocalizedPlugin_KeepsEveryLanguage()
+    {
+        var body = await CopiedDoorBody();
+
+        Assert.Contains(FrenchName, body, StringComparison.Ordinal);
+        Assert.Contains(EnglishName, body, StringComparison.Ordinal);
     }
 }

@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Codec.Serialization;
@@ -24,6 +26,41 @@ public static class TranslatedStringValues
                 Reorder(json, ordered, Elements(ref reader));
         }
         return ordered;
+    }
+
+    /// <summary><paramref name="text"/> with each translated string that holds several languages written as its
+    /// <paramref name="language"/> text alone, which is all a plugin that is not localized holds (xEdit copies the
+    /// current language's string). A string with no text in <paramref name="language"/> stays as it was.</summary>
+    public static string InLanguage(string text, Language language, GameRelease release, string recordType)
+    {
+        var root = JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected a record document.");
+        var changed = false;
+        foreach (var translated in TranslatedStrings(root).ToList())
+        {
+            var held = translated["Values"]?.AsArray()
+                .FirstOrDefault(entry => entry?["Language"]?.GetValue<string>() == language.ToString());
+            if (held?["String"] is not { } value) continue;
+            translated.Remove("Values");
+            translated["Value"] = value.DeepClone();
+            changed = true;
+        }
+        return changed ? RecordTextCodec.RoundTrip(root.ToJsonString(), release, recordType) : text;
+    }
+
+    private static IEnumerable<JsonObject> TranslatedStrings(JsonNode node)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                if (obj.ContainsKey("TargetLanguage") && obj["Values"] is JsonArray) yield return obj;
+                foreach (var child in obj.Select(property => property.Value).OfType<JsonNode>())
+                    foreach (var found in TranslatedStrings(child)) yield return found;
+                break;
+            case JsonArray array:
+                foreach (var child in array.OfType<JsonNode>())
+                    foreach (var found in TranslatedStrings(child)) yield return found;
+                break;
+        }
     }
 
     private static void Reorder(byte[] json, byte[] ordered, List<Element> elements)

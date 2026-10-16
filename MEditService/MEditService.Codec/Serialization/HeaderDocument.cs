@@ -58,6 +58,8 @@ public static class HeaderDocument
 
     public static uint NextObjectId(byte[] body, GameRelease release) => Read(body, release).NextFormID;
 
+    public static bool IsLocalized(byte[] body, GameRelease release) => Read(body, release).UsingLocalization;
+
     /// <summary>The document with its header's Next Object ID set to <paramref name="nextObjectId"/>.</summary>
     public static byte[] WithNextObjectId(byte[] body, GameRelease release, uint nextObjectId)
     {

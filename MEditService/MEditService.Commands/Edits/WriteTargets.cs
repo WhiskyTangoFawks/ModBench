@@ -1,8 +1,12 @@
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
+using System.Text;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Edits;
 
@@ -73,11 +77,21 @@ internal sealed class WriteTargets(
         }
         if (!source.Body(identity).Holds(out var body, out why)) return RefuseUnreadableCopySource(formKey, why);
 
-        target = new CopyTarget(
-            source, identity, new RecordCopy.Destination(SessionOf(destinationPlugin, sessions), destinationPlugin),
-            loadOrder.Current.GameRelease, body);
+        var session = SessionOf(destinationPlugin, sessions);
+        var release = loadOrder.Current.GameRelease;
+        if (!NotLocalizedIn(session.Repository, destinationPlugin, release).Holds(out var language, out var unreadable))
+            return RefuseUnreadable(formKey, unreadable.Reason);
+        var destination = new RecordCopy.Destination(session, destinationPlugin, language);
+        target = new CopyTarget(source, identity, destination, release, destination.Landing(body, release, identity.RecordType));
         return null;
     }
+
+    private Answer<Language?, SourceFailure> NotLocalizedIn(ISourceRepository repository, PluginAddress plugin, GameRelease release) =>
+        repository.RecordOf(plugin, PluginHeader.IdentityOf(plugin.Name)).Then(header =>
+            SourceAnswer.Of(
+                header is { } held && !HeaderDocument.IsLocalized(Encoding.UTF8.GetBytes(held.Body), release)
+                    ? (Language?)loadOrder.Current.StringsLanguage
+                    : null));
 
     // A record's own descendants are inside its text, so one unreadable response refuses its topic
     // here too.
