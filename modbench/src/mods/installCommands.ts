@@ -15,8 +15,6 @@ import { promptModName } from './promptModName';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 import { MODS_KEY_ARGS } from './gestureEntry';
-import { upgradeLoss, type ReadStatus } from './modStatuses';
-import { failureReason, isReadFailed } from '../wire/readFailed';
 
 interface InstalledMod {
   readonly name: string;
@@ -42,7 +40,6 @@ interface InstallOptions {
 
 interface ModInstallDeps {
   commands: Pick<ModlistCommands, 'installMod' | 'newModNameRefusal'>;
-  readStatus: ReadStatus;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporterFor: (tag: string) => Reporter;
   warnIfFomod: (name: string, isFomod: boolean) => void;
@@ -109,28 +106,15 @@ async function pickSourcePath(): Promise<{ kind: 'archive' | 'folder'; path: str
 // modbench.mod.install: with no source, as from the Mods menu, it asks archive-or-folder first,
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
-  const { commands, instance, reporterFor, warnIfFomod, downloadInstall, readStatus } = deps;
+  const { commands, instance, reporterFor, warnIfFomod, downloadInstall } = deps;
   const reporterOf = (via: InstallVia): Reporter => (via === 'downloadedFile' ? downloadInstall.reporter : reporterFor(via));
   const newModNameRefusal = (name: string) => commands.newModNameRefusal(instance.value, name);
   const failedMessage = ({ source, target, via }: Install): string =>
     `Failed to install "${source.kind === 'downloadedFile' && via === 'downloadedFile' ? source.name : target.name}".`;
 
-  const upgradeRefusal = async ({ target, force }: Install): Promise<string | undefined> => {
-    if (force || target.kind !== 'upgrade') return undefined;
-    const answer = await readStatus([target.name]);
-    if (isReadFailed(answer)) return `"${target.name}" status could not be read: ${failureReason(answer)}`;
-    const status = answer.find(({ mod }) => mod === target.name);
-    if (status === undefined) return `"${target.name}" has no status to read.`;
-    if (status.unreadable) return `"${target.name}" status could not be read: ${status.unreadable.why}`;
-    const loss = upgradeLoss(status);
-    return loss === undefined ? undefined : `The upgrade would lose, in "${target.name}": ${loss}. Request it again with force to replace them.`;
-  };
-
   const installedMod = async (install: Install): Promise<InstallResult> => {
     try {
-      const refusal = await upgradeRefusal(install);
-      if (refusal !== undefined) return { applied: false, refusal: failedMessage(install), detail: refusal };
-      const outcome = await commands.installMod(install.source, install.target, instance.value.gameName);
+      const outcome = await commands.installMod(install.source, install.target, instance.value.gameName, install.force);
       if (!outcome.applied) return { applied: false, refusal: failedMessage(install), detail: outcome.refusal };
       return {
         applied: true,

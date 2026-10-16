@@ -14,7 +14,8 @@ import { modsKeyContext } from './gestureEntry';
 import { onModCheckboxChanged } from './modCheckboxHandler';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
 import { modNameOf } from '../instanceLoader/modName';
-import { ModStatuses, type ReadStatus } from './modStatuses';
+import { ModStatuses } from './modStatuses';
+import type { ReadStatus } from '../modOrderCommands/modOrderCommands';
 import type { MEditClient } from '../client';
 import { registerModDecorations } from './modDecorations';
 import { registerModInstallCommands } from './installCommands';
@@ -118,7 +119,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     ...registerConflictTable(instance, deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
     vscode.commands.registerCommand('modbench.mod.sync', (value: InstanceValue) => modSync.run(value.modSyncArguments)),
     ...registerModInstallCommands({
-      commands, instance, reporterFor, warnIfFomod: deps.warnIfFomod, downloadInstall: deps.downloadInstall, readStatus: deps.modStatus.read,
+      commands, instance, reporterFor, warnIfFomod: deps.warnIfFomod, downloadInstall: deps.downloadInstall,
     }),
     registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), deps.nexusRow),
     ...registerSortDirectionToggle('mod', provider),
