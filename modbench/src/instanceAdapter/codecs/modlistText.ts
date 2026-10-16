@@ -3,7 +3,8 @@
 // The top of the file is the winning end. Mutations edit the lines.
 
 import type { EntryRef, ModlistEntry, MovePlace, OrderEnd, SeparatorsPlace } from '../instanceAdapter';
-import { editLines, stripBom } from '../../loadOrderFileCodec/lineScan';
+import { firstLines } from '../../loadOrderFileCodec/firstLines';
+import { editLines, entryLineIndices, stripBom } from '../../loadOrderFileCodec/lineScan';
 
 /** The per-profile mod list, one line per mod in Mod override order. */
 export const MODLIST_FILE_NAME = 'modlist.txt';
@@ -125,16 +126,14 @@ function separatorLineAt(lines: readonly string[], separatorName: string): numbe
   return sepIdx;
 }
 
-// A separator trails the mods it holds, so its block runs back to the previous separator, or to
-// `first` when none precedes it.
-function blockStartOf<T>(items: readonly T[], sepIdx: number, isSeparator: (item: T) => boolean, first: number): number {
-  const previous = items.slice(0, sepIdx).findLastIndex(isSeparator);
-  return previous === -1 ? Math.min(first, sepIdx) : previous + 1;
+// A separator trails the mods it holds, so its block runs back to the previous separator the
+// reading shows, or to the first entry line when none precedes it. A repeated line is no boundary.
+function lineBlockStartAt(lines: readonly string[], sepIdx: number): number {
+  const repeats = new Set(firstLines(entryLineIndices(lines, isEntryLine), (at) => modLineKey(entryNamed((lines[at] ?? '').slice(1)))).repeats);
+  const previous = lines.slice(0, sepIdx).findLastIndex((line, at) => isSeparatorLine(line) && !repeats.has(at));
+  // Starting at the first entry line, so a leading comment or blank line stays where it is.
+  return previous === -1 ? Math.min(firstEntryLineAt(lines), sepIdx) : previous + 1;
 }
-
-// Starting at the first entry line, so a leading comment or blank line stays where it is.
-const lineBlockStartAt = (lines: readonly string[], sepIdx: number): number =>
-  blockStartOf(lines, sepIdx, isSeparatorLine, firstEntryLineAt(lines));
 
 const separatorBlockStartAt = (lines: readonly string[], separatorName: string): number =>
   lineBlockStartAt(lines, separatorLineAt(lines, separatorName));

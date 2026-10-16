@@ -113,6 +113,8 @@ describe('insertSeparatorBesideInText', () => {
     ['directly after a mod anchor', '+A\n+B\n', mod('A'), '+A\n+S_separator\n+B\n'],
     ['after the last mod, joining no lines when it is unterminated', '+A', mod('A'), '+A\n+S_separator'],
     ['before the first mod of a separator anchor\'s group, taking none', '+A\n+B\n+X_separator\n+C\n', separator('X'), '+S_separator\n+A\n+B\n+X_separator\n+C\n'],
+    ['before the first mod the reading shows in a separator anchor\'s group, a repeated separator line holding no boundary',
+      '+A\n+X_separator\n+B\n-x_separator\n+C\n+Y_separator\n', separator('Y'), '+A\n+X_separator\n+S_separator\n+B\n-x_separator\n+C\n+Y_separator\n'],
     ['before an anchor separator with no mods of its own', '+First_separator\n+Second_separator\n+M\n', separator('Second'), '+First_separator\n+S_separator\n+Second_separator\n+M\n'],
     ['before every mod, leaving the header above it, when the anchor is the winning-most separator', `${H}+A\r\n+X_separator\r\n`, separator('X'), `${H}+S_separator\r\n+A\r\n+X_separator\r\n`],
     ['beside the anchor of the kind it is handed, when a mod and a separator share a name', '+Gear_separator\n+Gear\n', mod('Gear'), '+Gear_separator\n+Gear\n+S_separator\n'],
@@ -310,6 +312,8 @@ describe('moveSeparatorsInText', () => {
       twoSeparators, ['S1'], { kind: 'modOrder' }, 'losing', `${header}+B\r\n+S2_separator\r\n+A\r\n+S1_separator\r\n+C\r\n`],
     ['at the winning end of mod order, land below a leading comment',
       twoSeparators, ['S2'], { kind: 'modOrder' }, 'winning', `${header}+B\r\n+S2_separator\r\n+A\r\n+S1_separator\r\n+C\r\n`],
+    ['a repeated separator line is no boundary: the block holds the mods the reading shows in it',
+      '+A\n+X_separator\n+B\n-x_separator\n+C\n+Y_separator\n', ['Y'], { kind: 'separator', name: 'X' }, 'winning', '+B\n-x_separator\n+C\n+Y_separator\n+A\n+X_separator\n'],
     ['on the winning side of the first separator, land below a leading comment',
       `${header}+A\r\n+S1_separator\r\n+B\r\n+S2_separator\r\n`, ['S2'], { kind: 'separator', name: 'S1' }, 'winning', `${header}+B\r\n+S2_separator\r\n+A\r\n+S1_separator\r\n`],
   ])('%s', (_what, text, separators, place, end, expected) => {
