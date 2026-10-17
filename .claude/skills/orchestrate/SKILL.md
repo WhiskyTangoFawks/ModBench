@@ -83,9 +83,11 @@ The tracker is yours to read, assign, close and comment on. Tickets come from th
 
 ## 4. Drain
 
-The run ends when the epic is achieved. Run the Windows gates once on the final `main`, through `/windows-vm`: the per-ticket gates ran on Linux alone. A red Windows gate is a defect the run found. Then post one comment on the epic. It lists what landed, both ticketed and not, what needs human eyes and why, what parked and the strategic question each park waits on, what was never dispatched, and every break in the chain of authority's form. Tactical decisions stay in the commit messages. The epic is the user's review surface. If everyticket is closed and no open questions remain, close the epic ticket.
+The run ends when the epic is achieved. Acceptance runs first, then the Windows gates, never beside them: a run and the VM each hold gigabytes. Start one fresh `general-purpose` agent with `run_in_background: false`, [`ACCEPT.md`](ACCEPT.md) as its brief, followed by the epic's spec stories and what landed. It reports each story as passed, failed with quoted evidence, or out of reach. A failure is a defect the run found: route it as a finding, then run the step again for the failed stories. What is out of reach is what the comment lists as needing human eyes.
 
-**Criterion:** the Windows gates ran on the final `main` and every red one is fixed or in the comment, the comment is posted, no worktree remains, and `main` is clean.
+Run the Windows gates once on the final `main`, through `/windows-vm`: the per-ticket gates ran on Linux alone. A red Windows gate is a defect the run found. Then post one comment on the epic. It lists what landed, both ticketed and not, what needs human eyes and why, what parked and the strategic question each park waits on, what was never dispatched, and every break in the chain of authority's form. Tactical decisions stay in the commit messages. The epic is the user's review surface. If everyticket is closed and no open questions remain, close the epic ticket.
+
+**Criterion:** every story is passed or out of reach, `accept.sh down` printed, the Windows gates ran on the final `main` and every red one is fixed or in the comment, the comment is posted, no worktree remains, and `main` is clean.
 
 ## Unattended mechanics
 
