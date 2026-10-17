@@ -29,7 +29,7 @@ describe('the MO2 adapter\'s hashes', () => {
       archives: fakeArchiveReader([]),
     });
 
-    await adapter.installationFiles('Mod');
+    await adapter.installationFile('Mod');
 
     expect(await readdir(join(root, 'hash-index'))).toEqual(['hashes.jsonl']);
   });

@@ -203,7 +203,7 @@ export interface BuildOutcome {
  *  commits itself (ADR-0013). */
 export type UpdateManifestMod = components['schemas']['UpdateManifestModRequest'];
 
-/** The instance's facts every mod's manifest needs: the game files its files override, and the stat cache's folder. */
+/** The instance's facts every mod's manifest needs: the stat cache's folder. */
 export type UpdateManifestFacts = Omit<components['schemas']['UpdateManifestRequest'], 'mods' | 'gesture'>;
 
 /** Where a modlist gesture is: the gesture it is, the mod it works on, and how many mods it has done of how many. The
@@ -219,8 +219,8 @@ export interface ModlistCallOptions<P = ModlistProgress> {
 interface UpdatedMod {
   mod: string;
   manifestWritten: boolean;
-  /** Each file nothing provides, by its path in the mod folder. */
-  noProvider: readonly string[];
+  /** Each file its package does not hold, by its path in the mod folder. */
+  notInPackage: readonly string[];
   /** Why the stat cache could not keep what the update read. */
   statCacheNotWritten?: string | null;
 }
@@ -236,8 +236,8 @@ export interface UpdateManifestOutcome {
 /** A mod to restore from its manifest: its folder and its installation files (ADR-0013). */
 export type RestoreMod = components['schemas']['RestoreFromManifestModRequest'];
 
-/** The instance's facts restore from manifest needs: the game files the mods' files override, the game's data folder and the
- *  stat cache's folder. */
+/** The instance's facts restore from manifest needs: the stat cache's folder, the suffix of an excluded file and the archives
+ *  a build packs. */
 export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestRequest'], 'mods' | 'gesture'>;
 
 
@@ -245,8 +245,8 @@ export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestReques
 export type ModStatus = components['schemas']['ModStatus'];
 export type ReadModStatus = (mods: readonly string[]) => Promise<readonly ModStatus[] | ReadFailed>;
 
-/** A mod restore would destroy files in: each file whose bytes differ from what its provider fixes, and each file no line
- *  names, by its path in the mod folder, or a version or source in its metadata. */
+/** A mod restore would destroy files in: each file whose bytes differ from what its package fixes, and each file no line
+ *  names, by its path in the mod folder, or a version or page in its metadata. */
 export type ModRestoreDestroys = components['schemas']['ModRestoreDestroys'];
 
 /** Each mod restore from manifest would destroy files in, and each mod skipped because a file of it could not be read. */
@@ -271,12 +271,11 @@ interface RestoredMod {
   metadata?: components['schemas']['ModMetadata'];
 }
 
-/** A skipped mod lacking files the call did not hand: game files by path under the data folder, installation files by
- *  name. A call that hands them brings it back, or names every other lack. */
+/** A skipped mod lacking installation files the call did not hand, by name. A call that hands them brings it back, or
+ *  names every other lack. */
 export interface NotFound {
   mod: string;
-  gameFiles: readonly string[];
-  installationFiles: readonly string[];
+  installationFile?: string;
 }
 
 /** Restore from manifest's answer: each mod restored or skipped with its reason, and each skipped mod that is `NotFound`. */

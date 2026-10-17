@@ -14,8 +14,8 @@ public sealed class ModStatusMetadataTests : IDisposable
         _statCache.Dispose();
     }
 
-    private static ModMetadata Metadata(string? version, params (string Name, string? Source)[] files) =>
-        new(version, [.. files.Select(file => new MetadataInstallationFile(file.Name, file.Source))]);
+    private static ModMetadata Metadata(string? version, params (string Name, string? Page)[] files) =>
+        new(version, files is [var file] ? new MetadataInstallationFile(file.Name, file.Page) : null);
 
     public static TheoryData<ModMetadata, ModMetadata, bool> RestoreCases => new()
     {
@@ -28,15 +28,15 @@ public sealed class ModStatusMetadataTests : IDisposable
         { Metadata(null, ("a.7z", null)), Metadata(null, ("a.7z", "nexus:fallout4:1")), false },
         { Metadata(null, ("a.7z", "nexus:fallout4:1")), Metadata(null, ("a.7z", null)), false },
         { Metadata(null, ("old.7z", null)), Metadata(null, ("new.7z", null)), true },
-        { Metadata(null, ("b.7z", "nexus:fallout4:2")), Metadata(null, ("a.7z", "nexus:fallout4:1"), ("b.7z", "nexus:fallout4:2")), false },
-        { Metadata(null, ("b.7z", "nexus:fallout4:2")), Metadata(null, ("a.7z", "nexus:fallout4:1"), ("b.7z", "nexus:fallout4:3")), true },
         { Metadata(null, ("a.7z", null)), Metadata(null), false },
     };
 
     private ModStatus StatusAgainst(ModMetadata manifest, ModMetadata? held)
     {
-        var sources = manifest.InstallationFiles.Select(file => new ManifestSource(file.Name, 1, "hash", file.Source)).ToList();
-        _repository.WriteManifest(_root, "mod", new Manifest(sources, [], [], manifest.Version));
+        ManifestPackage? package = manifest.InstallationFile is { } file
+            ? new ManifestPackage.InstallationFile(file.Name, 1, "hash", file.Page)
+            : null;
+        _repository.WriteManifest(_root, "mod", new Manifest(package, [], manifest.Version));
         return _repository.Status(_root, "mod", new HashSet<string>(), _statCache, held);
     }
 
@@ -56,7 +56,6 @@ public sealed class ModStatusMetadataTests : IDisposable
         { Metadata(null, ("a.7z", null)), Metadata(null, ("a.7z", "nexus:fallout4:1")), true },
         { Metadata(null, ("a.7z", "nexus:fallout4:1")), Metadata(null, ("a.7z", null)), true },
         { Metadata(null, ("old.7z", null)), Metadata(null, ("new.7z", null)), true },
-        { Metadata(null, ("b.7z", null)), Metadata(null, ("a.7z", null), ("b.7z", null)), true },
         { Metadata(null, ("a.7z", null)), Metadata(null), true },
         { Metadata(null), Metadata(null, ("a.7z", null)), true },
         { Metadata(null), Metadata(null), false },
@@ -77,7 +76,7 @@ public sealed class ModStatusMetadataTests : IDisposable
         var says = StatusAgainst(Metadata("1.0", ("a.7z", "nexus:fallout4:1")), null).ManifestMetadata;
 
         Assert.Equal("1.0", says?.Version);
-        Assert.Equal([new MetadataInstallationFile("a.7z", "nexus:fallout4:1")], says?.InstallationFiles);
+        Assert.Equal(new MetadataInstallationFile("a.7z", "nexus:fallout4:1"), says?.InstallationFile);
     }
 
     [Fact]

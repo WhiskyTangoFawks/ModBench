@@ -3,15 +3,14 @@ using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to restore from its manifest, with the installation files its manifest names that the request found in the
+/// <summary>A mod to restore from its manifest, with the installation file its manifest names if the request found it in the
 /// downloads folder, its metadata files, and the folder its source is in or is cloned into.</summary>
 public sealed record ModToRestore(
-    string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> MetadataFiles, string? SourceFolder);
+    string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, string? SourceFolder);
 
-/// <summary>The instance's facts beyond its mods: the game files the mods' files override, under the game's data folder,
-/// the stat cache's folder, and what a build needs, as <see cref="InstanceToBuild"/>.</summary>
-public sealed record InstanceToRestore(
-    IReadOnlyList<OverriddenGameFile> GameFiles, string DataFolder, string StatCache, string ExcludedSuffix, ArchiveVariants? Archives);
+/// <summary>The instance's facts beyond its mods: the stat cache's folder, and what a build needs, as
+/// <see cref="InstanceToBuild"/>.</summary>
+public sealed record InstanceToRestore(string StatCache, string ExcludedSuffix, ArchiveVariants? Archives);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum RestoreRefusal
@@ -22,15 +21,13 @@ public enum RestoreRefusal
 
     ManifestUnreadable,
 
-    /// <summary>A file its manifest names has no provider, or one whose installation file or game file is missing or
-    /// has other bytes.</summary>
+    /// <summary>A file its package does not hold, or an installation file that has other bytes.</summary>
     Lacking,
 
-    /// <summary>A lack is an installation file or a game file the request did not hand.</summary>
+    /// <summary>A lack is an installation file the request did not hand.</summary>
     NotFound,
 
-    /// <summary>A file the mod is restored from could not be read: one of its own, an installation file or a game
-    /// file.</summary>
+    /// <summary>A file the mod is restored from could not be read: one of its own or its installation file.</summary>
     Unreadable,
 
     /// <summary>A write failed part way, so some files came back and some did not, or its build left a plugin or an
@@ -47,13 +44,11 @@ public enum RestoreRefusal
     NotBuilt,
 }
 
-/// <summary>Why a mod was skipped. A NotFound mod names the game files and installation files it lacks, as a request
-/// hands them; a NotBuilt mod, its build's refusal (ADR-0019).</summary>
+/// <summary>Why a mod was skipped. A NotFound mod names the installation file it lacks, as a request hands it; a
+/// NotBuilt mod, its build's refusal (ADR-0019).</summary>
 public sealed record RestoreSkip(RestoreRefusal Kind, BuildRefusal Build = BuildRefusal.None)
 {
-    public IReadOnlyList<string> GameFilesNotFound { get; init; } = [];
-
-    public IReadOnlyList<string> InstallationFilesNotFound { get; init; } = [];
+    public string? InstallationFileNotFound { get; init; }
 }
 
 /// <summary>A mod whose files are as its manifest says: the files written, each file no line names, why the stat cache did

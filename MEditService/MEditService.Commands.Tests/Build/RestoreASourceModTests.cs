@@ -80,7 +80,7 @@ public sealed class RestoreASourceModTests : IDisposable
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: new PluginProvider.FromMod(ModName, ModFolder, remote))]));
         Assert.Single((await TestEditService.InitHandler(_holder).InitAsync([new ModToInit(ModName, remote, [])])).Landed);
-        _folders.WriteManifest(ModFolder, ModName, new Manifest([], [], [new ManifestFile("Fixture.esp", new FileProvider.Source(remote, Git(remote, "rev-parse", "HEAD").Trim()))]));
+        _folders.WriteManifest(ModFolder, ModName, new Manifest(new ManifestPackage.SourceMod(remote, Git(remote, "rev-parse", "HEAD").Trim()), [new ManifestFile("Fixture.esp", new PackageEntry.Held())]));
         return plugin;
     }
 
@@ -175,7 +175,7 @@ public sealed class RestoreASourceModTests : IDisposable
 
     private void ManifestedAt(string commit, string? remote = null, string? version = null) =>
         _folders.WriteManifest(
-            ModFolder, ModName, new Manifest([], [], [new ManifestFile("meshes/c.nif", new FileProvider.Source(remote ?? RemoteFolder, commit))], version));
+            ModFolder, ModName, new Manifest(new ManifestPackage.SourceMod(remote ?? RemoteFolder, commit), [new ManifestFile("meshes/c.nif", new PackageEntry.Held())], version));
 
     private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(params InstallationFile[] handed) =>
         Restore(new InMemoryNotificationPublisher(), CancellationToken.None, handed);
@@ -183,8 +183,8 @@ public sealed class RestoreASourceModTests : IDisposable
     private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(
         InMemoryNotificationPublisher notifications, CancellationToken cancel, params InstallationFile[] handed) =>
         TestEditService.RestoreHandler(_holder, notifications, TestAdapters.Source(), _folders).RestoreAsync(
-            [new ModToRestore(ModName, ModFolder, handed, ["meta.ini"], SourceFolder)],
-            new InstanceToRestore([], Path.Combine(_root, "game"), Path.Combine(_root, "stat-cache"), ".mohidden", Archives: null), cancel: cancel);
+            [new ModToRestore(ModName, ModFolder, handed.FirstOrDefault(), ["meta.ini"], SourceFolder)],
+            new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".mohidden", Archives: null), cancel: cancel);
 
     private string Commit(string configuration, string mesh)
     {

@@ -24,13 +24,13 @@ const installedFileOf = ({ nexusId, installedFiles = [] }: ModMeta): InstalledFi
   installedFiles.find((file) => file.nexusId === nexusId) ?? installedFiles[0];
 
 // A mod with no game of its own is the instance's game's.
-async function nexusPageOf(meta: ModMeta, { instanceRoot }: Mo2Context): Promise<Pick<InstallationFile, 'source' | 'unpagedGame'>> {
+async function nexusPageOf(meta: ModMeta, { instanceRoot }: Mo2Context): Promise<Pick<InstallationFile, 'page' | 'unpagedGame'>> {
   const file = installedFileOf(meta);
   const modId = file?.nexusId || meta.nexusId;
   if (!modId) return {};
   const game = meta.gameName ?? readGameName(await get(settingsFile(instanceRoot)));
   const domain = nexusDomainForMetaGame(game);
-  return domain === undefined ? { unpagedGame: game } : { source: formatNexusPage({ game: domain, modId, fileId: file?.fileId }) };
+  return domain === undefined ? { unpagedGame: game } : { page: formatNexusPage({ game: domain, modId, fileId: file?.fileId }) };
 }
 
 async function metaGameFor(domain: string, { instanceRoot }: Mo2Context): Promise<string | undefined> {
@@ -55,19 +55,18 @@ async function pageChanges(carried: ModMeta, page: string, context: Mo2Context):
 }
 
 // MO2 holds one installation file: the one it holds if the manifest names it, else the manifest's first.
-async function planMetadata(context: Mo2Context, mod: string, { version, installationFiles }: ModMetadata): Promise<MetadataPlan> {
+async function planMetadata(context: Mo2Context, mod: string, { version, installationFile: chosen }: ModMetadata): Promise<MetadataPlan> {
   const folder = (await folderHolding(context, { kind: 'mod', name: mod }))?.path ?? newModFolder(context, mod);
   const file = modMetaFileIn(folder);
   if (entryNamed(mod).kind === 'separator') return { file, held: '', changes: {} };
   const held = await get(file, '');
   const carried = parseMetaIni(held);
   const heldName = carried.archiveFilename === undefined ? undefined : basename(carried.archiveFilename);
-  const chosen = installationFiles.find((candidate) => candidate.name === heldName) ?? installationFiles[0];
   const changes: Partial<OwnedMetaKeys> = version === undefined || version === carried.version ? {} : { version };
   if (chosen === undefined) return { file, held, changes };
   if (chosen.name !== heldName) Object.assign(changes, { archiveFilename: chosen.name });
-  if (chosen.source !== undefined) {
-    const fromPage = await pageChanges(carried, chosen.source, context);
+  if (chosen.page !== undefined) {
+    const fromPage = await pageChanges(carried, chosen.page, context);
     if ('unwritable' in fromPage) return fromPage;
     Object.assign(changes, fromPage);
   } else if (chosen.name !== heldName) {
@@ -81,13 +80,13 @@ async function planMetadata(context: Mo2Context, mod: string, { version, install
 
 async function metadataOf(meta: ModMeta, context: Mo2Context): Promise<ModMetadata> {
   const { archiveFilename } = meta;
-  const { source } = await nexusPageOf(meta, context);
-  return { version: meta.version, installationFiles: archiveFilename === undefined ? [] : [{ name: basename(archiveFilename), source }] };
+  const { page } = await nexusPageOf(meta, context);
+  return { version: meta.version, installationFile: archiveFilename === undefined ? undefined : { name: basename(archiveFilename), page } };
 }
 
 export function mo2Installation(
   context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>, { modMeta }: Pick<ReadingSource, 'modMeta'>,
-): Pick<InstanceAdapter, 'installationFiles' | 'downloadedFile' | 'modMetadata' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
+): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'modMetadata' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
   return {
     modMetadata: (mod) => readOrReason(async () => metadataOf(await modMeta(mod), context)),
 
@@ -106,17 +105,17 @@ export function mo2Installation(
       await write(plan.file, changeOwnedKeysInText(plan.held, plan.changes));
     }),
 
-    async installationFiles(mod) {
+    async installationFile(mod) {
       const meta = await modMeta(mod);
       const { archiveFilename } = meta;
-      if (archiveFilename === undefined) return { kind: 'read', answer: [] };
-      const refused = (why: string): FileRead<readonly InstallationFile[]> =>
+      if (archiveFilename === undefined) return { kind: 'read', answer: undefined };
+      const refused = (why: string): FileRead<InstallationFile | undefined> =>
         ({ kind: 'unreadable', reason: `Modbench cannot tell what ${archiveFilename} installs: ${why}` });
       const located = await readOrReason(() => reinstallPath(context, archiveFilename));
       if (located.kind === 'unreadable') return refused(located.reason);
       const path = located.answer;
       const hashed = await downloadedFileHash(path);
-      return hashed.kind === 'read' ? { kind: 'read', answer: [{ path, ...(await nexusPageOf(meta, context)), ...hashed.answer }] } : refused(hashed.reason);
+      return hashed.kind === 'read' ? { kind: 'read', answer: { path, ...(await nexusPageOf(meta, context)), ...hashed.answer } } : refused(hashed.reason);
     },
 
     async downloadedFile(name) {

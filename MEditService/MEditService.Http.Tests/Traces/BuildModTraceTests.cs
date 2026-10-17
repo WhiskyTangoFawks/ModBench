@@ -86,8 +86,12 @@ public sealed class BuildModTraceTests : HostedTests
             Directory.CreateDirectory(Path.GetDirectoryName(copy).Require());
             File.Copy(file, copy);
         }
-        var line = JsonSerializer.Serialize(new { path = Plugin, from = new { remote, commit = GitProbe.Run(Path.Combine(source, ".git"), source, "rev-parse", "HEAD").Trim() } });
-        File.WriteAllText(Path.Combine(_builtFolder, $"{Origin}.manifest"), line + "\n");
+        var manifest = JsonSerializer.Serialize(new
+        {
+            package = new { remote, commit = GitProbe.Run(Path.Combine(source, ".git"), source, "rev-parse", "HEAD").Trim() },
+            files = new[] { new { path = Plugin } },
+        });
+        File.WriteAllText(Path.Combine(_builtFolder, $"{Origin}.manifest"), manifest);
         var absent = Path.Combine(_instance.Root, "source", Origin);
 
         var answer = await Answer(await Client.PostAsJsonAsync("/restore-from-manifest", new
@@ -100,8 +104,6 @@ public sealed class BuildModTraceTests : HostedTests
                     sourceFolder = absent,
                 },
             },
-            gameFiles = Array.Empty<object>(),
-            dataFolder = _instance.GameDirectory,
             statCache = StatCache,
             excludedSuffix = ".mohidden",
         }));

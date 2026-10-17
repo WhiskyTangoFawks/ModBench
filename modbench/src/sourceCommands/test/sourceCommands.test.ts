@@ -13,7 +13,7 @@ describe('sourceCommands build', () => {
   it('hands mEdit each mod with the source folder that builds it, its folder and its metadata files, the release\'s archive variants and the stat cache\'s folder', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
-    const adapter = fakeAdapter({ metadata: new Map([['ModA', { version: '1.2.3', installationFiles: [] }]]) });
+    const adapter = fakeAdapter({ metadata: new Map([['ModA', { version: '1.2.3' }]]) });
 
     await sourceCommands({ client, adapter }).build(['ModA', 'ModB'], 'Fallout4', SOURCES);
 

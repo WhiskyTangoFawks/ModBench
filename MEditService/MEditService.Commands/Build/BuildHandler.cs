@@ -103,34 +103,49 @@ public sealed class BuildHandler
         var (landed, refused) = await CompileAsync(loadOrder, mod, plugins, written);
         var archivesRefused = Pack(mod, source.Archives, assets, instance.Archives, written);
 
-        Dictionary<string, Made> made = new(StringComparer.OrdinalIgnoreCase);
-        foreach (var asset in assets.Values.Where(asset => !packed.Contains(asset.Path))) made[written.PathOf(asset.Path)] = new Made(FromSource: true, Vouched: true);
-        foreach (var (path, vouched) in CompiledFiles(loadOrder, mod, plugins, landed)) made[path] = new Made(FromSource: true, vouched);
+        MadeFiles made = new();
+        foreach (var asset in assets.Values.Where(asset => !packed.Contains(asset.Path))) made.Add(written.PathOf(asset.Path), vouched: true);
+        foreach (var (path, vouched) in CompiledFiles(loadOrder, mod, plugins, landed)) made.Add(path, vouched);
         foreach (var archive in source.Archives.Select(archive => archive.Path))
-            made[written.PathOf(archive)] = new Made(FromSource: true, Vouched: archivesRefused.All(refusal => refusal.Item != archive));
+            made.Add(written.PathOf(archive), vouched: archivesRefused.All(refusal => refusal.Item != archive));
 
         var (manifest, failure) = WriteManifest(mod, instance, source.Shared, made);
         return ItemAnswer<BuildRefusal, BuiltMod>.Landed(new BuiltMod(
             landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)], failure, source.Uncommitted, source.Unpushed, manifest));
     }
 
-    // A refused plugin's or archive's bytes are not as this build made them.
-    private readonly record struct Made(bool FromSource, bool Vouched);
+    private sealed class MadeFiles
+    {
+        private readonly HashSet<string> _all = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _refused = new(StringComparer.OrdinalIgnoreCase);
+
+        public void Add(string path, bool vouched)
+        {
+            _all.Add(path);
+            if (!vouched) _refused.Add(path);
+            else _refused.Remove(path);
+        }
+
+        public bool Contains(string path) => _all.Contains(path);
+
+        public bool IsVouchedFor(string path) => !_refused.Contains(path);
+    }
 
     // The manifest is written last (mods.md, Build, story 1), and names only the files the build made (story 3).
-    private (Manifest? Written, string? Failure) WriteManifest(ModToBuild mod, InstanceToBuild instance, SharedSource? shared, Dictionary<string, Made> made)
+    private (Manifest? Written, string? Failure) WriteManifest(ModToBuild mod, InstanceToBuild instance, SharedSource? shared, MadeFiles made)
     {
         try
         {
             var read = _modFolders.Files(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
-            var builder = new ManifestBuilder([], []);
-            var files = read.Files.Where(file => made.ContainsKey(file.Path)).ToList();
-            var manifest = builder.Manifest([.. files.Select(file => new ManifestFile(file.Path,
-                made[file.Path].FromSource && shared is { } source ? new FileProvider.Source(source.Remote, source.Commit) : builder.ProviderOf(file)))], mod.Version);
+            var files = read.Files.Where(file => made.Contains(file.Path)).ToList();
+            var manifest = new Manifest(
+                shared is { } source ? new ManifestPackage.SourceMod(source.Remote, source.Commit) : null,
+                [.. files.Select(file => new ManifestFile(file.Path, shared is null ? new PackageEntry.NotHeld() : new PackageEntry.Held()))],
+                mod.Version);
             _modFolders.WriteManifest(mod.Folder, mod.Name, manifest);
             // A stat cache that cannot be written leaves each file to be read again, and the mod's status says why.
             _ = _modFolders.KeepInStatCache(
-                read, manifest, files.Where(file => made[file.Path].Vouched).ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal));
+                read, manifest, files.Where(file => made.IsVouchedFor(file.Path)).ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal));
             return (manifest, null);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

@@ -105,8 +105,8 @@ function stateOf(status: ModStatus): string | undefined {
 /** What a mod row's description says of its status (mods.md, A row, Mod). */
 export function statusDescription(status: ModStatus): string | undefined {
   const state = stateOf(status);
-  const unprovided = status.noProvider.length > 0 ? `${counted(status.noProvider.length, 'file', 'files')} with no provider` : undefined;
-  return [state, unprovided].filter((part) => part !== undefined).join(' · ') || undefined;
+  const notHeld = status.notInPackage.length > 0 ? `${counted(status.notInPackage.length, 'file', 'files')} its package does not hold` : undefined;
+  return [state, notHeld].filter((part) => part !== undefined).join(' · ') || undefined;
 }
 
 /** What a separator row's description says of its status (mods.md, A row, Separator). */

@@ -7,9 +7,9 @@ public interface IModFolderRepository
     /// stat cache in <paramref name="statCache"/> last read goes unread; with none, every file is read.</summary>
     ModFolderFiles Files(string modFolder, string modName, IReadOnlySet<string> leftOut, string? statCache);
 
-    /// <summary>Keeps in the stat cache what <paramref name="read"/> found, and as the hash each line's provider fixes,
-    /// the one <paramref name="provided"/> holds for its path. Why it could not, or null.</summary>
-    string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided);
+    /// <summary>Keeps in the stat cache what <paramref name="read"/> found, and as the hash each line's package fixes,
+    /// the one <paramref name="hashes"/> holds for its path. Why it could not, or null.</summary>
+    string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> hashes);
 
     /// <summary>Every file of the mod no line of <paramref name="manifest"/> names, but its manifest and those left out. A
     /// line names a file in another case where the file system finds it by the line's name.</summary>
@@ -41,9 +41,6 @@ public interface IModFolderRepository
     bool WriteFile(string folder, string path, Action<Stream> write);
 
     Stream OpenInstallationFile(string path);
-
-    /// <summary>The game file at the forward-slash <paramref name="path"/> under <paramref name="dataFolder"/>.</summary>
-    Stream OpenGameFile(string dataFolder, string path);
 
     /// <summary>Writes the mod's manifest into its folder, and only when its text differs from the one there.
     /// True when it wrote.</summary>

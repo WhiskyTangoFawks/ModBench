@@ -14,7 +14,6 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     private const string Mod = "RestoredMod";
     private const string HashOfKept = "gO3vE0ddOto=";
     private const string HashOfOriginal = "PclCUmd0Z4s=";
-    private const string HashOfVanilla = "/Qk9lLVYbZs=";
     private const string HashOfTheZip = "AAECAwQFBgc=";
     private const string Gesture = "a-gesture";
 
@@ -41,7 +40,6 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         Directory.CreateDirectory(ModFolder);
         File.WriteAllText(Path.Combine(ModFolder, "kept.txt"), "kept");
         File.WriteAllText(Path.Combine(ModFolder, "edited.txt"), Original);
-        File.WriteAllText(Path.Combine(ModFolder, "Game.esm"), "vanilla");
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "[General]");
         Directory.CreateDirectory(Downloads);
         using var zip = ZipFile.Open(Path.Combine(Downloads, "Mod.zip"), ZipArchiveMode.Create);
@@ -54,11 +52,8 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
 
     private void ChangedSinceItsUpdate()
     {
-        Directory.CreateDirectory(Path.Combine(_instance, "game", "Data"));
-        File.WriteAllText(Path.Combine(_instance, "game", "Data", "Game.esm"), "vanilla");
         File.WriteAllText(Path.Combine(ModFolder, "edited.txt"), "edited");
         File.Delete(Path.Combine(ModFolder, "kept.txt"));
-        File.Delete(Path.Combine(ModFolder, "Game.esm"));
         File.WriteAllText(Path.Combine(ModFolder, "nonCompiledPlugin.txt"), "mine");
     }
 
@@ -76,20 +71,18 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         {
             ["name"] = Mod,
             ["folder"] = ModFolder,
-            ["installationFiles"] = handsTheDownload ? new JsonArray(installationFile) : new JsonArray(),
+            ["installationFile"] = handsTheDownload ? installationFile : null,
             ["metadataFiles"] = new JsonArray("meta.ini"),
             ["version"] = _versionUpdated,
         };
         var request = new JsonObject
         {
             ["mods"] = new JsonArray(mod),
-            ["gameFiles"] = new JsonArray(new JsonObject { ["path"] = "Game.esm", ["size"] = 7, ["hash"] = HashOfVanilla }),
             ["statCache"] = StatCache,
             ["gesture"] = Gesture,
         };
         if (gesture == "restore-from-manifest")
         {
-            request["dataFolder"] = Path.Combine(_instance, "game", "Data");
             request["excludedSuffix"] = ".mohidden";
         }
         return request;
@@ -115,7 +108,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         ["statCache"] = StatCache,
     };
 
-    private static JsonObject Metadata(string? version) => new() { ["version"] = version, ["installationFiles"] = new JsonArray() };
+    private static JsonObject Metadata(string? version) => new() { ["version"] = version };
 
     private async Task<JsonElement> WhatRestoreDestroys()
     {
@@ -243,7 +236,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task RestoringAModChangedSinceItsUpdate_BringsEveryFileBack_AGameFilesFromTheGame_NamesEachFileNoLineNames_AndReportsItsProgressUnderItsGesture()
+    public async Task RestoringAModChangedSinceItsUpdate_BringsEveryFileBack_NamesEachFileNoLineNames_AndReportsItsProgressUnderItsGesture()
     {
         ModInstalledFromADownload();
         await Post("update-manifest");
@@ -253,9 +246,9 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         var body = await Post("restore-from-manifest");
 
         var restored = Assert.Single(body.GetProperty("applied").EnumerateArray());
-        Assert.Equal(["Game.esm", "edited.txt", "kept.txt"], Paths(restored, "written"));
+        Assert.Equal(["edited.txt", "kept.txt"], Paths(restored, "written"));
         Assert.Equal(["nonCompiledPlugin.txt"], Paths(restored, "namedByNoLine"));
-        Assert.Equal((Original, "kept", "vanilla"), (FileText("edited.txt"), FileText("kept.txt"), FileText("Game.esm")));
+        Assert.Equal((Original, "kept"), (FileText("edited.txt"), FileText("kept.txt")));
         var progress = await stream.EventsUntil("restore-from-manifest-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
         Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Mod);
         Assert.All(progress, e => Assert.Equal(Gesture, e.GetProperty("modlistProgress").GetProperty("gesture").GetString()));
@@ -270,7 +263,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
 
         var skipped = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
         Assert.Equal("NotFound", skipped.GetProperty("refusal").GetString());
-        Assert.Equal(["Mod.zip"], skipped.GetProperty("installationFilesNotFound").EnumerateArray().Select(name => name.GetString()));
+        Assert.Equal("Mod.zip", skipped.GetProperty("installationFileNotFound").GetString());
     }
 
     [Fact]
@@ -341,8 +334,6 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     }
 
     [Theory]
-    [InlineData("gameFiles")]
-    [InlineData("dataFolder")]
     [InlineData("statCache")]
     [InlineData("excludedSuffix")]
     public async Task RestoringWithAFieldMissing_Is400(string field)

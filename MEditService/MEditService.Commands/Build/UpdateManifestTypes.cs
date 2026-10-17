@@ -2,19 +2,13 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to update the manifest of, with its installation files in the mod manager's order, its version, its
-/// metadata files, which no line names, and whether its build writes its manifest.</summary>
+/// <summary>A mod to update the manifest of, with its installation file, its version, its metadata files, which no line names, and whether its build writes its manifest.</summary>
 public sealed record ModToUpdate(
-    string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> MetadataFiles, bool IsSourceMod,
+    string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, bool IsSourceMod,
     string? Version);
 
-/// <summary>The instance's facts beyond its mods: the game files the mods' files override, and the folder of the stat
-/// cache.</summary>
-public sealed record InstanceToUpdate(IReadOnlyList<OverriddenGameFile> GameFiles, string StatCache);
-
-/// <summary>A game file a mod file overrides, by its forward-slash path under the game's data folder, as the
-/// Instance adapter knows it (ADR-0013).</summary>
-public sealed record OverriddenGameFile(string Path, long Size, string Hash);
+/// <summary>The instance's facts beyond its mods: the folder of the stat cache.</summary>
+public sealed record InstanceToUpdate(string StatCache);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum UpdateManifestRefusal
@@ -38,5 +32,5 @@ public enum UpdateManifestRefusal
 }
 
 /// <summary>A mod whose manifest is as its folder says. ManifestWritten is false when the manifest was already so.
-/// NoProvider names each file nothing provides. StatCacheNotWritten is why the stat cache could not be written, or null.</summary>
-public sealed record UpdatedMod(bool ManifestWritten, IReadOnlyList<string> NoProvider, string? StatCacheNotWritten);
+/// NotInPackage names each file its package does not hold. StatCacheNotWritten is why the stat cache failed, or null.</summary>
+public sealed record UpdatedMod(bool ManifestWritten, IReadOnlyList<string> NotInPackage, string? StatCacheNotWritten);

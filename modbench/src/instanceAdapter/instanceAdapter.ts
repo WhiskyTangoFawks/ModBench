@@ -337,17 +337,6 @@ export interface HashedFile {
   readonly hash: string;
 }
 
-/** A game file by its forward-slash path under the game's Data folder, with its size and hash. */
-export interface GameFile extends HashedFile {
-  readonly path: string;
-}
-
-// The game files a mod's files override, and each entry of its folder the listing skipped, one line apiece.
-interface OverriddenGameFiles {
-  readonly gameFiles: readonly GameFile[];
-  readonly notes: readonly string[];
-}
-
 /** A downloaded file hashed whole and entry by entry. */
 export interface HashedDownload extends HashedFile {
   /** Each entry by its forward-slash path inside the file. */
@@ -358,19 +347,19 @@ export interface HashedDownload extends HashedFile {
 export interface InstallationFile extends HashedDownload {
   readonly path: string;
   /** The file's page on its host, a string the Instance adapter formats and the rest keeps opaque. */
-  readonly source?: string;
+  readonly page?: string;
   /** The game the metadata names when the registry has no Nexus domain for it, so the file carries no page. */
   readonly unpagedGame?: string;
 }
 
 interface MetadataInstallationFile {
   readonly name: string;
-  readonly source?: string;
+  readonly page?: string;
 }
 
 export interface ModMetadata {
   readonly version?: string;
-  readonly installationFiles: readonly MetadataInstallationFile[];
+  readonly installationFile?: MetadataInstallationFile;
 }
 
 /** How a message names the mod manager, the file it keeps mod order in, and the file it keeps beside a downloaded file. */
@@ -440,11 +429,11 @@ export interface InstanceAdapter {
   modFolderPath(mod: string): Promise<string | undefined>;
   /** The source folder init makes a mod's repository in (ADR-0007); undefined when its name gives it none. */
   sourceFolder(mod: string): string | undefined;
-  /** The downloaded files the mod manager records `mod` as installed from, in its order. */
-  installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
+  /** The downloaded file the mod manager records `mod` as installed from; undefined when it records none. */
+  installationFile(mod: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
-  /** What the mod manager's metadata says of `mod`'s version and installation files; none when it says none. */
+  /** What the mod manager's metadata says of `mod`'s version and installation file; none when it says none. */
   modMetadata(mod: string): Promise<FileRead<ModMetadata>>;
   /** What a meta already read says, as `modMetadata` answers it. */
   metadataOf(meta: ModMeta): Promise<ModMetadata>;
@@ -458,12 +447,6 @@ export interface InstanceAdapter {
   /** The folder in the instance, outside every mod folder, where mEdit keeps what it last read of each mod's files
    *  (modlist-repository.md, Status, story 3). The repository never commits it. */
   readonly statCacheFolder: string;
-  /** The game files in `dataFolder` that files of a mod, by their paths in it, override, named as the game folder
-   *  names them, with their hashes. */
-  overriddenGameFiles(dataFolder: string, modFilePaths: readonly string[]): Promise<FileRead<readonly GameFile[]>>;
-  /** The game files in `dataFolder` that the files in `mod`'s folder override, as `overriddenGameFiles` names them, listed in
-   *  any profile or none. */
-  gameFilesOverriddenBy(dataFolder: string, mod: string): Promise<FileRead<OverriddenGameFiles>>;
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds. Rejects, writing nothing,
    *  when an ignore list is already there. */
   writeIgnoreList(): Promise<void>;
