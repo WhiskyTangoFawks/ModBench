@@ -7,7 +7,6 @@ import { pluralArgument, registerGesture, singularArgument } from '../drivingLib
 import {
   argumentOfKind, registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure,
 } from '../drivingLib/agentGesture';
-import { downloadedFileNamed } from '../drivingLib/argument';
 import type { Argument } from '../wire/argument';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { reportFailure } from '../drivingLib/reportFailure';
@@ -15,7 +14,7 @@ import { runWritingGesture } from '../drivingLib/writingGesture';
 
 const runDownloadsWriting = <T>(instance: Pick<Instance, 'refresh'>, command: () => Promise<T>): Promise<T> =>
   runWritingGesture(DOWNLOADS_KEY_ARGS.view, instance, command);
-import type { DownloadFile, Instance, InstanceValue } from '../instanceLoader/instance';
+import type { Instance, InstanceValue } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
@@ -51,19 +50,19 @@ const deletedPartials = (managerNames: Pick<InstanceValue['managerNames'], 'down
 function deleteGesture(
   commands: DownloadsCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
   ask: AskQuestion, trash: MoveToTrash, log: (line: string) => void,
-): DownloadsGesture<readonly DownloadFile[], DeletedDownload> {
+): DownloadsGesture<readonly string[], DeletedDownload> {
   return {
     fromView: async (entry) => {
-      const rows = pluralArgument(entry, 'download').map((node) => node.argument.row);
-      return rows.length > 0 && await confirmDelete(rows.map((row) => row.name), ask) ? rows : undefined;
+      const names = pluralArgument(entry, 'download').map((node) => node.argument.row.name);
+      return names.length > 0 && await confirmDelete(names, ask) ? names : undefined;
     },
-    fromAgent: ({ argument }) => argument.map(downloadedFileNameOf).map((name) => downloadedFileNamed(instance.value.downloads, name)),
-    run: (rows) => runDownloadsWriting(instance, () =>
-      landed(commands.deleteDownloads(rows, trash), deletedPartials(instance.value.managerNames))),
-    report: (result, rows) => {
+    fromAgent: ({ argument }) => argument.map(downloadedFileNameOf),
+    run: (names) => runDownloadsWriting(instance, () =>
+      landed(commands.deleteDownloads(names, trash), deletedPartials(instance.value.managerNames))),
+    report: (result, names) => {
       if (!result.applied) return;
       reporter.selectionOutcome(
-        `Could not delete ${result.outcome.refused.length} of ${rows.length} downloaded files.`, result.outcome, (item) => item.name);
+        `Could not delete ${result.outcome.refused.length} of ${names.length} downloaded files.`, result.outcome, (item) => item.name);
       reportPartial(reporter, result.partial, log);
     },
   };
