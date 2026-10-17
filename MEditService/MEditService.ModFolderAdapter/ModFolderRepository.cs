@@ -6,7 +6,7 @@ namespace MEditService.ModFolderAdapter;
 /// matches names in.</summary>
 public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fileExists) : IModFolderRepository
 {
-    private const string ManifestExtension = ".manifest";
+    private const string ManifestExtension = ".manifest.json";
 
     public ModFolderRepository(TimeProvider time) : this(time, File.Exists)
     {

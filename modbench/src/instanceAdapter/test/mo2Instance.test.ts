@@ -1920,21 +1920,21 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('renames the manifest in a mod\'s folder to the new name in the same rename, leaving no manifest of the old name', async () => {
-      await writeFile(join(root, 'mods', 'Harder VATS', 'Harder VATS.manifest'), '');
+      await writeFile(join(root, 'mods', 'Harder VATS', 'Harder VATS.manifest.json'), '');
 
       await adapter.renameModFolder('harder vats', 'Harder VATS 2');
 
-      expect(await isThere(join(root, 'mods', 'Harder VATS 2', 'Harder VATS 2.manifest'))).toBe(true);
-      expect(await isThere(join(root, 'mods', 'Harder VATS 2', 'Harder VATS.manifest'))).toBe(false);
+      expect(await isThere(join(root, 'mods', 'Harder VATS 2', 'Harder VATS 2.manifest.json'))).toBe(true);
+      expect(await isThere(join(root, 'mods', 'Harder VATS 2', 'Harder VATS.manifest.json'))).toBe(false);
     });
 
     it('puts the folder back when its manifest cannot be renamed, so no rename lands in part', async () => {
-      await writeFile(join(root, 'mods', 'Harder VATS', 'Harder VATS.manifest'), '');
-      await mkdir(join(root, 'mods', 'Harder VATS', 'Harder VATS 2.manifest'));
+      await writeFile(join(root, 'mods', 'Harder VATS', 'Harder VATS.manifest.json'), '');
+      await mkdir(join(root, 'mods', 'Harder VATS', 'Harder VATS 2.manifest.json'));
 
       await expect(adapter.renameModFolder('Harder VATS', 'Harder VATS 2')).rejects.toThrow();
 
-      expect(await isThere(join(root, 'mods', 'Harder VATS', 'Harder VATS.manifest'))).toBe(true);
+      expect(await isThere(join(root, 'mods', 'Harder VATS', 'Harder VATS.manifest.json'))).toBe(true);
       expect(await isThere(join(root, 'mods', 'Harder VATS 2'))).toBe(false);
     });
 
@@ -2271,24 +2271,24 @@ describe('the MO2 Instance adapter', () => {
 
     it('renames the manifest in a separator\'s folder to the new name with the folder', async () => {
       const folder = separatorFolder('Unassigned (Modlist Development)');
-      await writeFile(join(folder, 'Unassigned (Modlist Development)_separator.manifest'), '');
+      await writeFile(join(folder, 'Unassigned (Modlist Development)_separator.manifest.json'), '');
 
       await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]);
 
-      expect(await isThere(join(separatorFolder('Core Mods'), 'Core Mods_separator.manifest'))).toBe(true);
-      expect(await isThere(join(separatorFolder('Core Mods'), 'Unassigned (Modlist Development)_separator.manifest'))).toBe(false);
+      expect(await isThere(join(separatorFolder('Core Mods'), 'Core Mods_separator.manifest.json'))).toBe(true);
+      expect(await isThere(join(separatorFolder('Core Mods'), 'Unassigned (Modlist Development)_separator.manifest.json'))).toBe(false);
     });
 
     it('leaves a separator\'s line and folder as they were when its manifest cannot be renamed', async () => {
       const folder = separatorFolder('Unassigned (Modlist Development)');
-      await writeFile(join(folder, 'Unassigned (Modlist Development)_separator.manifest'), '');
-      await mkdir(join(folder, 'Core Mods_separator.manifest'));
+      await writeFile(join(folder, 'Unassigned (Modlist Development)_separator.manifest.json'), '');
+      await mkdir(join(folder, 'Core Mods_separator.manifest.json'));
       const before = await text(root, DEFAULT_MODLIST);
 
       await expect(change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }])).rejects.toThrow();
 
       expect(await text(root, DEFAULT_MODLIST)).toBe(before);
-      expect(await isThere(join(folder, 'Unassigned (Modlist Development)_separator.manifest'))).toBe(true);
+      expect(await isThere(join(folder, 'Unassigned (Modlist Development)_separator.manifest.json'))).toBe(true);
       expect(await isThere(separatorFolder('Core Mods'))).toBe(false);
     });
 

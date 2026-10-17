@@ -366,6 +366,6 @@ public sealed class BuildHandlerTests : IDisposable
     private static (string Path, string Text)[] FilesIn(string folder) =>
         [.. Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
             .Select(file => (Path.GetRelativePath(folder, file).Replace('\\', '/'), File.ReadAllText(file)))
-            .Where(file => file.Item1 != $"{ModName}.manifest")
+            .Where(file => file.Item1 != $"{ModName}.manifest.json")
             .OrderBy(file => file.Item1, StringComparer.Ordinal)];
 }

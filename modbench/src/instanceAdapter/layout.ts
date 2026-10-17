@@ -21,7 +21,7 @@ const HASH_INDEX = 'hash-index';
 const STAT_CACHE = 'stat-cache';
 const IGNORE_LIST_FILE = '.gitignore';
 const SUBMODULES_FILE = '.gitmodules';
-const MANIFEST_GLOB = '*.manifest';
+const MANIFEST_GLOB = '*.manifest.json';
 const PLUGIN_ORDER_FILE = 'loadorder.txt';
 
 export const profilesDir = (instanceRoot: string): string => join(instanceRoot, PROFILES);
@@ -106,7 +106,7 @@ export const defaultDownloadsDir = (instanceRoot: string): string => join(instan
 export const settingsFile = (instanceRoot: string): string => join(instanceRoot, SETTINGS_FILE_NAME);
 
 /** A mod's manifest, in its folder, named for the mod. */
-export const manifestFileIn = (modFolder: string, modName: string): string => join(modFolder, `${modName}.manifest`);
+export const manifestFileIn = (modFolder: string, modName: string): string => join(modFolder, `${modName}.manifest.json`);
 
 /** The meta file of the mod folder `modFolder`, wherever that folder is. */
 export const modMetaFileIn = (modFolder: string): string => join(modFolder, MOD_META_FILE_NAME);
