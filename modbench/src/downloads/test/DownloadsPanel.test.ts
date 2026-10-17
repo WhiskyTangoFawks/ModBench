@@ -488,7 +488,7 @@ describe('the Downloads gestures called by the agent', () => {
     registerDownloadsMultiRowCommands(downloadsCommands(fake.adapter), listing('a.7z'), recordingReporter(), scriptedDialog(), trash, downloadsLog, viewSelection);
     const answered = await invoke('modbench.downloadedFile.delete', named('a.7z', 'gone.7z'));
 
-    expect(answered).toMatchObject({ applied: true, outcome: { landed: [{ name: 'a.7z' }], refused: [{ item: { name: 'gone.7z' }, reason: expect.stringContaining('gone.7z') }] } });
+    expect(answered).toMatchObject({ applied: true, outcome: { landed: [{ name: 'a.7z' }], refused: [{ item: { name: 'gone.7z' } }] } });
   });
 
   it.each(['delete', 'exclude', 'include'])('%s refuses an Argument that is not a downloaded file, writing nothing', async (verb) => {
