@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient, PluginAddress } from '../client';
 import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
-import type { PluginsCommands } from '../pluginsCommands/plugins';
+import type { PluginCommands } from '../pluginCommands/plugins';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -46,7 +46,7 @@ import type { StatusBar } from './statusBar';
 export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, line, enabled and winning for every plugin. */
   instance: PluginsInstance & Pick<Instance, 'quiet'>;
-  commands: PluginsCommands;
+  commands: PluginCommands;
   sourceCommands: SourceCommands;
   /** The record browser that supplies a plugin row's children. */
   recordBrowser: RecordBrowser;

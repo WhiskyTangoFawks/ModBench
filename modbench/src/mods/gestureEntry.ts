@@ -3,7 +3,7 @@ import type { Instance } from '../instanceLoader/instance';
 import { kindGuard, singularArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { argumentOfKind } from '../drivingLib/agentGesture';
-import type { EntryRef, OriginFileRef } from '../modOrderCommands/modOrderCommands';
+import type { EntryRef, OriginFileRef } from '../modCommands/modCommands';
 import type { Argument } from '../wire/argument';
 
 /** The `args` a Mods key passes, so a command other surfaces share knows the key is the Mods

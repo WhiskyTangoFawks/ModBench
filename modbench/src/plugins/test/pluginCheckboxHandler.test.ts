@@ -19,7 +19,7 @@ import { PluginNode } from '../pluginRows';
 import { recordRow } from './browserRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { recordSummaryFixture } from '../../client/test/fixtures';
-import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
+import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, refusing, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { progressSteps } from '../../test/recordedProgress';
 
@@ -36,7 +36,7 @@ const toggled = (...items: [string, 0 | 1][]) => ({
   items: items.map(([name, state]) => [new PluginNode({ name, enabled: state === 0 }, 'SomeMod'), state] as [PluginNode, 0 | 1]),
 });
 const toggle = (event: ReturnType<typeof toggled>, adapter = fake(), reporter = recordingReporter()) =>
-  onPluginCheckboxChanged(event, pluginsCommandsWith(adapter.adapter), profile, reporter, instance);
+  onPluginCheckboxChanged(event, pluginCommandsWith(adapter.adapter), profile, reporter, instance);
 const enabling = (...pairs: [string, boolean][]) =>
   [{ verb: 'changePluginOrder', profile: 'Default', changes: pairs.map(([plugin, enabled]) => ({ kind: 'enable', plugin, enabled })) }];
 
@@ -86,7 +86,7 @@ describe('onPluginCheckboxChanged', () => {
     const adapter = fake();
     const recordNode = await recordRow(recordSummaryFixture(), 'Data/');
 
-    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, pluginsCommandsWith(adapter.adapter), profile, recordingReporter(), instance);
+    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, pluginCommandsWith(adapter.adapter), profile, recordingReporter(), instance);
 
     expect(adapter.calls).toEqual([]);
   });
@@ -113,7 +113,7 @@ describe('a check box ends when the read lands (common.md, A gesture that writes
 
   it('opens no progress for a record row', async () => {
     await onPluginCheckboxChanged(
-      { items: [[await recordRow(recordSummaryFixture(), 'Data/'), 1]] }, pluginsCommandsWith(fake().adapter), profile, recordingReporter(), instance);
+      { items: [[await recordRow(recordSummaryFixture(), 'Data/'), 1]] }, pluginCommandsWith(fake().adapter), profile, recordingReporter(), instance);
 
     expect(progressSteps).toEqual([]);
   });

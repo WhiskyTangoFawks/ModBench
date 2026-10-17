@@ -4,7 +4,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { OVERWRITE_ORIGIN } from '../../instanceAdapter/instanceAdapter';
-import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
+import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -27,7 +27,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
   });
   const rename = (newName: string, plugin: PluginAddress = PLUGIN, answers: InstanceAnswers = {}) => {
     const fake = fakeInstanceAdapter(undefined, answers);
-    const result = pluginsCommandsWith(fake.adapter, client).renamePlugin({ apply }, plugin, newName, 'Fallout4');
+    const result = pluginCommandsWith(fake.adapter, client).renamePlugin({ apply }, plugin, newName, 'Fallout4');
     return { fake, result };
   };
 
@@ -122,7 +122,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
 });
 
 describe('renameRefusal — what the prompt is told before the rename is asked for', () => {
-  const refusal = (newName: string, heldIn: string) => pluginsCommandsWith(fakeInstanceAdapter(undefined, {
+  const refusal = (newName: string, heldIn: string) => pluginCommandsWith(fakeInstanceAdapter(undefined, {
     heldPlugins: [{ origin: { kind: 'mod', name: heldIn }, name: 'Renamed Patch.esp' }],
   }).adapter).renameRefusal(PLUGIN, newName, ['.esm', '.esl', '.esp']);
 
@@ -135,7 +135,7 @@ describe('renameRefusal — what the prompt is told before the rename is asked f
 describe('confirmRename — what is known before any write', () => {
   let client: InMemoryMEditClient;
   const confirm = (ask: ReturnType<typeof scriptedDialog>, plugin = PLUGIN) =>
-    pluginsCommandsWith(fakeInstanceAdapter().adapter, client).confirmRename(ask, plugin, 'Renamed Patch.esp');
+    pluginCommandsWith(fakeInstanceAdapter().adapter, client).confirmRename(ask, plugin, 'Renamed Patch.esp');
   const dependants = (dependantPlugins: PluginAddress[], unreadable: PluginAddress[] = []) =>
     client.setQueryAnswer('getPluginDependants', { dependants: dependantPlugins, unreadable });
 

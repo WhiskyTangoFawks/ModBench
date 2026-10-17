@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { Instance, InstanceView } from '../instanceLoader/instance';
-import type { DownloadsCommands } from '../downloadsCommands/downloads';
+import type { DownloadedFileCommands } from '../downloadedFileCommands/downloads';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
@@ -16,7 +16,7 @@ import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { downloadsKeyContext } from './keyContext';
 
 interface DownloadsViewDeps {
-  commands: DownloadsCommands;
+  commands: DownloadedFileCommands;
   instance: InstanceView & Pick<Instance, 'refresh'>;
   reporter: Reporter;
   ask: AskQuestion;

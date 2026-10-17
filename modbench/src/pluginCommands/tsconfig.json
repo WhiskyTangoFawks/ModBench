@@ -2,14 +2,15 @@
   "extends": "../../tsconfig.box.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "../../out/projects/modOrderCommands"
+    "outDir": "../../out/projects/pluginCommands"
   },
   "references": [
-    { "path": "../client" },
-    { "path": "../coreLib" },
+    { "path": "../loadOrderFileCodec" },
     { "path": "../instanceAdapter" },
-    { "path": "../ports" },
-    { "path": "../wire" }
+    { "path": "../coreLib" },
+    { "path": "../client" },
+    { "path": "../wire" },
+    { "path": "../ports" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

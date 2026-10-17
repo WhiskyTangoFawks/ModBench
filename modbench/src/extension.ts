@@ -37,12 +37,12 @@ import { publishRepository } from './toolbox/repositoryContext';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import { openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
-import { pluginsCommands, pluginSyncOver } from './pluginsCommands/plugins';
+import { pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
 import { modlistRepositoryCommands } from './sourceCommands/modlistRepositoryCommands';
 import { sourceCommands } from './sourceCommands/sourceCommands';
-import { modSyncOver, modlistCommands } from './modOrderCommands/modOrderCommands';
+import { modSyncOver, modCommands } from './modCommands/modCommands';
 import { warnIfFomod } from './mods/fomodWarning';
-import { downloadsCommands } from './downloadsCommands/downloads';
+import { downloadedFileCommands } from './downloadedFileCommands/downloads';
 import { instanceCommands } from './instanceCommands/instanceCommands';
 import { reachMEditFromTerminals } from './terminalEnvironment';
 import { openWalkthroughOnce } from './walkthrough';
@@ -132,20 +132,20 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const sourceGestureRows = selectionInFocusedView(
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.sourceGestureRowsIn');
   const plugins = own(pluginsBox.onInstance({
-    instance, instanceRoot, commands: pluginsCommands({ adapter, client }), sourceCommands: sourceCommands({ client, adapter }), pluginSync, sourceGestureRows, modsView: MODS_KEY_ARGS.view,
+    instance, instanceRoot, commands: pluginCommands({ adapter, client }), sourceCommands: sourceCommands({ client, adapter }), pluginSync, sourceGestureRows, modsView: MODS_KEY_ARGS.view,
     saveUnsavedPluginSource: (mod) => saveModPluginSource((origin) => sourceFiles(instance.value, origin), mod),
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
   const { view: downloadsView, nameFilter: downloadsFilter } = own(createDownloadsView({
-    commands: downloadsCommands(adapter), instance, reporter: reporterFor('downloadList'), ask, trash,
+    commands: downloadedFileCommands(adapter), instance, reporter: reporterFor('downloadList'), ask, trash,
     log: (line) => outputChannel.warn(`[downloads] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
   const modlist = modlistRepositoryCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(instanceRoot), trash });
   const readStatus: ReadModStatus = (names) => modlist.modStatus(names);
   const mods = own(createModsView({
-    instance, commands: modlistCommands(adapter, client, readStatus), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
+    instance, commands: modCommands(adapter, client, readStatus), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
     downloadInstall: {
       reporter: reporterFor('downloadList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),

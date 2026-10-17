@@ -8,7 +8,7 @@
     "types": ["node", "vscode"]
   },
   "references": [
-    { "path": "../downloadsCommands" },
+    { "path": "../downloadedFileCommands" },
     { "path": "../drivingLib" },
     { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },

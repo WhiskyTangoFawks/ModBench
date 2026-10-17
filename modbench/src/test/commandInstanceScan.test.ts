@@ -13,7 +13,7 @@ const commandModules = (): string[] => CORE_BOXES.flatMap((box) => productionFil
 
 describe('commands never read the Instance', () => {
   it('covers every command box the core band draws and the code builds', () => {
-    expect(CORE_BOXES).toEqual(expect.arrayContaining(['modOrderCommands', 'pluginsCommands', 'instanceCommands', 'downloadsCommands']));
+    expect(CORE_BOXES).toEqual(expect.arrayContaining(['modCommands', 'pluginCommands', 'instanceCommands', 'downloadedFileCommands']));
     expect(commandModules().length).toBeGreaterThan(CORE_BOXES.length);
   });
 

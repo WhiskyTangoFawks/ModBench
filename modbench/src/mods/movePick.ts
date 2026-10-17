@@ -1,7 +1,7 @@
 // mods.md, Pickers, Move: the places a move offers.
 
 import type { ModGroup, ModGroups } from '../instanceLoader/instance';
-import type { MovePlace, OrderEnd, SeparatorsPlace } from '../modOrderCommands/modOrderCommands';
+import type { MovePlace, OrderEnd, SeparatorsPlace } from '../modCommands/modCommands';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 
 export interface MovePickItem<T> {

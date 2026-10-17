@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { unreadStatus } from '../../test/unreadStatus';
-import { modSyncOver, modlistCommands } from '../modOrderCommands';
+import { modSyncOver, modCommands } from '../modCommands';
 import type {
   EntryRef, ModlistEntry, ModOrderChange, MovePlace, OriginFileMark, SeparatorsPlace,
 } from '../../instanceAdapter/instanceAdapter';
@@ -20,13 +20,13 @@ const NO_TRASH = () => Promise.resolve();
 
 function over(order: readonly ModlistEntry[] = FIXTURE_ORDER, answers: InstanceAnswers = {}, mEdit = new InMemoryMEditClient()) {
   const fake = fakeInstanceAdapter(readingFixture({ mods: order }), answers);
-  return { fake, mEdit, commands: modlistCommands(fake.adapter, mEdit, unreadStatus) };
+  return { fake, mEdit, commands: modCommands(fake.adapter, mEdit, unreadStatus) };
 }
 
 const orderWrite = (changes: readonly ModOrderChange[], profile = 'Default'): AdapterCall => ({ verb: 'changeModOrder', profile, changes });
 const verbs = (calls: readonly AdapterCall[]) => calls.map((call) => call.verb);
 
-describe('the modlist commands refuse the whole selection once when the adapter refuses the write', () => {
+describe('the mod commands refuse the whole selection once when the adapter refuses the write', () => {
   const place: MovePlace = { kind: 'ungrouped' };
   const separatorsPlace: SeparatorsPlace = { kind: 'modOrder' };
 

@@ -4,7 +4,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { pluginSyncOver, type PluginsDrop } from '../plugins';
-import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
+import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, fileIn, refusing, readingFixture } from '../../test/fakeInstanceAdapter';
 import type { PluginMetadata } from '../../client';
 import type { DataFolderPlugins, PluginOrderChange } from '../../instanceAdapter/instanceAdapter';
@@ -28,7 +28,7 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
   it('a move is its plugins and the record index the drop settles to', async () => {
     const fake = fakeOver('Base.esp', 'Gone.esp');
 
-    await pluginsCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(PROFILE, moving('Base.esp'), { kind: 'after', name: 'Gone.esp' }, []);
+    await pluginCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(PROFILE, moving('Base.esp'), { kind: 'after', name: 'Gone.esp' }, []);
 
     expect(fake.calls).toEqual(handed([{ kind: 'move', plugins: ['Base.esp'], toIndex: 1 }]));
   });
@@ -36,7 +36,7 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
   it('a drop on a row the order does not list is refused by name, and no change is handed over', async () => {
     const fake = fakeOver('Base.esp', 'Other.esp');
 
-    const result = await pluginsCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(PROFILE, moving('Other.esp'), { kind: 'before', name: 'Gone.esp' }, []);
+    const result = await pluginCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(PROFILE, moving('Other.esp'), { kind: 'before', name: 'Gone.esp' }, []);
 
     expect(result).toEqual({ applied: false, refusal: 'Plugin not found in plugins.txt: Gone.esp' });
     expect(fake.calls).toEqual([]);
@@ -45,7 +45,7 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
   it('a refusal by the adapter is the refusal the command returns', async () => {
     const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: lines('Base.esp') }), { refusals: refusing('changePluginOrder', 'ENOENT: no plugins.txt') });
 
-    const result = await pluginsCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(PROFILE, moving('Base.esp'), { kind: 'losingEnd' }, []);
+    const result = await pluginCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(PROFILE, moving('Base.esp'), { kind: 'losingEnd' }, []);
 
     expect(result).toEqual({ applied: false, refusal: 'ENOENT: no plugins.txt' });
   });
@@ -61,7 +61,7 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
     interface Move { order: readonly string[]; facts: Fact[]; moved: string; drop: PluginsDrop; withNoLine?: string[] }
     const run = async ({ order, facts, moved, drop, withNoLine = [] }: Move) => {
       const fake = fakeOver(...order);
-      const result = await pluginsCommandsWith(fake.adapter, knowing(...facts)).reorderPlugins(PROFILE, moving(moved), drop, withNoLine);
+      const result = await pluginCommandsWith(fake.adapter, knowing(...facts)).reorderPlugins(PROFILE, moving(moved), drop, withNoLine);
       return { fake, result };
     };
 
@@ -108,7 +108,7 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
     it('lets a drop land while mEdit cannot say any masters', async () => {
       const fake = fakeOver(...THREE);
 
-      const result = await pluginsCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(PROFILE, moving('A.esp'), { kind: 'winningEnd' }, []);
+      const result = await pluginCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(PROFILE, moving('A.esp'), { kind: 'winningEnd' }, []);
 
       expect(result).toMatchObject({ applied: true });
     });
@@ -121,7 +121,7 @@ describe('plugin participation is a change for each plugin the order lists', () 
   it('setPluginsEnabled gives every named plugin the one state', async () => {
     const fake = fakeOver(...ORDER);
 
-    const result = await pluginsCommandsWith(fake.adapter).setPluginsEnabled(PROFILE, ORDER, false);
+    const result = await pluginCommandsWith(fake.adapter).setPluginsEnabled(PROFILE, ORDER, false);
 
     expect(result).toEqual({ applied: true, outcome: { landed: ORDER, refused: [] } });
     expect(fake.calls).toEqual(handed([{ kind: 'enable', plugin: 'Base.esp', enabled: false }, { kind: 'enable', plugin: 'Other.esp', enabled: false }]));
@@ -130,7 +130,7 @@ describe('plugin participation is a change for each plugin the order lists', () 
   it('setPluginsParticipation gives each named plugin its own state', async () => {
     const fake = fakeOver(...ORDER);
 
-    const result = await pluginsCommandsWith(fake.adapter).setPluginsParticipation(PROFILE, [{ name: 'Base.esp', enabled: false }, { name: 'Other.esp', enabled: true }]);
+    const result = await pluginCommandsWith(fake.adapter).setPluginsParticipation(PROFILE, [{ name: 'Base.esp', enabled: false }, { name: 'Other.esp', enabled: true }]);
 
     expect(result).toEqual({ applied: true, outcome: { landed: ORDER, refused: [] } });
     expect(fake.calls).toEqual(handed([{ kind: 'enable', plugin: 'Base.esp', enabled: false }, { kind: 'enable', plugin: 'Other.esp', enabled: true }]));
@@ -138,7 +138,7 @@ describe('plugin participation is a change for each plugin the order lists', () 
 
   it('a plugin named in another case than its line lands, for the check box and for enable alike', async () => {
     const fake = fakeOver(...ORDER);
-    const commands = pluginsCommandsWith(fake.adapter);
+    const commands = pluginCommandsWith(fake.adapter);
 
     const checkbox = await commands.setPluginsParticipation(PROFILE, [{ name: 'base.ESP', enabled: false }]);
     const enable = await commands.setPluginsEnabled(PROFILE, ['other.esp'], true);
@@ -152,7 +152,7 @@ describe('plugin participation is a change for each plugin the order lists', () 
   it('a plugin the order does not list is refused by name, and the rest still land in the one change', async () => {
     const fake = fakeOver(...ORDER);
 
-    const result = await pluginsCommandsWith(fake.adapter).setPluginsEnabled(PROFILE, ['Base.esp', 'No Such.esp'], false);
+    const result = await pluginCommandsWith(fake.adapter).setPluginsEnabled(PROFILE, ['Base.esp', 'No Such.esp'], false);
 
     expect(result).toEqual({
       applied: true,
@@ -164,7 +164,7 @@ describe('plugin participation is a change for each plugin the order lists', () 
   it('a refusal by the adapter refuses the whole selection', async () => {
     const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: lines(...ORDER) }), { refusals: refusing('changePluginOrder', 'ENOENT: no plugins.txt') });
 
-    expect(await pluginsCommandsWith(fake.adapter).setPluginsEnabled(PROFILE, ORDER, false)).toEqual({ applied: false, refusal: 'ENOENT: no plugins.txt' });
+    expect(await pluginCommandsWith(fake.adapter).setPluginsEnabled(PROFILE, ORDER, false)).toEqual({ applied: false, refusal: 'ENOENT: no plugins.txt' });
   });
 });
 
