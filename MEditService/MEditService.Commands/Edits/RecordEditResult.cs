@@ -135,6 +135,10 @@ public enum RecordEditRefusal
     /// named a member the codec has no home for. Never reported as success.</summary>
     CodecDroppedValue,
 
+    /// <summary>A copy into a plugin that is not localized holds a translated string in the strings language
+    /// alone, and the record has no text in that language for one of its strings: nothing was written.</summary>
+    NoTextInStringsLanguage,
+
     /// <summary>The record's own document could not be produced at index time; the diagnosis is the
     /// reason, and repairing it is not a field edit.</summary>
     RecordParseFailed,
