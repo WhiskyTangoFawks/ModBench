@@ -21,7 +21,8 @@ public sealed class RespelledGameFolderTests
             .Build();
         using (var cold = Indexes.Open(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
-        var link = Path.Combine(Path.GetTempPath(), "respelled-" + Guid.NewGuid().ToString("N"));
+        using var scratch = new ScratchDirectory("respelled-");
+        var link = Path.Combine(scratch, "game");
         Directory.CreateSymbolicLink(link, data.DataFolder);
         try
         {
