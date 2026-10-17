@@ -518,10 +518,8 @@ export interface InstanceAdapter {
   /** A downloaded file that is gone gets no mark. Rejects when the downloads folder cannot be
    *  resolved. */
   markDownloadedFile(name: string, mark: DownloadedFileMark): Promise<Marked>;
-  /** Moves a downloaded file to the trash, then what the manager keeps about it; a write of that a
-   *  crash left half done goes with it. A file already gone is `gone`. Rejects when the file cannot
-   *  be trashed, with what is kept about it untouched. A failure on what is kept, once the file
-   *  is trashed, comes back as `metadataLeftBehind`, the reason. */
+  /** Moves a downloaded file to the trash, then what the manager keeps about it. Rejects when the
+   *  file cannot be trashed. `metadataLeftBehind` is the reason what is kept could not follow. */
   trashDownloadedFile(name: string, trash: MoveToTrash): Promise<DownloadedFileTrashed>;
   selectProfile(profile: string): Promise<Written>;
 

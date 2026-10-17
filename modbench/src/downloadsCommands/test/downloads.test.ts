@@ -47,7 +47,7 @@ describe('deleteDownloads', () => {
   it('refuses a file gone from disk, by name', async () => {
     const { commands } = commandsOver({ goneDownloads: new Set(['gone.7z']) });
 
-    assertSelectionOutcome(await commands.deleteDownloads(['gone.7z']), {
+    assertSelectionOutcome(await commands.deleteDownloads(['gone.7z'], recordingTrash().trash), {
       landed: [],
       refused: [{ item: { name: 'gone.7z' }, reasonContains: 'gone.7z' }],
     });
