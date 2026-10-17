@@ -1,4 +1,7 @@
-*MBDevSFConflictB.esp
-*MBDevSFConflictA.esp
-*MBDevSfConditions.esp
+*MBDevSfFixes.esm
 *MBDevSfMaster.esm
+*MBDevSfFixesAddon.esp
+*MBDevSFConflictA.esp
+*MBDevSFConflictB.esp
+*MBDevSfConditions.esp
+*MBDevSfPatchAB.esp
