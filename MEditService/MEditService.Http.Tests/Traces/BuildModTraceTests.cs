@@ -91,7 +91,7 @@ public sealed class BuildModTraceTests : HostedTests
         using var submodule = new PinnedSubmodule(_instance.Root, Origin);
         submodule.Pin(pin);
         var manifest = JsonSerializer.Serialize(new { package = new { submodule = Origin }, files = new[] { new { path = Plugin } } });
-        File.WriteAllText(Path.Combine(_builtFolder, $"{Origin}.manifest"), manifest);
+        File.WriteAllText(Path.Combine(_builtFolder, $"{Origin}.manifest.json"), manifest);
 
         var answer = await Answer(await Client.PostAsJsonAsync("/restore-from-manifest", new
         {

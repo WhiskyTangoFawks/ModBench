@@ -26,24 +26,24 @@ describe('renameFolderWithManifest', () => {
     from = { kind: 'mod', name: 'Old', path: join(root, 'Old'), modName: 'Old' };
     toPath = join(root, 'New');
     await mkdir(from.path);
-    await writeFile(join(from.path, 'Old.manifest'), '');
+    await writeFile(join(from.path, 'Old.manifest.json'), '');
     failing.endings = [];
   });
 
   afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
   it('puts the folder back, and rejects with why the manifest could not be renamed', async () => {
-    failing.endings = ['New.manifest'];
+    failing.endings = ['New.manifest.json'];
 
-    await expect(renameFolderWithManifest(from, toPath, 'New')).rejects.toThrow(`EBUSY: ${join(toPath, 'New.manifest')}`);
+    await expect(renameFolderWithManifest(from, toPath, 'New')).rejects.toThrow(`EBUSY: ${join(toPath, 'New.manifest.json')}`);
 
     expect(await readdir(root)).toEqual(['Old']);
   });
 
   it('names why the manifest could not be renamed and that the folder sits under its new name because putting it back failed', async () => {
-    failing.endings = ['New.manifest', 'Old'];
+    failing.endings = ['New.manifest.json', 'Old'];
 
     await expect(renameFolderWithManifest(from, toPath, 'New')).rejects.toThrow(new Error(
-      `EBUSY: ${join(toPath, 'New.manifest')}; the folder now sits at ${toPath} because putting it back failed: EBUSY: ${from.path}`));
+      `EBUSY: ${join(toPath, 'New.manifest.json')}; the folder now sits at ${toPath} because putting it back failed: EBUSY: ${from.path}`));
   });
 });

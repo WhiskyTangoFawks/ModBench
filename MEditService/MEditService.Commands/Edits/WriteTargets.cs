@@ -82,7 +82,8 @@ internal sealed class WriteTargets(
         if (!NotLocalizedIn(session.Repository, destinationPlugin, release).Holds(out var language, out var unreadable))
             return RefuseUnreadable(formKey, unreadable.Reason);
         var destination = new RecordCopy.Destination(session, destinationPlugin, language);
-        target = new CopyTarget(source, identity, destination, release, destination.Landing(body, release, identity.RecordType));
+        if (destination.Landing(body, release, formKey, identity.RecordType, out var landed) is { } unlandable) return unlandable;
+        target = new CopyTarget(source, identity, destination, release, landed);
         return null;
     }
 

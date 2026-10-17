@@ -102,13 +102,42 @@ public class RecordTextCodecTests
         ];
         var text = RecordTextCodec.SerializeToText(weapon, GameRelease.Fallout4);
 
-        var collapsed = TranslatedStringValues.InLanguage(text, Language.French, GameRelease.Fallout4, "WEAP");
+        var collapsed = TranslatedStringValues.InLanguage(text, Language.French, GameRelease.Fallout4, "WEAP").Text;
 
         Assert.Contains("\"Values\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Values\"", collapsed, StringComparison.Ordinal);
         Assert.Contains("Arme", collapsed, StringComparison.Ordinal);
         Assert.Contains("Modele", collapsed, StringComparison.Ordinal);
         Assert.DoesNotContain("Mod English", collapsed, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InLanguage_AStringWithNoTextInTheLanguage_ReportsItsPathAndLeavesIt()
+    {
+        var weapon = MakeWeapon();
+        weapon.Name = new TranslatedString(Language.English,
+        [
+            new KeyValuePair<Language, string>(Language.English, "Weapon"),
+            new KeyValuePair<Language, string>(Language.German, "Waffe"),
+        ]);
+        weapon.ObjectTemplates =
+        [
+            new ObjectTemplate<Weapon.Property>
+            {
+                Name = new TranslatedString(Language.English,
+                [
+                    new KeyValuePair<Language, string>(Language.English, "Mod English"),
+                    new KeyValuePair<Language, string>(Language.French, "Modele"),
+                ]),
+            },
+        ];
+        var text = RecordTextCodec.SerializeToText(weapon, GameRelease.Fallout4);
+
+        var collapsed = TranslatedStringValues.InLanguage(text, Language.French, GameRelease.Fallout4, "WEAP");
+
+        Assert.Equal(["Name"], collapsed.Unresolved);
+        Assert.Contains("Weapon", collapsed.Text, StringComparison.Ordinal);
+        Assert.Contains("Modele", collapsed.Text, StringComparison.Ordinal);
     }
 
     [Fact]
