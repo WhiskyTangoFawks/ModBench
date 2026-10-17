@@ -1,6 +1,7 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -29,7 +30,7 @@ public abstract class LocalizedSourceCopyScenario : IDisposable
     private readonly LoadOrderSnapshot _loadOrder;
     private readonly CopyRecordChangesHandler _handler;
 
-    protected LocalizedSourceCopyScenario(bool destinationLocalized, bool doorNamedInStringsLanguage = true)
+    protected LocalizedSourceCopyScenario(bool destinationLocalized, bool doorNamedInStringsLanguage = true, bool cellNamedInStringsLanguage = true)
     {
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
         var door = sourceMod.Doors.AddNew("MainDoor");
@@ -46,7 +47,7 @@ public abstract class LocalizedSourceCopyScenario : IDisposable
             EditorID = "MainCell",
             Name = new TranslatedString(Language.English, [
                 new KeyValuePair<Language, string>(Language.English, EnglishName),
-                new KeyValuePair<Language, string>(Language.French, FrenchName),
+                new KeyValuePair<Language, string>(cellNamedInStringsLanguage ? Language.French : Language.German, FrenchName),
             ]),
         };
         var placedObject = new PlacedObject(sourceMod) { EditorID = "MainRef", Position = new P3Float(1f, 2f, 3f), Scale = 1f };
@@ -103,9 +104,18 @@ public abstract class LocalizedSourceCopyScenario : IDisposable
         return body;
     }
 
-    protected string CopiedUncompiledDoorBody() => CopiedBody(_door, _door);
+    protected SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges> CopyDoorAndCell()
+    {
+        RecordAt[] records = [.. new[] { _door, _cell }.Select(formKey => new RecordAt(new PluginAddress(SourcePluginName, SourceOrigin), formKey.ToString()))];
+        return _handler.CopySync(records, CopyMode.Override, [Destination], replace: false);
+    }
 
-    protected Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileDestination() => CompileServices.Over(_loadOrder).CompileAsync([Destination]);
+    protected SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges> CopyPlacedObject() =>
+        _handler.CopySync([new RecordAt(new PluginAddress(SourcePluginName, SourceOrigin), _placedObject.ToString())], CopyMode.Override, [Destination], replace: false);
+
+    protected SourceDocument? DoorInDestination() => SourceModTree.Document(_destinationModFolder, Destination, _door.ToString());
+
+    protected SourceDocument? CellInDestination() => SourceModTree.Document(_destinationModFolder, Destination, _cell.ToString());
 
     private static PluginAddress Destination => new(DestinationPluginName, DestinationOrigin);
 
@@ -147,14 +157,37 @@ public sealed class CopyAsOverrideLocalizedTests() : LocalizedSourceCopyScenario
 public sealed class CopyAsOverrideWithoutStringsLanguageTextTests() : LocalizedSourceCopyScenario(destinationLocalized: false, doorNamedInStringsLanguage: false)
 {
     [Fact]
-    public async Task CopyRecordAsOverride_OfAStringWithNoTextInTheStringsLanguage_LeavesItAndTheCompileRefuses()
+    public void CopyRecordAsOverride_OfAStringWithNoTextInTheStringsLanguage_RefusesNamingTheFieldAndWritesNothing()
     {
-        var body = CopiedUncompiledDoorBody();
+        var result = CopyDoorAndCell();
 
-        var answer = await CompileDestination();
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(RecordEditRefusal.CodecDroppedValue, refused.Refusal);
+        Assert.Contains("Name", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("French", refused.Message, StringComparison.Ordinal);
+        Assert.Null(DoorInDestination());
+    }
 
-        Assert.Contains("\"Values\"", body, StringComparison.Ordinal);
-        Assert.Equal(CompileRefusal.SourceValueDropped, Assert.Single(answer.Refused).Refusal);
+    [Fact]
+    public void CopyRecordAsOverride_OfASelectionWithOneStringWithNoTextInTheStringsLanguage_LandsTheOthers()
+    {
+        var result = CopyDoorAndCell();
+
+        Assert.Single(result.Landed);
+        Assert.NotNull(CellInDestination());
+    }
+}
+
+public sealed class CopyAsOverrideOfAChildWithoutStringsLanguageTextInItsContainerTests()
+    : LocalizedSourceCopyScenario(destinationLocalized: false, cellNamedInStringsLanguage: false)
+{
+    [Fact]
+    public void CopyRecordAsOverride_OfAChildWhoseContainerHasAStringWithNoTextInTheStringsLanguage_RefusesTheChildAndWritesNothing()
+    {
+        var result = CopyPlacedObject();
+
+        Assert.Equal(RecordEditRefusal.CodecDroppedValue, Assert.Single(result.Refused).Refusal);
+        Assert.Null(CellInDestination());
     }
 }
 
