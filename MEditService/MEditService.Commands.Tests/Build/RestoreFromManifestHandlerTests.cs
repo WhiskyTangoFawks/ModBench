@@ -24,8 +24,8 @@ public sealed class RestoreFromManifestHandlerTests
 
     private static InstanceToRestore Instance() => new("stat-cache", ".mohidden", Archives: null);
 
-    private static ModToRestore ModFrom(string folder, params InstallationFile[] installationFiles) =>
-        new(folder[(folder.LastIndexOf('/') + 1)..], folder, installationFiles, ["meta.ini"], SourceFolder: null);
+    private static ModToRestore ModFrom(string folder, InstallationFile? installationFile = null) =>
+        new(folder[(folder.LastIndexOf('/') + 1)..], folder, installationFile, ["meta.ini"], SourceFolder: null);
 
     private InstallationFile Downloaded(string path, params (string Path, string Text)[] entries) =>
         DownloadedBytes(path, [.. entries.Select(e => (e.Path, Encoding.ASCII.GetBytes(e.Text)))]);
@@ -110,7 +110,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         await Handler.RestoreAsync([ModFrom(Mod, download)], Instance());
 
-        Assert.Equal(new Dictionary<string, string> { ["a.nif"] = "a" }, _folders.KeptProviderHashes[Mod]);
+        Assert.Equal(new Dictionary<string, string> { ["a.nif"] = "a" }, _folders.KeptPackageHashes[Mod]);
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var metadata = Assert.Single(result.Landed).Outcome.Metadata;
         Assert.Equal("1.2", metadata.Version);
-        Assert.Equal(new MetadataInstallationFile("Mod.zip", "nexus:fallout4:7;7:9"), Assert.Single(metadata.InstallationFiles));
+        Assert.Equal(new MetadataInstallationFile("Mod.zip", "nexus:fallout4:7;7:9"), metadata.InstallationFile);
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public sealed class RestoreFromManifestHandlerTests
     {
         var download = Downloaded("dl/Patch.zip", ("Meshes/A.nif", "x"));
         _folders.WithFile(Mod, "meta.ini", "[General]");
-        Manifested(Mod, download, Line("meshes/a.nif", new PackageEntry.HeldAt("Meshes/A.nif")));
+        Manifested(Mod, download, ManifestFile.At("meshes/a.nif", new FileBytes.InInstallationFile("Patch.zip", "Meshes/A.nif")));
 
         await Handler.RestoreAsync([ModFrom(Mod, download)], Instance());
 
@@ -170,11 +170,11 @@ public sealed class RestoreFromManifestHandlerTests
     {
         var download = Downloaded("dl/Mod.zip", ("a.nif", "a"));
         _folders.WithFile(Mod, "meta.ini", "[General]");
-        Manifested(Mod, download, Line("a.nif", new PackageEntry.Held()), Line("copy/a.nif", new PackageEntry.HeldAt("a.nif")));
+        Manifested(Mod, download, Line("a.nif", new PackageEntry.Held()), ManifestFile.At("copy/x.nif", new FileBytes.InInstallationFile("Mod.zip", "a.nif")));
 
         await Handler.RestoreAsync([ModFrom(Mod, download)], Instance());
 
-        Assert.Equal(("a", "a"), (WrittenText(Mod, "a.nif"), WrittenText(Mod, "copy/a.nif")));
+        Assert.Equal(("a", "a"), (WrittenText(Mod, "a.nif"), WrittenText(Mod, "copy/x.nif")));
     }
 
     [Theory]
@@ -231,7 +231,7 @@ public sealed class RestoreFromManifestHandlerTests
         var skipped = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Refused);
 
         Assert.Equal(RestoreRefusal.NotFound, skipped.Refusal.Kind);
-        Assert.Equal(["Mod.zip"], skipped.Refusal.InstallationFilesNotFound);
+        Assert.Equal("Mod.zip", skipped.Refusal.InstallationFileNotFound);
     }
 
     [Fact]

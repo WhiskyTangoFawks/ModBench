@@ -68,14 +68,14 @@ public abstract record PackageEntry
     public sealed record Held : PackageEntry;
 
     /// <summary>The package holds the file at another path, as a FOMOD install moves files.</summary>
-    public sealed record HeldAt(string Path) : PackageEntry
+    internal sealed record HeldAt(string Path) : PackageEntry
     {
         internal override string PathOf(string filePath) => Path;
     }
 
     public sealed record NotHeld : PackageEntry;
 
-    public static PackageEntry At(string filePath, string packagePath) =>
+    internal static PackageEntry At(string filePath, string packagePath) =>
         string.Equals(filePath, packagePath, StringComparison.OrdinalIgnoreCase) ? new Held() : new HeldAt(packagePath);
 
     internal virtual string PathOf(string filePath) => filePath;

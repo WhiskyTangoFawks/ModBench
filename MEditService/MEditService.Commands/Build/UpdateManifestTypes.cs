@@ -2,10 +2,9 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to update the manifest of, with its installation files in the mod manager's order, the first its package,
-/// its version, its metadata files, which no line names, and whether its build writes its manifest.</summary>
+/// <summary>A mod to update the manifest of, with its installation file, its version, its metadata files, which no line names, and whether its build writes its manifest.</summary>
 public sealed record ModToUpdate(
-    string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> MetadataFiles, bool IsSourceMod,
+    string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, bool IsSourceMod,
     string? Version);
 
 /// <summary>The instance's facts beyond its mods: the folder of the stat cache.</summary>
@@ -33,5 +32,5 @@ public enum UpdateManifestRefusal
 }
 
 /// <summary>A mod whose manifest is as its folder says. ManifestWritten is false when the manifest was already so.
-/// NotInPackage names each file the mod's package does not hold. StatCacheNotWritten is why the stat cache could not be written, or null.</summary>
+/// NotInPackage names each file its package does not hold. StatCacheNotWritten is why the stat cache failed, or null.</summary>
 public sealed record UpdatedMod(bool ManifestWritten, IReadOnlyList<string> NotInPackage, string? StatCacheNotWritten);

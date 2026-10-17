@@ -56,7 +56,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
         };
         var whole = new JsonObject
         {
-            ["mods"] = new JsonArray(new JsonObject { ["name"] = Mod, ["folder"] = ModFolder, ["version"] = "1.2.3", ["installationFiles"] = new JsonArray(installationFile) }),
+            ["mods"] = new JsonArray(new JsonObject { ["name"] = Mod, ["folder"] = ModFolder, ["version"] = "1.2.3", ["installationFile"] = installationFile }),
             ["statCache"] = Path.Combine(_instance, "stat-cache"),
             ["gesture"] = Gesture,
         };

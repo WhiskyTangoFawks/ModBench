@@ -21,15 +21,15 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
         return new([.. paths.Select(path => new HashedFile(path, cache.HashOf(path, () => HashOf(modFolder, path))))]) { StatCache = cache };
     }
 
-    public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided)
+    public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> hashes)
     {
         if (read.StatCache is not { } cache) return null;
-        Dictionary<(string Source, string Path), string> providers = [];
+        Dictionary<(string Package, string Path), string> fixes = [];
         foreach (var line in manifest.Files)
         {
-            if (manifest.FixedBy(line) is { } fixedBy && provided.TryGetValue(line.Path, out var hash)) providers.TryAdd(fixedBy, hash);
+            if (manifest.FixedBy(line) is { } fixedBy && hashes.TryGetValue(line.Path, out var hash)) fixes.TryAdd(fixedBy, hash);
         }
-        return cache.Write([.. read.Files.Select(file => file.Path)], providers);
+        return cache.Write([.. read.Files.Select(file => file.Path)], fixes);
     }
 
     public IReadOnlyList<string> NamedByNoLine(string modFolder, string modName, Manifest manifest, IReadOnlySet<string> leftOut)
@@ -84,7 +84,7 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
 
     private static string[] Ordered(IEnumerable<string> paths) => [.. paths.Order(StringComparer.Ordinal)];
 
-    private static bool HoldsWhatItIsFixedBy(string modFolder, string path, StatCache cache, (string Source, string Path) fixedBy)
+    private static bool HoldsWhatItIsFixedBy(string modFolder, string path, StatCache cache, (string Package, string Path) fixedBy)
     {
         if (cache.HashFixedBy(fixedBy) is not { } fixedHash) return false;
         try
@@ -154,7 +154,6 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
     }
 
     public Stream OpenInstallationFile(string path) => File.OpenRead(path);
-
 
     public bool WriteManifest(string modFolder, string modName, Manifest manifest)
     {

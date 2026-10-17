@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>A mod folder against its manifest (modlist-repository.md, Status), each list by path on disk in ordinal order.
-/// Differing holds each file whose bytes the stat cache cannot vouch are its package's. NotInPackage holds each file its package does not hold.</summary>
+/// Differing holds each file whose bytes the stat cache cannot vouch are its package's.</summary>
 public sealed record ModStatus(
     string Mod, bool NoManifest, IReadOnlyList<string> Differing, IReadOnlyList<string> NamedByNoLine, IReadOnlyList<string> Gone,
     IReadOnlyList<string> NotInPackage, ModUnreadable? Unreadable = null, string? StatCacheNotWritten = null,

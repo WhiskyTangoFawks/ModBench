@@ -1397,7 +1397,7 @@ export interface components {
         };
         ModMetadata: {
             version?: string | null;
-            installationFiles: components["schemas"]["MetadataInstallationFile"][];
+            installationFile?: components["schemas"]["MetadataInstallationFile"] | null;
         };
         ModRestoreDestroys: {
             mod: string;
@@ -1409,7 +1409,7 @@ export interface components {
             item: string;
             refusal: components["schemas"]["RestoreRefusal"];
             message: string;
-            installationFilesNotFound: string[];
+            installationFileNotFound?: string | null;
             buildRefusal: components["schemas"]["BuildRefusal"];
         };
         ModStatus: {
@@ -1746,7 +1746,7 @@ export interface components {
         RestoreFromManifestModRequest: {
             name: string;
             folder: string;
-            installationFiles: components["schemas"]["InstallationFileRequest"][];
+            installationFile?: components["schemas"]["InstallationFileRequest"] | null;
             metadataFiles: string[];
             sourceFolder?: string | null;
         };
@@ -1813,7 +1813,7 @@ export interface components {
         UpdateManifestModRequest: {
             name: string;
             folder: string;
-            installationFiles: components["schemas"]["InstallationFileRequest"][];
+            installationFile?: components["schemas"]["InstallationFileRequest"] | null;
             metadataFiles: string[];
             isSourceMod: boolean;
             version?: string | null;

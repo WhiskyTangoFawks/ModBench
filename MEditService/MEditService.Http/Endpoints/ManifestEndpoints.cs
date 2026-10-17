@@ -76,7 +76,7 @@ internal static class ManifestEndpoints
         using var running = cancels.Run(req.Gesture, aborted);
         var result = await handler.UpdateManifestAsync(
             [.. mods.Select(mod => new ModToUpdate(
-                mod.Name, mod.Folder, InstallationFilesOf(mod.InstallationFiles), mod.MetadataFiles ?? [], mod.IsSourceMod, mod.Version))],
+                mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.IsSourceMod, mod.Version))],
             new InstanceToUpdate(req.StatCache), req.Gesture, running.Token);
 
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
@@ -101,7 +101,7 @@ internal static class ManifestEndpoints
         using var running = cancels.Run(req.Gesture, aborted);
         var result = await handler.RestoreAsync(
             [.. mods.Select(mod => new ModToRestore(
-                mod.Name, mod.Folder, InstallationFilesOf(mod.InstallationFiles), mod.MetadataFiles ?? [], mod.SourceFolder))],
+                mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.SourceFolder))],
             new InstanceToRestore(req.StatCache, req.ExcludedSuffix, variants), req.Gesture, running.Token);
 
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
@@ -110,7 +110,7 @@ internal static class ManifestEndpoints
             [.. result.Landed.Select(landed => new RestoredModResponse(
                 landed.Item, landed.Outcome.Written, landed.Outcome.NamedByNoLine, landed.Outcome.StatCacheNotWritten, landed.Outcome.Metadata, landed.Outcome.Uncommitted))],
             [.. result.Refused.Select(refused => new ModRestoreRefusal(
-                refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.InstallationFilesNotFound,
+                refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.InstallationFileNotFound,
                 refused.Refusal.Build))]));
     }
 
@@ -127,7 +127,7 @@ internal static class ManifestEndpoints
             {
                 refused.Add(new ModRestoreRefusal(
                     status.Mod, unreadable.Manifest ? RestoreRefusal.ManifestUnreadable : RestoreRefusal.Unreadable,
-                    $"was skipped: {unreadable.Why}.", []));
+                    $"was skipped: {unreadable.Why}.", null));
                 continue;
             }
             var overwritesMetadata = status.ManifestMetadata is { } says && mod.Metadata?.IsOverwrittenBy(says) == true;
@@ -155,7 +155,7 @@ internal static class ManifestEndpoints
     {
         if (mods.Count == 0) return Results.Problem("At least one mod is required.", statusCode: 400);
         if (string.IsNullOrWhiteSpace(statCache)) return Results.Problem("The folder of the stat cache is required.", statusCode: 400);
-        var installationFiles = mods.SelectMany(mod => mod.InstallationFiles ?? []).ToList();
+        var installationFiles = mods.Select(mod => mod.InstallationFile).OfType<InstallationFileRequest>().ToList();
         if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.Folder)) || installationFiles.Any(file => !file.IsWhole))
         {
             return Results.Problem(
@@ -166,9 +166,6 @@ internal static class ManifestEndpoints
             return Results.Problem("Every hash is xxHash64 as Wabbajack writes it: eight bytes in base64.", statusCode: 400);
         return null;
     }
-
-    private static InstallationFile[] InstallationFilesOf(IReadOnlyList<InstallationFileRequest>? files) =>
-        [.. (files ?? []).Select(file => file.ToInstallationFile())];
 
 }
 
@@ -183,12 +180,12 @@ internal interface IModRequest
 
     string Folder { get; }
 
-    IReadOnlyList<InstallationFileRequest> InstallationFiles { get; }
+    InstallationFileRequest? InstallationFile { get; }
 }
 
 /// <summary>A mod, whether it is a source mod, whose build writes its manifest, and its version as its metadata says.</summary>
 internal sealed record UpdateManifestModRequest(
-    string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> MetadataFiles, bool IsSourceMod, string? Version)
+    string Name, string Folder, InstallationFileRequest? InstallationFile, IReadOnlyList<string> MetadataFiles, bool IsSourceMod, string? Version)
     : IModRequest;
 
 /// <summary>A landed mod. StatCacheNotWritten is why the stat cache could not keep what the update read, or null.</summary>
@@ -206,7 +203,7 @@ internal sealed record RestoreFromManifestRequest(
 
 /// <summary>A mod, with the folder its source is in or is cloned into, none when its name gives it none.</summary>
 internal sealed record RestoreFromManifestModRequest(
-    string Name, string Folder, IReadOnlyList<InstallationFileRequest> InstallationFiles, IReadOnlyList<string> MetadataFiles, string? SourceFolder)
+    string Name, string Folder, InstallationFileRequest? InstallationFile, IReadOnlyList<string> MetadataFiles, string? SourceFolder)
     : IModRequest;
 
 /// <summary>A mod whose files are as its manifest says: Written each file written, NamedByNoLine each file no line names,
@@ -239,9 +236,9 @@ internal sealed record WhatRestoreDestroysResponse(
 
 internal sealed record ManifestMetadataResponse(string Mod, ModMetadata Metadata);
 
-/// <summary>A skipped mod. A NotFound mod names each installation file it lacks by name, for a request to hand. A NotBuilt mod names its build's refusal.</summary>
+/// <summary>A skipped mod. A NotFound mod names the installation file it lacks by name, for a request to hand. A NotBuilt mod names its build's refusal.</summary>
 internal sealed record ModRestoreRefusal(
-    string Item, RestoreRefusal Refusal, string Message, IReadOnlyList<string> InstallationFilesNotFound,
+    string Item, RestoreRefusal Refusal, string Message, string? InstallationFileNotFound,
     BuildRefusal BuildRefusal = BuildRefusal.None);
 
 /// <summary>Landed, skipped or not finished, per mod (ADR-0019), never the status of the call.</summary>

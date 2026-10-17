@@ -13,7 +13,7 @@ import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
-  'installationFiles' | 'downloadedFile' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'removeIgnoreList' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
+  'installationFile' | 'downloadedFile' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'removeIgnoreList' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
   | 'statCacheFolder' | 'trashModFile' | 'sourceFolder' | 'excludedSuffix'>;
 
 interface ModlistRepositoryCommandsDeps {
@@ -54,7 +54,7 @@ export type RestoreStatus = { readonly phase: 'ReadingFiles'; readonly mod: stri
 
 type ReadMod = Omit<UpdateManifestMod, 'isSourceMod' | 'version'>;
 
-type InstallationFilesOf = (mod: string) => Promise<FileRead<readonly InstallationFile[]>>;
+type InstallationFileOf = (mod: string) => Promise<FileRead<InstallationFile | undefined>>;
 
 interface ReadMods {
   readonly sent: readonly ReadMod[];
@@ -71,25 +71,26 @@ async function byFolder(adapter: Adapter, mods: readonly string[]): Promise<ModB
   return asked;
 }
 
-const wireFile = ({ path, page, size, hash, entries }: InstallationFile): UpdateManifestMod['installationFiles'][number] =>
+const wireFile = ({ path, page, size, hash, entries }: InstallationFile): NonNullable<UpdateManifestMod['installationFile']> =>
   ({ path, page, size, hash, entries: [...entries] });
 
 async function readMod(
-  adapter: Adapter, mod: string, installationFilesOf: InstallationFilesOf,
+  adapter: Adapter, mod: string, installationFileOf: InstallationFileOf,
 ): Promise<{ read: ReadMod; notes: readonly string[] } | { refusal: string }> {
   const folder = await adapter.modFolderPath(mod);
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
-  const installed = await installationFilesOf(mod);
+  const installed = await installationFileOf(mod);
   if (installed.kind === 'unreadable') return { refusal: installed.reason };
   return {
-    read: { name: mod, folder, installationFiles: installed.answer.map(wireFile), metadataFiles: [...adapter.metadataFilesInModFolder] },
-    notes: installed.answer.flatMap(({ unpagedGame }) =>
-      unpagedGame === undefined ? [] : [`its installation file comes from '${unpagedGame}', a game whose host the instance adapter has no page on, so its manifest names no page`]),
+    read: { name: mod, folder, installationFile: installed.answer === undefined ? undefined : wireFile(installed.answer), metadataFiles: [...adapter.metadataFilesInModFolder] },
+    notes: installed.answer?.unpagedGame === undefined
+      ? []
+      : [`its installation file comes from '${installed.answer.unpagedGame}', a game whose host the instance adapter has no page on, so its manifest names no page`],
   };
 }
 
 async function readMods(
-  adapter: Adapter, mods: readonly string[], installationFilesOf: InstallationFilesOf,
+  adapter: Adapter, mods: readonly string[], installationFileOf: InstallationFileOf,
   { onProgress, signal }: ModlistCallOptions<{ phase: 'ReadingFiles'; mod: string }>,
 ): Promise<ReadMods> {
   const sent: ReadMod[] = [];
@@ -98,7 +99,7 @@ async function readMods(
   for (const mod of mods) {
     if (signal?.aborted) break;
     onProgress?.({ phase: 'ReadingFiles', mod });
-    const read = await readMod(adapter, mod, installationFilesOf);
+    const read = await readMod(adapter, mod, installationFileOf);
     if ('refusal' in read) { refused.push({ item: mod, reason: read.refusal }); continue; }
     sent.push(read.read);
     notes.push(...read.notes.map((note) => ({ mod, note })));
@@ -107,7 +108,7 @@ async function readMods(
 }
 
 // modlist-repository.md, Restore from manifest, story 8: the manifest names them, and only mEdit reads it.
-const noneBeforeTheManifestNamesThem: InstallationFilesOf = () => Promise.resolve({ kind: 'read', answer: [] });
+const noneBeforeTheManifestNamesThem: InstallationFileOf = () => Promise.resolve({ kind: 'read', answer: undefined });
 
 // A call that fails part way answers no mod, so none had its files no line names trashed: each is not finished.
 async function restoreOnce(
@@ -118,20 +119,22 @@ async function restoreOnce(
 }
 
 async function namedDownloadedFiles(adapter: Adapter, notFound: readonly NotFound[]): Promise<{
-  handed: (names: readonly string[]) => RestoreMod['installationFiles'];
-  unread: (names: readonly string[]) => string;
+  handed: (name: string | undefined) => RestoreMod['installationFile'];
+  unread: (name: string | undefined) => string;
 }> {
   const read = new Map<string, FileRead<InstallationFile | undefined>>();
-  for (const name of new Set(notFound.flatMap(({ installationFiles }) => installationFiles))) read.set(name, await adapter.downloadedFile(name));
+  for (const name of new Set(notFound.flatMap(({ installationFile }) => installationFile === undefined ? [] : [installationFile]))) {
+    read.set(name, await adapter.downloadedFile(name));
+  }
   return {
-    handed: (names) => names.flatMap((name) => {
-      const file = read.get(name);
-      return file?.kind === 'read' && file.answer !== undefined ? [wireFile(file.answer)] : [];
-    }),
-    unread: (names) => names.map((name) => {
-      const file = read.get(name);
+    handed: (name) => {
+      const file = name === undefined ? undefined : read.get(name);
+      return file?.kind === 'read' && file.answer !== undefined ? wireFile(file.answer) : undefined;
+    },
+    unread: (name) => {
+      const file = name === undefined ? undefined : read.get(name);
       return file?.kind === 'unreadable' ? ` '${name}' could not be read: ${file.reason}.` : '';
-    }).join(''),
+    },
   };
 }
 
@@ -176,8 +179,8 @@ async function withFilesNoLineNamesTrashed(
   return { finished, unfinished };
 }
 
-const heldByAdapter = ({ version, installationFiles }: NonNullable<Restored[number]['metadata']>): ModMetadata =>
-  ({ version: version ?? undefined, installationFiles: installationFiles.map(({ name, page }) => ({ name, page: page ?? undefined })) });
+const heldByAdapter = ({ version, installationFile }: NonNullable<Restored[number]['metadata']>): ModMetadata =>
+  ({ version: version ?? undefined, installationFile: installationFile ? { name: installationFile.name, page: installationFile.page ?? undefined } : undefined });
 
 async function metadataWrittenOrWhy(adapter: Adapter, mod: string, metadata: Restored[number]['metadata']): Promise<string | undefined> {
   if (metadata === undefined) return undefined;
@@ -224,11 +227,11 @@ async function restoreFolders(
   const downloaded = await namedDownloadedFiles(adapter, first.notFound);
   const again = sent.flatMap((mod) => {
     const notFound = retried.get(mod.name);
-    return notFound === undefined ? [] : [{ ...mod, installationFiles: downloaded.handed(notFound.installationFiles) }];
+    return notFound === undefined ? [] : [{ ...mod, installationFile: downloaded.handed(notFound.installationFile) }];
   });
   const second = await restoreOnce(client, again, facts, restoring);
   if (!second.applied) return { ...second, landed: first.landed };
-  const unreadFor = new Map(second.notFound.map(({ mod, installationFiles }) => [mod, downloaded.unread(installationFiles)]));
+  const unreadFor = new Map(second.notFound.map(({ mod, installationFile }) => [mod, downloaded.unread(installationFile)]));
   return {
     applied: true,
     landed: [...first.landed, ...second.landed],
@@ -297,7 +300,7 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
     updateManifest: async (
       mods: readonly string[], instance: ModlistInstance, { onProgress, signal }: ModlistCallOptions<UpdateManifestStatus> = {},
     ): Promise<UpdateManifestResult> => {
-      const { sent, refused: unread, notes } = await readMods(adapter, mods, (mod) => adapter.installationFiles(mod), { onProgress, signal });
+      const { sent, refused: unread, notes } = await readMods(adapter, mods, (mod) => adapter.installationFile(mod), { onProgress, signal });
       const refused = [...unread];
       if (sent.length === 0) return { applied: true, landed: [], refused, notes, submoduleNotes: [] };
       const versioned: UpdateManifestMod[] = [];

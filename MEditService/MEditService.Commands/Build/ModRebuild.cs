@@ -7,7 +7,7 @@ internal sealed class ModRebuild(IModFolderRepository repository, string modFold
 {
     /// <summary>A write that fails leaves the files before it written. Throws <see cref="InvalidDataException"/> for an
     /// installation file that is not an archive it can read.</summary>
-    public void Write(IReadOnlyList<ManifestSources.SourcedFile> files)
+    public void Write(IReadOnlyList<PackageContents.PackagedFile> files)
     {
         foreach (var fromOne in files.GroupBy(file => file.File))
         {

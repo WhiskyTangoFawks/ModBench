@@ -4,8 +4,8 @@ using System.Text.Json;
 
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>A manifest as a JSON file with a line for its version, its package and each file, the files in path order,
-/// so a change to one file is one line in a diff.</summary>
+/// <summary>A manifest as a JSON file with a line for its package, which holds its version, and a line for each file in
+/// alphabetical order, so a change to one file is one line in a diff.</summary>
 internal static class ManifestText
 {
     private static readonly JsonWriterOptions Compact = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -13,9 +13,9 @@ internal static class ManifestText
     public static string Of(Manifest manifest)
     {
         List<string> members = [];
-        if (manifest.Version is { } version) members.Add("\"version\": " + Value(writer => writer.WriteStringValue(version)));
-        if (manifest.Package is { } package) members.Add("\"package\": " + Value(writer => PackageLine(writer, package)));
-        var files = manifest.Files.OrderBy(file => file.Path, StringComparer.Ordinal).Select(file => Value(writer => FileLine(writer, file))).ToList();
+        if (manifest.Package is not null || manifest.Version is not null)
+            members.Add("\"package\": " + Value(writer => PackageLine(writer, manifest.Package, manifest.Version)));
+        var files = manifest.Files.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ThenBy(file => file.Path, StringComparer.Ordinal).Select(file => Value(writer => FileLine(writer, file))).ToList();
         members.Add(files.Count == 0 ? "\"files\": []" : "\"files\": [\n" + string.Join(",\n", files) + "\n]");
         return "{\n" + string.Join(",\n", members) + "\n}\n";
     }
@@ -28,10 +28,8 @@ internal static class ManifestText
             using var parsed = JsonDocument.Parse(text);
             var root = parsed.RootElement;
             var files = root.GetProperty("files").EnumerateArray().Index().Select(entry => FileOf(entry.Index, entry.Item)).ToList();
-            return new Manifest(
-                root.TryGetProperty("package", out var package) ? PackageOf(package) : null,
-                files,
-                root.TryGetProperty("version", out var version) ? Text(version) : null);
+            var (package, version) = root.TryGetProperty("package", out var line) ? PackageOf(line) : (null, null);
+            return new Manifest(package, files, version);
         }
         catch (JsonException e)
         {
@@ -45,15 +43,18 @@ internal static class ManifestText
 
     private static string Text(JsonElement value) => value.GetString() ?? throw new FormatException();
 
-    private static ManifestPackage PackageOf(JsonElement package)
+    private static (ManifestPackage? Package, string? Version) PackageOf(JsonElement line)
     {
-        if (package.TryGetProperty("installationFile", out var name))
+        var version = line.TryGetProperty("version", out var held) ? Text(held) : null;
+        if (line.TryGetProperty("installationFile", out var name))
         {
-            return new ManifestPackage.InstallationFile(
-                Text(name), package.GetProperty("size").GetInt64(), Text(package.GetProperty("hash")),
-                package.TryGetProperty("page", out var page) ? Text(page) : null);
+            return (new ManifestPackage.InstallationFile(
+                Text(name), line.GetProperty("size").GetInt64(), Text(line.GetProperty("hash")),
+                line.TryGetProperty("page", out var page) ? Text(page) : null), version);
         }
-        return new ManifestPackage.SourceMod(Text(package.GetProperty("remote")), Text(package.GetProperty("commit")));
+        return line.TryGetProperty("remote", out var remote)
+            ? (new ManifestPackage.SourceMod(Text(remote), Text(line.GetProperty("commit"))), version)
+            : (null, version);
     }
 
     private static ManifestFile FileOf(int index, JsonElement line)
@@ -77,7 +78,7 @@ internal static class ManifestText
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
-    private static void PackageLine(Utf8JsonWriter writer, ManifestPackage package)
+    private static void PackageLine(Utf8JsonWriter writer, ManifestPackage? package, string? version)
     {
         writer.WriteStartObject();
         switch (package)
@@ -93,6 +94,7 @@ internal static class ManifestText
                 writer.WriteString("commit", sourceMod.Commit);
                 break;
         }
+        if (version is not null) writer.WriteString("version", version);
         writer.WriteEndObject();
     }
 

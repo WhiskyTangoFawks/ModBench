@@ -28,7 +28,7 @@ public sealed class ModlistGestureCancelApiTests : HostedTests
             Directory.CreateDirectory(FolderOf(mod));
             File.WriteAllText(Path.Combine(FolderOf(mod), "a.txt"), mod);
         }
-        object[] mods = [.. new[] { "ModA", "ModB" }.Select(mod => new { name = mod, folder = FolderOf(mod), installationFiles = Array.Empty<object>(), metadataFiles = Array.Empty<string>() })];
+        object[] mods = [.. new[] { "ModA", "ModB" }.Select(mod => new { name = mod, folder = FolderOf(mod), metadataFiles = Array.Empty<string>() })];
         return new
         {
             mods,

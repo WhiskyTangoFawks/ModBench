@@ -71,7 +71,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         {
             ["name"] = Mod,
             ["folder"] = ModFolder,
-            ["installationFiles"] = handsTheDownload ? new JsonArray(installationFile) : new JsonArray(),
+            ["installationFile"] = handsTheDownload ? installationFile : null,
             ["metadataFiles"] = new JsonArray("meta.ini"),
             ["version"] = _versionUpdated,
         };
@@ -108,7 +108,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         ["statCache"] = StatCache,
     };
 
-    private static JsonObject Metadata(string? version) => new() { ["version"] = version, ["installationFiles"] = new JsonArray() };
+    private static JsonObject Metadata(string? version) => new() { ["version"] = version };
 
     private async Task<JsonElement> WhatRestoreDestroys()
     {
@@ -263,7 +263,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
 
         var skipped = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
         Assert.Equal("NotFound", skipped.GetProperty("refusal").GetString());
-        Assert.Equal(["Mod.zip"], skipped.GetProperty("installationFilesNotFound").EnumerateArray().Select(name => name.GetString()));
+        Assert.Equal("Mod.zip", skipped.GetProperty("installationFileNotFound").GetString());
     }
 
     [Fact]

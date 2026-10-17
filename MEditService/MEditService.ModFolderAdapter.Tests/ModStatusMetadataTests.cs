@@ -15,7 +15,7 @@ public sealed class ModStatusMetadataTests : IDisposable
     }
 
     private static ModMetadata Metadata(string? version, params (string Name, string? Page)[] files) =>
-        new(version, [.. files.Select(file => new MetadataInstallationFile(file.Name, file.Page))]);
+        new(version, files is [var file] ? new MetadataInstallationFile(file.Name, file.Page) : null);
 
     public static TheoryData<ModMetadata, ModMetadata, bool> RestoreCases => new()
     {
@@ -33,8 +33,8 @@ public sealed class ModStatusMetadataTests : IDisposable
 
     private ModStatus StatusAgainst(ModMetadata manifest, ModMetadata? held)
     {
-        ManifestPackage? package = manifest.InstallationFiles.Count > 0
-            ? new ManifestPackage.InstallationFile(manifest.InstallationFiles[0].Name, 1, "hash", manifest.InstallationFiles[0].Page)
+        ManifestPackage? package = manifest.InstallationFile is { } file
+            ? new ManifestPackage.InstallationFile(file.Name, 1, "hash", file.Page)
             : null;
         _repository.WriteManifest(_root, "mod", new Manifest(package, [], manifest.Version));
         return _repository.Status(_root, "mod", new HashSet<string>(), _statCache, held);
@@ -76,7 +76,7 @@ public sealed class ModStatusMetadataTests : IDisposable
         var says = StatusAgainst(Metadata("1.0", ("a.7z", "nexus:fallout4:1")), null).ManifestMetadata;
 
         Assert.Equal("1.0", says?.Version);
-        Assert.Equal([new MetadataInstallationFile("a.7z", "nexus:fallout4:1")], says?.InstallationFiles);
+        Assert.Equal(new MetadataInstallationFile("a.7z", "nexus:fallout4:1"), says?.InstallationFile);
     }
 
     [Fact]

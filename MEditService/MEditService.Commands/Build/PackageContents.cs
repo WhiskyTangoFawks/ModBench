@@ -4,7 +4,7 @@ using MEditService.SourceAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>Each manifest line's entry in the mod's one package, with the hash that fixes its bytes, and what the package lacks.</summary>
-internal sealed class ManifestSources(IModFolderRepository repository, Manifest manifest, IReadOnlyList<InstallationFile> installationFiles)
+internal sealed class PackageContents(IModFolderRepository repository, Manifest manifest, InstallationFile? installationFile)
 {
     internal record Lack(string Text)
     {
@@ -12,11 +12,11 @@ internal sealed class ManifestSources(IModFolderRepository repository, Manifest 
     }
 
     /// <summary>A file of the mod folder, by its path, and the entry of the installation file that holds its bytes.</summary>
-    internal sealed record SourcedFile(string Path, InstallationFile File, string EntryPath, string Hash);
+    internal sealed record PackagedFile(string Path, InstallationFile File, string EntryPath, string Hash);
 
-    /// <summary>Built is the source and commit that build the mod's files, none when its package is no source mod.</summary>
+    /// <summary>Built is the source mod's remote and commit that build its files, none when its package is no source mod.</summary>
     internal sealed record Resolved(
-        IReadOnlyList<SourcedFile> Files, IReadOnlyList<Lack> Lacks, SharedSource? Built);
+        IReadOnlyList<PackagedFile> Files, IReadOnlyList<Lack> Lacks, SharedSource? Built);
 
     private sealed record Handed(InstallationFile File, Dictionary<string, HashedEntry> Entries);
 
@@ -24,7 +24,7 @@ internal sealed class ManifestSources(IModFolderRepository repository, Manifest 
 
     public Resolved Resolve()
     {
-        List<SourcedFile> sourced = [];
+        List<PackagedFile> sourced = [];
         List<Lack> lacks = [];
         if (manifest.Package is ManifestPackage.InstallationFile named && Package(named).Lack is { } missing) lacks.Add(missing);
         foreach (var file in manifest.Files)
@@ -37,7 +37,7 @@ internal sealed class ManifestSources(IModFolderRepository repository, Manifest 
         return new Resolved(sourced, [.. lacks.Distinct()], built);
     }
 
-    private (SourcedFile?, Lack?) EntryOf(ManifestFile file) => manifest.BytesOf(file) switch
+    private (PackagedFile?, Lack?) EntryOf(ManifestFile file) => manifest.BytesOf(file) switch
     {
         FileBytes.NotHeld => (null, new Lack($"its package does not hold '{file.Path}'")),
         FileBytes.NoInstallationFile => (null, new Lack($"'{file.Path}' names no installation file")),
@@ -46,12 +46,12 @@ internal sealed class ManifestSources(IModFolderRepository repository, Manifest 
         var other => throw new ArgumentOutOfRangeException(nameof(file), other, null),
     };
 
-    private (SourcedFile?, Lack?) EntryOf(string path, ManifestPackage.InstallationFile named, FileBytes.InInstallationFile held)
+    private (PackagedFile?, Lack?) EntryOf(string path, ManifestPackage.InstallationFile named, FileBytes.InInstallationFile held)
     {
         var (handed, lack) = Package(named);
         if (handed is null) return (null, lack);
         return handed.Entries.TryGetValue(held.Path, out var entry)
-            ? (new SourcedFile(path, handed.File, entry.Path, entry.Hash), null)
+            ? (new PackagedFile(path, handed.File, entry.Path, entry.Hash), null)
             : (null, new Lack($"installation file '{held.Name}' holds no '{held.Path}'"));
     }
 
@@ -59,7 +59,7 @@ internal sealed class ManifestSources(IModFolderRepository repository, Manifest 
 
     private (Handed?, Lack?) Find(ManifestPackage.InstallationFile named)
     {
-        var handed = installationFiles.FirstOrDefault(file => repository.InstallationFileName(file.Path) == named.Name);
+        var handed = installationFile is not null && repository.InstallationFileName(installationFile.Path) == named.Name ? installationFile : null;
         if (handed is null) return (null, new Lack.InstallationFileMissing(named.Name));
         if (!repository.InstallationFileExists(handed.Path)) return (null, new Lack($"installation file '{named.Name}' is not in the downloads folder"));
         if (named.Hash != handed.Hash) return (null, new Lack($"installation file '{named.Name}' has other bytes"));

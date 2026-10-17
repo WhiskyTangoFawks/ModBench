@@ -4,20 +4,20 @@ using MEditService.RepositoriesLib;
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>What Modbench last read of one mod folder's files on this machine (modlist-repository.md, Status, story 3), and
-/// the hash each provider of its manifest fixes as the last update or restore was handed it.</summary>
+/// the hash its package fixes for each file of its manifest as the last update or restore was handed it.</summary>
 internal sealed class StatCache
 {
     private sealed record Entry(long Size, long Modified, long Changed, string Hash);
 
-    private sealed record ProviderHash(string Source, string Path, string Hash);
+    private sealed record PackageHash(string Package, string Path, string Hash);
 
-    private sealed record Content(Dictionary<string, Entry?>? Files, List<ProviderHash?>? Providers);
+    private sealed record Content(Dictionary<string, Entry?>? Files, List<PackageHash?>? Packages);
 
     private readonly string _folder;
     private readonly string _file;
     private readonly string _modFolder;
     private readonly Dictionary<string, Entry> _read;
-    private readonly Dictionary<(string Source, string Path), string> _providers;
+    private readonly Dictionary<(string Package, string Path), string> _fixes;
     private readonly StampGatedMemo<string> _memo;
 
     public StatCache(string folder, string modFolder, TimeProvider time)
@@ -26,45 +26,45 @@ internal sealed class StatCache
         _modFolder = modFolder;
         _file = Path.Combine(folder, Path.GetFileName(Path.TrimEndingDirectorySeparator(modFolder)));
         _memo = new StampGatedMemo<string>(time);
-        (_read, _providers) = Parsed(Read(_file));
+        (_read, _fixes) = Parsed(Read(_file));
         foreach (var (path, entry) in _read) _memo.Remember(FileAt(path), new FileStamp(entry.Size, entry.Modified, entry.Changed), entry.Hash);
     }
 
-    private static (Dictionary<string, Entry> Files, Dictionary<(string Source, string Path), string> Providers) Parsed(Content content)
+    private static (Dictionary<string, Entry> Files, Dictionary<(string Package, string Path), string> Fixes) Parsed(Content content)
     {
         Dictionary<string, Entry> files = new(StringComparer.Ordinal);
         foreach (var (path, entry) in content.Files ?? [])
         {
             if (entry is not null) files[path] = entry;
         }
-        Dictionary<(string Source, string Path), string> providers = [];
-        foreach (var provider in (content.Providers ?? []).OfType<ProviderHash>()) providers[(provider.Source, provider.Path)] = provider.Hash;
-        return (files, providers);
+        Dictionary<(string Package, string Path), string> fixes = [];
+        foreach (var fix in (content.Packages ?? []).OfType<PackageHash>()) fixes[(fix.Package, fix.Path)] = fix.Hash;
+        return (files, fixes);
     }
 
     public string HashOf(string path, Func<string> read) =>
         _memo.Of(FileAt(path), read) ?? throw new InvalidOperationException("A read of a file's hash answers a hash.");
 
-    public string? HashFixedBy((string Source, string Path) provider) => _providers.GetValueOrDefault(provider);
+    public string? HashFixedBy((string Package, string Path) fixedBy) => _fixes.GetValueOrDefault(fixedBy);
 
     // A status reads beside an update or a restore of the same mod, and each writes the whole cache.
     private static readonly Lock Writing = new();
 
-    /// <summary>Writes what this read kept of the files at <paramref name="paths"/>, and <paramref name="providers"/>, in
+    /// <summary>Writes what this read kept of the files at <paramref name="paths"/>, and <paramref name="fixes"/>, in
     /// place of what it found, and nothing when the two are the same. Why it could not, or null.</summary>
-    public string? Write(IReadOnlyList<string> paths, IReadOnlyDictionary<(string Source, string Path), string> providers)
+    public string? Write(IReadOnlyList<string> paths, IReadOnlyDictionary<(string Package, string Path), string> fixes)
     {
-        lock (Writing) return Write(Kept(paths), _read, providers, _providers);
+        lock (Writing) return Write(Kept(paths), _read, fixes, _fixes);
     }
 
-    /// <summary>Writes what this read kept of the files at <paramref name="paths"/> beside the provider hashes the cache
+    /// <summary>Writes what this read kept of the files at <paramref name="paths"/> beside the hashes its package fixes that the cache
     /// holds as it writes, which an update or a restore can have written since this read.</summary>
     public string? Keep(IReadOnlyList<string> paths)
     {
         lock (Writing)
         {
-            var (files, providers) = Parsed(Read(_file));
-            return Write(Kept(paths), files, providers, providers);
+            var (files, fixes) = Parsed(Read(_file));
+            return Write(Kept(paths), files, fixes, fixes);
         }
     }
 
@@ -81,16 +81,16 @@ internal sealed class StatCache
 
     private string? Write(
         Dictionary<string, Entry> kept, Dictionary<string, Entry> found,
-        IReadOnlyDictionary<(string Source, string Path), string> providers, Dictionary<(string Source, string Path), string> foundProviders)
+        IReadOnlyDictionary<(string Package, string Path), string> fixes, Dictionary<(string Package, string Path), string> foundFixes)
     {
-        if (Same(kept, found) && Same(providers, foundProviders)) return null;
+        if (Same(kept, found) && Same(fixes, foundFixes)) return null;
 
         try
         {
             Directory.CreateDirectory(_folder);
             Replace(new Content(
                 kept.ToDictionary(entry => entry.Key, Entry? (entry) => entry.Value, StringComparer.Ordinal),
-                [.. providers.Select(provider => new ProviderHash(provider.Key.Source, provider.Key.Path, provider.Value))]));
+                [.. fixes.Select(fix => new PackageHash(fix.Key.Package, fix.Key.Path, fix.Value))]));
             return null;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

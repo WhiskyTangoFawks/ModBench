@@ -275,7 +275,7 @@ interface RestoredMod {
  *  names every other lack. */
 export interface NotFound {
   mod: string;
-  installationFiles: readonly string[];
+  installationFile?: string;
 }
 
 /** Restore from manifest's answer: each mod restored or skipped with its reason, and each skipped mod that is `NotFound`. */

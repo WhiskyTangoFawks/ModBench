@@ -3,10 +3,10 @@ using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to restore from its manifest, with the installation files its manifest names that the request found in the
+/// <summary>A mod to restore from its manifest, with the installation file its manifest names if the request found it in the
 /// downloads folder, its metadata files, and the folder its source is in or is cloned into.</summary>
 public sealed record ModToRestore(
-    string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> MetadataFiles, string? SourceFolder);
+    string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, string? SourceFolder);
 
 /// <summary>The instance's facts beyond its mods: the stat cache's folder, and what a build needs, as
 /// <see cref="InstanceToBuild"/>.</summary>
@@ -44,11 +44,11 @@ public enum RestoreRefusal
     NotBuilt,
 }
 
-/// <summary>Why a mod was skipped. A NotFound mod names the installation files it lacks, as a request hands them; a
+/// <summary>Why a mod was skipped. A NotFound mod names the installation file it lacks, as a request hands it; a
 /// NotBuilt mod, its build's refusal (ADR-0019).</summary>
 public sealed record RestoreSkip(RestoreRefusal Kind, BuildRefusal Build = BuildRefusal.None)
 {
-    public IReadOnlyList<string> InstallationFilesNotFound { get; init; } = [];
+    public string? InstallationFileNotFound { get; init; }
 }
 
 /// <summary>A mod whose files are as its manifest says: the files written, each file no line names, why the stat cache did

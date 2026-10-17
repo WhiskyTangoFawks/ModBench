@@ -183,7 +183,7 @@ public sealed class RestoreASourceModTests : IDisposable
     private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(
         InMemoryNotificationPublisher notifications, CancellationToken cancel, params InstallationFile[] handed) =>
         TestEditService.RestoreHandler(_holder, notifications, TestAdapters.Source(), _folders).RestoreAsync(
-            [new ModToRestore(ModName, ModFolder, handed, ["meta.ini"], SourceFolder)],
+            [new ModToRestore(ModName, ModFolder, handed.FirstOrDefault(), ["meta.ini"], SourceFolder)],
             new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".mohidden", Archives: null), cancel: cancel);
 
     private string Commit(string configuration, string mesh)

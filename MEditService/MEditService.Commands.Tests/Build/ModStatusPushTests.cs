@@ -55,7 +55,7 @@ public sealed class ModStatusPushTests : IDisposable
     private void Put(params ModByFolder[] mods) =>
         Assert.True(_handler.Put(_dataFolder, _instanceRoot, GameRelease.Fallout4, [], [], [], [], [], [], Language.English, new SnapshotMods(mods, "stat-cache")).Applied);
 
-    private static ModByFolder Holding(string mod, string version) => new(mod, mod, ["meta.ini"], new ModMetadata(version, []));
+    private static ModByFolder Holding(string mod, string version) => new(mod, mod, ["meta.ini"], new ModMetadata(version));
 
     private IReadOnlyList<string> NextPush() =>
         _pushes.TryTake(out var mods, Patience) ? mods : throw new TimeoutException("no mod status was pushed");

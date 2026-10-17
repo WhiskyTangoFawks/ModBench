@@ -359,7 +359,7 @@ interface MetadataInstallationFile {
 
 export interface ModMetadata {
   readonly version?: string;
-  readonly installationFiles: readonly MetadataInstallationFile[];
+  readonly installationFile?: MetadataInstallationFile;
 }
 
 /** How a message names the mod manager, the file it keeps mod order in, and the file it keeps beside a downloaded file. */
@@ -429,11 +429,11 @@ export interface InstanceAdapter {
   modFolderPath(mod: string): Promise<string | undefined>;
   /** The source folder init makes a mod's repository in (ADR-0007); undefined when its name gives it none. */
   sourceFolder(mod: string): string | undefined;
-  /** The downloaded files the mod manager records `mod` as installed from, in its order. */
-  installationFiles(mod: string): Promise<FileRead<readonly InstallationFile[]>>;
+  /** The downloaded file the mod manager records `mod` as installed from; undefined when it records none. */
+  installationFile(mod: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
-  /** What the mod manager's metadata says of `mod`'s version and installation files; none when it says none. */
+  /** What the mod manager's metadata says of `mod`'s version and installation file; none when it says none. */
   modMetadata(mod: string): Promise<FileRead<ModMetadata>>;
   /** What a meta already read says, as `modMetadata` answers it. */
   metadataOf(meta: ModMeta): Promise<ModMetadata>;

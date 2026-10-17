@@ -167,11 +167,11 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
   return { result, log, fetch, request };
 }
 
-const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, installationFiles: [], metadataFiles: ['meta.ini'] });
-const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, installationFiles: [], metadataFiles: ['meta.ini'] });
-const modToUpdate = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], metadataFiles: ['meta.ini'], isSourceMod: false });
+const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, metadataFiles: ['meta.ini'] });
+const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'] });
+const modToUpdate = (name: string) => ({ name, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'], isSourceMod: false });
 const updateFacts = { statCache: '/instance/stat-cache' };
-const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], metadataFiles: ['meta.ini'], sourceFolder: `/instance/source/${name}` });
+const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'], sourceFolder: `/instance/source/${name}` });
 const restoreFacts = { statCache: '/instance/stat-cache', excludedSuffix: '.mohidden', archives: null };
 const buildFacts = {
   excludedSuffix: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } },
@@ -281,9 +281,9 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         refused: [
           {
             item: 'ModB', refusal: 'NotFound', message: "'ModB' was skipped: installation file 'B.7z' is missing.",
-            installationFilesNotFound: ['B.7z'],
+            installationFileNotFound: 'B.7z',
           },
-          { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: its package does not hold 'c.nif'.", installationFilesNotFound: [] },
+          { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: its package does not hold 'c.nif'." },
         ],
       },
       reads: {
@@ -292,7 +292,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
           { item: 'ModB', reason: "'ModB' was skipped: installation file 'B.7z' is missing." },
           { item: 'ModC', reason: "'ModC' was skipped: its package does not hold 'c.nif'." },
         ],
-        notFound: [{ mod: 'ModB', installationFiles: ['B.7z'] }],
+        notFound: [{ mod: 'ModB', installationFile: 'B.7z' }],
       },
       path: '/restore-from-manifest', body: { mods: [modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], ...restoreFacts, gesture: expect.any(String) as unknown } },
     { name: 'decompile', verb: (c) => c.decompile([first, second], true),
@@ -378,10 +378,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'] }];
     const destroys = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'] }];
     const skipped = "'ModB' was skipped: a file could not be read: denied";
-    const manifests = [{ mod: 'ModA', metadata: { version: '1.0', installationFiles: [{ name: 'A.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' }] } }];
+    const manifests = [{ mod: 'ModA', metadata: { version: '1.0', installationFile: { name: 'A.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } } }];
     const { result, request } = await exchange(
       (c) => c.getWhatRestoreDestroys(mods, '/instance/stat-cache'),
-      answers(200, { mods: destroys, refused: [{ item: 'ModB', refusal: 'Unreadable', message: skipped, installationFilesNotFound: [] }], manifests }),
+      answers(200, { mods: destroys, refused: [{ item: 'ModB', refusal: 'Unreadable', message: skipped }], manifests }),
     );
 
     expect(new URL(request.url).pathname).toBe('/what-restore-destroys');

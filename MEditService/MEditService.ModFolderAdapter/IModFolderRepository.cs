@@ -8,8 +8,8 @@ public interface IModFolderRepository
     ModFolderFiles Files(string modFolder, string modName, IReadOnlySet<string> leftOut, string? statCache);
 
     /// <summary>Keeps in the stat cache what <paramref name="read"/> found, and as the hash each line's package fixes,
-    /// the one <paramref name="provided"/> holds for its path. Why it could not, or null.</summary>
-    string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided);
+    /// the one <paramref name="hashes"/> holds for its path. Why it could not, or null.</summary>
+    string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> hashes);
 
     /// <summary>Every file of the mod no line of <paramref name="manifest"/> names, but its manifest and those left out. A
     /// line names a file in another case where the file system finds it by the line's name.</summary>

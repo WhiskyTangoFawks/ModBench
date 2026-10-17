@@ -18,7 +18,7 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
     {
         if (mod.IsSourceMod || NamesASource(mod)) return LeftToItsBuild(mod, instance);
 
-        var installationFile = mod.InstallationFiles.Count > 0 ? mod.InstallationFiles[0] : null;
+        var installationFile = mod.InstallationFile;
         if (installationFile is not null && !repository.InstallationFileExists(installationFile.Path))
         {
             return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(

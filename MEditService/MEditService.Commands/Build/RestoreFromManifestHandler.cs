@@ -33,7 +33,7 @@ public sealed class RestoreFromManifestHandler(
             return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
         }
 
-        var resolved = new ManifestSources(repository, manifest, mod.InstallationFiles).Resolve();
+        var resolved = new PackageContents(repository, manifest, mod.InstallationFile).Resolve();
         if (resolved.Lacks.Count > 0) return Lacked(resolved.Lacks);
         if (resolved.Built is { } built) return await RebuildAsync(mod, instance, built, manifest.Version, cancel);
 
@@ -51,7 +51,7 @@ public sealed class RestoreFromManifestHandler(
         }
 
         var hashes = read.Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
-        List<ManifestSources.SourcedFile> differing = [.. resolved.Files.Where(file => hashes.GetValueOrDefault(file.Path) != file.Hash)];
+        List<PackageContents.PackagedFile> differing = [.. resolved.Files.Where(file => hashes.GetValueOrDefault(file.Path) != file.Hash)];
         try
         {
             new ModRebuild(repository, mod.Folder).Write(differing);
@@ -127,13 +127,13 @@ public sealed class RestoreFromManifestHandler(
     private Dictionary<string, string> HashesIn(ModToRestore mod, IReadOnlySet<string> metadataFiles, InstanceToRestore instance) =>
         repository.Files(mod.Folder, mod.Name, metadataFiles, instance.StatCache).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
 
-    private static ItemAnswer<RestoreSkip, RestoredMod> Lacked(IReadOnlyList<ManifestSources.Lack> lacks)
+    private static ItemAnswer<RestoreSkip, RestoredMod> Lacked(IReadOnlyList<PackageContents.Lack> lacks)
     {
         var why = string.Join("; ", lacks.Select(lack => lack.Text));
-        if (!lacks.Any(lack => lack is ManifestSources.Lack.InstallationFileMissing)) return Skipped(RestoreRefusal.Lacking, why);
+        if (!lacks.Any(lack => lack is PackageContents.Lack.InstallationFileMissing)) return Skipped(RestoreRefusal.Lacking, why);
         return Skipped(new RestoreSkip(RestoreRefusal.NotFound)
         {
-            InstallationFilesNotFound = [.. lacks.OfType<ManifestSources.Lack.InstallationFileMissing>().Select(lack => lack.Name)],
+            InstallationFileNotFound = lacks.OfType<PackageContents.Lack.InstallationFileMissing>().Select(lack => lack.Name).FirstOrDefault(),
         }, why);
     }
 

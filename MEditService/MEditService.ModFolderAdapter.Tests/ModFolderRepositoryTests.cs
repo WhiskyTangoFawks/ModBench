@@ -364,13 +364,13 @@ public sealed class ModFolderRepositoryTests : IDisposable
     private static readonly ManifestPackage.InstallationFile Package = new("Mod.7z", 100, "AAAA", "https://www.nexusmods.com/fallout4/mods/1");
 
     [Fact]
-    public void WriteManifest_WritesAJsonFileWithALineForTheVersionThePackageAndEachFile_InPathOrder()
+    public void WriteManifest_WritesAJsonFileWithALineForThePackageWithItsVersionAndOneForEachFile_InPathOrder()
     {
         var manifest = new Manifest(
             Package,
             [
                 new ManifestFile("z.txt", new PackageEntry.NotHeld()),
-                new ManifestFile("b.nif", new PackageEntry.HeldAt("Data/b.nif")),
+                ManifestFile.At("b.nif", new FileBytes.InInstallationFile("Mod.7z", "Data/b.nif")),
                 new ManifestFile("a.nif", new PackageEntry.Held()),
             ],
             "1.2.3");
@@ -380,8 +380,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         var text = File.ReadAllText(Path.Combine(_root, "mod.manifest"));
         Assert.Equal(
             "{\n"
-            + "\"version\": \"1.2.3\",\n"
-            + "\"package\": {\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\"},\n"
+            + "\"package\": {\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\",\"version\":\"1.2.3\"},\n"
             + "\"files\": [\n"
             + "{\"path\":\"a.nif\"},\n"
             + "{\"path\":\"b.nif\",\"packagePath\":\"Data/b.nif\"},\n"
@@ -401,6 +400,15 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
         Assert.Contains(
             "\"package\": {\"remote\":\"https://example.com/mod.git\",\"commit\":\"0123abc\"}", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+    }
+
+    [Fact]
+    public void WriteManifest_OfAModWithAVersionAndNoPackage_HoldsTheVersionOnThePackageLine()
+    {
+        _repository.WriteManifest(_root, "mod", new Manifest(null, [], "1.2.3"));
+
+        Assert.Equal("{\n\"package\": {\"version\":\"1.2.3\"},\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+        Assert.Equal("1.2.3", _repository.ReadManifest(_root, "mod")?.Version);
     }
 
     [Fact]
@@ -436,13 +444,30 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Contains("café", System.Text.Encoding.UTF8.GetString(bytes));
     }
 
+    [Fact]
+    public void WriteManifest_OrdersFilesAlphabetically_NotCapitalsFirst()
+    {
+        var manifest = new Manifest(null, [
+            new ManifestFile("Textures/x.dds", new PackageEntry.Held()),
+            new ManifestFile("meshes/b.nif", new PackageEntry.Held()),
+            new ManifestFile("Meshes/a.nif", new PackageEntry.Held()),
+            new ManifestFile("meshes/a.nif", new PackageEntry.Held()),
+        ]);
+
+        _repository.WriteManifest(_root, "mod", manifest);
+
+        Assert.Equal(
+            ["Meshes/a.nif", "meshes/a.nif", "meshes/b.nif", "Textures/x.dds"],
+            _repository.ReadManifest(_root, "mod")?.Files.Select(file => file.Path));
+    }
+
     public static TheoryData<Manifest> Manifests => new()
     {
         new Manifest(
             Package,
             [
                 new ManifestFile("a.nif", new PackageEntry.Held()),
-                new ManifestFile("b.nif", new PackageEntry.HeldAt("Data/b.nif")),
+                ManifestFile.At("b.nif", new FileBytes.InInstallationFile("Mod.7z", "Data/b.nif")),
                 new ManifestFile("z.txt", new PackageEntry.NotHeld()),
             ],
             "1.2.3"),
@@ -490,7 +515,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [InlineData("{\"files\": []", "line")]
     [InlineData("{\"package\": {\"installationFile\":\"A.zip\"}, \"files\": []}", "cannot be read")]
     [InlineData("{\"package\": {\"remote\":\"https://example.com/mod.git\"}, \"files\": []}", "cannot be read")]
-    [InlineData("{\"package\": {}, \"files\": []}", "cannot be read")]
+    [InlineData("{\"package\": {\"version\": 7}, \"files\": []}", "cannot be read")]
     [InlineData("{}", "cannot be read")]
     public void ReadManifest_WithTextItCannotRead_RefusesNamingWhere(string text, string where)
     {

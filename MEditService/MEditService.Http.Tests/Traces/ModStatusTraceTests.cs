@@ -42,7 +42,6 @@ public sealed class ModStatusTraceTests : HostedTests
             {
                 ["name"] = Recorded,
                 ["folder"] = FolderOf(Recorded),
-                ["installationFiles"] = new JsonArray(),
                 ["metadataFiles"] = new JsonArray("meta.ini"),
             }),
             ["statCache"] = StatCache,

@@ -53,12 +53,12 @@ internal sealed class FakeModFolders : IModFolderRepository
     }
 
     /// <summary>Each mod folder's hashes kept as its providers fix them, by path.</summary>
-    public Dictionary<string, IReadOnlyDictionary<string, string>> KeptProviderHashes { get; } = [];
+    public Dictionary<string, IReadOnlyDictionary<string, string>> KeptPackageHashes { get; } = [];
 
     public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided)
     {
         var modFolder = Manifests.First(held => ReferenceEquals(held.Value, manifest)).Key;
-        KeptProviderHashes[modFolder] = provided;
+        KeptPackageHashes[modFolder] = provided;
         return UnwritableStatCaches.Contains(modFolder) ? "stat-cache is read-only" : null;
     }
 
@@ -74,7 +74,7 @@ internal sealed class FakeModFolders : IModFolderRepository
         if (StatusThrows.Contains(modFolder)) throw new ArgumentException($"'{modFolder}' is not a path", nameof(modFolder));
         if (UnreadableManifests.Contains(modFolder)) return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: true, "line 1 is not a manifest line"));
         if (!Manifests.TryGetValue(modFolder, out var manifest)) return new(modName, NoManifest: true, [], [], [], []);
-        var kept = KeptProviderHashes.GetValueOrDefault(modFolder) ?? new Dictionary<string, string>();
+        var kept = KeptPackageHashes.GetValueOrDefault(modFolder) ?? new Dictionary<string, string>();
         var there = manifest.Files.ToLookup(line => _files.ContainsKey((modFolder, line.Path)));
         return new(
             modName, NoManifest: false,

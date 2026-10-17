@@ -77,7 +77,7 @@ export interface InstanceAnswers {
   hashes?: ReadonlyMap<string, HashedFile>;
   stamps?: ReadonlyMap<string, FileStamp>;
   /** What the installation of each mod answers, by mod name; a mod not there records none. */
-  installations?: ReadonlyMap<string, FileRead<readonly InstallationFile[]>>;
+  installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
   downloads?: ReadonlyMap<string, FileRead<InstallationFile>>;
   /** Why each mod's metadata cannot be read, by mod name. */
@@ -88,7 +88,6 @@ export interface InstanceAnswers {
   metadata?: ReadonlyMap<string, ModMetadata>;
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
-  /** The game's files, which a mod's files of the same path, whatever the case, override. */
   installed?: InstallOutcome;
   /** Whether the instance folder holds a repository on disk now, whatever its reading said. */
   repositoryOnDisk?: boolean;
@@ -163,14 +162,14 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
     modFolderPath: (mod) => Promise.resolve(answers.foldersAbsent?.has(mod) ? undefined : `/mods/${mod}`),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
-    installationFiles: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: [] }),
+    installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloads?.get(name) ?? { kind: 'read', answer: undefined }),
     modMetadata: (mod) => {
       const reason = answers.unreadableMetadata?.get(mod);
-      return Promise.resolve(reason === undefined ? { kind: 'read', answer: answers.metadata?.get(mod) ?? { installationFiles: [] } } : { kind: 'unreadable', reason });
+      return Promise.resolve(reason === undefined ? { kind: 'read', answer: answers.metadata?.get(mod) ?? {} } : { kind: 'unreadable', reason });
     },
     metadataOf: ({ version, archiveFilename }) =>
-      Promise.resolve({ version, installationFiles: archiveFilename === undefined ? [] : [{ name: archiveFilename }] }),
+      Promise.resolve({ version, installationFile: archiveFilename === undefined ? undefined : { name: archiveFilename } }),
     unwritableMetadata: (mod) => Promise.resolve(answers.unwritableMetadata?.get(mod)),
     writeModMetadata: (mod, metadata) => record({ verb: 'writeModMetadata', mod, metadata }, undefined),
     metadataFilesInModFolder: ['meta.ini'],
