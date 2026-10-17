@@ -1,4 +1,3 @@
-using DuckDB.NET.Data;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -189,11 +188,7 @@ public sealed class PersistentIndexTests : IDisposable
 
     private void AgeTheFileWithSqlSinceNoOtherWayWritesRowsUnderAVersionThisBuildCannotProduce(string sql)
     {
-        using var connection = new DuckDBConnection($"Data Source={IndexFiles.In(_instanceRoot)}");
-        connection.Open();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
+        IndexFiles.Execute(_instanceRoot, sql);
     }
 
     [Fact]

@@ -1,4 +1,3 @@
-using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -79,11 +78,7 @@ public sealed class ReReadMemoryTests : IDisposable
 
         private void LimitDuckDbsMemory()
         {
-            using var connection = new DuckDBConnection($"DataSource={IndexFiles.In(instanceRoot)}");
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = $"SET GLOBAL memory_limit = '{MemoryLimit}'";
-            command.ExecuteNonQuery();
+            IndexFiles.Execute(instanceRoot, $"SET GLOBAL memory_limit = '{MemoryLimit}'");
         }
 
         public void Dispose()

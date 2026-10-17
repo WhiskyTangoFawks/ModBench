@@ -1,4 +1,3 @@
-using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -105,11 +104,7 @@ public sealed class InvalidatedIndexFileTests : IDisposable
             {
                 foreach (var document in read.Records) yield return document;
                 if (!aborting()) yield break;
-                using var connection = new DuckDBConnection($"DataSource={IndexFiles.In(instanceRoot)}");
-                connection.Open();
-                using var command = connection.CreateCommand();
-                command.CommandText = "SET GLOBAL checkpoint_threshold = '1KB'; SET GLOBAL debug_checkpoint_abort = 'before_header'";
-                command.ExecuteNonQuery();
+                IndexFiles.Execute(instanceRoot, "SET GLOBAL checkpoint_threshold = '1KB'; SET GLOBAL debug_checkpoint_abort = 'before_header'");
             }
         }
 
