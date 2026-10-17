@@ -260,6 +260,8 @@ interface ModOrderWritten extends Written {
   readonly landed: readonly ModOrderChange[];
 }
 
+export type DownloadedFileTrashed = { readonly gone: true } | { readonly gone: false; readonly metadataLeftBehind?: string };
+
 type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
 
 /** A mark on a file of an origin, with the path it has once marked, or why it was refused before
@@ -516,9 +518,11 @@ export interface InstanceAdapter {
   /** A downloaded file that is gone gets no mark. Rejects when the downloads folder cannot be
    *  resolved. */
   markDownloadedFile(name: string, mark: DownloadedFileMark): Promise<Marked>;
-  /** False when the downloaded file has no metadata. A write of the metadata a crash left half
-   *  done goes with it. */
-  trashDownloadedFileMeta(name: string, trash: MoveToTrash): Promise<boolean>;
+  /** Moves a downloaded file to the trash, then what the manager keeps about it; a write of that a
+   *  crash left half done goes with it. A file already gone is `gone`. Rejects when the file cannot
+   *  be trashed, with what is kept about it untouched. A failure on what is kept, once the file
+   *  is trashed, comes back as `metadataLeftBehind`, the reason. */
+  trashDownloadedFile(name: string, trash: MoveToTrash): Promise<DownloadedFileTrashed>;
   selectProfile(profile: string): Promise<Written>;
 
   // Put and rename in mods/.

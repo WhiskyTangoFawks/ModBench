@@ -1,6 +1,7 @@
 // MO2's changes to the plugin order, the profile, the mod folders and the downloaded files' metadata:
 // each file spliced through its own codec under its lock and written whole.
 
+import { errorMessage } from '../ports/errorMessage';
 import { firstLines } from '../loadOrderFileCodec/firstLines';
 import {
   appendPluginInText, movePluginsInText, parsePlugins, pluginKey, removePluginFromText, setPluginEnabledInText,
@@ -18,7 +19,7 @@ import { readPluginsProvided, type ReadingSource } from './mo2Reads';
 
 type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
-  | 'trashDownloadedFileMeta' | 'selectProfile'>;
+  | 'trashDownloadedFile' | 'selectProfile'>;
 
 function listedPlugin(order: readonly PluginEntry[], plugin: string): string {
   const listed = order.find((p) => pluginKey(p.name) === pluginKey(plugin));
@@ -106,8 +107,17 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
       return { gone: false, wrote };
     },
 
-    async trashDownloadedFileMeta(name, trash) {
-      return trashDownloadMeta(await currentDownloadsDir(context), name, trash);
+    async trashDownloadedFile(name, trash) {
+      const downloadsDir = await currentDownloadsDir(context);
+      const file = downloadFile(downloadsDir, name);
+      if (!(await exists(file))) return { gone: true };
+      await trash(file);
+      try {
+        await trashDownloadMeta(downloadsDir, name, trash);
+      } catch (err) {
+        return { gone: false, metadataLeftBehind: errorMessage(err) };
+      }
+      return { gone: false };
     },
 
     selectProfile(profile) {

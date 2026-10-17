@@ -47,7 +47,7 @@ export type AdapterCall =
   | { readonly verb: 'changeModOrder'; readonly profile: string; readonly changes: readonly ModOrderChange[] }
   | { readonly verb: 'changePluginOrder' | 'changePluginOrderOverProvided'; readonly profile: string; readonly changes: readonly PluginOrderChange[] }
   | { readonly verb: 'markDownloadedFile'; readonly name: string; readonly mark: DownloadedFileMark }
-  | { readonly verb: 'trashDownloadedFileMeta'; readonly name: string }
+  | { readonly verb: 'trashDownloadedFile'; readonly name: string }
   | { readonly verb: 'selectProfile'; readonly profile: string }
   | { readonly verb: 'createModFolder'; readonly mod: string }
   | { readonly verb: 'renameModFolder'; readonly from: string; readonly to: string }
@@ -103,6 +103,8 @@ export interface InstanceAnswers {
   pins?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['submodule']>>>;
   /** Downloaded files that are gone: they get no mark. */
   goneDownloads?: ReadonlySet<string>;
+  /** The reason a trashed downloaded file's metadata is left behind. */
+  metadataLeftBehind?: string;
   /** A write that rejects with the message this returns for it, after it is recorded. */
   refusals?: (call: AdapterCall) => string | undefined;
   /** Origin files that are gone: they get no mark. */
@@ -217,7 +219,9 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     markDownloadedFile: (name, mark) =>
       record({ verb: 'markDownloadedFile', name, mark }, answers.goneDownloads?.has(name) ? { gone: true } as const : { gone: false, wrote: true } as const),
-    trashDownloadedFileMeta: (name) => record({ verb: 'trashDownloadedFileMeta', name }, true),
+    trashDownloadedFile: (name) =>
+      record({ verb: 'trashDownloadedFile', name },
+        answers.goneDownloads?.has(name) ? { gone: true } as const : { gone: false, metadataLeftBehind: answers.metadataLeftBehind } as const),
     selectProfile: (profile) => record({ verb: 'selectProfile', profile }, { wrote: profile !== current.profile }),
     createModFolder: (mod) => record({ verb: 'createModFolder', mod }, undefined),
     renameModFolder: (from, to) => record({ verb: 'renameModFolder', from, to }, undefined),

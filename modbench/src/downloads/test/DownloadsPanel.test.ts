@@ -49,7 +49,8 @@ import type { MoveToTrash } from '../../ports/trash';
 import type { DownloadFile, DownloadRow, Instance, InstanceValue } from '../../instanceLoader/instance';
 import { recordingReporter, scriptedDialog, assertAskedOnce, assertSelectionOutcome } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
-import { fakeInstanceAdapter, refusing, readingFixture, type FakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, readingFixture, type FakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
+import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const node = (root: string, name: string, row: Partial<DownloadRow> = {}): DownloadNode =>
@@ -114,7 +115,6 @@ function calledFsPath(mockFn: { mock: { calls: FakeUri[][] } }): string {
 }
 
 const trash = vi.fn<MoveToTrash>();
-const trashedPaths = (): string[] => trash.mock.calls.map(([path]) => path);
 
 function invoke(commandId: string, ...args: unknown[]): unknown {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
@@ -243,12 +243,16 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
   });
 
   it('delete trashes, then the read, then the bar closes', async () => {
-    trash.mockImplementation((path) => { progressSteps.push(`trash ${path === join(ROOT, 'downloads', 'foo.7z') ? 'archive' : 'meta'}`); return Promise.resolve(); });
+    const { adapter } = fakeInstanceAdapter();
+    const trashing: InstanceAdapter = {
+      ...adapter,
+      trashDownloadedFile: (name, trashFile) => { progressSteps.push('trash'); return adapter.trashDownloadedFile(name, trashFile); },
+    };
 
-    registerDownloadsMultiRowCommands(downloadsCommands(fakeInstanceAdapter().adapter), instanceThatReads, recordingReporter(), scriptedDialog('Delete'), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(downloadsCommands(trashing), instanceThatReads, recordingReporter(), scriptedDialog('Delete'), trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.delete', node(ROOT, 'foo.7z'));
 
-    expect(progressSteps).toEqual([opens, 'trash archive', reads, 'progress closes']);
+    expect(progressSteps).toEqual([opens, 'trash', reads, 'progress closes']);
   });
 
   it('a declined delete opens no bar', async () => {
@@ -315,7 +319,6 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => trash.mockReset());
 
-  const archivePath = (name: string): string => join(ROOT, 'downloads', name);
 
   it('Esc deletes nothing and says nothing', async () => {
     const fake = fakeInstanceAdapter();
@@ -333,8 +336,9 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
   });
 
   it('given the right-clicked row and the selection, deletes the whole selection in one call, refuses the file that cannot go, and reports once', async () => {
-    const fake = fakeInstanceAdapter();
-    trash.mockImplementation((path) => (path === archivePath('locked.7z') ? Promise.reject(new Error('EPERM: operation not permitted')) : Promise.resolve()));
+    const fake = fakeInstanceAdapter(readingFixture(), {
+      refusals: (call) => (call.verb === 'trashDownloadedFile' && call.name === 'locked.7z' ? 'EPERM: operation not permitted' : undefined),
+    });
     const reporter = recordingReporter();
     const ask = scriptedDialog('Delete');
 
@@ -347,8 +351,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
 
     const refused = { item: { name: 'locked.7z' }, reason: 'EPERM: operation not permitted' };
     const outcome = { landed: [{ name: 'a.7z' }, { name: 'b.7z' }], refused: [refused] };
-    expect(trashedPaths()).toEqual(['a.7z', 'b.7z', 'locked.7z'].map(archivePath));
-    expect(fake.calls).toEqual(['a.7z', 'b.7z'].map((name) => ({ verb: 'trashDownloadedFileMeta', name })));
+    expect(fake.calls).toEqual(['a.7z', 'b.7z', 'locked.7z'].map((name) => ({ verb: 'trashDownloadedFile', name })));
     assertAskedOnce(ask, { messageContains: '3 items', buttons: ['Delete'] });
     expect(reporter.selectionOutcomeCalls).toEqual([
       { message: 'Could not delete 1 of 3 downloaded files.', outcome },
@@ -378,7 +381,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
   });
 
   it('metadata left behind after the file landed is one Output line naming the word the instance supplies, no notification', async () => {
-    const fake = fakeInstanceAdapter(readingFixture(), { refusals: refusing('trashDownloadedFileMeta', 'EPERM: operation not permitted') });
+    const fake = fakeInstanceAdapter(readingFixture(), { metadataLeftBehind: 'EPERM: operation not permitted' });
     const reporter = recordingReporter();
 
     const instance = {
@@ -399,10 +402,12 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     const ask = scriptedDialog('Delete');
     const viewSelection = () => [node(ROOT, 'a.7z'), node(ROOT, 'b.7z')];
 
-    registerDownloadsMultiRowCommands(downloadsCommands(fakeInstanceAdapter().adapter), instanceThatReads, recordingReporter(), ask, trash, downloadsLog, viewSelection);
+    const fake = fakeInstanceAdapter();
+
+    registerDownloadsMultiRowCommands(downloadsCommands(fake.adapter), instanceThatReads, recordingReporter(), ask, trash, downloadsLog, viewSelection);
     invoke('modbench.downloadedFile.delete');
 
-    await vi.waitFor(() => expect(trashedPaths()).toEqual(expect.arrayContaining(['a.7z', 'b.7z'].map(archivePath))));
+    await vi.waitFor(() => expect(fake.calls).toEqual(['a.7z', 'b.7z'].map((name) => ({ verb: 'trashDownloadedFile', name }))));
     assertAskedOnce(ask, { messageContains: '2', buttons: ['Delete'] });
   });
 
@@ -454,18 +459,19 @@ describe('the Downloads gestures called by the agent', () => {
   it('delete trashes the files given, never the selection, asking nothing, and answers what it deleted', async () => {
     const ask = scriptedDialog('Delete');
     const reporter = recordingReporter();
+    const fake = fakeInstanceAdapter();
 
-    registerDownloadsMultiRowCommands(downloadsCommands(fakeInstanceAdapter().adapter), listing('a.7z'), reporter, ask, trash, downloadsLog, viewSelection);
+    registerDownloadsMultiRowCommands(downloadsCommands(fake.adapter), listing('a.7z'), reporter, ask, trash, downloadsLog, viewSelection);
     const answered = await invoke('modbench.downloadedFile.delete', named('a.7z'));
 
     expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'a.7z' }], refused: [] }, partial: [] });
-    expect(trashedPaths()).toEqual([join(ROOT, 'downloads', 'a.7z')]);
+    expect(fake.calls).toEqual([{ verb: 'trashDownloadedFile', name: 'a.7z' }]);
     expect(ask.asked).toEqual([]);
     expect(reporter.reports).toEqual([]);
   });
 
   it('delete answers the metadata left behind as a log partial, writing no line itself', async () => {
-    const fake = fakeInstanceAdapter(readingFixture(), { refusals: refusing('trashDownloadedFileMeta', 'EPERM') });
+    const fake = fakeInstanceAdapter(readingFixture(), { metadataLeftBehind: 'EPERM' });
 
     registerDownloadsMultiRowCommands(downloadsCommands(fake.adapter), listing('a.7z'), recordingReporter(), scriptedDialog(), trash, downloadsLog, viewSelection);
     const answered = await invoke('modbench.downloadedFile.delete', named('a.7z'));
