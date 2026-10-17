@@ -510,6 +510,18 @@ describe('Restore from manifest', () => {
     }]]);
   });
 
+  it('warns in its one line when the clone of a submodule was left detached at its pin, naming why in the Output', async () => {
+    const why = "its branch 'main' is at abc, not at the pin, so it is left detached at the pin";
+    restoreFromManifest.mockResolvedValueOnce({
+      applied: true, landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: [], leftDetached: why }], refused: [],
+    });
+    const { reporter, run } = register();
+
+    await run(RESTORE, modRow('ModA'));
+
+    expect([reporter.landings, reporter.reports]).toEqual([[], [{ severity: 'warning', message: 'Restored "ModA" from its manifest.', detail: `ModA: ${why}` }]]);
+  });
+
   it('warns in its one line when the push refusal could not be written, naming why in the Output', async () => {
     restoreFromManifest.mockResolvedValueOnce({
       applied: true, landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [], pushRefusalNotWritten: '/i/.git/hooks/pre-push already exists',

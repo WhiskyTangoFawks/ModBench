@@ -113,7 +113,8 @@ internal static class ManifestEndpoints
         foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Restore from manifest", item.Refusal.Kind, item.Message, item.Item);
         return Results.Ok(new RestoreFromManifestResponse(
             [.. result.Landed.Select(landed => new RestoredModResponse(
-                landed.Item, landed.Outcome.Written, landed.Outcome.NamedByNoLine, landed.Outcome.StatCacheNotWritten, landed.Outcome.Metadata, landed.Outcome.Uncommitted))],
+                landed.Item, landed.Outcome.Written, landed.Outcome.NamedByNoLine, landed.Outcome.StatCacheNotWritten, landed.Outcome.Metadata, landed.Outcome.Uncommitted,
+                landed.Outcome.LeftDetached))],
             [.. result.Refused.Select(refused => new ModRestoreRefusal(
                 refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.InstallationFileNotFound,
                 refused.Refusal.GameFilesNotFound, refused.Refusal.Build, refused.Refusal.SubmoduleNotFound))]));
@@ -237,9 +238,11 @@ internal sealed record SubmoduleRequest(string Folder, string Pin, string? Branc
 }
 
 /// <summary>A mod whose files are as its manifest says: Written each file written, NamedByNoLine each file no line names,
-/// StatCacheNotWritten why the stat cache did not keep the read, Metadata its manifest's version and page.</summary>
+/// StatCacheNotWritten why the stat cache did not keep the read, Metadata its manifest's version and page, LeftDetached why the
+/// clone of its submodule is not on the branch it follows.</summary>
 internal sealed record RestoredModResponse(
-    string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, ModMetadata Metadata, bool Uncommitted);
+    string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, ModMetadata Metadata, bool Uncommitted,
+    string? LeftDetached);
 
 /// <summary>The mods to read the folders of against their manifests, and the stat cache's folder.</summary>
 internal sealed record ModFoldersRequest(IReadOnlyList<ModByFolder> Mods, string StatCache);

@@ -67,7 +67,7 @@ public interface ISourceAdapter
 
     /// <summary>The commit at HEAD of <paramref name="submodule"/>. git first checks out an empty folder at the pin, on its
     /// branch when that branch is at the pin; a failed or cancelled clone leaves the folder empty.</summary>
-    Answer<string, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel);
+    Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel);
 
     /// <summary>Writes <paramref name="change"/> into the build configuration in <paramref name="sourceFolder"/>, keeping all
     /// else it says, in the working tree.</summary>

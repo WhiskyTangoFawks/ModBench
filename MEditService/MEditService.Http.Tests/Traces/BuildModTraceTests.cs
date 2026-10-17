@@ -7,6 +7,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Traces;
 
+[Collection(ProcessEnvironmentCollection.Name)]
 public sealed class BuildModTraceTests : HostedTests
 {
     private const string Plugin = "Built.esp";
@@ -87,7 +88,7 @@ public sealed class BuildModTraceTests : HostedTests
             File.Copy(file, copy);
         }
         var pin = GitProbe.Run(Path.Combine(source, ".git"), source, "rev-parse", "HEAD").Trim();
-        var submodule = new PinnedSubmodule(_instance.Root, Origin);
+        using var submodule = new PinnedSubmodule(_instance.Root, Origin);
         submodule.Pin(pin);
         var manifest = JsonSerializer.Serialize(new { package = new { submodule = Origin }, files = new[] { new { path = Plugin } } });
         File.WriteAllText(Path.Combine(_builtFolder, $"{Origin}.manifest"), manifest);

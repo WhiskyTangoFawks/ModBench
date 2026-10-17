@@ -109,7 +109,7 @@ public sealed class BuildHandler
         foreach (var archive in source.Archives.Select(archive => archive.Path))
             made.Add(written.PathOf(archive), vouched: archivesRefused.All(refusal => refusal.Item != archive));
 
-        var (manifest, failure) = WriteManifest(mod, instance, new ManifestPackage.SourceRepository(_modFolders.FolderName(mod.SourceFolder), source.HasRemote), made);
+        var (manifest, failure) = WriteManifest(mod, instance, new ManifestPackage.SourceRepository(_modFolders.FolderName(mod.SourceFolder), mod.IsSubmodule), made);
         return ItemAnswer<BuildRefusal, BuiltMod>.Landed(new BuiltMod(
             landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)], failure, source.Uncommitted, source.Unpushed, manifest));
     }

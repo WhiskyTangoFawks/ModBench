@@ -12,6 +12,8 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         internal sealed record GameFileMissing(string Path) : Lack($"game file '{Path}' is missing");
 
         internal sealed record SubmoduleMissing(string Name) : Lack($"its submodule '{Name}' is missing");
+
+        internal sealed record NoHost() : Lack("its package has no host");
     }
 
     /// <summary>A file of the mod folder, by its path, and where its package holds its bytes.</summary>
@@ -36,7 +38,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         List<PackagedFile> sourced = [];
         List<Lack> lacks = [];
         if (manifest.Package is ManifestPackage.InstallationFile named && Package(named).Lack is { } missing) lacks.Add(missing);
-        if (manifest.Package is ManifestPackage.SourceRepository { IsSubmodule: false }) lacks.Add(new Lack("its package has no host"));
+        if (manifest.Package is ManifestPackage.SourceRepository { IsSubmodule: false }) lacks.Add(new Lack.NoHost());
         foreach (var file in manifest.Files)
         {
             var (entry, lack) = EntryOf(file);

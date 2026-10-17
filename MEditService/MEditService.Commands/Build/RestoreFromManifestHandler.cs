@@ -81,10 +81,10 @@ public sealed class RestoreFromManifestHandler(
     private async Task<ItemAnswer<RestoreSkip, RestoredMod>> RebuildAsync(
         ModToRestore mod, InstanceToRestore instance, Submodule submodule, string? version, CancellationToken cancel)
     {
-        if (!source.CommitAtHead(submodule, cancel).Holds(out var head, out var failure))
+        if (!source.CommitAtHead(submodule, cancel).Holds(out var checkedOut, out var failure))
             return Skipped(RestoreRefusal.SourceUnavailable, $"its submodule could not be cloned or read: {failure.Reason.TrimEnd('.')}");
-        if (head != submodule.Pin)
-            return Skipped(RestoreRefusal.SourceAtAnotherCommit, $"its submodule is at {head}, not at {submodule.Pin}, the commit the instance repository pins");
+        if (checkedOut.Commit != submodule.Pin)
+            return Skipped(RestoreRefusal.SourceAtAnotherCommit, $"its submodule is at {checkedOut.Commit}, not at {submodule.Pin}, the commit the instance repository pins");
 
         var metadataFiles = mod.MetadataFiles.ToHashSet(StringComparer.Ordinal);
         Dictionary<string, string> before;
@@ -98,7 +98,7 @@ public sealed class RestoreFromManifestHandler(
         }
 
         var answer = await build.BuildOneAsync(
-            new ModToBuild(mod.Name, submodule.Folder, mod.Folder, mod.MetadataFiles, version),
+            new ModToBuild(mod.Name, submodule.Folder, mod.Folder, mod.MetadataFiles, version, IsSubmodule: true),
             new InstanceToBuild(instance.ExcludedSuffix, instance.Archives, instance.StatCache));
         if (answer is ItemAnswer<BuildRefusal, BuiltMod>.Refusing refusing)
             return ItemAnswer<RestoreSkip, RestoredMod>.Refused(new RestoreSkip(RestoreRefusal.NotBuilt, refusing.Refusal), refusing.Message);
@@ -118,7 +118,8 @@ public sealed class RestoreFromManifestHandler(
             var manifest = outcome.Manifest ?? throw new InvalidOperationException("A build that stopped nowhere wrote its manifest.");
             return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod(
                 [.. after.Where(file => before.GetValueOrDefault(file.Key) != file.Value).Select(file => file.Key).Order(StringComparer.Ordinal)],
-                repository.NamedByNoLine(mod.Folder, mod.Name, manifest, metadataFiles), StatCacheNotWritten: null, ModMetadata.Of(manifest), outcome.Uncommitted));
+                repository.NamedByNoLine(mod.Folder, mod.Name, manifest, metadataFiles), StatCacheNotWritten: null, ModMetadata.Of(manifest), outcome.Uncommitted,
+                checkedOut.LeftDetached));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
         {
@@ -133,6 +134,7 @@ public sealed class RestoreFromManifestHandler(
     private static ItemAnswer<RestoreSkip, RestoredMod> Lacked(IReadOnlyList<PackageContents.Lack> lacks)
     {
         var why = string.Join("; ", lacks.Select(lack => lack.Text));
+        if (lacks.Any(lack => lack is PackageContents.Lack.NoHost)) return Skipped(RestoreRefusal.NoHost, why);
         var gameFiles = lacks.OfType<PackageContents.Lack.GameFileMissing>().Select(lack => lack.Path).ToList();
         var installationFile = lacks.OfType<PackageContents.Lack.InstallationFileMissing>().Select(lack => lack.Name).FirstOrDefault();
         var submodule = lacks.OfType<PackageContents.Lack.SubmoduleMissing>().Select(lack => lack.Name).FirstOrDefault();

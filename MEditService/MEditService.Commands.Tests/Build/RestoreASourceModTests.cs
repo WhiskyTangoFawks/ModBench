@@ -11,6 +11,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Build;
 
+[Collection(ProcessEnvironmentCollection.Name)]
 public sealed class RestoreASourceModTests : IDisposable
 {
     private const string ModName = "Mod";
@@ -32,7 +33,11 @@ public sealed class RestoreASourceModTests : IDisposable
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
     }
 
-    public void Dispose() => _root.Dispose();
+    public void Dispose()
+    {
+        _submodule.Dispose();
+        _root.Dispose();
+    }
 
     private string ModFolder => Path.Combine(_root, "mods", ModName);
 
@@ -72,7 +77,7 @@ public sealed class RestoreASourceModTests : IDisposable
 
         var skipped = Assert.Single((await Restore(_first)).Refused);
 
-        Assert.Equal((RestoreRefusal.Lacking, "was skipped: its package has no host."), (skipped.Refusal.Kind, skipped.Message));
+        Assert.Equal((RestoreRefusal.NoHost, "was skipped: its package has no host."), (skipped.Refusal.Kind, skipped.Message));
         Assert.False(Directory.Exists(SourceFolder));
     }
 
@@ -131,6 +136,20 @@ public sealed class RestoreASourceModTests : IDisposable
 
         Assert.True(restored.Uncommitted);
         Assert.Equal("changed", File.ReadAllText(Path.Combine(ModFolder, "meshes", "c.nif")));
+    }
+
+    [Fact]
+    public async Task ASubmoduleClonedIntoAGitDirectoryWhoseBranchIsElsewhere_LandsNamingWhyItIsLeftDetached()
+    {
+        Assert.Equal(_second, CommitAtHead(_second));
+        Git(SourceFolder, "checkout", "-q", "main");
+        Git(SourceFolder, "commit", "-q", "--allow-empty", "-m", "unpushed");
+        Git(_submodule.Instance, "submodule", "deinit", "-q", "-f", "--", "source/Mod");
+        Manifested();
+
+        var restored = Assert.Single((await Restore(_second, branch: "main")).Landed).Outcome;
+
+        Assert.StartsWith("its branch 'main' is at ", restored.LeftDetached, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -207,18 +226,18 @@ public sealed class RestoreASourceModTests : IDisposable
     private string CommitAtHead(string pin)
     {
         _submodule.Pin(pin);
-        return TestAdapters.Source().CommitAtHead(new Submodule(SourceFolder, pin, null), CancellationToken.None).Value();
+        return TestAdapters.Source().CommitAtHead(new Submodule(SourceFolder, pin, null), CancellationToken.None).Value().Commit;
     }
 
-    private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(string? pin) =>
-        Restore(pin, new InMemoryNotificationPublisher(), CancellationToken.None);
+    private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(string? pin, string? branch = null) =>
+        Restore(pin, new InMemoryNotificationPublisher(), CancellationToken.None, branch);
 
     private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(
-        string? pin, InMemoryNotificationPublisher notifications, CancellationToken cancel)
+        string? pin, InMemoryNotificationPublisher notifications, CancellationToken cancel, string? branch = null)
     {
         if (pin is not null) _submodule.Pin(pin);
         return TestEditService.RestoreHandler(_holder, notifications, TestAdapters.Source(), _folders).RestoreAsync(
-            [new ModToRestore(ModName, ModFolder, null, ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, null))],
+            [new ModToRestore(ModName, ModFolder, null, ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch))],
             new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".mohidden", Archives: null), cancel: cancel);
     }
 

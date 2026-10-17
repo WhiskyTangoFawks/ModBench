@@ -178,26 +178,20 @@ describe('the MO2 adapter\'s repository', () => {
 
     const urlOf = (): string => runGit('config', '-f', '.gitmodules', 'submodule.Mod A.url').trim();
 
-    it.each([
-      ['https://user:token@example.test/a.git', 'https://example.test/a.git'],
-      ['ssh://git:secret@example.test/a.git', 'ssh://git@example.test/a.git'],
-      ['git@example.test:owner/a.git', 'git@example.test:owner/a.git'],
-      ['../a', '../a'],
-    ])('writes the remote %s with no credential, as %s', async (remote, written) => {
+    it('writes its remote with no credential', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
-      await sourceMod('Mod A', 'Mod A', remote);
+      await sourceMod('Mod A', 'Mod A', 'https://user:token@example.test/a.git');
 
       const report = await adapter.writeSubmodules();
 
-      expect([report.notes, urlOf()]).toEqual([[], written]);
+      expect([report.notes, urlOf()]).toEqual([[], 'https://example.test/a.git']);
     });
 
     it.each([
-      'https://user:p@ss@example.test/a.git',
-      'ssh://git:p@ss@example.test/a.git',
-      'user:secret@example.test:a.git',
-    ])('takes the entry and the line of a source mod whose credential cannot safely be left out of %s, and names it', async (remote) => {
+      ['https://user:p@ss@example.test/a.git', 'its remote holds a credential that cannot safely be left out of its URL, so it is no submodule'],
+      ['../a', 'its remote is on this machine alone, so it is no submodule'],
+    ])('takes the entry and the line of a source mod whose remote %s is no host, and names it', async (remote, note) => {
       const { adapter, folder } = await submoduleOfOne();
       git(folder, 'remote', 'set-url', 'origin', remote);
 
@@ -205,7 +199,48 @@ describe('the MO2 adapter\'s repository', () => {
 
       expect([
         report.notes, runGit('config', '-f', '.gitmodules', '--list').trim(), (await readFile(join(root, '.gitignore'), 'utf8')).includes('Mod A'),
-      ]).toEqual([[{ mod: 'Mod A', note: 'its remote holds a credential that cannot safely be left out of its URL, so it is no submodule' }], '', false]);
+      ]).toEqual([[{ mod: 'Mod A', note }], '', false]);
+    });
+
+    describe('a source mod\'s host', () => {
+      const UNSAFE = 'its remote holds a credential that cannot safely be left out of its URL';
+      const LOCAL = 'its remote is on this machine alone';
+
+      it.each([
+        ['https://example.test/a.git', { kind: 'host', url: 'https://example.test/a.git' }],
+        ['https://user:token@example.test/a.git', { kind: 'host', url: 'https://example.test/a.git' }],
+        ['ssh://git:secret@example.test/a.git', { kind: 'host', url: 'ssh://git@example.test/a.git' }],
+        ['git@example.test:owner/a.git', { kind: 'host', url: 'git@example.test:owner/a.git' }],
+        ['https://user:p@ss@example.test/a.git', { kind: 'noHost', why: UNSAFE }],
+        ['ssh://git:p@ss@example.test/a.git', { kind: 'noHost', why: UNSAFE }],
+        ['user:secret@example.test:a.git', { kind: 'noHost', why: UNSAFE }],
+        ['../a', { kind: 'noHost', why: LOCAL }],
+        ['/srv/a.git', { kind: 'noHost', why: LOCAL }],
+        ['C:\\srv\\a.git', { kind: 'noHost', why: LOCAL }],
+        ['file:///srv/a.git', { kind: 'noHost', why: LOCAL }],
+      ])('reads the remote %s as %j', async (remote, host) => {
+        const adapter = await instance();
+        const folder = await sourceMod('Mod A', 'Mod A', remote);
+
+        expect(await adapter.sourceHost(folder)).toEqual({ kind: 'read', answer: host });
+      });
+
+      it.each([
+        [['fork', 'origin'], 'origin'],
+        [['upstream', 'fork'], 'fork'],
+      ])('reads origin, else the first remote by name, of %j', async (remotes, read) => {
+        const adapter = await instance();
+        const folder = await sourceMod('Mod A', 'Mod A');
+        for (const remote of remotes) git(folder, 'remote', 'add', remote, `https://example.test/${remote}.git`);
+
+        expect(await adapter.sourceHost(folder)).toEqual({ kind: 'read', answer: { kind: 'host', url: `https://example.test/${read}.git` } });
+      });
+
+      it('reads a repository with no remote as having none', async () => {
+        const adapter = await instance();
+
+        expect(await adapter.sourceHost(await sourceMod('Mod A', 'Mod A'))).toEqual({ kind: 'read', answer: { kind: 'noRemote' } });
+      });
     });
 
     it('names a source mod with a remote and no branch checked out, and writes no entry for it', async () => {
@@ -398,7 +433,9 @@ describe('the MO2 adapter\'s repository', () => {
         runGit('config', 'user.name', 't');
         runGit('config', 'user.email', 't@t');
         await adapter.writeIgnoreList();
-        const mod = await sourceMod('Mod A', 'Mod A', await bareRepository());
+        const hosted = 'https://example.test/mod-a.git';
+        const mod = await sourceMod('Mod A', 'Mod A', hosted);
+        git(mod, 'config', `url.${await bareRepository()}.pushInsteadOf`, hosted);
         await adapter.writeSubmodules();
         runGit('remote', 'add', 'origin', await bareRepository());
         return { adapter, mod };

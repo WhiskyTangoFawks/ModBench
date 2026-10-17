@@ -17,18 +17,20 @@ internal static class Submodules
         return remote is null ? null : (git.HoldsUncommittedChanges(), !git.RemoteHoldsHead(remote));
     }
 
-    internal static string CommitAtHead(Submodule submodule, CancellationToken cancel)
+    internal static SubmoduleHead CommitAtHead(Submodule submodule, CancellationToken cancel)
     {
-        if (HoldsNothing(submodule.Folder)) Clone(submodule, cancel);
+        var leftDetached = HoldsNothing(submodule.Folder) ? Clone(submodule, cancel) : null;
         var git = new SourceRepositoryGit(submodule.Folder);
-        return git.Exists ? git.HeadCommit() : throw SourceStopException.Unreadable($"'{submodule.Folder}' holds no repository.");
+        return git.Exists
+            ? new SubmoduleHead(git.HeadCommit(), leftDetached)
+            : throw SourceStopException.Unreadable($"'{submodule.Folder}' holds no repository.");
     }
 
     // A clone of the instance repository leaves an empty folder where each submodule goes.
     private static bool HoldsNothing(string folder) => !Directory.Exists(folder) || !Directory.EnumerateFileSystemEntries(folder).Any();
 
     // git checks the submodule out at its pin with HEAD detached, and a source mod's repository has a main (ADR-0007).
-    private static void Clone(Submodule submodule, CancellationToken cancel)
+    private static string? Clone(Submodule submodule, CancellationToken cancel)
     {
         try
         {
@@ -45,8 +47,7 @@ internal static class Submodules
             GitInit.EnsureCommitIdentity(git);
             if (!SourceRepositoryGit.HoldsRepository(submodule.Folder) && !git.TryRun(out _, "branch", "--track", "main", $"{Origin}/main"))
                 throw SourceStopException.Unreadable("its remote has no main, so it is not a source mod's repository");
-            if (submodule.Branch is { } branch && FollowedBranchIsAtThePin(git, branch, submodule.Pin))
-                git.Run("checkout", "-q", "-B", branch, "--track", $"{Origin}/{branch}");
+            return submodule.Branch is { } branch && FollowedBranchIsAtThePin(git, branch, submodule.Pin) ? OnTheBranch(git, branch, submodule.Pin) : null;
         }
         catch (SourceStopException) when (Directory.Exists(submodule.Folder))
         {
@@ -59,6 +60,18 @@ internal static class Submodules
     {
         var git = new SourceRepositoryGit(submodule.Folder);
         return git.Exists && !git.TryRun(out _, "cat-file", "-e", $"{submodule.Pin}^{{commit}}");
+    }
+
+    // The git directory a deinit keeps holds its local branches, and one can hold commits no remote holds.
+    private static string? OnTheBranch(SourceRepositoryGit git, string branch, string pin)
+    {
+        if (!git.TryRun(out var local, "rev-parse", "--verify", "-q", $"refs/heads/{branch}"))
+            git.Run("checkout", "-q", "-b", branch, "--track", $"{Origin}/{branch}");
+        else if (local.Trim() == pin)
+            git.Run("checkout", "-q", branch);
+        else
+            return $"its branch '{branch}' is at {local.Trim()}, not at the pin, so it is left detached at the pin";
+        return null;
     }
 
     private static bool FollowedBranchIsAtThePin(SourceRepositoryGit git, string branch, string pin) =>

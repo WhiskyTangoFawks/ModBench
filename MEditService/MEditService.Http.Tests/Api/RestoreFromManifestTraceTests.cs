@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Http.Tests.Api;
 
+[Collection(ProcessEnvironmentCollection.Name)]
 public sealed class RestoreFromManifestTraceTests : HostedTests
 {
     private const string Mod = "RestoredMod";
@@ -289,7 +290,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     [Fact]
     public async Task RestoringASourceModWhoseRequestHandsNoSubmodule_NamesItsManifestsSubmodule_SoARequestHandingItsPinRebuildsIt()
     {
-        var submodule = new PinnedSubmodule(_instance);
+        using var submodule = new PinnedSubmodule(_instance);
         var pin = submodule.Commit(("build.json", $"{{\"output\": \"{Mod}\"}}"), ("assets/a.nif", "built"));
         submodule.Pin(pin);
         Directory.CreateDirectory(ModFolder);

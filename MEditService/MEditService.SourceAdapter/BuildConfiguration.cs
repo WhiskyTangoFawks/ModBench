@@ -12,15 +12,18 @@ public sealed record BuildConfigurationChange(string? Output, IReadOnlyList<stri
 /// <paramref name="Files"/>.</summary>
 public sealed record ArchiveToPack(string Path, IReadOnlyList<string> Files);
 
-/// <summary>What a source mod's build writes over the base, as its working tree says. HasRemote makes it a submodule.
-/// Uncommitted: its working tree holds changes no commit holds. Unpushed: its remote, as last fetched, lacks HEAD.</summary>
+/// <summary>What a source mod's build writes over the base, as its working tree says. Uncommitted: its working tree holds
+/// changes no commit holds. Unpushed: its remote, as last fetched, lacks HEAD.</summary>
 public sealed record SourceToBuild(
     string Output, IReadOnlyList<string> Exclude, IReadOnlyList<ArchiveToPack> Archives, IReadOnlyList<string> Plugins,
-    IReadOnlyList<Asset> Assets, bool HasRemote = false, bool Uncommitted = false, bool Unpushed = false);
+    IReadOnlyList<Asset> Assets, bool Uncommitted = false, bool Unpushed = false);
 
 /// <summary>A source mod's repository as the instance repository holds it: the folder git checks it out in, the commit the
 /// instance repository pins, and the branch it follows, if any.</summary>
 public sealed record Submodule(string Folder, string Pin, string? Branch);
+
+/// <summary>The commit a submodule's repository is at, and why the clone that made it was left detached at the pin.</summary>
+public sealed record SubmoduleHead(string Commit, string? LeftDetached = null);
 
 /// <summary>A source mod's build configuration: the output folder's name, its exclusions and each archive to pack. The
 /// mod manager's record says the installation files.</summary>
@@ -54,7 +57,6 @@ internal static class BuildConfiguration
             ArchivesIn(sourceFolder, configuration),
             SourceRepositoryLayout.PluginsIn(sourceFolder),
             AssetsIn(sourceFolder),
-            remote is not null,
             remote?.Uncommitted ?? false,
             remote?.Unpushed ?? false);
     }

@@ -94,7 +94,7 @@ export class ModStatuses implements SyncMessage, vscode.Disposable {
 
 const counted = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
 
-// modlist-repository.md, Status, stories 1, 2 and 6.
+// modlist-repository.md, Status, stories 1 and 6.
 const differs = ({ differing, namedByNoLine, gone, metadataDiffers }: ModStatus): boolean => differing.length + namedByNoLine.length + gone.length > 0 || metadataDiffers;
 
 function stateOf(status: ModStatus): string | undefined {

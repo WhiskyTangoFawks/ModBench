@@ -584,7 +584,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) => _inner.SourceToBuild(sourceFolder);
 
-        public Answer<string, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) => _inner.CommitAtHead(submodule, cancel);
+        public Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) => _inner.CommitAtHead(submodule, cancel);
 
         public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) =>
             _inner.ChangeBuildConfiguration(sourceFolder, change);

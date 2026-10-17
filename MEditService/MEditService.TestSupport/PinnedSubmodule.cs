@@ -1,20 +1,25 @@
 namespace MEditService.TestSupport;
 
 /// <summary>An instance repository that pins a submodule at <c>source/&lt;name&gt;</c>, checked out nowhere, as a clone of
-/// the instance repository leaves it, and the submodule's remote, made by its first commit.</summary>
-public sealed class PinnedSubmodule
+/// the instance repository leaves it, and the submodule's remote, made by its first commit. A class that makes one runs in
+/// its assembly's process environment collection.</summary>
+public sealed class PinnedSubmodule : IDisposable
 {
-    // git refuses a submodule a remote on this machine unless protocol.file.allow says so, and a test's remotes are here.
-    static PinnedSubmodule()
-    {
-        var count = int.TryParse(Environment.GetEnvironmentVariable("GIT_CONFIG_COUNT"), out var held) ? held : 0;
-        Environment.SetEnvironmentVariable($"GIT_CONFIG_KEY_{count}", "protocol.file.allow");
-        Environment.SetEnvironmentVariable($"GIT_CONFIG_VALUE_{count}", "always");
-        Environment.SetEnvironmentVariable("GIT_CONFIG_COUNT", (count + 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
-    }
+    private readonly (string Variable, string? Was)[] _environment;
 
+    // git refuses a submodule a remote on this machine unless protocol.file.allow says so, and the Source adapter's git
+    // reads it from the process's environment alone, until this is disposed.
     public PinnedSubmodule(string root, string name = "Mod")
     {
+        var count = int.TryParse(Environment.GetEnvironmentVariable("GIT_CONFIG_COUNT"), out var held) ? held : 0;
+        (string Variable, string Value)[] allowing =
+        [
+            ($"GIT_CONFIG_KEY_{count}", "protocol.file.allow"), ($"GIT_CONFIG_VALUE_{count}", "always"),
+            ("GIT_CONFIG_COUNT", (count + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        ];
+        _environment = [.. allowing.Select(set => (set.Variable, Environment.GetEnvironmentVariable(set.Variable)))];
+        foreach (var (variable, value) in allowing) Environment.SetEnvironmentVariable(variable, value);
+
         Name = name;
         Remote = Directory.CreateDirectory(Path.Combine(root, "remote")).FullName;
         Instance = Directory.CreateDirectory(Path.Combine(root, "instance")).FullName;
@@ -61,4 +66,9 @@ public sealed class PinnedSubmodule
     }
 
     public static string Git(string folder, params string[] args) => GitProbe.Run(Path.Combine(folder, ".git"), folder, args);
+
+    public void Dispose()
+    {
+        foreach (var (variable, was) in _environment) Environment.SetEnvironmentVariable(variable, was);
+    }
 }

@@ -33,19 +33,6 @@ public sealed class SourceToBuildTests : IDisposable
     }
 
     [Theory]
-    [InlineData("https://user:token@example.com/mod.git")]
-    [InlineData("git@example.com:owner/mod.git")]
-    [InlineData("../remote")]
-    [InlineData("file:///srv/remote.git")]
-    public void ASourceWithAnyRemote_HasARemote_WhichGitHoldsForItsSubmodule(string url)
-    {
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], []));
-        Git("remote", "add", "upstream", url);
-
-        Assert.True(Built().HasRemote);
-    }
-
-    [Theory]
     [InlineData("assets/textures/new.dds", true)]
     [InlineData("notes.txt", false)]
     public void ASourceWithARemote_SaysWhetherItsWorkingTreeHoldsChangesNoCommitHolds(string written, bool uncommitted)
@@ -70,12 +57,17 @@ public sealed class SourceToBuildTests : IDisposable
         Assert.Equal(unpushed, Built().Unpushed);
     }
 
-    [Fact]
-    public void ASourceWithNoRemote_HasNone()
+    [Theory]
+    [InlineData("fork", "origin", "origin")]
+    [InlineData("upstream", "fork", "fork")]
+    public void ASourceWithRemotes_SaysWhetherOrigin_ElseTheFirstRemoteByName_HoldsTheCommitAtHead(string added, string addedNext, string holding)
     {
         Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], []));
+        Git("remote", "add", added, $"https://example.com/{added}.git");
+        Git("remote", "add", addedNext, $"https://example.com/{addedNext}.git");
+        Git("update-ref", $"refs/remotes/{holding}/main", "HEAD");
 
-        Assert.False(Built().HasRemote);
+        Assert.False(Built().Unpushed);
     }
 
     [Fact]

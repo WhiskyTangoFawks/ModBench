@@ -7,13 +7,13 @@ import { promisify } from 'node:util';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { exists, get, isRepository, remove, write } from './files';
-import type { InstanceAdapter, Submodule, SubmoduleNote } from './instanceAdapter';
+import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote } from './instanceAdapter';
 import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, withSourceModLines } from './layout';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from './prePushHook';
 import { sourceModsIn } from './sourceMods';
 
-type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'submodule' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'>;
+type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'sourceHost' | 'submodule' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'>;
 
 const execFileAsync = promisify(execFile);
 
@@ -22,34 +22,52 @@ const git = async (folder: string, ...args: string[]): Promise<string> =>
 
 interface SubmoduleEntry { readonly name: string; readonly url: string; readonly branch: string }
 
-/** Why a source mod's entry is not written, and whether the entry it has stays. */
+// Why a source mod's entry is not written, and whether the entry it has stays.
 interface EntryNote { readonly note: string; readonly keepsEntry: boolean }
 
-// git's scp-like form, [user@]host:path, with a password before its @.
+const UNSAFE = 'its remote holds a credential that cannot safely be left out of its URL';
+
+// modlist-repository.md, The manifest, story 8: a path or a file URL reaches no other machine.
+const LOCAL = 'its remote is on this machine alone';
+
+// git's scp-like form, [user@]host:path, whose host is longer than a Windows drive letter, and that form with a password.
+const SCP_LIKE = /^([^/\\@:]+@)?[^/\\@:]{2,}:/;
 const SCP_PASSWORD = /^[^/\\@:]{2,}:[^/\\]*@/;
 
 // An HTTP user is a credential; another scheme's user names the account, so only its password goes.
 const accountOf = (scheme: string, userInfo: string): string => {
   const [user = ''] = userInfo.split(':');
-  return user === '' || /^https?:/i.test(scheme) ? '' : `${user}@`;
+  return user === '' || /^https?$/i.test(scheme) ? '' : `${user}@`;
 };
 
-function withoutCredential(url: string): string | undefined {
-  const [, scheme, authority = '', path = ''] = /^([a-z][a-z0-9+.-]*:\/\/)([^/?#]*)(.*)$/is.exec(url) ?? [];
-  if (scheme === undefined) return SCP_PASSWORD.test(url) ? undefined : url;
+function scpLikeHost(url: string): SourceHost {
+  if (SCP_PASSWORD.test(url)) return { kind: 'noHost', why: UNSAFE };
+  return SCP_LIKE.test(url) ? { kind: 'host', url } : { kind: 'noHost', why: LOCAL };
+}
+
+function hostOf(url: string): SourceHost {
+  const [, scheme, authority = '', path = ''] = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)(.*)$/is.exec(url) ?? [];
+  if (scheme === undefined) return scpLikeHost(url);
+  if (scheme.toLowerCase() === 'file') return { kind: 'noHost', why: LOCAL };
   const [userInfo = '', host, ...more] = authority.split('@');
-  if (host === undefined) return url;
-  return more.length > 0 || host === '' ? undefined : `${scheme}${accountOf(scheme, userInfo)}${host}${path}`;
+  if (host === undefined) return { kind: 'host', url };
+  return more.length > 0 || host === '' ? { kind: 'noHost', why: UNSAFE } : { kind: 'host', url: `${scheme}://${accountOf(scheme, userInfo)}${host}${path}` };
+}
+
+// git lists remotes by name.
+async function sourceHostOf(folder: string): Promise<SourceHost> {
+  const remotes = (await git(folder, 'remote')).split('\n').filter((remote) => remote !== '');
+  const remote = remotes.includes('origin') ? 'origin' : remotes[0];
+  return remote === undefined ? { kind: 'noRemote' } : hostOf((await git(folder, 'remote', 'get-url', remote)).trim());
 }
 
 async function submoduleOf(folder: string): Promise<SubmoduleEntry | undefined | EntryNote> {
   try {
-    const remotes = (await git(folder, 'remote')).split('\n').filter((remote) => remote !== '');
-    if (remotes.length === 0) return undefined;
-    const url = withoutCredential((await git(folder, 'remote', 'get-url', ...(remotes.includes('origin') ? ['origin'] : remotes.slice(0, 1)))).trim());
-    if (url === undefined) return { note: 'its remote holds a credential that cannot safely be left out of its URL, so it is no submodule', keepsEntry: false };
+    const host = await sourceHostOf(folder);
+    if (host.kind === 'noRemote') return undefined;
+    if (host.kind === 'noHost') return { note: `${host.why}, so it is no submodule`, keepsEntry: false };
     const branch = (await git(folder, 'symbolic-ref', '--short', 'HEAD').catch(() => '')).trim();
-    return branch === '' ? { note: 'it has a remote but no branch checked out, so its entry stays as it was', keepsEntry: true } : { name: basename(folder), url, branch };
+    return branch === '' ? { note: 'it has a remote but no branch checked out, so its entry stays as it was', keepsEntry: true } : { name: basename(folder), url: host.url, branch };
   } catch (err) {
     return { note: `its remote could not be read, so its entry stays as it was: ${errorMessage(err)}`, keepsEntry: true };
   }
@@ -171,6 +189,9 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       }
       return { notes, other };
     },
+
+    sourceHost: (folder) => sourceHostOf(folder).then(
+      (answer) => ({ kind: 'read' as const, answer }), (err: unknown) => ({ kind: 'unreadable' as const, reason: errorMessage(err) })),
 
     submodule: (name) => submoduleIn(instanceRoot, name).catch((err: unknown) =>
       ({ lacks: `the instance repository's submodule '${name}' could not be read: ${errorMessage(err)}` })),

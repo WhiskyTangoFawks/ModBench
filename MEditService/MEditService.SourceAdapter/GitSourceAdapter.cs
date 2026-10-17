@@ -50,7 +50,7 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved) : ISourceAdapter
     public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) =>
         SourceFailure.Answer(() => BuildConfiguration.ToBuild(sourceFolder));
 
-    public Answer<string, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) =>
+    public Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) =>
         SourceFailure.Answer(() => Submodules.CommitAtHead(submodule, cancel));
 
     public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) =>

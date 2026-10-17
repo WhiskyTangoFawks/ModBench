@@ -97,6 +97,8 @@ export interface InstanceAnswers {
   repositoryOnDisk?: boolean;
   /** What writing the submodules says. */
   submodules?: Awaited<ReturnType<InstanceAdapter['writeSubmodules']>>;
+  /** The host of each source folder, by its path; a folder not there has no remote. */
+  hosts?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['sourceHost']>>>;
   /** What the instance repository holds of each submodule, by name. */
   pins?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['submodule']>>>;
   /** Downloaded files that are gone: they get no mark. */
@@ -187,6 +189,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, undefined),
     removeIgnoreList: () => record({ verb: 'removeIgnoreList' }, undefined),
     repositoryOnDisk: () => Promise.resolve(answers.repositoryOnDisk ?? false),
+    sourceHost: (folder) => Promise.resolve(answers.hosts?.get(folder) ?? { kind: 'read', answer: { kind: 'noRemote' } }),
     submodule: (name) => Promise.resolve(answers.pins?.get(name) ?? { lacks: `no answer fixed for ${name}` }),
     removeRepository: () => record({ verb: 'removeRepository' }, undefined),
     checkPushRefusalFree: () => record({ verb: 'checkPushRefusalFree' }, undefined),

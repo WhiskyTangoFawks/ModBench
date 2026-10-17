@@ -1,7 +1,9 @@
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
+[Collection(ProcessEnvironmentCollection.Name)]
 public sealed class SourceCommitAtHeadTests : IDisposable
 {
     private readonly ScratchDirectory _root = new("medit-source-commit-at-head-");
@@ -15,7 +17,11 @@ public sealed class SourceCommitAtHeadTests : IDisposable
         _commits["second"] = _submodule.Commit(("build.json", "second"));
     }
 
-    public void Dispose() => _root.Dispose();
+    public void Dispose()
+    {
+        _submodule.Dispose();
+        _root.Dispose();
+    }
 
     private string SourceFolder => _submodule.Folder;
 
@@ -26,7 +32,7 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     {
         if (leftEmptyByAClone) Directory.CreateDirectory(SourceFolder);
 
-        Assert.Equal(_commits[at], CommitAtHead(_commits[at]).Value());
+        Assert.Equal(new SubmoduleHead(_commits[at]), CommitAtHead(_commits[at]).Value());
 
         Assert.Equal(_commits[at], Git(SourceFolder, "rev-parse", "HEAD").Trim());
         Assert.Equal(at, File.ReadAllText(Path.Combine(SourceFolder, "build.json")));
@@ -59,6 +65,49 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     }
 
     [Fact]
+    public void AClone_IntoAGitDirectoryADeinitKept_LeavesTheBranchItHolds_AndSaysItIsLeftDetachedAtThePin()
+    {
+        _submodule.Follow("main");
+        CommitAtHead(_commits["second"]).Value();
+        Git(SourceFolder, "commit", "-q", "--allow-empty", "-m", "unpushed");
+        var unpushed = Git(SourceFolder, "rev-parse", "main").Trim();
+        Git(_submodule.Instance, "submodule", "deinit", "-q", "-f", "--", "source/Mod");
+
+        var head = CommitAtHead(_commits["second"]).Value();
+
+        Assert.Equal(
+            (new SubmoduleHead(_commits["second"], $"its branch 'main' is at {unpushed}, not at the pin, so it is left detached at the pin"), "HEAD", unpushed),
+            (head, Git(SourceFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim(), Git(SourceFolder, "rev-parse", "main").Trim()));
+    }
+
+    [Fact]
+    public void APinItsRemoteLacked_IsClonedByARetry_OnceItsRemoteHoldsIt()
+    {
+        var developer = Directory.CreateDirectory(Path.Combine(_root, "developer")).FullName;
+        Git(developer, "init", "-q", "-b", "main");
+        Git(developer, "fetch", "-q", _submodule.Remote, "main");
+        Git(developer, "reset", "-q", "--hard", "FETCH_HEAD");
+        Git(developer, "commit", "-q", "--allow-empty", "-m", "third");
+        var third = Git(developer, "rev-parse", "HEAD").Trim();
+        var failed = CommitAtHead(third).Stopped();
+        Git(developer, "push", "-q", _submodule.Remote, "HEAD:refs/heads/side");
+
+        Assert.Equal((typeof(SourceFailure.GitFailed), third), (failed.GetType(), CommitAtHead(third).Value().Commit));
+    }
+
+    [Fact]
+    public void AGitDirectoryAKilledCloneLeftBeforeItsFetch_IsFetchedByARetry()
+    {
+        var modules = Directory.CreateDirectory(Path.Combine(_submodule.Instance, ".git", "modules", "Mod")).FullName;
+        Directory.CreateDirectory(SourceFolder);
+        GitProbe.Run(modules, SourceFolder, "init", "-q");
+        GitProbe.Run(modules, SourceFolder, "config", "remote.origin.url", _submodule.Remote);
+        GitProbe.Run(modules, SourceFolder, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*");
+
+        Assert.Equal(_commits["second"], CommitAtHead(_commits["second"]).Value().Commit);
+    }
+
+    [Fact]
     public void AClone_OfARemoteWhoseDefaultBranchIsNotMain_HasTheRemotesMain()
     {
         Git(_submodule.Remote, "checkout", "-q", "-b", "edit", _commits["second"]);
@@ -86,7 +135,7 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     {
         CommitAtHead(_commits["first"]).Value();
 
-        Assert.Equal(_commits["first"], CommitAtHead(_commits["second"]).Value());
+        Assert.Equal(_commits["first"], CommitAtHead(_commits["second"]).Value().Commit);
 
         Assert.Equal("first", File.ReadAllText(Path.Combine(SourceFolder, "build.json")));
     }
@@ -139,7 +188,7 @@ public sealed class SourceCommitAtHeadTests : IDisposable
         Assert.Equal($"'{SourceFolder}' holds no repository.", Assert.IsType<SourceFailure.Unreadable>(failure).Reason);
     }
 
-    private RepositoriesLib.Answer<string, SourceFailure> CommitAtHead(string pin, CancellationToken cancel = default)
+    private RepositoriesLib.Answer<SubmoduleHead, SourceFailure> CommitAtHead(string pin, CancellationToken cancel = default)
     {
         _submodule.Pin(pin);
         return TestAdapters.Source().CommitAtHead(new Submodule(SourceFolder, pin, _submodule.Branch), cancel);

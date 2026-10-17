@@ -52,7 +52,7 @@ public sealed class BuildHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task ASourceWithNoRemote_NamesItsRepositoryAsAPackageWithNoHost_AndHoldsEachFileItMade()
+    public async Task AModTheRequestNamesNoSubmodule_NamesItsRepositoryAsAPackageWithNoHost_AndHoldsEachFileItMade()
     {
         WriteSource("{\"output\": \"Mod\"}", ("meshes/c.nif", "added c"));
         WriteInFolder(MetaIni, "[General]");
@@ -66,12 +66,12 @@ public sealed class BuildHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task ASourceWithARemote_NamesItsSubmoduleByItsFoldersNameAsThePackage_AndHoldsEachFileItMade()
+    public async Task AModTheRequestNamesASubmodule_NamesItsSubmoduleByItsSourceFoldersNameAsThePackage_AndHoldsEachFileItMade()
     {
         WriteSource("{\"output\": \"Mod\"}", ("meshes/c.nif", "added c"));
         Shared();
 
-        await Landed();
+        await Landed(_noArchives, isSubmodule: true);
 
         var manifest = ManifestWritten().Require();
         Assert.Equal(new ManifestPackage.SourceRepository(SourceFolderName, IsSubmodule: true), manifest.Package);
@@ -130,7 +130,7 @@ public sealed class BuildHandlerTests : IDisposable
         WriteInFolder("notes.txt", "mine");
         Shared();
 
-        await Landed();
+        await Landed(_noArchives, isSubmodule: true);
 
         Assert.Equal(new ModStatus(ModName, NoManifest: false, [], ["notes.txt"], [], []), Status());
     }
@@ -262,7 +262,7 @@ public sealed class BuildHandlerTests : IDisposable
         GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "remote", "add", "origin", Remote);
 
         Assert.Single((await TestEditService.BuildHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null)], _noArchives)).Landed);
+            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, IsSubmodule: true)], _noArchives)).Landed);
 
         var stringsFiles = Directory.GetFiles(Path.Combine(ModFolder, "Strings")).Select(file => $"Strings/{Path.GetFileName(file)}");
         var manifest = ManifestWritten().Require();
@@ -319,17 +319,18 @@ public sealed class BuildHandlerTests : IDisposable
 
     private async Task<BuiltMod> Landed() => await Landed(_noArchives);
 
-    private async Task<BuiltMod> Landed(InstanceToBuild instance)
+    private async Task<BuiltMod> Landed(InstanceToBuild instance, bool isSubmodule = false)
     {
-        var result = await Build(instance);
+        var result = await Build(instance, isSubmodule);
         Assert.Empty(result.Refused);
         return Assert.Single(result.Landed).Outcome;
     }
 
-    private Task<SelectionResult<string, BuildRefusal, BuiltMod>> Build(InstanceToBuild instance)
+    private Task<SelectionResult<string, BuildRefusal, BuiltMod>> Build(InstanceToBuild instance, bool isSubmodule = false)
     {
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
-        return TestEditService.BuildHandler(_holder).BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null)], instance);
+        return TestEditService.BuildHandler(_holder).BuildAsync(
+            [new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, isSubmodule)], instance);
     }
 
     private void WriteSource(string configuration, params (string Path, string Text)[] assets)

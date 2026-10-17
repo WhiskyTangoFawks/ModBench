@@ -219,6 +219,9 @@ const quoted = (label: Label, mods: readonly string[]): string => mods.map((mod)
 const uncommittedWarnings = (landed: Restored): string[] => landed.filter(({ uncommitted }) => uncommitted === true)
   .map(({ mod }) => `${mod}: its submodule holds changes no commit holds, so the commit the instance repository pins does not rebuild these bytes`);
 
+const leftDetachedWarnings = (landed: Restored): string[] =>
+  landed.flatMap(({ mod, leftDetached }) => (leftDetached ? [`${mod}: ${leftDetached}`] : []));
+
 const pushNotRefused = ({ pushRefusalNotWritten: why }: { readonly pushRefusalNotWritten?: string }): string[] =>
   (why === undefined ? [] : [`a push of a pin its source mod's remote lacks is not refused: ${why}`]);
 
@@ -293,7 +296,7 @@ async function restoreFromManifestForAgent(
   return {
     applied: true,
     outcome: answered,
-    partial: warned('Restore from manifest:', [...statCacheNotWritten(answered.landed), ...uncommittedWarnings(answered.landed), ...pushNotRefused(outcome)]),
+    partial: warned('Restore from manifest:', [...statCacheNotWritten(answered.landed), ...uncommittedWarnings(answered.landed), ...leftDetachedWarnings(answered.landed), ...pushNotRefused(outcome)]),
   };
 }
 
@@ -307,7 +310,9 @@ function restoreMessage(status: RestoreStatus, label: Label): string {
 // modlist-repository.md, Reporting: one line, with each skipped mod, each stat cache not written and each mod built from
 // changes no commit holds in the Output.
 function reportRestored(reporter: Reporter, total: number, outcome: Omit<Extract<RestoreResult, { applied: true }>, 'applied'>): void {
-  const warnings = [...statCacheNotWritten(outcome.landed), ...uncommittedWarnings(outcome.landed), ...pushNotRefused(outcome)];
+  const warnings = [
+    ...statCacheNotWritten(outcome.landed), ...uncommittedWarnings(outcome.landed), ...leftDetachedWarnings(outcome.landed), ...pushNotRefused(outcome),
+  ];
   if (outcome.refused.length > 0) {
     const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...warnings].join('\n');
     reporter.report('error', `Could not restore ${outcome.refused.length} of ${total} mods.`, detail);

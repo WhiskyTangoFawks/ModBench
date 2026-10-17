@@ -1008,6 +1008,7 @@ export interface components {
             folder: string;
             metadataFiles: string[];
             version?: string | null;
+            isSubmodule: boolean;
         };
         BuildProgress: {
             mod?: string | null;
@@ -1775,7 +1776,7 @@ export interface components {
             refused: components["schemas"]["ModRestoreRefusal"][];
         };
         /** @enum {string} */
-        RestoreRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "NotFound" | "Unreadable" | "NotFinished" | "SourceUnavailable" | "SourceAtAnotherCommit" | "NotBuilt";
+        RestoreRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "NoHost" | "NotFound" | "Unreadable" | "NotFinished" | "SourceUnavailable" | "SourceAtAnotherCommit" | "NotBuilt";
         RestoredModResponse: {
             mod: string;
             written: string[];
@@ -1783,6 +1784,7 @@ export interface components {
             statCacheNotWritten?: string | null;
             metadata: components["schemas"]["ModMetadata"];
             uncommitted: boolean;
+            leftDetached?: string | null;
         };
         ScriptCopyRequest: {
             record: components["schemas"]["RecordAddress"];

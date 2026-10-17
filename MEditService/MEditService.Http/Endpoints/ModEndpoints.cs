@@ -114,7 +114,7 @@ internal static class ModEndpoints
         return await EndpointMapping.Answered(
             "Build", logger,
             buildHandler.BuildAsync(
-                [.. mods.Select(mod => new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, mod.MetadataFiles ?? [], mod.Version))],
+                [.. mods.Select(mod => new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, mod.MetadataFiles ?? [], mod.Version, mod.IsSubmodule))],
                 new InstanceToBuild(req.ExcludedSuffix, variants, req.StatCache)),
             EndpointMapping.Refusal,
             landed => new BuiltModResponse(
@@ -137,9 +137,10 @@ internal sealed record BuildConfigurationRequest(
 /// name, the game's archive variants, if any, and the stat cache's folder.</summary>
 internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExcludedSuffix, ArchiveVariantsRequest? Archives, string StatCache);
 
-/// <summary>A mod by name, the source folder whose build configuration names it, its folder, its version, and its
-/// metadata files, which its manifest does not name.</summary>
-internal sealed record BuildModRequest(string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version);
+/// <summary>A mod by name, the source folder whose build configuration names it, its folder, its version, its metadata
+/// files, which its manifest does not name, and whether the Instance adapter makes its repository a submodule (ADR-0023).</summary>
+internal sealed record BuildModRequest(
+    string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule = false);
 
 /// <summary>The variant an archive of textures packs as, and the one every other archive packs as.</summary>
 internal sealed record ArchiveVariantsRequest(ArchiveVariantRequest General, ArchiveVariantRequest Textures)

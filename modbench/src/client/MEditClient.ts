@@ -268,6 +268,8 @@ interface RestoredMod {
   statCacheNotWritten?: string | null;
   /** As a built mod's. */
   uncommitted?: boolean;
+  /** Why the clone of its submodule is not on the branch it follows. */
+  leftDetached?: string | null;
   /** What its manifest says of the mod's version and installation files, for the mod manager's metadata. */
   metadata?: components['schemas']['ModMetadata'];
 }
