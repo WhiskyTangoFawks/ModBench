@@ -7,7 +7,7 @@ Modbench is a modding IDE for Bethesda games, built on VS Code. It treats a modl
 - Clone a modlist as its manifests, and restore the working modlist from them.
 - Review each record a change touches, as a diff, before it reaches the game.
 - Manage multiple contributors working on a single modlist cleanly.
-- Keep your edits to another author's mod on top of each new release.
+- Keep your edits to another author's mod on top of each new release ([how](docs/wiki/workflows.md#patch-another-authors-mod)).
 - Script records in any language, and review a script's changes as you review your own.
 
 ## Is it for you
@@ -88,6 +88,7 @@ VS Code then opens Modbench's walkthrough, which takes you from your instance to
 
 ## Guides
 
+- [Workflows: git and modding](docs/wiki/workflows.md)
 - [Connect your agent](docs/wiki/agent.md)
 - [Write a script](docs/wiki/scripts.md)
 - [Filter records](docs/wiki/record-filter.md)
