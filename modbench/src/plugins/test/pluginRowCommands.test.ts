@@ -331,7 +331,7 @@ describe('modbench.mod.build', () => {
   const PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const MOD_DIRS = new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB'], ['ModC', '/mods/ModC']]);
-  const SOURCE_DIRS = new Map(['ModA', 'ModB', 'ModS', 'ModX'].map((mod) => [mod, `/source/${mod}`]));
+  const SOURCE_DIRS = new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, `/source/${mod}`]));
   const FILES = valueWithSourceDirs(new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, normalize(`/instance/source/${mod}`)])));
   const built = (mod: string, plugins: PluginAddress[] = [], refused: { item: PluginAddress; reason: string }[] = []) =>
     ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [], overwritten: [] });
@@ -366,7 +366,7 @@ describe('modbench.mod.build', () => {
       sourceFiles: (origin) => sourceFiles(FILES, origin),
       saveUnsaved: (mod) => {
         const files = sourceFiles(FILES, mod);
-        if (files === undefined) return Promise.resolve(undefined);
+        if (files === undefined) return Promise.resolve([]);
         const folder = files.file('');
         progressSteps.push(`save ${folder}`);
         return Promise.resolve(options.unsaved?.[folder] ?? []);
@@ -467,16 +467,6 @@ describe('modbench.mod.build', () => {
     expect(reporter.reports.map((r) => r.detail)).toEqual([unsaved]);
   });
 
-  it('refuses, naming the mod, when it has no folder to hold plugin source', async () => {
-    const client = new InMemoryMEditClient();
-    const { handler, reporter } = registered(client);
-
-    await handler(new ModsRowStandIn('ModX'));
-
-    expect(buildCalls()).toEqual([]);
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not build: no source folder for these mods.', detail: 'ModX' }]);
-  });
-
   it('names each refused mod and why in one notification, and builds the rest', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', {
@@ -505,29 +495,29 @@ describe('modbench.mod.build', () => {
     ]);
   });
 
-  it('sends mEdit no mod that is not a source mod, and names it', async () => {
+  it('sends every named mod to source commands, and names the one they refuse in their words', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModA')], refused: [] });
+    client.setCommandResult('build', { landed: [built('ModA')], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
     const { handler, reporter } = registered(client);
     const rows = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModC')];
 
     await handler(rows[0], rows);
 
-    expect(buildCalls()).toEqual([[['ModA']]]);
+    expect(buildCalls()).toEqual([[['ModA', 'ModC']]]);
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not build 1 of 2 mods.', detail: '"ModC" (it is not a source mod)' },
+      { severity: 'error', message: 'Could not build 1 of 2 mods.', detail: '"ModC" (no repository in the source folder builds it)' },
     ]);
   });
 
-  it('names a plugin no mod provides before a mod that is not a source mod', async () => {
+  it('names a plugin no mod provides before a mod source commands refuse', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModA')], refused: [] });
+    client.setCommandResult('build', { landed: [built('ModA')], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
     const { handler, reporter } = registered(client);
     const rows = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModC'), row({ name: 'Loose.esp', origin: 'Overwrite' })];
 
     await handler(rows[0], rows);
 
-    expect(reporter.reports.map((r) => r.detail)).toEqual(['"Loose.esp (Overwrite)" (it is not in a mod), "ModC" (it is not a source mod)']);
+    expect(reporter.reports.map((r) => r.detail)).toEqual(['"Loose.esp (Overwrite)" (it is not in a mod), "ModC" (no repository in the source folder builds it)']);
   });
 
   it('points at the Problems panel when the build left diagnostics, and puts them on the source files', async () => {
@@ -691,21 +681,29 @@ describe('modbench.mod.build', () => {
     expect(buildCalls()).toEqual([[['ModB']]]);
   });
 
-  it.each([
-    ['a mod that is not a source mod', () => new ModsRowStandIn('ModC')],
-    ['a plugin no mod provides', () => row({ name: 'Game.esm', origin: 'Data' })],
-    ['a row that carries no mod or plugin', () => new TreeItem('Separator')],
-  ])('from the palette with %s selected, falls through to the pick of every source mod, and refuses nothing', async (_what, selected) => {
+  it('from the palette with only a mod that is not a source mod selected, sends it to source commands without the pick', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModB')], refused: [] });
-    showQuickPick.mockResolvedValueOnce([{ label: 'ModB' }]);
-    const { handler, reporter } = registered(client, { selection: [selected()] });
+    client.setCommandResult('build', { landed: [], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
+    const { handler, reporter } = registered(client, { selection: [new ModsRowStandIn('ModC')] });
 
     await handler();
 
-    expect(showQuickPick).toHaveBeenCalledOnce();
-    expect(buildCalls()).toEqual([[['ModB']]]);
-    expect(reporter.reports).toEqual([]);
+    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(buildCalls()).toEqual([[['ModC']]]);
+    expect(reporter.reports.map((r) => r.detail)).toEqual(['"ModC" (no repository in the source folder builds it)']);
+  });
+
+  it.each([
+    ['a plugin no mod provides', () => row({ name: 'Game.esm', origin: 'Data' }), '"Game.esm (Data)" (it is not in a mod)'],
+    ['a row that carries no mod or plugin', () => new TreeItem('Separator'), '"Separator" (it carries no mod or plugin)'],
+  ])('from the palette with only %s selected, refuses it without the pick', async (_what, selected, detail) => {
+    const { handler, reporter } = registered(new InMemoryMEditClient(), { selection: [selected()] });
+
+    await handler();
+
+    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(buildCalls()).toEqual([]);
+    expect(reporter.reports.map((r) => r.detail)).toEqual([detail]);
   });
 
   it('from the palette with no mod, picks among every source mod, and builds the picks', async () => {
@@ -717,7 +715,7 @@ describe('modbench.mod.build', () => {
     await handler();
 
     expect(showQuickPick).toHaveBeenCalledWith(
-      [{ label: 'ModA' }, { label: 'ModB' }, { label: 'ModS' }, { label: 'ModX' }], { canPickMany: true, placeHolder: 'Build which mods?' });
+      [{ label: 'ModA' }, { label: 'ModB' }, { label: 'ModS' }], { canPickMany: true, placeHolder: 'Build which mods?' });
     expect(buildCalls()).toEqual([[['ModA', 'ModB']]]);
   });
 
@@ -752,15 +750,15 @@ describe('modbench.mod.build', () => {
       expect([...diagnostics]).toEqual([]);
     });
 
-    it('refuses a mod no repository in the source folder holds, naming why, and builds the rest', async () => {
+    it('sends every named mod to source commands, and answers the refusal they name', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('build', { landed: [built('ModA')], refused: [] });
+      client.setCommandResult('build', { landed: [built('ModA')], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
       const { handler } = registered(client);
 
       const answered = await handler(calling('ModA', 'ModC'));
 
-      expect(builds).toEqual([[['ModA'], 'Fallout4']]);
-      expect(answered).toMatchObject({ applied: true, outcome: { refused: [{ item: 'ModC', reason: 'it is not a source mod' }] } });
+      expect(builds).toEqual([[['ModA', 'ModC'], 'Fallout4']]);
+      expect(answered).toMatchObject({ applied: true, outcome: { refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] } });
     });
 
     it('answers a plugin and an archive refused inside a built mod as partial failures', async () => {
