@@ -8,7 +8,7 @@ What MO2 does: [the surface audit](../research/mo2-surface-audit.md).
 
 | Reason | Why | Gestures | Examples |
 |---|---|---|---|
-| VS Code provides it | VS Code already supplies the file tab, Explorer, Open Folder, tasks, settings and the columnless tree ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)). A mod's `meta.ini` stays editable as text. | 29 | Visit the game's Nexus page; Open folders: game, MyGames, INIs, instance, mods, profile, downloads; Switch or create an instance |
+| VS Code provides it | VS Code already supplies the file tab, Explorer, Open Folder, tasks, settings and the columnless tree ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)). A mod's `meta.ini` stays editable as text. | 27 | Visit the game's Nexus page; Open folders: game, MyGames, INIs, instance, mods, profile, downloads; Switch an instance |
 | Manual file management | The operation is a compound file operation. VS Code's file tab and Explorer do it, and Modbench does not abstract the file system away. | 10 | Rename a profile; Remove a profile; Transfer saves |
 | An ADR decides it | A watcher feeds the read model, so a list needs no refresh gesture ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)). Modbench never assumes it owns a file, so it never deletes one silently ([ADR-0003](../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)). A mod folder has one package, so an install never merges into a mod ([ADR-0023](../adr/0023-a-mod-folder-has-only-one-package.md)). | 3 | Delete orphaned .meta files on refresh, without asking; Refresh the list |
 | Platform | MO2 runs programs through a virtual file system. Modbench has no virtual file system. | 1 | Conflicts tab: preview, execute with the virtual file system |
@@ -27,7 +27,6 @@ Gestures Modbench does differently.
 | 1 | The top bar | The Toolbox, the container's first view: a small readout of the instance value, Game and Profile, with the workspace actions in its title bar ([toolbox.md](../architecture/surfaces/toolbox.md)) | MO2's top bar | Limitation: VS Code has no container-title contribution point. |
 | 2 | Downloads | Starts collapsed. The status-bar item for the ambient glance waits for Nexus integration and the `nxm://` handler ([downloads.md](../architecture/surfaces/downloads.md)). | A tab, always visible | Ruling: Downloads is occasional, unlike Mods and Plugins. |
 | 3 | Archives | No Archives view. | An Archives tab | Ruling. |
-| 4 | Deploy and run | MO2 runs the game and the tools, not Modbench. Deployment is a boundary of its own (Orthogonality), and MO2's virtual file system is one implementation of it. | Runs every program through its virtual file system | Ruling. |
 | 5 | Downloads rows | Excluded rows, when shown, are dimmed | Hidden rows look like the rest | Ruling: show excluded mixes them into the list, and the dim is the only way to tell them apart. |
 | 6 | Downloads order | Newest file first | By status, newest first within each | Ruling: the file just downloaded is the one wanted next. |
 | 7 | Downloads selection | Several rows selected at once; delete, exclude and include act on the whole selection | One row at a time, plus bulk items: hide or delete all, installed or uninstalled, and query info for every incomplete file | Ruling: selecting several is VS Code's native way to act on many. |
@@ -51,8 +50,6 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Switch an instance | Toolbar: Manage Instances | VS Code provides it |
 | Tools menu | Toolbar: Tools | VS Code provides it |
 | Endorse MO2, notifications, update, help | Toolbar | VS Code provides it |
-| Run an executable from the run box | Run box, toolbar, Run menu | VS Code provides it |
-| Pin or unpin an executable on the toolbar | Run box, toolbar context menu | VS Code provides it |
 | Create a desktop or start-menu shortcut for an executable | Run box: Shortcut | VS Code provides it |
 
 ### Profile

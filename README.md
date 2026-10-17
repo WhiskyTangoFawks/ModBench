@@ -6,18 +6,17 @@ Modbench is a modding IDE for Bethesda games, built on VS Code. It treats a modl
 - Try a change on a branch, and drop it when it breaks the game.
 - Clone a modlist as its manifests, and restore the working modlist from them.
 - Review each record a change touches, as a diff, before it reaches the game.
+- Manage multiple contributors working on a single modlist cleanly.
 - Keep your edits to another author's mod on top of each new release.
 - Script records in any language, and review a script's changes as you review your own.
 
 ## Is it for you
 
-Modbench is for a modder who works as a developer works: in an IDE, with git. You need to know git and VS Code, or want to learn them.
-
-Modbench never edits a plugin in place, and [How it works](#how-it-works) says why. For an edit in place, use xEdit.
+Modbench is a power tool for an advanced modlist maintainer who wants the functionality of standard software development tooling. You need to know git and VS Code, or at least want to learn them.
 
 ## How it works
 
-Modbench is VS Code. The editor, the terminal, search, extensions and your agent work on your modlist. Mod management and record editing are one tool, so when you reorder a mod, the record panel follows. The Mods view works as MO2's does, and the record panel as xEdit's does.
+Modbench is a VS Code extension. The editor, the terminal, search, extensions and your agent work on your modlist. Mod management and record editing are one unified tool, so when you reorder a mod, the record panel follows. The Mods view works as MO2's does, and the record panel as xEdit's does.
 
 Git holds the history. You commit, diff, branch and merge a modlist as you would any project, and you roll back a change that breaks the game.
 
@@ -25,25 +24,33 @@ VS Code edits files, and git stores files. So Modbench works on files, and turns
 
 ### A mod is its manifest
 
-Git does not hold gigabytes of binary files. So the modlist repository holds each mod as a manifest: the file the mod was installed from, and each file the mod holds. The profiles and MO2's configuration sit beside the manifests. An upgrade, a new mod or a removed file reads as a change to a manifest.
+Git does not hold gigabytes of binary files. So the modlist repository holds each mod as a manifest, which restores the mod as installed. The profiles and MO2's modlist configuration sit beside the manifests. An upgrade, a new mod or a removed file reads as a change to a manifest, which git tracks.
 
-Update manifest writes a mod's manifest from its folder, and restore from manifest rebuilds the mod from its manifest. Clone a modlist and restore it, and you have a working modlist to develop, as Wabbajack gives a player one to play.
-
-The instance stays MO2's, in MO2's own format. You switch between MO2 and Modbench at any time.
+The instance stays MO2's, in MO2's own format. You switch between MO2 and Modbench at any time. Nothing Modbench does breaks using the list in MO2.
 
 ### A plugin is its source
 
-A plugin is one binary file, and git cannot diff it. So Modbench decompiles a mod's plugins into plugin source: one JSON file for each record and its child records. The plugin source lives in a git repository of the mod's own, and the mod becomes a source mod. Each edit is then a change to one record's file, which you review in Source Control. A merge conflict lands in one record.
+A plugin is a binary file: git cannot diff it, and VS Code cannot edit it. Modbench shows any plugin's records in a record panel familiar to xEdit users, but to edit a plugin, you decompile it first. Modbench uses Mutagen to decompile a mod's plugins into JSON for editing (similar to Spriggit), in a git repository of the mod's own in the `source/` folder, alongside `mods/`. Each record edit is then a change to one file, which you review in VS Code's Source Control. A source mod with a git remote becomes a submodule of the modlist repository, and restoring the modlist clones it.
 
-A build writes the plugins from their plugin source, and the game, MO2 and xEdit load what it wrote. Unchanged plugin source builds plugins that mean the same, record for record. Decompile refuses a plugin it cannot round-trip, and names the record at fault. When another tool changes a built plugin, Modbench tells you.
+A build reconstructs the binary plugin from its source on demand, and places it in the mod's folder in `mods/` as a build artifact.
 
-You view any plugin's records, and edit a source mod's. To edit another author's mod, you use the vendored workflow: their releases on `main`, your edits on the `edit` branch. When they release a new version, you decompile it onto `main` and merge `edit`.
-
-A source mod with a remote is a submodule of the modlist repository. Restoring the modlist builds the mod from its source.
+## Features
 
 ### Scripts
 
-A script reads and writes records, as an xEdit script does. Modbench's backend is an HTTP API, so any language can script it. Modbench ships a Python API, and VS Code's Python tools run and debug a script. Each write is a change to a record's file, so you review a script's work in Source Control, as you review your own.
+Modbench's Mutagen-powered backend has an HTTP API, so unlike xEdit scripts, which are written in xEdit's own Pascal dialect, any language can script Modbench. Modbench ships a Python API for convenience. VS Code's native tools, or any other IDE, run and debug scripts.
+
+### Filtering
+
+The record index is a DuckDB database, so you filter records with SQL queries.
+
+### External changes
+
+Modbench picks up a change another tool makes, such as MO2, xEdit or a git checkout, through VS Code's file watchers. When another tool changes a plugin a build wrote, Modbench tells you.
+
+### MCP server
+
+The included MCP server gives your agent Modbench's gestures as tools, so agentic workflows work as you expect in VS Code.
 
 ## Status
 
@@ -54,17 +61,17 @@ What works today:
 - Mods: install from a file or a folder, separators, order, enable, and the downloads folder.
 - Plugins: plugin order and checkboxes, and each active plugin's records in a tree.
 - Records: an xEdit-style record panel across the active plugins, with conflict colours, field editing, copy as override, new record, and Referenced By.
-- Version control: the modlist repository, source mods, build, and external changes.
-- Record filter: a plain `.sql` file run against the active plugins' records.
-- Scripts: any language through the HTTP API, and Python through `import medit`.
-- Agents: an MCP server for your agent.
+- Version control: the modlist repository, source mods and build.
 
 Planned, on the [milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones) board:
 
+- Deploy and launch: Modbench does not launch the game yet, so you launch it from MO2.
 - Downloads: fetch each file a manifest names, so a clone restores with no file fetched by hand. This waits on a Nexus API key.
-- Repair of a malformed plugin, so it decompiles.
-
-Not yet planned: Vortex instances, FOMOD installers, creating a new instance, and LOOT sorting.
+- Repair of a malformed plugin, so it decompiles. Mutagen is stricter than xEdit about what it accepts, so not every plugin decompiles today.
+- Vortex instances, alongside MO2.
+- FOMOD installers.
+- Creating a new instance. Today Modbench opens an existing one.
+- LOOT integration.
 
 ## Get started
 
@@ -82,6 +89,7 @@ VS Code then opens Modbench's walkthrough, which takes you from your instance to
 
 - [Connect your agent](docs/wiki/agent.md)
 - [Write a script](docs/wiki/scripts.md)
+- [Filter records](docs/wiki/record-filter.md)
 
 ## Contributing
 
