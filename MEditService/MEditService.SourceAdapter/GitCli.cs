@@ -27,23 +27,24 @@ internal static class GitCli
         }
     }
 
-    /// <summary>Clones <paramref name="remote"/> into <paramref name="folder"/> with each of <paramref name="settings"/>.
-    /// Asks for no credentials, as no one can answer, and stops when <paramref name="cancel"/> does.</summary>
-    internal static void Clone(string remote, string folder, IEnumerable<(string Key, string Value)> settings, CancellationToken cancel)
+    /// <summary>Has git check out the submodule at <paramref name="folder"/> at the commit its repository pins, with each of
+    /// <paramref name="settings"/>. Asks for no credentials, and stops when <paramref name="cancel"/> does.</summary>
+    internal static void UpdateSubmodule(string folder, IEnumerable<(string Key, string Value)> settings, CancellationToken cancel)
     {
-        var parent = Directory.CreateDirectory(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(folder)) ?? folder).FullName;
-        string[] args = ["clone", "-q", "-o", "origin", .. settings.SelectMany(setting => new[] { "-c", $"{setting.Key}={setting.Value}" }), "--", remote, folder];
+        var path = Path.TrimEndingDirectorySeparator(folder);
+        var parent = Directory.CreateDirectory(Path.GetDirectoryName(path) ?? path).FullName;
+        string[] args = [.. settings.SelectMany(setting => new[] { "-c", $"{setting.Key}={setting.Value}" }), "submodule", "update", "-q", "--init", "--", Path.GetFileName(path)];
         var psi = StartInfo(args, parent);
         psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
         var (exitCode, _, stderr) = Execute(psi, parent, cancel);
         if (cancel.IsCancellationRequested) throw SourceStopException.GitFailed("the clone was cancelled");
-        if (exitCode != 0) throw Failed(args, exitCode, stderr);
+        if (exitCode != 0) throw Failed("submodule", args, exitCode, stderr);
     }
 
     internal static string Run(string gitDir, string workTree, params string[] args)
     {
         var (exitCode, stdout, stderr) = Execute(gitDir, workTree, args);
-        if (exitCode != 0) throw Failed(args, exitCode, stderr);
+        if (exitCode != 0) throw Failed(args[0], args, exitCode, stderr);
         return stdout;
     }
 
@@ -63,10 +64,10 @@ internal static class GitCli
 
     // Only the subcommand and the exit code are named: the arguments and git's stderr can carry paths
     // onto the wire via a refusal's message, so they go to the log instead.
-    private static SourceStopException Failed(string[] args, int exitCode, string stderr)
+    private static SourceStopException Failed(string subcommand, string[] args, int exitCode, string stderr)
     {
         Log.Warning("git {Args} failed ({ExitCode}): {Stderr}", args, exitCode, stderr);
-        return SourceStopException.GitFailed($"git {args[0]} failed ({exitCode})");
+        return SourceStopException.GitFailed($"git {subcommand} failed ({exitCode})");
     }
 
     private static ProcessStartInfo StartInfo(string[] args, string workingDirectory)

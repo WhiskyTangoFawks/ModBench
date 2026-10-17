@@ -278,6 +278,14 @@ export interface SourceMods {
   readonly notes: readonly string[];
 }
 
+/** A source mod's repository as the instance repository holds it (ADR-0023): the folder git checks it out in, the commit
+ *  the instance repository pins and the branch it follows. */
+export interface Submodule { readonly folder: string; readonly pin: string; readonly branch?: string }
+
+/** Where a clone fetches a source mod's repository from: its remote's URL with no credential, or why it has no host
+ *  (ADR-0023). */
+export type SourceHost = { readonly kind: 'host'; readonly url: string } | { readonly kind: 'noRemote' } | { readonly kind: 'noHost'; readonly why: string };
+
 /** Why one source mod is not as a submodule would be. */
 export interface SubmoduleNote { readonly mod: string; readonly note: string }
 
@@ -473,6 +481,10 @@ export interface InstanceAdapter {
   /** Makes each source mod with a remote a submodule: its entry in `.gitmodules` and its line in the ignore list. A source mod
    *  it cannot read keeps the entry and line it has. */
   writeSubmodules(): Promise<SubmoduleReport>;
+  /** The host of the repository in `sourceFolder`, through `origin`, else its first remote by name. */
+  sourceHost(sourceFolder: string): Promise<FileRead<SourceHost>>;
+  /** The submodule of the instance repository named `name`, as its index pins it, or what the repository lacks of it. */
+  submodule(name: string): Promise<Submodule | { readonly lacks: string }>;
   /** Whether the instance folder holds a repository now, read from disk. */
   repositoryOnDisk(): Promise<boolean>;
   /** Takes back the repository `git init` made. Rejects, removing nothing, when it holds a commit or a ref. */
@@ -481,7 +493,7 @@ export interface InstanceAdapter {
    *  `refuseUnpublishedPins` would write one. */
   checkPushRefusalFree(): Promise<void>;
   /** Makes the instance repository refuse a push of a pin that is on none of its source mod's remotes. Rejects, writing
-   *  nothing, when a pre-push hook is there. */
+   *  nothing, when a pre-push hook other than this one is there. */
   refuseUnpublishedPins(): Promise<void>;
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;

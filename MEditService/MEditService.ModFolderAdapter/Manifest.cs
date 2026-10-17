@@ -9,17 +9,17 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
         (_, PackageEntry.NotHeld) => new FileBytes.NotHeld(),
         (null, _) => new FileBytes.NoInstallationFile(),
         (ManifestPackage.InstallationFile installationFile, var entry) => new FileBytes.InInstallationFile(installationFile.Name, entry.PathOf(file.Path)),
-        (ManifestPackage.SourceMod sourceMod, var entry) => new FileBytes.AtCommit(sourceMod.Commit, entry.PathOf(file.Path)),
+        (ManifestPackage.SourceRepository, var entry) => new FileBytes.Built(entry.PathOf(file.Path)),
         (ManifestPackage.GameFolder, var entry) => new FileBytes.InGameFolder(entry.PathOf(file.Path)),
         _ => throw new ArgumentOutOfRangeException(nameof(file), file, null),
     };
 
-    /// <summary>The hash or commit that fixes <paramref name="file"/>'s bytes, and its path in the package. Null when the
-    /// line names no bytes.</summary>
+    /// <summary>The hash, or the repository whose last build wrote it, that fixes <paramref name="file"/>'s bytes, and its
+    /// path in the package. Null when the line names no bytes.</summary>
     internal (string Package, string Path)? FixedBy(ManifestFile file) => (BytesOf(file), Package) switch
     {
         (FileBytes.InInstallationFile held, ManifestPackage.InstallationFile installationFile) => (installationFile.Hash, held.Path),
-        (FileBytes.AtCommit built, _) => (built.Commit, built.Path),
+        (FileBytes.Built built, ManifestPackage.SourceRepository repository) => (repository.Name, built.Path),
         (FileBytes.InGameFolder taken, ManifestPackage.GameFolder gameFolder) => (gameFolder.Hash, taken.Path),
         _ => null,
     };
@@ -32,7 +32,9 @@ public abstract record ManifestPackage
     /// <summary>The downloaded file the mod was installed from, with its page on its host.</summary>
     public sealed record InstallationFile(string Name, long Size, string Hash, string? Page = null) : ManifestPackage;
 
-    public sealed record SourceMod(string Remote, string Commit) : ManifestPackage;
+    /// <summary>A source mod's repository by its folder's name, which names its submodule when it is one. Git holds a
+    /// submodule's remote, pin and branch; a repository that is no submodule has no host (ADR-0023).</summary>
+    public sealed record SourceRepository(string Name, bool IsSubmodule) : ManifestPackage;
 
     /// <summary>The game folder by the game's name, pinned by a hash of the files the mod takes from it (ADR-0023).</summary>
     public sealed record GameFolder(string Name, string Hash) : ManifestPackage;
@@ -45,7 +47,8 @@ public abstract record FileBytes
 
     public sealed record InInstallationFile(string Name, string Path) : FileBytes;
 
-    public sealed record AtCommit(string Commit, string Path) : FileBytes;
+    /// <summary>The file at <paramref name="Path"/> as the source mod's build writes it.</summary>
+    public sealed record Built(string Path) : FileBytes;
 
     public sealed record InGameFolder(string Path) : FileBytes;
 

@@ -8,7 +8,7 @@ import { ba2VersionsOf } from '../tables/gamePaths';
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'init'>;
   adapter: Pick<InstanceAdapter,
-    'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder'>;
+    'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder' | 'sourceHost'>;
 }
 
 export const metadataUnreadable = (reason: string): string => `its metadata could not be read: ${reason}`;
@@ -27,13 +27,15 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
         const sourceFolder = sourceDirs.get(mod);
         const folder = await adapter.modFolderPath(mod);
         const metadata = await adapter.modMetadata(mod);
-        if (sourceFolder === undefined) refused.push({ item: mod, reason: 'no repository in the source folder builds it' });
+        const host = sourceFolder === undefined ? undefined : await adapter.sourceHost(sourceFolder);
+        if (sourceFolder === undefined || host === undefined) refused.push({ item: mod, reason: 'no repository in the source folder builds it' });
         else if (folder === undefined) refused.push({ item: mod, reason: 'its name gives it no folder' });
         else if (metadata.kind === 'unreadable') refused.push({ item: mod, reason: metadataUnreadable(metadata.reason) });
+        else if (host.kind === 'unreadable') refused.push({ item: mod, reason: `its remote could not be read: ${host.reason}` });
         else {
           sent.push({
             name: mod, sourceFolder, folder, metadataFiles: [...adapter.metadataFilesInModFolder],
-            version: metadata.answer.version,
+            version: metadata.answer.version, isSubmodule: host.answer.kind === 'host',
           });
         }
       }

@@ -5,7 +5,7 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>Restore from manifest (ADR-0022): every file whose bytes differ is written, or the mod's source builds it, and
+/// <summary>Restore from manifest (ADR-0022): every file whose bytes differ is written, or the mod's submodule builds it, and
 /// each file no line names is named for the extension's trash. A mod lacking anything is skipped.</summary>
 public sealed class RestoreFromManifestHandler(
     IModFolderRepository repository, INotificationPublisher notifications, ISourceAdapter source, BuildHandler build)
@@ -35,7 +35,12 @@ public sealed class RestoreFromManifestHandler(
 
         var resolved = new PackageContents(repository, manifest, mod.InstallationFile, instance.GameFolder).Resolve();
         if (resolved.Lacks.Count > 0) return Lacked(resolved.Lacks);
-        if (resolved.Built is { } built) return await RebuildAsync(mod, instance, built, manifest.Version, cancel);
+        if (resolved.Built is { } submodule)
+        {
+            return mod.Submodule is { } pinned
+                ? await RebuildAsync(mod, instance, pinned, manifest.Version, cancel)
+                : Lacked([new PackageContents.Lack.SubmoduleMissing(submodule)]);
+        }
 
         IReadOnlyList<string> namedByNoLine;
         ModFolderFiles read;
@@ -72,16 +77,14 @@ public sealed class RestoreFromManifestHandler(
     }
 
     // modlist-repository.md, Restore from manifest, stories 3 and 5: what the build makes comes back as the build makes it,
-    // and only at the commit the manifest names.
+    // and only at the commit the instance repository pins.
     private async Task<ItemAnswer<RestoreSkip, RestoredMod>> RebuildAsync(
-        ModToRestore mod, InstanceToRestore instance, SharedSource built, string? version,
-        CancellationToken cancel)
+        ModToRestore mod, InstanceToRestore instance, Submodule submodule, string? version, CancellationToken cancel)
     {
-        if (mod.SourceFolder is not { } sourceFolder) return Skipped(RestoreRefusal.SourceUnavailable, "its name gives it no source folder");
-        if (!source.CommitAtHead(sourceFolder, built, cancel).Holds(out var head, out var failure))
-            return Skipped(RestoreRefusal.SourceUnavailable, $"its source could not be cloned or read: {failure.Reason.TrimEnd('.')}");
-        if (head != built.Commit)
-            return Skipped(RestoreRefusal.SourceAtAnotherCommit, $"its source is at {head}, not at {built.Commit}, the commit its manifest names");
+        if (!source.CommitAtHead(submodule, cancel).Holds(out var checkedOut, out var failure))
+            return Skipped(RestoreRefusal.SourceUnavailable, $"its submodule could not be cloned or read: {failure.Reason.TrimEnd('.')}");
+        if (checkedOut.Commit != submodule.Pin)
+            return Skipped(RestoreRefusal.SourceAtAnotherCommit, $"its submodule is at {checkedOut.Commit}, not at {submodule.Pin}, the commit the instance repository pins");
 
         var metadataFiles = mod.MetadataFiles.ToHashSet(StringComparer.Ordinal);
         Dictionary<string, string> before;
@@ -95,7 +98,7 @@ public sealed class RestoreFromManifestHandler(
         }
 
         var answer = await build.BuildOneAsync(
-            new ModToBuild(mod.Name, sourceFolder, mod.Folder, mod.MetadataFiles, version),
+            new ModToBuild(mod.Name, submodule.Folder, mod.Folder, mod.MetadataFiles, version, IsSubmodule: true),
             new InstanceToBuild(instance.ExcludedSuffix, instance.Archives, instance.StatCache));
         if (answer is ItemAnswer<BuildRefusal, BuiltMod>.Refusing refusing)
             return ItemAnswer<RestoreSkip, RestoredMod>.Refused(new RestoreSkip(RestoreRefusal.NotBuilt, refusing.Refusal), refusing.Message);
@@ -115,7 +118,8 @@ public sealed class RestoreFromManifestHandler(
             var manifest = outcome.Manifest ?? throw new InvalidOperationException("A build that stopped nowhere wrote its manifest.");
             return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod(
                 [.. after.Where(file => before.GetValueOrDefault(file.Key) != file.Value).Select(file => file.Key).Order(StringComparer.Ordinal)],
-                repository.NamedByNoLine(mod.Folder, mod.Name, manifest, metadataFiles), StatCacheNotWritten: null, ModMetadata.Of(manifest), outcome.Uncommitted));
+                repository.NamedByNoLine(mod.Folder, mod.Name, manifest, metadataFiles), StatCacheNotWritten: null, ModMetadata.Of(manifest), outcome.Uncommitted,
+                checkedOut.LeftDetached));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
         {
@@ -130,10 +134,14 @@ public sealed class RestoreFromManifestHandler(
     private static ItemAnswer<RestoreSkip, RestoredMod> Lacked(IReadOnlyList<PackageContents.Lack> lacks)
     {
         var why = string.Join("; ", lacks.Select(lack => lack.Text));
+        if (lacks.Any(lack => lack is PackageContents.Lack.NoHost)) return Skipped(RestoreRefusal.NoHost, why);
         var gameFiles = lacks.OfType<PackageContents.Lack.GameFileMissing>().Select(lack => lack.Path).ToList();
         var installationFile = lacks.OfType<PackageContents.Lack.InstallationFileMissing>().Select(lack => lack.Name).FirstOrDefault();
-        if (gameFiles.Count == 0 && installationFile is null) return Skipped(RestoreRefusal.Lacking, why);
-        return Skipped(new RestoreSkip(RestoreRefusal.NotFound) { InstallationFileNotFound = installationFile, GameFilesNotFound = gameFiles }, why);
+        var submodule = lacks.OfType<PackageContents.Lack.SubmoduleMissing>().Select(lack => lack.Name).FirstOrDefault();
+        if (gameFiles.Count == 0 && installationFile is null && submodule is null) return Skipped(RestoreRefusal.Lacking, why);
+        return Skipped(
+            new RestoreSkip(RestoreRefusal.NotFound) { InstallationFileNotFound = installationFile, GameFilesNotFound = gameFiles, SubmoduleNotFound = submodule },
+            why);
     }
 
     private static ItemAnswer<RestoreSkip, RestoredMod> Skipped(RestoreRefusal refusal, string why) =>

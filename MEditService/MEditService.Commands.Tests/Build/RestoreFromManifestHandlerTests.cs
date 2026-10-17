@@ -25,7 +25,7 @@ public sealed class RestoreFromManifestHandlerTests
     private static InstanceToRestore Instance() => new("stat-cache", ".mohidden", Archives: null);
 
     private static ModToRestore ModFrom(string folder, InstallationFile? installationFile = null) =>
-        new(folder[(folder.LastIndexOf('/') + 1)..], folder, installationFile, ["meta.ini"], SourceFolder: null);
+        new(folder[(folder.LastIndexOf('/') + 1)..], folder, installationFile, ["meta.ini"]);
 
     private InstallationFile Downloaded(string path, params (string Path, string Text)[] entries) =>
         DownloadedBytes(path, [.. entries.Select(e => (e.Path, Encoding.ASCII.GetBytes(e.Text)))]);

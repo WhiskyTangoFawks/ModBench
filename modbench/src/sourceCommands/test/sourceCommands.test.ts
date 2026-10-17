@@ -10,10 +10,13 @@ const fakeAdapter = (answers: InstanceAnswers = {}) => fakeInstanceAdapter(readi
 const BUILT = { landed: [{ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [] }], refused: [] };
 
 describe('sourceCommands build', () => {
-  it('hands mEdit each mod with the source folder that builds it, its folder and its metadata files, the release\'s archive variants and the stat cache\'s folder', async () => {
+  it('hands mEdit each mod with the source folder that builds it, whether that is a submodule, its folder and its metadata files, the release\'s archive variants and the stat cache\'s folder', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
-    const adapter = fakeAdapter({ metadata: new Map([['ModA', { version: '1.2.3' }]]) });
+    const adapter = fakeAdapter({
+      metadata: new Map([['ModA', { version: '1.2.3' }]]),
+      hosts: new Map([['/instance/source/ModA', { kind: 'read', answer: { kind: 'host', url: 'https://example.test/a.git' } }]]),
+    });
 
     await sourceCommands({ client, adapter }).build(['ModA', 'ModB'], 'Fallout4', SOURCES);
 
@@ -21,8 +24,8 @@ describe('sourceCommands build', () => {
     expect(client.calls).toEqual([{
       method: 'build',
       args: [[
-        { name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], version: '1.2.3' },
-        { name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'] },
+        { name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], version: '1.2.3', isSubmodule: true },
+        { name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], isSubmodule: false },
       ], { excludedSuffix: '.excluded', archives: { general: ba2, textures: ba2 }, statCache: '/instance/stat-cache' }],
     }]);
   });
@@ -36,6 +39,17 @@ describe('sourceCommands build', () => {
 
     expect(client.calls).toMatchObject([{ args: [[{ name: 'ModB' }], expect.anything()] }]);
     expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: 'its metadata could not be read: EISDIR: meta.ini' }] });
+  });
+
+  it('refuses a mod whose remote cannot be read, naming why, and builds the rest', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('build', BUILT);
+    const adapter = fakeAdapter({ hosts: new Map([['/instance/source/ModA', { kind: 'unreadable', reason: 'git remote failed' }]]) });
+
+    const outcome = await sourceCommands({ client, adapter }).build(['ModA', 'ModB'], undefined, SOURCES);
+
+    expect(client.calls).toMatchObject([{ args: [[{ name: 'ModB' }], expect.anything()] }]);
+    expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: 'its remote could not be read: git remote failed' }] });
   });
 
   it('hands mEdit no archive variant for a release the table names none for', async () => {

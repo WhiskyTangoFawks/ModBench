@@ -51,6 +51,7 @@ describe('a mod row says its status against its manifest after its version (mods
     ['metadata that differs from its manifest', status('ModA', { metadataDiffers: true }), true, '1.0 · differs'],
     ['files its package does not hold', status('ModA', { notInPackage: ['a.esp', 'b.esp'] }), true, '1.0 · 2 files its package does not hold'],
     ['a difference and a file its package does not hold', status('ModA', { differing: ['a.nif'], notInPackage: ['a.esp'] }), true, '1.0 · differs · 1 file its package does not hold'],
+    ['a package with no host', status('ModA', { noHost: true }), true, '1.0 · its package has no host'],
     ['no manifest while the instance holds no repository', status('ModA', { noManifest: true }), false, '1.0'],
   ])('%s', async (_case, held, holdsRepository, description) => {
     const { provider } = providerOver(held ? [held] : [], holdsRepository);

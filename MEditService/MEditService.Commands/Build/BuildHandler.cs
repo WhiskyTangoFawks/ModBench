@@ -109,7 +109,7 @@ public sealed class BuildHandler
         foreach (var archive in source.Archives.Select(archive => archive.Path))
             made.Add(written.PathOf(archive), vouched: archivesRefused.All(refusal => refusal.Item != archive));
 
-        var (manifest, failure) = WriteManifest(mod, instance, source.Shared, made);
+        var (manifest, failure) = WriteManifest(mod, instance, new ManifestPackage.SourceRepository(_modFolders.FolderName(mod.SourceFolder), mod.IsSubmodule), made);
         return ItemAnswer<BuildRefusal, BuiltMod>.Landed(new BuiltMod(
             landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)], failure, source.Uncommitted, source.Unpushed, manifest));
     }
@@ -132,16 +132,13 @@ public sealed class BuildHandler
     }
 
     // The manifest is written last (mods.md, Build, story 1), and names only the files the build made (story 3).
-    private (Manifest? Written, string? Failure) WriteManifest(ModToBuild mod, InstanceToBuild instance, SharedSource? shared, MadeFiles made)
+    private (Manifest? Written, string? Failure) WriteManifest(ModToBuild mod, InstanceToBuild instance, ManifestPackage.SourceRepository package, MadeFiles made)
     {
         try
         {
             var read = _modFolders.Files(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
             var files = read.Files.Where(file => made.Contains(file.Path)).ToList();
-            var manifest = new Manifest(
-                shared is { } source ? new ManifestPackage.SourceMod(source.Remote, source.Commit) : null,
-                [.. files.Select(file => new ManifestFile(file.Path, shared is null ? new PackageEntry.NotHeld() : new PackageEntry.Held()))],
-                mod.Version);
+            var manifest = new Manifest(package, [.. files.Select(file => new ManifestFile(file.Path, new PackageEntry.Held()))], mod.Version);
             _modFolders.WriteManifest(mod.Folder, mod.Name, manifest);
             // A stat cache that cannot be written leaves each file to be read again, and the mod's status says why.
             _ = _modFolders.KeepInStatCache(

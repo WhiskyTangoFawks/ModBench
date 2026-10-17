@@ -1,5 +1,6 @@
 using MEditService.Commands.Build;
 using MEditService.ModFolderAdapter;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -24,10 +25,10 @@ internal static class ManifestEndpoints
             .WithTags("Modlist")
             .WithDescription(
                 "Writes each file a mod's manifest names whose bytes differ, from the installation files and game files " +
-                "it names (ADR-0022), or builds a mod whose manifest names its source at the commit it names, cloning the source " +
-                "when it is absent and skipping it at another commit, and names each file no line names, for the extension's " +
-                "trash; it writes no other file. A " +
-                "mod lands, is skipped naming what it lacks and each installation file and game file the request did not hand, or is " +
+                "it names (ADR-0022), or builds a mod whose manifest names its submodule at the commit the instance repository " +
+                "pins, which git clones when it is absent, skipping it at another commit, and names each file no line names, for " +
+                "the extension's trash; it writes no other file. A " +
+                "mod lands, is skipped naming what it lacks and each installation file, game file and submodule the request did not hand, or is " +
                 "named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, " +
                 "which names the request's gesture.")
             .Produces<RestoreFromManifestResponse>()
@@ -49,7 +50,8 @@ internal static class ManifestEndpoints
             .WithDescription(
                 "Each mod's folder against its manifest (modlist-repository.md, Status), from its manifest, a stat of each file and " +
                 "the stat cache, which keeps what the read found: each file whose bytes differ, each file no line names, each " +
-                "file a line names that is gone and each file its package does not hold, or that it has no manifest or why it cannot be read.")
+                "file a line names that is gone and each file its package does not hold, whether its package has no host, or that " +
+                "it has no manifest or why it cannot be read.")
             .Produces<ModStatusResponse>()
             .ProducesProblem(400);
 
@@ -98,21 +100,24 @@ internal static class ManifestEndpoints
             return Results.Problem("The suffix the mod manager gives an excluded file's name is required.", statusCode: 400);
         var variants = req.Archives?.Variants();
         if (req.Archives is not null && variants is null) return Results.Problem(ArchiveVariantsRequest.NotOneEach, statusCode: 400);
+        if (mods.Any(mod => mod.Submodule is { IsWhole: false }))
+            return Results.Problem("Every submodule needs the folder git checks it out in and the commit the instance repository pins.", statusCode: 400);
 
         using var running = cancels.Run(req.Gesture, aborted);
         var result = await handler.RestoreAsync(
             [.. mods.Select(mod => new ModToRestore(
-                mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.SourceFolder))],
+                mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.Submodule?.ToSubmodule()))],
             new InstanceToRestore(req.StatCache, req.ExcludedSuffix, variants, req.GameFolder?.ToGameFolder()), req.Gesture, running.Token);
 
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
         foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Restore from manifest", item.Refusal.Kind, item.Message, item.Item);
         return Results.Ok(new RestoreFromManifestResponse(
             [.. result.Landed.Select(landed => new RestoredModResponse(
-                landed.Item, landed.Outcome.Written, landed.Outcome.NamedByNoLine, landed.Outcome.StatCacheNotWritten, landed.Outcome.Metadata, landed.Outcome.Uncommitted))],
+                landed.Item, landed.Outcome.Written, landed.Outcome.NamedByNoLine, landed.Outcome.StatCacheNotWritten, landed.Outcome.Metadata, landed.Outcome.Uncommitted,
+                landed.Outcome.LeftDetached))],
             [.. result.Refused.Select(refused => new ModRestoreRefusal(
                 refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.InstallationFileNotFound,
-                refused.Refusal.GameFilesNotFound, refused.Refusal.Build))]));
+                refused.Refusal.GameFilesNotFound, refused.Refusal.Build, refused.Refusal.SubmoduleNotFound))]));
     }
 
     internal static IResult WhatRestoreDestroys(ModFoldersRequest req, IModFolderRepository repository)
@@ -218,15 +223,25 @@ internal sealed record RestoreFromManifestRequest(
     IReadOnlyList<RestoreFromManifestModRequest> Mods, string StatCache, string ExcludedSuffix, ArchiveVariantsRequest? Archives,
     GameFolderRequest? GameFolder, string? Gesture);
 
-/// <summary>A mod, with the folder its source is in or is cloned into, none when its name gives it none.</summary>
+/// <summary>A mod, with the submodule its manifest names, none until a refusal names it.</summary>
 internal sealed record RestoreFromManifestModRequest(
-    string Name, string Folder, InstallationFileRequest? InstallationFile, IReadOnlyList<string> MetadataFiles, string? SourceFolder)
+    string Name, string Folder, InstallationFileRequest? InstallationFile, IReadOnlyList<string> MetadataFiles, SubmoduleRequest? Submodule)
     : IModRequest;
+
+/// <summary>A submodule as the Instance adapter reads the instance repository (ADR-0013): the folder git checks it out in, the
+/// commit the instance repository pins, and the branch it follows, if any.</summary>
+internal sealed record SubmoduleRequest(string Folder, string Pin, string? Branch)
+{
+    internal bool IsWhole => !string.IsNullOrWhiteSpace(Folder) && !string.IsNullOrWhiteSpace(Pin);
+
+    internal Submodule ToSubmodule() => new(Folder, Pin, Branch);
+}
 
 /// <summary>A mod whose files are as its manifest says: Written each file written, NamedByNoLine each file no line names,
 /// StatCacheNotWritten why the stat cache did not keep the read, Metadata its manifest's version and page.</summary>
 internal sealed record RestoredModResponse(
-    string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, ModMetadata Metadata, bool Uncommitted);
+    string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, ModMetadata Metadata, bool Uncommitted,
+    string? LeftDetached);
 
 /// <summary>The mods to read the folders of against their manifests, and the stat cache's folder.</summary>
 internal sealed record ModFoldersRequest(IReadOnlyList<ModByFolder> Mods, string StatCache);
@@ -253,11 +268,11 @@ internal sealed record WhatRestoreDestroysResponse(
 
 internal sealed record ManifestMetadataResponse(string Mod, ModMetadata Metadata);
 
-/// <summary>A skipped mod. A NotFound mod names the installation file and the game files it lacks, for a request to hand. A
-/// NotBuilt mod names its build's refusal.</summary>
+/// <summary>A skipped mod. A NotFound mod names the installation file, the game files and the submodule it lacks, for a request
+/// to hand. A NotBuilt mod names its build's refusal.</summary>
 internal sealed record ModRestoreRefusal(
     string Item, RestoreRefusal Refusal, string Message, string? InstallationFileNotFound, IReadOnlyList<string> GameFilesNotFound,
-    BuildRefusal BuildRefusal = BuildRefusal.None);
+    BuildRefusal BuildRefusal = BuildRefusal.None, string? SubmoduleNotFound = null);
 
 /// <summary>Landed, skipped or not finished, per mod (ADR-0019), never the status of the call.</summary>
 internal sealed record RestoreFromManifestResponse(IReadOnlyList<RestoredModResponse> Applied, IReadOnlyList<ModRestoreRefusal> Refused);
