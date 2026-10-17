@@ -357,7 +357,7 @@ describe('the MO2 adapter\'s repository', () => {
 
     it('refuses before the repository exists when the global core.hooksPath points outside the instance, naming it and where', async () => {
       const adapter = await instance();
-      await put('global.config', `[core]\n\thooksPath = ${join(root, 'global-hooks')}\n`);
+      await put('global.config', `[core]\n\thooksPath = ${join(root, 'global-hooks').replaceAll('\\', '/')}\n`);
       vi.stubEnv('GIT_CONFIG_GLOBAL', join(root, 'global.config'));
 
       try {
