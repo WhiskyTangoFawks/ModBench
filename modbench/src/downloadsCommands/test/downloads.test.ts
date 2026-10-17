@@ -9,14 +9,7 @@ const commandsOver = (answers: InstanceAnswers = {}) => {
   return { fake, commands: downloadsCommands(fake.adapter) };
 };
 
-const recordingTrash = (failFor?: string) => {
-  const trashed: string[] = [];
-  const trash: MoveToTrash = (path) => {
-    trashed.push(path);
-    return path === failFor ? Promise.reject(new Error('disk full')) : Promise.resolve();
-  };
-  return { trash, trashed };
-};
+const noopTrash: MoveToTrash = () => Promise.resolve();
 
 describe('excludeDownloads / includeDownloads', () => {
   it.each([
@@ -42,50 +35,48 @@ describe('excludeDownloads / includeDownloads', () => {
 });
 
 describe('deleteDownloads', () => {
-  const FILE = { name: 'foo.7z', path: '/downloads/foo.7z' };
-
-  it('trashes the file, then hands the adapter the metadata by the file\'s name', async () => {
+  it('hands the adapter each name, and lands it', async () => {
     const { fake, commands } = commandsOver();
-    const { trash, trashed } = recordingTrash();
 
-    const outcome = await commands.deleteDownloads([FILE], trash);
+    const outcome = await commands.deleteDownloads(['foo.7z'], noopTrash);
 
     expect(outcome).toEqual({ landed: [{ name: 'foo.7z' }], refused: [] });
-    expect(trashed).toEqual([FILE.path]);
-    expect(fake.calls).toEqual([{ verb: 'trashDownloadedFileMeta', name: 'foo.7z' }]);
+    expect(fake.calls).toEqual([{ verb: 'trashDownloadedFile', name: 'foo.7z' }]);
   });
 
-  it('a trash failure on the file refuses with why and leaves its metadata alone', async () => {
-    const { fake, commands } = commandsOver();
+  it('refuses a file gone from disk, by name', async () => {
+    const { commands } = commandsOver({ goneDownloads: new Set(['gone.7z']) });
 
-    const outcome = await commands.deleteDownloads([FILE], recordingTrash(FILE.path).trash);
+    assertSelectionOutcome(await commands.deleteDownloads(['gone.7z'], noopTrash), {
+      landed: [],
+      refused: [{ item: { name: 'gone.7z' }, reasonContains: 'gone.7z' }],
+    });
+  });
+
+  it('a trash failure on the file refuses with why', async () => {
+    const { commands } = commandsOver({ refusals: refusing('trashDownloadedFile', 'disk full') });
+
+    const outcome = await commands.deleteDownloads(['foo.7z'], noopTrash);
 
     expect(outcome).toEqual({ landed: [], refused: [{ item: { name: 'foo.7z' }, reason: 'disk full' }] });
-    expect(fake.calls).toEqual([]);
   });
 
-  it('a metadata failure after the file landed reports the delete as done, not a refusal', async () => {
-    const { commands } = commandsOver({ refusals: refusing('trashDownloadedFileMeta', 'disk full') });
+  it('metadata left behind after the file landed reports the delete as done, not a refusal', async () => {
+    const { commands } = commandsOver({ metadataLeftBehind: 'disk full' });
 
-    const outcome = await commands.deleteDownloads([FILE], recordingTrash().trash);
+    const outcome = await commands.deleteDownloads(['foo.7z'], noopTrash);
 
     expect(outcome).toEqual({ landed: [{ name: 'foo.7z', metadataLeftBehind: 'disk full' }], refused: [] });
   });
 
   it('over a selection, a file that cannot be trashed is refused and the rest are deleted', async () => {
-    const { fake, commands } = commandsOver();
-    const locked = { name: 'locked.7z', path: '/downloads/locked.7z' };
-    const other = { name: 'other.7z', path: '/downloads/other.7z' };
+    const { commands } = commandsOver({ refusals: (call) => (call.verb === 'trashDownloadedFile' && call.name === 'locked.7z' ? 'disk full' : undefined) });
 
-    const outcome = await commands.deleteDownloads([FILE, locked, other], recordingTrash(locked.path).trash);
+    const outcome = await commands.deleteDownloads(['foo.7z', 'locked.7z', 'other.7z'], noopTrash);
 
     expect(outcome).toEqual({
       landed: [{ name: 'foo.7z' }, { name: 'other.7z' }],
       refused: [{ item: { name: 'locked.7z' }, reason: 'disk full' }],
     });
-    expect(fake.calls).toEqual([
-      { verb: 'trashDownloadedFileMeta', name: 'foo.7z' },
-      { verb: 'trashDownloadedFileMeta', name: 'other.7z' },
-    ]);
   });
 });

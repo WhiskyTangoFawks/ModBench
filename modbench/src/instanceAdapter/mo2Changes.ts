@@ -1,6 +1,7 @@
 // MO2's changes to the plugin order, the profile, the mod folders and the downloaded files' metadata:
 // each file spliced through its own codec under its lock and written whole.
 
+import { errorMessage } from '../ports/errorMessage';
 import { firstLines } from '../loadOrderFileCodec/firstLines';
 import {
   appendPluginInText, movePluginsInText, parsePlugins, pluginKey, removePluginFromText, setPluginEnabledInText,
@@ -18,7 +19,13 @@ import { readPluginsProvided, type ReadingSource } from './mo2Reads';
 
 type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
-  | 'trashDownloadedFileMeta' | 'selectProfile'>;
+  | 'trashDownloadedFile' | 'selectProfile'>;
+
+async function heldDownload(context: Mo2Context, name: string): Promise<{ downloadsDir: string; file: string } | undefined> {
+  const downloadsDir = await currentDownloadsDir(context);
+  const file = downloadFile(downloadsDir, name);
+  return (await exists(file)) ? { downloadsDir, file } : undefined;
+}
 
 function listedPlugin(order: readonly PluginEntry[], plugin: string): string {
   const listed = order.find((p) => pluginKey(p.name) === pluginKey(plugin));
@@ -100,14 +107,24 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
     },
 
     async markDownloadedFile(name, mark) {
-      const downloadsDir = await currentDownloadsDir(context);
-      if (!(await exists(downloadFile(downloadsDir, name)))) return { gone: true };
+      const held = await heldDownload(context, name);
+      if (held === undefined) return { gone: true };
+      const { downloadsDir } = held;
       const { wrote } = await spliceDownloadMeta(downloadsDir, name, (text) => markIn(text, mark));
       return { gone: false, wrote };
     },
 
-    async trashDownloadedFileMeta(name, trash) {
-      return trashDownloadMeta(await currentDownloadsDir(context), name, trash);
+    async trashDownloadedFile(name, trash) {
+      const held = await heldDownload(context, name);
+      if (held === undefined) return { gone: true };
+      const { downloadsDir, file } = held;
+      await trash(file);
+      try {
+        await trashDownloadMeta(downloadsDir, name, trash);
+      } catch (err) {
+        return { gone: false, metadataLeftBehind: errorMessage(err) };
+      }
+      return { gone: false };
     },
 
     selectProfile(profile) {

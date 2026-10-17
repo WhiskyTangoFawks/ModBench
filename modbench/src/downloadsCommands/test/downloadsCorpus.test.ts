@@ -43,7 +43,7 @@ describe('downloads commands over the committed corpus fixture: one path each fr
     const before = await snapshotTree(dir);
     const trashed: string[] = [];
 
-    const outcome = await downloadsCommands(adapterOver(dir)).deleteDownloads([{ name: NAME, path: join(dir, ARCHIVE) }], async (path) => {
+    const outcome = await downloadsCommands(adapterOver(dir)).deleteDownloads([NAME], async (path) => {
       trashed.push(path);
       await rm(path);
     });
