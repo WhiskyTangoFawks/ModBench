@@ -9,7 +9,7 @@ function fakeGlobalState() {
   };
 }
 
-describe('openWalkthroughOnce (common.md, Getting started, story 2)', () => {
+describe('openWalkthroughOnce (user-docs.md, The walkthrough, story 2)', () => {
   it('opens the walkthrough the first time Modbench activates, and never on a later activation', async () => {
     const state = fakeGlobalState();
     const opened: string[] = [];
