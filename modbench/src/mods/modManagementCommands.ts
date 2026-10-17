@@ -14,7 +14,7 @@ import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
-import type { EntryRef, ModlistCommands, MovePlace, OriginFileMark, OriginFileRef, SelectionResult } from '../modOrderCommands/modOrderCommands';
+import type { EntryRef, ModlistCommands, MovePlace, OriginFileMark, OriginFileRef, SelectionResult } from '../modCommands/modCommands';
 import { FILE_MARKS, fileLabel } from './modFiles';
 import {
   endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem, type MoveTarget,

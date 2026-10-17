@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient, SourceChanges } from '../client';
 import type { Instance } from '../instanceLoader/instance';
-import type { PluginsCommands } from '../pluginsCommands/plugins';
+import type { PluginCommands } from '../pluginCommands/plugins';
 import { singularArgument } from '../drivingLib/gestureEntry';
 import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { promptRename } from '../drivingLib/promptRename';
@@ -17,7 +17,7 @@ import { creatablePluginExtensionsOf } from './creatablePluginExtensions';
 import type { PluginsTreeNode } from './pluginRows';
 
 export interface RenamePluginDeps {
-  commands: Pick<PluginsCommands, 'confirmRename' | 'renameRefusal' | 'renamePlugin'>;
+  commands: Pick<PluginCommands, 'confirmRename' | 'renameRefusal' | 'renamePlugin'>;
   ask: AskQuestion;
   client: Pick<MEditClient, 'getCreatablePluginExtensions'>;
   source: SourceEditing;

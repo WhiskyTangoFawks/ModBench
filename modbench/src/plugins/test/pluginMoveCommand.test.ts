@@ -27,14 +27,14 @@ vi.mock('vscode', async () => {
 });
 
 import type { MEditClient, PluginMetadata } from '../../client';
-import type { PluginsDrop } from '../../pluginsCommands/plugins';
+import type { PluginsDrop } from '../../pluginCommands/plugins';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { registerPluginMoveCommand } from '../pluginMoveCommand';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
-import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
+import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { progressSteps } from '../../test/recordedProgress';
 
@@ -77,7 +77,7 @@ function registered(
     value,
     refresh: () => { progressSteps.push('Instance loader: read every file again'); return refresh(); },
   };
-  registerPluginMoveCommand(pluginsCommandsWith(fake.adapter, masters), instance, { selection: () => selection, movePlaces: () => PLACES }, reporter);
+  registerPluginMoveCommand(pluginCommandsWith(fake.adapter, masters), instance, { selection: () => selection, movePlaces: () => PLACES }, reporter);
   return { reporter, fake };
 }
 

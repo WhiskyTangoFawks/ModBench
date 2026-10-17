@@ -23,8 +23,8 @@ instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 activation: @../target-architecture.modbench_drivers.activation
 activation.label: Activation
-pluginscommands: @../target-architecture.modbench_core.pluginscommands
-pluginscommands.label: plugin commands
+plugincommands: @../target-architecture.modbench_core.plugincommands
+plugincommands.label: plugin commands
 
 plugins."the name, then the place"
 plugins -> client: "create: origin, name, folder" {class: edit}
@@ -43,7 +43,7 @@ client -> plugins: applied or refusal {class: edit}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> activation: value {class: loadorder}
-activation -> pluginscommands: "plugin sync: update-load-order-file" {class: loadorder}
+activation -> plugincommands: "plugin sync: update-load-order-file" {class: loadorder}
 instanceloader."the next snapshot: index-load-order; in a source mod, detect-external-change"
 
 refused: "refused, before any write" {

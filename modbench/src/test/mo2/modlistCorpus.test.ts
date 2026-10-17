@@ -6,7 +6,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { appendFile, mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { modSyncOver, modlistCommands } from '../../modOrderCommands/modOrderCommands';
+import { modSyncOver, modlistCommands } from '../../modCommands/modCommands';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, modFolderNames, snapshotTree,
 } from './corpusFixture';

@@ -28,7 +28,7 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import type { UpgradeCandidate } from '../../instanceLoader/instance';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
-import { modlistCommands } from '../../modOrderCommands/modOrderCommands';
+import { modlistCommands } from '../../modCommands/modCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };

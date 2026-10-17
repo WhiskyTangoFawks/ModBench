@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, uriFrom } from './vscodeMock';
 import { adapterOver, readPluginLines, sourceOver } from './mo2/adapterOver';
-import { pluginsCommandsWith } from './pluginsCommandsWith';
+import { pluginCommandsWith } from './pluginCommandsWith';
 import { STEADY_WINDOW } from './steadyWindow';
 import { readInstance, type ReadingSource } from '../instanceAdapter/mo2Reads';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
@@ -25,8 +25,8 @@ vi.mock('vscode', async () => {
 
 import { Instance } from '../instanceLoader/instance';
 import { instanceSyncs } from '../syncWiring';
-import { pluginSyncOver } from '../pluginsCommands/plugins';
-import { modSyncOver } from '../modOrderCommands/modOrderCommands';
+import { pluginSyncOver } from '../pluginCommands/plugins';
+import { modSyncOver } from '../modCommands/modCommands';
 import { registerRenamePluginCommand } from '../plugins/pluginRenameCommand';
 import { PluginNode } from '../plugins/pluginRows';
 import { recordingReporter, scriptedDialog } from './surfacingDoubles';
@@ -91,7 +91,7 @@ describe('a rename while a recompute is reading', () => {
     client.setQueryAnswer('getPluginDependants', { dependants: [], unreadable: [] });
     showInputBox.mockResolvedValue(RENAMED);
     registerRenamePluginCommand({
-      client, commands: pluginsCommandsWith({ ...writer, renamePlugin: async (...args) => { await writer.renamePlugin(...args); release(); } }, client),
+      client, commands: pluginCommandsWith({ ...writer, renamePlugin: async (...args) => { await writer.renamePlugin(...args); release(); } }, client),
       ask: scriptedDialog('Rename'), instance, reporter: recordingReporter(),
       source: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     }, () => []);

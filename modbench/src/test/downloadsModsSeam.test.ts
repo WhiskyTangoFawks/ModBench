@@ -16,7 +16,7 @@ vi.mock('vscode', () => ({
 
 import { registerModInstallCommands } from '../mods/installCommands';
 import { DownloadNode } from '../downloads/DownloadsProvider';
-import { modlistCommands } from '../modOrderCommands/modOrderCommands';
+import { modlistCommands } from '../modCommands/modCommands';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter } from './fakeInstanceAdapter';
 import { instanceValueFixture } from './mo2/instanceValueFixture';

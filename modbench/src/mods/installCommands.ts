@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { DownloadFile, Instance, InstanceValue } from '../instanceLoader/instance';
 import { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, samePath } from '../instanceAdapter/instanceAdapter';
-import type { InstallTarget, ModlistCommands, ModPackage } from '../modOrderCommands/modOrderCommands';
+import type { InstallTarget, ModlistCommands, ModPackage } from '../modCommands/modCommands';
 import { downloadArgumentOf, downloadedFileNamed } from '../drivingLib/argument';
 import {
   argumentOfKind, registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure,

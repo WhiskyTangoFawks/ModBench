@@ -4,7 +4,7 @@ import { pluralArgument } from '../drivingLib/gestureEntry';
 import { endAtTop, type MoveTarget } from './movePick';
 import type { ModlistNode, ModNode, SeparatorNode } from './ModListProvider';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
-import type { OrderEnd } from '../modOrderCommands/modOrderCommands';
+import type { OrderEnd } from '../modCommands/modCommands';
 
 /** The rows a drag carries, and the row whose kind a drag that mixes kinds takes. */
 export interface DraggedRows {

@@ -8,8 +8,8 @@ const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'ut
 
 describe('every MO2 text-file write command has a corpus test', () => {
   const WRITERS = [
-    'downloadsCommands/downloads.ts', 'modOrderCommands/install.ts', 'modOrderCommands/modOrderCommands.ts',
-    'pluginsCommands/plugins.ts', 'instanceCommands/instanceCommands.ts',
+    'downloadedFileCommands/downloads.ts', 'modCommands/install.ts', 'modCommands/modCommands.ts',
+    'pluginCommands/plugins.ts', 'instanceCommands/instanceCommands.ts',
   ];
   const writeVerbs = WRITERS.flatMap((file) => commandVerbs(read(file)));
   const corpus = tsFiles(SRC, { exclude: ['generated'] }).filter((f) => f.endsWith('Corpus.test.ts')).map((f) => readFileSync(f, 'utf8')).join('\n');

@@ -34,7 +34,7 @@ const { installMod } = vi.hoisted(() => ({ installMod: vi.fn() }));
 import { registerModInstallCommands } from '../installCommands';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
-import { modlistCommands } from '../../modOrderCommands/modOrderCommands';
+import { modlistCommands } from '../../modCommands/modCommands';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';

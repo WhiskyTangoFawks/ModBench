@@ -66,7 +66,7 @@ async function deleteDownload(adapter: InstanceAdapter, name: string, trash: Mov
 }
 
 /** The downloads' commands, bound to one instance: each takes the gesture's arguments only. */
-export function downloadsCommands(adapter: InstanceAdapter) {
+export function downloadedFileCommands(adapter: InstanceAdapter) {
   return {
     excludeDownloads: (...args: TailOf<typeof excludeDownloads>) => excludeDownloads(adapter, ...args),
     includeDownloads: (...args: TailOf<typeof includeDownloads>) => includeDownloads(adapter, ...args),
@@ -74,4 +74,4 @@ export function downloadsCommands(adapter: InstanceAdapter) {
   };
 }
 
-export type DownloadsCommands = ReturnType<typeof downloadsCommands>;
+export type DownloadedFileCommands = ReturnType<typeof downloadedFileCommands>;

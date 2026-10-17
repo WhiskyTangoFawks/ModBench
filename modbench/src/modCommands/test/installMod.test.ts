@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { modlistCommands, type ModPackage } from '../modOrderCommands';
+import { modlistCommands, type ModPackage } from '../modCommands';
 import type { InstallPackage, InstallTarget } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { ModStatus } from '../../client';

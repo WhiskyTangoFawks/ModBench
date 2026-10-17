@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 import { defaultModName } from '../instanceAdapter/instanceAdapter';
-import type { InstallTarget } from '../modOrderCommands/modOrderCommands';
+import type { InstallTarget } from '../modCommands/modCommands';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import type { DownloadFile, UpgradeCandidate, UpgradeTier } from '../instanceLoader/instance';
 
