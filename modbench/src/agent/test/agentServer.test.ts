@@ -62,7 +62,7 @@ const NO_ENVIRONMENT = { forEach: () => undefined };
 
 const statusRead: { asked: (readonly string[])[]; answer: Awaited<ReturnType<ReadModStatus>> } = { asked: [], answer: [] };
 const status = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], metadataDiffers: false, ...over });
+  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], metadataDiffers: false, noHost: false, ...over });
 const readStatus: ReadModStatus = (mods) => { statusRead.asked.push(mods); return Promise.resolve(statusRead.answer); };
 
 async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT) {
@@ -197,8 +197,8 @@ describe('the agent server, given an instance value', () => {
       const client = await clientOf(inRepository);
 
       expect(await read(client, 'list_mod_statuses')).toEqual([
-        { kind: 'mod', name: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: ['b.nif'], metadataDiffers: false },
-        { kind: 'separator', name: 'Textures', noManifest: true, differing: [], namedByNoLine: [], gone: [], notInPackage: [], metadataDiffers: false },
+        { kind: 'mod', name: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: ['b.nif'], metadataDiffers: false, noHost: false },
+        { kind: 'separator', name: 'Textures', noManifest: true, differing: [], namedByNoLine: [], gone: [], notInPackage: [], metadataDiffers: false, noHost: false },
       ]);
       expect(statusRead.asked).toEqual([['Big Rocks', 'Textures_separator', 'InAnotherProfile']]);
     });

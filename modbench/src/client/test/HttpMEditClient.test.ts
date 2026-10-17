@@ -168,10 +168,10 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
 }
 
 const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, metadataFiles: ['meta.ini'] });
-const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'] });
+const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'], isSubmodule: true });
 const modToUpdate = (name: string) => ({ name, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'], isSourceMod: false });
 const updateFacts = { statCache: '/instance/stat-cache' };
-const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'], sourceFolder: `/instance/source/${name}` });
+const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'] });
 const restoreFacts = { statCache: '/instance/stat-cache', excludedSuffix: '.mohidden', archives: null };
 const buildFacts = {
   excludedSuffix: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } },
@@ -284,6 +284,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
             installationFileNotFound: 'B.7z',
           },
           { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: its package does not hold 'c.nif'." },
+          {
+            item: 'ModD', refusal: 'NotFound', message: "'ModD' was skipped: its submodule 'Mod Source' is missing.",
+            submoduleNotFound: 'Mod Source',
+          },
         ],
       },
       reads: {
@@ -291,8 +295,9 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         refused: [
           { item: 'ModB', reason: "'ModB' was skipped: installation file 'B.7z' is missing." },
           { item: 'ModC', reason: "'ModC' was skipped: its package does not hold 'c.nif'." },
+          { item: 'ModD', reason: "'ModD' was skipped: its submodule 'Mod Source' is missing." },
         ],
-        notFound: [{ mod: 'ModB', installationFile: 'B.7z' }],
+        notFound: [{ mod: 'ModB', installationFile: 'B.7z' }, { mod: 'ModD', submodule: 'Mod Source' }],
       },
       path: '/restore-from-manifest', body: { mods: [modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], ...restoreFacts, gesture: expect.any(String) as unknown } },
     { name: 'decompile', verb: (c) => c.decompile([first, second], true),

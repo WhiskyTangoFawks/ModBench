@@ -264,13 +264,13 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Theory]
-    [InlineData("0123abc", false)]
-    [InlineData("4567def", true)]
-    public void AFileItsSourceModBuilds_Differs_UnlessItHoldsTheBytesTheBuildAtTheLinesCommitKept(string commit, bool differs)
+    [InlineData("Mod", false)]
+    [InlineData("Other", true)]
+    public void AFileItsSourceModBuilds_Differs_UnlessItHoldsTheBytesTheLastBuildOfTheManifestsRepositoryKept(string repository, bool differs)
     {
         Write("a.esp", "hello");
-        KeepAsRestored(ManifestedFromSource("0123abc"));
-        ManifestedFromSource(commit);
+        KeepAsRestored(ManifestedFromSource("Mod"));
+        ManifestedFromSource(repository);
 
         Assert.Equal(differs, Status().Differing.Contains("a.esp"));
     }
@@ -319,6 +319,19 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
         Assert.Equal(["a.nif"], status.NotInPackage);
         Assert.Empty(status.Differing);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void ASourceMod_HasNoHost_OnlyWhenItsRepositoryIsNoSubmodule_AndItsPackageHoldsEveryFile(bool isSubmodule, bool noHost)
+    {
+        Write("a.esp", "hello");
+        ManifestedFromSource("Mod", isSubmodule);
+
+        var status = Status();
+
+        Assert.Equal((noHost, 0), (status.NoHost, status.NotInPackage.Count));
     }
 
     [Fact]
@@ -392,14 +405,15 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal(3, parsed.RootElement.GetProperty("files").GetArrayLength());
     }
 
-    [Fact]
-    public void WriteManifest_OfASourceMod_NamesItsRemoteAndCommitAsItsPackage()
+    [Theory]
+    [InlineData(true, "{\"submodule\":\"Mod\",\"version\":\"2\"}")]
+    [InlineData(false, "{\"repository\":\"Mod\",\"version\":\"2\"}")]
+    public void WriteManifest_OfASourceMod_NamesItsSubmodule_OrWithNoRemoteItsRepository_AsItsPackage(bool isSubmodule, string line)
     {
         _repository.WriteManifest(_root, "mod", new Manifest(
-            new ManifestPackage.SourceMod("https://example.com/mod.git", "0123abc"), [new ManifestFile("d.esp", new PackageEntry.Held())]));
+            new ManifestPackage.SourceRepository("Mod", isSubmodule), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"));
 
-        Assert.Contains(
-            "\"package\": {\"remote\":\"https://example.com/mod.git\",\"commit\":\"0123abc\"}", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+        Assert.Contains("\"package\": " + line, File.ReadAllText(Path.Combine(_root, "mod.manifest")));
     }
 
     [Fact]
@@ -480,7 +494,8 @@ public sealed class ModFolderRepositoryTests : IDisposable
             ],
             "1.2.3"),
         new Manifest(new ManifestPackage.InstallationFile("Mod.7z", 100, "AAAA"), [new ManifestFile("a.nif", new PackageEntry.Held())]),
-        new Manifest(new ManifestPackage.SourceMod("https://example.com/mod.git", "0123abc"), [new ManifestFile("d.esp", new PackageEntry.Held())]),
+        new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"),
+        new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: false), [new ManifestFile("d.esp", new PackageEntry.Held())]),
         new Manifest(new ManifestPackage.GameFolder("Fallout 4", "AAAA"), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"),
         new Manifest(null, []),
     };
@@ -659,9 +674,9 @@ public sealed class ModFolderRepositoryTests : IDisposable
         return manifest;
     }
 
-    private Manifest ManifestedFromSource(string commit)
+    private Manifest ManifestedFromSource(string repository, bool isSubmodule = true)
     {
-        var manifest = new Manifest(new ManifestPackage.SourceMod("https://example.com/mod.git", commit), [new ManifestFile("a.esp", new PackageEntry.Held())]);
+        var manifest = new Manifest(new ManifestPackage.SourceRepository(repository, isSubmodule), [new ManifestFile("a.esp", new PackageEntry.Held())]);
         _repository.WriteManifest(_root, "mod", manifest);
         return manifest;
     }

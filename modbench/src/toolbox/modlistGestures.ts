@@ -217,7 +217,13 @@ function reportCancelRefused(reporter: Reporter, { cancelRefusal }: { readonly c
 const quoted = (label: Label, mods: readonly string[]): string => mods.map((mod) => `"${label(mod)}"`).join(', ');
 
 const uncommittedWarnings = (landed: Restored): string[] => landed.filter(({ uncommitted }) => uncommitted === true)
-  .map(({ mod }) => `${mod}: its source holds changes no commit holds, so its manifest's commit does not rebuild these bytes`);
+  .map(({ mod }) => `${mod}: its submodule holds changes no commit holds, so the commit the instance repository pins does not rebuild these bytes`);
+
+const leftDetachedWarnings = (landed: Restored): string[] =>
+  landed.flatMap(({ mod, leftDetached }) => (leftDetached ? [`${mod}: ${leftDetached}`] : []));
+
+const pushNotRefused = ({ pushRefusalNotWritten: why }: { readonly pushRefusalNotWritten?: string }): string[] =>
+  (why === undefined ? [] : [`a push of a pin its source mod's remote lacks is not refused: ${why}`]);
 
 async function confirmRestore(ask: AskQuestion, label: Label, { mods, everyMod: all }: ModsToRun): Promise<boolean> {
   const manifests = mods.length === 1 ? 'its manifest' : 'their manifests';
@@ -256,7 +262,7 @@ async function restoreFromManifest(deps: ModlistGestureDeps, toRun: ModsToRun): 
       return;
     }
     reportCancelRefused(reporter, outcome);
-    reportRestored(reporter, mods.length + refused.length, named(label, { landed: outcome.landed, refused: [...outcome.refused, ...notAsked] }));
+    reportRestored(reporter, mods.length + refused.length, named(label, { ...outcome, refused: [...outcome.refused, ...notAsked] }));
   });
 }
 
@@ -290,7 +296,7 @@ async function restoreFromManifestForAgent(
   return {
     applied: true,
     outcome: answered,
-    partial: warned('Restore from manifest:', [...statCacheNotWritten(answered.landed), ...uncommittedWarnings(answered.landed)]),
+    partial: warned('Restore from manifest:', [...statCacheNotWritten(answered.landed), ...uncommittedWarnings(answered.landed), ...leftDetachedWarnings(answered.landed), ...pushNotRefused(outcome)]),
   };
 }
 
@@ -304,7 +310,9 @@ function restoreMessage(status: RestoreStatus, label: Label): string {
 // modlist-repository.md, Reporting: one line, with each skipped mod, each stat cache not written and each mod built from
 // changes no commit holds in the Output.
 function reportRestored(reporter: Reporter, total: number, outcome: Omit<Extract<RestoreResult, { applied: true }>, 'applied'>): void {
-  const warnings = [...statCacheNotWritten(outcome.landed), ...uncommittedWarnings(outcome.landed)];
+  const warnings = [
+    ...statCacheNotWritten(outcome.landed), ...uncommittedWarnings(outcome.landed), ...leftDetachedWarnings(outcome.landed), ...pushNotRefused(outcome),
+  ];
   if (outcome.refused.length > 0) {
     const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...warnings].join('\n');
     reporter.report('error', `Could not restore ${outcome.refused.length} of ${total} mods.`, detail);

@@ -268,16 +268,19 @@ interface RestoredMod {
   statCacheNotWritten?: string | null;
   /** As a built mod's. */
   uncommitted?: boolean;
+  /** Why the clone of its submodule is not on the branch it follows. */
+  leftDetached?: string | null;
   /** What its manifest says of the mod's version and installation files, for the mod manager's metadata. */
   metadata?: components['schemas']['ModMetadata'];
 }
 
-/** A skipped mod lacking an installation file, by name, or game files, by their path in the mod folder, that the call did
- *  not hand. A call that hands them brings it back, or names every other lack. */
+/** A skipped mod lacking an installation file or a submodule, by name, or game files, by their path in the mod folder, that
+ *  the call did not hand. A call that hands them brings it back. */
 export interface NotFound {
   mod: string;
   installationFile?: string;
   gameFiles: readonly string[];
+  submodule?: string;
 }
 
 /** Restore from manifest's answer: each mod restored or skipped with its reason, and each skipped mod that is `NotFound`. */

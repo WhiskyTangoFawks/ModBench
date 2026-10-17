@@ -90,7 +90,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) => _builds[sourceFolder];
 
-    public Answer<string, SourceFailure> CommitAtHead(string sourceFolder, SharedSource cloneFrom, CancellationToken cancel) => throw Unreached();
+    public Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) => throw Unreached();
 
     public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) => throw Unreached();
 

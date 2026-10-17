@@ -68,7 +68,7 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
             statCacheNotWritten));
     }
 
-    private bool NamesASource(ModToUpdate mod) => NamesPackage<ManifestPackage.SourceMod>(mod);
+    private bool NamesASource(ModToUpdate mod) => NamesPackage<ManifestPackage.SourceRepository>(mod);
 
     private bool NamesTheGameFolder(ModToUpdate mod) => NamesPackage<ManifestPackage.GameFolder>(mod);
 

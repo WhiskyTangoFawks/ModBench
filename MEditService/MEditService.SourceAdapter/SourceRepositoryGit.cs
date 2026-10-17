@@ -10,14 +10,14 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     private const string EmptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
     private readonly string _sourceFolder = sourceFolder;
-    private readonly string _gitDir = Path.Combine(sourceFolder, ".git");
+    private readonly string _gitDir = GitDirOf(sourceFolder);
 
     /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c>
     /// exists. A <c>.git</c> with no <c>main</c> is init's own, half made, or
     /// <see cref="HoldsAnotherRepository"/>.</summary>
     internal static bool HoldsRepository(string sourceFolder)
     {
-        var gitDir = Path.Combine(sourceFolder, ".git");
+        var gitDir = GitDirOf(sourceFolder);
         return Directory.Exists(gitDir) && HasMainBranch(gitDir);
     }
 
@@ -28,8 +28,18 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     /// writes to (ADR-0003). The mark is a config key set right after <c>git init</c>.</summary>
     internal static bool HoldsAnotherRepository(string sourceFolder)
     {
-        var gitDir = Path.Combine(sourceFolder, ".git");
+        var gitDir = GitDirOf(sourceFolder);
         return Directory.Exists(gitDir) && !HasMainBranch(gitDir) && !IsMarkedByInit(gitDir);
+    }
+
+    // A submodule git checks out holds a .git file naming its git directory, as gitrepository-layout(5) has it.
+    private static string GitDirOf(string sourceFolder)
+    {
+        const string GitFile = "gitdir: ";
+        var dotGit = Path.Combine(sourceFolder, ".git");
+        if (!File.Exists(dotGit)) return dotGit;
+        var line = File.ReadLines(dotGit).FirstOrDefault() ?? "";
+        return line.StartsWith(GitFile, StringComparison.Ordinal) ? Path.GetFullPath(line[GitFile.Length..].Trim(), sourceFolder) : dotGit;
     }
 
     private static bool IsMarkedByInit(string gitDir)

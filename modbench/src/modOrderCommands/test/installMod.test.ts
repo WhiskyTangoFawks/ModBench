@@ -22,7 +22,7 @@ function install(installed: ModPackage, target: InstallTarget = NEW_MOD, answers
 }
 
 const statusOf = (over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod: UPGRADED.name, noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], metadataDiffers: false, ...over });
+  ({ mod: UPGRADED.name, noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], metadataDiffers: false, noHost: false, ...over });
 
 const reading = (answer: readonly ModStatus[] | ReadFailed) => vi.fn<ReadModStatus>().mockResolvedValue(answer);
 
