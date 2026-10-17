@@ -16,7 +16,7 @@ public sealed class UpdateManifestHandlerTests
     private readonly FakeModFolders _folders = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
 
-    private UpdateManifestHandler Handler => new(_folders, _notifications);
+    private UpdateManifestHandler Handler => TestEditService.UpdateManifestHandler(_folders, _notifications);
 
     private static ModToUpdate ModFrom(string name, InstallationFile? installationFile = null) =>
         new(name, $"mods/{name}", installationFile, [], IsSourceMod: false, Version: null);
