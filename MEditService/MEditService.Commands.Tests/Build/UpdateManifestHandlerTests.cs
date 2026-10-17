@@ -35,7 +35,7 @@ public sealed class UpdateManifestHandlerTests
 
     private static ModToUpdate SourceMod => new("Mod", Mod, null, [], IsSourceMod: true, Version: null);
 
-    private InstallationFile Downloaded(string path, params (string Path, string Hash)[] entries)
+    private InstallationFile DownloadedFile(string path, params (string Path, string Hash)[] entries)
     {
         _folders.WithBytes(string.Empty, path, Zip(entries));
         return new InstallationFile(path, Page: null, Size: 7, Hash: $"#{path}", [.. entries.Select(e => new HashedEntry(e.Path, e.Hash))]);
@@ -76,7 +76,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "meshes/a.nif", "edited");
 
-        var updated = await Landed(ModFrom("Mod", Downloaded("dl/Base.zip", ("Meshes/A.nif", "original"))));
+        var updated = await Landed(ModFrom("Mod", DownloadedFile("dl/Base.zip", ("Meshes/A.nif", "original"))));
 
         Assert.IsType<PackageEntry.NotHeld>(FileOf(Mod, "meshes/a.nif").Entry);
         Assert.Equal(["meshes/a.nif"], updated.NotInPackage);
@@ -100,9 +100,9 @@ public sealed class UpdateManifestHandlerTests
     public async Task AFileTheInstallationFileHoldsAtItsPath_IsTheShortLine_AndThePackageIsAsTheRequestSaysIt()
     {
         _folders.WithFile(Mod, "meshes/a.nif", "hello");
-        var download = Downloaded("dl/Mod.zip", ("meshes/a.nif", "hello")) with { Page = "https://www.nexusmods.com/fallout4/mods/1" };
+        var downloadedFile = DownloadedFile("dl/Mod.zip", ("meshes/a.nif", "hello")) with { Page = "https://www.nexusmods.com/fallout4/mods/1" };
 
-        await Landed(new ModToUpdate("Mod", Mod, download, [], IsSourceMod: false, Version: null));
+        await Landed(new ModToUpdate("Mod", Mod, downloadedFile, [], IsSourceMod: false, Version: null));
 
         Assert.IsType<PackageEntry.Held>(FileOf(Mod, "meshes/a.nif").Entry);
         Assert.Equal(
@@ -115,7 +115,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "a.txt", "hello");
 
-        await Landed(ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.txt", "hello"))) with { Version = "1.2.3" });
+        await Landed(ModFrom("Mod", DownloadedFile("dl/Mod.zip", ("a.txt", "hello"))) with { Version = "1.2.3" });
 
         Assert.Equal("1.2.3", _folders.Manifests[Mod].Version);
     }
@@ -151,7 +151,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "a.nif", "hello");
 
-        await Landed(ModFrom("Mod", Downloaded("dl/Patch.zip", ("Data/a.nif", "hello"))));
+        await Landed(ModFrom("Mod", DownloadedFile("dl/Patch.zip", ("Data/a.nif", "hello"))));
 
         Assert.Equal(ManifestFile.At("a.nif", new FileBytes.InInstallationFile("Patch.zip", "Data/a.nif")).Entry, FileOf(Mod, "a.nif").Entry);
     }
@@ -161,7 +161,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "b/same.txt", "hello");
 
-        await Landed(ModFrom("Mod", Downloaded("dl/Mod.zip", ("a/same.txt", "hello"), ("b/same.txt", "hello"))));
+        await Landed(ModFrom("Mod", DownloadedFile("dl/Mod.zip", ("a/same.txt", "hello"), ("b/same.txt", "hello"))));
 
         Assert.IsType<PackageEntry.Held>(FileOf(Mod, "b/same.txt").Entry);
     }
@@ -171,7 +171,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "Textures/A.dds", "hello");
 
-        await Landed(ModFrom("Mod", Downloaded("dl/Mod.zip", ("textures/a.dds", "hello"))));
+        await Landed(ModFrom("Mod", DownloadedFile("dl/Mod.zip", ("textures/a.dds", "hello"))));
 
         Assert.IsType<PackageEntry.Held>(FileOf(Mod, "Textures/A.dds").Entry);
     }
@@ -181,7 +181,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "a.txt", "hello");
 
-        await Landed(ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.txt", "hello"))));
+        await Landed(ModFrom("Mod", DownloadedFile("dl/Mod.zip", ("a.txt", "hello"))));
 
         Assert.Equal(new Dictionary<string, string> { ["a.txt"] = "hello" }, _folders.KeptPackageHashes[Mod]);
     }
@@ -203,7 +203,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "a.txt", "hellO").WithFile(Mod, "b.txt", "hello");
 
-        var updated = await Landed(ModFrom("Mod", Downloaded("dl/Mod.zip", ("other/a.txt", "hello"), ("b.txt", "hello"))));
+        var updated = await Landed(ModFrom("Mod", DownloadedFile("dl/Mod.zip", ("other/a.txt", "hello"), ("b.txt", "hello"))));
 
         Assert.IsType<PackageEntry.NotHeld>(FileOf(Mod, "a.txt").Entry);
         Assert.Equal(["a.txt"], updated.NotInPackage);
@@ -215,7 +215,7 @@ public sealed class UpdateManifestHandlerTests
         _folders.WithFile("mods/Lost", "a.txt", "hello").WithFile("mods/Found", "a.txt", "hello");
         var lost = new InstallationFile("dl/Lost.zip", null, 7, "#lost", [new HashedEntry("a.txt", "hello")]);
 
-        var result = await Update([ModFrom("Lost", lost), ModFrom("Found", Downloaded("dl/Found.zip", ("a.txt", "hello")))]);
+        var result = await Update([ModFrom("Lost", lost), ModFrom("Found", DownloadedFile("dl/Found.zip", ("a.txt", "hello")))]);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Lost", UpdateManifestRefusal.InstallationFileMissing), (refused.Item, refused.Refusal));
@@ -453,9 +453,9 @@ public sealed class UpdateManifestHandlerTests
     public async Task AModWithAnInstallationFile_NamesItAsItsPackage_WhateverTheGameFolderHolds()
     {
         _folders.WithFile(Mod, "a.nif", "a");
-        var download = Downloaded("dl/Mod.zip", ("a.nif", "a"));
+        var downloadedFile = DownloadedFile("dl/Mod.zip", ("a.nif", "a"));
 
-        var manifest = await UpdatedWith(GameFolderHolding(("a.nif", "a")), ModFrom("Mod", download));
+        var manifest = await UpdatedWith(GameFolderHolding(("a.nif", "a")), ModFrom("Mod", downloadedFile));
 
         Assert.IsType<ManifestPackage.InstallationFile>(manifest.Package);
     }
