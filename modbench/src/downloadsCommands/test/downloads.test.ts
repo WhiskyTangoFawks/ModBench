@@ -9,7 +9,7 @@ const commandsOver = (answers: InstanceAnswers = {}) => {
   return { fake, commands: downloadsCommands(fake.adapter) };
 };
 
-const recordingTrash = () => ({ trash: ((): Promise<void> => Promise.resolve()) satisfies MoveToTrash });
+const noopTrash: MoveToTrash = () => Promise.resolve();
 
 describe('excludeDownloads / includeDownloads', () => {
   it.each([
@@ -35,10 +35,10 @@ describe('excludeDownloads / includeDownloads', () => {
 });
 
 describe('deleteDownloads', () => {
-  it('hands the adapter each name with the trash, and lands it', async () => {
+  it('hands the adapter each name, and lands it', async () => {
     const { fake, commands } = commandsOver();
 
-    const outcome = await commands.deleteDownloads(['foo.7z'], recordingTrash().trash);
+    const outcome = await commands.deleteDownloads(['foo.7z'], noopTrash);
 
     expect(outcome).toEqual({ landed: [{ name: 'foo.7z' }], refused: [] });
     expect(fake.calls).toEqual([{ verb: 'trashDownloadedFile', name: 'foo.7z' }]);
@@ -47,7 +47,7 @@ describe('deleteDownloads', () => {
   it('refuses a file gone from disk, by name', async () => {
     const { commands } = commandsOver({ goneDownloads: new Set(['gone.7z']) });
 
-    assertSelectionOutcome(await commands.deleteDownloads(['gone.7z'], recordingTrash().trash), {
+    assertSelectionOutcome(await commands.deleteDownloads(['gone.7z'], noopTrash), {
       landed: [],
       refused: [{ item: { name: 'gone.7z' }, reasonContains: 'gone.7z' }],
     });
@@ -56,7 +56,7 @@ describe('deleteDownloads', () => {
   it('a trash failure on the file refuses with why', async () => {
     const { commands } = commandsOver({ refusals: refusing('trashDownloadedFile', 'disk full') });
 
-    const outcome = await commands.deleteDownloads(['foo.7z'], recordingTrash().trash);
+    const outcome = await commands.deleteDownloads(['foo.7z'], noopTrash);
 
     expect(outcome).toEqual({ landed: [], refused: [{ item: { name: 'foo.7z' }, reason: 'disk full' }] });
   });
@@ -64,7 +64,7 @@ describe('deleteDownloads', () => {
   it('metadata left behind after the file landed reports the delete as done, not a refusal', async () => {
     const { commands } = commandsOver({ metadataLeftBehind: 'disk full' });
 
-    const outcome = await commands.deleteDownloads(['foo.7z'], recordingTrash().trash);
+    const outcome = await commands.deleteDownloads(['foo.7z'], noopTrash);
 
     expect(outcome).toEqual({ landed: [{ name: 'foo.7z', metadataLeftBehind: 'disk full' }], refused: [] });
   });
@@ -72,7 +72,7 @@ describe('deleteDownloads', () => {
   it('over a selection, a file that cannot be trashed is refused and the rest are deleted', async () => {
     const { commands } = commandsOver({ refusals: (call) => (call.verb === 'trashDownloadedFile' && call.name === 'locked.7z' ? 'disk full' : undefined) });
 
-    const outcome = await commands.deleteDownloads(['foo.7z', 'locked.7z', 'other.7z'], recordingTrash().trash);
+    const outcome = await commands.deleteDownloads(['foo.7z', 'locked.7z', 'other.7z'], noopTrash);
 
     expect(outcome).toEqual({
       landed: [{ name: 'foo.7z' }, { name: 'other.7z' }],

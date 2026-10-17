@@ -200,7 +200,6 @@ describe('registerDownloadsSingleRowCommands', () => {
 
 describe('a Downloads gesture that writes ends on the Instance loader\'s read, with the view\'s progress bar open throughout', () => {
   beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
-  afterEach(() => { trash.mockReset(); });
 
   const opens = 'progress opens on modbench.downloads';
   const reads = 'Instance loader: read every file again';
@@ -317,8 +316,6 @@ describe('modbench.downloadedFile.exclude / include — a multi-name selection',
 
 describe('modbench.downloadedFile.delete — a multi-name selection', () => {
   beforeEach(() => vi.clearAllMocks());
-  afterEach(() => trash.mockReset());
-
 
   it('Esc deletes nothing and says nothing', async () => {
     const fake = fakeInstanceAdapter();
@@ -329,7 +326,6 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     await invoke('modbench.downloadedFile.delete', node(ROOT, 'a.7z'), [node(ROOT, 'a.7z'), node(ROOT, 'b.7z')]);
 
     expect(ask.asked).toHaveLength(1);
-    expect(trash).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.selectionOutcomeCalls).toEqual([]);
@@ -349,8 +345,10 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
       [node(ROOT, 'a.7z'), node(ROOT, 'b.7z'), node(ROOT, 'locked.7z')],
     );
 
-    const refused = { item: { name: 'locked.7z' }, reason: 'EPERM: operation not permitted' };
-    const outcome = { landed: [{ name: 'a.7z' }, { name: 'b.7z' }], refused: [refused] };
+    const outcome = {
+      landed: [{ name: 'a.7z' }, { name: 'b.7z' }],
+      refused: [{ item: { name: 'locked.7z' }, reason: 'EPERM: operation not permitted' }],
+    };
     expect(fake.calls).toEqual(['a.7z', 'b.7z', 'locked.7z'].map((name) => ({ verb: 'trashDownloadedFile', name })));
     assertAskedOnce(ask, { messageContains: '3 items', buttons: ['Delete'] });
     expect(reporter.selectionOutcomeCalls).toEqual([
@@ -415,17 +413,18 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     const reporter = recordingReporter();
     const ask = scriptedDialog('Delete');
 
-    registerDownloadsMultiRowCommands(downloadsCommands(fakeInstanceAdapter().adapter), instanceThatReads, reporter, ask, trash, downloadsLog, () => []);
+    const fake = fakeInstanceAdapter();
+
+    registerDownloadsMultiRowCommands(downloadsCommands(fake.adapter), instanceThatReads, reporter, ask, trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.delete');
 
     expect(ask.asked).toEqual([]);
-    expect(trash).not.toHaveBeenCalled();
+    expect(fake.calls).toEqual([]);
   });
 });
 
 describe('the Downloads gestures called by the agent', () => {
   beforeEach(() => vi.clearAllMocks());
-  afterEach(() => trash.mockReset());
 
   const named = (...names: string[]) => new AgentCall(names.map((name) => ({ kind: 'downloadedFile' as const, name })), {});
   const listing = (...names: string[]) => fakeInstance([], names.map((name) => downloadRowFixture(name, {}, ROOT)));
@@ -483,12 +482,13 @@ describe('the Downloads gestures called by the agent', () => {
     expect(downloadsLogLines).toEqual([]);
   });
 
-  it('delete refuses a file the Instance value does not list, trashing nothing', async () => {
-    registerDownloadsMultiRowCommands(downloadsCommands(fakeInstanceAdapter().adapter), listing('a.7z'), recordingReporter(), scriptedDialog(), trash, downloadsLog, viewSelection);
+  it('delete refuses, item by item, a file the adapter finds gone, whatever the Instance value lists', async () => {
+    const fake = fakeInstanceAdapter(readingFixture(), { goneDownloads: new Set(['gone.7z']) });
 
-    await expect(invoke('modbench.downloadedFile.delete', named('gone.7z'))).rejects.toBeInstanceOf(Refusal);
+    registerDownloadsMultiRowCommands(downloadsCommands(fake.adapter), listing('a.7z'), recordingReporter(), scriptedDialog(), trash, downloadsLog, viewSelection);
+    const answered = await invoke('modbench.downloadedFile.delete', named('a.7z', 'gone.7z'));
 
-    expect(trash).not.toHaveBeenCalled();
+    expect(answered).toMatchObject({ applied: true, outcome: { landed: [{ name: 'a.7z' }], refused: [{ item: { name: 'gone.7z' }, reason: expect.stringContaining('gone.7z') }] } });
   });
 
   it.each(['delete', 'exclude', 'include'])('%s refuses an Argument that is not a downloaded file, writing nothing', async (verb) => {
@@ -498,7 +498,6 @@ describe('the Downloads gestures called by the agent', () => {
     await expect(invoke(`modbench.downloadedFile.${verb}`, new AgentCall([{ kind: 'mod', name: 'a.7z' }], {}))).rejects.toBeInstanceOf(Refusal);
 
     expect(fake.calls).toEqual([]);
-    expect(trash).not.toHaveBeenCalled();
   });
 });
 

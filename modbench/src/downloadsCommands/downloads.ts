@@ -8,7 +8,6 @@ import { goneFromDisk } from '../coreLib/commandRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult } from '../coreLib/commandResult';
 
-// `metadataLeftBehind` is delete's own: the file trashed but its metadata didn't.
 type DownloadsCommandResult = CommandResult<{ wrote: boolean; metadataLeftBehind?: string }>;
 
 async function mark(adapter: InstanceAdapter, name: string, excluded: 'Excluded' | 'Included'): Promise<DownloadsCommandResult> {
@@ -39,15 +38,15 @@ function includeDownloads(adapter: InstanceAdapter, names: readonly string[]): P
   return selectionOutcomeOf(names, (name) => includeDownload(adapter, name), bareName);
 }
 
-/** A landed delete: `metadataLeftBehind` is set only when the file's own trash landed but its
- *  metadata's then failed — the delete still applied, so a caller logs this, not a refusal. */
 export interface DeletedDownload {
   name: string;
   metadataLeftBehind?: string;
 }
 
+const leftBehind = (reason?: string): { metadataLeftBehind?: string } => (reason === undefined ? {} : { metadataLeftBehind: reason });
+
 const toDeletedDownload = (name: string, landed?: { metadataLeftBehind?: string }): DeletedDownload =>
-  landed?.metadataLeftBehind === undefined ? { name } : { name, metadataLeftBehind: landed.metadataLeftBehind };
+  ({ name, ...leftBehind(landed?.metadataLeftBehind) });
 
 // Never touches the mod installed from any of them.
 function deleteDownloads(
@@ -60,9 +59,7 @@ async function deleteDownload(adapter: InstanceAdapter, name: string, trash: Mov
   try {
     const trashed = await adapter.trashDownloadedFile(name, trash);
     if (trashed.gone) return { applied: false, refusal: goneFromDisk(name) };
-    return trashed.metadataLeftBehind === undefined
-      ? { applied: true, wrote: true }
-      : { applied: true, wrote: true, metadataLeftBehind: trashed.metadataLeftBehind };
+    return { applied: true, wrote: true, ...leftBehind(trashed.metadataLeftBehind) };
   } catch (err) {
     return refuse(err);
   }

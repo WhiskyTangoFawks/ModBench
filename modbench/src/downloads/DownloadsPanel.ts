@@ -7,7 +7,6 @@ import { pluralArgument, registerGesture, singularArgument } from '../drivingLib
 import {
   argumentOfKind, registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure,
 } from '../drivingLib/agentGesture';
-import { downloadedFileNamed } from '../drivingLib/argument';
 import type { Argument } from '../wire/argument';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { reportFailure } from '../drivingLib/reportFailure';
@@ -57,7 +56,7 @@ function deleteGesture(
       const names = pluralArgument(entry, 'download').map((node) => node.argument.row.name);
       return names.length > 0 && await confirmDelete(names, ask) ? names : undefined;
     },
-    fromAgent: ({ argument }) => argument.map(downloadedFileNameOf).map((name) => downloadedFileNamed(instance.value.downloads, name).name),
+    fromAgent: ({ argument }) => argument.map(downloadedFileNameOf),
     run: (names) => runDownloadsWriting(instance, () =>
       landed(commands.deleteDownloads(names, trash), deletedPartials(instance.value.managerNames))),
     report: (result, names) => {

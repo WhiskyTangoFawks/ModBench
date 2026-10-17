@@ -21,6 +21,12 @@ type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
   | 'trashDownloadedFile' | 'selectProfile'>;
 
+async function heldDownload(context: Mo2Context, name: string): Promise<{ downloadsDir: string; file: string } | undefined> {
+  const downloadsDir = await currentDownloadsDir(context);
+  const file = downloadFile(downloadsDir, name);
+  return (await exists(file)) ? { downloadsDir, file } : undefined;
+}
+
 function listedPlugin(order: readonly PluginEntry[], plugin: string): string {
   const listed = order.find((p) => pluginKey(p.name) === pluginKey(plugin));
   if (listed === undefined) throw new Error(`Plugin not found in plugins.txt: ${plugin}`);
@@ -101,16 +107,17 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
     },
 
     async markDownloadedFile(name, mark) {
-      const downloadsDir = await currentDownloadsDir(context);
-      if (!(await exists(downloadFile(downloadsDir, name)))) return { gone: true };
+      const held = await heldDownload(context, name);
+      if (held === undefined) return { gone: true };
+      const { downloadsDir } = held;
       const { wrote } = await spliceDownloadMeta(downloadsDir, name, (text) => markIn(text, mark));
       return { gone: false, wrote };
     },
 
     async trashDownloadedFile(name, trash) {
-      const downloadsDir = await currentDownloadsDir(context);
-      const file = downloadFile(downloadsDir, name);
-      if (!(await exists(file))) return { gone: true };
+      const held = await heldDownload(context, name);
+      if (held === undefined) return { gone: true };
+      const { downloadsDir, file } = held;
       await trash(file);
       try {
         await trashDownloadMeta(downloadsDir, name, trash);

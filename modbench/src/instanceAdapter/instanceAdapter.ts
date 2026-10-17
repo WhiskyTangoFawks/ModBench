@@ -518,9 +518,6 @@ export interface InstanceAdapter {
   /** A downloaded file that is gone gets no mark. Rejects when the downloads folder cannot be
    *  resolved. */
   markDownloadedFile(name: string, mark: DownloadedFileMark): Promise<Marked>;
-  /** Moves a downloaded file to the trash, then what the manager keeps about it. Rejects when the
-   *  file cannot be trashed. `metadataLeftBehind` is the reason what is kept could not follow. */
-  trashDownloadedFile(name: string, trash: MoveToTrash): Promise<DownloadedFileTrashed>;
   selectProfile(profile: string): Promise<Written>;
 
   // Put and rename in mods/.
@@ -547,6 +544,9 @@ export interface InstanceAdapter {
   renamePlugin(origin: FileOrigin, from: string, to: string, gameRelease: string | undefined): Promise<void>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
+  /** Moves a downloaded file to the trash, then what the manager keeps about it. Rejects when the
+   *  file cannot be trashed. `metadataLeftBehind` is the reason what is kept could not follow. */
+  trashDownloadedFile(name: string, trash: MoveToTrash): Promise<DownloadedFileTrashed>;
   /** Moves the file at the forward-slash `relativePath` in the mod's folder into the trash; a file already gone is done.
    *  Rejects a path that leaves the folder, its links resolved. */
   trashModFile(mod: string, relativePath: string, trash: MoveToTrash): Promise<void>;

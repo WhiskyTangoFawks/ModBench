@@ -221,7 +221,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       record({ verb: 'markDownloadedFile', name, mark }, answers.goneDownloads?.has(name) ? { gone: true } as const : { gone: false, wrote: true } as const),
     trashDownloadedFile: (name) =>
       record({ verb: 'trashDownloadedFile', name },
-        answers.goneDownloads?.has(name) ? { gone: true } as const : { gone: false, metadataLeftBehind: answers.metadataLeftBehind } as const),
+        answers.goneDownloads?.has(name) ? { gone: true } as const : { gone: false, ...(answers.metadataLeftBehind === undefined ? {} : { metadataLeftBehind: answers.metadataLeftBehind }) } as const),
     selectProfile: (profile) => record({ verb: 'selectProfile', profile }, { wrote: profile !== current.profile }),
     createModFolder: (mod) => record({ verb: 'createModFolder', mod }, undefined),
     renameModFolder: (from, to) => record({ verb: 'renameModFolder', from, to }, undefined),
