@@ -57,18 +57,22 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   async open(uri: vscode.Uri, columns: readonly RecordCopy[], options: TabShowOptions, place?: ViewState): Promise<void> {
     const key = uri.toString();
     this.toShow.set(key, { columns, place });
-    let untaken: readonly RecordCopy[] | undefined;
     try {
       await vscode.commands.executeCommand('vscode.openWith', uri, RECORD_VIEW_TYPE, options);
-    } finally {
-      untaken = this.toShow.get(key)?.columns;
+    } catch (err) {
       this.toShow.delete(key);
+      throw err;
     }
+    const untaken = this.toShow.get(key)?.columns;
     if (!untaken) return;
+    const shownBefore = [...this.deps.tabs].filter((tab) => tab.document.toString() === key);
+    // With no tab on the document yet, VS Code is still resolving the one it opened, and it takes them.
+    if (shownBefore.length === 0) return;
+    this.toShow.delete(key);
     // No new tab took them, so VS Code showed the document's tab already open in the group, which
     // is active now (editor.md, Opening, story 3).
-    for (const tab of this.deps.tabs) {
-      if (tab.document.toString() === key && tab.panel.active) tab.postOnceListening({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: [...untaken] });
+    for (const tab of shownBefore) {
+      if (tab.panel.active) tab.postOnceListening({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: [...untaken] });
     }
   }
 
