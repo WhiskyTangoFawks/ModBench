@@ -2,6 +2,7 @@ using System.Data;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using DuckDB.NET.Data;
+using DuckDB.NET.Native;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -163,6 +164,24 @@ internal sealed class Store : IDisposable
                 aReadEnded = remaining > TimeSpan.Zero && Monitor.Wait(_readsGate, remaining);
             }
             return _readsInFlight == 0;
+        }
+    }
+
+    /// <summary>DuckDB invalidates its database at a fatal error, a failed checkpoint among them, and
+    /// answers nothing from it until the file is opened again.</summary>
+    internal static bool Invalidates(Exception ex) => ex is DuckDBException { ErrorType: DuckDBErrorType.Fatal };
+
+    public bool Invalidated()
+    {
+        try
+        {
+            using var connection = OpenReadConnection();
+            DuckDbSql.Scalar<int>(connection, "SELECT 1");
+            return false;
+        }
+        catch (DuckDBException ex) when (Invalidates(ex))
+        {
+            return true;
         }
     }
 
