@@ -293,7 +293,7 @@ function reportBuildResult(reporter: Reporter, result: Built): void {
 
 // mods.md, Build, story 5: the plugins are built from what the user sees, so the mod's unsaved
 // plugin source is saved first, and a file VS Code does not save refuses the build before anything
-// is written. A mod with no source folder has nothing to save; source commands refuse it.
+// is written.
 async function savedFirst(deps: BuildDeps, mods: readonly string[]): Promise<Built | undefined> {
   const unsaved: string[] = [];
   for (const mod of mods) unsaved.push(...(await deps.saveUnsaved(mod) ?? []));
