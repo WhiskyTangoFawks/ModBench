@@ -60,7 +60,7 @@ export interface PluginsViewDeps {
   ask: AskQuestion;
   recordWrite: RecordWrite;
   sourceEditing: SourceEditing;
-  /** Saves a mod's unsaved plugin source; answers the paths VS Code left unsaved, or undefined when the mod has no source folder. */
+  /** Saves a mod's unsaved plugin source; answers the paths VS Code left unsaved. */
   saveUnsavedPluginSource: (mod: string) => Promise<string[]>;
   /** The rows of the focused Mods or Plugins view, which the palette's decompile and commit and build act on. */
   sourceGestureRows: () => readonly unknown[];

@@ -247,8 +247,8 @@ export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => re
   const gesture: AgentGesture<unknown, ModsGiven, Built> = {
     fromView: async (entry) => {
       const targets = targetsOf(entry.selection, deps.modOfOrigin);
-      const fromARow = entry.clicked !== undefined || targets.mods.length > 0 || targets.refusedRows.length > 0;
-      if (fromARow) return { ...targets, invokedFrom: viewOf(entry.selection, deps.modsView) };
+      const named = entry.clicked !== undefined || targets.mods.length > 0 || targets.refusedRows.length > 0;
+      if (named) return { ...targets, invokedFrom: viewOf(entry.selection, deps.modsView) };
       const mods = await pickSourceMods(deps.sourceDirs());
       return mods === undefined ? undefined : { mods, refusedRows: [], invokedFrom: deps.modsView };
     },
