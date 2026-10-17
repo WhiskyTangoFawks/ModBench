@@ -1,8 +1,7 @@
 namespace MEditService.TestSupport;
 
-/// <summary>An instance repository that pins a submodule at <c>source/&lt;name&gt;</c>, checked out nowhere, as a clone of
-/// the instance repository leaves it, and the submodule's remote, made by its first commit. A class that makes one runs in
-/// its assembly's process environment collection.</summary>
+/// <summary>An instance repository that pins a submodule at <c>source/&lt;name&gt;</c>, checked out nowhere, and the
+/// submodule's remote. A class that makes one runs in its assembly's process environment collection.</summary>
 public sealed class PinnedSubmodule : IDisposable
 {
     private readonly (string Variable, string? Was)[] _environment;

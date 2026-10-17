@@ -60,8 +60,7 @@ public sealed record RestoreSkip(RestoreRefusal Kind, BuildRefusal Build = Build
 }
 
 /// <summary>A mod whose files are as its manifest says: the files written, each file no line names, why the stat cache did
-/// not keep the read, the metadata its manifest says, Uncommitted as <see cref="BuiltMod"/>'s, and LeftDetached as
-/// <see cref="SubmoduleHead"/>'s.</summary>
+/// not keep the read, the metadata its manifest says, and Uncommitted and LeftDetached as its rebuild answered them.</summary>
 public sealed record RestoredMod(
     IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, ModMetadata Metadata, bool Uncommitted = false,
     string? LeftDetached = null);

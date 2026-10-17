@@ -238,8 +238,7 @@ internal sealed record SubmoduleRequest(string Folder, string Pin, string? Branc
 }
 
 /// <summary>A mod whose files are as its manifest says: Written each file written, NamedByNoLine each file no line names,
-/// StatCacheNotWritten why the stat cache did not keep the read, Metadata its manifest's version and page, LeftDetached why the
-/// clone of its submodule is not on the branch it follows.</summary>
+/// StatCacheNotWritten why the stat cache did not keep the read, Metadata its manifest's version and page.</summary>
 internal sealed record RestoredModResponse(
     string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, ModMetadata Metadata, bool Uncommitted,
     string? LeftDetached);
