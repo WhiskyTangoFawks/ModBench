@@ -432,6 +432,7 @@ internal sealed class Indexer : IDisposable
             // Every type, out of memory included: nothing above observes a throw, so one left here
             // would leave the status Reconciling for ever (plugins.md, States, story 6).
             _logger.LogError(ex, "Load order reconcile failed");
+            ReopenIfInvalidatedBy(ex);
             failure = ex.Message;
             return true;
         }
@@ -444,6 +445,21 @@ internal sealed class Indexer : IDisposable
 
     private bool CancelledBy(Exception ex, CancellationToken token) =>
         ex is OperationCanceledException && (token.IsCancellationRequested || _disposal.IsCancellationRequested);
+
+    // ADR-0003: recovery is not gated. Until the file is opened again every read on it throws, and the
+    // plugins read before the fatal would answer nothing until the next snapshot. Called with the
+    // exclusive right held, so no reconcile is in flight; EnsureScope waits out the reads.
+    private void ReopenIfInvalidatedBy(Exception ex)
+    {
+        if (!Store.Invalidates(ex)) return;
+        LoadOrderSnapshot snapshot;
+        lock (_lock)
+        {
+            if (_scope is not { } current) return;
+            snapshot = current.LoadOrder;
+        }
+        EnsureScope(snapshot, out _, out _);
+    }
 
     private bool FailsOnePlugin(Exception ex, CancellationToken token) =>
         ex is not OutOfMemoryException && !Store.Invalidates(ex) && !CancelledBy(ex, token);
@@ -1064,6 +1080,7 @@ internal sealed class Indexer : IDisposable
             // Every type, out of memory included: the failure becomes status data (plugins.md,
             // States, story 6), and the next snapshot tries again.
             _logger.LogError(ex, "Validating the record index failed unexpectedly");
+            ReopenIfInvalidatedBy(ex);
             return ex.Message;
         }
     }
