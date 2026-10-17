@@ -86,6 +86,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
               AND w.origin = {alias}.{originColumn}
         """;
 
+    // The tables a plugin's rows land in (records, winners, form_references, holdings) take no key or index:
+    // DuckDB serves no NOCASE lookup from one, and a re-read's commit pins in memory the entries of the rows
+    // it deletes and of the rows it appends.
     public static void CreateTables(DuckDBConnection connection)
     {
         DuckDbSql.Execute(connection, $"CREATE SCHEMA IF NOT EXISTS {MirrorSchema}");
@@ -226,8 +229,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             )
             """);
 
-    // No key or index on any appended table: DuckDB serves no NOCASE lookup from one, and a re-read's
-    // commit pins in memory the entries of the rows it deletes and of the rows it appends.
     private static void CreateWinnersTable(DuckDBConnection connection)
     {
         DuckDbSql.Execute(connection, $"""
