@@ -257,6 +257,16 @@ describe('a cell\'s context, which its right-click hands a command and the host\
   });
 });
 
+describe('a translated string\'s cell', () => {
+  const name = fieldMeta({ name: 'Name', type: 'translatedString' });
+  const held = { TargetLanguage: 'English', Values: [{ Language: 'English', String: 'Old' }, { Language: 'French', String: 'Vieux' }] };
+  const result = { ...answer([name], [diffNode({ fieldName: 'Name', values: { [MASTER]: held } })]), stringsLanguage: 'French' };
+
+  it('shows its text in the comparison\'s strings language, and holds the document\'s value', () => {
+    expect(fieldRowsOf(rowsFor(result))[0]?.cells.get(MASTER)).toMatchObject({ shown: 'Vieux', value: held });
+  });
+});
+
 describe('the focused cell, as the grid shows it', () => {
   const rows = rowsFor(answer([bounds], [boundsDiff]), [MOD]);
   const none = new Set<string>();

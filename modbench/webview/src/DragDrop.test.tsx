@@ -14,6 +14,8 @@ import {
 
 const levelMeta = fieldMeta({ name: 'Level', type: 'int' });
 const nameMeta = fieldMeta({ name: 'Name', type: 'string' });
+const titleMeta = fieldMeta({ name: 'Title', type: 'translatedString' });
+const title = { TargetLanguage: 'English', Value: 'Gun' };
 const valuesMeta = fieldMeta({
   name: 'Values', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'int' }),
 });
@@ -28,7 +30,7 @@ const record = compareResultFixture({
       formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data/', isWinner: false, editorId: 'TestNPC',
       fields: [
         { metadata: levelMeta, value: 5 }, { metadata: nameMeta, value: 'Master' },
-        { metadata: valuesMeta, value: [4, 6] }, { metadata: otherValuesMeta, value: [1] },
+        { metadata: valuesMeta, value: [4, 6] }, { metadata: otherValuesMeta, value: [1] }, { metadata: titleMeta, value: title },
       ],
       conflictThis: 'Master',
     }),
@@ -36,6 +38,7 @@ const record = compareResultFixture({
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data/', isWinner: true, editorId: 'TestNPC',
       fields: [
         { metadata: levelMeta, value: 7 }, { metadata: valuesMeta, value: [4] }, { metadata: otherValuesMeta, value: [1] },
+        { metadata: titleMeta, value: title },
       ],
       conflictThis: 'Override',
     }),
@@ -59,6 +62,9 @@ const record = compareResultFixture({
       children: [
         diffNode({ fieldName: '[0]', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
       ],
+    }),
+    diffNode({
+      fieldName: 'Title', values: { 'Fallout4.esm': title, 'MyMod.esp': title }, winnerColumn: 'MyMod.esp', cellStates: {},
     }),
   ],
 });
@@ -119,6 +125,13 @@ describe('RecordPanel — drag and drop', () => {
 
   it('a cell dragged onto a cell that already holds its value writes nothing', async () => {
     const { landed } = drag(await cellOf('[0]', MASTER), await cellOf('[0]', MOD));
+
+    expect(landed).toBe(false);
+    expect(lastPostedEnvelope(vscode.postMessage)).toBeUndefined();
+  });
+
+  it('a translated text dragged onto a cell that already holds it writes nothing', async () => {
+    const { landed } = drag(await cellOf('Title', MASTER), await cellOf('Title', MOD));
 
     expect(landed).toBe(false);
     expect(lastPostedEnvelope(vscode.postMessage)).toBeUndefined();

@@ -1,5 +1,5 @@
 import { isString } from '../../src/wire/messages';
-import { displayValue } from './modelValue';
+import { displayValue, shownValue } from './modelValue';
 import { defaultOf, discriminatorOf, getAtPath, metaAtPath, rootFieldOf, toStr } from './recordUtils';
 import { siblingsInUseFor } from './siblingsInUse';
 import type { CompareOverride, FieldDiff, FieldMetadata, PathHop } from './types';
@@ -260,31 +260,32 @@ export const elementsIn = (array: FieldDiff | undefined, column: string): FieldD
 
 /** editor-fields.md § Collapsed readings: the first row that applies. */
 export function collapsedReading(
-  diff: FieldDiff, meta: FieldMetadata | undefined, column: string, isLast = true,
+  diff: FieldDiff, meta: FieldMetadata | undefined, column: string, stringsLanguage: string, isLast = true,
   keyMembers?: readonly string[] | null,
 ): Reading {
   const value = diff.values[column];
-  const named = value == null ? undefined : namedReading(diff, meta, column, isLast);
+  const named = value == null ? undefined : namedReading(diff, meta, column, stringsLanguage, isLast);
   if (named != null) return content(named);
-  const keyed = value == null ? undefined : keyReading(diff, meta, column, keyMembers);
+  const keyed = value == null ? undefined : keyReading(diff, meta, column, stringsLanguage, keyMembers);
   if (keyed != null) return content(keyed);
   if (meta?.type === 'array') {
     const list = value ?? defaultOf(meta);
     const length = Array.isArray(list) ? list.length : 0;
     const [only] = elementsIn(diff, column);
     return length === 1 && only
-      ? collapsedReading(only, meta.elementType ?? undefined, column, true, meta.keyMembers)
+      ? collapsedReading(only, meta.elementType ?? undefined, column, stringsLanguage, true, meta.keyMembers)
       : placeholder(`[${length}]`);
   }
   // A one-element array's element can be a plain value, which reads as its own cell does.
   if (value != null && meta != null && meta.type !== 'struct') {
-    return content(displayValue(value, meta, diff.resolutions?.[column]));
+    return content(displayValue(shownValue(value, meta, stringsLanguage), meta, diff.resolutions?.[column]));
   }
   return placeholder('{…}');
 }
 
 function keyReading(
-  diff: FieldDiff, meta: FieldMetadata | undefined, column: string, keyMembers: readonly string[] | null | undefined,
+  diff: FieldDiff, meta: FieldMetadata | undefined, column: string, stringsLanguage: string,
+  keyMembers: readonly string[] | null | undefined,
 ): string | undefined {
   if (!keyMembers?.length) return undefined;
   const value = diff.values[column];
@@ -293,14 +294,14 @@ function keyReading(
     const memberMeta = metaAtPath(meta, memberPath(path), value);
     if (!memberMeta) return undefined;
     const held = getAtPath(value, memberPath(path)) ?? defaultOf(memberMeta);
-    const reading = displayValue(held, memberMeta, diffAt(diff, path)?.resolutions?.[column]);
+    const reading = displayValue(shownValue(held, memberMeta, stringsLanguage), memberMeta, diffAt(diff, path)?.resolutions?.[column]);
     return reading === '' && memberMeta.type === 'formKey' ? NO_REFERENCE : reading;
   });
   return readings.every(r => r != null) ? readings.join(', ') : undefined;
 }
 
 function namedReading(
-  diff: FieldDiff, meta: FieldMetadata | undefined, column: string, isLast: boolean,
+  diff: FieldDiff, meta: FieldMetadata | undefined, column: string, stringsLanguage: string, isLast: boolean,
 ): string | undefined {
   const value = diff.values[column];
   const found = summarizerFor(meta, value);
@@ -314,7 +315,7 @@ function namedReading(
     return {
       value: memberValue,
       meta: memberMeta,
-      label: memberMeta ? displayValue(memberValue, memberMeta, resolution) : toStr(memberValue),
+      label: memberMeta ? displayValue(shownValue(memberValue, memberMeta, stringsLanguage), memberMeta, resolution) : toStr(memberValue),
       shortName: resolution?.editorId ?? toStr(memberValue),
     };
   };
@@ -328,7 +329,8 @@ function namedReading(
       const arrayMeta = metaAtPath(meta, memberPath(path), value);
       const elementMeta = arrayMeta?.elementType ?? undefined;
       const present = elementsIn(diffAt(diff, path), column);
-      return present.map((child, i) => collapsedReading(child, elementMeta, column, i === present.length - 1, arrayMeta?.keyMembers).text);
+      return present.map((child, i) =>
+        collapsedReading(child, elementMeta, column, stringsLanguage, i === present.length - 1, arrayMeta?.keyMembers).text);
     },
   });
 }

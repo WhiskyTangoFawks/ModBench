@@ -2091,7 +2091,7 @@ describe('RecordPanel — an absent non-nullable struct reads as its default mem
   });
 });
 
-describe('RecordPanel — a translated string leaf, whose document spelling is an object, posts its object so the codec receives what it wrote', () => {
+describe('RecordPanel — a translated string leaf, whose document spelling is an object, posts its text', () => {
   const nameMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'translatedString' });
   const value = { TargetLanguage: 'English', Value: 'Base name' };
   const compare: CompareResult = compareResultFixture({
@@ -2104,7 +2104,7 @@ describe('RecordPanel — a translated string leaf, whose document spelling is a
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
 
-  it('reads the text and posts set of the whole object with the new Value', async () => {
+  it('reads the text and posts set of the new text', async () => {
     renderPanel(compare, { plugins: unionCompiledPluginsResponse });
     await waitFor(() => screen.getByText('Base name'));
     vi.mocked(vscode.postMessage).mockClear();
@@ -2115,7 +2115,7 @@ describe('RecordPanel — a translated string leaf, whose document spelling is a
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
-      envelope: { op: 'set', path: [{ kind: 'member', name: 'Name' }], value: { TargetLanguage: 'English', Value: 'New name' } },
+      envelope: { op: 'set', path: [{ kind: 'member', name: 'Name' }], value: 'New name' },
     }));
   });
 });

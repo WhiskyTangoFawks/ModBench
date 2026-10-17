@@ -1,4 +1,6 @@
+using System.Text;
 using System.Text.Json.Nodes;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
@@ -8,6 +10,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
@@ -24,8 +27,15 @@ internal sealed class DocumentEditFixture : TestInstance
 
     internal PluginAddress Plugin { get; }
 
-    internal DocumentEditFixture() =>
+    internal DocumentEditFixture(Language stringsLanguage = Language.English)
+        : base(stringsLanguage: stringsLanguage) =>
         Plugin = Add(new Fallout4Mod(ModKey, Fallout4Release.Fallout4), "DocEditMod");
+
+    /// <summary>Seeds the plugin's header as a localized plugin's.</summary>
+    internal void Localize() =>
+        SeedRaw(
+            PluginHeader.FormKeyFor(ModKey), PluginHeader.RecordType, null,
+            Encoding.UTF8.GetString(HeaderDocument.Write(new Fallout4Mod(ModKey, Fallout4Release.Fallout4) { UsingLocalization = true })));
 
     internal static FormKey KeyOf(uint id) => new(ModKey, id);
 

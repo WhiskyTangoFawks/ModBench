@@ -5,6 +5,7 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Skyrim;
+using Mutagen.Bethesda.Strings;
 using static MEditService.Codec.Tests.TestSupport.DocumentEditing;
 
 namespace MEditService.Codec.Tests.Schema;
@@ -122,7 +123,7 @@ public sealed class SkyrimConditionDocumentTests
         Assert.Null(DocumentEdit.Locate(
             Document.Parse(PerkText()), SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["perk"], EditOp.Set,
             [Member("Conditions"), At(condition), Member("Data"), Member(member)], out var edit));
-        Assert.Null(edit.Require().Apply(value, out var patch));
+        Assert.Null(edit.Require().Apply(value, Language.English, localized: false, out var patch));
         return Data(patch.Require().Document.Text, condition);
     }
 }

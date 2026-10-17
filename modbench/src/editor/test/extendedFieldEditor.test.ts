@@ -65,7 +65,7 @@ const holder = (plugin: string, origin: string): CompareResult['overrides'][numb
 });
 
 const comparison = (diffs: Diff[], holders: Array<[string, string]> = [['Fallout4.esm', 'Data/']]): CompareResult => ({
-  overrides: holders.map(([plugin, origin]) => holder(plugin, origin)), diffs, conflictAll: 'NoConflict', recordTypeName: 'Npc',
+  overrides: holders.map(([plugin, origin]) => holder(plugin, origin)), diffs, conflictAll: 'NoConflict', recordTypeName: 'Npc', stringsLanguage: 'English',
 });
 
 const descriptionOf = (value: string) => comparison([diff('Description', { 'Fallout4.esm': value })]);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { copiedText, displayValue, modelValue, pastedValue } from './modelValue';
+import { copiedText, displayValue, modelValue, pastedValue, shownValue } from './modelValue';
 import type { FieldMetadata, FormKeyResolution } from './types';
 import { fieldMeta } from './test/fixtures';
 
@@ -93,12 +93,12 @@ describe('an integer whose bits the schema names reads, copies and pastes as fla
   });
 
   it('pastes the names and hex bits a copy leaves as the integer', () => {
-    expect(pastedValue('Deleted, Persistent, 0x4000', recordFlagsMeta, 0)).toBe(1024 | 32 | 0x4000);
-    expect(pastedValue('', recordFlagsMeta, 32)).toBe(0);
+    expect(pastedValue('Deleted, Persistent, 0x4000', recordFlagsMeta)).toBe(1024 | 32 | 0x4000);
+    expect(pastedValue('', recordFlagsMeta)).toBe(0);
   });
 
   it('pastes a name the schema does not list as the text, for mEdit to refuse', () => {
-    expect(pastedValue('Persistent, Bogus', recordFlagsMeta, 0)).toBe('Persistent, Bogus');
+    expect(pastedValue('Persistent, Bogus', recordFlagsMeta)).toBe('Persistent, Bogus');
   });
 });
 
@@ -204,73 +204,87 @@ describe('pastedValue — the text a copy leaves, taken back as the field\'s own
     ['False', false],
     [' true ', true],
   ])('bool: %j is %j', (text, expected) => {
-    expect(pastedValue(text, boolMeta, undefined)).toBe(expected);
+    expect(pastedValue(text, boolMeta)).toBe(expected);
   });
 
   it('bool: text that is neither stays text, for the backend to refuse', () => {
-    expect(pastedValue('maybe', boolMeta, undefined)).toBe('maybe');
+    expect(pastedValue('maybe', boolMeta)).toBe('maybe');
   });
 
   it('int: a whole number is a number', () => {
-    expect(pastedValue('-12', intMeta, undefined)).toBe(-12);
+    expect(pastedValue('-12', intMeta)).toBe(-12);
   });
 
   it.each(['12abc', '1.5', ''])('int: %j is not repaired to a number', text => {
-    expect(pastedValue(text, intMeta, undefined)).toBe(text);
+    expect(pastedValue(text, intMeta)).toBe(text);
   });
 
   it('float: a number is a number', () => {
-    expect(pastedValue('1.25', floatMeta, undefined)).toBe(1.25);
+    expect(pastedValue('1.25', floatMeta)).toBe(1.25);
   });
 
   it.each(['1.25kg', '0x1A', 'Infinity', ''])('float: %j is not repaired to a number', text => {
-    expect(pastedValue(text, floatMeta, undefined)).toBe(text);
+    expect(pastedValue(text, floatMeta)).toBe(text);
   });
 
   it('enum: a member\'s label is its value', () => {
-    expect(pastedValue('Woman', labelledEnum, undefined)).toBe('Female');
+    expect(pastedValue('Woman', labelledEnum)).toBe('Female');
   });
 
   it('enum: a member\'s value is itself', () => {
-    expect(pastedValue('Male', labelledEnum, undefined)).toBe('Male');
+    expect(pastedValue('Male', labelledEnum)).toBe('Male');
   });
 
   it('flags: the names joined by a comma are the array of names', () => {
-    expect(pastedValue('A, C', flagMeta, undefined)).toEqual(['A', 'C']);
+    expect(pastedValue('A, C', flagMeta)).toEqual(['A', 'C']);
   });
 
   it('flags: no names is no flags set', () => {
-    expect(pastedValue('', flagMeta, undefined)).toEqual([]);
+    expect(pastedValue('', flagMeta)).toEqual([]);
   });
 
   it('reference: the FormKey in a label\'s brackets', () => {
-    expect(pastedValue('Dogmeat [00001A:Fallout4.esm]', fkMeta, undefined)).toBe('00001A:Fallout4.esm');
+    expect(pastedValue('Dogmeat [00001A:Fallout4.esm]', fkMeta)).toBe('00001A:Fallout4.esm');
   });
 
   it('reference: a bare FormKey is itself', () => {
-    expect(pastedValue('00001A:Fallout4.esm', fkMeta, undefined)).toBe('00001A:Fallout4.esm');
+    expect(pastedValue('00001A:Fallout4.esm', fkMeta)).toBe('00001A:Fallout4.esm');
   });
 
   it('reference: no text is no reference', () => {
-    expect(pastedValue('', fkMeta, undefined)).toBeNull();
+    expect(pastedValue('', fkMeta)).toBeNull();
   });
 
   it('struct and array: the JSON a copy leaves is the whole value', () => {
-    expect(pastedValue('[1,2]', arrayMeta, undefined)).toEqual([1, 2]);
-    expect(pastedValue('{"Rank":3}', structMeta, undefined)).toEqual({ Rank: 3 });
+    expect(pastedValue('[1,2]', arrayMeta)).toEqual([1, 2]);
+    expect(pastedValue('{"Rank":3}', structMeta)).toEqual({ Rank: 3 });
   });
 
   it('struct: text that is not JSON stays text, for the backend to refuse', () => {
-    expect(pastedValue('{oops', structMeta, undefined)).toBe('{oops');
+    expect(pastedValue('{oops', structMeta)).toBe('{oops');
   });
 
-  it('translated text: only the text of the codec\'s object changes', () => {
-    const meta = fieldMeta({ name: 'Name', type: 'translatedString' });
-    expect(pastedValue('New', meta, { Value: 'Old', Id: 7 })).toEqual({ Value: 'New', Id: 7 });
+  it.each([
+    ['text', strMeta, ' Dog '],
+    ['bytes', fieldMeta({ name: 'Raw', type: 'hex' }), '0xAB'],
+    ['translated text', fieldMeta({ name: 'Name', type: 'translatedString' }), 'New'],
+  ])('%s: the text as it is', (_type, meta, text) => {
+    expect(pastedValue(text, meta)).toBe(text);
+  });
+});
+
+describe('shownValue — a value as its cell shows it', () => {
+  const name = fieldMeta({ name: 'Name', type: 'translatedString' });
+  const several = (other: string) => ({
+    TargetLanguage: 'English', Values: [{ Language: 'English', String: 'Old' }, { Language: other, String: 'Vieux' }],
   });
 
-  it('text and bytes: the text as it is', () => {
-    expect(pastedValue(' Dog ', strMeta, undefined)).toBe(' Dog ');
-    expect(pastedValue('0xAB', fieldMeta({ name: 'Raw', type: 'hex' }), undefined)).toBe('0xAB');
+  it.each([
+    ['a translated string: its one text', name, { TargetLanguage: 'English', Value: 'Old' }, 'Old'],
+    ['a translated string: its text in the strings language', name, several('French'), 'Vieux'],
+    ['a translated string: nothing where it holds no text in the strings language', name, several('German'), ''],
+    ['any other value: itself', intMeta, 5, 5],
+  ])('%s', (_case, meta, value, shown) => {
+    expect(shownValue(value, meta, 'French')).toEqual(shown);
   });
 });

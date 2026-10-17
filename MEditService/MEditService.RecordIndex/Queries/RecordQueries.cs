@@ -145,8 +145,13 @@ internal sealed class RecordQueries(
             .ToList();
         if (outsideTheComparison.Count == 1) PlaceBeforeOverrider(annotated, snapshot);
 
-        return new CompareResult(annotated, classification.Diffs, conflictAll, RequireSchemas().DisplayNameFor(recordType));
+        return ComparisonOf(annotated, classification.Diffs, conflictAll, recordType, snapshot);
     }
+
+    private CompareResult ComparisonOf(
+        IReadOnlyList<CompareOverride> overrides, IReadOnlyList<FieldDiff> diffs, ConflictAll conflictAll, string recordType,
+        LoadOrderSnapshot snapshot) =>
+        new(overrides, diffs, conflictAll, RequireSchemas().DisplayNameFor(recordType), snapshot.StringsLanguage.ToString());
 
     // The outside copy is last. When its plugin is overridden, it moves to just before the place of the
     // active plugin of its filename.
@@ -198,7 +203,7 @@ internal sealed class RecordQueries(
 
         var conflictAll = ConflictRules.Worst(ConflictAll.NoConflict, diffs.Select(diff => diff.ConflictAll));
         return new CompareRecordsAnswer.Compared(
-            new CompareResult(overrides, diffs, conflictAll, RequireSchemas().DisplayNameFor(documents[0].RecordType)));
+            ComparisonOf(overrides, diffs, conflictAll, documents[0].RecordType, snapshot));
     }
 
     // The text is the document carrying the record. A plugin's source tree says which document that is, as it

@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Edits;
 
@@ -14,7 +15,9 @@ internal sealed record RecordTextEditRequest(
     RecordEditEnvelope Envelope,
     GameRelease Release,
     Func<string, string> RoundTrip,
-    LoadOrderResolution.MastersWalk Masters);
+    LoadOrderResolution.MastersWalk Masters,
+    Language StringsLanguage,
+    bool Localized);
 
 /// <summary>A write is an edit by path on the record's own document (ADR-0005), refused by the rules that
 /// decide a write. Pure: a document and metadata in, text or one refusal out.</summary>
@@ -57,7 +60,7 @@ internal static class RecordTextEdit
         if (op == EditOp.Move && RefuseMove(edit, envelope, spelled) is { } unmoved) return unmoved;
         var value = envelope.Value?.RawText;
         if (edit.ReadOnlyReached(value) is { } reached) return ReadOnlyRefusal(reached.Path, reached.Member, reached.Reason);
-        if (edit.Apply(value, out var applied) is { } refused) return Refusal(refused);
+        if (edit.Apply(value, request.StringsLanguage, request.Localized, out var applied) is { } refused) return Refusal(refused);
         var patch = applied ?? throw new InvalidOperationException("Expected Apply to answer a patch when it does not refuse.");
         var patched = emptying?.Apply(patch.Document, request.Schema, request.Release, left) ?? patch.Document;
 

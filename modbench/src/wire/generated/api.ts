@@ -1099,6 +1099,7 @@ export interface components {
             diffs: components["schemas"]["FieldDiff"][];
             conflictAll: components["schemas"]["ConflictAll"];
             recordTypeName: string;
+            stringsLanguage: string;
         };
         CompileDiagnostic: {
             formKey: string;

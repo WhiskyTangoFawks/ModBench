@@ -20,6 +20,8 @@ internal sealed class WriteTargets(
         internal ISourceRepository Repository => Session.Repository;
     }
 
+    internal Language StringsLanguage => loadOrder.Current.StringsLanguage;
+
     internal RecordEditResult? ResolveEditTarget(PluginAddress plugin, string formKey, WriteSessions sessions, out EditTarget target)
     {
         target = default;
@@ -88,11 +90,12 @@ internal sealed class WriteTargets(
     }
 
     private Answer<Language?, SourceFailure> NotLocalizedIn(ISourceRepository repository, PluginAddress plugin, GameRelease release) =>
+        IsLocalized(repository, plugin, release).Then(localized =>
+            SourceAnswer.Of(localized ? null : (Language?)loadOrder.Current.StringsLanguage));
+
+    internal static Answer<bool, SourceFailure> IsLocalized(ISourceRepository repository, PluginAddress plugin, GameRelease release) =>
         repository.RecordOf(plugin, PluginHeader.IdentityOf(plugin.Name)).Then(header =>
-            SourceAnswer.Of(
-                header is { } held && !HeaderDocument.IsLocalized(Encoding.UTF8.GetBytes(held.Body), release)
-                    ? (Language?)loadOrder.Current.StringsLanguage
-                    : null));
+            SourceAnswer.Of(header is not { } held || HeaderDocument.IsLocalized(Encoding.UTF8.GetBytes(held.Body), release)));
 
     // A record's own descendants are inside its text, so one unreadable response refuses its topic
     // here too.

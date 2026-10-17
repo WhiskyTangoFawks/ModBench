@@ -70,13 +70,15 @@ public sealed class EditRecordChangesHandler
         var text = (own ?? throw new InvalidOperationException($"Expected the text given for {formKey} to carry it.")).Body;
         if (!HeldIn.Of(repository, plugin, identity).Holds(out var held, out unread)) return unread;
         if (!Document.TryRead(text, out var record, out var whyNot)) return WriteTargets.RefuseUnreadable(formKey, whyNot, spelled);
+        if (!WriteTargets.IsLocalized(repository, plugin, release).Holds(out var localized, out unread)) return unread;
 
         Func<string, string> roundTrip = schema.IsHeader
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched), release)))
             : patched => RecordTextCodec.RoundTrip(patched, release, identity.RecordType);
 
         var request = new RecordTextEditRequest(
-            record, held, schema, envelope, release, roundTrip, _resolution.WalkAmongMastersOf(repository, plugin, schemas, sessions));
+            record, held, schema, envelope, release, roundTrip, _resolution.WalkAmongMastersOf(repository, plugin, schemas, sessions),
+            _targets.StringsLanguage, localized);
 
         string newText;
         CellGroupMove? move;

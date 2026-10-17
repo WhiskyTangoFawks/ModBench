@@ -121,11 +121,13 @@ internal sealed record ClassifyResult(
     IReadOnlyDictionary<string, ConflictThis> PluginStates,
     IReadOnlyList<FieldDiff> Diffs);
 
+/// <summary>A comparison, and the language a translated text shows in.</summary>
 public record CompareResult(
     IReadOnlyList<CompareOverride> Overrides,
     IReadOnlyList<FieldDiff> Diffs,
     ConflictAll ConflictAll,
-    string RecordTypeName);
+    string RecordTypeName,
+    string StringsLanguage);
 
 /// <summary>One column of a comparison of several records: the copy <paramref name="Plugin"/> holds,
 /// or the one <paramref name="DocumentText"/> spells in its place (ADR-0012).</summary>

@@ -3,6 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Codec.Tests.TestSupport;
 
@@ -19,13 +20,18 @@ internal static class DocumentEditing
     internal static Outcome Edit(string text, string table, EditOp op, string? value, params DocumentHop[] path) =>
         Edit(GameRelease.Fallout4, text, table, op, value, path);
 
-    internal static Outcome Edit(GameRelease release, string text, string table, EditOp op, string? value, params DocumentHop[] path)
+    internal static Outcome Edit(GameRelease release, string text, string table, EditOp op, string? value, params DocumentHop[] path) =>
+        Edit(release, Language.English, localized: false, text, table, op, value, path);
+
+    private static Outcome Edit(
+        GameRelease release, Language stringsLanguage, bool localized, string text, string table, EditOp op, string? value,
+        params DocumentHop[] path)
     {
         var schema = SharedSchemaReflector.Instance.GetSchemas(release)[table];
         var record = Document.Parse(text);
         if (DocumentEdit.Locate(record, schema, op, path, out var located) is { } unaddressed) return new(unaddressed, null, null, null);
         var edit = located.Require();
-        if (edit.Apply(value, out var applied) is { } failure) return new(failure, null, null, null);
+        if (edit.Apply(value, stringsLanguage, localized, out var applied) is { } failure) return new(failure, null, null, null);
         var patch = applied.Require();
         var written = WrittenBack(patch.Document.Text, schema, release);
         var after = Document.Parse(written);
@@ -40,9 +46,18 @@ internal static class DocumentEditing
     internal static string Edited(string text, string table, EditOp op, string? value, params DocumentHop[] path) =>
         Edited(GameRelease.Fallout4, text, table, op, value, path);
 
-    internal static string Edited(GameRelease release, string text, string table, EditOp op, string? value, params DocumentHop[] path)
+    internal static string Edited(GameRelease release, string text, string table, EditOp op, string? value, params DocumentHop[] path) =>
+        Edited(release, Language.English, localized: false, text, table, op, value, path);
+
+    internal static string Edited(
+        Language stringsLanguage, bool localized, string text, string table, EditOp op, string? value, params DocumentHop[] path) =>
+        Edited(GameRelease.Fallout4, stringsLanguage, localized, text, table, op, value, path);
+
+    private static string Edited(
+        GameRelease release, Language stringsLanguage, bool localized, string text, string table, EditOp op, string? value,
+        params DocumentHop[] path)
     {
-        var outcome = Edit(release, text, table, op, value, path);
+        var outcome = Edit(release, stringsLanguage, localized, text, table, op, value, path);
         if (outcome.Failure is { } failure) throw new InvalidOperationException($"Expected the edit to be made: {failure}");
         if (outcome.Dropped is { } dropped) throw new InvalidOperationException($"Expected the codec to keep '{dropped}'.");
         if (outcome.ChangedAside is { } aside) throw new InvalidOperationException($"Expected the edit to leave '{aside}' as it was.");

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Codec.Schema;
 
@@ -67,7 +68,7 @@ public sealed class DocumentEdit
 
     /// <summary>The edit made with <paramref name="value"/>, JSON text: what a set puts, what an add appends
     /// (null for the element's default), or a move's destination index.</summary>
-    public EditFailure? Apply(string? value, out Patch? patch)
+    public EditFailure? Apply(string? value, Language stringsLanguage, bool localized, out Patch? patch)
     {
         if (_applied) throw new InvalidOperationException("Expected an edit to be applied once.");
         _applied = true;
@@ -76,7 +77,9 @@ public sealed class DocumentEdit
             ? SetBit(bit, value, out var edited, out var editedMeta)
             : _op switch
             {
-                EditOp.Set => Set(_cursor, value ?? throw new InvalidOperationException("Expected a set to carry a value."), _spelled, out edited, out editedMeta),
+                EditOp.Set => Set(
+                    _cursor, value ?? throw new InvalidOperationException("Expected a set to carry a value."), stringsLanguage, localized, _spelled,
+                    out edited, out editedMeta),
                 EditOp.Add => Add(_cursor, value, _spelled, out edited, out editedMeta),
                 EditOp.Remove => Remove(_cursor, out edited, out editedMeta),
                 _ => Move(_cursor, value ?? throw new InvalidOperationException("Expected a move to carry its destination."), _spelled, out edited, out editedMeta),
@@ -222,13 +225,15 @@ public sealed class DocumentEdit
     // ── the operations ──────────────────────────────────────────────────────
 
     private static EditFailure? Set(
-        Cursor cursor, string value, string spelled,
+        Cursor cursor, string value, Language stringsLanguage, bool localized, string spelled,
         out JsonNode? edited, out FieldMetadata editedMeta)
     {
         edited = null;
         editedMeta = cursor.Meta;
         var node = JsonNode.Parse(value);
         if (node is null && cursor.OwnerArray != null) return new EditFailure.NullElement(spelled);
+        if (cursor.Meta.Type == TranslatedStringValues.ApiType && node is JsonValue typed && typed.TryGetValue<string>(out var text))
+            node = TranslatedStringValues.WithText(cursor.Node as JsonObject, text, stringsLanguage, localized);
 
         if (PreCheck(node, cursor.Meta, cursor.Node, spelled, readOnlyStops: false) is { } refused) return refused;
         node = LeafSpelling.AsRead(node, cursor.Meta);

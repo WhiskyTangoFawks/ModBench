@@ -9,6 +9,8 @@ namespace MEditService.Codec.Serialization;
 /// files, which an archive and a folder list differently. A source lists them in one order (ADR-0006).</summary>
 public static class TranslatedStringValues
 {
+    public const string ApiType = "translatedString";
+
     /// <summary><paramref name="json"/> with each translated string's languages in <see cref="Language"/>
     /// order, every other byte as it was.</summary>
     public static byte[] InLanguageOrder(byte[] json)
@@ -53,6 +55,37 @@ public static class TranslatedStringValues
             changed = true;
         }
         return new InLanguageResult(changed ? RecordTextCodec.RoundTrip(root.ToJsonString(), release, recordType) : text, unresolved);
+    }
+
+    /// <summary><paramref name="held"/> with <paramref name="text"/> as its text in <paramref name="language"/>, every
+    /// other language as it was. A plugin that is not localized holds one text, whatever its language.</summary>
+    internal static JsonObject WithText(JsonObject? held, string text, Language language, bool localized)
+    {
+        var edited = held?.DeepClone().AsObject() ?? new JsonObject { ["TargetLanguage"] = language.ToString() };
+        if (!localized || (edited["Values"] is null && TargetLanguageOf(edited) == language))
+        {
+            edited["Value"] = text;
+            return edited;
+        }
+        var values = edited["Values"] as JsonArray ?? OneLanguageAsValues(edited);
+        if (values.OfType<JsonObject>().FirstOrDefault(entry => entry["Language"]?.GetValue<string>() == language.ToString()) is { } entry)
+            entry["String"] = text;
+        else
+            values.Add(new JsonObject { ["Language"] = language.ToString(), ["String"] = text });
+        return edited;
+    }
+
+    private static Language TargetLanguageOf(JsonObject translated) =>
+        Enum.TryParse<Language>(translated["TargetLanguage"]?.GetValue<string>(), out var named) ? named : TranslatedString.DefaultLanguage;
+
+    private static JsonArray OneLanguageAsValues(JsonObject translated)
+    {
+        var values = new JsonArray();
+        if (translated["Value"] is { } one)
+            values.Add(new JsonObject { ["Language"] = TargetLanguageOf(translated).ToString(), ["String"] = one.DeepClone() });
+        translated.Remove("Value");
+        translated["Values"] = values;
+        return values;
     }
 
     private static IEnumerable<(string Path, JsonObject Translated)> TranslatedStrings(JsonNode node, string path)

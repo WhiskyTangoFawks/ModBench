@@ -210,7 +210,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const pasteIntoFocused = useCallback((text: string) => {
     const plugin = focusedCell?.plugin;
     if (!plugin || !focused || !('editPath' in focused) || !focused.editPath) return;
-    handleCellCommit(plugin, focused.editPath, pastedValue(text, focused.meta, focused.shown));
+    handleCellCommit(plugin, focused.editPath, pastedValue(text, focused.meta));
   }, [focusedCell, focused, handleCellCommit]);
   useEffect(() => {
     return listen((msg) => {
@@ -281,7 +281,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   // `result.conflictAll` is record-wide and deliberately not threaded into the row background —
   // that is each row's own `diff.conflictAll`, computed bottom-up per node.
-  const { overrides } = result;
+  const { overrides, stringsLanguage } = result;
 
   const title = recordLabel(overrides, formKey);
   // Several records compared, or a file alone, carry no colours to be final (editor.md, Columns, story 7; States, story 7).
@@ -326,7 +326,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         return (
           <DiffRow
             {...shared} row={row} isExpanded={!collapsedRows.has(row.key)} onToggle={onToggle}
-            onEdit={handleCellCommit} onAddElement={addElement}
+            onEdit={handleCellCommit} onAddElement={addElement} stringsLanguage={stringsLanguage}
           />
         );
     }

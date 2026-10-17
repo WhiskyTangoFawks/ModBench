@@ -111,15 +111,22 @@ export function flagsValue(names: readonly string[], meta: FieldMetadata): unkno
   return bits;
 }
 
-// The codec spells a translated string as an object whose `Value` is the text.
+// The codec spells a translated string as an object whose `Value` is the text; an edit spells it
+// as the text alone.
 function translatedText(value: unknown): string | undefined {
-  const text = (value as { Value?: unknown } | null | undefined)?.Value;
+  const text = isString(value) ? value : (value as { Value?: unknown } | null | undefined)?.Value;
   return isString(text) ? text : undefined;
 }
 
-// The codec's own spelling of a translated string, with only its text changed.
-function withTranslatedText(current: unknown, text: string): object {
-  return { ...(typeof current === 'object' ? current : null), Value: text };
+type HeldText = { Language?: unknown; String?: unknown };
+
+/** A value as its cell shows it: a translated string as its text in `stringsLanguage`, as mEdit's views read it,
+ *  its one text, else the text it holds in that language. The codec spells several languages as `Values`. */
+export function shownValue(value: unknown, meta: FieldMetadata, stringsLanguage: string): unknown {
+  if (meta.type !== 'translatedString') return value;
+  const values = (value as { Values?: unknown } | null | undefined)?.Values;
+  const held = Array.isArray(values) ? (values as HeldText[]).find(entry => entry.Language === stringsLanguage)?.String : undefined;
+  return translatedText(value) ?? (isString(held) ? held : '');
 }
 
 const WHOLE_NUMBER = /^[+-]?\d+$/;
@@ -140,7 +147,7 @@ function enumValueNamed(text: string, meta: FieldMetadata): string {
 
 /** The inverse of `copiedText`: pasted text as the field's own value. Text the field cannot hold
  *  stays text, so mEdit refuses it by the field's name rather than this repairing it. */
-export function pastedValue(text: string, meta: FieldMetadata, current: unknown): unknown {
+export function pastedValue(text: string, meta: FieldMetadata): unknown {
   const trimmed = text.trim();
   const names = trimmed === '' ? [] : trimmed.split(',').map(name => name.trim());
   switch (meta.type) {
@@ -162,7 +169,6 @@ export function pastedValue(text: string, meta: FieldMetadata, current: unknown)
     case 'formKey': return trimmed === '' ? null : BRACKETED_FORM_KEY.exec(trimmed)?.[1] ?? trimmed;
     case 'struct':
     case 'array': return parsedJson(text);
-    case 'translatedString': return withTranslatedText(current, text);
     default: return text;
   }
 }

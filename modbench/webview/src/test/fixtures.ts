@@ -40,7 +40,7 @@ export const compareOverride = (
 /** A compare result with every required wire member at its neutral value, so a fixture answers
  *  no wire question by omission — the same posture as fieldMeta/diffNode/compareOverride. */
 export const compareResultFixture = (over: Partial<CompareResult> = {}): CompareResult => ({
-  overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Non-Player Character', ...over,
+  overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Non-Player Character', stringsLanguage: 'English', ...over,
 });
 
 /** What `GET /plugins` says about one column, as far as the panel reads it. */
