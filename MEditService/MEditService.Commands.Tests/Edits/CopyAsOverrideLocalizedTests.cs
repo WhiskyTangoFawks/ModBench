@@ -104,9 +104,9 @@ public abstract class LocalizedSourceCopyScenario : IDisposable
         return body;
     }
 
-    protected SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges> CopyDoorAndCell()
+    protected SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges> CopyCellThenDoor()
     {
-        RecordAt[] records = [.. new[] { _door, _cell }.Select(formKey => new RecordAt(new PluginAddress(SourcePluginName, SourceOrigin), formKey.ToString()))];
+        RecordAt[] records = [.. new[] { _cell, _door }.Select(formKey => new RecordAt(new PluginAddress(SourcePluginName, SourceOrigin), formKey.ToString()))];
         return _handler.CopySync(records, CopyMode.Override, [Destination], replace: false);
     }
 
@@ -159,10 +159,10 @@ public sealed class CopyAsOverrideWithoutStringsLanguageTextTests() : LocalizedS
     [Fact]
     public void CopyRecordAsOverride_OfAStringWithNoTextInTheStringsLanguage_RefusesNamingTheFieldAndWritesNothing()
     {
-        var result = CopyDoorAndCell();
+        var result = CopyCellThenDoor();
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(RecordEditRefusal.CodecDroppedValue, refused.Refusal);
+        Assert.Equal(RecordEditRefusal.NoTextInStringsLanguage, refused.Refusal);
         Assert.Contains("Name", refused.Message, StringComparison.Ordinal);
         Assert.Contains("French", refused.Message, StringComparison.Ordinal);
         Assert.Null(DoorInDestination());
@@ -171,7 +171,7 @@ public sealed class CopyAsOverrideWithoutStringsLanguageTextTests() : LocalizedS
     [Fact]
     public void CopyRecordAsOverride_OfASelectionWithOneStringWithNoTextInTheStringsLanguage_LandsTheOthers()
     {
-        var result = CopyDoorAndCell();
+        var result = CopyCellThenDoor();
 
         Assert.Single(result.Landed);
         Assert.NotNull(CellInDestination());
@@ -186,7 +186,7 @@ public sealed class CopyAsOverrideOfAChildWithoutStringsLanguageTextInItsContain
     {
         var result = CopyPlacedObject();
 
-        Assert.Equal(RecordEditRefusal.CodecDroppedValue, Assert.Single(result.Refused).Refusal);
+        Assert.Equal(RecordEditRefusal.NoTextInStringsLanguage, Assert.Single(result.Refused).Refusal);
         Assert.Null(CellInDestination());
     }
 }

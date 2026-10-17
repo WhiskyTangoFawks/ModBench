@@ -32,7 +32,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
             if (collapsed.Unresolved.Count > 0)
             {
                 return RecordEditResult.Refused(
-                    RecordEditRefusal.CodecDroppedValue,
+                    RecordEditRefusal.NoTextInStringsLanguage,
                     $"{formKey} cannot be copied into {Plugin.Name} ({Plugin.Origin}), which is not localized: " +
                     $"{string.Join(", ", collapsed.Unresolved)} has no text in {language}. Nothing was written.");
             }
