@@ -33,7 +33,7 @@ public sealed class RestoreFromManifestHandler(
             return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
         }
 
-        var resolved = new PackageContents(repository, manifest, mod.InstallationFile).Resolve();
+        var resolved = new PackageContents(repository, manifest, mod.InstallationFile, instance.GameFolder).Resolve();
         if (resolved.Lacks.Count > 0) return Lacked(resolved.Lacks);
         if (resolved.Built is { } built) return await RebuildAsync(mod, instance, built, manifest.Version, cancel);
 
@@ -130,11 +130,10 @@ public sealed class RestoreFromManifestHandler(
     private static ItemAnswer<RestoreSkip, RestoredMod> Lacked(IReadOnlyList<PackageContents.Lack> lacks)
     {
         var why = string.Join("; ", lacks.Select(lack => lack.Text));
-        if (!lacks.Any(lack => lack is PackageContents.Lack.InstallationFileMissing)) return Skipped(RestoreRefusal.Lacking, why);
-        return Skipped(new RestoreSkip(RestoreRefusal.NotFound)
-        {
-            InstallationFileNotFound = lacks.OfType<PackageContents.Lack.InstallationFileMissing>().Select(lack => lack.Name).FirstOrDefault(),
-        }, why);
+        var gameFiles = lacks.OfType<PackageContents.Lack.GameFileMissing>().Select(lack => lack.Path).ToList();
+        var installationFile = lacks.OfType<PackageContents.Lack.InstallationFileMissing>().Select(lack => lack.Name).FirstOrDefault();
+        if (gameFiles.Count == 0 && installationFile is null) return Skipped(RestoreRefusal.Lacking, why);
+        return Skipped(new RestoreSkip(RestoreRefusal.NotFound) { InstallationFileNotFound = installationFile, GameFilesNotFound = gameFiles }, why);
     }
 
     private static ItemAnswer<RestoreSkip, RestoredMod> Skipped(RestoreRefusal refusal, string why) =>

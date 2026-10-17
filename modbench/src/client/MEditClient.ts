@@ -203,7 +203,8 @@ export interface BuildOutcome {
  *  commits itself (ADR-0013). */
 export type UpdateManifestMod = components['schemas']['UpdateManifestModRequest'];
 
-/** The instance's facts every mod's manifest needs: the stat cache's folder. */
+/** The instance's facts every mod's manifest needs: the stat cache's folder and the game folder with the game files at the
+ *  paths of the mods' files. */
 export type UpdateManifestFacts = Omit<components['schemas']['UpdateManifestRequest'], 'mods' | 'gesture'>;
 
 /** Where a modlist gesture is: the gesture it is, the mod it works on, and how many mods it has done of how many. The
@@ -236,8 +237,8 @@ export interface UpdateManifestOutcome {
 /** A mod to restore from its manifest: its folder and its installation files (ADR-0013). */
 export type RestoreMod = components['schemas']['RestoreFromManifestModRequest'];
 
-/** The instance's facts restore from manifest needs: the stat cache's folder, the suffix of an excluded file and the archives
- *  a build packs. */
+/** The instance's facts restore from manifest needs: the stat cache's folder, the game folder with the game files handed so
+ *  far, the suffix of an excluded file and the archives a build packs. */
 export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestRequest'], 'mods' | 'gesture'>;
 
 
@@ -271,11 +272,12 @@ interface RestoredMod {
   metadata?: components['schemas']['ModMetadata'];
 }
 
-/** A skipped mod lacking installation files the call did not hand, by name. A call that hands them brings it back, or
- *  names every other lack. */
+/** A skipped mod lacking an installation file, by name, or game files, by their path in the mod folder, that the call did
+ *  not hand. A call that hands them brings it back, or names every other lack. */
 export interface NotFound {
   mod: string;
   installationFile?: string;
+  gameFiles: readonly string[];
 }
 
 /** Restore from manifest's answer: each mod restored or skipped with its reason, and each skipped mod that is `NotFound`. */

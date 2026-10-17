@@ -60,7 +60,7 @@ public sealed class BuildModTraceTests : HostedTests
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
         var built = Assert.Single(answer.GetProperty("applied").EnumerateArray());
         Assert.Equal(Origin, built.GetProperty("mod").GetString());
-        Assert.Equal("1.2.3", new MEditService.ModFolderAdapter.ModFolderRepository(TimeProvider.System).ReadManifest(_builtFolder, Origin)?.Version);
+        Assert.Null(new MEditService.ModFolderAdapter.ModFolderRepository(TimeProvider.System).ReadManifest(_builtFolder, Origin)?.Version);
         Assert.Empty(built.GetProperty("refused").EnumerateArray());
         Assert.Equal(
             [SecondPlugin, Plugin],

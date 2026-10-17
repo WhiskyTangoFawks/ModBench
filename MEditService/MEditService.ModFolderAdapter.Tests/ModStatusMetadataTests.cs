@@ -35,7 +35,7 @@ public sealed class ModStatusMetadataTests : IDisposable
     {
         ManifestPackage? package = manifest.InstallationFile is { } file
             ? new ManifestPackage.InstallationFile(file.Name, 1, "hash", file.Page)
-            : null;
+            : manifest.Version is not null ? new ManifestPackage.GameFolder("Fallout4", "hash") : null;
         _repository.WriteManifest(_root, "mod", new Manifest(package, [], manifest.Version));
         return _repository.Status(_root, "mod", new HashSet<string>(), _statCache, held);
     }
@@ -50,7 +50,6 @@ public sealed class ModStatusMetadataTests : IDisposable
         { Metadata("1.0"), Metadata("1.0"), false },
         { Metadata("1.0"), Metadata("2.0"), true },
         { Metadata(null), Metadata("2.0"), true },
-        { Metadata("1.0"), Metadata(null), true },
         { Metadata(null, ("a.7z", "nexus:fallout4:1")), Metadata(null, ("a.7z", "nexus:fallout4:1")), false },
         { Metadata(null, ("a.7z", "nexus:fallout4:1")), Metadata(null, ("a.7z", "nexus:fallout4:2")), true },
         { Metadata(null, ("a.7z", null)), Metadata(null, ("a.7z", "nexus:fallout4:1")), true },
@@ -65,6 +64,14 @@ public sealed class ModStatusMetadataTests : IDisposable
     [MemberData(nameof(StatusCases))]
     public void AModsMetadata_DiffersFromItsManifests_WhereUpdatingTheManifestWouldWriteAnother(ModMetadata held, ModMetadata manifest, bool differs) =>
         Assert.Equal(differs, StatusAgainst(manifest, held).MetadataDiffers);
+
+    [Fact]
+    public void AModWithNoPackage_HoldsNoVersion_SoTheVersionItsMetadataHoldsIsNoDifference()
+    {
+        _repository.WriteManifest(_root, "mod", new Manifest(null, []));
+
+        Assert.False(_repository.Status(_root, "mod", new HashSet<string>(), _statCache, Metadata("1.0")).MetadataDiffers);
+    }
 
     [Fact]
     public void AModWhoseMetadataIsNotHeld_DiffersFromNothing() =>
