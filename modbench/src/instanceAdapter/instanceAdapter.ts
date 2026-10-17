@@ -260,7 +260,7 @@ interface ModOrderWritten extends Written {
   readonly landed: readonly ModOrderChange[];
 }
 
-export type DownloadedFileTrashed = { readonly gone: true } | { readonly gone: false; readonly metadataLeftBehind?: string };
+type DownloadedFileTrashed = { readonly gone: true } | { readonly gone: false; readonly metadataLeftBehind?: string };
 
 type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
 
