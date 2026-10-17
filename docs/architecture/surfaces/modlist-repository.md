@@ -34,6 +34,7 @@ A mod folder has one package ([ADR-0023](../../adr/0023-a-mod-folder-has-only-on
 13. The manifest to name the installation file by its page on its host, such as the file's page on Nexus, so I can read it in a diff and open it.
 14. A mod from the game folder to differ only when a file it takes changes, never when the game folder gains or changes a file the mod does not take. Cites: ADR-0023
 15. A mod from the game folder to name the game folder as its package, never to leave its package unnamed. A mod is from the game folder when its metadata names no installation file and the game folder holds each of its files with their bytes. Cites: ADR-0023
+16. Each manifest to be `<mod>.manifest.json`, so VS Code opens it as JSON and the ignore list never matches a mod's own files. Cites: Existing tools
 
 ## Status
 
