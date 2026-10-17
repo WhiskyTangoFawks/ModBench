@@ -3,7 +3,7 @@ import {
   type ModByFolder, type ModStatus, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
-import type { FileRead, GameFile, GameFolder, InstallationFile, InstanceAdapter, ModFolders, ModMetadata } from '../instanceAdapter/instanceAdapter';
+import type { FileRead, GameFile, GameFolder, InstallationFile, InstanceAdapter, ModFolder, ModMetadata } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -30,7 +30,7 @@ interface ModlistRepositoryCommandsDeps {
 export interface ModlistInstance {
   readonly gameFolder: GameFolder;
   readonly gameRelease: string | undefined;
-  readonly modFolders: ModFolders | undefined;
+  readonly modFolders: readonly ModFolder[] | undefined;
   readonly paths: { readonly sourceDirs: ReadonlyMap<string, string> };
 }
 
@@ -58,13 +58,12 @@ type ReadMod = Omit<UpdateManifestMod, 'isSourceMod' | 'version'>;
 
 type InstallationFileOf = (mod: string) => Promise<FileRead<InstallationFile | undefined>>;
 
-/** The game folder a manifest can name as a mod's package: found, and the game known by its release. */
+// The game folder found, named by the game's release.
 interface NamedGameFolder {
   readonly name: string;
   readonly dataFolder: string;
 }
 
-/** The game folder update manifest hands for the mods `takes` holds true of; none found is `undefined` in `folder`. */
 interface GameToHand {
   readonly takes: (mod: string) => boolean;
   readonly folder: NamedGameFolder | undefined;
@@ -74,7 +73,7 @@ const namedGameFolder = ({ gameFolder, gameRelease }: ModlistInstance): NamedGam
   gameFolder.kind === 'found' && gameRelease !== undefined ? { name: gameRelease, dataFolder: gameFolder.dataFolder } : undefined;
 
 const takesTheGameFolder = ({ modFolders, paths }: ModlistInstance, mod: string): boolean =>
-  !paths.sourceDirs.has(mod) && modFolders?.all.find((folder) => folder.modName === mod)?.kind !== 'separator';
+  !paths.sourceDirs.has(mod) && modFolders?.find((folder) => folder.modName === mod)?.kind !== 'separator';
 
 const wireGameFolder = (folder: NamedGameFolder | undefined, files: readonly GameFile[]): UpdateManifestFacts['gameFolder'] =>
   folder === undefined ? undefined : { ...folder, files: [...files] };

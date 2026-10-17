@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { FileRead, GameFolder, ModFolders, InstallationFile, InstanceAdapter, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
+import type { FileRead, GameFolder, ModFolder, InstallationFile, InstanceAdapter, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
 import { archiveVariants } from '../sourceCommands';
@@ -10,7 +10,7 @@ const INSTALLED: InstallationFile = { path: '/downloads/ModA-1.0.7z', size: 10, 
 const recording = (file: InstallationFile): FileRead<InstallationFile> => ({ kind: 'read', answer: file });
 const FOUND: GameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
 const NOT_FOUND: GameFolder = { kind: 'notFound', looked: [], setting: 'modbench.gameDirectory' };
-const instanceOf = (sourceDirs: ReadonlyMap<string, string> = new Map(), gameFolder: GameFolder = FOUND, modFolders?: ModFolders) =>
+const instanceOf = (sourceDirs: ReadonlyMap<string, string> = new Map(), gameFolder: GameFolder = FOUND, modFolders?: readonly ModFolder[]) =>
   ({ gameFolder, gameRelease: 'Fallout4', modFolders, paths: { sourceDirs } });
 const GAME_FOLDER = { name: 'Fallout4', dataFolder: '/game/Data', files: [] };
 const filesIn = (filesByMod: Record<string, readonly OriginFile[]>): ReadonlyMap<string, OriginFiles> =>
@@ -208,7 +208,7 @@ describe('modlistRepositoryCommands update manifest', () => {
     const taking = adapter.adapter.gameFilesTakenBy;
     adapter.adapter.gameFilesTakenBy = (dataFolder, mod) => { asked.push(mod); return taking(dataFolder, mod); };
     const folders = modFoldersOf('ModA', 'Source', { kind: 'separator', name: 'Group', modName: 'Group_separator' });
-    const found = instanceOf(new Map([['Source', '/source/Source']]), FOUND, folders);
+    const found = instanceOf(new Map([['Source', '/source/Source']]), FOUND, folders.all);
 
     await commands.updateManifest(['ModA', 'Source', 'Group_separator'], found);
     const outcome = await commands.updateManifest(['ModA', 'Source', 'Group_separator'], { ...found, gameFolder: NOT_FOUND });
