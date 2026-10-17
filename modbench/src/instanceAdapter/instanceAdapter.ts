@@ -337,6 +337,18 @@ export interface HashedFile {
   readonly hash: string;
 }
 
+/** A game file by its forward-slash path under the game's Data folder, named as the game folder names it, with its hash. */
+export interface GameFile {
+  readonly path: string;
+  readonly hash: string;
+}
+
+// The game files a mod's files take, and each entry of its folder the listing skipped, one line apiece.
+export interface GameFilesTaken {
+  readonly gameFiles: readonly GameFile[];
+  readonly notes: readonly string[];
+}
+
 /** A downloaded file hashed whole and entry by entry. */
 export interface HashedDownload extends HashedFile {
   /** Each entry by its forward-slash path inside the file. */
@@ -447,6 +459,12 @@ export interface InstanceAdapter {
   /** The folder in the instance, outside every mod folder, where mEdit keeps what it last read of each mod's files
    *  (modlist-repository.md, Status, story 3). The repository never commits it. */
   readonly statCacheFolder: string;
+  /** The game files in `dataFolder` at the paths of a mod's files, named as the game folder names them, with their hashes;
+   *  a path the game folder holds no file at has none. */
+  gameFiles(dataFolder: string, modFilePaths: readonly string[]): Promise<FileRead<readonly GameFile[]>>;
+  /** The game files in `dataFolder` at the paths of the files in `mod`'s folder, as `gameFiles` names them, listed in any
+   *  profile or none. */
+  gameFilesTakenBy(dataFolder: string, mod: string): Promise<FileRead<GameFilesTaken>>;
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds. Rejects, writing nothing,
    *  when an ignore list is already there. */
   writeIgnoreList(): Promise<void>;

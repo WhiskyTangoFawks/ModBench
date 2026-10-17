@@ -12,7 +12,8 @@ internal static class ManifestEndpoints
             .WithTags("Modlist")
             .WithDescription(
                 "Writes each mod's manifest from the mod as it is (ADR-0022), but a source mod's, which its build writes: that one " +
-                "is refused when its folder differs from what the build wrote. A mod lands or is refused on its own, " +
+                "is refused when its folder differs from what the build wrote. A mod with no installation file names the game " +
+                "folder as its package when the game files the request hands hold each of its files with their bytes. A mod lands or is refused on its own, " +
                 "and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification, " +
                 "which names the request's gesture.")
             .Produces<UpdateManifestResponse>()

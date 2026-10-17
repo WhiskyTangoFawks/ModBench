@@ -126,7 +126,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each mod's manifest from the mod as it is (ADR-0022), but a source mod's, which its build writes: that one is refused when its folder differs from what the build wrote. A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification, which names the request's gesture. */
+        /** @description Writes each mod's manifest from the mod as it is (ADR-0022), but a source mod's, which its build writes: that one is refused when its folder differs from what the build wrote. A mod with no installation file names the game folder as its package when the game files the request hands hold each of its files with their bytes. A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification, which names the request's gesture. */
         post: operations["UpdateManifest"];
         delete?: never;
         options?: never;
@@ -1263,6 +1263,15 @@ export interface components {
         };
         /** @enum {string} */
         FormKeyResolutionState: "Unresolved" | "ResolvedWrongType" | "ResolvedValidType";
+        GameFileRequest: {
+            path: string;
+            hash: string;
+        };
+        GameFolderRequest: {
+            name: string;
+            dataFolder: string;
+            files: components["schemas"]["GameFileRequest"][];
+        };
         GridPosition: {
             /** Format: int32 */
             x?: number | null;
@@ -1410,6 +1419,7 @@ export interface components {
             refusal: components["schemas"]["RestoreRefusal"];
             message: string;
             installationFileNotFound?: string | null;
+            gameFilesNotFound: string[];
             buildRefusal: components["schemas"]["BuildRefusal"];
         };
         ModStatus: {
@@ -1755,6 +1765,7 @@ export interface components {
             statCache: string;
             excludedSuffix: string;
             archives?: components["schemas"]["ArchiveVariantsRequest"] | null;
+            gameFolder?: components["schemas"]["GameFolderRequest"] | null;
             gesture?: string | null;
         };
         RestoreFromManifestResponse: {
@@ -1823,6 +1834,7 @@ export interface components {
         UpdateManifestRequest: {
             mods: components["schemas"]["UpdateManifestModRequest"][];
             statCache: string;
+            gameFolder?: components["schemas"]["GameFolderRequest"] | null;
             gesture?: string | null;
         };
         UpdateManifestResponse: {

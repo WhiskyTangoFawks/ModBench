@@ -489,3 +489,28 @@ describe('the MO2 adapter\'s repository', () => {
     });
   });
 });
+
+describe('the MO2 adapter\'s game files', () => {
+  const HASH_OF_AAAA = 'Mr+EvxoNp0I=';
+
+  it('hands the game file at each path of a mod\'s files, named as the game folder names it, and none for a path the game folder lacks', async () => {
+    const adapter = await instance();
+    await put('game/Data/Meshes/A.nif', 'aaaa');
+    await put('game/Data/b.dds', 'bbbb');
+
+    const found = await adapter.gameFiles(join(root, 'game', 'Data'), ['meshes/a.nif', 'mine.nif', 'MESHES']);
+
+    expect(found).toEqual({ kind: 'read', answer: [{ path: 'Meshes/A.nif', hash: HASH_OF_AAAA }] });
+  });
+
+  it('hands the game files a mod\'s own files take, whichever profile holds the mod', async () => {
+    const adapter = await instance();
+    await put('game/Data/a.nif', 'aaaa');
+    await put('mods/Mod/A.nif', 'zzzz');
+    await put('mods/Mod/mine.nif', 'mine');
+
+    const taken = await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), 'Mod');
+
+    expect(taken).toEqual({ kind: 'read', answer: { gameFiles: [{ path: 'a.nif', hash: HASH_OF_AAAA }], notes: [] } });
+  });
+});
