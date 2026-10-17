@@ -1,7 +1,7 @@
-namespace MEditService.Codec.Schema;
+namespace MEditService.Codec.Game;
 
 /// <summary>The Skyrim keyed arrays outside the virtual machine adapter and conditions, overlaid on
-/// the reflected schema. Its own file so <see cref="SchemaAnnotations"/> stays game-neutral.</summary>
+/// the reflected schema.</summary>
 internal static class SkyrimKeyedArrayAnnotations
 {
     /// <summary>Arrays xEdit declares <c>wbArrayS</c> or <c>wbRArrayS</c> over a wbStructSK,

@@ -1,7 +1,6 @@
-namespace MEditService.Codec.Schema;
+namespace MEditService.Codec.Game;
 
-/// <summary>The Starfield condition facts overlaid on the reflected schema. Its own file so
-/// <see cref="SchemaAnnotations"/> stays game-neutral.</summary>
+/// <summary>The Starfield condition facts overlaid on the reflected schema.</summary>
 internal static class StarfieldConditionAnnotations
 {
     /// <summary>The slots a function reads nothing from, from <c>wbDefinitionsSF1.pas</c>'s

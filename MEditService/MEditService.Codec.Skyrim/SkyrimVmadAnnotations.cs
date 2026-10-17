@@ -1,7 +1,6 @@
-namespace MEditService.Codec.Schema;
+namespace MEditService.Codec.Game;
 
-/// <summary>The Skyrim virtual-machine-adapter facts overlaid on the reflected schema. Its own file
-/// so <see cref="SchemaAnnotations"/> stays game-neutral.</summary>
+/// <summary>The Skyrim virtual-machine-adapter facts overlaid on the reflected schema.</summary>
 internal static class SkyrimVmadAnnotations
 {
     /// <summary>Every adapter array <c>wbDefinitionsTES5.pas</c> declares <c>wbArrayS</c>, keyed by its

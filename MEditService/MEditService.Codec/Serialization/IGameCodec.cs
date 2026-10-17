@@ -1,5 +1,6 @@
 using System.IO.Abstractions;
 using System.Reflection;
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.IO;
 using Noggog.WorkEngine;
@@ -27,11 +28,14 @@ public interface IGameCodec
         string folder, IWorkDropoff workDropoff, CancellationToken cancel,
         IFileSystem? fileSystem = null, ICreateStream? streamCreator = null);
 
+    /// <summary>The plugin header bit the game names Blueprint, 0 for a game with none.</summary>
+    int BlueprintFlag { get; }
+
     /// <summary>The Next Object ID the game's serializer omits from a header document.</summary>
     uint NextObjectIdDefault { get; }
 
-    /// <summary>The schema rows that make a member govern which of its siblings are in use, empty for a game with none.</summary>
-    SiblingsInUseRows SiblingsInUse { get; }
+    /// <summary>The facts overlaid on the reflected schema of the game's types.</summary>
+    SchemaAnnotations Annotations { get; }
 
     CreationKitShapes CreationKitShapes { get; }
 

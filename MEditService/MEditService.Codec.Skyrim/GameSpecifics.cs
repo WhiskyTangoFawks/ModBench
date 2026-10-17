@@ -6,6 +6,8 @@ namespace MEditService.Codec.Game;
 /// <summary>What the shared codec source asks each game's project to answer.</summary>
 internal static class GameSpecifics
 {
+    public const int BlueprintFlag = 0;
+
     public static SiblingsInUseRows SiblingsInUse { get; } = new(new Dictionary<(string, string), IReadOnlyDictionary<string, IReadOnlyList<string>>>
     {
         [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,

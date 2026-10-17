@@ -7,5 +7,4 @@ public sealed class SiblingsInUseRows(IDictionary<(string TypeName, string Membe
     : ReadOnlyDictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>>(
         new Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>>(rows))
 {
-    internal static SiblingsInUseRows None { get; } = new(new Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>>());
 }

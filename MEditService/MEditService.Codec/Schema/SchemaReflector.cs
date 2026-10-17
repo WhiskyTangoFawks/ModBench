@@ -86,7 +86,7 @@ public sealed class SchemaReflector
 
     private GameSchemaCache GetCache(GameCategory category, Assembly assembly) =>
         _cache.GetOrAdd(category, c => BuildForCategory(
-            c, assembly, SchemaAnnotations.For(c) with { SiblingsInUse = GameCodecs.For(c).SiblingsInUse }, _logger));
+            c, assembly, GameCodecs.For(c).Annotations, _logger));
 
     private static GameSchemaCache BuildForCategory(
         GameCategory category, Assembly assembly, SchemaAnnotations annotations, ILogger logger)

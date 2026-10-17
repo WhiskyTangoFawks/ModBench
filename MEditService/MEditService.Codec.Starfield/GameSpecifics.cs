@@ -6,6 +6,9 @@ namespace MEditService.Codec.Game;
 /// <summary>What the shared codec source asks each game's project to answer.</summary>
 internal static class GameSpecifics
 {
+    // wbDefinitionsSF1.pas names 0x800 'Blueprint' in Starfield's TES4 header; Mutagen's header flag enum has no such bit.
+    public const int BlueprintFlag = 0x800;
+
     public static SiblingsInUseRows SiblingsInUse { get; } = new(new Dictionary<(string, string), IReadOnlyDictionary<string, IReadOnlyList<string>>>
     {
         [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,

@@ -17,5 +17,5 @@ public static class PartialFormFlag
 
     /// <summary>The plugin that alone defines a cell a Partial Form copy can override, or null where any can.</summary>
     public static ModKey? CellsDefinedIn(GameRelease release) =>
-        SchemaAnnotations.For(release.ToCategory()).PartialFormCellsDefinedIn is { } plugin ? ModKey.FromFileName(plugin) : (ModKey?)null;
+        GameCodecs.For(release).Annotations.PartialFormCellsDefinedIn is { } plugin ? ModKey.FromFileName(plugin) : (ModKey?)null;
 }
