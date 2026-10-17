@@ -193,7 +193,7 @@ describe('package.json activation', () => {
   });
 });
 
-describe('package.json getting started (common.md, Getting started)', () => {
+describe('package.json getting started (user-docs.md, The walkthrough)', () => {
   const steps = pkg.contributes.walkthroughs.flatMap((walkthrough) => walkthrough.steps);
   const commands = new Set(pkg.contributes.commands.map(({ command }) => command));
   const views = new Set(Object.values(pkg.contributes.views).flat().map(({ id }) => id));
