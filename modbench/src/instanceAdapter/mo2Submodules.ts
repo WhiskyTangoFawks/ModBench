@@ -22,15 +22,36 @@ const git = async (folder: string, ...args: string[]): Promise<string> =>
 
 interface SubmoduleEntry { readonly name: string; readonly url: string; readonly branch: string }
 
-async function submoduleOf(folder: string): Promise<SubmoduleEntry | undefined | string> {
+/** Why a source mod's entry is not written, and whether the entry it has stays. */
+interface EntryNote { readonly note: string; readonly keepsEntry: boolean }
+
+// git's scp-like form, [user@]host:path, with a password before its @.
+const SCP_PASSWORD = /^[^/\\@:]{2,}:[^/\\]*@/;
+
+// An HTTP user is a credential; another scheme's user names the account, so only its password goes.
+const accountOf = (scheme: string, userInfo: string): string => {
+  const [user = ''] = userInfo.split(':');
+  return user === '' || /^https?:/i.test(scheme) ? '' : `${user}@`;
+};
+
+function withoutCredential(url: string): string | undefined {
+  const [, scheme, authority = '', path = ''] = /^([a-z][a-z0-9+.-]*:\/\/)([^/?#]*)(.*)$/is.exec(url) ?? [];
+  if (scheme === undefined) return SCP_PASSWORD.test(url) ? undefined : url;
+  const [userInfo = '', host, ...more] = authority.split('@');
+  if (host === undefined) return url;
+  return more.length > 0 || host === '' ? undefined : `${scheme}${accountOf(scheme, userInfo)}${host}${path}`;
+}
+
+async function submoduleOf(folder: string): Promise<SubmoduleEntry | undefined | EntryNote> {
   try {
     const remotes = (await git(folder, 'remote')).split('\n').filter((remote) => remote !== '');
     if (remotes.length === 0) return undefined;
-    const url = (await git(folder, 'remote', 'get-url', ...(remotes.includes('origin') ? ['origin'] : remotes.slice(0, 1)))).trim();
+    const url = withoutCredential((await git(folder, 'remote', 'get-url', ...(remotes.includes('origin') ? ['origin'] : remotes.slice(0, 1)))).trim());
+    if (url === undefined) return { note: 'its remote holds a credential that cannot safely be left out of its URL, so it is no submodule', keepsEntry: false };
     const branch = (await git(folder, 'symbolic-ref', '--short', 'HEAD').catch(() => '')).trim();
-    return branch === '' ? 'it has a remote but no branch checked out, so its entry stays as it was' : { name: basename(folder), url, branch };
+    return branch === '' ? { note: 'it has a remote but no branch checked out, so its entry stays as it was', keepsEntry: true } : { name: basename(folder), url, branch };
   } catch (err) {
-    return `its remote could not be read, so its entry stays as it was: ${errorMessage(err)}`;
+    return { note: `its remote could not be read, so its entry stays as it was: ${errorMessage(err)}`, keepsEntry: true };
   }
 }
 
@@ -113,9 +134,9 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       for (const [mod, folder] of sources.folders) {
         const found = await submoduleOf(folder);
         const name = basename(folder);
-        if (typeof found === 'string') {
-          notes.push({ mod, note: found });
-          if (existing.includes(name)) kept.add(name);
+        if (found !== undefined && 'note' in found) {
+          notes.push({ mod, note: found.note });
+          if (found.keepsEntry && existing.includes(name)) kept.add(name);
         } else if (found !== undefined) {
           kept.add(name);
           try {

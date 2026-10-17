@@ -178,6 +178,36 @@ describe('the MO2 adapter\'s repository', () => {
 
     const urlOf = (): string => runGit('config', '-f', '.gitmodules', 'submodule.Mod A.url').trim();
 
+    it.each([
+      ['https://user:token@example.test/a.git', 'https://example.test/a.git'],
+      ['ssh://git:secret@example.test/a.git', 'ssh://git@example.test/a.git'],
+      ['git@example.test:owner/a.git', 'git@example.test:owner/a.git'],
+      ['../a', '../a'],
+    ])('writes the remote %s with no credential, as %s', async (remote, written) => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await sourceMod('Mod A', 'Mod A', remote);
+
+      const report = await adapter.writeSubmodules();
+
+      expect([report.notes, urlOf()]).toEqual([[], written]);
+    });
+
+    it.each([
+      'https://user:p@ss@example.test/a.git',
+      'ssh://git:p@ss@example.test/a.git',
+      'user:secret@example.test:a.git',
+    ])('takes the entry and the line of a source mod whose credential cannot safely be left out of %s, and names it', async (remote) => {
+      const { adapter, folder } = await submoduleOfOne();
+      git(folder, 'remote', 'set-url', 'origin', remote);
+
+      const report = await adapter.writeSubmodules();
+
+      expect([
+        report.notes, runGit('config', '-f', '.gitmodules', '--list').trim(), (await readFile(join(root, '.gitignore'), 'utf8')).includes('Mod A'),
+      ]).toEqual([[{ mod: 'Mod A', note: 'its remote holds a credential that cannot safely be left out of its URL, so it is no submodule' }], '', false]);
+    });
+
     it('names a source mod with a remote and no branch checked out, and writes no entry for it', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
