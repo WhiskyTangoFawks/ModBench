@@ -4,8 +4,8 @@ using System.Text.Json;
 
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>A manifest as a JSON file: a line for its package with its version, or for the version alone, and a line for each
-/// file in alphabetical order, so a change to one file is one line in a diff.</summary>
+/// <summary>A manifest as a JSON file: a line for its package with its version, or for the version alone, and a line for
+/// each file in alphabetical order, so a diff shows one line per change.</summary>
 internal static class ManifestText
 {
     private static readonly JsonWriterOptions Compact = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
