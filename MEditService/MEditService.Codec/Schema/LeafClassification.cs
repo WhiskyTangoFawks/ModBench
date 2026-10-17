@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Globalization;
 using System.Reflection;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Plugins;
 using Noggog;
 
@@ -75,7 +76,7 @@ internal static class LeafClassification
         }
 
         if (ReflectedTypes.IsTranslatedString(core))
-            return new("translatedString", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
+            return new(TranslatedStringValues.ApiType, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
 
         // A hex blob, a colour and a vector each have a zero the wire's own 0 does not stand for and
         // the type name alone cannot say, so the leaf carries the codec's own spelling of it.

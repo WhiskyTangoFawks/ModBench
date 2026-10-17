@@ -6,6 +6,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Strings;
 using Noggog;
 
 namespace MEditService.Commands.Tests.TestSupport;
@@ -21,6 +22,7 @@ public abstract class TestInstance : IDisposable
 {
     private readonly ScratchDirectory _root = new("medit-instance-");
     private readonly GameRelease _release;
+    private readonly Language _stringsLanguage;
     private readonly List<LoadOrderEntry> _entries = [];
     private readonly Cache<IModMasterStyledGetter, ModKey> _added = new(mod => mod.ModKey);
     private readonly Lazy<LoadOrderHolder> _holder;
@@ -28,9 +30,9 @@ public abstract class TestInstance : IDisposable
     private LoadOrderSnapshot? _loadOrder;
     private int _nextLine;
 
-    protected TestInstance(GameRelease release = GameRelease.Fallout4)
+    protected TestInstance(GameRelease release = GameRelease.Fallout4, Language stringsLanguage = Language.English)
     {
-        _release = release;
+        (_release, _stringsLanguage) = (release, stringsLanguage);
         GameDirectory = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
         _holder = new Lazy<LoadOrderHolder>(() =>
         {
@@ -129,7 +131,7 @@ public abstract class TestInstance : IDisposable
             throw new InvalidOperationException($"Expected '{origin}' to init: {string.Join("; ", messages)}");
     }
 
-    private LoadOrderSnapshot Snapshot() => SnapshotPlugins.Snapshot(GameDirectory, _root, _release, _entries);
+    private LoadOrderSnapshot Snapshot() => SnapshotPlugins.Snapshot(GameDirectory, _root, _release, _entries, stringsLanguage: _stringsLanguage);
 
     /// <summary>Hands the handlers the load order again with <paramref name="plugin"/>'s entry changed, as
     /// Mod Management does after its line changes.</summary>

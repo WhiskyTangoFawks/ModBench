@@ -15,7 +15,7 @@ public static class CheckErrorBuilder
         bool indexed, Func<string, string?>? whyUnchecked = null, string? missingStringsFile = null)
     {
         var entries = new List<string>();
-        if (missingStringsFile is not null && meta.Type == "translatedString" && HoldsNoText(value))
+        if (missingStringsFile is not null && meta.Type == TranslatedStringValues.ApiType && HoldsNoText(value))
             entries.Add(missingStringsFile);
         // Nothing unread, for a caller whose targets all live in one store it just read.
         Func<string, string?> unread = whyUnchecked ?? (_ => null);

@@ -3,6 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Codec.Tests.Schema;
 
@@ -16,7 +17,7 @@ public sealed class LeafSpellingTests
     private static DocumentEdit.Patch Patched(string table, EditOp op, string? value, string member)
     {
         Assert.Null(DocumentEdit.Locate(Document.Parse(Bare), Schemas[table], op, [new(member, null)], out var edit));
-        Assert.Null(edit.Require().Apply(value, out var patch));
+        Assert.Null(edit.Require().Apply(value, Language.English, localized: false, out var patch));
         return patch.Require();
     }
 

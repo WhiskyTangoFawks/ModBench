@@ -270,7 +270,7 @@ describe('ScalarCell — a translated string, which the codec spells as an objec
     expect(screen.queryByText(/TargetLanguage/)).toBeNull();
   });
 
-  it('commits the object with the typed text as its Value, keeping the rest', () => {
+  it('commits the typed text', () => {
     const onCommit = vi.fn();
     render(<ScalarCell value={value} meta={nameMeta} editable onCommit={onCommit} />);
     fireEvent.click(screen.getByText('Base name'));
@@ -278,18 +278,16 @@ describe('ScalarCell — a translated string, which the codec spells as an objec
     fireEvent.change(input, { target: { value: 'New name' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
-    expect(onCommit).toHaveBeenCalledWith({ TargetLanguage: 'English', Value: 'New name' });
+    expect(onCommit).toHaveBeenCalledWith('New name');
   });
 
-  it('commits a bare object from an absent value', () => {
+  it('commits nothing for the text it already holds', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value={null} meta={nameMeta} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getByText('—'));
-    const input = screen.getByRole('textbox');
-    fireEvent.change(input, { target: { value: 'Named' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
+    render(<ScalarCell value={value} meta={nameMeta} editable onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('Base name'));
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
 
-    expect(onCommit).toHaveBeenCalledWith({ Value: 'Named' });
+    expect(onCommit).not.toHaveBeenCalled();
   });
 });
 

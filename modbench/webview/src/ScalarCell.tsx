@@ -110,7 +110,7 @@ export function ScalarCell({
   }
 
   // A checkbox writes as it toggles, so closing it has nothing left to write.
-  const pending = meta.type === 'bool' ? value : pastedValue(draft, meta, value);
+  const pending = meta.type === 'bool' ? value : pastedValue(draft, meta);
 
   // Enter, Esc and a blur each end the editor, and the focus Enter and Esc hand back blurs it again.
   function settle(write: boolean) {

@@ -1,5 +1,5 @@
 import { isString } from '../../src/wire/messages';
-import { copiedText, modelValue, readsAsFlags } from './modelValue';
+import { copiedText, modelValue, readsAsFlags, shownValue } from './modelValue';
 import { formKeyLabel } from './FormKeyLink';
 import { elementsIn } from './presentation';
 import { idleMembers } from './siblingsInUse';
@@ -24,6 +24,8 @@ export interface GridCell {
 export interface ValueCell extends GridCell {
   meta: FieldMetadata;
   holds: boolean;
+  // The document's value, and the value the cell shows: a translated string's text.
+  value: unknown;
   shown: unknown;
   editPath?: PathHop[];
   dropAddsTo?: ArrayParentContext;
@@ -79,6 +81,7 @@ const arrayLength = (value: unknown): number => (Array.isArray(value) ? value.le
 
 function fieldRow(
   diff: FieldDiff, meta: FieldMetadata, at: RowPlacement, columns: readonly Column[], recordLabel: RowsInput['recordLabel'],
+  stringsLanguage: string,
 ): FieldRow {
   const { present, editable, cellMetas, ...place } = at;
   const name = meta.displayLabel ?? diff.fieldName;
@@ -90,7 +93,8 @@ function fieldRow(
     const cellMeta = cellMetas?.[key] ?? meta;
     const value = diff.values[key];
     const holds = structural || (present(key) && columnHasNode(cellMeta, value));
-    const shown = holds ? value ?? defaultOf(cellMeta) : undefined;
+    const held = holds ? value ?? defaultOf(cellMeta) : undefined;
+    const shown = holds ? shownValue(held, cellMeta, stringsLanguage) : undefined;
     const resolution = diff.resolutions?.[key];
     const hops = wirePath(at.rootField, at.path, key);
     const editPath = hops && editable.has(key) && cellMeta.readOnlyReason == null ? hops : undefined;
@@ -112,7 +116,7 @@ function fieldRow(
         ? referenceContext(shown)
         : undefined,
     );
-    return [key, { context, meta: cellMeta, holds, shown, editPath, dropAddsTo }];
+    return [key, { context, meta: cellMeta, holds, value: held, shown, editPath, dropAddsTo }];
   }));
   return {
     kind: 'field', diff, meta, ...place, expandable: (diff.children?.length ?? 0) > 0 || readsAsFlags(meta),
@@ -142,7 +146,7 @@ export function recordRows({ result, columns, editableColumns, partialFormColumn
   function rowsOf(diff: FieldDiff, meta: FieldMetadata | undefined, at: RowPlacement): RecordRow[] {
     if (!meta) return [];
     const children = diff.children ?? [];
-    const rows: RecordRow[] = [fieldRow(diff, meta, at, columns, recordLabel)];
+    const rows: RecordRow[] = [fieldRow(diff, meta, at, columns, recordLabel, result.stringsLanguage)];
     const { path, key, present, depth } = at;
 
     // Mutagen aliases a condition's parameter slots onto the same bytes, so the idle twin of a

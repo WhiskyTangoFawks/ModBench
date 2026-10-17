@@ -22,5 +22,5 @@ const override = (formKey: string, copy: Copy): Override => ({
 
 /** What mEdit answers for a record held in `copies`. */
 export const comparisonOf = (formKey: string, copies: Copy[]): CompareResult => ({
-  overrides: copies.map((copy) => override(formKey, copy)), diffs: [], conflictAll: 'OnlyOne', recordTypeName: 'Weapon',
+  overrides: copies.map((copy) => override(formKey, copy)), diffs: [], conflictAll: 'OnlyOne', recordTypeName: 'Weapon', stringsLanguage: 'English',
 });

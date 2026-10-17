@@ -123,10 +123,11 @@ interface DiffRowProps {
   onFocusCell: (rowKey: string, plugin: ColumnKey | null) => void;
   onEdit: (plugin: ColumnKey, path: PathHop[], value: unknown) => void;
   onAddElement: (context: ArrayParentContext, value: unknown) => void;
+  stringsLanguage: string;
 }
 
 export function DiffRow({
-  row, columns, columnStyle, collapsedColumns, isExpanded, onToggle, focusedCell, onFocusCell, onEdit, onAddElement,
+  row, columns, columnStyle, collapsedColumns, isExpanded, onToggle, focusedCell, onFocusCell, onEdit, onAddElement, stringsLanguage,
 }: Readonly<DiffRowProps>) {
   const { diff, meta, key: rowKey, isLastElement, keyMembers } = row;
   // The children the diff node itself carries — the row and the panel can never disagree about
@@ -176,7 +177,7 @@ export function DiffRow({
         if (collapsedColumns.has(key) || !cell) {
           return <td key={key} style={cellStyle} />;
         }
-        const { meta: cellMeta, holds, shown, editPath, dropAddsTo } = cell;
+        const { meta: cellMeta, holds, value: own, shown, editPath, dropAddsTo } = cell;
         // The wire carries one per column at every depth, so this row's error is its own node's.
         const checkError = diff.checkErrors?.[key];
         const isFocused = isCellFocused(focusedCell, rowKey, key);
@@ -188,7 +189,7 @@ export function DiffRow({
           : undefined;
         const landing = (dragged: CellDrag): (() => void) | undefined => {
           if (dragged.row === rowKey) {
-            return edit && JSON.stringify(dragged.value) !== JSON.stringify(shown)
+            return edit && JSON.stringify(dragged.value) !== JSON.stringify(own)
               ? () => edit(dragged.value)
               : undefined;
           }
@@ -198,7 +199,7 @@ export function DiffRow({
         };
         const resolution = diff.resolutions?.[key];
         if (hasChildren) {
-          const reading = isExpanded ? undefined : collapsedReading(diff, cellMeta, key, isLastElement?.(key), keyMembers);
+          const reading = isExpanded ? undefined : collapsedReading(diff, cellMeta, key, stringsLanguage, isLastElement?.(key), keyMembers);
           return (
             <DiskCell
               key={key}

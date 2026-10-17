@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -7,6 +9,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Strings;
 using static MEditService.Codec.Tests.TestSupport.DocumentEditing;
 
 namespace MEditService.Codec.Tests.Schema;
@@ -445,6 +448,29 @@ public sealed class DocumentEditTests
 
         Assert.Equal("Named", Node(after, "Name.Value").GetValue<string>());
         AssertOnlyChanged(before, after, "Name");
+    }
+
+    [Theory]
+    [InlineData(false, """{"TargetLanguage":"English","Value":"Old"}""", """{"TargetLanguage":"English","Value":"Nommé"}""")]
+    [InlineData(false, null, """{"TargetLanguage":"French","Value":"Nommé"}""")]
+    [InlineData(true, """{"TargetLanguage":"French","Value":"Vieux"}""", """{"TargetLanguage":"French","Value":"Nommé"}""")]
+    [InlineData(
+        true, """{"TargetLanguage":"English","Value":"Old"}""",
+        """{"TargetLanguage":"English","Values":[{"Language":"English","String":"Old"},{"Language":"French","String":"Nommé"}]}""")]
+    [InlineData(
+        true, """{"TargetLanguage":"English","Values":[{"Language":"English","String":"Old"},{"Language":"French","String":"Vieux"}]}""",
+        """{"TargetLanguage":"English","Values":[{"Language":"English","String":"Old"},{"Language":"French","String":"Nommé"}]}""")]
+    [InlineData(
+        true, """{"TargetLanguage":"English","Values":[{"Language":"English","String":"Old"},{"Language":"German","String":"Alt"}]}""",
+        """{"TargetLanguage":"English","Values":[{"Language":"English","String":"Old"},{"Language":"German","String":"Alt"},{"Language":"French","String":"Nommé"}]}""")]
+    public void TranslatedString_SetToText_IsItsTextInTheStringsLanguageWhereThePluginIsLocalized(bool localized, string? held, string expected)
+    {
+        var before = JsonNode.Parse(NpcText()).Require().AsObject();
+        before["Name"] = held is null ? null : JsonNode.Parse(held);
+
+        var after = Edited(Language.French, localized, before.ToJsonString(), "npc_", EditOp.Set, "\"Nommé\"", Member("Name"));
+
+        Assert.Equal(expected, Node(after, "Name").ToJsonString(new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
     }
 
     [Fact]

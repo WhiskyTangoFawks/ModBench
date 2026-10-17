@@ -359,7 +359,7 @@ describe('collapsedReading of a script', () => {
   it.each(rows)('$name', ({ scripts, editorIds, meta, diff, at, keyMembers, reads }) => {
     const top = required(oneColumn(scripts, editorIds, meta).diffs[0], 'the array diff');
 
-    expect(collapsedReading(diff(top), at, PLUGIN, true, keyMembers).text).toBe(reads);
+    expect(collapsedReading(diff(top), at, PLUGIN, 'English', true, keyMembers).text).toBe(reads);
   });
 });
 

@@ -406,7 +406,7 @@ describe('collapsedReading of a condition', () => {
   it.each(rows)('$name', ({ conditions, resolutions, meta = conditionsMeta, isLast = true, reads }) => {
     const [conditionDiff] = required(oneColumn(conditions, resolutions, meta).diffs[0]?.children, 'the condition rows');
 
-    const reading = collapsedReading(required(conditionDiff, 'the condition row'), meta.elementType ?? undefined, PLUGIN, isLast);
+    const reading = collapsedReading(required(conditionDiff, 'the condition row'), meta.elementType ?? undefined, PLUGIN, 'English', isLast);
 
     expect(reading).toEqual(reads);
   });
@@ -443,7 +443,7 @@ describe('collapsedReading of a condition whose function is its kind', () => {
   });
   const readingOf = (data: Condition, resolutions: Record<string, string> = {}) => {
     const [conditionDiff] = required(oneColumn([condition(data)], resolutions, meta).diffs[0]?.children, 'the condition rows');
-    return collapsedReading(required(conditionDiff, 'the condition row'), meta.elementType ?? undefined, PLUGIN, true).text;
+    return collapsedReading(required(conditionDiff, 'the condition row'), meta.elementType ?? undefined, PLUGIN, 'English', true).text;
   };
 
   it('names the function as its kind reads, then the parameters that kind holds', () => {

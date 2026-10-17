@@ -7,6 +7,7 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.RecordIndex.Tests.Query;
 
@@ -492,6 +493,18 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
         Assert.NotNull(compare);
         Assert.All(compare.Overrides, o => Assert.Null(o.ParseDiagnosis));
+    }
+
+    [Fact]
+    public void GetCompare_CarriesTheLoadOrdersStringsLanguage()
+    {
+        var fixture = Built(TwoNpcsPlugin());
+        var index = Reconciled(fixture);
+
+        index.Receive(index.Holder, SnapshotPlugins.Snapshot(fixture.GameDirectory, null, GameRelease.Fallout4, fixture.Plugins, stringsLanguage: Language.German));
+        index.Settled();
+
+        Assert.Equal("German", index.Queries.GetCompare(Npc01).Value()?.StringsLanguage);
     }
 
     [Fact]
