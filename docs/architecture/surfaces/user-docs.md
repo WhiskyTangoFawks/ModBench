@@ -10,18 +10,18 @@ As a user who has not installed Modbench, I want:
 
 1. To learn first what Modbench is: a modding IDE, and a software development tool for modding.
 2. To learn next whether it is for me, so I stop reading when it is not. Cites: Minimal by default
-3. To learn how working in Modbench differs from modding as I know it, from the modlist down to the record, each set against the tool I use for it now. Cites: Mutagen's data, the reference's behaviour, VS Code's interaction
-4. To learn whether I can use it now: its status, the games and platforms it supports, what works and what is planned. Cites: Windows and Linux alike
-5. To get it running, then to be handed to the walkthrough for the rest.
-6. A pointer to how to contribute, and nothing more of it.
-7. To learn that Modbench is VS Code, so the editor, terminal, extensions and agents I already use work on my modlist. Cites: ADR-0001
-8. To learn that git holds my modlist and my mods' source, so I commit, diff, branch and merge them. Cites: ADR-0007; ADR-0022
-9. To learn that Modbench works on files, because VS Code edits files and git stores them.
-10. To learn that a mod is restored from its manifest, because git does not hold gigabytes of binary files. Cites: ADR-0022
-11. To learn that a plugin is decompiled into a file for each record and built back, so I edit and review its source and never the plugin in place. Cites: ADR-0006; ADR-0007
-12. Each thing I learn about to come with why I would want it.
-13. To learn that any language scripts Modbench through its HTTP API, and that Modbench ships a Python API that VS Code runs and debugs, so I script records with tools I already use. Cites: ADR-0004
-14. To meet my agent as one feature among the others, never as the headline.
+4. To learn how working in Modbench differs from modding as I know it, from the modlist down to the record, each set against the tool I use for it now. Cites: Mutagen's data, the reference's behaviour, VS Code's interaction
+5. To learn whether I can use it now: its status, the games and platforms it supports, what works and what is planned. Cites: Windows and Linux alike
+6. To get it running, then to be handed to the walkthrough for the rest.
+7. A pointer to how to contribute, and nothing more of it.
+8. To learn that Modbench is VS Code, so the editor, terminal, extensions and agents I already use work on my modlist. Cites: ADR-0001
+9. To learn that git holds my modlist and my mods' source, so I commit, diff, branch and merge them. Cites: ADR-0007; ADR-0022
+10. To learn that Modbench works on files, because VS Code edits files and git stores them.
+11. To learn that a mod is restored from its manifest, because git does not hold gigabytes of binary files. Cites: ADR-0022
+12. To learn that a plugin is decompiled into a file for each record and built back, so I edit and review its source and never the plugin in place. Cites: ADR-0006; ADR-0007
+13. Each thing I learn about to come with why I would want it.
+14. To learn that any language scripts Modbench through its HTTP API, and that Modbench ships a Python API that VS Code runs and debugs, so I script records with tools I already use. Cites: ADR-0004
+15. To meet my agent as one feature among the others, never as the headline.
 
 ## The walkthrough
 
