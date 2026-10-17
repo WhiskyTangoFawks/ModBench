@@ -127,7 +127,7 @@ public sealed class SchemaReflector
         foreach (var (tableName, getterType) in discovered)
         {
             schemas[tableName] = BuildSchema(
-                category, tableName, getterType, siblingsByTable[tableName], game, logger);
+                tableName, getterType, siblingsByTable[tableName], game, logger);
         }
 
         ModHeaderSchema.AddHeaderSchema(schemas, category, assembly, game, logger);
@@ -151,7 +151,7 @@ public sealed class SchemaReflector
     // EnumerateMajorRecords falls back to the abstract group base and returns every sibling's records
     // anyway, so pointing at the base would gain nothing.
     private static RecordTableSchema BuildSchema(
-        GameCategory category, string tableName, Type getterType, List<Type> siblingGetterTypes,
+        string tableName, Type getterType, List<Type> siblingGetterTypes,
         GameReflection game, ILogger logger)
     {
         // Decided by sibling count, never table or signature name, so another game's multi-subclass
@@ -160,7 +160,7 @@ public sealed class SchemaReflector
             ? LoquiUnions.BuildUnionColumns(LoquiUnions.RecordUnion(siblingGetterTypes), game, logger)
             : ColumnReflection.ReflectColumns(getterType, game, logger);
 
-        return new RecordTableSchema(getterType, RecordDisplayNames.For(category, tableName))
+        return new RecordTableSchema(getterType, RecordDisplayNames.For(game.Annotations, tableName))
         {
             TableName = tableName,
             RecordColumns = [.. columns

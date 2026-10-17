@@ -1,5 +1,4 @@
 using MEditService.Codec.Schema;
-using Mutagen.Bethesda;
 using static MEditService.Codec.Schema.SchemaAnnotations;
 
 namespace MEditService.Codec.Game;
@@ -7,6 +6,10 @@ namespace MEditService.Codec.Game;
 /// <summary>The facts overlaid on the reflected schema of this game's types.</summary>
 internal static class GameAnnotations
 {
+    private static readonly string ModHeaderGetterName = typeof(IGameModHeaderGetter).Name;
+
+    private static readonly string MajorRecordGetterName = typeof(ISkyrimMajorRecordGetter).Name;
+
     public static SchemaAnnotations Table { get; } =
         new(
             ExcludedColumns: [.. GrupTimestampColumns],
@@ -36,10 +39,13 @@ internal static class GameAnnotations
             RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
             EnumMemberLabels: new()
             {
-                [(ModHeaderGetter(GameCategory.Skyrim), "Flags")] = XEditModHeaderFlagNames,
+                [(ModHeaderGetterName, "Flags")] = XEditModHeaderFlagNames,
             },
             KnownDefects: [],
-            SiblingsInUse: GameSpecifics.SiblingsInUse,
+            SiblingsInUse: new Dictionary<(string, string), IReadOnlyDictionary<string, IReadOnlyList<string>>>
+            {
+            [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
+            },
             KeyedArrays: SkyrimVmadAnnotations.KeyedArrays.Concat(SkyrimKeyedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
             ExtendedKeys: SkyrimKeyedArrayAnnotations.ExtendedKeys.ToDictionary(
@@ -47,12 +53,12 @@ internal static class GameAnnotations
             PermittedNullFormLinks: [.. SkyrimVmadAnnotations.PermittedNullFormLinks],
             SyntheticFlagMembers: new()
             {
-                [(ModHeaderGetter(GameCategory.Skyrim), "IsSmallMaster")] = ("Flags", "Small"),
+                [(ModHeaderGetterName, "IsSmallMaster")] = ("Flags", "Small"),
             },
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
-                new(MajorRecordGetter(GameCategory.Skyrim), "Version2", "Version Control Info 2", IgnoredInConflicts: true),
+                new(MajorRecordGetterName, "Version2", "Version Control Info 2", IgnoredInConflicts: true),
             ],
             // Mutagen names bit 14 on no Skyrim type; wbDefinitionsTES5.pas gives it to CELL, DIAL and WRLD.
             RecordFlagNames:
@@ -65,6 +71,7 @@ internal static class GameAnnotations
             // Mutagen's Skyrim containing-cell lookup divides by it.
             ExteriorCellWidth: 4096f,
             PartialFormCellsDefinedIn: null,
-            PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetter(GameCategory.Skyrim)),
+            DisplayNameOverrides: new Dictionary<string, string>(),
+            PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetterName),
             ContainmentMembers: [CellGridInEveryGame]);
 }

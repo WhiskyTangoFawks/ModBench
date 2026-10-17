@@ -1,5 +1,4 @@
 using MEditService.Codec.Schema;
-using Mutagen.Bethesda;
 using static MEditService.Codec.Schema.SchemaAnnotations;
 
 namespace MEditService.Codec.Game;
@@ -7,6 +6,10 @@ namespace MEditService.Codec.Game;
 /// <summary>The facts overlaid on the reflected schema of this game's types.</summary>
 internal static class GameAnnotations
 {
+    private static readonly string ModHeaderGetterName = typeof(IGameModHeaderGetter).Name;
+
+    private static readonly string MajorRecordGetterName = typeof(IStarfieldMajorRecordGetter).Name;
+
     public static SchemaAnnotations Table { get; } =
         new(
             ExcludedColumns: [.. GrupTimestampColumns, ("IQuestGetter", "Timestamp")],
@@ -28,14 +31,17 @@ internal static class GameAnnotations
             // wbDefinitionsSF1.pas's TES4 record spells the light-master and overlay bits Small and Update.
             EnumMemberLabels: new()
             {
-                [(ModHeaderGetter(GameCategory.Starfield), "Flags")] = new Dictionary<string, string>(StringComparer.Ordinal)
+                [(ModHeaderGetterName, "Flags")] = new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["Light"] = "Small",
                     ["Overlay"] = "Update",
                 },
             },
             KnownDefects: [],
-            SiblingsInUse: GameSpecifics.SiblingsInUse,
+            SiblingsInUse: new Dictionary<(string, string), IReadOnlyDictionary<string, IReadOnlyList<string>>>
+            {
+            [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
+            },
             KeyedArrays: StarfieldVmadAnnotations.KeyedArrays.Concat(StarfieldKeyedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
             ExtendedKeys: StarfieldKeyedArrayAnnotations.ExtendedKeys.ToDictionary(
@@ -43,12 +49,12 @@ internal static class GameAnnotations
             PermittedNullFormLinks: [.. StarfieldVmadAnnotations.PermittedNullFormLinks],
             SyntheticFlagMembers: new()
             {
-                [(ModHeaderGetter(GameCategory.Starfield), "IsSmallMaster")] = ("Flags", "Light"),
+                [(ModHeaderGetterName, "IsSmallMaster")] = ("Flags", "Light"),
             },
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
-                new(MajorRecordGetter(GameCategory.Starfield), "Version2", "Version Control Info 2", IgnoredInConflicts: true),
+                new(MajorRecordGetterName, "Version2", "Version Control Info 2", IgnoredInConflicts: true),
             ],
             // Mutagen names it on Starfield's Cell, DialogTopic and Quest; wbDefinitionsSF1.pas gives WRLD bit 14 too.
             RecordFlagNames: [("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName)],
@@ -67,6 +73,7 @@ internal static class GameAnnotations
             // wbDefinitionsSF1.pas sets wbCellSizeFactor to 100; Mutagen's 4096 scales worldspace bounds.
             ExteriorCellWidth: 100f,
             PartialFormCellsDefinedIn: null,
-            PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetter(GameCategory.Starfield)),
+            DisplayNameOverrides: new Dictionary<string, string> { ["idle"] = "Animation" },
+            PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetterName),
             ContainmentMembers: [CellGridInEveryGame]);
 }

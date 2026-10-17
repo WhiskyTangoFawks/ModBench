@@ -69,7 +69,7 @@ public sealed record SchemaAnnotations(
     IReadOnlyList<KnownDefect> KnownDefects,
     // See FieldMetadata.SiblingsInUse. The inner map must name every enum value, since an unnamed one
     // would silently idle every member the row governs; validated in all four directions.
-    SiblingsInUseRows SiblingsInUse,
+    IReadOnlyDictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse,
     // xEdit's wbArrayS: elements identified by key members (Mutagen member names, dotted one struct
     // down), not by position. Aligned by key in the compare grid, kept in the order held.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> KeyedArrays,
@@ -103,19 +103,21 @@ public sealed record SchemaAnnotations(
     // Members a field edit cannot move a record by, keyed by an interface the record's getter has,
     // not the member's declarer, so a row reaches every record of its kind. Child slots are
     // reflected, not rows.
-    IReadOnlyList<ContainmentMember> ContainmentMembers)
+    IReadOnlyList<ContainmentMember> ContainmentMembers,
+    // xEdit's name for a record type the game spells differently from the other games, by table name.
+    IReadOnlyDictionary<string, string> DisplayNameOverrides)
 {
-    // Rows every game shares are named once here; a row true of only some games is written inline
-    // in each table that has it, so each table still states that game's complete facts.
+    // Rows several games share are named once here; a row of one game is written inline in that
+    // game's table.
 
-    public static readonly (string, string)[] GrupTimestampColumns =
+    public static readonly IReadOnlyList<(string, string)> GrupTimestampColumns =
     [
         ("ICellGetter", "Timestamp"), ("ICellGetter", "PersistentTimestamp"), ("ICellGetter", "TemporaryTimestamp"),
         ("IDialogTopicGetter", "Timestamp"),
     ];
 
     // Not editor surface in any game: Mutagen.Bethesda.Core / Loqui plumbing, and one generated alias.
-    public static readonly (string, string)[] PlumbingMembers =
+    public static readonly IReadOnlyList<(string, string)> PlumbingMembers =
     [
         ("ILoquiObject", "Registration"),                    // Loqui's own registration handle
         ("IBinaryItem", "BinaryWriteTranslator"),            // Mutagen's binary write-strategy object
@@ -125,7 +127,7 @@ public sealed record SchemaAnnotations(
     ];
 
     // Mutagen's names for a condition slot's raw value under a function that reads nothing from it.
-    public static readonly (string, string)[] UnusedConditionSlotCarriers =
+    public static readonly IReadOnlyList<(string, string)> UnusedConditionSlotCarriers =
     [
         ("ConditionData", "FirstUnusedIntParameter"),
         ("ConditionData", "FirstUnusedStringParameter"),
@@ -135,17 +137,13 @@ public sealed record SchemaAnnotations(
 
     // The header members Mutagen.Bethesda.Core declares on every game's major records, leading
     // xEdit's order; each game's base adds the rest.
-    public static readonly RecordHeaderMember[] RecordHeaderMembersInEveryGame =
+    public static readonly IReadOnlyList<RecordHeaderMember> RecordHeaderMembersInEveryGame =
     [
         new("IMajorRecordGetter", "MajorRecordFlagsRaw", "Record Flags"),
         new("IFormKeyGetter", "FormKey", "FormID"),
         new("IMajorRecordGetter", "VersionControl", "Version Control Info 1", IgnoredInConflicts: true, IsVersionControlInfo1: true),
         new("IMajorRecordGetter", "FormVersion", "Form Version", IgnoredInConflicts: true),
     ];
-
-    public static string ModHeaderGetter(GameCategory game) => $"I{game}ModHeaderGetter";
-
-    public static string MajorRecordGetter(GameCategory game) => $"I{game}MajorRecordGetter";
 
     // Each game's ModHeader declares these (its *ModHeader.xml in Mutagen), the TES4 record's header
     // first, in wbRecordHeader's order (wbDefinitionsCommon.pas).
@@ -167,21 +165,21 @@ public sealed record SchemaAnnotations(
         "the cell's source, so moving it restructures the tree rather than rewriting one file. That is a structural " +
         "gesture, not a field edit");
 
-    public static readonly string[] EmptySubSchemaTypesInEveryGame =
+    public static readonly IReadOnlyList<string> EmptySubSchemaTypesInEveryGame =
     [
         "IPlacedGetter",                     // abstract placed-record base, no members of its own
     ];
 
     // The siblings left out (P2Double, P3Double, P3Int, the wrapper types) are the shape of no
     // member in these games' record graphs, which is what the validation below proves.
-    public static readonly string[] VectorStructTypesInEveryGame =
+    public static readonly IReadOnlyList<string> VectorStructTypesInEveryGame =
     [
         "Noggog.P3Int16", "Noggog.P3Float",
         "Noggog.P2Int", "Noggog.P2Int16", "Noggog.P2Float",
     ];
 
     // Counts are live, from the audit's enumeration over Fallout 4.
-    public static readonly KeyValuePair<string, string>[] RefusedShapesInEveryGame =
+    public static readonly IReadOnlyList<KeyValuePair<string, string>> RefusedShapesInEveryGame =
     [
         // Real modding content: Race height, head data, models and voices per sex, ArmorAddon models,
         // faction rank titles. Presenting a gendered pair is a maintainer's shape decision.
@@ -216,7 +214,7 @@ public sealed record SchemaAnnotations(
     public const string PartialFormName = "PartialForm";
 
     // PlacedObject.cs's per-base-type enums in every game, as wbREFRRecordFlagsDecider chooses them.
-    public static readonly (string, string)[] PlacedObjectRecordFlagEnums =
+    public static readonly IReadOnlyList<(string, string)> PlacedObjectRecordFlagEnums =
     [
         ("IPlacedObjectGetter", "DefaultMajorFlag"),
         ("IPlacedObjectGetter", "StaticMajorFlag"),

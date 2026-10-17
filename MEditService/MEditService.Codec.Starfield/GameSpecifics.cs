@@ -9,11 +9,6 @@ internal static class GameSpecifics
     // wbDefinitionsSF1.pas names 0x800 'Blueprint' in Starfield's TES4 header; Mutagen's header flag enum has no such bit.
     public const int BlueprintFlag = 0x800;
 
-    public static SiblingsInUseRows SiblingsInUse { get; } = new(new Dictionary<(string, string), IReadOnlyDictionary<string, IReadOnlyList<string>>>
-    {
-        [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
-    });
-
     // Proven over the installed masters, in which no reference has a power-grid counter and no entry
     // point uses function 6 or 7.
     public static CreationKitShapes CreationKitShapes { get; } = new(

@@ -119,8 +119,9 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                 var name = modPath.ModKey.FileName.String;
                 // Mutagen's game-agnostic getter carries no raw header flags and names no blueprint bit, so
                 // only a game with blueprint plugins reads its header a second time.
-                var isBlueprint = PluginFlagPredicates.HasBlueprintPlugins(loadOrder.GameRelease)
-                    && PluginFlagPredicates.IsBlueprint(loaded.Getter, name, ModHeaderFrame.FromPath(modPath, loadOrder.GameRelease).Flags, loadOrder.GameRelease);
+                var blueprintFlag = GameCodecs.For(loadOrder.GameRelease).BlueprintFlag;
+                var isBlueprint = blueprintFlag != 0
+                    && PluginFlagPredicates.IsBlueprint(loaded.Getter, name, ModHeaderFrame.FromPath(modPath, loadOrder.GameRelease).Flags, blueprintFlag);
                 var (content, unreachable) = OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint);
                 var missing = strings is { } named
                     ? LocalizedStrings.FindMissingStringsFiles(loaded.Getter, modPath, named, loadOrder, loadOrder.GameRelease, loadOrder.StringsLanguage)

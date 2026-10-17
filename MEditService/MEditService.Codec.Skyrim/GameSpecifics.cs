@@ -8,11 +8,6 @@ internal static class GameSpecifics
 {
     public const int BlueprintFlag = 0;
 
-    public static SiblingsInUseRows SiblingsInUse { get; } = new(new Dictionary<(string, string), IReadOnlyDictionary<string, IReadOnlyList<string>>>
-    {
-        [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
-    });
-
     // Proven over the five masters and every Creation Club plugin: 865 entry-point effects, 276 region
     // RDATs, 240 races. No Skyrim record has a power-grid counter or a weapon template.
     public static CreationKitShapes CreationKitShapes { get; } = new(

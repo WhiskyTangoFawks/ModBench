@@ -1,5 +1,4 @@
 using MEditService.Codec.Schema;
-using Mutagen.Bethesda;
 using static MEditService.Codec.Schema.SchemaAnnotations;
 
 namespace MEditService.Codec.Game;
@@ -7,6 +6,10 @@ namespace MEditService.Codec.Game;
 /// <summary>The facts overlaid on the reflected schema of this game's types.</summary>
 internal static class GameAnnotations
 {
+    private static readonly string ModHeaderGetterName = typeof(IGameModHeaderGetter).Name;
+
+    private static readonly string MajorRecordGetterName = typeof(IFallout4MajorRecordGetter).Name;
+
     public static SchemaAnnotations Table { get; } =
         new(
             ExcludedColumns: [.. GrupTimestampColumns, ("IQuestGetter", "Timestamp")],
@@ -14,7 +17,7 @@ internal static class GameAnnotations
             [
                 .. PlumbingMembers,
                 ("IGlobalGetter", "TypeChar"),  // GLOB's derived subclass discriminant char
-                // Reserved padding Mutagen names Unused in both games; wbUnused(3)/wbUnused(2) in wbDefinitionsFO4.pas's wbObjectModProperties
+                // Reserved padding Mutagen names Unused; wbUnused(3)/wbUnused(2) in wbDefinitionsFO4.pas's wbObjectModProperties
                 ("IObjectModStringPropertyGetter`1", "Unused"),
                 ("IObjectModEnumPropertyGetter`1", "Unused"),
             ],
@@ -36,7 +39,7 @@ internal static class GameAnnotations
             RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
             EnumMemberLabels: new()
             {
-                [(ModHeaderGetter(GameCategory.Fallout4), "Flags")] = XEditModHeaderFlagNames,
+                [(ModHeaderGetterName, "Flags")] = XEditModHeaderFlagNames,
             },
             KnownDefects:
             [
@@ -44,7 +47,11 @@ internal static class GameAnnotations
                     "SceneActionTypicalType's binary-overlay Type getter is an unimplemented throw upstream, so the "
                     + "leaves under ASceneActionType cannot be read; the member is named as the document holds it and never written"),
             ],
-            SiblingsInUse: GameSpecifics.SiblingsInUse,
+            SiblingsInUse: new Dictionary<(string, string), IReadOnlyDictionary<string, IReadOnlyList<string>>>
+            {
+            [("IFunctionConditionDataGetter", "Function")] = Fallout4ConditionAnnotations.FunctionParameterSlots,
+            [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
+            },
             KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.Concat(Fallout4KeyedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
             ExtendedKeys: Fallout4KeyedArrayAnnotations.ExtendedKeys.ToDictionary(
@@ -52,12 +59,12 @@ internal static class GameAnnotations
             PermittedNullFormLinks: [.. Fallout4VmadAnnotations.PermittedNullFormLinks],
             SyntheticFlagMembers: new()
             {
-                [(ModHeaderGetter(GameCategory.Fallout4), "IsSmallMaster")] = ("Flags", "Small"),
+                [(ModHeaderGetterName, "IsSmallMaster")] = ("Flags", "Small"),
             },
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
-                new(MajorRecordGetter(GameCategory.Fallout4), "Version2", "Version Control Info 2", IgnoredInConflicts: true),
+                new(MajorRecordGetterName, "Version2", "Version Control Info 2", IgnoredInConflicts: true),
             ],
             // Quest's MajorFlag names it; wbDefinitionsFO4.pas gives CELL, DIAL and WRLD bit 14 too.
             RecordFlagNames:
@@ -71,6 +78,7 @@ internal static class GameAnnotations
             // Mutagen's Fallout 4 worldspace bounds divide by it.
             ExteriorCellWidth: 4096f,
             PartialFormCellsDefinedIn: "Fallout4.esm",
-            PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetter(GameCategory.Fallout4)),
+            DisplayNameOverrides: new Dictionary<string, string>(),
+            PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetterName),
             ContainmentMembers: [CellGridInEveryGame]);
 }

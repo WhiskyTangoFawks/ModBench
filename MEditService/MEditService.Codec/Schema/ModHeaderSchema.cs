@@ -54,7 +54,7 @@ internal static class ModHeaderSchema
         // column's own member names.
         columns.AddRange(SyntheticColumns.For(headerGetterType, game, backingPathPrefix: pathPrefix));
 
-        return new RecordTableSchema(headerGetterType, RecordDisplayNames.For(category, PluginHeader.RecordType))
+        return new RecordTableSchema(headerGetterType, RecordDisplayNames.For(game.Annotations, PluginHeader.RecordType))
         {
             TableName = PluginHeader.RecordType,
             RecordColumns = columns,
