@@ -1,10 +1,6 @@
-using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.RecordIndex.Tests.TestSupport;
-using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -30,7 +26,7 @@ public sealed class InvalidatedIndexFileTests : IDisposable
 
     public InvalidatedIndexFileTests()
     {
-        _index = Indexes.Open(_holder, new AbortingDuckDbsCheckpointAtTheSecondRead(_fixture.InstanceRoot), notifications: _notifications);
+        _index = Indexes.Open(_holder, new AbortingDuckDbsCheckpoint(_fixture.InstanceRoot, Aborted, nthRead: 2), notifications: _notifications);
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         var rewritten = new Fallout4Mod(ModKey.FromFileName(Aborted), Fallout4Release.Fallout4);
         rewritten.Npcs.AddNew("RewrittenNpc");
@@ -45,12 +41,12 @@ public sealed class InvalidatedIndexFileTests : IDisposable
     }
 
     [Fact]
-    public void AFatalErrorInTheIndexFile_FailsTheSnapshotWithItsCause_AndBlamesNoPlugin()
+    public void AFatalErrorInTheIndexFile_FailsTheSnapshot_AndBlamesNoPlugin()
     {
         var status = _index.Status;
 
         Assert.Empty(status.Failures);
-        Assert.False(string.IsNullOrEmpty(status.Message));
+        Assert.Equal(LoadOrderState.Failed, status.State);
     }
 
     [Fact]
@@ -59,7 +55,12 @@ public sealed class InvalidatedIndexFileTests : IDisposable
         var read = _index.ListedIn(_fixture.Plugins.Single(p => p.Name == Before).KeyOf());
 
         Assert.Single(read);
+        Assert.Equal([Aborted, After, Before], PublishedIndexedPlugins());
+        Assert.Equal([Aborted, After, Before], _index.Status.IndexedPlugins.Select(p => p.Name).Order());
     }
+
+    private string[] PublishedIndexedPlugins() =>
+        [.. _notifications.Notifications.OfType<LoadOrderStatusNotification>().Last().Status.IndexedPlugins.Select(p => p.Name).Order()];
 
     [Fact]
     public void TheNextSnapshotAfterAFatalError_OpensTheIndexFileAgain_AndReadsEveryPlugin()
@@ -74,40 +75,4 @@ public sealed class InvalidatedIndexFileTests : IDisposable
     private LoadOrderState? Answered(int before) =>
         _notifications.Since(before).OfType<LoadOrderStatusNotification>()
             .Select(n => (LoadOrderState?)n.Status.State).LastOrDefault(state => state is LoadOrderState.Ready or LoadOrderState.Failed);
-
-    private sealed class AbortingDuckDbsCheckpointAtTheSecondRead(string instanceRoot) : DelegatingPluginAdapter(TestAdapters.Mutagen())
-    {
-        private int _reads;
-
-        private bool SecondRead() => Interlocked.Increment(ref _reads) == 2;
-
-        public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
-            ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-            PluginStrings? strings = null)
-        {
-            var opened = base.OpenDocuments(modPath, loadOrder, schemas, strings);
-            return modPath.ModKey.FileName == Aborted
-                ? opened.Map<IPluginDocuments, IPluginDocuments>(documents => new AbortingDuckDbsNextCheckpointAfterTheRecords(documents, instanceRoot, SecondRead))
-                : opened;
-        }
-    }
-
-    private sealed class AbortingDuckDbsNextCheckpointAfterTheRecords(IPluginDocuments read, string instanceRoot, Func<bool> aborting) : IPluginDocuments
-    {
-        public PluginDocument Header => read.Header;
-
-        public IReadOnlyList<RecordTypeFailure> Failures => read.Failures;
-
-        public IEnumerable<PluginDocument> Records
-        {
-            get
-            {
-                foreach (var document in read.Records) yield return document;
-                if (!aborting()) yield break;
-                IndexFiles.Execute(instanceRoot, "SET GLOBAL checkpoint_threshold = '1KB'; SET GLOBAL debug_checkpoint_abort = 'before_header'");
-            }
-        }
-
-        public void Dispose() => read.Dispose();
-    }
 }

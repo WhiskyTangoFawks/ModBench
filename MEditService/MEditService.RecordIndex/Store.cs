@@ -456,15 +456,9 @@ internal sealed class Store : IDisposable
         DuckDbSql.Execute(Connection, $"UPDATE {FilesRelation} SET file_path = $3 WHERE plugin = $1 AND origin = $2",
             plugin.Name, plugin.Origin, StoredFilePath(filePath));
 
-    // A file inside the instance is stored relative to it, so the instance moved or copied to a new
-    // path is the same place (ADR-0003); a game Data file outside it stays absolute.
-    private string StoredFilePath(string filePath)
-    {
-        var full = Path.GetFullPath(filePath);
-        if (_instanceRoot is null) return full;
-        var relative = Path.GetRelativePath(_instanceRoot, full);
-        return relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative) ? full : relative;
-    }
+    // ADR-0012: an absolute path as identity changes when the instance moves.
+    private string StoredFilePath(string filePath) =>
+        _instanceRoot is null ? Path.GetFullPath(filePath) : FolderPlaces.RelativeWithin(_instanceRoot, Path.GetFullPath(filePath));
 
     private string ResolvedFilePath(string stored) =>
         _instanceRoot is null ? stored : Path.GetFullPath(stored, _instanceRoot);
