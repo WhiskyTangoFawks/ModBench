@@ -61,10 +61,7 @@ What works today:
 - Mods: install from a file or a folder, separators, order, enable, and the downloads folder.
 - Plugins: plugin order and checkboxes, and each active plugin's records in a tree.
 - Records: an xEdit-style record panel across the active plugins, with conflict colours, field editing, copy as override, new record, and Referenced By.
-- Version control: the modlist repository, source mods, build, and external changes.
-- Record filter: a plain `.sql` file run against the active plugins' records.
-- Scripts: any language through the HTTP API, and Python through `import medit`.
-- Agents: an MCP server for your agent.
+- Version control: the modlist repository, source mods and build.
 
 Planned, on the [milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones) board:
 
