@@ -1,12 +1,12 @@
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { pluginsCommands, type PluginsCommands } from '../pluginsCommands/plugins';
+import { pluginCommands, type PluginCommands } from '../pluginCommands/plugins';
 
-type PluginsCommandsClient = Parameters<typeof pluginsCommands>[0]['client'];
+type PluginCommandsClient = Parameters<typeof pluginCommands>[0]['client'];
 
-/** The Plugins commands bound to `adapter` and a client that answers only what a test fixes. */
-export function pluginsCommandsWith(adapter: InstanceAdapter, client: Partial<PluginsCommandsClient> = {}): PluginsCommands {
+/** Plugin commands bound to `adapter` and a client that answers only what a test fixes. */
+export function pluginCommandsWith(adapter: InstanceAdapter, client: Partial<PluginCommandsClient> = {}): PluginCommands {
   const unanswered = () => Promise.reject(new Error('this test fixed no answer'));
-  return pluginsCommands({
+  return pluginCommands({
     adapter,
     client: {
       getPlugins: client.getPlugins?.bind(client) ?? unanswered,

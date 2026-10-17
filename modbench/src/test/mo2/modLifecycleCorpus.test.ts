@@ -6,7 +6,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { modlistCommands } from '../../modOrderCommands/modOrderCommands';
+import { modCommands } from '../../modCommands/modCommands';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree,
 } from './corpusFixture';
@@ -33,7 +33,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
   it('uninstallMods trashes the folder, removes the modlist line, and marks its download uninstalled — nothing else', async () => {
     const downloadMeta = `downloads/${ARCHIVE}.meta`;
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).uninstallMods(PROFILE, await readModlistEntries(dir), [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
+    await modCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).uninstallMods(PROFILE, await readModlistEntries(dir), [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST, downloadMeta]));
@@ -47,7 +47,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
   it('uninstallMods marks no download when none is handed in, though the mod\'s meta.ini names one', async () => {
     const downloadMeta = `downloads/${ARCHIVE}.meta`;
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).uninstallMods(PROFILE, await readModlistEntries(dir), [{ name: 'Unofficial Fallout 4 Patch' }], trash);
+    await modCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).uninstallMods(PROFILE, await readModlistEntries(dir), [{ name: 'Unofficial Fallout 4 Patch' }], trash);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST]));
@@ -56,7 +56,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
 
   it('uninstallMods on a mod with no linked download touches only its own folder and modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).uninstallMods(PROFILE, await readModlistEntries(dir), [{ name: 'Harder VATS' }], trash);
+    await modCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).uninstallMods(PROFILE, await readModlistEntries(dir), [{ name: 'Harder VATS' }], trash);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Harder VATS/meta.ini', MODLIST]));
@@ -71,7 +71,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
     await writeFile(join(dir, 'source', 'Harder VATS', '.git', 'HEAD'), 'ref: refs/heads/main\n');
     const before = await snapshotTree(dir);
 
-    await modlistCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).renameMod(PROFILE, [PROFILE, 'Secondary'], 'Harder VATS', 'Harder VATS 2');
+    await modCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).renameMod(PROFILE, [PROFILE, 'Secondary'], 'Harder VATS', 'Harder VATS 2');
     const after = await snapshotTree(dir);
 
     const moved = [...before.keys()].filter((path) => path.startsWith('mods/Harder VATS/'));
@@ -99,7 +99,7 @@ describe('mod lifecycle corpus (install)', () => {
     await writeFile(join(dir, 'downloads', `${MANUAL}.meta`), '[General]\r\nuninstalled=true\r\n');
     const before = await snapshotTree(dir);
 
-    const outcome = await modlistCommands(adapterOver(dir, { archives: fakeArchiveReader(['Manual.esp']) }), unscriptedMEdit, unreadStatus)
+    const outcome = await modCommands(adapterOver(dir, { archives: fakeArchiveReader(['Manual.esp']) }), unscriptedMEdit, unreadStatus)
       .installMod({ kind: 'downloadedFile', name: MANUAL, path: join(dir, 'downloads', MANUAL) }, { kind: 'new', name: 'Manual' }, 'Fallout 4', true);
     const after = await snapshotTree(dir);
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { modlistCommands, type ModPackage } from '../modOrderCommands';
+import { modCommands, type ModPackage } from '../modCommands';
 import type { InstallPackage, InstallTarget } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { ModStatus } from '../../client';
@@ -17,7 +17,7 @@ const DOWNLOADED = { kind: 'downloadedFile', name: 'Freshly-1-0.7z', path: '/dow
 
 function install(installed: ModPackage, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, readStatus: ReadModStatus = unreadStatus) {
   const fake = fakeInstanceAdapter(undefined, answers);
-  const outcome = modlistCommands(fake.adapter, new InMemoryMEditClient(), readStatus).installMod(installed, target, GAME_NAME, force);
+  const outcome = modCommands(fake.adapter, new InMemoryMEditClient(), readStatus).installMod(installed, target, GAME_NAME, force);
   return outcome.then((result) => ({ result, calls: fake.calls }));
 }
 

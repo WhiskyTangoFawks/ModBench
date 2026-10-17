@@ -14,7 +14,7 @@
     { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },
     { "path": "../instanceCommands" },
-    { "path": "../pluginsCommands" },
+    { "path": "../pluginCommands" },
     { "path": "../ports" },
     { "path": "../wire" }
   ],

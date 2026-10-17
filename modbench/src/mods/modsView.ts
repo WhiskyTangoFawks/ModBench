@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { Instance, InstanceView } from '../instanceLoader/instance';
-import type { ModlistCommands } from '../modOrderCommands/modOrderCommands';
+import type { ModCommands } from '../modCommands/modCommands';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
@@ -28,7 +28,7 @@ import {
 
 interface ModsViewDeps {
   instance: InstanceView & Pick<Instance, 'refresh' | 'sameCopies'>;
-  commands: ModlistCommands;
+  commands: ModCommands;
   log: (line: string) => void;
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;

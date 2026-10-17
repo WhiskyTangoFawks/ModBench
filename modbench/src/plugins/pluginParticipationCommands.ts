@@ -5,7 +5,7 @@ import { runWritingGesture } from '../drivingLib/writingGesture';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
 import { pluralArgument } from '../drivingLib/gestureEntry';
-import type { PluginParticipation, PluginsCommands, SelectionResult } from '../pluginsCommands/plugins';
+import type { PluginParticipation, PluginCommands, SelectionResult } from '../pluginCommands/plugins';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { present } from '../ports/present';
 import type { Reporter } from '../ports/reporter';
@@ -13,7 +13,7 @@ import type { Reporter } from '../ports/reporter';
 // modbench.plugin.enable / modbench.plugin.disable: the whole selection through the entry
 // (plugins.md, Menus and keys, story 3 — behaves as in Mods).
 export function registerPluginEnableCommands(
-  commands: Pick<PluginsCommands, 'setPluginsEnabled'>, instance: Pick<Instance, 'value' | 'refresh'>,
+  commands: Pick<PluginCommands, 'setPluginsEnabled'>, instance: Pick<Instance, 'value' | 'refresh'>,
   viewSelection: () => readonly PluginsTreeNode[], reporter: Reporter,
 ): vscode.Disposable[] {
   const gesture = (enabled: boolean): AgentGesture<PluginsTreeNode, readonly PluginAddress[], SelectionResult<PluginAddress>> => ({

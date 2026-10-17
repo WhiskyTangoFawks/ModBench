@@ -417,7 +417,7 @@ export function modSyncOver(adapter: InstanceAdapter): ModSyncRun {
 }
 
 /** The modlist's commands, bound to one instance: each takes the gesture's arguments only. */
-export function modlistCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['mEdit'], readStatus: ReadModStatus) {
+export function modCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['mEdit'], readStatus: ReadModStatus) {
   const entryKey: EntryKey = (entry) => adapter.entryKey(entry);
   return {
     setModsEnabled: (...args: TailOf<typeof setModsEnabled>) => setModsEnabled(adapter, ...args),
@@ -437,4 +437,4 @@ export function modlistCommands(adapter: InstanceAdapter, mEdit: SourceModWriter
   };
 }
 
-export type ModlistCommands = ReturnType<typeof modlistCommands>;
+export type ModCommands = ReturnType<typeof modCommands>;

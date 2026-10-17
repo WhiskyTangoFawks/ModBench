@@ -112,7 +112,7 @@ import { createFocusedView } from '../../drivingLib/focusedView';
 import { createPluginsView } from '../pluginsView';
 import { createPlugins } from '../index';
 import { createSync, type Sync } from '../../drivingLib/syncFailureReport';
-import type { PluginSyncRun } from '../../pluginsCommands/plugins';
+import type { PluginSyncRun } from '../../pluginCommands/plugins';
 import { NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
 import { PluginNode } from '../pluginRows';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
@@ -125,7 +125,7 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
+import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { sourceCommands } from '../../sourceCommands/sourceCommands';
 import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';
@@ -153,7 +153,7 @@ const silentChannel = { error: vi.fn(), info: vi.fn() };
 
 const createPluginSync = (sync: PluginSyncRun, channel: typeof silentChannel) =>
   createSync(sync, channel, {
-    command: 'plugin sync', prefix: '[pluginsCommands]', unsynced: 'plugins.txt is not synced', added: 'plugins.txt lines added', dropped: 'plugins.txt lines dropped',
+    command: 'plugin sync', prefix: '[pluginCommands]', unsynced: 'plugins.txt is not synced', added: 'plugins.txt lines added', dropped: 'plugins.txt lines dropped',
   });
 
 function syncRefusing() {
@@ -179,7 +179,7 @@ function pluginsView(
   const recordBrowser = new RecordBrowser(client);
   const reporters = new Map<string, RecordingReporter>();
   const plugins = createPluginsView({
-    instance, commands: pluginsCommandsWith(fakeInstanceAdapter().adapter), sourceCommands: sourceCommands({ client, adapter: fakeInstanceAdapter().adapter }), recordBrowser, client,
+    instance, commands: pluginCommandsWith(fakeInstanceAdapter().adapter), sourceCommands: sourceCommands({ client, adapter: fakeInstanceAdapter().adapter }), recordBrowser, client,
     pluginSync,
     channel: silentChannel,
     dataFolderFile: () => undefined, log: () => undefined,
@@ -288,7 +288,7 @@ describe('the Plugins view says what it knows of whether a plugin is a compiled 
         sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
       });
       const onInstance = () => plugins.onInstance({
-        instance: new FakeInstance(value), instanceRoot: '/instance', commands: pluginsCommandsWith(fakeInstanceAdapter().adapter),
+        instance: new FakeInstance(value), instanceRoot: '/instance', commands: pluginCommandsWith(fakeInstanceAdapter().adapter),
         sourceCommands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter }),
         pluginSync: syncRefusing().pluginSync, saveUnsavedPluginSource: () => Promise.resolve([]), sourceGestureRows: () => [],
         modsView: 'modbench.modList', dataFolderFile: () => undefined,

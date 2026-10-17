@@ -2,14 +2,11 @@
   "extends": "../../tsconfig.box.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "../../out/projects/pluginsCommands"
+    "outDir": "../../out/projects/downloadedFileCommands"
   },
   "references": [
-    { "path": "../loadOrderFileCodec" },
-    { "path": "../instanceAdapter" },
     { "path": "../coreLib" },
-    { "path": "../client" },
-    { "path": "../wire" },
+    { "path": "../instanceAdapter" },
     { "path": "../ports" }
   ],
   "include": ["**/*.ts"],

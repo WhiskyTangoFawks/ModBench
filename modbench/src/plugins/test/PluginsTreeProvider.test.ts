@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { PluginsDrop } from '../../pluginsCommands/plugins';
+import type { PluginsDrop } from '../../pluginCommands/plugins';
 import { buildLoadOrderRows, type LoadOrderPlugin, type LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import { FileConflictLookup, modOrigin } from '../../instanceLoader/fileConflictIndex';
 import type { PluginAddress } from '../../wire/pluginAddress';

@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { downloadsCommands } from '../downloads';
+import { downloadedFileCommands } from '../downloads';
 import { fakeInstanceAdapter, refusing, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { assertSelectionOutcome } from '../../test/surfacingDoubles';
 import type { MoveToTrash } from '../../ports/trash';
 
 const commandsOver = (answers: InstanceAnswers = {}) => {
   const fake = fakeInstanceAdapter(readingFixture(), answers);
-  return { fake, commands: downloadsCommands(fake.adapter) };
+  return { fake, commands: downloadedFileCommands(fake.adapter) };
 };
 
 const noopTrash: MoveToTrash = () => Promise.resolve();
