@@ -2,9 +2,8 @@ using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod's manifest from the mod as it is: the mod's one package holds each file whose bytes it has, and the
-/// rest it does not hold. A mod with no installation file is from the game folder when the game folder holds each of its files
-/// with their bytes.</summary>
+/// <summary>A mod's manifest from the mod as it is: its one package holds each file whose bytes it has. With no installation
+/// file, the package is the game folder when it holds each file with its bytes.</summary>
 internal sealed class ManifestBuilder
 {
     private readonly ManifestPackage.InstallationFile? _package;

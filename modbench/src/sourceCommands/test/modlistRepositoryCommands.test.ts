@@ -337,8 +337,8 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     const outcome = await commands.restoreFromManifest(['ModA'], instanceOf());
 
-    expect(client.calls.map((call) => (call.args[1] as { gameFolder?: unknown }).gameFolder)).toEqual([
-      GAME_FOLDER, { ...GAME_FOLDER, files: [{ path: 'Meshes/A.nif', hash: '#a' }] }]);
+    expect(client.calls.map((call) => call.args[1])).toMatchObject([
+      { gameFolder: GAME_FOLDER }, { gameFolder: { ...GAME_FOLDER, files: [{ path: 'Meshes/A.nif', hash: '#a' }] } }]);
     expect(outcome).toEqual({ applied: true, landed: RESTORED.landed, refused: [] });
   });
 

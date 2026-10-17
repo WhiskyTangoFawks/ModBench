@@ -272,8 +272,8 @@ interface RestoredMod {
   metadata?: components['schemas']['ModMetadata'];
 }
 
-/** A skipped mod lacking an installation file or game files the call did not hand: the file by name, the game files by
- *  their path in the mod folder. A call that hands them brings it back, or names every other lack. */
+/** A skipped mod lacking an installation file, by name, or game files, by their path in the mod folder, that the call did
+ *  not hand. A call that hands them brings it back, or names every other lack. */
 export interface NotFound {
   mod: string;
   installationFile?: string;
