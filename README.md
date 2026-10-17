@@ -7,7 +7,7 @@ Modbench is a modding IDE for Bethesda games, built on VS Code. It treats a modl
 - Clone a modlist as its manifests, and restore the working modlist from them.
 - Review each record a change touches, as a diff, before it reaches the game.
 - Keep your edits to another author's mod on top of each new release.
-- Let an agent or a script edit records, and review its changes as you review your own.
+- Script records in any language, and review a script's changes as you review your own.
 
 ## Is it for you
 
@@ -41,11 +41,9 @@ You view any plugin's records, and edit a source mod's. To edit another author's
 
 A source mod with a remote is a submodule of the modlist repository. Restoring the modlist builds the mod from its source.
 
-### Scripts and agents
+### Scripts
 
 A script reads and writes records, as an xEdit script does. Modbench's backend is an HTTP API, so any language can script it. Modbench ships a Python API, and VS Code's Python tools run and debug a script. Each write is a change to a record's file, so you review a script's work in Source Control, as you review your own.
-
-Your agent reaches Modbench through its MCP server. It reads the instance, runs Modbench's gestures and edits plugin source, and its edits land in Source Control too.
 
 ## Status
 
@@ -58,7 +56,8 @@ What works today:
 - Records: an xEdit-style record panel across the active plugins, with conflict colours, field editing, copy as override, new record, and Referenced By.
 - Version control: the modlist repository, source mods, build, and external changes.
 - Record filter: a plain `.sql` file run against the active plugins' records.
-- Agents and scripts: an MCP server for your agent, and Python scripts through `import medit`.
+- Scripts: any language through the HTTP API, and Python through `import medit`.
+- Agents: an MCP server for your agent.
 
 Planned, on the [milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones) board:
 

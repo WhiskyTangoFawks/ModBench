@@ -21,6 +21,8 @@ As a user who has not installed Modbench, I want:
 11. To learn that a mod is restored from its manifest, because git does not hold gigabytes of binary files. Cites: ADR-0022
 12. To learn that a plugin is decompiled into a file for each record and built back, so I edit and review its source and never the plugin in place. Cites: ADR-0006; ADR-0007
 13. Each thing I learn about to come with why I would want it.
+14. To learn that any language scripts Modbench through its HTTP API, and that Modbench ships a Python API that VS Code runs and debugs, so I script records with tools I already use. Cites: ADR-0004
+15. To meet my agent as one of the VS Code tools that work on my modlist, never as a selling point of its own.
 
 ## The walkthrough
 

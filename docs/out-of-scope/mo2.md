@@ -12,7 +12,7 @@ What MO2 does: [the surface audit](../research/mo2-surface-audit.md).
 | Manual file management | The operation is a compound file operation. VS Code's file tab and Explorer do it, and Modbench does not abstract the file system away. | 10 | Rename a profile; Remove a profile; Transfer saves |
 | An ADR decides it | A watcher feeds the read model, so a list needs no refresh gesture ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)). Modbench never assumes it owns a file, so it never deletes one silently ([ADR-0003](../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)). A mod folder has one package, so an install never merges into a mod ([ADR-0023](../adr/0023-a-mod-folder-has-only-one-package.md)). | 3 | Delete orphaned .meta files on refresh, without asking; Refresh the list |
 | Platform | MO2 runs programs through a virtual file system. Modbench has no virtual file system. | 1 | Conflicts tab: preview, execute with the virtual file system |
-| Scripts, tasks or the agent | The gesture runs an external tool or exports data. A task or the agent does the same job. | 2 | Export to CSV; Sort with LOOT |
+| Scripts, tasks or the agent | The gesture runs an external tool or exports data. A task or the agent does the same job. | 1 | Export to CSV |
 | Metadata chrome | The feature annotates or organizes a mod list inside MO2's UI. Separators already organize the list, and nothing in Modbench consumes the rest. | 16 | Endorse, un-endorse or decline to endorse; Start or stop tracking on Nexus; Change categories |
 | Backups belong to git | Git tracks the history of a mod, the mod list and the plugin list. A backup is a git action. | 5 | Back up or restore the mod list; Back up or restore the plugin lists; Create a backup of a mod |
 | Dead in MO2 | MO2 has it by accident, or it has no working effect there. | 1 | Enable or disable a separator with Space (effect inferred) |
@@ -48,7 +48,7 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 |---|---|---|
 | Visit the game's Nexus page | Toolbar: Visit Nexus (Ctrl+N) | VS Code provides it |
 | Open folders: game, MyGames, INIs, instance, mods, profile, downloads | Pane: Open Folders menu | VS Code provides it |
-| Switch or create an instance | Toolbar: Manage Instances | VS Code provides it |
+| Switch an instance | Toolbar: Manage Instances | VS Code provides it |
 | Tools menu | Toolbar: Tools | VS Code provides it |
 | Endorse MO2, notifications, update, help | Toolbar | VS Code provides it |
 | Run an executable from the run box | Run box, toolbar, Run menu | VS Code provides it |
@@ -128,7 +128,6 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Lock or unlock a plugin's load-order slot (sorting rules will be relative) | Plugin list: Lock load order | Maintainer ruling |
 | Edit the priority cell | Plugin list: F2 | VS Code provides it |
 | Restrict reordering to the priority or mod-index sort | Plugin list | VS Code provides it |
-| Sort with LOOT | Plugin list: Sort button | Scripts, tasks or the agent |
 
 ### Downloaded file
 
