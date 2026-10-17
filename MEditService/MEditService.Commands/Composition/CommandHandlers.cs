@@ -141,6 +141,16 @@ public static class CommandHandlers
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<INotificationPublisher>()));
 
+        services.AddSingleton(sp => new UpdateManifestHandler(
+            sp.GetRequiredService<IModFolderRepository>(),
+            sp.GetRequiredService<INotificationPublisher>()));
+
+        services.AddSingleton(sp => new RestoreFromManifestHandler(
+            sp.GetRequiredService<IModFolderRepository>(),
+            sp.GetRequiredService<INotificationPublisher>(),
+            sp.GetRequiredService<ISourceAdapter>(),
+            sp.GetRequiredService<BuildHandler>()));
+
         services.AddSingleton(sp => new BuildConfigurationHandler(sp.GetRequiredService<ISourceAdapter>()));
 
         services.AddSingleton(sp => new CreatePluginHandler(
