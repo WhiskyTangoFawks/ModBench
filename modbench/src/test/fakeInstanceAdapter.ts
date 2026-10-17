@@ -1,6 +1,6 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type {
-  DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, GameFile, GameFilesTaken, HashedFile, InstallationFile,
+  DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, GameFile, HashedFile, InstallationFile,
   InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
   ModFolder, ModFolders, ModMetadata, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription } from '../instanceAdapter/instanceAdapter';
 import { groupModOrder } from '../instanceAdapter/modGroups';
@@ -81,7 +81,7 @@ export interface InstanceAnswers {
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
   downloads?: ReadonlyMap<string, FileRead<InstallationFile>>;
   /** What the game files a mod's files take answer, by mod name; a mod not there takes none. */
-  gameFilesTaken?: ReadonlyMap<string, FileRead<GameFilesTaken>>;
+  gameFilesTaken?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['gameFilesTakenBy']>>>;
   /** The game files the game folder holds, by their lower-cased path; a path not there has none. */
   gameFiles?: ReadonlyMap<string, GameFile>;
   /** Why each mod's metadata cannot be read, by mod name. */
