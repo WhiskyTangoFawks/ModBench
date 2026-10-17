@@ -106,7 +106,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
         Assert.Equal(
             "{\n"
-            + $"\"package\": {{\"installationFile\":\"Mod.zip\",\"size\":7,\"hash\":\"{HashOfTheZip}\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\"}},\n"
+            + $"\"package\": {{\"installationFile\":\"Mod.zip\",\"size\":7,\"hash\":\"{HashOfTheZip}\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\",\"version\":\"1.2.3\"}},\n"
             + "\"files\": [\n"
             + "{\"path\":\"edited.txt\",\"inPackage\":false},\n"
             + "{\"path\":\"kept.txt\"}\n"
