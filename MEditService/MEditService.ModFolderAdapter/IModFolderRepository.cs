@@ -42,6 +42,9 @@ public interface IModFolderRepository
 
     Stream OpenInstallationFile(string path);
 
+    /// <summary>The game file at the forward-slash <paramref name="path"/> under the game's <paramref name="dataFolder"/>.</summary>
+    Stream OpenGameFile(string dataFolder, string path);
+
     /// <summary>Writes the mod's manifest into its folder, and only when its text differs from the one there.
     /// True when it wrote.</summary>
     bool WriteManifest(string modFolder, string modName, Manifest manifest);

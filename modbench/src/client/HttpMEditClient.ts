@@ -533,7 +533,7 @@ class HttpMEditClient implements MEditClient {
       outcome: (answer) => ({
         ...selectionOutcome(answer),
         notFound: answer.refused.filter((refused) => refused.refusal === 'NotFound')
-          .map((refused) => ({ mod: refused.item, installationFile: refused.installationFileNotFound ?? undefined })),
+          .map((refused) => ({ mod: refused.item, installationFile: refused.installationFileNotFound ?? undefined, gameFiles: refused.gameFilesNotFound })),
       }),
     }));
   }

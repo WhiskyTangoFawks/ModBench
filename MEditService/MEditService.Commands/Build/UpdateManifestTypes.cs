@@ -7,8 +7,16 @@ public sealed record ModToUpdate(
     string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, bool IsSourceMod,
     string? Version);
 
-/// <summary>The instance's facts beyond its mods: the folder of the stat cache.</summary>
-public sealed record InstanceToUpdate(string StatCache);
+/// <summary>A game file by its forward-slash path under the game's Data folder as the game folder names it, with its hash as the
+/// Instance adapter knows it (ADR-0013).</summary>
+public sealed record GameFile(string Path, string Hash);
+
+/// <summary>The game folder as the Instance adapter hands it: the game's name, its Data folder, and the game files at the paths of
+/// the mods' files.</summary>
+public sealed record GameFolder(string Name, string DataFolder, IReadOnlyList<GameFile> Files);
+
+/// <summary>The instance's facts beyond its mods: the folder of the stat cache and the game folder, none when it was not found.</summary>
+public sealed record InstanceToUpdate(string StatCache, GameFolder? GameFolder = null);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum UpdateManifestRefusal
@@ -19,6 +27,9 @@ public enum UpdateManifestRefusal
     InstallationFileMissing,
 
     ModFolderMissing,
+
+    /// <summary>A mod whose manifest names the game folder, when the request found none.</summary>
+    GameFolderNotFound,
 
     /// <summary>A file of the mod could not be read.</summary>
     ModFilesUnreadable,

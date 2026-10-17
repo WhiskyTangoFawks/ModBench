@@ -1731,7 +1731,7 @@ describe('the MO2 Instance adapter', () => {
 
         it.each([
           ['no version and the installation file it holds', { installationFile: { name: DOWNLOAD } }],
-          ['a source it holds no id for', { installationFile: { name: DOWNLOAD, page: 'https://www.nexusmods.com/fallout4/mods/0' } }],
+          ['a page it holds no id for', { installationFile: { name: DOWNLOAD, page: 'https://www.nexusmods.com/fallout4/mods/0' } }],
         ])('leaves metadata MO2 wrote byte for byte when the manifest says %s', async (_name, metadata) => {
           const held = await holding(mo2Written(''));
 

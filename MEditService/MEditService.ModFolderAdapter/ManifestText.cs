@@ -13,8 +13,7 @@ internal static class ManifestText
     public static string Of(Manifest manifest)
     {
         List<string> members = [];
-        if (manifest.Package is not null || manifest.Version is not null)
-            members.Add("\"package\": " + Value(writer => PackageLine(writer, manifest.Package, manifest.Version)));
+        if (manifest.Package is not null) members.Add("\"package\": " + Value(writer => PackageLine(writer, manifest.Package, manifest.Version)));
         var files = manifest.Files.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ThenBy(file => file.Path, StringComparer.Ordinal).Select(file => Value(writer => FileLine(writer, file))).ToList();
         members.Add(files.Count == 0 ? "\"files\": []" : "\"files\": [\n" + string.Join(",\n", files) + "\n]");
         return "{\n" + string.Join(",\n", members) + "\n}\n";
@@ -28,7 +27,8 @@ internal static class ManifestText
             using var parsed = JsonDocument.Parse(text);
             var root = parsed.RootElement;
             var files = root.GetProperty("files").EnumerateArray().Index().Select(entry => FileOf(entry.Index, entry.Item)).ToList();
-            var (package, version) = root.TryGetProperty("package", out var line) ? PackageOf(line) : (null, null);
+            if (!root.TryGetProperty("package", out var line)) return new Manifest(null, files);
+            var (package, version) = PackageOf(line);
             return new Manifest(package, files, version);
         }
         catch (JsonException e)
@@ -43,7 +43,7 @@ internal static class ManifestText
 
     private static string Text(JsonElement value) => value.GetString() ?? throw new FormatException();
 
-    private static (ManifestPackage? Package, string? Version) PackageOf(JsonElement line)
+    private static (ManifestPackage Package, string? Version) PackageOf(JsonElement line)
     {
         var version = line.TryGetProperty("version", out var held) ? Text(held) : null;
         if (line.TryGetProperty("installationFile", out var name))
@@ -52,9 +52,8 @@ internal static class ManifestText
                 Text(name), line.GetProperty("size").GetInt64(), Text(line.GetProperty("hash")),
                 line.TryGetProperty("page", out var page) ? Text(page) : null), version);
         }
-        return line.TryGetProperty("remote", out var remote)
-            ? (new ManifestPackage.SourceMod(Text(remote), Text(line.GetProperty("commit"))), version)
-            : (null, version);
+        if (line.TryGetProperty("gameFolder", out var game)) return (new ManifestPackage.GameFolder(Text(game), Text(line.GetProperty("hash"))), version);
+        return (new ManifestPackage.SourceMod(Text(line.GetProperty("remote")), Text(line.GetProperty("commit"))), version);
     }
 
     private static ManifestFile FileOf(int index, JsonElement line)
@@ -78,7 +77,7 @@ internal static class ManifestText
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
-    private static void PackageLine(Utf8JsonWriter writer, ManifestPackage? package, string? version)
+    private static void PackageLine(Utf8JsonWriter writer, ManifestPackage package, string? version)
     {
         writer.WriteStartObject();
         switch (package)
@@ -88,6 +87,10 @@ internal static class ManifestText
                 writer.WriteNumber("size", installationFile.Size);
                 writer.WriteString("hash", installationFile.Hash);
                 if (installationFile.Page is { } page) writer.WriteString("page", page);
+                break;
+            case ManifestPackage.GameFolder gameFolder:
+                writer.WriteString("gameFolder", gameFolder.Name);
+                writer.WriteString("hash", gameFolder.Hash);
                 break;
             case ManifestPackage.SourceMod sourceMod:
                 writer.WriteString("remote", sourceMod.Remote);

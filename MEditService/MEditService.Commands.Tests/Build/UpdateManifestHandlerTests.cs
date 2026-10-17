@@ -111,13 +111,39 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public async Task TheModsVersion_IsInItsManifest()
+    public async Task TheVersionOfAModWithAPackage_IsInItsManifest()
+    {
+        _folders.WithFile(Mod, "a.txt", "hello");
+
+        await Landed(ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.txt", "hello"))) with { Version = "1.2.3" });
+
+        Assert.Equal("1.2.3", _folders.Manifests[Mod].Version);
+    }
+
+    [Fact]
+    public async Task TheVersionOfAModWithNoPackage_IsNotInItsManifest()
     {
         _folders.WithFile(Mod, "a.txt", "hello");
 
         await Landed(ModFrom("Mod") with { Version = "1.2.3" });
 
-        Assert.Equal("1.2.3", _folders.Manifests[Mod].Version);
+        Assert.Null(_folders.Manifests[Mod].Version);
+    }
+
+    [Fact]
+    public async Task AModWhoseManifestNamesTheGameFolder_IsRefusedWhenTheGameFolderWasNotFound_ItsManifestLeftAsItWas()
+    {
+        _folders.WithFile(Mod, "a.nif", "a");
+        var named = await UpdatedWith(GameFolderHolding(("a.nif", "a")));
+        _folders.WithFile("mods/Other", "b.nif", "b");
+
+        var result = await Handler.UpdateManifestAsync([ModFrom("Mod"), ModFrom("Other")], new InstanceToUpdate("stat-cache"));
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal((UpdateManifestRefusal.GameFolderNotFound, "Mod"), (refused.Refusal, refused.Item));
+        Assert.Contains("the game folder was not found", refused.Message);
+        Assert.Same(named, _folders.Manifests[Mod]);
+        Assert.Equal(["Other"], result.Landed.Select(landed => landed.Item));
     }
 
     [Fact]
@@ -353,5 +379,84 @@ public sealed class UpdateManifestHandlerTests
         await Update([ModFrom("Mod")]);
 
         Assert.Equal(["a.txt"], _folders.Manifests[Mod].Files.Select(f => f.Path));
+    }
+
+    private static GameFolder GameFolderHolding(params (string Path, string Text)[] files) =>
+        new("Fallout 4", "data", [.. files.Select(file => new GameFile(file.Path, file.Text))]);
+
+    private async Task<Manifest> UpdatedWith(GameFolder? gameFolder, ModToUpdate? mod = null)
+    {
+        var result = await Handler.UpdateManifestAsync([mod ?? ModFrom("Mod")], new InstanceToUpdate("stat-cache", gameFolder));
+        Assert.Empty(result.Refused);
+        return _folders.Manifests[Mod];
+    }
+
+    [Fact]
+    public async Task AModWithNoInstallationFile_WhoseFilesTheGameFolderHoldsWithTheirBytes_NamesTheGameFolderAsItsPackage()
+    {
+        _folders.WithFile(Mod, "meshes/a.nif", "a").WithFile(Mod, "b.dds", "b");
+
+        var manifest = await UpdatedWith(GameFolderHolding(("Meshes/A.nif", "a"), ("b.dds", "b")));
+
+        Assert.Equal(
+            new ManifestPackage.GameFolder("Fallout 4", FileHash.OfFilesTaken([new HashedFile("meshes/a.nif", "a"), new HashedFile("b.dds", "b")])),
+            manifest.Package);
+        Assert.All(manifest.Files, file => Assert.IsType<PackageEntry.Held>(file.Entry));
+    }
+
+    [Fact]
+    public async Task AGameFolderModsManifest_DoesNotChange_WhenTheGameFolderGainsOrChangesAFileTheModDoesNotTake()
+    {
+        _folders.WithFile(Mod, "a.nif", "a");
+        await UpdatedWith(GameFolderHolding(("a.nif", "a")));
+
+        var result = await Handler.UpdateManifestAsync(
+            [ModFrom("Mod")], new InstanceToUpdate("stat-cache", GameFolderHolding(("a.nif", "a"), ("other.nif", "new"), ("more.nif", "x"))));
+
+        Assert.False(result.Landed.Single().Outcome.ManifestWritten);
+    }
+
+    [Fact]
+    public async Task AGameFolderModsManifest_Changes_WhenAFileItTakesChanges()
+    {
+        _folders.WithFile(Mod, "a.nif", "a");
+        var before = (await UpdatedWith(GameFolderHolding(("a.nif", "a")))).Package;
+        _folders.WithFile(Mod, "a.nif", "a2");
+
+        var after = (await UpdatedWith(GameFolderHolding(("a.nif", "a2")))).Package;
+
+        Assert.NotEqual(before, after);
+    }
+
+    [Fact]
+    public async Task AModWithAFileTheGameFolderHoldsWithOtherBytes_OrNotAtAll_HasNoPackage_AndItsFilesAreNotInIt()
+    {
+        _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "mine.nif", "mine").WithFile(Mod, "c.nif", "edited");
+
+        var manifest = await UpdatedWith(GameFolderHolding(("a.nif", "a"), ("c.nif", "c")));
+
+        Assert.Null(manifest.Package);
+        Assert.All(manifest.Files, file => Assert.IsType<PackageEntry.NotHeld>(file.Entry));
+    }
+
+    [Fact]
+    public async Task AModWithNoFiles_IsNotFromTheGameFolder()
+    {
+        _folders.WithFile(Mod, "meta.ini", "[General]");
+
+        var manifest = await UpdatedWith(GameFolderHolding(("a.nif", "a")), new ModToUpdate("Mod", Mod, null, ["meta.ini"], IsSourceMod: false, Version: null));
+
+        Assert.Null(manifest.Package);
+    }
+
+    [Fact]
+    public async Task AModWithAnInstallationFile_NamesItAsItsPackage_WhateverTheGameFolderHolds()
+    {
+        _folders.WithFile(Mod, "a.nif", "a");
+        var download = Downloaded("dl/Mod.zip", ("a.nif", "a"));
+
+        var manifest = await UpdatedWith(GameFolderHolding(("a.nif", "a")), ModFrom("Mod", download));
+
+        Assert.IsType<ManifestPackage.InstallationFile>(manifest.Package);
     }
 }

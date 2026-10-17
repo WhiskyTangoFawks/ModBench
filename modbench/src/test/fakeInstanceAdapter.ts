@@ -1,6 +1,6 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type {
-  DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, HashedFile, InstallationFile,
+  DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, GameFile, HashedFile, InstallationFile,
   InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
   ModFolder, ModFolders, ModMetadata, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription } from '../instanceAdapter/instanceAdapter';
 import { groupModOrder } from '../instanceAdapter/modGroups';
@@ -80,6 +80,10 @@ export interface InstanceAnswers {
   installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
   downloads?: ReadonlyMap<string, FileRead<InstallationFile>>;
+  /** What the game files a mod's files take answer, by mod name; a mod not there takes none. */
+  gameFilesTaken?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['gameFilesTakenBy']>>>;
+  /** The game files the game folder holds, by their lower-cased path; a path not there has none. */
+  gameFiles?: ReadonlyMap<string, GameFile>;
   /** Why each mod's metadata cannot be read, by mod name. */
   unreadableMetadata?: ReadonlyMap<string, string>;
   /** Why each mod's metadata cannot hold the metadata a manifest says, by mod name. */
@@ -164,6 +168,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloads?.get(name) ?? { kind: 'read', answer: undefined }),
+    gameFiles: (_dataFolder, paths) => Promise.resolve({
+      kind: 'read', answer: paths.flatMap((path) => answers.gameFiles?.get(path.toLowerCase()) ?? []),
+    }),
+    gameFilesTakenBy: (_dataFolder, mod) => Promise.resolve(answers.gameFilesTaken?.get(mod) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } }),
     modMetadata: (mod) => {
       const reason = answers.unreadableMetadata?.get(mod);
       return Promise.resolve(reason === undefined ? { kind: 'read', answer: answers.metadata?.get(mod) ?? {} } : { kind: 'unreadable', reason });

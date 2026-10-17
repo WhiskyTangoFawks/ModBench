@@ -164,13 +164,13 @@ public sealed class RestoreASourceModTests : IDisposable
     }
 
     [Fact]
-    public async Task TheRebuild_KeepsTheVersionItsManifestNames()
+    public async Task TheRebuildOfASourceModWithNoRemote_WritesNoVersion_ItsManifestHavingNoPackage()
     {
         ManifestedAt(_first, version: "1.2.3");
 
         await Restore();
 
-        Assert.Equal("1.2.3", _folders.ReadManifest(ModFolder, ModName)?.Version);
+        Assert.Null(_folders.ReadManifest(ModFolder, ModName)?.Version);
     }
 
     private void ManifestedAt(string commit, string? remote = null, string? version = null) =>
