@@ -357,11 +357,23 @@ describe('the MO2 adapter\'s repository', () => {
 
     it('refuses before the repository exists when the global core.hooksPath points outside the instance, naming it and where', async () => {
       const adapter = await instance();
-      await put('global.config', `[core]\n\thooksPath = ${join(root, 'global-hooks')}\n`);
+      await put('global.config', `[core]\n\thooksPath = ${join(root, 'global-hooks').replaceAll('\\', '/')}\n`);
       vi.stubEnv('GIT_CONFIG_GLOBAL', join(root, 'global.config'));
 
       try {
         await expect(adapter.checkPushRefusalFree()).rejects.toThrow(new RegExp(`core\\.hooksPath.*${join(root, 'global-hooks').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+
+    it('rejects with git\'s reason when the global config is malformed, rather than reading no hooks path', async () => {
+      const adapter = await instance();
+      await put('global.config', '[core]\n\thooksPath = C:\\Users\\x\\hooks\n');
+      vi.stubEnv('GIT_CONFIG_GLOBAL', join(root, 'global.config'));
+
+      try {
+        await expect(adapter.checkPushRefusalFree()).rejects.toThrow(/bad config/);
       } finally {
         vi.unstubAllEnvs();
       }
