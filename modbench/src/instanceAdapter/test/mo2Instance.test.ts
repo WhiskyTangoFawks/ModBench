@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { MoveToTrash } from '../../ports/trash';
 import {
   access, chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, writeFile,
 } from 'node:fs/promises';
@@ -2709,26 +2710,52 @@ describe('the MO2 Instance adapter', () => {
       expect(await isThere(join(downloads(), 'gone.zip.meta'))).toBe(false);
     });
 
-    it('sweeps its own leftover temp write when it trashes metadata, even for a file with none, as a crash during a first write leaves its temp beside no metadata at all', async () => {
+    it('sweeps its own leftover temp write when it trashes a file, even one with no metadata, as a crash during a first write leaves its temp beside no metadata at all', async () => {
       const leftover = join(downloads(), 'manual.zip.meta.0123456789ab.tmp');
       await writeFile(leftover, 'half written');
 
-      expect(await adapter.trashDownloadedFileMeta('manual.zip', () => Promise.resolve())).toBe(false);
+      expect(await adapter.trashDownloadedFile('manual.zip', () => Promise.resolve())).toEqual({ gone: false });
 
       expect(await isThere(leftover)).toBe(false);
     });
 
-    it('moves a downloaded file\'s metadata to the trash, and answers false when it has none', async () => {
+    it('moves a downloaded file to the trash, then its metadata when it has any', async () => {
       const trashed: string[] = [];
       const trash = (path: string): Promise<void> => {
         trashed.push(path);
         return Promise.resolve();
       };
 
-      expect(await adapter.trashDownloadedFileMeta(DOWNLOAD, trash)).toBe(true);
-      expect(await adapter.trashDownloadedFileMeta('manual.zip', trash)).toBe(false);
+      expect(await adapter.trashDownloadedFile(DOWNLOAD, trash)).toEqual({ gone: false });
+      expect(await adapter.trashDownloadedFile('manual.zip', trash)).toEqual({ gone: false });
 
-      expect(trashed).toEqual([join(downloads(), `${DOWNLOAD}.meta`)]);
+      expect(trashed).toEqual([join(downloads(), DOWNLOAD), join(downloads(), `${DOWNLOAD}.meta`), join(downloads(), 'manual.zip')]);
+    });
+
+    it('answers a downloaded file already gone as gone, trashing nothing', async () => {
+      const trash = vi.fn<MoveToTrash>();
+
+      expect(await adapter.trashDownloadedFile('gone.zip', trash)).toEqual({ gone: true });
+
+      expect(trash).not.toHaveBeenCalled();
+    });
+
+    it('rejects when the file cannot be trashed, leaving its metadata', async () => {
+      const trashed: string[] = [];
+      const trash = (path: string): Promise<void> => {
+        trashed.push(path);
+        return Promise.reject(new Error('EPERM'));
+      };
+
+      await expect(adapter.trashDownloadedFile(DOWNLOAD, trash)).rejects.toThrow('EPERM');
+
+      expect(trashed).toEqual([join(downloads(), DOWNLOAD)]);
+    });
+
+    it('answers the reason when the file landed in the trash but its metadata could not', async () => {
+      const trash = (path: string): Promise<void> => (path.endsWith('.meta') ? Promise.reject(new Error('EPERM')) : Promise.resolve());
+
+      expect(await adapter.trashDownloadedFile(DOWNLOAD, trash)).toEqual({ gone: false, metadataLeftBehind: 'EPERM' });
     });
   });
 

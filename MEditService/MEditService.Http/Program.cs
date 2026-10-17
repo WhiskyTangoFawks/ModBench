@@ -5,7 +5,6 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Skyrim;
 using MEditService.Codec.Starfield;
-using MEditService.Commands.Build;
 using MEditService.Commands.Composition;
 using MEditService.Http;
 using MEditService.Http.Endpoints;
@@ -82,8 +81,6 @@ try
     builder.Services.AddSingleton<UnsavedDocuments>();
     builder.Services.AddSingleton<ISourceAdapter, GitSourceAdapter>();
     builder.Services.AddSingleton<IModFolderRepository, ModFolderRepository>();
-    builder.Services.AddSingleton<UpdateManifestHandler>();
-    builder.Services.AddSingleton<RestoreFromManifestHandler>();
     builder.Services.AddSingleton<ModlistGestureCancels>();
     builder.Services.AddSingleton<LoadOrderHolder>();
     // One Index for the whole process (ADR-0014). Which file it opens comes from the

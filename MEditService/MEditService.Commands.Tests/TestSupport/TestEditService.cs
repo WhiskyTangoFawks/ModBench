@@ -65,9 +65,12 @@ internal static class TestEditService
         LoadOrderHolder holder, INotificationPublisher? notifications = null, ISourceAdapter? source = null, IModFolderRepository? modFolders = null) =>
         Over(holder, notifications: notifications, source: source, modFolders: modFolders).GetRequiredService<BuildHandler>();
 
+    internal static UpdateManifestHandler UpdateManifestHandler(IModFolderRepository modFolders, INotificationPublisher notifications) =>
+        Over(new LoadOrderHolder(), notifications: notifications, modFolders: modFolders).GetRequiredService<UpdateManifestHandler>();
+
     internal static RestoreFromManifestHandler RestoreHandler(
         LoadOrderHolder holder, INotificationPublisher notifications, ISourceAdapter source, IModFolderRepository modFolders) =>
-        ActivatorUtilities.CreateInstance<RestoreFromManifestHandler>(Over(holder, notifications: notifications, source: source, modFolders: modFolders));
+        Over(holder, notifications: notifications, source: source, modFolders: modFolders).GetRequiredService<RestoreFromManifestHandler>();
 
     internal static DecompilePluginHandler DecompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<DecompilePluginHandler>();
