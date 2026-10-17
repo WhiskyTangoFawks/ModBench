@@ -469,14 +469,14 @@ describe('modbench.mod.build', () => {
 
   it('sends a mod with no folder to hold plugin source to source commands, which refuse it', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [], refused: [{ item: 'ModX', reason: 'no repository in the source folder builds it' }] });
+    client.setCommandResult('build', { landed: [], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
     const { handler, reporter } = registered(client);
 
-    await handler(new ModsRowStandIn('ModX'));
+    await handler(new ModsRowStandIn('ModC'));
 
-    expect(buildCalls()).toEqual([[['ModX']]]);
+    expect(buildCalls()).toEqual([[['ModC']]]);
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not build 1 of 1 mods.', detail: '"ModX" (no repository in the source folder builds it)' },
+      { severity: 'error', message: 'Could not build 1 of 1 mods.', detail: '"ModC" (no repository in the source folder builds it)' },
     ]);
   });
 
