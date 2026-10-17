@@ -202,18 +202,16 @@ describe('modlistRepositoryCommands update manifest', () => {
   });
 
   it('hands no game files for a source mod or a separator, and notes neither when the game folder was not found', async () => {
-    const { commands, client, adapter } = commandsOver({}, new InMemoryMEditClient());
+    const unreadable: FileRead<{ gameFiles: []; notes: [] }> = { kind: 'unreadable', reason: 'it was asked' };
+    const { commands, client } = commandsOver({ gameFilesTaken: new Map([['Source', unreadable], ['Group_separator', unreadable]]) });
     client.setCommandResult('updateManifest', UPDATED);
-    const asked: string[] = [];
-    const taking = adapter.adapter.gameFilesTakenBy;
-    adapter.adapter.gameFilesTakenBy = (dataFolder, mod) => { asked.push(mod); return taking(dataFolder, mod); };
     const folders = modFoldersOf('ModA', 'Source', { kind: 'separator', name: 'Group', modName: 'Group_separator' });
     const found = instanceOf(new Map([['Source', '/source/Source']]), FOUND, folders.all);
 
-    await commands.updateManifest(['ModA', 'Source', 'Group_separator'], found);
+    const asked = await commands.updateManifest(['ModA', 'Source', 'Group_separator'], found);
     const outcome = await commands.updateManifest(['ModA', 'Source', 'Group_separator'], { ...found, gameFolder: NOT_FOUND });
 
-    expect(asked).toEqual(['ModA']);
+    expect(asked).toMatchObject({ refused: [] });
     expect(outcome).toMatchObject({ notes: [{ mod: 'ModA' }] });
     expect(outcome.applied && outcome.notes).toHaveLength(1);
   });
