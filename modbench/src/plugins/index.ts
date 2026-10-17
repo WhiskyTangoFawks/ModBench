@@ -22,20 +22,22 @@ export interface PluginsDeps {
   facts: Pick<Instance, 'refresh'>;
   channel: Pick<vscode.LogOutputChannel, 'error' | 'info' | 'warn' | 'show'>;
   reporterFor: (tag: string) => Reporter;
-  /** Registers the source mods' repositories: a reconcile reached Ready, or a decompile and commit landed. */
+  /** Registers the source mods' repositories: a reconcile reached Ready. */
   registerRepositories: () => Promise<void>;
   ask: AskQuestion;
   sourceEditing: PluginsViewDeps['sourceEditing'];
 }
 
 type PluginsInstanceDeps = Pick<PluginsViewDeps,
-  'instance' | 'commands' | 'sourceCommands' | 'pluginSync' | 'saveUnsavedPluginSource' | 'sourceGestureRows' | 'modsView' | 'dataFolderFile'
+  'instance' | 'commands' | 'pluginSync' | 'dataFolderFile'
 > & { instanceRoot: string };
 
 interface PluginsOnInstance extends vscode.Disposable {
   followed: PluginsView['followed'];
   nameFilter: PluginsView['nameFilter'];
   copyValue: PluginsView['copyValue'];
+  /** The Plugins view's message line, where another view's gesture says its phase. */
+  say: PluginsView['progress']['say'];
   /** The launch and the load order's puts, which the Plugins view says. */
   editing: EditingFlow;
   nextRefill: ReconcileNarrator['nextRefill'];
@@ -75,7 +77,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
         client, instanceRoot, around: editingShown.around, onPut: editingShown.onPut, reporterFor, log: (line) => channel.error(line),
       });
       return {
-        followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, editing,
+        followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, say: view.progress.say, editing,
         nextRefill: () => view.narrator.nextRefill(),
         dispose: () => {
           if (shown === view) shown = undefined;

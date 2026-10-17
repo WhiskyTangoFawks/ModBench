@@ -2,14 +2,11 @@ import * as vscode from 'vscode';
 import type { MEditClient, PluginAddress } from '../client';
 import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
 import type { PluginCommands } from '../pluginCommands/plugins';
-import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { SourceEditing } from '../drivingLib/sourceEditing';
-import { sourceFiles } from '../instanceLoader/loadOrderSnapshot';
-import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import type { Instance } from '../instanceLoader/instance';
 import { reportSyncFailures, type Sync, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
 import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider';
@@ -28,9 +25,7 @@ import {
 import { registerRenamePluginCommand, type RenamePluginDeps } from './pluginRenameCommand';
 import { registerRecordCreateCommand } from './createRecordCommand';
 import { createdRecordSelection } from './createdRecordSelection';
-import {
-  BuildProblems, registerBuildCommand, registerDecompileCommand, registerDecompileAndCommitCommand, type DecompileDeps,
-} from './pluginRowCommands';
+import { registerDecompileCommand, type DecompileDeps } from './pluginRowCommands';
 import { registerPluginMoveCommand } from './pluginMoveCommand';
 import { registerPluginEnableCommands } from './pluginParticipationCommands';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
@@ -47,7 +42,6 @@ export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, line, enabled and winning for every plugin. */
   instance: PluginsInstance & Pick<Instance, 'quiet'>;
   commands: PluginCommands;
-  sourceCommands: SourceCommands;
   /** The record browser that supplies a plugin row's children. */
   recordBrowser: RecordBrowser;
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the record index
@@ -55,17 +49,11 @@ export interface PluginsViewDeps {
   client: PluginFactsClient & RenamePluginDeps['client'] & DecompileDeps['client']
     & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onLoadOrderStatus' | 'onReconnected' | 'onStatusChanged' | 'setFilter' | 'clearFilter' | 'createPlugin'>;
   statusBar: StatusBar;
-  /** Registers the source mods' repositories: a reconcile reached Ready, or a decompile and commit landed. */
+  /** Registers the source mods' repositories: a reconcile reached Ready. */
   registerRepositories: () => Promise<void>;
   ask: AskQuestion;
   recordWrite: RecordWrite;
   sourceEditing: SourceEditing;
-  /** Saves a mod's unsaved plugin source; answers the paths VS Code left unsaved. */
-  saveUnsavedPluginSource: (mod: string) => Promise<string[]>;
-  /** The rows of the focused Mods or Plugins view, which the palette's decompile and commit and build act on. */
-  sourceGestureRows: () => readonly unknown[];
-  /** The Mods view's id, whose bar a decompile and commit or a build from a Mods row runs under. */
-  modsView: string;
   /** Plugin sync, whose failure the view's message line says. */
   pluginSync: Sync;
   channel: SyncChannel;
@@ -119,7 +107,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     showCollapseAll: true,
   });
   const selected = survivingSelection(view, (row) => tree.shownRow(row));
-  const showKeyContext = () => { publishKeyContext(selected.rows(), tree, instance); };
+  const showKeyContext = () => { publishKeyContext(selected.rows(), tree); };
   showKeyContext();
   const keyContextSubscriptions = [view.onDidChangeSelection(showKeyContext), tree.onDidChangeTreeData(showKeyContext)];
   const nameFilter = registerPluginsNameFilter(view, tree, joinSyncMessages(pluginSync, loadOrderPut, recordBrowser.beneathFailure));
@@ -130,7 +118,6 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     client, facts: tree.facts, recordBrowser, progress, statusBar, showRecordFilter, registerRepositories: registerInBackground, log,
     reporter: reporterFor('loadOrder'),
   });
-  const buildProblems = new BuildProblems(vscode.languages.createDiagnosticCollection('modbench-build'));
   const unsubscribe = subscribeTreeToNotifications(client, recordBrowser, () => { void tree.facts.refresh(); });
   // Disposed in order: what reads the tree and the view goes before them.
   const recordDecorations = new RecordDecorationProvider(recordBrowser, () => tree.lockedRowUris());
@@ -144,7 +131,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, lens),
     ...registerPluginEnableCommands(
       commands, instance, selected.rows, reporterFor('pluginListTree.enableDisable')),
-    ...registerPluginGestures(deps, { tree, view, progress, selection: selected.rows, buildProblems }),
+    ...registerPluginGestures(deps, { tree, view, selection: selected.rows }),
     registerPluginMoveCommand(commands, instance, { selection: selected.rows, movePlaces: (names) => tree.movePlaces(names) },
       reporterFor('pluginListTree.move')),
     ...registerFilterCommands({
@@ -160,7 +147,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     vscode.window.registerFileDecorationProvider(new ImplicitMasterDecorationProvider(() => tree.lockedRowUris())),
     nameFilter,
     ...keyContextSubscriptions,
-    selected, view, tree, changedOutsideDiagnostics, failedToReadDiagnostics, loadDiagnostics, buildProblems,
+    selected, view, tree, changedOutsideDiagnostics, failedToReadDiagnostics, loadDiagnostics,
   );
   return {
     view, nameFilter,
@@ -172,30 +159,19 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   };
 }
 
-function publishKeyContext(selection: readonly PluginsTreeNode[], tree: PluginsTreeProvider, instance: Pick<Instance, 'value'>): void {
+function publishKeyContext(selection: readonly PluginsTreeNode[], tree: PluginsTreeProvider): void {
   for (const [name, value] of Object.entries(pluginsKeyContext(selection, (row) => tree.isEnabled(row)))) {
     void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
   }
-  void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.sourceMods.size > 0);
 }
 
 function registerPluginGestures(
-  { instance, commands, sourceCommands, client, ask, registerRepositories, pluginSync, reporterFor, recordWrite, sourceEditing, saveUnsavedPluginSource, sourceGestureRows, modsView }: PluginsViewDeps,
-  { tree, view, progress, selection, buildProblems }: {
-    tree: PluginsTreeProvider; view: vscode.TreeView<PluginsTreeNode>; progress: PluginsViewProgress;
-    selection: () => readonly PluginsTreeNode[]; buildProblems: BuildProblems;
+  { instance, commands, client, ask, pluginSync, reporterFor, recordWrite, sourceEditing }: PluginsViewDeps,
+  { tree, view, selection }: {
+    tree: PluginsTreeProvider; view: vscode.TreeView<PluginsTreeNode>; selection: () => readonly PluginsTreeNode[];
   },
 ): vscode.Disposable[] {
   return [
-    registerDecompileAndCommitCommand({
-      progress, instance, commands: sourceCommands, reporter: reporterFor('mod.decompileAndCommit'), onCommitted: registerRepositories,
-      modOfOrigin: (origin) => modOfOrigin(instance.value, origin)?.name, modsView,
-    }, sourceGestureRows),
-    registerBuildCommand({
-      commands: sourceCommands, instance, gameRelease: () => instance.value.gameRelease, reporter: reporterFor('mod.build'), problems: buildProblems,
-      sourceFiles: (origin) => sourceFiles(instance.value, origin), saveUnsaved: saveUnsavedPluginSource,
-      modOfOrigin: (origin) => modOfOrigin(instance.value, origin)?.name, sourceDirs: () => instance.value.paths.sourceDirs, modsView,
-    }, sourceGestureRows),
     registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
     registerRecordCreateCommand({
       client, reporter: reporterFor('record.create'), write: recordWrite, source: sourceEditing,

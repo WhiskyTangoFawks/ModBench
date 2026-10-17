@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import type { Instance, InstanceView } from '../instanceLoader/instance';
 import type { ModCommands } from '../modCommands/modCommands';
+import type { SourceCommands } from '../sourceCommands/sourceCommands';
+import { sourceFiles } from '../instanceLoader/loadOrderSnapshot';
+import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
@@ -20,11 +23,29 @@ import { registerModDecorations } from './modDecorations';
 import { registerModInstallCommands } from './installCommands';
 import { registerCompareFileCommand } from './compareFile';
 import { registerGoToModCommand } from './goToMod';
+import { registerBuildCommand } from './buildCommand';
+import { BuildProblems } from './buildProblems';
+import { registerDecompileAndCommitCommand } from './decompileAndCommitCommand';
 import { registerConflictTable } from './conflictTableEditor';
 import {
   modsCopyValueText, registerCreateEmptyModCommand, registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands,
   registerModMoveCommand, registerOpenFolderCommand, registerOpenSourceCommand, registerSeparatorCommands, registerViewOnNexusCommand,
 } from './modManagementCommands';
+
+/** What decompile and commit and build need, which act on the mods of Mods rows and of Plugins rows. */
+interface SourceGestureDeps {
+  commands: SourceCommands;
+  /** The rows of the focused Mods or Plugins view, which the palette's decompile and commit and build act on. */
+  rows: () => readonly unknown[];
+  /** The Plugins view's id, whose bar a gesture from a plugin row runs under. */
+  pluginsView: string;
+  /** The Plugins view's message line, where decompile and commit says its phase. */
+  say: (message: string | undefined) => void;
+  /** Saves a mod's unsaved plugin source; answers the paths VS Code left unsaved. */
+  saveUnsavedPluginSource: (mod: string) => Promise<string[]>;
+  /** Registers the source mods' repositories once a decompile and commit landed. */
+  registerRepositories: () => Promise<void>;
+}
 
 interface ModsViewDeps {
   instance: InstanceView & Pick<Instance, 'refresh' | 'sameCopies'>;
@@ -41,6 +62,7 @@ interface ModsViewDeps {
   /** Mod sync, whose failure the view's message line says. */
   modSync: Sync;
   /** Each mod's status: mEdit pushes the mods whose status changed, and the view reads them. */
+  sourceGestures: SourceGestureDeps;
   modStatus: { push: Pick<MEditClient, 'onNotification' | 'onReconnected'>; readStatus: ReadModStatus };
 }
 
@@ -101,6 +123,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       commands, instance, viewSelection: () => view.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
       log,
     }),
+    ...registerSourceGestures(deps, provider),
     ...registerModEnableCommands(commands, instance, () => view.selection, reporterFor('mod.enableDisable')),
     ...registerFileExclusionCommands(commands, instance, () => view.selection, reporterFor('mod.excludeFile')),
     registerModMoveCommand(
@@ -131,6 +154,29 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },
     dispose: () => { disposable.dispose(); },
   };
+}
+
+function registerSourceGestures(
+  { instance, reporterFor, sourceGestures }: ModsViewDeps, provider: ModListProvider,
+): vscode.Disposable[] {
+  const showAnySource = () => { void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.sourceMods.size > 0); };
+  showAnySource();
+  const problems = new BuildProblems(vscode.languages.createDiagnosticCollection('modbench-build'));
+  const { commands, rows, pluginsView, say, saveUnsavedPluginSource, registerRepositories } = sourceGestures;
+  const owner = (origin: string) => modOfOrigin(instance.value, origin)?.name;
+  return [
+    registerDecompileAndCommitCommand({
+      progress: { say }, instance, commands, reporter: reporterFor('mod.decompileAndCommit'), onCommitted: registerRepositories,
+      modOfOrigin: owner, pluginsView,
+    }, rows),
+    registerBuildCommand({
+      commands, instance, gameRelease: () => instance.value.gameRelease, reporter: reporterFor('mod.build'), problems,
+      sourceFiles: (origin) => sourceFiles(instance.value, origin), saveUnsaved: saveUnsavedPluginSource,
+      modOfOrigin: owner, sourceDirs: () => instance.value.paths.sourceDirs, pluginsView,
+    }, rows),
+    provider.onDidChangeTreeData(showAnySource),
+    problems,
+  ];
 }
 
 // modlist-repository.md, Status, story 1: status shows while the instance holds a repository.
