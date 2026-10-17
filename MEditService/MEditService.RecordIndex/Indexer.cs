@@ -446,9 +446,8 @@ internal sealed class Indexer : IDisposable
     private bool CancelledBy(Exception ex, CancellationToken token) =>
         ex is OperationCanceledException && (token.IsCancellationRequested || _disposal.IsCancellationRequested);
 
-    // ADR-0003: recovery is not gated. Until the file is opened again every read on it throws, and the
-    // plugins read before the fatal would answer nothing until the next snapshot. Called with the
-    // exclusive right held, so no reconcile is in flight; EnsureScope waits out the reads.
+    // ADR-0003: recovery is not gated. Every read throws until the file is opened again, so the plugins
+    // read before the fatal answer nothing until the next snapshot. Runs with the exclusive right held.
     private void ReopenIfInvalidatedBy(Exception ex)
     {
         if (!Store.IsInvalidation(ex)) return;
