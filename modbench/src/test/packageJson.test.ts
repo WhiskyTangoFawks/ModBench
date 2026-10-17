@@ -193,7 +193,7 @@ describe('package.json activation', () => {
   });
 });
 
-describe('package.json getting started (common.md, Getting started)', () => {
+describe('package.json getting started (user-docs.md, The walkthrough)', () => {
   const steps = pkg.contributes.walkthroughs.flatMap((walkthrough) => walkthrough.steps);
   const commands = new Set(pkg.contributes.commands.map(({ command }) => command));
   const views = new Set(Object.values(pkg.contributes.views).flat().map(({ id }) => id));
@@ -203,7 +203,7 @@ describe('package.json getting started (common.md, Getting started)', () => {
     onCommand: isCommand,
     onView: (subject) => views.has(subject) || isVsCodes(subject),
     onContext: (subject) => [FOLDER_KEY, INSTANCE_READ_KEY].some((key) => subject.startsWith(`${key} `)),
-    onLink: (subject) => subject.startsWith(`${REPOSITORY}#`),
+    onLink: (subject) => subject.startsWith(`${REPOSITORY}/blob/main/docs/wiki/`),
   };
   const owned = (event: string): boolean => {
     const [kind = '', subject = ''] = event.split(/:(.*)/s);
