@@ -4,8 +4,8 @@
 
 ## Prerequisites
 
-- .NET SDK 10.x, Node.js 20 or later, VS Code and git.
-- 7-Zip on `PATH` as `7z`, `7za` or `7zz`. Installing a mod from a compressed file needs it.
+- What the README's [Get started](README.md#get-started) names.
+- .NET SDK 10.x and Node.js 20 or later.
 - `python3` (`python` on Windows) on `PATH`. The two-windows backend tests need it, and skip without it.
 
 On Ubuntu or Debian:

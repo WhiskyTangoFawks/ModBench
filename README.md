@@ -25,25 +25,25 @@ VS Code edits files, and git stores files. So Modbench works on files, and turns
 
 ### A mod is its manifest
 
-Git does not hold gigabytes of binary files. So the modlist repository records each mod as a manifest: the file the mod was installed from, and each file the mod holds. The profiles and MO2's configuration sit beside the manifests. An upgrade, a new mod or a removed file reads as a change to a manifest.
+Git does not hold gigabytes of binary files. So the modlist repository holds each mod as a manifest: the file the mod was installed from, and each file the mod holds. The profiles and MO2's configuration sit beside the manifests. An upgrade, a new mod or a removed file reads as a change to a manifest.
 
-Update manifest records a mod as it is, and restore from manifest rebuilds the mod from its manifest. Clone a modlist and restore it, and you have a working modlist to develop, as Wabbajack gives a player one to play.
+Update manifest writes a mod's manifest from its folder, and restore from manifest rebuilds the mod from its manifest. Clone a modlist and restore it, and you have a working modlist to develop, as Wabbajack gives a player one to play.
 
 The instance stays MO2's, in MO2's own format. You switch between MO2 and Modbench at any time.
 
 ### A plugin is its source
 
-A plugin is one binary file, and git cannot diff it. So Modbench decompiles a mod's plugins into plugin source, one JSON file for each record, in a git repository of the mod's own, and the mod becomes a source mod. Each edit is then a change to one record's file, which you review in Source Control, and a merge conflict lands in one record.
+A plugin is one binary file, and git cannot diff it. So Modbench decompiles a mod's plugins into plugin source: one JSON file for each record and its child records. The plugin source lives in a git repository of the mod's own, and the mod becomes a source mod. Each edit is then a change to one record's file, which you review in Source Control. A merge conflict lands in one record.
 
-A build writes the plugins from their source, and the game, MO2 and xEdit load what it wrote. Unchanged source builds plugins that mean the same, record for record. Decompile refuses a plugin it cannot round-trip, and names the record at fault. When another tool changes a built plugin, Modbench tells you.
+A build writes the plugins from their plugin source, and the game, MO2 and xEdit load what it wrote. Unchanged plugin source builds plugins that mean the same, record for record. Decompile refuses a plugin it cannot round-trip, and names the record at fault. When another tool changes a built plugin, Modbench tells you.
 
-You view any plugin's records, and edit a source mod's. To edit another author's mod, you use the vendored workflow: their releases on `main`, your edits on a branch. When they release a new version, you decompile it onto `main` and merge your branch.
+You view any plugin's records, and edit a source mod's. To edit another author's mod, you use the vendored workflow: their releases on `main`, your edits on the `edit` branch. When they release a new version, you decompile it onto `main` and merge `edit`.
 
 A source mod with a remote is a submodule of the modlist repository. Restoring the modlist builds the mod from its source.
 
 ### Scripts and agents
 
-A script reads and writes records, as an xEdit script does. Modbench's backend is an HTTP API, so any language can script it, and Modbench ships a Python API. In a terminal of a Modbench window, `import medit` reaches the instance with nothing to install, and VS Code's Python tools run and debug the script. Each write is a change to a record's file, so you review a script's work in Source Control, as you review your own.
+A script reads and writes records, as an xEdit script does. Modbench's backend is an HTTP API, so any language can script it. Modbench ships a Python API, and VS Code's Python tools run and debug a script. Each write is a change to a record's file, so you review a script's work in Source Control, as you review your own.
 
 Your agent reaches Modbench through its MCP server. It reads the instance, runs Modbench's gestures and edits plugin source, and its edits land in Source Control too.
 
@@ -54,15 +54,15 @@ Modbench is alpha. It supports Fallout 4, Skyrim Special Edition and Starfield, 
 What works today:
 
 - Mods: install from a file or a folder, separators, order, enable, and the downloads folder.
-- Plugins: plugin order and checkboxes, and each plugin's records in a tree.
+- Plugins: plugin order and checkboxes, and each active plugin's records in a tree.
 - Records: an xEdit-style record panel across the active plugins, with conflict colours, field editing, copy as override, new record, and Referenced By.
 - Version control: the modlist repository, source mods, build, and external changes.
-- Record filter: a plain `.sql` file run against every record.
+- Record filter: a plain `.sql` file run against the active plugins' records.
 - Agents and scripts: an MCP server for your agent, and Python scripts through `import medit`.
 
 Planned, on the [milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones) board:
 
-- Downloads: fetch each file a manifest names, so a clone restores with no manual download. This waits on a Nexus API key.
+- Downloads: fetch each file a manifest names, so a clone restores with no file fetched by hand. This waits on a Nexus API key.
 - Repair of a malformed plugin, so it decompiles.
 
 Not yet planned: Vortex instances, FOMOD installers, creating a new instance, and LOOT sorting.

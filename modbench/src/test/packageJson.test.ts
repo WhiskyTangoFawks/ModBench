@@ -203,7 +203,7 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
     onCommand: isCommand,
     onView: (subject) => views.has(subject) || isVsCodes(subject),
     onContext: (subject) => [FOLDER_KEY, INSTANCE_READ_KEY].some((key) => subject.startsWith(`${key} `)),
-    onLink: (subject) => subject.startsWith(`${REPOSITORY}#`),
+    onLink: (subject) => subject.startsWith(`${REPOSITORY}/blob/main/docs/wiki/`),
   };
   const owned = (event: string): boolean => {
     const [kind = '', subject = ''] = event.split(/:(.*)/s);
