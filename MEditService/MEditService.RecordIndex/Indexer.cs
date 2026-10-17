@@ -446,7 +446,7 @@ internal sealed class Indexer : IDisposable
         ex is OperationCanceledException && (token.IsCancellationRequested || _disposal.IsCancellationRequested);
 
     private bool FailsOnePlugin(Exception ex, CancellationToken token) =>
-        ex is not OutOfMemoryException && !CancelledBy(ex, token);
+        ex is not OutOfMemoryException && !Store.Invalidates(ex) && !CancelledBy(ex, token);
 
     // Called with the exclusive right held, so no other reconcile can be in flight.
     private CancellationToken BeginReconcile()
@@ -474,7 +474,7 @@ internal sealed class Indexer : IDisposable
         OpenScope? leaving;
         lock (_lock)
         {
-            if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot))
+            if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot) && !current.Store.Invalidated())
             {
                 _scope = current with { LoadOrder = snapshot };
                 return _scope;
