@@ -54,7 +54,7 @@ The included MCP server gives your agent Modbench's gestures as tools, so agenti
 
 ## Status
 
-Modbench is alpha. It supports Fallout 4, Skyrim Special Edition and Starfield, on Windows and Linux, with Mod Organizer 2 instances.
+Modbench is an early alpha. It supports Fallout 4, Skyrim Special Edition and Starfield, on Windows and Linux, with Mod Organizer 2 instances. It is designed never to break the instance for MO2, but it has not been tested much on real modlists yet, so try it on a copy of your instance.
 
 What works today:
 
@@ -85,6 +85,8 @@ code --install-extension modbench-<platform>-<version>.vsix
 ```
 
 VS Code then opens Modbench's walkthrough, which takes you from your instance to your first built plugin.
+
+Report a problem as a [GitHub issue](https://github.com/WhiskyTangoFawks/ModBench/issues). Modbench's log is in the Output panel, under Modbench.
 
 ## Guides
 
