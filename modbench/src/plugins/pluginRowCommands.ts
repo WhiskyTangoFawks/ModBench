@@ -230,8 +230,8 @@ export interface BuildDeps {
   reporter: Reporter;
   problems: BuildProblems;
   sourceFiles: SourceFilesOf;
-  /** Saves the mod's unsaved plugin source; answers the paths VS Code left unsaved, or undefined when the mod has no source folder. */
-  saveUnsaved: (mod: string) => Promise<string[] | undefined>;
+  /** Saves the mod's unsaved plugin source; answers the paths VS Code left unsaved. */
+  saveUnsaved: (mod: string) => Promise<string[]>;
   modOfOrigin: (origin: string) => string | undefined;
   /** The source folder of each mod that holds a repository, by mod name. */
   sourceDirs: () => ReadonlyMap<string, string>;
@@ -247,7 +247,7 @@ export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => re
   const gesture: AgentGesture<unknown, ModsGiven, Built> = {
     fromView: async (entry) => {
       const targets = targetsOf(entry.selection, deps.modOfOrigin);
-      const fromARow = entry.clicked !== undefined || targets.mods.some((mod) => deps.sourceDirs().has(mod));
+      const fromARow = entry.clicked !== undefined || targets.mods.length > 0 || targets.refusedRows.length > 0;
       if (fromARow) return { ...targets, invokedFrom: viewOf(entry.selection, deps.modsView) };
       const mods = await pickSourceMods(deps.sourceDirs());
       return mods === undefined ? undefined : { mods, refusedRows: [], invokedFrom: deps.modsView };
@@ -268,7 +268,7 @@ async function pickSourceMods(sourceDirs: ReadonlyMap<string, string>): Promise<
 
 async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom }: ModsGiven): Promise<Built> {
   const { commands, instance } = deps;
-  if (mods.length === 0) return { applied: true, outcome: { landed: [], refused: [...refusedRows] } };
+  if (mods.length === 0) return { applied: true, outcome: { landed: [], refused: refusedRows } };
   const unsaved = await savedFirst(deps, mods);
   if (unsaved !== undefined) return unsaved;
   return runWritingGesture(invokedFrom, instance, async (): Promise<Built> => {
@@ -291,12 +291,12 @@ function reportBuildResult(reporter: Reporter, result: Built): void {
   reportPartial(reporter, result.partial);
 }
 
-// mods.md, Build, story 5: the plugins are built from what the user sees, so the mod's unsaved
+// mods.md, Build, story 5: the plugins are built from what the user sees, so each mod's unsaved
 // plugin source is saved first, and a file VS Code does not save refuses the build before anything
 // is written.
 async function savedFirst(deps: BuildDeps, mods: readonly string[]): Promise<Built | undefined> {
   const unsaved: string[] = [];
-  for (const mod of mods) unsaved.push(...(await deps.saveUnsaved(mod) ?? []));
+  for (const mod of mods) unsaved.push(...(await deps.saveUnsaved(mod)));
   if (unsaved.length === 0) return undefined;
   return { applied: false, refusal: 'Could not build: VS Code did not save its plugin source.', detail: unsaved.join('\n') };
 }
