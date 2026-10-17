@@ -35,8 +35,8 @@ describe('saving the unsaved plugin source of a mod\'s source folder', () => {
     expect(sibling.save).toHaveBeenCalledOnce();
   });
 
-  it('answers undefined for a mod with no source folder', async () => {
-    expect(await saveModPluginSource(SOURCE_DIRS, 'ModZ')).toBeUndefined();
+  it('answers none left unsaved for a mod with no source folder', async () => {
+    expect(await saveModPluginSource(SOURCE_DIRS, 'ModZ')).toEqual([]);
   });
 
   it('leaves alone a document of another mod\'s folder, a sibling folder of the same prefix, a file that is no plugin source, and a clean one', async () => {
