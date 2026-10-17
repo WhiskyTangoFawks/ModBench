@@ -213,6 +213,14 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void AManifest_IsNamedForTheMod_WithTheJsonSuffix()
+    {
+        _repository.WriteManifest(_root, "mod", new Manifest(null, []));
+
+        Assert.Equal(["mod.manifest.json"], Directory.GetFiles(_root).Select(Path.GetFileName));
+    }
+
+    [Fact]
     public void AManifestThatNamesNothing_IsWritten_ReadBack_AndAgreesWithAFolderOfItsMetadataAlone()
     {
         Write("meta.ini", "[General]");
@@ -221,7 +229,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         var written = _repository.WriteManifest(_root, "mod", nothing);
         var writtenAgain = _repository.WriteManifest(_root, "mod", nothing);
 
-        Assert.Equal([true, false, true], [written, writtenAgain, File.Exists(Path.Combine(_root, "mod.manifest"))]);
+        Assert.Equal([true, false, true], [written, writtenAgain, File.Exists(Path.Combine(_root, "mod.manifest.json"))]);
         var read = Assert.IsType<Manifest>(_repository.ReadManifest(_root, "mod"));
         Assert.Empty(read.Files);
         Assert.Null(read.Package);
@@ -346,7 +354,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void AModWithAManifestItCannotRead_IsUnreadable_NamingTheLine_AndListsNothing()
     {
         Write("mine.txt", "mine");
-        Write("mod.manifest", "<<<<<<< HEAD\n");
+        Write("mod.manifest.json", "<<<<<<< HEAD\n");
 
         var status = Status();
 
@@ -369,7 +377,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         Write("a.txt", "abc");
         Write("meta.ini", "abc");
-        Write("mod.manifest", "{}\n");
+        Write("mod.manifest.json", "{}\n");
 
         Assert.Equal(["a.txt"], _repository.Files(_root, "mod", new HashSet<string> { "meta.ini" }, statCache: null).Files.Select(f => f.Path));
     }
@@ -390,7 +398,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
         Assert.True(_repository.WriteManifest(_root, "mod", manifest));
 
-        var text = File.ReadAllText(Path.Combine(_root, "mod.manifest"));
+        var text = File.ReadAllText(Path.Combine(_root, "mod.manifest.json"));
         Assert.Equal(
             "{\n"
             + "\"package\": {\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\",\"version\":\"1.2.3\"},\n"
@@ -413,7 +421,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         _repository.WriteManifest(_root, "mod", new Manifest(
             new ManifestPackage.SourceRepository("Mod", isSubmodule), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"));
 
-        Assert.Contains("\"package\": " + line, File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+        Assert.Contains("\"package\": " + line, File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
     }
 
     [Fact]
@@ -422,7 +430,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         _repository.WriteManifest(_root, "mod", new Manifest(new ManifestPackage.GameFolder("Fallout 4", "AAAA"), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"));
 
         Assert.Contains(
-            "\"package\": {\"gameFolder\":\"Fallout 4\",\"hash\":\"AAAA\",\"version\":\"2\"}", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+            "\"package\": {\"gameFolder\":\"Fallout 4\",\"hash\":\"AAAA\",\"version\":\"2\"}", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
     }
 
     [Fact]
@@ -430,7 +438,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         _repository.WriteManifest(_root, "mod", new Manifest(null, [], "1.2.3"));
 
-        Assert.Equal("{\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+        Assert.Equal("{\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
     }
 
     [Fact]
@@ -438,7 +446,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         _repository.WriteManifest(_root, "mod", new Manifest(null, []));
 
-        Assert.Equal("{\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+        Assert.Equal("{\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
     }
 
     [Fact]
@@ -446,7 +454,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         var manifest = new Manifest(null, [new ManifestFile("a.txt", new PackageEntry.NotHeld())]);
         _repository.WriteManifest(_root, "mod", manifest);
-        var path = Path.Combine(_root, "mod.manifest");
+        var path = Path.Combine(_root, "mod.manifest.json");
         File.SetLastWriteTimeUtc(path, LongAgo);
 
         Assert.False(_repository.WriteManifest(_root, "mod", manifest));
@@ -461,7 +469,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
         _repository.WriteManifest(_root, "mod", manifest);
 
-        var bytes = File.ReadAllBytes(Path.Combine(_root, "mod.manifest"));
+        var bytes = File.ReadAllBytes(Path.Combine(_root, "mod.manifest.json"));
         Assert.Equal((byte)'{', bytes[0]);
         Assert.Contains("café", System.Text.Encoding.UTF8.GetString(bytes));
     }
@@ -519,7 +527,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         _repository.WriteManifest(_root, "mod", new Manifest(null, [new ManifestFile("a.nif", new PackageEntry.NotHeld())]));
 
-        Assert.DoesNotContain("version", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+        Assert.DoesNotContain("version", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
     }
 
     [Fact]
@@ -543,7 +551,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [InlineData("{}", "cannot be read")]
     public void ReadManifest_WithTextItCannotRead_RefusesNamingWhere(string text, string where)
     {
-        Write("mod.manifest", text);
+        Write("mod.manifest.json", text);
 
         var refused = Assert.Throws<InvalidDataException>(() => _repository.ReadManifest(_root, "mod"));
 

@@ -276,7 +276,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         File.WriteAllText(Path.Combine(ModFolder, "a.nif"), "taken");
         var hash = new ModFolderRepository(TimeProvider.System).Files(ModFolder, Mod, new HashSet<string>(), null).Files.Single().Hash;
         File.WriteAllText(
-            Path.Combine(ModFolder, Mod + ".manifest"),
+            Path.Combine(ModFolder, Mod + ".manifest.json"),
             $"{{\n\"package\": {{\"gameFolder\":\"Fallout4\",\"hash\":\"{FileHash.OfFilesTaken([new HashedFile("a.nif", hash)])}\"}},\n\"files\": [\n{{\"path\":\"a.nif\"}}\n]\n}}\n");
         var request = Request("restore-from-manifest", "Mod.zip", handsTheDownload: false);
 
@@ -294,7 +294,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         var pin = submodule.Commit(("build.json", $"{{\"output\": \"{Mod}\"}}"), ("assets/a.nif", "built"));
         submodule.Pin(pin);
         Directory.CreateDirectory(ModFolder);
-        File.WriteAllText(Path.Combine(ModFolder, Mod + ".manifest"), "{\n\"package\": {\"submodule\":\"Mod\"},\n\"files\": [\n{\"path\":\"a.nif\"}\n]\n}\n");
+        File.WriteAllText(Path.Combine(ModFolder, Mod + ".manifest.json"), "{\n\"package\": {\"submodule\":\"Mod\"},\n\"files\": [\n{\"path\":\"a.nif\"}\n]\n}\n");
         (await Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(_instance, _instance, []))).EnsureSuccessStatusCode();
         var handed = new JsonObject { ["folder"] = submodule.Folder, ["pin"] = pin };
 
@@ -359,7 +359,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     {
         var torn = Path.Combine(_instance, "mods", "Torn");
         Directory.CreateDirectory(torn);
-        File.WriteAllText(Path.Combine(torn, "Torn.manifest"), "<<<<<<< HEAD\n");
+        File.WriteAllText(Path.Combine(torn, "Torn.manifest.json"), "<<<<<<< HEAD\n");
         var request = WhatRestoreDestroysRequest();
         request["mods"] = new JsonArray(new JsonObject { ["name"] = "Torn", ["folder"] = torn, ["metadataFiles"] = new JsonArray() });
 
@@ -378,8 +378,8 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         ChangedSinceItsUpdate();
         var locked = Path.Combine(_instance, "mods", "Locked");
         Directory.CreateDirectory(locked);
-        File.WriteAllText(Path.Combine(locked, "Locked.manifest"), "");
-        FileModes.Set(Path.Combine(locked, "Locked.manifest"), "000");
+        File.WriteAllText(Path.Combine(locked, "Locked.manifest.json"), "");
+        FileModes.Set(Path.Combine(locked, "Locked.manifest.json"), "000");
         var request = WhatRestoreDestroysRequest();
         Assert.IsType<JsonArray>(request["mods"]).Add(new JsonObject { ["name"] = "Locked", ["folder"] = locked, ["metadataFiles"] = new JsonArray() });
 
