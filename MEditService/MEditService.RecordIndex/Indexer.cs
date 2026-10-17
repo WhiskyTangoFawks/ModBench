@@ -445,9 +445,8 @@ internal sealed class Indexer : IDisposable
     private bool CancelledBy(Exception ex, CancellationToken token) =>
         ex is OperationCanceledException && (token.IsCancellationRequested || _disposal.IsCancellationRequested);
 
-    // ADR-0003: recovery is not gated. Every read throws until the file is opened again, and the plugins
-    // read before the fatal keep their rows, so the held plugins and the indexed list stay. Runs with the
-    // exclusive right held; a reopen that fails is the failure, with its reason.
+    // ADR-0003: recovery is not gated. The plugins read before the fatal keep their rows, so the held
+    // plugins and the indexed list stay. Runs with the exclusive right held.
     private string FailureAfterReopening(Exception cause)
     {
         if (!Store.IsInvalidation(cause)) return cause.Message;
@@ -961,7 +960,7 @@ internal sealed class Indexer : IDisposable
     // handed with it, or why a place could not be read (ADR-0003).
     private string StringsReadBy(LoadOrderSnapshot loadOrder, RegisteredPlugin plugin) =>
         $"{_readLanguage}\n" + (_adapter.StringsPlacesOf(ModPathOf(plugin.Path), loadOrder, plugin.Strings).Holds(out var places, out var failure)
-            ? string.Join('\n', places.Select(place => $"{FolderPlaces.RelativeWithin(loadOrder.DataFolderPath, place)}|{plugin.Strings.StampOf(place) ?? loadOrder.StampOf(place)}"))
+            ? string.Join('\n', places.Select(place => $"{Store.RelativeWithin(loadOrder.DataFolderPath, place)}|{plugin.Strings.StampOf(place) ?? loadOrder.StampOf(place)}"))
             : failure.Reason);
 
     // ADR-0015.

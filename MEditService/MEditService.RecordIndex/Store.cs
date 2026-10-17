@@ -458,7 +458,13 @@ internal sealed class Store : IDisposable
 
     // ADR-0012: an absolute path as identity changes when the instance moves.
     private string StoredFilePath(string filePath) =>
-        _instanceRoot is null ? Path.GetFullPath(filePath) : FolderPlaces.RelativeWithin(_instanceRoot, Path.GetFullPath(filePath));
+        _instanceRoot is null ? Path.GetFullPath(filePath) : RelativeWithin(_instanceRoot, Path.GetFullPath(filePath));
+
+    /// <summary>A place inside <paramref name="folder"/> spelled relative to it, any other place as given.</summary>
+    internal static string RelativeWithin(string folder, string place) =>
+        Path.GetRelativePath(folder, place) is var relative && !relative.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relative)
+            ? relative
+            : place;
 
     private string ResolvedFilePath(string stored) =>
         _instanceRoot is null ? stored : Path.GetFullPath(stored, _instanceRoot);
